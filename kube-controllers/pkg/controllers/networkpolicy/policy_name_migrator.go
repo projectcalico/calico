@@ -16,8 +16,6 @@ import (
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
-	liberr "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -40,10 +38,6 @@ import (
 //     a. Create a new policy entry in the datastore with the correct v3 name.
 //     b. Delete the old policy entry with the v1 name.
 func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli clientv3.Interface, feed *utils.DataFeed) controller.Controller {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
 	// Read the namespace from the service account file to determine the namespace we're running in.
 	namespace, err := os.ReadFile(winutils.GetHostPath("/var/run/secrets/kubernetes.io/serviceaccount/namespace"))
 	if err != nil {
@@ -55,7 +49,7 @@ func NewMigratorController(ctx context.Context, cs kubernetes.Interface, cli cli
 		ctx:           ctx,
 		cli:           cli,
 		cs:            cs,
-		bc:            cli.(accessor).Backend(),
+		bc:            cli.(bapi.BackendAccessor).Backend(),
 		doWork:        make(chan struct{}, 1),
 		pendingWork:   set.New[model.ResourceKey](),
 		kvps:          make(map[model.ResourceKey]*model.KVPair),
@@ -199,7 +193,7 @@ func (c *policyMigrator) processUpdates(update bapi.Update) {
 
 		// If the policy needs migration, add to pending work.
 		if p, ok := kvp.Value.(client.Object); ok {
-			if needsMigration(p, key) {
+			if NeedsMigration(p, key) {
 				logCtx.Debug("Stored policy for potential migration check")
 				c.pendingWork.Add(key)
 			} else {
@@ -218,67 +212,11 @@ func (c *policyMigrator) processPendingWork() error {
 		return nil
 	}
 
-	// No-op for now.
 	for key := range c.pendingWork.All() {
-		kvp := c.kvps[key]
-		p := kvp.Value.(client.Object)
-		k := kvp.Key.(model.ResourceKey)
-
-		logCtx := logrus.WithFields(logrus.Fields{
-			"namespace": p.GetNamespace(),
-			"v3name":    p.GetName(),
-			"kind":      p.GetObjectKind().GroupVersionKind().Kind,
-		})
-		logCtx.Debug("Processing policy for potential migration")
-
-		// The name in the Key is the actual v1 ID used in the datastore, whereas the ObjectMeta.Name is the v3
-		// object name. If they differ, we need to correct the underlying datastore entry to align with the v3 naming.
-		if !needsMigration(p, k) {
-			logCtx.Debug("No migration needed")
-			c.pendingWork.Discard(key)
+		if _, err := MigratePolicyKVP(c.ctx, c.bc, c.kvps[key]); err != nil {
+			logrus.WithField("key", key).WithError(err).Error("Failed to migrate policy, will retry")
 			continue
 		}
-
-		logCtx.WithFields(logrus.Fields{
-			"v1Name": k.Name,
-		}).Debug("Migrating policy to new name")
-
-		// Create a new Policy object with the correct v3 name.
-		newPolicy := p.DeepCopyObject()
-		newKey := k
-		newKey.Name = p.GetName()
-
-		// Create the new policy in the datastore.
-		_, err := c.bc.Create(c.ctx, &model.KVPair{Key: newKey, Value: newPolicy})
-		if err != nil {
-			if _, ok := err.(liberr.ErrorResourceAlreadyExists); !ok {
-				// If the error is AlreadyExists, it means we already fixed this policy in a previous run, so we can safely ignore it.
-				// For other errors, log them and continue on to the next piece of work.
-				logCtx.Errorf("Error creating new policy %s: %v", newKey, err)
-				continue
-			}
-			logCtx.Infof("New policy %s already exists, carry on", newKey)
-		}
-
-		// Delete the old policy from the datastore.
-		_, err = c.bc.DeleteKVP(c.ctx, kvp)
-		if err != nil {
-			if _, ok := err.(liberr.ErrorResourceDoesNotExist); !ok {
-				// If the error is NotFound, it means the old policy was already deleted, so we can safely ignore it.
-				// For other errors, log them and continue on to the next piece of work.
-				logCtx.Errorf("Error deleting old policy %s: %v", k, err)
-				continue
-			}
-			logCtx.Infof("Old policy %s already deleted, carry on", k)
-		}
-
-		// Successfully migrated this policy, remove from pending work.
-		logrus.WithFields(logrus.Fields{
-			"namespace": p.GetNamespace(),
-			"newName":   p.GetName(),
-			"oldName":   k.Name,
-			"kind":      p.GetObjectKind().GroupVersionKind().Kind,
-		}).Info("Successfully migrated storage name for policy")
 		c.pendingWork.Discard(key)
 	}
 	return nil
@@ -343,25 +281,4 @@ func (c *policyMigrator) waitForCalicoNodeRollout() error {
 			return nil
 		}
 	}
-}
-
-func needsMigration(p client.Object, k model.ResourceKey) bool {
-	// The name in the Key is the actual v1 ID used in the datastore, whereas the ObjectMeta.Name is the v3
-	// object name. If they differ, we need to correct the underlying datastore entry to align with the v3 naming.
-	//
-	// Policies in non-default tiers have traditionally had restrictive validation that prevented the mismatch
-	// this controller is designed to fix. Therefore, we only need to fix policies in the default tier.
-	return isDefaultTier(p) && k.Name != p.GetName()
-}
-
-func isDefaultTier(p client.Object) bool {
-	tier, ok := names.TierFromPolicy(p)
-	if !ok {
-		logrus.WithFields(logrus.Fields{
-			"namespace": p.GetNamespace(),
-			"name":      p.GetName(),
-		}).Warn("Could not extract tier from policy object, assuming default")
-		return true
-	}
-	return tier == names.DefaultTierName
 }
