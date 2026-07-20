@@ -921,8 +921,9 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 	// The "Drop VXLAN packets from non-allowed hosts" filter rule drops any UDP packet
 	// destined for the VXLAN port, regardless of which interface it arrived on. If the
 	// masquerade below picks the VXLAN port as the source port, the reply (whose dest
-	// port is then the VXLAN port) gets dropped on the way back. Constrain masquerade to
-	// a port range that excludes the VXLAN port whenever that drop rule is in force.
+	// port is then the VXLAN port) gets dropped on the way back. When that drop rule is
+	// in force, compute a source-port range that excludes the VXLAN port; it's applied to
+	// the UDP masquerade rule below.
 	// See https://github.com/projectcalico/calico/issues/12244.
 	masqToPorts := ""
 	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
@@ -972,21 +973,40 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		// Other remote sources will only reach the tunnel if they're being NATted
 		// already (for example, a Kubernetes "NodePort").  The kernel will then
 		// choose the correct source on its own.
+		//
+		// The match comments below apply to every masquerade rule we emit for this
+		// tunnel:
+		//   - OutInterface: only match packets going out the tunnel.
+		//   - NotSrcAddrType(..., limitIfaceOut=true): match packets that don't have the
+		//     correct source address.  This matches local addresses (i.e. ones assigned
+		//     to this host) limiting the match to the output interface (matched above as
+		//     the tunnel).  Avoiding embedding the IP address lets us use a static rule.
+		//   - SrcAddrType: only match if the IP is also some local IP on the box.  This
+		//     prevents us from matching packets from workloads, which are remote as far
+		//     as the routing table is concerned.
+		if masqToPorts != "" {
+			// The "Drop VXLAN packets from non-allowed hosts" rule only matches UDP, so
+			// only UDP flows can have their source masqueraded onto the VXLAN port and
+			// then get their replies dropped. Constrain the source port for UDP and let
+			// everything else masquerade normally. This split is also required for
+			// correctness: MASQUERADE's --to-ports (and the nftables equivalent) is only
+			// valid on a rule that also matches a transport protocol, so a protocol-less
+			// rule carrying --to-ports would be rejected on restore.
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch().
+					ProtocolNum(ProtoUDP).
+					OutInterface(tunnel).
+					NotSrcAddrType(generictables.AddrTypeLocal, true).
+					SrcAddrType(generictables.AddrTypeLocal, false),
+				Action: r.Masq(masqToPorts),
+			})
+		}
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().
-				// Only match packets going out the tunnel.
 				OutInterface(tunnel).
-				// Match packets that don't have the correct source address.  This
-				// matches local addresses (i.e. ones assigned to this host)
-				// limiting the match to the output interface (which we matched
-				// above as the tunnel).  Avoiding embedding the IP address lets
-				// us use a static rule, which is easier to manage.
 				NotSrcAddrType(generictables.AddrTypeLocal, true).
-				// Only match if the IP is also some local IP on the box.  This
-				// prevents us from matching packets from workloads, which are
-				// remote as far as the routing table is concerned.
 				SrcAddrType(generictables.AddrTypeLocal, false),
-			Action: r.Masq(masqToPorts),
+			Action: r.Masq(""),
 		})
 	}
 	return []*generictables.Chain{{
