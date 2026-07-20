@@ -222,7 +222,7 @@ configRetry:
 		}
 		log.Info("Created datastore client")
 		numClientsCreated++
-		backendClient = v3Client.(interface{ Backend() bapi.Client }).Backend()
+		backendClient = v3Client.(bapi.BackendAccessor).Backend()
 		for {
 			globalConfig, selectorConfig, hostConfig, err := loadConfigFromDatastore(
 				ctx, backendClient, datastoreConfig, configParams.FelixHostname)

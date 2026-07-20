@@ -114,7 +114,7 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	calicostore := calicorest.RESTStorageProvider{StorageType: "calico"}
 
 	// Create a backend Calico v3 clientset.
-	cc := calico.CreateClientFromConfig().(backendClient).Backend()
+	cc := calico.CreateClientFromConfig().(api.BackendAccessor).Backend()
 
 	// Create the various lister and getters required by the RBAC calculator. Note that we use an informer/cache for the
 	// k8s resources to minimize the number of queries underpinning a single request. For the Calico resources we
@@ -291,10 +291,6 @@ func (t *calicoResourceLister) OnUpdates(updates []api.Update) {
 			}
 		}
 	}
-}
-
-type backendClient interface {
-	Backend() api.Client
 }
 
 // install registers the API group and adds types to a scheme
