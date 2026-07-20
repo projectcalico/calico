@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
 const (
@@ -55,9 +58,14 @@ type nodeConditionController struct {
 	gracePeriod   time.Duration
 	checkInterval time.Duration
 
-	// For testing: allow injecting a custom time function and patch function.
+	// manageTaint controls whether we also add the network-ready taint. It mirrors the condition:
+	// we only ever add the taint here as a backstop, and leave removal to calico-node startup.
+	manageTaint bool
+
+	// For testing: allow injecting a custom time function and patch functions.
 	nowFn   func() time.Time
 	patchFn func(nodeName string) error
+	taintFn func(nodeName string) error
 }
 
 func newNodeConditionController(
@@ -73,9 +81,11 @@ func newNodeConditionController(
 		markedUnavailable: make(map[string]bool),
 		gracePeriod:       defaultConditionGracePeriod,
 		checkInterval:     defaultConditionCheckInterval,
+		manageTaint:       os.Getenv(names.NetworkReadyTaintEnvVar) == "true",
 		nowFn:             time.Now,
 	}
 	c.patchFn = c.patchNodeUnavailable
+	c.taintFn = c.addNetworkReadyTaint
 	return c
 }
 
@@ -145,6 +155,11 @@ func (c *nodeConditionController) checkNodes() {
 			log.WithError(err).WithField("node", nodeName).Error("Failed to set NetworkUnavailable condition")
 			continue
 		}
+		if c.manageTaint {
+			if err := c.taintFn(nodeName); err != nil {
+				log.WithError(err).WithField("node", nodeName).Error("Failed to add network-ready taint")
+			}
+		}
 		c.markedUnavailable[nodeName] = true
 	}
 
@@ -205,5 +220,27 @@ func (c *nodeConditionController) patchNodeUnavailable(nodeName string) error {
 	}
 	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
 	_, err = c.k8sClientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
+	return err
+}
+
+// addNetworkReadyTaint adds the network-ready taint to the node if it isn't already present.
+// Removal is left to calico-node startup, so we never remove the taint here.
+func (c *nodeConditionController) addNetworkReadyTaint(nodeName string) error {
+	node, err := c.nodeLister.Get(nodeName)
+	if err != nil {
+		return err
+	}
+	for _, t := range node.Spec.Taints {
+		if t.Key == names.NetworkReadyTaintKey {
+			return nil
+		}
+	}
+
+	node = node.DeepCopy()
+	node.Spec.Taints = append(node.Spec.Taints, v1.Taint{
+		Key:    names.NetworkReadyTaintKey,
+		Effect: v1.TaintEffectNoSchedule,
+	})
+	_, err = c.k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
 	return err
 }

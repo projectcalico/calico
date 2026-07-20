@@ -345,6 +345,15 @@ func markNetworkAvailable() (*kubernetes.Clientset, string, error) {
 			return nil, "", err
 		}
 
+		// Networking is up, so remove the network-ready taint to let workloads schedule here. New
+		// nodes are tainted at admission time, so this is the point where we clear it.
+		if utils.NetworkReadyTaintEnabled() {
+			if err := utils.SetNodeNetworkReadyTaint(*clientset, k8sNodeName, false, 30*time.Second); err != nil {
+				log.WithError(err).Error("Unable to remove network-ready taint")
+				return nil, "", err
+			}
+		}
+
 		// Remove shutdownTS file when everything is done.
 		// This indicates Calico node started successfully.
 		if err := utils.RemoveShutdownTimestampFile(); err != nil {
@@ -402,6 +411,7 @@ func monitorNodeHealth(done context.Context, clientset *kubernetes.Clientset, k8
 	ticker := time.NewTicker(healthCheckInterval)
 	defer ticker.Stop()
 
+	manageTaint := utils.NetworkReadyTaintEnabled()
 	consecutiveFailures := 0
 	markedUnavailable := false
 
@@ -424,6 +434,11 @@ func monitorNodeHealth(done context.Context, clientset *kubernetes.Clientset, k8
 					} else {
 						markedUnavailable = true
 					}
+					if manageTaint {
+						if taintErr := utils.SetNodeNetworkReadyTaint(*clientset, k8sNodeName, true, 30*time.Second); taintErr != nil {
+							log.WithError(taintErr).Error("Failed to add network-ready taint")
+						}
+					}
 				}
 			} else {
 				if consecutiveFailures > 0 {
@@ -439,6 +454,11 @@ func monitorNodeHealth(done context.Context, clientset *kubernetes.Clientset, k8
 						log.WithError(patchErr).Error("Failed to set NetworkUnavailable to False")
 					} else {
 						markedUnavailable = false
+					}
+					if manageTaint {
+						if taintErr := utils.SetNodeNetworkReadyTaint(*clientset, k8sNodeName, false, 30*time.Second); taintErr != nil {
+							log.WithError(taintErr).Error("Failed to remove network-ready taint")
+						}
 					}
 				}
 			}

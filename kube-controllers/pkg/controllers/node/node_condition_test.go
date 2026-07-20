@@ -246,6 +246,62 @@ var _ = Describe("nodeConditionController", func() {
 		})
 	})
 
+	Context("when taint management is enabled", func() {
+		var tainted map[string]int
+
+		BeforeEach(func() {
+			tainted = make(map[string]int)
+			ctrl.manageTaint = true
+			ctrl.taintFn = func(nodeName string) error {
+				tainted[nodeName]++
+				return nil
+			}
+		})
+
+		It("should add the taint alongside the condition after the grace period", func() {
+			createNode("node1")
+			createCalicoNodePod("node1", false)
+			waitForSync()
+
+			ctrl.checkNodes()
+			Expect(tainted).To(BeEmpty())
+
+			now = now.Add(6 * time.Second)
+			ctrl.checkNodes()
+			Expect(patched).To(HaveKeyWithValue("node1", 1))
+			Expect(tainted).To(HaveKeyWithValue("node1", 1))
+		})
+
+		It("should not taint a node with a Ready calico-node pod", func() {
+			createNode("node1")
+			createCalicoNodePod("node1", true)
+			waitForSync()
+
+			now = now.Add(6 * time.Second)
+			ctrl.checkNodes()
+			Expect(tainted).To(BeEmpty())
+		})
+	})
+
+	Context("when taint management is disabled", func() {
+		It("should not taint even after the grace period", func() {
+			tainted := 0
+			ctrl.taintFn = func(nodeName string) error {
+				tainted++
+				return nil
+			}
+			createNode("node1")
+			createCalicoNodePod("node1", false)
+			waitForSync()
+
+			ctrl.checkNodes()
+			now = now.Add(6 * time.Second)
+			ctrl.checkNodes()
+			Expect(patched).To(HaveKeyWithValue("node1", 1))
+			Expect(tainted).To(Equal(0))
+		})
+	})
+
 	Context("when a previously unavailable node recovers then fails again", func() {
 		It("should patch again after new grace period", func() {
 			createNode("node1")
