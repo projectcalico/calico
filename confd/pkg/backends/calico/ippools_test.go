@@ -121,6 +121,11 @@ func Test_processIPPoolsV4(t *testing.T) {
 	cache[key] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			ProgramClusterRoutes: ptr.To("Enabled"),
+		},
+	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -174,6 +179,11 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV4, 4)
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			ProgramClusterRoutes: ptr.To("Enabled"),
+		},
+	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
@@ -243,6 +253,11 @@ func Test_processIPPoolsV6(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			ProgramClusterRoutes: ptr.To("Enabled"),
+		},
+	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
