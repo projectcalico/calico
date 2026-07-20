@@ -34,3 +34,17 @@ func BuildMigrateArgs(subcommand string, cmd *cobra.Command) []string {
 	}
 	return args
 }
+
+// BuildMigratePolicyNamesArgs constructs the args slice expected by the
+// docopt-based MigratePolicyNames function from cobra flag values.
+func BuildMigratePolicyNamesArgs(cmd *cobra.Command) []string {
+	args := []string{"datastore", "migrate-policy-names"}
+
+	if config, _ := cmd.Flags().GetString("config"); config != "" {
+		args = append(args, "--config="+config)
+	}
+	if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
+		args = append(args, "--allow-version-mismatch")
+	}
+	return args
+}

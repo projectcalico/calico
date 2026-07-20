@@ -27,6 +27,19 @@ func newDatastoreCommand() *cobra.Command {
 		Short: "Calico datastore management",
 	}
 	cmd.AddCommand(newMigrateCommand())
+	cmd.AddCommand(newMigratePolicyNamesCommand())
+	return cmd
+}
+
+func newMigratePolicyNamesCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "migrate-policy-names",
+		Short: "Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the tier prefix",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return migrate.MigratePolicyNames(datastore.BuildMigratePolicyNamesArgs(cmd))
+		},
+	}
+	addConfigFlag(cmd)
 	return cmd
 }
 
