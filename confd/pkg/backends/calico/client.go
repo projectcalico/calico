@@ -75,11 +75,6 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() api.Client
-}
-
 func NewRouteIndex() *RouteIndex {
 	return &RouteIndex{
 		programmedRoutes:       make(map[string]bool),
@@ -114,7 +109,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 	}
 
 	// Extract the backend client from the v3 client.
-	bc := cc.(backendClientAccessor).Backend()
+	bc := cc.(api.BackendAccessor).Backend()
 
 	// The node label manager tracks node labels for components to use when calculating
 	// node selectors, etc.

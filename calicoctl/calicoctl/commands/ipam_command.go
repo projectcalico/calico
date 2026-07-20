@@ -71,10 +71,7 @@ func newIPAMCheckCommand() *cobra.Command {
 				return err
 			}
 
-			type accessor interface {
-				Backend() bapi.Client
-			}
-			bc := client.(accessor).Backend()
+			bc := client.(bapi.BackendAccessor).Backend()
 
 			var kubeClient kubernetes.Interface
 			if kc, ok := bc.(*k8s.KubeClient); ok {
@@ -198,10 +195,7 @@ func newIPAMShowCommand() *cobra.Command {
 			ipamClient := client.IPAM()
 			ippoolClient := client.IPPools()
 
-			type accessor interface {
-				Backend() bapi.Client
-			}
-			bc := client.(accessor).Backend()
+			bc := client.(bapi.BackendAccessor).Backend()
 
 			if ip != "" {
 				return ipam.ShowIP(ctx, ipamClient, ip)
