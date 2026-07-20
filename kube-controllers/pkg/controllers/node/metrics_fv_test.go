@@ -121,11 +121,8 @@ var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure
 		}, 15*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
-		type accessor interface {
-			Backend() backend.Client
-		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
-		bc = calicoClient.(accessor).Backend()
+		bc = calicoClient.(backend.BackendAccessor).Backend()
 
 		// Shorten the leak grace period for testing, allowing reclamations to happen quickly.
 		kcc := api.NewKubeControllersConfiguration()

@@ -240,10 +240,7 @@ func TestIPAMCleanup(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Make a raw, leaked handle for IPAM check to find.
-		type accessor interface {
-			Backend() bapi.Client
-		}
-		bc := client.(accessor).Backend()
+		bc := client.(bapi.BackendAccessor).Backend()
 		createLeakedHandle := func() *model.KVPair {
 			kv, err := bc.Create(ctx, &model.KVPair{
 				Key: model.IPAMHandleKey{
@@ -317,10 +314,7 @@ func TestIPAMCleanup(t *testing.T) {
 }
 
 func createNodeForLocalhost(t *testing.T, ctx context.Context, client clientv3.Interface) (cleanup func()) {
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := client.(accessor).Backend()
+	bc := client.(bapi.BackendAccessor).Backend()
 	nodeName, err := os.Hostname()
 	if k8sClient, ok := bc.(*k8s.KubeClient); ok {
 		t.Log("Creating Kubernetes Node")
