@@ -380,6 +380,30 @@ var _ = Describe("IPIPManager", func() {
 		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(HaveLen(1)) // Black hole route
 	})
 
+	It("should not clear the parent iface addr on a local HostMetadataUpdate with empty Ipv4Addr", func() {
+		// First, send a local host update with a valid IP. This should populate
+		// the parent device address.
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		Expect(ipipMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+
+		// Now send a local host update with an empty IP (e.g. BGP spec was
+		// cleared transiently). The parent device address must NOT be
+		// overwritten with an empty string — that would tear down the tunnel
+		// device unnecessarily.
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "",
+		})
+		Expect(ipipMgr.routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+
+		// The local hostname should also not be tracked in activeHostnameToIP;
+		// that map is only used as a remote-gateway lookup in tunnelRoute.
+		Expect(ipipMgr.activeHostnameToIP).NotTo(HaveKey("node1"))
+	})
+
 	It("should program routes for remote tunnel endpoint", func() {
 		By("Sending host updates")
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
