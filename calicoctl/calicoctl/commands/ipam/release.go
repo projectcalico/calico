@@ -282,11 +282,8 @@ func releaseHandles(notInUseHandles map[string]HandleInfo, c clientv3.Interface)
 	fmt.Printf("Deleting %d handles...\n", len(notInUseHandles))
 	fmt.Println("Key: '.' = Deleted OK; 'x' = skip, handle missing/changed.")
 	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
 	var numReleased, numConflict, numErrors int
-	bc := c.(accessor).Backend()
+	bc := c.(bapi.BackendAccessor).Backend()
 
 	type result struct {
 		Handle HandleInfo
