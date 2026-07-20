@@ -22,6 +22,7 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore"
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
@@ -31,7 +32,8 @@ func Datastore(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   <BINARY_NAME> datastore <command> [<args>...]
 
-    migrate  Migrate the contents of an etcdv3 datastore to a Kubernetes datastore.
+    migrate               Migrate the contents of an etcdv3 datastore to a Kubernetes datastore.
+    migrate-policy-names  Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the tier prefix.
 
 Options:
   -h --help      Show this screen.
@@ -64,6 +66,8 @@ Description:
 	switch command {
 	case "migrate":
 		return datastore.Migrate(args)
+	case "migrate-policy-names":
+		return migrate.MigratePolicyNames(args)
 	default:
 		fmt.Println(doc)
 	}
