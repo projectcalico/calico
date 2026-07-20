@@ -65,7 +65,7 @@ func ForEndpointReadyWithTimeout(policyDir string, endpoint *internalapi.Workloa
 func waitUntilFileExists(ctx context.Context, directory, filename string) error {
 	log := logrus.WithFields(logrus.Fields{
 		"directory":   directory,
-		"disiredFile": filename,
+		"desiredFile": filename,
 	})
 
 	retryInterval := 500 * time.Millisecond
@@ -186,13 +186,11 @@ func waitForCreateEvent(ctx context.Context, watcher *fsnotify.Watcher, filename
 		select {
 		case e := <-watcher.Events:
 			log.WithField("eventName", e.Name).Debug("Received watch event")
-			switch e.Op {
-			case fsnotify.Create:
+			if e.Has(fsnotify.Create) {
 				if filepath.Base(e.Name) == filename {
 					log.WithField("eventName", e.Name).Debug("FS 'Create' event seen for file. Firing notification and stopping watch")
 					return true, nil
 				}
-			default:
 			}
 
 		case err := <-watcher.Errors:
