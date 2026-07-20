@@ -114,6 +114,7 @@ for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 bas
 	${HELM} template \
 		--show-only templates/$FILE \
 		--set version=$CALICO_VERSION \
+		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
 		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
 done
 for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
