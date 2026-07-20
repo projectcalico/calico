@@ -889,37 +889,73 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 	}
 
 	c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
-		// Evaluate ingress if destination is local workload endpoint
-		if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
+		// Evaluate ingress if destination is a local endpoint (workload or host).
+		if isLocalEp(data.DstEp) {
 			c.evaluatePendingRuleTrace(rules.RuleDirIngress, ps, data.DstEp, flow, &data.IngressPendingRuleIDs)
 		}
 
-		// Evaluate egress if source is local workload endpoint
-		if data.SrcEp != nil && !data.SrcEp.IsHostEndpoint() && data.SrcEp.IsLocal() {
+		// Evaluate egress if source is a local endpoint (workload or host).
+		if isLocalEp(data.SrcEp) {
 			c.evaluatePendingRuleTrace(rules.RuleDirEgress, ps, data.SrcEp, flow, &data.EgressPendingRuleIDs)
 		}
 	})
 }
 
+// isLocalEp returns true if the endpoint is a non-nil local endpoint (workload or host).
+func isLocalEp(ep calc.EndpointData) bool {
+	return ep != nil && ep.IsLocal()
+}
+
 // evaluatePendingRuleTrace evaluates the pending rule trace for the given direction and endpoint,
 // and updates the ruleIDs if they are different.
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
-	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
-	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace := checker.Evaluate(direction, store, protoEp, &flow)
-		if !equal(*ruleIDs, trace) {
-			*ruleIDs = append([]*calc.RuleID(nil), trace...)
-			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
+	if ep == nil {
+		return
+	}
+	protoEp, ok := c.lookupPolicyEndpoint(store, ep)
+	if !ok {
+		// Endpoint is not yet tracked by the PolicyStore — preserve existing ruleIDs
+		// rather than wiping them.
+		return
+	}
+	trace := checker.Evaluate(direction, store, protoEp, &flow)
+	if !equal(*ruleIDs, trace) {
+		*ruleIDs = append([]*calc.RuleID(nil), trace...)
+		log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
+	}
+}
+
+// lookupPolicyEndpoint returns the PolicyEndpoint (either a *proto.WorkloadEndpoint or
+// *proto.HostEndpoint) from the policy store, dispatching based on the endpoint key type.
+// Must be called with the read lock on the policy store.
+func (c *collector) lookupPolicyEndpoint(store *policystore.PolicyStore, ep calc.EndpointData) (checker.PolicyEndpoint, bool) {
+	switch ep.Key().(type) {
+	case model.WorkloadEndpointKey:
+		protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key())
+		if protoEp == nil {
+			return nil, false
 		}
-	} else {
-		log.WithField("endpoint", ep.Key()).Trace("The endpoint is not yet tracked by the PolicyStore")
+		return protoEp, true
+	case model.HostEndpointKey:
+		protoEp := c.lookupProtoHostEndpoint(store, ep.Key())
+		if protoEp == nil {
+			return nil, false
+		}
+		return protoEp, true
+	default:
+		log.WithField("key", ep.Key()).Warn("Unknown endpoint key type in lookupPolicyEndpoint")
+		return nil, false
 	}
 }
 
 // lookupProtoWorkloadEndpoint returns the proto.WorkloadEndpoint from the policy store. Must be
 // called with the read lock on the policy store.
 func (c *collector) lookupProtoWorkloadEndpoint(store *policystore.PolicyStore, key model.Key) *proto.WorkloadEndpoint {
-	if store == nil || store.Endpoints == nil {
+	if store == nil {
+		return nil
+	}
+	if store.Endpoints == nil {
+		log.Warn("PolicyStore.Endpoints is nil; store was not initialized via NewPolicyStore()")
 		return nil
 	}
 	epKey := prototypes.WorkloadEndpointID{
@@ -928,6 +964,27 @@ func (c *collector) lookupProtoWorkloadEndpoint(store *policystore.PolicyStore, 
 		EndpointId:     getEndpointIDFromKey(key),
 	}
 	return store.Endpoints[epKey]
+}
+
+// lookupProtoHostEndpoint returns the proto.HostEndpoint from the policy store. Must be
+// called with the read lock on the policy store.
+func (c *collector) lookupProtoHostEndpoint(store *policystore.PolicyStore, key model.Key) *proto.HostEndpoint {
+	if store == nil {
+		return nil
+	}
+	if store.HostEndpoints == nil {
+		log.Warn("PolicyStore.HostEndpoints is nil; store was not initialized via NewPolicyStore()")
+		return nil
+	}
+	endpointID := getEndpointIDFromKey(key)
+	if endpointID == "" {
+		log.WithField("key", key).Warn("Could not extract endpoint ID from key")
+		return nil
+	}
+	hepKey := prototypes.HostEndpointID{
+		EndpointId: endpointID,
+	}
+	return store.HostEndpoints[hepKey]
 }
 
 func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error) {
@@ -1019,6 +1076,8 @@ func equal(a, b []*calc.RuleID) bool {
 func getEndpointIDFromKey(key model.Key) string {
 	switch k := key.(type) {
 	case model.WorkloadEndpointKey:
+		return k.EndpointID
+	case model.HostEndpointKey:
 		return k.EndpointID
 	default:
 		return ""
