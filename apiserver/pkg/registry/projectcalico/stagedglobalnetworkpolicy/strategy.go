@@ -50,11 +50,11 @@ func (policyStrategy) Validate(ctx context.Context, obj runtime.Object) field.Er
 	// return validation.ValidatePolicy(obj.(*calico.Policy))
 }
 
-func (policyStrategy) AllowCreateOnUpdate() bool {
+func (policyStrategy) AllowCreateOnUpdate(ctx context.Context) bool {
 	return false
 }
 
-func (policyStrategy) AllowUnconditionalUpdate() bool {
+func (policyStrategy) AllowUnconditionalUpdate(ctx context.Context) bool {
 	return false
 }
 
