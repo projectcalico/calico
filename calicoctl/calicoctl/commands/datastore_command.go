@@ -17,7 +17,6 @@ package commands
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/datastore/migrate"
 )
 
@@ -36,7 +35,9 @@ func newMigratePolicyNamesCommand() *cobra.Command {
 		Use:   "migrate-policy-names",
 		Short: "Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the tier prefix",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrate.MigratePolicyNames(datastore.BuildMigratePolicyNamesArgs(cmd))
+			config, _ := cmd.Flags().GetString("config")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
+			return migrate.MigratePolicyNames(config, allowMismatch)
 		},
 	}
 	addConfigFlag(cmd)
@@ -62,7 +63,9 @@ func newMigrateExportCommand() *cobra.Command {
 		Use:   "export",
 		Short: "Export the contents of the etcdv3 datastore to yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrate.Export(datastore.BuildMigrateArgs("export", cmd))
+			config, _ := cmd.Flags().GetString("config")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
+			return migrate.Export(config, allowMismatch)
 		},
 	}
 	addConfigFlag(cmd)
@@ -74,7 +77,9 @@ func newMigrateImportCommand() *cobra.Command {
 		Use:   "import",
 		Short: "Store and convert yaml of resources into the Kubernetes datastore",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrate.Import(datastore.BuildMigrateArgs("import", cmd))
+			config, _ := cmd.Flags().GetString("config")
+			filename, _ := cmd.Flags().GetString("filename")
+			return migrate.Import(config, filename)
 		},
 	}
 	addConfigFlag(cmd)
@@ -87,7 +92,9 @@ func newMigrateLockCommand() *cobra.Command {
 		Use:   "lock",
 		Short: "Lock the datastore to prevent changes during migration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrate.Lock(datastore.BuildMigrateArgs("lock", cmd))
+			config, _ := cmd.Flags().GetString("config")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
+			return migrate.Lock(config, allowMismatch)
 		},
 	}
 	addConfigFlag(cmd)
@@ -99,7 +106,9 @@ func newMigrateUnlockCommand() *cobra.Command {
 		Use:   "unlock",
 		Short: "Unlock the datastore to allow changes after migration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return migrate.Unlock(datastore.BuildMigrateArgs("unlock", cmd))
+			config, _ := cmd.Flags().GetString("config")
+			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
+			return migrate.Unlock(config, allowMismatch)
 		},
 	}
 	addConfigFlag(cmd)

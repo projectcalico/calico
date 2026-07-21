@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	apiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,101 +33,39 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
 type diagOpts struct {
-	// Even though we already know, in this file, that we are doing the "calicoctl cluster
-	// diags" command, these two fields must be present or else Bind returns an error and fails
-	// to fill in the fields that we really do need.
-	Cluster bool // Only needed for Bind to work.
-	Diags   bool // Only needed for Bind to work.
-
-	// Fields that we really want Bind to fill in.
-	Help                 bool
-	Config               string
-	Since                string
-	MaxLogs              int
-	MaxParallelism       int
-	FocusNodes           string
-	AllowVersionMismatch bool
-	SkipTempDirCleanup   bool
+	Config             string
+	Since              string
+	MaxLogs            int
+	MaxParallelism     int
+	FocusNodes         string
+	SkipTempDirCleanup bool
 }
 
-var usage = `Usage:
-  calicoctl cluster diags [options]
-
-Options:
-  -h --help                    Show this screen.
-     --since=<SINCE>           Only collect logs newer than provided relative
-                               duration, in seconds (s), minutes (m) or hours (h).
-     --max-logs=<MAXLOGS>      Only collect up to this number of logs, for each
-                               kind of Calico component. [default: 5]
-     --max-parallelism=<MAXPARALLELISM> Maximum number of parallel threads to use for
-                               collecting logs. [default: 10]
-     --focus-nodes=<NODES>     Comma-separated list of nodes from which we should
-                               try first to collect logs.
-  -c --config=<CONFIG>         Path to connection configuration file.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-     --skip-temp-dir-cleanup   Don't clean up the temporary directory (useful
-                               for development).
-`
-
-var doc = constants.DatastoreIntro + usage + `
-Description:
-  The cluster diags command collects a snapshot of diagnostic info and logs related
-  to Calico for the given cluster.  It generates a .tar.gz file containing all the
-  diags.
-
-  By default, in order to keep the .tar.gz file to a reasonable size, this command
-  only collects up to 5 sets of logs for each kind of Calico pod (for example,
-  for calico-node, or Typha, or the intrusion detection controller).  To collect
-  more (or fewer) sets of logs, use the --max-logs option.
-
-  To tell calicoctl to try to collect logs first from particular nodes of interest,
-  set the --focus-nodes option to the relevant node names, comma-separated.  For a
-  Calico component with pods on multiple nodes, calicoctl will first collect logs
-  from the pods (if any) on the focus nodes, then from other nodes in the cluster.
-
-  To collect logs only for the last few hours, minutes, or seconds, set the --since
-  option to indicate the desired period.
-`
-
-// Diags executes a series of kubectl exec commands to retrieve logs and resource information
-// for the configured cluster.
-func Diags(args []string) error {
-	return diagsTestable(args, fmt.Print, collectDiags)
+// Diags collects a snapshot of diagnostic info and logs related to Calico for
+// the cluster and writes it to a .tar.gz file.
+func Diags(config, since string, maxLogs, maxParallelism int, focusNodes string, skipTempDirCleanup bool) error {
+	return collectDiags(buildDiagOpts(config, since, maxLogs, maxParallelism, focusNodes, skipTempDirCleanup))
 }
 
-func diagsTestable(args []string, print func(a ...any) (int, error), continuation func(*diagOpts) error) error {
-	// Make our own Parser so we can print out options when bad options are given.
-	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler, SkipHelpFlags: true}
-	parsedArgs, err := parser.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'.\n\n%v", strings.Join(args, " "), usage)
+func buildDiagOpts(config, since string, maxLogs, maxParallelism int, focusNodes string, skipTempDirCleanup bool) *diagOpts {
+	// Default since to "0s", which kubectl understands as meaning all logs.
+	if since == "" {
+		since = "0s"
 	}
-
-	var opts diagOpts
-	err = parsedArgs.Bind(&opts)
-	if err != nil {
-		return fmt.Errorf("error understanding options: %w", err)
+	return &diagOpts{
+		Config:             config,
+		Since:              since,
+		MaxLogs:            maxLogs,
+		MaxParallelism:     maxParallelism,
+		FocusNodes:         focusNodes,
+		SkipTempDirCleanup: skipTempDirCleanup,
 	}
-
-	if opts.Help {
-		_, _ = print(doc)
-		return nil
-	}
-
-	// Default --since to "0s", which kubectl understands as meaning all logs.
-	if opts.Since == "" {
-		opts.Since = "0s"
-	}
-
-	return continuation(&opts)
 }
 
 func collectDiags(opts *diagOpts) error {
@@ -340,8 +277,10 @@ func collectCalicoResource(dir string) {
 	// and version is the storage version. We use these to construct fully qualified resource identifiers
 	// (<plural>.<version>.<group>) to avoid ambiguity when multiple API groups define the same resource
 	// name (e.g., apiservers.operator.tigera.io vs apiservers.config.openshift.io).
-	buf, err := common.Exec([]string{"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
-		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}"})
+	buf, err := common.Exec([]string{
+		"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
+		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}",
+	})
 	if err != nil {
 		fmt.Printf("Couldn't list CRDs: %s\n", err)
 		if buf != nil {
@@ -964,7 +903,7 @@ func collectUnsupportedAnnotations(tempDir string, directoryName string) {
 		fmt.Println("\n==== WARNING: Unsupported annotation usage detected in the cluster ====")
 		content := strings.Join(filesWithString, "\n")
 		filePath := fmt.Sprintf("%s/%s/files_with_unsupported_annotation.txt", tempDir, directoryName)
-		err = os.WriteFile(filePath, []byte(content), 0644)
+		err = os.WriteFile(filePath, []byte(content), 0o644)
 		if err != nil {
 			fmt.Printf("Error writing list of files with unsupported annotation: %s\n", err)
 		}
