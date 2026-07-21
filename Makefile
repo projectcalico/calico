@@ -50,6 +50,9 @@ clean:
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
 	$(MAKE) -C third_party/cni-plugins clean
+	$(MAKE) -C third_party/envoy-gateway clean
+	$(MAKE) -C third_party/envoy-proxy clean
+	$(MAKE) -C third_party/envoy-ratelimit clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
