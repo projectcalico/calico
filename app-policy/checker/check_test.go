@@ -424,7 +424,7 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status, _ := checkTiers(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status, _ := checkTiersBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	expectedStatus := rpc.Status{Code: OK}
 	Expect(status.Code).To(Equal(expectedStatus.Code))
 	Expect(status.Message).To(Equal(expectedStatus.Message))
@@ -448,7 +448,7 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, nil, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, nil, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -472,7 +472,7 @@ func TestCheckStoreNoTiers(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -522,13 +522,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -571,13 +571,13 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -627,7 +627,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -688,7 +688,7 @@ func TestCheckStorePass(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -715,7 +715,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -757,7 +757,7 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
 }
 
@@ -842,20 +842,20 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	// Change to a bad path, and check that we get PERMISSION_DENIED
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Path = "/bad"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	// Change to a path that hits tier2 default Pass action, and then is allowed in tier3
 	http.Path = "/bar"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -921,13 +921,13 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "GET"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
