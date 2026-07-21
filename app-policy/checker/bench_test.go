@@ -113,7 +113,33 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 	})
 }
 
+// BenchmarkEvaluateBaselinePolicyScaleCompiled is BenchmarkEvaluateBaselinePolicyScale
+// with the store's policies compiled, as when a PolicyCompiler is configured. Missing
+// IP sets warn at compile time (outside the timed loop) rather than per flow, so there
+// is no MissingSetsLogsOff variant to distinguish.
+func BenchmarkEvaluateBaselinePolicyScaleCompiled(b *testing.B) {
+	b.Run("AllSetsPresent", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, false)
+	})
+	b.Run("MissingSets", func(b *testing.B) {
+		p := defaultBaselinePolicyScaleParams()
+		p.numMissingIPSets = 8
+		benchEvaluateBaselinePolicyScaleCompiled(b, p, log.WarnLevel, false)
+	})
+	b.Run("MatchEarly", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
+	})
+}
+
 func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
+	benchEvaluateBaselinePolicyScaleImpl(b, p, level, matchEarly, false)
+}
+
+func benchEvaluateBaselinePolicyScaleCompiled(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
+	benchEvaluateBaselinePolicyScaleImpl(b, p, level, matchEarly, true)
+}
+
+func benchEvaluateBaselinePolicyScaleImpl(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly, compiled bool) {
 	logger := log.StandardLogger()
 	oldLevel, oldOut := logger.GetLevel(), logger.Out
 	counter := &ipsetMissCounter{}
@@ -133,6 +159,17 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 	store, ep, expectedWarns := buildBaselinePolicyStore(p)
 	if matchEarly {
 		addMatchEarlyPolicy(store, ep)
+	}
+	if compiled {
+		// Compiling moves the missing-set warnings to compile time (once per
+		// missing reference), off the per-flow path entirely.
+		compileStoreForTest(store)
+		if logger.IsLevelEnabled(log.WarnLevel) && counter.count.Load() != int64(expectedWarns) {
+			b.Fatalf("expected %d 'IPSet not found' warnings at compile time, got %d",
+				expectedWarns, counter.count.Load())
+		}
+		counter.count.Store(0)
+		expectedWarns = 0
 	}
 	flow := &MockFlow{
 		// TEST-NET addresses; generated IP set members all come from 10.0.0.0/8, so no
