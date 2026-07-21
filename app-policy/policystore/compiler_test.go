@@ -174,6 +174,33 @@ func TestCompileFailureLeavesNoEntry(t *testing.T) {
 	Expect(store.CompiledPolicyByID).To(HaveKey(pID("policy1")))
 }
 
+// TestNilPolicyUpdateCompilesNothing verifies that a malformed update
+// carrying a nil policy/profile does not crash the compile hooks and leaves
+// no compiled entry (evaluation falls back to interpreting the stored nil,
+// as before).
+func TestNilPolicyUpdateCompilesNothing(t *testing.T) {
+	RegisterTestingT(t)
+
+	compiler := newFakeCompiler()
+	store := NewPolicyStoreWithCompiler(compiler)
+
+	// Replace a healthy policy/profile with a nil one: the compiled entry
+	// (and the reverse-index entries) must be dropped.
+	store.ProcessUpdate("", ipSetUpdate("set-a", "10.0.0.1"), false)
+	store.ProcessUpdate("", policyUpdate("policy1", &proto.Policy{
+		InboundRules: []*proto.Rule{{SrcIpSetIds: []string{"set-a"}}},
+	}), false)
+	store.ProcessUpdate("", profileUpdate("profile1", &proto.Profile{}), false)
+	Expect(store.CompiledPolicyByID).To(HaveLen(1))
+	Expect(store.CompiledProfileByID).To(HaveLen(1))
+
+	store.ProcessUpdate("", policyUpdate("policy1", nil), false)
+	store.ProcessUpdate("", profileUpdate("profile1", nil), false)
+	Expect(store.CompiledPolicyByID).To(BeEmpty())
+	Expect(store.CompiledProfileByID).To(BeEmpty())
+	Expect(store.ipSetPolicyRefs).To(BeEmpty())
+}
+
 // TestIPSetInvalidation verifies the reverse index: replacing or removing an
 // IP set recompiles exactly the policies and profiles that reference it,
 // while membership deltas (which mutate the IPSet object in place) recompile

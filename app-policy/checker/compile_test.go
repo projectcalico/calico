@@ -139,6 +139,13 @@ func TestCompiledPolicyEquivalence(t *testing.T) {
 			DestPort:   80,
 			Protocol:   0,
 		},
+		// Nil IPs, as seen for non-IP connections (e.g. pipes): the parsed-IP
+		// fast path must not be taken (ContainsIP would panic on a nil IP).
+		&MockFlow{
+			SourcePort: 1234,
+			DestPort:   80,
+			Protocol:   6,
+		},
 	}
 
 	ruleVariants := []*proto.Rule{

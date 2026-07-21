@@ -318,14 +318,20 @@ type resolvedIPSet struct {
 
 func (s resolvedIPSet) containsSrcIP(req *requestCache) bool {
 	if s.addrSet != nil {
-		return s.addrSet.ContainsIP(req.getSrcIP())
+		// The flow's IP can be nil (non-IP connections, e.g. pipes); as in
+		// ipSetContains, only a non-nil IP may take the parsed-IP fast path.
+		if ip := req.getSrcIP(); ip != nil {
+			return s.addrSet.ContainsIP(ip)
+		}
 	}
 	return s.set.Contains(req.getSrcIPStr())
 }
 
 func (s resolvedIPSet) containsDstIP(req *requestCache) bool {
 	if s.addrSet != nil {
-		return s.addrSet.ContainsIP(req.getDstIP())
+		if ip := req.getDstIP(); ip != nil {
+			return s.addrSet.ContainsIP(ip)
+		}
 	}
 	return s.set.Contains(req.getDstIPStr())
 }
@@ -552,7 +558,7 @@ func compileProtocolMatcher(p, notP *proto.Protocol) ruleMatcher {
 		notN, notOK := resolve(notP)
 		return func(req *requestCache) bool {
 			proto := int32(req.GetProtocol())
-			return proto == n && !(notOK && proto == notN)
+			return proto == n && (!notOK || proto != notN)
 		}
 	}
 	notN, notOK := resolve(notP)

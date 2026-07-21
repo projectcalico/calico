@@ -51,9 +51,11 @@ func (store *PolicyStore) onPolicyUpdate(id types.PolicyID, old, updated *proto.
 			deleteRef(store.ipSetPolicyRefs, setID, id)
 		})
 	}
-	forEachIPSetRef(updated, func(setID string) {
-		addRef(&store.ipSetPolicyRefs, setID, id)
-	})
+	if updated != nil {
+		forEachIPSetRef(updated, func(setID string) {
+			addRef(&store.ipSetPolicyRefs, setID, id)
+		})
+	}
 	store.compilePolicy(id, updated)
 }
 
@@ -81,9 +83,11 @@ func (store *PolicyStore) onProfileUpdate(id types.ProfileID, old, updated *prot
 			deleteRef(store.ipSetProfileRefs, setID, id)
 		})
 	}
-	forEachProfileIPSetRef(updated, func(setID string) {
-		addRef(&store.ipSetProfileRefs, setID, id)
-	})
+	if updated != nil {
+		forEachProfileIPSetRef(updated, func(setID string) {
+			addRef(&store.ipSetProfileRefs, setID, id)
+		})
+	}
 	store.compileProfile(id, updated)
 }
 
@@ -119,8 +123,15 @@ func (store *PolicyStore) onIPSetReplaced(setID string) {
 	}
 }
 
+// compilePolicy and compileProfile treat a nil policy/profile (a malformed
+// update, or a stale reverse-index entry) as not compilable: the entry is
+// dropped and evaluation falls back to interpreting the stored value.
 func (store *PolicyStore) compilePolicy(id types.PolicyID, policy *proto.Policy) {
-	if cp := store.compiler.CompilePolicy(store, policy); cp != nil {
+	var cp CompiledPolicy
+	if policy != nil {
+		cp = store.compiler.CompilePolicy(store, policy)
+	}
+	if cp != nil {
 		store.CompiledPolicyByID[id] = cp
 	} else {
 		delete(store.CompiledPolicyByID, id)
@@ -128,7 +139,11 @@ func (store *PolicyStore) compilePolicy(id types.PolicyID, policy *proto.Policy)
 }
 
 func (store *PolicyStore) compileProfile(id types.ProfileID, profile *proto.Profile) {
-	if cp := store.compiler.CompileProfile(store, profile); cp != nil {
+	var cp CompiledPolicy
+	if profile != nil {
+		cp = store.compiler.CompileProfile(store, profile)
+	}
+	if cp != nil {
 		store.CompiledProfileByID[id] = cp
 	} else {
 		delete(store.CompiledProfileByID, id)
