@@ -6094,10 +6094,15 @@ func dumpCTMapsAny(family int, felix *infrastructure.Felix) map[conntrack.KeyInt
 
 func dumpBPFMap(felix *infrastructure.Felix, m maps.Map, iter func(k, v []byte)) {
 	// Wait for the map to exist before trying to access it.  Otherwise, we
-	// might fail a test that was retrying this dump anyway.
+	// might fail a test that was retrying this dump anyway.  This must be
+	// generous: it is a hard assertion, so when a caller polls a dump from
+	// inside its own Eventually, a timeout here fails the test outright and
+	// defeats the caller's retry loop.  Under bpf_jit_harden=2 and a loaded
+	// CI VM, Felix can take over 10s to create and pin its full map set
+	// after a restart into BPF mode.
 	Eventually(func() bool {
 		return felix.FileExists(m.Path())
-	}, "10s", "300ms").Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
+	}, "30s", "300ms").Should(BeTrue(), fmt.Sprintf("dumpBPFMap: map %s didn't show up inside container", m.Path()))
 	cmd, err := maps.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get BPF map dump command: "+m.Path())
 	log.WithField("cmd", cmd).Debug("dumpBPFMap")
