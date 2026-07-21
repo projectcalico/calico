@@ -137,8 +137,8 @@ func matchDestination(policyNamespace string, r *proto.Rule, req *requestCache) 
 // selector, pod selector,
 func computeNamespaceMatch(
 	policyNamespace, nsSelector, podSelector, notPodSelector string, saMatch *proto.ServiceAccountMatch,
-) *namespaceMatch {
-	nsMatch := &namespaceMatch{}
+) namespaceMatch {
+	nsMatch := namespaceMatch{}
 	if nsSelector != "" {
 		// In all cases, if a namespace label selector is present, it takes precedence.
 		nsMatch.Selector = nsSelector
@@ -228,7 +228,7 @@ func matchLabels(selectorStr string, labels map[string]string) bool {
 
 // matchNamespace checks if the namespace part of the Rule matches the request. It returns true if
 // the Rule matches, false otherwise.
-func matchNamespace(nsMatch *namespaceMatch, ns *namespace) bool {
+func matchNamespace(nsMatch namespaceMatch, ns *namespace) bool {
 	if ns == nil {
 		log.Debug("nil namespace. Return true")
 		return true
@@ -482,8 +482,12 @@ func matchSrcIPSets(r *proto.Rule, req *requestCache) bool {
 			"NotSrcIpSetIds": r.NotSrcIpSetIds,
 		}).Debug("matching source IP sets")
 	}
-	return matchIPSetsAll(r.SrcIpSetIds, req.getIPSet, req.GetSourceIP().String()) &&
-		matchIPSetsNotAny(r.NotSrcIpSetIds, req.getIPSet, req.GetSourceIP().String())
+	if len(r.SrcIpSetIds) == 0 && len(r.NotSrcIpSetIds) == 0 {
+		return true
+	}
+	srcIP := req.getSrcIPStr()
+	return matchIPSetsAll(r.SrcIpSetIds, req.getIPSet, srcIP) &&
+		matchIPSetsNotAny(r.NotSrcIpSetIds, req.getIPSet, srcIP)
 }
 
 // matchDstIPPortSetIds checks if the destination IP, protocol and port is within the IP sets. It
@@ -494,10 +498,11 @@ func matchDstIPPortSetIds(r *proto.Rule, req *requestCache) bool {
 			"DstIpPortSetIds": r.GetDstIpPortSetIds(),
 		}).Debug("matching destination IP port sets")
 	}
-	protocolStr := protocolMapL4[int32(req.GetProtocol())]
-	// The values compared against are of the for "ip,protocol:port".
-	ipProtoPort := fmt.Sprintf("%s,%s:%d", req.GetDestIP(), protocolStr, req.GetDestPort())
-	return matchIPSetsAll(r.GetDstIpPortSetIds(), req.getIPSet, ipProtoPort)
+	if len(r.GetDstIpPortSetIds()) == 0 {
+		return true
+	}
+	// The values compared against are of the form "ip,protocol:port".
+	return matchIPSetsAll(r.GetDstIpPortSetIds(), req.getIPSet, req.getDstIPProtoPortStr())
 }
 
 // matchDstIPSets checks if the destination IP is within the IP sets and not in the not IP sets. It
@@ -509,8 +514,12 @@ func matchDstIPSets(r *proto.Rule, req *requestCache) bool {
 			"NotDstIpSetIds": r.GetNotDstIpSetIds(),
 		}).Debug("matching destination IP sets")
 	}
-	return matchIPSetsAll(r.GetDstIpSetIds(), req.getIPSet, req.GetDestIP().String()) &&
-		matchIPSetsNotAny(r.GetNotDstIpSetIds(), req.getIPSet, req.GetDestIP().String())
+	if len(r.GetDstIpSetIds()) == 0 && len(r.GetNotDstIpSetIds()) == 0 {
+		return true
+	}
+	destIP := req.getDstIPStr()
+	return matchIPSetsAll(r.GetDstIpSetIds(), req.getIPSet, destIP) &&
+		matchIPSetsNotAny(r.GetNotDstIpSetIds(), req.getIPSet, destIP)
 }
 
 // matchIPSetsAll returns true if the address matches all of the IP set ids, false otherwise.
