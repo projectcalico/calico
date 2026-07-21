@@ -148,10 +148,7 @@ func TestTier_Defaults(t *testing.T) {
 }
 
 // TestTier_DeletionProtection exercises the protect-builtin-tiers
-// ValidatingAdmissionPolicy (api/admission/protect-builtin-tiers.yaml). In
-// Calico Enterprise the built-in tiers are the default tier plus the
-// AdminNetworkPolicy / BaselineAdminNetworkPolicy tiers - not the OSS
-// kube-admin / kube-baseline tiers, which do not exist here yet.
+// ValidatingAdmissionPolicy (api/admission/protect-builtin-tiers.yaml).
 func TestTier_DeletionProtection(t *testing.T) {
 	if !admissionPoliciesEnabled {
 		t.Skip("ValidatingAdmissionPolicy not supported on this K8s version")
@@ -163,8 +160,8 @@ func TestTier_DeletionProtection(t *testing.T) {
 		order         float64
 	}{
 		{names.DefaultTierName, v3.Deny, v3.DefaultTierOrder},
-		{names.AdminNetworkPolicyTierName, v3.Pass, v3.AdminNetworkPolicyTierOrder},
-		{names.BaselineAdminNetworkPolicyTierName, v3.Pass, v3.BaselineAdminNetworkPolicyTierOrder},
+		{names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder},
+		{names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder},
 	}
 
 	for _, bt := range builtinTiers {
@@ -173,7 +170,7 @@ func TestTier_DeletionProtection(t *testing.T) {
 			newTier := func() *v3.Tier {
 				return &v3.Tier{
 					ObjectMeta: metav1.ObjectMeta{Name: bt.name},
-					Spec:       v3.TierSpec{DefaultAction: ptr.To(bt.defaultAction), Order: &order},
+					Spec:       v3.TierSpec{DefaultAction: new(bt.defaultAction), Order: &order},
 				}
 			}
 
@@ -202,26 +199,21 @@ func TestTier_DeletionProtection(t *testing.T) {
 		})
 	}
 
-	// The OSS kube-admin / kube-baseline tiers are not protected in Enterprise,
-	// so deleting them (like any user-defined tier) must be allowed. They still
-	// carry CEL creation constraints (Pass action, fixed order), so create them
-	// with a valid spec. These subtests run after the ones above, by which point
-	// the ValidatingAdmissionPolicy is known to be active - confirming it is
-	// selective and does not block these tiers.
 	deletableTiers := []struct {
 		name          string
 		defaultAction v3.Action
 		order         float64
 	}{
-		{names.KubeAdminTierName, v3.Pass, v3.KubeAdminTierOrder},
-		{names.KubeBaselineTierName, v3.Pass, v3.KubeBaselineTierOrder},
+		{"adminnetworkpolicy", v3.Pass, v3.KubeAdminTierOrder},
+		{"baselineadminnetworkpolicy", v3.Pass, v3.KubeBaselineTierOrder},
+		{"user-defined-tier", v3.Pass, float64(5000)},
 	}
 	for _, dt := range deletableTiers {
 		t.Run(dt.name+" can be deleted", func(t *testing.T) {
 			order := dt.order
 			tier := &v3.Tier{
 				ObjectMeta: metav1.ObjectMeta{Name: dt.name},
-				Spec:       v3.TierSpec{DefaultAction: ptr.To(dt.defaultAction), Order: &order},
+				Spec:       v3.TierSpec{DefaultAction: new(dt.defaultAction), Order: &order},
 			}
 			if err := testClient.Create(context.Background(), tier); err != nil {
 				t.Fatalf("failed to create tier %q: %v", dt.name, err)
@@ -231,15 +223,4 @@ func TestTier_DeletionProtection(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("user-defined tier can be deleted", func(t *testing.T) {
-		name := uniqueName("tier-deletable")
-		tier := &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: name}}
-		if err := testClient.Create(context.Background(), tier); err != nil {
-			t.Fatalf("failed to create tier %q: %v", name, err)
-		}
-		if err := testClient.Delete(context.Background(), tier); err != nil {
-			t.Fatalf("expected deletion of user-defined tier %q to succeed, got: %v", name, err)
-		}
-	})
 }
