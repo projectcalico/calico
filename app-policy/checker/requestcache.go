@@ -43,6 +43,13 @@ var (
 type requestCache struct {
 	Flow
 	store *policystore.PolicyStore
+
+	// Memoized string forms of per-flow values. The match functions need these for
+	// every rule that carries an IP set reference; recomputing them per rule dominates
+	// allocation when many policies apply to an endpoint.
+	srcIPStr       string
+	dstIPStr       string
+	dstIPProtoPort string
 }
 
 type peer struct {
@@ -98,6 +105,32 @@ func (r *requestCache) getDstNamespace() *namespace {
 	}
 
 	return nil
+}
+
+// getSrcIPStr returns the source IP in string form, memoized across the request.
+func (r *requestCache) getSrcIPStr() string {
+	if r.srcIPStr == "" {
+		r.srcIPStr = r.GetSourceIP().String()
+	}
+	return r.srcIPStr
+}
+
+// getDstIPStr returns the destination IP in string form, memoized across the request.
+func (r *requestCache) getDstIPStr() string {
+	if r.dstIPStr == "" {
+		r.dstIPStr = r.GetDestIP().String()
+	}
+	return r.dstIPStr
+}
+
+// getDstIPProtoPortStr returns the destination "<IP>,<protocol>:<port>" key used for
+// IP+port set matching, memoized across the request.
+func (r *requestCache) getDstIPProtoPortStr() string {
+	if r.dstIPProtoPort == "" {
+		protocolStr := protocolMapL4[int32(r.GetProtocol())]
+		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
+	}
+	return r.dstIPProtoPort
 }
 
 // getIPSet returns the IPSet with the given ID.
