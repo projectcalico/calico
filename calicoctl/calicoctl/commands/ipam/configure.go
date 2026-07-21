@@ -33,7 +33,7 @@ func updateIPAMConfig(
 	ctx context.Context,
 	ipamClient ipam.Interface,
 	strictAffinity *bool,
-	maxBlocks *int,
+	maxBlocks *int32,
 	persistence *ipam.VMAddressPersistence,
 	ipCooldownSeconds *int,
 ) error {
@@ -49,7 +49,7 @@ func updateIPAMConfig(
 
 	// Set MaxBlocksPerHost if specified.
 	if maxBlocks != nil {
-		ipamConfig.MaxBlocksPerHost = *maxBlocks
+		ipamConfig.MaxBlocksPerHost = int(*maxBlocks)
 	}
 
 	// Update KubeVirtVMAddressPersistence if specified.
@@ -211,12 +211,13 @@ Description:
 	}
 
 	// Parse MaxBlocksPerHost (optional).
-	var maxBlocks *int
+	var maxBlocks *int32
 	if maxBlockStr, ok := parsedArgs["--max-blocks-per-host"].(string); ok && maxBlockStr != "" {
-		maxBlocksVal, err := strconv.Atoi(maxBlockStr)
+		parsed, err := strconv.ParseInt(maxBlockStr, 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid value for maxblockhost. Use a valid number")
 		}
+		maxBlocksVal := int32(parsed)
 		maxBlocks = &maxBlocksVal
 	}
 
