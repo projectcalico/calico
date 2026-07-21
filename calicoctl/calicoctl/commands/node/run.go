@@ -25,13 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
@@ -53,135 +50,43 @@ var (
 	backendMatch    = regexp.MustCompile("^(none|bird)$")
 )
 
-// Run function collects diagnostic information and logs
-func Run(args []string) error {
+// RunConfig holds the options for `calicoctl node run`.
+type RunConfig struct {
+	IP                     string
+	IP6                    string
+	AS                     string
+	Name                   string
+	IPAutodetectionMethod  string
+	IP6AutodetectionMethod string
+	LogDir                 string
+	NodeImage              string
+	Backend                string
+	Config                 string
+	FelixConfig            string
+
+	DryRun           bool
+	InitSystem       bool
+	NoDefaultIPPools bool
+}
+
+// Run starts a calico/node container instance that provides Calico networking
+// and network policy on the compute host.
+func Run(c RunConfig) error {
 	var err error
-	doc := `Usage:
-  <BINARY_NAME> node run [--ip=<IP>] [--ip6=<IP6>] [--as=<AS_NUM>]
-                     [--name=<NAME>]
-                     [--ip-autodetection-method=<IP_AUTODETECTION_METHOD>]
-                     [--ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>]
-                     [--log-dir=<LOG_DIR>]
-                     [--node-image=<DOCKER_IMAGE_NAME>]
-                     [--backend=(bird|none)]
-                     [--config=<CONFIG>]
-                     [--felix-config=<CONFIG>]
-                     [--no-default-ippools]
-                     [--dryrun]
-                     [--init-system]
-                     [--allow-version-mismatch]
-
-Options:
-  -h --help                Show this screen.
-     --name=<NAME>         The name of the Calico node.  If this is not
-                           supplied it defaults to the host name.
-     --as=<AS_NUM>         Set the AS number for this node.  If omitted, it
-                           will use the value configured on the node resource.
-                           If there is no configured value and --as option is
-                           omitted, the node will inherit the global AS number
-     --ip=<IP>             Set the local IPv4 routing address for this node.
-                           If omitted, it will use the value configured on the
-                           node resource.  If there is no configured value
-                           and the --ip option is omitted, the node will
-                           attempt to autodetect an IP address to use.  Use a
-                           value of 'autodetect' to always force autodetection
-                           of the IP each time the node starts.
-     --ip6=<IP6>           Set the local IPv6 routing address for this node.
-                           If omitted, it will use the value configured on the
-                           node resource.  If there is no configured value
-                           and the --ip6 option is omitted, the node will not
-                           route IPv6.  Use a value of 'autodetect' to force
-                           autodetection of the IP each time the node starts.
-     --ip-autodetection-method=<IP_AUTODETECTION_METHOD>
-                           Specify the autodetection method for detecting the
-                           local IPv4 routing address for this node.  The valid
-                           options are:
-                           > first-found
-                             Use the first valid IP address on the first
-                             enumerated interface (common known exceptions are
-                             filtered out, e.g. the docker bridge).  It is not
-                             recommended to use this if you have multiple
-                             external interfaces on your host.
-                           > can-reach=<IP OR DOMAINNAME>
-                             Use the interface determined by your host routing
-                             tables that will be used to reach the supplied
-                             destination IP or domain name.
-                           > interface=<IFACE NAME REGEX LIST>
-                             Use the first valid IP address found on interfaces
-                             named as per the first matching supplied interface
-                             name regex. Regexes are separated by commas
-                             (e.g. eth.*,enp0s.*).
-                           > skip-interface=<IFACE NAME REGEX LIST>
-                             Use the first valid IP address on the first
-                             enumerated interface (same logic as first-found
-                             above) that does NOT match with any of the
-                             specified interface name regexes. Regexes are
-                             separated by commas (e.g. eth.*,enp0s.*).
-                           [default: first-found]
-     --ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>
-                           Specify the autodetection method for detecting the
-                           local IPv6 routing address for this node.  See
-                           ip-autodetection-method flag for valid options.
-                           [default: first-found]
-     --log-dir=<LOG_DIR>   The directory containing Calico logs.
-                           [default: /var/log/calico]
-     --node-image=<DOCKER_IMAGE_NAME>
-                           Docker image to use for Calico's per-node container.
-                           [default: quay.io/calico/node:latest]
-     --backend=(bird|none)
-                           Specify which networking backend to use.  When set
-                           to "none", Calico node runs in policy only mode.
-                           [default: bird]
-     --dryrun              Output the appropriate command, without starting the
-                           container.
-     --init-system         Run the appropriate command to use with an init
-                           system.
-     --no-default-ippools  Do not create default pools upon startup.
-                           Default IP pools will be created if this is not set
-                           and there are no preexisting Calico IP pools.
-  -c --config=<CONFIG>     Path to the file containing connection
-                           configuration in YAML or JSON format.
-                           [default: ` + constants.DefaultConfigPath + `]
-     --felix-config=<CONFIG>
-                           Path to the file containing Felix
-                           configuration in YAML or JSON format.
-     --allow-version-mismatch
-                           Allow client and cluster versions mismatch.
-
-Description:
-  This command is used to start a calico/node container instance which provides
-  Calico networking and network policy on your compute host.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	binaryName, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", binaryName)
-
-	arguments, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		log.Info(err)
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(arguments) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
-	// Extract all the parameters.
-	ipv4 := argutils.ArgStringOrBlank(arguments, "--ip")
-	ipv6 := argutils.ArgStringOrBlank(arguments, "--ip6")
-	ipv4ADMethod := argutils.ArgStringOrBlank(arguments, "--ip-autodetection-method")
-	ipv6ADMethod := argutils.ArgStringOrBlank(arguments, "--ip6-autodetection-method")
-	logDir := argutils.ArgStringOrBlank(arguments, "--log-dir")
-	asNumber := argutils.ArgStringOrBlank(arguments, "--as")
-	img := argutils.ArgStringOrBlank(arguments, "--node-image")
-	backend := argutils.ArgStringOrBlank(arguments, "--backend")
-	dryrun := argutils.ArgBoolOrFalse(arguments, "--dryrun")
-	name := argutils.ArgStringOrBlank(arguments, "--name")
-	nopools := argutils.ArgBoolOrFalse(arguments, "--no-default-ippools")
-	config := argutils.ArgStringOrBlank(arguments, "--config")
-	felixConfig := argutils.ArgStringOrBlank(arguments, "--felix-config")
-	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
+	ipv4 := c.IP
+	ipv6 := c.IP6
+	ipv4ADMethod := c.IPAutodetectionMethod
+	ipv6ADMethod := c.IP6AutodetectionMethod
+	logDir := c.LogDir
+	asNumber := c.AS
+	img := c.NodeImage
+	backend := c.Backend
+	dryrun := c.DryRun
+	name := c.Name
+	nopools := c.NoDefaultIPPools
+	config := c.Config
+	felixConfig := c.FelixConfig
+	initSystem := c.InitSystem
 
 	// Validate parameters.
 	if ipv4 != "" && ipv4 != "autodetect" {
@@ -302,8 +207,10 @@ Description:
 	// in restart mechanism.  If this is for an init-system we want the
 	// command to remain attached and for Docker to remove the dead
 	// container so that it can be restarted by the init system.
-	cmd := []string{"docker", "run", "--net=host", "--privileged",
-		"--name=calico-node"}
+	cmd := []string{
+		"docker", "run", "--net=host", "--privileged",
+		"--name=calico-node",
+	}
 	if initSystem {
 		cmd = append(cmd, "--rm")
 	} else {

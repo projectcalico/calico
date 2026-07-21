@@ -17,58 +17,22 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"strings"
-
-	"github.com/docopt/docopt-go"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
-func MigratePolicyNames(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> datastore migrate-policy-names [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -c --config=<CONFIG>         Path to the file containing connection
-                               configuration in YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  Rewrite policy names in the datastore to drop the legacy "default." tier
-  prefix, aligning the stored name with the v3 resource name introduced in
-  v3.32.
-
-  This is only needed for an etcdv3 datastore (for example OpenStack) that was
-  created before v3.32 and upgraded in place. A Kubernetes datastore is
-  migrated automatically by kube-controllers. The command is safe to re-run.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
+// MigratePolicyNames rewrites default-tier policy names in an etcdv3 datastore to
+// drop the legacy tier prefix, matching the v3 name introduced in v3.32. Safe to re-run.
+func MigratePolicyNames(config string, allowVersionMismatch bool) error {
+	if err := common.CheckVersionMismatch(config, allowVersionMismatch); err != nil {
 		return err
 	}
 
-	cf := parsedArgs["--config"].(string)
-	c, err := clientmgr.NewClient(cf)
+	c, err := clientmgr.NewClient(config)
 	if err != nil {
 		return err
 	}

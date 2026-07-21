@@ -290,13 +290,11 @@ local:calicoctl/calicoctl/commands/clientmgr
 local:calicoctl/calicoctl/commands/cluster
 local:calicoctl/calicoctl/commands/common
 local:calicoctl/calicoctl/commands/constants
-local:calicoctl/calicoctl/commands/datastore
 local:calicoctl/calicoctl/commands/datastore/migrate
 local:calicoctl/calicoctl/commands/file
 local:calicoctl/calicoctl/commands/ipam
 local:calicoctl/calicoctl/commands/node
 local:calicoctl/calicoctl/resourcemgr
-local:calicoctl/calicoctl/util
 local:calicoctl/calicoctl/util/yaml
 local:cmd/calico
 local:cmd/calico-windows
