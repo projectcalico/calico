@@ -549,16 +549,16 @@ This certificate must be valid and accessible by the calico-node process.
 ### `PrometheusMetricsClientAuth` (config file) / `prometheusMetricsClientAuth` (YAML)
 
 Specifies the client authentication type for the /metrics endpoint.
-This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+This determines how the server validates client certificates. Default is "NoClientCert".
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_PrometheusMetricsClientAuth` |
 | Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>RequireAnyClientCert</code>, <code>VerifyClientCertIfGiven</code> |
-| Default value (above encoding) | `RequireAndVerifyClientCert` |
+| Default value (above encoding) | `NoClientCert` |
 | `FelixConfiguration` field | `prometheusMetricsClientAuth` (YAML) `PrometheusMetricsClientAuth` (Go API) |
 | `FelixConfiguration` schema | `string` |
-| Default value (YAML) | `RequireAndVerifyClientCert` |
+| Default value (YAML) | `NoClientCert` |
 
 ### `PrometheusMetricsEnabled` (config file) / `prometheusMetricsEnabled` (YAML)
 
@@ -1163,7 +1163,8 @@ network stack is used.
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
-Configures nftables support in Felix.
+Configures nftables support in Felix. In Auto mode, Felix uses the
+nftables dataplane if kube-proxy is detected to be running in nftables mode.
 
 | Detail |   |
 | --- | --- |
@@ -2297,6 +2298,25 @@ tunnel IPs).
 | `FelixConfiguration` field | `bpfMapSizeRoute` (YAML) `BPFMapSizeRoute` (Go API) |
 | `FelixConfiguration` schema | Integer |
 | Default value (YAML) | `262144` |
+| Notes | Required. | 
+
+### `BPFOverlayHostSourceIP` (config file) / `bpfOverlayHostSourceIP` (YAML)
+
+Controls the source IP that Felix uses in BPF mode for host-networked
+(node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel. "TunnelAddress" (the default)
+assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+of clusters upgraded from earlier releases. "HostAddress" uses the node's own IP directly and does not
+assign a tunnel device IP. This option has no effect on WireGuard tunnels, which always use a tunnel
+device IP.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_BPFOverlayHostSourceIP` |
+| Encoding (env var/config file) | One of: <code>HostAddress</code>, <code>TunnelAddress</code> |
+| Default value (above encoding) | `TunnelAddress` |
+| `FelixConfiguration` field | `bpfOverlayHostSourceIP` (YAML) `BPFOverlayHostSourceIP` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"HostAddress"</code>, <code>"TunnelAddress"</code>. |
+| Default value (YAML) | `TunnelAddress` |
 | Notes | Required. | 
 
 ### `BPFPSNATPorts` (config file) / `bpfPSNATPorts` (YAML)

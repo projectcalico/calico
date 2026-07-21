@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -176,6 +177,37 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table.Apply()
 		table.Apply()
 		Expect(f.ListCallCount).To(Equal(listCalls))
+	})
+
+	It("should skip the resync when the object listing fails transiently", func() {
+		// Drive to a settled, in-sync state with one programmed rule.
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.DropAction{}},
+		})
+		table.Apply()
+		txCount := len(f.transactions)
+		Expect(txCount).To(BeNumerically(">", 0))
+
+		// Force a resync, but make the object listing fail transiently. We bail
+		// out rather than falling back to per-type List calls or treating the
+		// table as empty, so the only list call is the failed ListAll and no
+		// reprogramming transaction is issued.
+		table.InvalidateDataplaneCache("test")
+		listCalls := f.ListCallCount
+		f.ListAllError = errors.New("transient nft failure")
+		table.Apply()
+		Expect(f.ListAllError).To(BeNil(), "expected the resync to consume the injected error")
+		Expect(f.ListCallCount-listCalls).To(Equal(1), "should not fall back to extra List calls after a failed ListAll")
+		Expect(f.transactions).To(HaveLen(txCount), "transient list failure should not trigger reprogramming")
+
+		// Our rule should still be present in the dataplane.
+		rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "filter-FORWARD",
+			Rule:    "counter drop",
+			Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
+		}))
 	})
 
 	Describe("after inserting a rule", func() {

@@ -11,7 +11,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -436,6 +435,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -1122,9 +1133,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -1191,7 +1203,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:

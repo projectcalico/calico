@@ -120,7 +120,29 @@ XDP has an equivalent preamble in `xdp_preamble.c`. The cgroup
 connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached directly — they have no preamble.
 
 Because the preamble is cheap to reload, Felix can swap it per
-interface without re-verifying the large program chain it fronts.
+interface without re-verifying the large program chain it fronts — and
+must, since it bakes per-interface config (jump-map indices, host IP,
+flags) into `.rodata`, some of which changes without a restart. So the
+preamble is re-loaded, and re-verified, on every attach.
+
+The preamble calls `bpf_trace_printk` on its drop/error paths
+regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
+ftrace is disabled, so every load makes the kernel log `could not
+enable bpf_trace_printk events`. Felix detects this at startup
+(`bpf.KernelLockdownConfidentiality`) and instead loads
+trace-printk-free preamble variants (`*_notrace.o`,
+`AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
+nodes.
+
+The main programs avoid `_notrace` duplicates (which would double the
+program matrix): each carries a `struct prog_flags` in its own frozen
+`.rodata.prog_flags` section. Felix sets `no_trace_printk` there before
+load (`bpf.SetNoTracePrintk` → `Map.SetProgFlags`); the frozen constant
+lets the verifier fold the flag and dead-code-eliminate `skb_log` (the
+policy `Log` action, which references the trace helper regardless of
+`BPFLogLevel`). **Per-program, load-time flags belong in `struct
+prog_flags`** — it is the vehicle for them, distinct from the node-wide
+globals.
 
 ### Two-tier jump maps
 

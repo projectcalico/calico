@@ -120,6 +120,14 @@ const (
 	BPFConnectTimeLBDisabled BPFConnectTimeLBType = "Disabled"
 )
 
+// +kubebuilder:validation:Enum=TunnelAddress;HostAddress
+type BPFOverlayHostSourceIPType string
+
+const (
+	BPFOverlayHostSourceIPTunnelAddress BPFOverlayHostSourceIPType = "TunnelAddress"
+	BPFOverlayHostSourceIPHostAddress   BPFOverlayHostSourceIPType = "HostAddress"
+)
+
 // +kubebuilder:validation:Enum=Auto;Userspace;BPFProgram
 type BPFConntrackMode string
 
@@ -525,7 +533,7 @@ type FelixConfigurationSpec struct {
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 
 	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
 
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
@@ -674,7 +682,9 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
@@ -707,6 +717,14 @@ type FelixConfigurationSpec struct {
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
+
+	// BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+	// (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+	// assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+	// of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+	// assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+	// device IP.  [Default: TunnelAddress]
+	BPFOverlayHostSourceIP *BPFOverlayHostSourceIPType `json:"bpfOverlayHostSourceIP,omitempty" validate:"omitempty,oneof=TunnelAddress HostAddress"`
 
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and

@@ -1,5 +1,179 @@
 # projectcalico.org/v3 and operator.tigera.io/v1 APIs
 ---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "policytypes.policy.projectcalico.org"
+spec:
+  paramKind:
+    kind: NetworkPolicy
+    apiVersion: projectcalico.org/v3
+  matchConditions:
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
+    - name: missing-types
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Determine the policy types based on the presence of ingress and egress rules.
+    # If both are present, set types to ["Ingress", "Egress"].
+    # If only ingress is present, set types to ["Ingress"].
+    # If only egress is present, set types to ["Egress"].
+    # If neither is present, default to ["Ingress"] for backward compatibility with policies from before types were required.
+    - name: defaultTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Egress"] : ["Ingress"]
+
+    # The logic for StagedKubernetesNetworkPolicy is slightly different from the above:
+    # - If both ingress and egress are present, set types to ["Ingress", "Egress"].
+    # - If only ingress is present, set types to ["Ingress"].
+    # - If only egress is present, set types to ["Ingress", "Egress"].
+    # - If neither is present, default to ["Ingress"] for backward compatibility.
+    - name: defaultKubeTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Ingress", "Egress"] : ["Ingress"]
+
+  mutations:
+    # Add the calculated 'types' field to the spec.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          [
+            JSONPatch{
+              op: "add",
+              path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
+              value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
+            }
+          ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
+# and sets the projectcalico.org/tier label to match.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "tierlabel.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    - name: tierValue
+      expression: |
+        has(object.spec.tier) && object.spec.tier != "" ? object.spec.tier : "default"
+  mutations:
+    # Default spec.tier to "default" if empty or unset.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          !has(object.spec.tier) || object.spec.tier == "" ?
+            [JSONPatch{op: "add", path: "/spec/tier", value: variables.tierValue}] :
+            []
+    # Set the projectcalico.org/tier label to match spec.tier.
+    # Uses ~1 encoding for the / in the label key per RFC 6901 (JSON Pointer).
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          has(object.metadata.labels) ?
+            [JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}] :
+            [
+              JSONPatch{op: "add", path: "/metadata/labels", value: {}},
+              JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}
+            ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-policytypes-binding
+spec:
+  policyName: policytypes.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-tier-label-binding
+spec:
+  policyName: tierlabel.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
+---
 # Source: projectcalico.org.v3/templates/operator.tigera.io_apiservers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -31616,6 +31790,18 @@ spec:
                           type: object
                       type: object
                   type: object
+                waypointLogging:
+                  description: |-
+                    WaypointLogging controls whether L7 logging is enabled on every Gateway
+                    using the istio-waypoint GatewayClass. When Enabled (the default), the
+                    operator injects an l7-collector sidecar into each waypoint pod via
+                    class-level defaults. When Disabled, no sidecar is injected and the
+                    associated EnvoyFilters are not created. Allowed values are Enabled or
+                    Disabled.
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 ztunnel:
                   description:
                     ZTunnelDaemonset defines the resource requirements for
@@ -34949,7 +35135,6 @@ spec:
       - bgpconfig
       - bgpconfigs
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -35251,7 +35436,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -36154,7 +36338,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -36441,7 +36624,6 @@ spec:
       - affinity
       - affinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -36539,7 +36721,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -36897,7 +37078,6 @@ spec:
       - clusterinfo
       - clusterinfos
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -36985,7 +37165,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -37409,6 +37588,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -38095,9 +38286,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -38164,7 +38356,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -38488,7 +38680,6 @@ spec:
       - gnp
       - cgnp
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -39808,7 +39999,6 @@ spec:
     shortNames:
       - gns
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -39875,7 +40065,6 @@ spec:
       - hep
       - heps
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -40017,7 +40206,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -40191,7 +40379,6 @@ spec:
       - ipamconfig
       - ipamconfigs
     singular: ipamconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -40305,7 +40492,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -40382,7 +40568,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -40670,7 +40855,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -40739,7 +40923,6 @@ spec:
       - kcc
       - kccs
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v3
@@ -40841,6 +41024,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -41070,6 +41260,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -41238,7 +41435,6 @@ spec:
       - cnp
       - caliconetworkpolicy
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -42504,7 +42700,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -42565,7 +42760,6 @@ spec:
     shortNames:
       - sgnp
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:
@@ -43893,7 +44087,6 @@ spec:
     shortNames:
       - sknp
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v3
@@ -44432,7 +44625,6 @@ spec:
       - scnp
       - snp
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - additionalPrinterColumns:
@@ -45712,7 +45904,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - additionalPrinterColumns:

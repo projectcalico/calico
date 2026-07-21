@@ -114,7 +114,7 @@ func (c completedConfig) New() (*ProjectCalicoServer, error) {
 	calicostore := calicorest.RESTStorageProvider{StorageType: "calico"}
 
 	// Create a backend Calico v3 clientset.
-	cc := calico.CreateClientFromConfig().(backendClient).Backend()
+	cc := calico.CreateClientFromConfig().(api.BackendAccessor).Backend()
 
 	// Create the various lister and getters required by the RBAC calculator. Note that we use an informer/cache for the
 	// k8s resources to minimize the number of queries underpinning a single request. For the Calico resources we
@@ -227,11 +227,12 @@ type CalicoResourceLister interface {
 
 // calicoResourceLister implements the CalicoResourceLister interface returning Tiers.
 type calicoResourceLister struct {
-	client api.Client
-	syncer api.Syncer
-	lock   sync.Mutex
-	sync   chan struct{}
-	tiers  map[string]*v3.Tier
+	client               api.Client
+	syncer               api.Syncer
+	lock                 sync.Mutex
+	sync                 chan struct{}
+	initialSyncCompleted bool
+	tiers                map[string]*v3.Tier
 }
 
 func (t *calicoResourceLister) ListTiers() ([]*v3.Tier, error) {
@@ -264,7 +265,8 @@ func (t *calicoResourceLister) WaitForCacheSync(stopCh <-chan struct{}) {
 }
 
 func (t *calicoResourceLister) OnStatusUpdated(status api.SyncStatus) {
-	if status == api.InSync {
+	if status == api.InSync && !t.initialSyncCompleted {
+		t.initialSyncCompleted = true
 		close(t.sync)
 	}
 }
@@ -289,10 +291,6 @@ func (t *calicoResourceLister) OnUpdates(updates []api.Update) {
 			}
 		}
 	}
-}
-
-type backendClient interface {
-	Backend() api.Client
 }
 
 // install registers the API group and adds types to a scheme

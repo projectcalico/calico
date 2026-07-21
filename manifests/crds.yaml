@@ -14,7 +14,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -314,7 +313,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1214,7 +1212,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1463,7 +1460,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1530,7 +1526,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1873,7 +1868,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -1945,7 +1939,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -2370,6 +2363,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -3056,9 +3061,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -3125,7 +3131,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -3443,7 +3449,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4745,7 +4750,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4804,7 +4808,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -4931,7 +4934,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5074,7 +5076,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5160,7 +5161,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5219,7 +5219,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5479,7 +5478,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5536,7 +5534,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -5638,6 +5635,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -5867,6 +5871,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -6029,7 +6040,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -7282,7 +7292,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -7339,7 +7348,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -8651,7 +8659,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -9183,7 +9190,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -10447,7 +10453,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1

@@ -262,6 +262,22 @@ var _ = Describe("IP sets dataplane", func() {
 		apply()
 	}
 
+	// resyncAndApplyUntilDrained queues a resync then applies repeatedly until
+	// the background resync queue is fully drained (signalled by the
+	// reschedule flag going false).  Multi-set resyncs spread their per-set
+	// re-listing over successive applies, so tests that resync more than one
+	// set need to pump the loop.
+	resyncAndApplyUntilDrained := func() {
+		ipsets.QueueResync()
+		for i := 0; ; i++ {
+			ExpectWithOffset(1, i).To(BeNumerically("<", 100), "resync drain did not terminate")
+			apply()
+			if !reschedRequested {
+				break
+			}
+		}
+	}
+
 	BeforeEach(func() {
 		listener = nil
 		dataplane = newMockDataplane()
@@ -270,6 +286,7 @@ var _ = Describe("IP sets dataplane", func() {
 			logutils.NewSummarizer("test loop"),
 			dataplane.newCmd,
 			dataplane.sleep,
+			dataplane.timeNow,
 		)
 	})
 
@@ -500,6 +517,39 @@ var _ = Describe("IP sets dataplane", func() {
 			// v4MainIPSetName2 should be destroyed since it's not in the desired state.
 			v4MainIPSetName3: []string{"10.0.0.5", "10.0.0.6"}, // This IPSet should not be touched.
 		})
+	})
+
+	It("should not spin the resync loop when a desired set cannot be re-listed", func() {
+		// Regression test: a desired set stuck at an unsupported revision fails
+		// every per-set re-list until tryUpdates recreates it.  The resync must
+		// re-list it only a bounded number of times per apply, not re-pop and
+		// re-list it in a tight loop — which previously ballooned memory by
+		// forking 'ipset list' commands without limit.
+		dataplane.IPSetMetadata = map[string]setMetadata{
+			v4MainIPSetName: {
+				Name:     v4MainIPSetName,
+				Family:   "inet",
+				Type:     IPSetTypeHashIP,
+				MaxSize:  1234,
+				Revision: supportedMockRevision + 1,
+			},
+		}
+		dataplane.IPSetMembers[v4MainIPSetName] = set.From("10.0.0.1", "10.0.0.9")
+		ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+
+		apply()
+
+		dataplane.ExpectMembers(map[string][]string{
+			v4MainIPSetName: {"10.0.0.1", "10.0.0.2"},
+		})
+		listCalls := 0
+		for _, name := range dataplane.CmdNames {
+			if name == "list" {
+				listCalls++
+			}
+		}
+		Expect(listCalls).To(BeNumerically("<", 40),
+			"the stuck set should be re-listed a bounded number of times, not in a spin")
 	})
 
 	Describe("with many left-over IP sets in place", func() {
@@ -785,7 +835,7 @@ var _ = Describe("IP sets dataplane", func() {
 				})
 
 				It("should be detected and fixed by a resync", func() {
-					resyncAndApply()
+					resyncAndApplyUntilDrained()
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
@@ -802,7 +852,7 @@ var _ = Describe("IP sets dataplane", func() {
 				})
 
 				It("should be detected and fixed by a resync", func() {
-					resyncAndApply()
+					resyncAndApplyUntilDrained()
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3"},
@@ -824,7 +874,7 @@ var _ = Describe("IP sets dataplane", func() {
 					})
 
 					// But the next timer-triggered resync should catch it.
-					resyncAndApply()
+					resyncAndApplyUntilDrained()
 					dataplane.ExpectMembers(map[string][]string{
 						v4MainIPSetName:  {"10.0.0.1", "10.0.0.2"},
 						v4MainIPSetName2: {"10.0.0.1", "10.0.0.3", "10.0.0.4"},
@@ -1069,7 +1119,7 @@ var _ = Describe("IP sets dataplane", func() {
 		dataplane.IPSetMembers["cali4tunknown"] = staleSet
 		ipsets.AddOrReplaceIPSet(meta, v4Members1And2)
 
-		resyncAndApply()
+		resyncAndApplyUntilDrained()
 
 		dataplane.ExpectMembers(map[string][]string{v4MainIPSetName: v4Members1And2})
 	})
@@ -1086,7 +1136,7 @@ var _ = Describe("IP sets dataplane", func() {
 
 		// Recreate its temporary set, then resync.
 		dataplane.IPSetMembers[v4TempIPSetName1] = set.From("10.0.0.1")
-		resyncAndApply()
+		resyncAndApplyUntilDrained()
 
 		// Should be cleaned up.
 		dataplane.ExpectMembers(map[string][]string{v4MainIPSetName: v4Members1And2})
@@ -1108,6 +1158,210 @@ var _ = Describe("IP sets dataplane", func() {
 		ipsets, err := ipsets.CalicoIPSets()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ipsets).Should(Equal([]string{v4MainIPSetName}))
+	})
+
+	Describe("incremental background resync", func() {
+		countListsOf := func(name string) int {
+			n := 0
+			for _, listed := range dataplane.ListedNames {
+				if listed == name {
+					n++
+				}
+			}
+			return n
+		}
+
+		Describe("with two IP sets programmed", func() {
+			BeforeEach(func() {
+				ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1"})
+				ipsets.AddOrReplaceIPSet(meta2, []string{"10.0.0.2"})
+				apply()
+			})
+
+			It("should drain the background queue one set per apply", func() {
+				// Corrupt both sets behind our back.
+				dataplane.IPSetMembers[v4MainIPSetName].Add("10.0.0.99")
+				dataplane.IPSetMembers[v4MainIPSetName2].Add("10.0.0.99")
+
+				ipsets.QueueResync()
+
+				apply()
+				Expect(reschedRequested).To(BeTrue(),
+					"should reschedule while the background queue is draining")
+
+				apply()
+				Expect(reschedRequested).To(BeFalse(), "queue should be drained")
+
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName:  {"10.0.0.1"},
+					v4MainIPSetName2: {"10.0.0.2"},
+				})
+			})
+
+			It("should list the names once per background resync", func() {
+				// Duplicate QueueResync calls collapse into one background resync.
+				ipsets.QueueResync()
+				ipsets.QueueResync()
+				dataplane.NumListNamesCalls = 0
+				apply()
+				Expect(dataplane.NumListNamesCalls).To(Equal(1))
+			})
+
+			It("should subsume a mid-drain background resync into an escalated full resync", func() {
+				// Corrupt both sets and start a background resync; the first
+				// apply repairs only one set, leaving the other mid-queue.
+				dataplane.IPSetMembers[v4MainIPSetName].Add("10.0.0.99")
+				dataplane.IPSetMembers[v4MainIPSetName2].Add("10.0.0.99")
+				ipsets.QueueResync()
+				apply()
+				Expect(reschedRequested).To(BeTrue(), "one set should still be queued")
+
+				// Escalate to a full resync via persistent update failures.
+				dataplane.RestoreOpFailures = slices.Repeat([]string{"write-ip"}, (MaxRetryAttempt/2)+1)
+				ipsets.AddMembers(ipSetID, []string{"10.0.0.3"})
+				apply()
+
+				// The full resync clears the queue and re-checks everything at
+				// "must" priority, so the still-queued corruption is repaired
+				// within the same apply and nothing is left queued.
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName:  {"10.0.0.1", "10.0.0.3"},
+					v4MainIPSetName2: {"10.0.0.2"},
+				})
+				Expect(reschedRequested).To(BeFalse(), "full resync should leave the queue drained")
+			})
+		})
+
+		Describe("after creating an IP set", func() {
+			BeforeEach(func() {
+				ipsets.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+				apply()
+				dataplane.ListedNames = nil
+			})
+
+			It("should recreate a set deleted between listing names and re-listing it", func() {
+				// The set is present when we enumerate names but gone by the
+				// time we re-list its contents: the classic resync race.
+				dataplane.PostListNamesHooks = []func(*mockDataplane){
+					func(d *mockDataplane) { delete(d.IPSetMembers, v4MainIPSetName) },
+				}
+				sleepBefore := dataplane.CumulativeSleep
+
+				resyncAndApply()
+
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName: {"10.0.0.1", "10.0.0.2"},
+				})
+				Expect(dataplane.CumulativeSleep).To(Equal(sleepBefore),
+					"missing set is not a failure, should not back off")
+				Expect(dataplane.LinesExecuted).To(ContainElement(HavePrefix("create " + v4MainIPSetName)))
+				Expect(dataplane.LinesExecuted).NotTo(ContainElement(HavePrefix("swap ")),
+					"recreation should be a plain create, not a temp-set swap")
+			})
+
+			It("should repair a desired set missing from the name listing without re-listing it", func() {
+				// The set is already gone before we enumerate names, so the
+				// name sweep must repair it directly, with no 'ipset list <set>'.
+				delete(dataplane.IPSetMembers, v4MainIPSetName)
+
+				resyncAndApply()
+
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName: {"10.0.0.1", "10.0.0.2"},
+				})
+				Expect(countListsOf(v4MainIPSetName)).To(Equal(0),
+					"a set missing from the listing should not be individually listed")
+			})
+
+			It("should re-check a desired set at must priority after a failed background list", func() {
+				// Corrupt the set, then fail the first re-list of its contents.
+				dataplane.IPSetMembers[v4MainIPSetName].Add("10.0.0.99")
+				dataplane.PostListNamesHooks = []func(*mockDataplane){
+					func(d *mockDataplane) { d.ListOpFailures = []string{"rc"} },
+				}
+
+				resyncAndApply()
+
+				Expect(dataplane.ListOpFailures).To(BeEmpty(), "the failure should be consumed")
+				Expect(dataplane.CumulativeSleep).To(BeNumerically(">", 0),
+					"a failed desired-set list should back off")
+				dataplane.ExpectMembers(map[string][]string{
+					v4MainIPSetName: {"10.0.0.1", "10.0.0.2"},
+				})
+			})
+
+			It("should not re-list a set that was removed while queued", func() {
+				// Queue several sets for background resync, then remove them all
+				// so ApplyDeletions destroys them a batch at a time.  A set that
+				// is destroyed while still queued must be dropped from the queue,
+				// so it is never individually re-listed afterwards.
+				for i, m := range []IPSetMetadata{meta2, meta3, meta4, meta5} {
+					ipsets.AddOrReplaceIPSet(m, []string{fmt.Sprintf("10.1.0.%d", i)})
+				}
+				apply()
+
+				ipsets.QueueResync()
+				apply() // Enumerate names + enqueue; pops one, leaves the rest queued.
+
+				dataplane.ListedNames = nil
+				ipsets.RemoveIPSet(ipSetID)
+				ipsets.RemoveIPSet(ipSetID2)
+				ipsets.RemoveIPSet(ipSetID3)
+				ipsets.RemoveIPSet(ipSetID4)
+				ipsets.RemoveIPSet(ipSetID5)
+
+				for i := 0; ; i++ {
+					Expect(i).To(BeNumerically("<", 100), "drain did not terminate")
+					apply()
+					if !reschedRequested {
+						break
+					}
+				}
+
+				dataplane.ExpectMembers(map[string][]string{})
+				Expect(dataplane.TriedToDeleteNonExistent).To(BeFalse())
+				for name, count := range listCounts(dataplane.ListedNames) {
+					Expect(count).To(BeNumerically("<=", 1),
+						"set %s was individually listed more than once during teardown", name)
+				}
+			})
+		})
+
+		Describe("with a fake clock that makes each resync cheap", func() {
+			BeforeEach(func() {
+				// Program several sets and let them settle.
+				for i, m := range []IPSetMetadata{meta, meta2, meta3, meta4, meta5} {
+					ipsets.AddOrReplaceIPSet(m, []string{fmt.Sprintf("10.2.0.%d", i)})
+				}
+				apply()
+			})
+
+			It("should re-list many sets in one apply while the budget lasts", func() {
+				// Each resync advances the clock by a fifth of the budget, so
+				// the drain can afford five sets in a single apply.
+				dataplane.autoAdvance = BackgroundResyncTimeBudget / 5
+				dataplane.ListedNames = nil
+
+				resyncAndApply()
+
+				Expect(reschedRequested).To(BeFalse(), "the budget should cover all five sets")
+				Expect(len(dataplane.ListedNames)).To(Equal(5))
+			})
+
+			It("should stop the drain when the budget is exhausted", func() {
+				// Each resync costs half the budget, so only a couple of sets
+				// are re-listed before the drain stops for this apply.
+				dataplane.autoAdvance = BackgroundResyncTimeBudget / 2
+				dataplane.ListedNames = nil
+
+				ipsets.QueueResync()
+				apply()
+
+				Expect(reschedRequested).To(BeTrue(), "budget exhausted, more work pending")
+				Expect(len(dataplane.ListedNames)).To(BeNumerically("<", 5),
+					"the drain should stop before re-listing every set")
+			})
+		})
 	})
 })
 
@@ -1165,6 +1419,14 @@ var _ = DescribeTable("ParseRange tests",
 	Entry("FOO-1", "FOO-1", 0, 0, true),
 	Entry("FOO", "FOO", 0, 0, true),
 )
+
+func listCounts(names []string) map[string]int {
+	counts := map[string]int{}
+	for _, name := range names {
+		counts[name]++
+	}
+	return counts
+}
 
 type mockListener struct {
 	SeenMembers set.Typed[string]

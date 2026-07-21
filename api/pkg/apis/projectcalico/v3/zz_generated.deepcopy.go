@@ -1743,6 +1743,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.BPFOverlayHostSourceIP != nil {
+		in, out := &in.BPFOverlayHostSourceIP, &out.BPFOverlayHostSourceIP
+		*out = new(BPFOverlayHostSourceIPType)
+		**out = **in
+	}
 	if in.BPFDisableUnprivileged != nil {
 		in, out := &in.BPFDisableUnprivileged, &out.BPFDisableUnprivileged
 		*out = new(bool)
@@ -4061,6 +4066,13 @@ func (in *Template) DeepCopyInto(out *Template) {
 	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val

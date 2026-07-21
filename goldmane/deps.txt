@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.4
+go 1.26.5
 github.com/beorn7/perks v1.0.1
 github.com/blang/semver/v4 v4.0.0
 github.com/cespare/xxhash/v2 v2.3.0
@@ -48,11 +48,11 @@ go.opentelemetry.io/otel v1.43.0
 go.opentelemetry.io/otel/trace v1.43.0
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
-golang.org/x/net v0.56.0
+golang.org/x/net v0.57.0
 golang.org/x/oauth2 v0.36.0
-golang.org/x/sys v0.46.0
-golang.org/x/term v0.44.0
-golang.org/x/text v0.38.0
+golang.org/x/sys v0.47.0
+golang.org/x/term v0.45.0
+golang.org/x/text v0.40.0
 golang.org/x/time v0.15.0
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260615183401-62b3387ff324
@@ -101,6 +101,7 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/std/chanutil
+local:lib/std/log
 local:lib/std/time
 local:lib/std/uniquelabels
 local:lib/std/uniquestr

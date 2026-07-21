@@ -75,11 +75,6 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() api.Client
-}
-
 func NewRouteIndex() *RouteIndex {
 	return &RouteIndex{
 		programmedRoutes:       make(map[string]bool),
@@ -114,7 +109,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 	}
 
 	// Extract the backend client from the v3 client.
-	bc := cc.(backendClientAccessor).Backend()
+	bc := cc.(api.BackendAccessor).Backend()
 
 	// The node label manager tracks node labels for components to use when calculating
 	// node selectors, etc.
@@ -409,9 +404,9 @@ func (c *client) SetPrefixes(keys []string) error {
 }
 
 // OnStatusUpdated is called from the BGP syncer to indicate that the sync status is updated.
-// This client handles InSync and WaitForDatastore statuses. When we receive InSync, we unblock GetValues calls.
-// When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
-// GetValues calls.
+// When we receive InSync, we unblock GetValues calls.
+// When we receive WaitForDatastore or ResyncInProgress, we reset the client's syncer status which blocks
+// GetValues calls until the syncer is back in sync.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	select {
 	case c.syncerC <- status:
@@ -424,7 +419,7 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 	switch status {
 	case api.InSync:
 		c.OnSyncChange(SourceSyncer, true)
-	case api.WaitForDatastore:
+	case api.WaitForDatastore, api.ResyncInProgress:
 		c.OnSyncChange(SourceSyncer, false)
 	}
 }

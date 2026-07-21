@@ -3503,6 +3503,25 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(v4_again).To(Equal(v4))
 		})
+
+		It("should allocate an IPv6 block from IPv6Pools, not IPv4Pools", func() {
+			Expect(bc.Clean()).To(Succeed())
+			deleteAllPools()
+
+			applyNode(bc, kc, host, nil)
+			applyPool(pool1.String(), true, "")
+			applyPool(pool4_v6.String(), true, "")
+
+			args := BlockArgs{
+				Hostname:              host,
+				IPv4Pools:             []cnet.IPNet{pool1},
+				IPv6Pools:             []cnet.IPNet{pool4_v6},
+				HostReservedAttrIPv6s: rsvdAttrWindows,
+			}
+			_, v6, outErr := ic.EnsureBlock(context.Background(), args)
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(pool4_v6.Contains(v6.IP)).To(BeTrue())
+		})
 	})
 
 	Describe("IPAM findOrClaimBlock test", func() {

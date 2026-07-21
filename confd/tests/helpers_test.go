@@ -658,10 +658,7 @@ func createBlockAffinities(t *testing.T, be *datastoreBackend) func() {
 	if be.datastoreType == apiconfig.EtcdV3 {
 		// In etcd mode, write raw v2 IPAM block entries that the confd syncer watches.
 		// These match the format in mock_data/etcd/block.
-		type backendAccessor interface {
-			Backend() backendapi.Client
-		}
-		bc := be.calicoClient.(backendAccessor).Backend()
+		bc := be.calicoClient.(backendapi.BackendAccessor).Backend()
 		for _, a := range standardBlockAffinities {
 			_, err := bc.Apply(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{

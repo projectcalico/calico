@@ -258,13 +258,13 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			char* intf_ip,
 			char* host_ip6,
 			char* intf_ip6,
+			char* host_tunnel_ip,
+			char* host_tunnel_ip6,
 			uint ext_to_svc_mark,
 			ushort tmtu,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
-			char* host_tunnel_ip,
-			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
 			ushort wg6_port,
@@ -355,6 +355,18 @@ void bpf_ct_cleanup_set_globals(
 		.udp_timeout = udp_timeout,
 		.generic_timeout = generic_timeout,
 		.icmp_timeout = icmp_timeout,
+	};
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+// bpf_set_prog_flags sets the per-object load-time feature flags in the
+// program's .rodata.prog_flags section (see struct prog_flags). Kept
+// separate from the main globals so it does not perturb their layout.
+void bpf_set_prog_flags(struct bpf_map *map, uint8_t no_trace_printk)
+{
+	struct prog_flags data = {
+		.no_trace_printk = no_trace_printk,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
