@@ -16,7 +16,7 @@ import (
 // BGPPeerApplyConfiguration represents a declarative configuration of the BGPPeer type for use
 // with apply.
 type BGPPeerApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *BGPPeerSpecApplyConfiguration `json:"spec,omitempty"`
 }

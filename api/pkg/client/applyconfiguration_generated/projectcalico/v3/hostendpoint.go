@@ -16,7 +16,7 @@ import (
 // HostEndpointApplyConfiguration represents a declarative configuration of the HostEndpoint type for use
 // with apply.
 type HostEndpointApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *HostEndpointSpecApplyConfiguration `json:"spec,omitempty"`
 }
