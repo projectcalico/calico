@@ -1304,7 +1304,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if names.TierIsStatic(tier.Name) {
+		if names.TierIsProtected(tier.Name) {
 			continue
 		}
 
