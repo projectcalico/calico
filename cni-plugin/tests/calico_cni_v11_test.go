@@ -15,6 +15,7 @@
 package main_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -25,6 +26,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/cni-plugin/internal/pkg/testutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
+	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 // Tests for the CNI spec v1.1.0 verbs (STATUS, GC). These pin their own
@@ -57,6 +62,30 @@ var _ = Describe("CNI spec v1.1 verbs", func() {
 	It("returns success for calico-ipam when the datastore is ready", func() {
 		exitCode, stdout := testutils.RunCNIVerb("calico-ipam", "STATUS", netconf, nil)
 		Expect(exitCode).To(Equal(0), "STATUS failed: %s", string(stdout))
+	})
+
+	It("networks and tears down a container with a 1.1.0 config", func() {
+		// Regression test: cmdAdd used to carry its own version gate,
+		// rejecting configs above 1.0.0 even though 1.1.0 is advertised.
+		if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+			Skip("ADD/DEL exercised in etcd lane; KDD ADD needs pod scaffolding")
+		}
+		calicoClient, err := client.NewFromEnv()
+		Expect(err).NotTo(HaveOccurred())
+		n := internalapi.NewNode()
+		n.Name, err = names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		testutils.MustCreateNewIPPool(calicoClient, "10.99.0.0/24", false, false, true)
+
+		containerID, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", "v11-add-test")
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(len(result.IPs)).Should(Equal(1))
+
+		exitCode, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(exitCode).To(Equal(0))
 	})
 
 	It("accepts GC requests (stub: no cleanup performed)", func() {

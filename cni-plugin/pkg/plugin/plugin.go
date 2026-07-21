@@ -163,7 +163,7 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 		conf.CNIVersion = "0.2.0"
 	}
 
-	if version.Compare(conf.CNIVersion, "1.0.0", ">") {
+	if version.Compare(conf.CNIVersion, "1.1.0", ">") {
 		return fmt.Errorf("unsupported CNI version %s", conf.CNIVersion)
 	}
 
