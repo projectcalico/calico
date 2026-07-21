@@ -17,6 +17,7 @@ package checker
 import (
 	"fmt"
 	"maps"
+	"net"
 	"regexp"
 	"sync"
 
@@ -44,9 +45,11 @@ type requestCache struct {
 	Flow
 	store *policystore.PolicyStore
 
-	// Memoized string forms of per-flow values. The match functions need these for
-	// every rule that carries an IP set reference; recomputing them per rule dominates
-	// allocation when many policies apply to an endpoint.
+	// Memoized per-flow values. The match functions need these for every rule that
+	// carries an IP set reference; recomputing them per rule dominates allocation
+	// when many policies apply to an endpoint.
+	srcIP          net.IP
+	dstIP          net.IP
 	srcIPStr       string
 	dstIPStr       string
 	dstIPProtoPort string
@@ -107,10 +110,27 @@ func (r *requestCache) getDstNamespace() *namespace {
 	return nil
 }
 
+// getSrcIP returns the source IP, memoized across the request (the Flow
+// implementations construct a fresh net.IP per call).
+func (r *requestCache) getSrcIP() net.IP {
+	if r.srcIP == nil {
+		r.srcIP = r.GetSourceIP()
+	}
+	return r.srcIP
+}
+
+// getDstIP returns the destination IP, memoized across the request.
+func (r *requestCache) getDstIP() net.IP {
+	if r.dstIP == nil {
+		r.dstIP = r.GetDestIP()
+	}
+	return r.dstIP
+}
+
 // getSrcIPStr returns the source IP in string form, memoized across the request.
 func (r *requestCache) getSrcIPStr() string {
 	if r.srcIPStr == "" {
-		r.srcIPStr = r.GetSourceIP().String()
+		r.srcIPStr = r.getSrcIP().String()
 	}
 	return r.srcIPStr
 }
@@ -118,7 +138,7 @@ func (r *requestCache) getSrcIPStr() string {
 // getDstIPStr returns the destination IP in string form, memoized across the request.
 func (r *requestCache) getDstIPStr() string {
 	if r.dstIPStr == "" {
-		r.dstIPStr = r.GetDestIP().String()
+		r.dstIPStr = r.getDstIP().String()
 	}
 	return r.dstIPStr
 }
