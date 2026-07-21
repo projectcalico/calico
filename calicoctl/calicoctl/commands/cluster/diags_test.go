@@ -15,6 +15,7 @@
 package cluster
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
