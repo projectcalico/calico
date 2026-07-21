@@ -61,6 +61,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Istio"),
 	describe.WithCategory(describe.Networking),
+	describe.RequiresAmbientPolicyEnforcement(),
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")
