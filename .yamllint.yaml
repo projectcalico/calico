@@ -20,6 +20,7 @@ rules:
 ignore:
   # template files are not valid yaml
   - charts/calico/templates/
+  - charts/projectcalico.org.v3/templates/admission-policies.yaml
   - charts/tigera-operator/templates/
   - process/testing/aso/infra/templates/
   # these dirs are not owned by us, we don't own yamls that they may contain
