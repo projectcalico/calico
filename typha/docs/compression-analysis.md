@@ -83,6 +83,53 @@ simultaneously during a rolling restart, this translates to:
 - **Faster client catch-up** during bootstrap
 - **Less pressure on the TCP send buffer** and reduced memory usage
 
+## Why Pure Go (klauspost) Instead of the Faster Cgo libzstd
+
+We also compared klauspost's pure-Go zstd against the cgo binding for the
+reference C library (`github.com/DataDog/zstd` v1.5.7, bundled libzstd),
+using the same 1,000-pod snapshot data on the same machine. The two produce
+interchangeable output: each decodes the other's streams.
+
+| Metric | Pure Go (SpeedFastest) | Cgo libzstd (level 1) |
+|---|---|---|
+| **Compression** | 307 MB/s | 948 MB/s (~3.1x faster) |
+| **Decompression** | 311 MB/s | 928 MB/s (~3.0x faster) |
+| **Compressed size** | 28,932 B | 27,441 B (~5% smaller) |
+| **Go-heap allocations, compress** | 9.1 MB / 100 allocs | 0.5 MB / 7 allocs (*not comparable*) |
+| **Go-heap allocations, decompress** | 6.1 MB / 44 allocs | 1.0 MB / 28 allocs (*not comparable*) |
+
+The allocation rows only count Go-heap memory, which is all that Go's
+benchmark tooling can see. libzstd allocates its working memory (window,
+match tables) with C malloc, outside the Go heap, so the cgo numbers look
+artificially small. Treat them as "Go-visible overhead", not as total
+memory use.
+
+Cgo libzstd wins the microbenchmark clearly. We chose the pure-Go
+implementation anyway:
+
+- **Compression is not the bottleneck.** Snapshots are compressed at most
+  once per second per (syncer, algorithm) and served from cache: ~18 ms
+  pure-Go vs ~6 ms cgo for a 10K-pod snapshot. Clients decompress one
+  snapshot per connection. Both are noise next to network transfer, so the
+  3x speed advantage buys nothing in practice.
+- **Build and maintenance cost.** Calico ships amd64, arm64, ppc64le, and
+  s390x images plus a Windows Felix client, which must decode zstd. A cgo
+  dependency needs a C cross-toolchain for every target and separate CVE
+  tracking for the vendored C library. klauspost/compress is a normal Go
+  dependency.
+- **Runtime behavior.** Cgo calls pin OS threads and add per-call overhead,
+  which works against the per-connection delta path (many connections,
+  small frequently-flushed writes).
+- **Decoder correctness gaps in the cgo wrapper.** The DataDog wrapper's
+  decoder skips checksums, omits some error checks, and mishandles
+  concatenated streams. Our protocol depends on concatenated frames: the
+  client's reused decoder reads the cached snapshot frame and the
+  per-connection delta frames back to back on one connection.
+
+The cgo comparison benchmark is not checked in because it would add the cgo
+dependency to the module; it is a ~150-line test that reuses
+`generateBenchPod` data with `github.com/DataDog/zstd` writers/readers.
+
 ## Reproducing the Results
 
 ```bash
