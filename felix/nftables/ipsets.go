@@ -453,46 +453,62 @@ func (s *IPSets) tryResync() error {
 		// set metadata and extracting the type. However, knftables does not yet support this operation. For now,
 		// assume that we haven't modified the type of an IP set across Felix versions.
 
-		// Build a set of canonicalized elements in the set by first converting to Felix's internal string representation,
-		// and then canonicalizing the members to match the format that we use in the desired state.
-		strElems := []string{}
-		unknownElems := set.New[SetMember]()
+		// Build the set of members currently in the dataplane, converting each element back to
+		// Felix's internal representation. Members this Felix can't parse - an unexpected arity, or
+		// an element the kernel returned in a form we don't recognise (e.g. a range rather than a
+		// CIDR for a hash:net set) - are recorded as unknown so they get reconciled, rather than
+		// panicking and crash-looping Felix on every resync.
+		wantIPV6 := s.IPVersionConfig.Family == ipsets.IPFamilyV6
+		elemsSet := set.New[SetMember]()
 		for _, e := range setData.elems {
+			var strElem string
 			switch metadata.Type {
 			case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
-				if len(e.Key) == 1 {
-					// These types are just IP addresses / CIDRs.
-					strElems = append(strElems, e.Key[0])
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// These types are just IP addresses / CIDRs.
+				if len(e.Key) != 1 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = e.Key[0]
 			case ipsets.IPSetTypeHashIPPort:
-				if len(e.Key) == 3 {
-					// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
-					strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A concatenation of IP, protocol and port.
+				if len(e.Key) != 3 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2])
 			case ipsets.IPSetTypeBitmapPort:
-				if len(e.Key) == 1 {
-					// A single port.
-					strElems = append(strElems, e.Key[0])
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A single port.
+				if len(e.Key) != 1 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = e.Key[0]
 			case ipsets.IPSetTypeHashNetNet:
-				if len(e.Key) == 2 {
-					// This is a concatination of two CIDRs. Format it back into Felix's internal representation.
-					strElems = append(strElems, fmt.Sprintf("%s,%s", e.Key[0], e.Key[1]))
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A concatenation of two CIDRs.
+				if len(e.Key) != 2 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = fmt.Sprintf("%s,%s", e.Key[0], e.Key[1])
 			default:
-				unknownElems.Add(UnknownMember(e.Key))
+				elemsSet.Add(UnknownMember(e.Key))
+				continue
 			}
+
+			// Skip members of the wrong IP version, matching the desired-state path's filtering.
+			if wantIPV6 != metadata.Type.IsMemberIPV6(strElem) {
+				continue
+			}
+
+			// Unlike the desired-state path, a member we can't parse here is treated as unknown, not fatal.
+			member, ok := parseMember(metadata.Type, strElem)
+			if !ok {
+				elemsSet.Add(UnknownMember(e.Key))
+				continue
+			}
+			elemsSet.Add(member)
 		}
-		elemsSet := s.filterAndCanonicaliseMembers(metadata.Type, strElems)
-		elemsSet.AddAll(unknownElems.Slice())
 
 		memberTracker := s.getOrCreateMemberTracker(setName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
@@ -878,6 +894,86 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 	}
 	log.WithField("type", string(t)).Warn("Unknown IPSetType")
 	return nil
+}
+
+// parseMember is the non-panicking twin of CanonicaliseMember, used only on the dataplane-readback
+// path. It returns ok=false instead of panicking when a member can't be parsed, so an element the
+// kernel returns in an unexpected form (or one programmed by a different Felix) is treated as
+// unknown and reconciled rather than crashing Felix. CanonicaliseMember stays strict because
+// desired-state members are Felix-generated and a parse failure there is a bug.
+func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
+	switch t {
+	case ipsets.IPSetTypeHashIP:
+		ipAddr := ip.FromIPOrCIDRString(member)
+		if ipAddr == nil {
+			return nil, false
+		}
+		return simpleMember(ipAddr.String()), true
+	case ipsets.IPSetTypeHashIPPort:
+		parts := strings.Split(member, ",")
+		if len(parts) != 2 {
+			return nil, false
+		}
+		ipAddr := ip.FromIPOrCIDRString(parts[0])
+		if ipAddr == nil {
+			return nil, false
+		}
+		portParts := strings.Split(parts[1], ":")
+		if len(portParts) != 2 {
+			return nil, false
+		}
+		port, err := strconv.Atoi(portParts[1])
+		if err != nil || port < 0 || port > math.MaxUint16 {
+			return nil, false
+		}
+		proto := portParts[0]
+		if ipAddr.Version() == 4 {
+			v4, ok := ipAddr.(ip.V4Addr)
+			if !ok {
+				return nil, false
+			}
+			return v4IPPortMember{IP: v4, Port: uint16(port), Protocol: proto}, true
+		}
+		v6, ok := ipAddr.(ip.V6Addr)
+		if !ok {
+			return nil, false
+		}
+		return v6IPPortMember{IP: v6, Port: uint16(port), Protocol: proto}, true
+	case ipsets.IPSetTypeHashNet:
+		cidr, err := ip.ParseCIDROrIP(member)
+		if err != nil {
+			return nil, false
+		}
+		return simpleMember(cidr.String()), true
+	case ipsets.IPSetTypeHashNetNet:
+		cidrs := strings.Split(member, ",")
+		if len(cidrs) != 2 {
+			return nil, false
+		}
+		net1, err := ip.ParseCIDROrIP(cidrs[0])
+		if err != nil {
+			return nil, false
+		}
+		net2, err := ip.ParseCIDROrIP(cidrs[1])
+		if err != nil {
+			return nil, false
+		}
+		return netNet{net1: net1, net2: net2}, true
+	case ipsets.IPSetTypeBitmapPort:
+		// Trim the family prefix (e.g. "v4,") if present.
+		if len(member) > 0 && member[0] == 'v' {
+			if len(member) < 3 {
+				return nil, false
+			}
+			member = member[3:]
+		}
+		port, err := strconv.Atoi(member)
+		if err != nil || port < 0 || port > 0xffff {
+			return nil, false
+		}
+		return simpleMember(member), true
+	}
+	return nil, false
 }
 
 // setType returns the nftables type to use for the given IPSetType and IP version.
