@@ -25,21 +25,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -47,95 +40,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-// IPAM takes keyword with an IP address then calls the subcommands.
-func Check(args []string, version string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam check [--config=<CONFIG>] [--show-all-ips] [--show-problem-ips] [-o <FILE>] [--kubeconfig <KUBECONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -o --output=<FILE>           Path to output report file.
-     --show-all-ips            Print all IPs that are checked.
-     --show-problem-ips        Print all IPs that are leaked or not allocated properly.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --kubeconfig=<KUBECONFIG> Path to Kubeconfig file
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam check command checks the integrity of the IPAM datastructures against Kubernetes.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, version)
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	// Create a new backend client from env vars.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		return err
-	}
-
-	// Get the backend client.
-	bc := client.(bapi.BackendAccessor).Backend()
-
-	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
-	// Otherwise, we need to build one ourselves.
-	var kubeClient kubernetes.Interface
-	if kc, ok := bc.(*k8s.KubeClient); ok {
-		// Pull from the kdd client.
-		kubeClient = kc.ClientSet
-	} else {
-		kubeConfigPath := os.Getenv("KUBECONFIG")
-
-		if parsedArgs["--kubeconfig"] != nil {
-			kubeConfigPath = parsedArgs["--kubeconfig"].(string)
-		}
-
-		if kubeConfigPath == "" {
-			return fmt.Errorf("KUBECONFIG environment variable or --kubeconfig parameter not set")
-		}
-
-		kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
-		if err != nil {
-			return err
-		}
-
-		kubeClient, err = kubernetes.NewForConfig(kubeConfig)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Pull out CLI args.
-	showAllIPs := parsedArgs["--show-all-ips"].(bool)
-	showProblemIPs := showAllIPs || parsedArgs["--show-problem-ips"].(bool)
-	outFile := ""
-	if arg := parsedArgs["--output"]; arg != nil {
-		outFile = arg.(string)
-	}
-
-	// Build the checker.
-	checker := NewIPAMChecker(kubeClient, client, bc, showAllIPs, showProblemIPs, outFile, version)
-	return checker.CheckIPAM(ctx)
-}
 
 func NewIPAMChecker(k8sClient kubernetes.Interface,
 	v3Client clientv3.Interface,

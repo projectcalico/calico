@@ -23,15 +23,10 @@ import (
 	"sort"
 	"strings"
 
-	docopt "github.com/docopt/docopt-go"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -273,74 +268,4 @@ func ShowConfiguration(ctx context.Context, ipamClient ipam.Interface) error {
 	}
 	t.Render()
 	return nil
-}
-
-// IPAM takes keyword with an IP address then calls the subcommands.
-func Show(args []string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam show [--ip=<IP> | --show-blocks | --show-borrowed | --show-configuration] [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-     --ip=<IP>                 Report whether this specific IP address is in use.
-     --show-blocks             Show detailed information for IP blocks as well as pools.
-     --show-borrowed           Show detailed information for "borrowed" IP addresses.
-     --show-configuration      Show current Calico IPAM configuration.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam show command prints information about a given IP address, or about
-  overall IP usage.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	// Create a new backend client from env vars.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		return err
-	}
-
-	ipamClient := client.IPAM()
-	ippoolClient := client.IPPools()
-
-	// Get the backend client.
-	bc := client.(bapi.BackendAccessor).Backend()
-
-	passedIP := parsedArgs["--ip"]
-	showBlocks := parsedArgs["--show-blocks"].(bool)
-	showBorrowed := parsedArgs["--show-borrowed"].(bool)
-	configuration := parsedArgs["--show-configuration"].(bool)
-
-	if passedIP != nil {
-		return ShowIP(ctx, ipamClient, passedIP.(string))
-	} else if showBlocks {
-		return ShowBlockUtilization(ctx, ipamClient, true)
-	} else if showBorrowed {
-		return ShowBorrowedDetails(ctx, ippoolClient, bc)
-	} else if configuration {
-		return ShowConfiguration(ctx, ipamClient)
-	}
-
-	return ShowBlockUtilization(ctx, ipamClient, false)
 }

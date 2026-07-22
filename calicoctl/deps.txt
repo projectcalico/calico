@@ -125,7 +125,6 @@ local:calicoctl/calicoctl/commands/clientmgr
 local:calicoctl/calicoctl/commands/cluster
 local:calicoctl/calicoctl/commands/common
 local:calicoctl/calicoctl/commands/constants
-local:calicoctl/calicoctl/commands/datastore
 local:calicoctl/calicoctl/commands/datastore/migrate
 local:calicoctl/calicoctl/commands/file
 local:calicoctl/calicoctl/commands/ipam
