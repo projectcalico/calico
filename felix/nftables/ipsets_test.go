@@ -143,6 +143,34 @@ var _ = Describe("IPSets with empty data plane", func() {
 		))
 	})
 
+	It("should not panic on a member it cannot parse and should reconcile it away", func() {
+		// Program a hash:net (interval) set. On readback, interval sets can return members in
+		// range form rather than CIDR form (CORE-13011), which Felix's canonicalisation can't
+		// parse. Felix must treat such a member as unknown rather than crash-looping on resync.
+		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}
+		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/24"})
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+
+		// Inject a range-form element directly, simulating what the kernel may return on readback.
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Element{
+			Set: "cali40test",
+			Key: []string{"10.0.0.0-10.0.0.255"},
+		})
+		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+		// Resync must tolerate the unparseable member and reconcile it away.
+		s.QueueResync()
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+		Expect(s.ApplyDeletions()).To(BeFalse())
+
+		elements, err := f.ListElements(context.Background(), "set", "cali40test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elements).To(ConsistOf(
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.0/24"}},
+		))
+	})
+
 	It("should resync with a large number of sets", func() {
 		// Create a large number of sets - larger than the number of gorooutines we limit
 		// ourselves to in the resync code.
