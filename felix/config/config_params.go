@@ -188,7 +188,7 @@ type Config struct {
 
 	// nftables configuration.
 	NFTablesMode                      string         `config:"oneof(Enabled,Disabled,Auto);Auto"`
-	NFTablesFlowTableOffload          string         `config:"oneof(Enabled,Disabled);Disabled"`
+	NFTablesFlowTableOffload          string         `config:"oneof(Enabled,Disabled);Enabled"`
 	NFTablesFlowTableDataIfacePattern *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	// BPF configuration.

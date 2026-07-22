@@ -1189,10 +1189,10 @@ nftables mode is active.
 | --- | --- |
 | Environment variable | `FELIX_NFTablesFlowTableOffload` |
 | Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
-| Default value (above encoding) | `Disabled` |
+| Default value (above encoding) | `Enabled` |
 | `FelixConfiguration` field | `nftablesFlowTableOffload` (YAML) `NFTablesFlowTableOffload` (Go API) |
 | `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| Default value (YAML) | `Enabled` |
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 

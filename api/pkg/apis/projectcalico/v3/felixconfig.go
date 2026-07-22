@@ -693,8 +693,8 @@ type FelixConfigurationSpec struct {
 	// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
 	// improved forwarding performance. When enabled, established connections accepted by
 	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
-	// nftables mode is active. [Default: Disabled]
-	// +kubebuilder:default=Disabled
+	// nftables mode is active. [Default: Enabled]
+	// +kubebuilder:default=Enabled
 	NFTablesFlowTableOffload *NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
 
 	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host

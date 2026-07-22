@@ -3141,12 +3141,12 @@ spec:
                     is Enabled. [Default: ""]
                   type: string
                 nftablesFlowTableOffload:
-                  default: Disabled
+                  default: Enabled
                   description: |-
                     NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
                     improved forwarding performance. When enabled, established connections accepted by
                     Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
-                    nftables mode is active. [Default: Disabled]
+                    nftables mode is active. [Default: Enabled]
                   enum:
                     - Enabled
                     - Disabled
