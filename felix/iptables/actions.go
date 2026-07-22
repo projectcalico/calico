@@ -129,6 +129,12 @@ func (a *actionFactory) DSCP(value uint8) generictables.Action {
 	}
 }
 
+// FlowOffload is a no-op in iptables mode; flowtable offload is nftables-only. The rule
+// renderer only emits it when nftables is active, so this is never reached in practice.
+func (s *actionFactory) FlowOffload() generictables.Action {
+	return nil
+}
+
 type Referrer interface {
 	ReferencedChain() string
 }

@@ -21,8 +21,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/knftables"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
@@ -1165,5 +1167,84 @@ var _ = Describe("ARP Table", func() {
 		chains, err := f.List(context.TODO(), "chain")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(chains).To(ContainElement("cali-arp-dispatch"))
+	})
+})
+
+var _ = Describe("Table with flowtable offload enabled", func() {
+	var table *nftables.NftablesTable
+	var f *fakeNFT
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+			},
+			true,
+		)
+	})
+
+	// The FORWARD rule references the flowtable whenever offload is on, so it must be created even
+	// with no devices. Deleting it instead (the old behavior) failed the transaction.
+	It("should program the flowtable even when there are no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+	})
+
+	It("should attach the configured overlay and workload devices to the flowtable", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Devices are combined and sorted, so the workload interface sorts ahead of the tunnel.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+	})
+
+	It("should report the flowtable device count as a metric", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+	})
+
+	It("should attach external devices to the flowtable alongside overlay and workload devices", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		table.SetExternalDevices([]string{"eth0"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(3)))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, eth0, vxlan.calico }"))
+	})
+
+	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
+	// FORWARD rule would reference a flowtable that the resync failed to recreate.
+	It("should re-assert the flowtable on a resync with no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Simulate another process removing the flowtable behind our back.
+		tx := f.Fake().NewTransaction()
+		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+
+		// A resync should put it back, despite the empty device set.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
 	})
 })
