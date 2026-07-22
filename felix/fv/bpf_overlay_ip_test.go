@@ -16,6 +16,7 @@ package fv_test
 
 import (
 	"fmt"
+	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -153,6 +154,51 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 			cc.ExpectSome(w[1], w[0])
 
 			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+		})
+
+		It("should use the host IP, not the tunnel IP, as the overlay underlay source", func() {
+			// The outer (underlay) source of encapsulated host-networked traffic must be
+			// the node's own IP.  The overlay tunnel-device IP is not underlay-routable; a
+			// fabric that checks source addresses (e.g. GCP) drops packets carrying it.
+			// Connectivity alone does not catch this on a permissive underlay, so capture
+			// the encapsulated traffic and check its outer source.  Selection is done with
+			// tcpdump's own filter (by outer source host), not by parsing its text, whose
+			// format varies by tcpdump version.
+			var encap []string
+			var tunnelAddr string
+			switch tunnel {
+			case "vxlan":
+				tunnelAddr = tc.Felixes[0].ExpectedVXLANTunnelAddr
+				encap = []string{"udp", "and", "port", "4789"}
+			case "ipip":
+				tunnelAddr = tc.Felixes[0].ExpectedIPIPTunnelAddr
+				encap = []string{"ip", "proto", "4"}
+			}
+			Expect(tunnelAddr).NotTo(BeEmpty(), "tunnel address should be assigned in TunnelAddress mode")
+
+			// Any captured packet line contains " > "; the tcpdump banner does not.
+			pkt := regexp.MustCompile(" > ")
+
+			// Encapsulated packets whose outer source is the node IP (correct).
+			fromNode := tc.Felixes[0].AttachTCPDump("eth0")
+			fromNode.SetLogEnabled(true)
+			fromNode.AddMatcher("pkt", pkt)
+			fromNode.Start(infra, append(append([]string{"-n"}, encap...), "and", "src", "host", tc.Felixes[0].IP)...)
+
+			// Encapsulated packets whose outer source is the tunnel IP (the bug).
+			fromTunnel := tc.Felixes[0].AttachTCPDump("eth0")
+			fromTunnel.SetLogEnabled(true)
+			fromTunnel.AddMatcher("pkt", pkt)
+			fromTunnel.Start(infra, append(append([]string{"-n"}, encap...), "and", "src", "host", tunnelAddr)...)
+
+			// Host-networked -> remote workload drives the encapsulated host-origin flow.
+			cc.ExpectSome(hostW[0], w[1])
+			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+			Eventually(fromNode.MatchCountFn("pkt"), "5s", "100ms").Should(BeNumerically(">", 0),
+				fmt.Sprintf("overlay outer source should be the node IP %s", tc.Felixes[0].IP))
+			Consistently(fromTunnel.MatchCountFn("pkt"), "2s", "100ms").Should(BeZero(),
+				fmt.Sprintf("overlay outer source must never be the tunnel IP %s", tunnelAddr))
 		})
 	})
 }
