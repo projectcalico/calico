@@ -75,9 +75,8 @@ func (r *ReconcileWaypoint) staleGatewaySets(ctx context.Context, reqLogger logr
 		return nil, fmt.Errorf("failed to list Gateways: %w", err)
 	}
 	gateways := map[types.NamespacedName]*gapi.Gateway{}
-	for i := range gatewayList.Items {
-		gw := &gatewayList.Items[i]
-		gateways[types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}] = gw
+	for _, gw := range gatewayList.Items {
+		gateways[types.NamespacedName{Namespace: gw.Namespace, Name: gw.Name}] = &gw
 	}
 
 	// The kinds istiod renders for every managed Gateway. It can also render a
