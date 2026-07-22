@@ -918,12 +918,10 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		}, rules...)
 	}
 
-	// The "Drop VXLAN packets from non-allowed hosts" filter rule drops any UDP packet
-	// destined for the VXLAN port, regardless of which interface it arrived on. If the
-	// masquerade below picks the VXLAN port as the source port, the reply (whose dest
-	// port is then the VXLAN port) gets dropped on the way back. When that drop rule is
-	// in force, compute a source-port range that excludes the VXLAN port; it's applied to
-	// the UDP masquerade rule below.
+	// If a masquerade below picks the VXLAN port as the source port, replies come back
+	// with that as their dest port and get caught by our "Drop VXLAN packets from
+	// non-allowed hosts" filter rule. When VXLAN is enabled, build a source port range
+	// that excludes the VXLAN port and apply it to the UDP masquerade below.
 	// See https://github.com/projectcalico/calico/issues/12244.
 	masqToPorts := ""
 	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
@@ -974,24 +972,15 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		// already (for example, a Kubernetes "NodePort").  The kernel will then
 		// choose the correct source on its own.
 		//
-		// The match comments below apply to every masquerade rule we emit for this
-		// tunnel:
-		//   - OutInterface: only match packets going out the tunnel.
-		//   - NotSrcAddrType(..., limitIfaceOut=true): match packets that don't have the
-		//     correct source address.  This matches local addresses (i.e. ones assigned
-		//     to this host) limiting the match to the output interface (matched above as
-		//     the tunnel).  Avoiding embedding the IP address lets us use a static rule.
-		//   - SrcAddrType: only match if the IP is also some local IP on the box.  This
-		//     prevents us from matching packets from workloads, which are remote as far
-		//     as the routing table is concerned.
+		// Both rules below share the same match: packets going out the tunnel
+		// (OutInterface) whose source is not the tunnel's own address (NotSrcAddrType,
+		// limited to the output interface) but is some local IP on the box (SrcAddrType).
+		// Matching on address type rather than the specific IP keeps the rule static.
 		if masqToPorts != "" {
-			// The "Drop VXLAN packets from non-allowed hosts" rule only matches UDP, so
-			// only UDP flows can have their source masqueraded onto the VXLAN port and
-			// then get their replies dropped. Constrain the source port for UDP and let
-			// everything else masquerade normally. This split is also required for
-			// correctness: MASQUERADE's --to-ports (and the nftables equivalent) is only
-			// valid on a rule that also matches a transport protocol, so a protocol-less
-			// rule carrying --to-ports would be rejected on restore.
+			// Only UDP can hit the drop rule, so only UDP needs its source port
+			// constrained; the rule below masquerades everything else normally. A
+			// separate rule is needed regardless, since --to-ports is only valid on a
+			// rule that also matches a protocol.
 			rules = append(rules, generictables.Rule{
 				Match: r.NewMatch().
 					ProtocolNum(ProtoUDP).
@@ -1015,11 +1004,10 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 	}}
 }
 
-// masqPortRangeExcluding returns a masquerade "--to-ports" range that spans as many
-// ephemeral ports as possible while excluding the given port. iptables and nftables can
-// only target a single contiguous range, so we can't punch a hole in the middle; we take
-// whichever side of the excluded port is wider, keeping the low bound at 1024 to avoid
-// masquerading onto privileged ports. A non-positive port disables the exclusion.
+// masqPortRangeExcluding returns a masquerade "--to-ports" range that excludes the given
+// port. iptables and nftables only accept a single contiguous range, so we can't punch a
+// hole in the middle; instead we take whichever side of the port is wider, with a floor of
+// 1024 to stay off privileged ports. Returns "" (no restriction) for an out-of-range port.
 func masqPortRangeExcluding(port int) string {
 	if port <= 0 || port > 65535 {
 		return ""

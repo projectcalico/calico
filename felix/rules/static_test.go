@@ -1215,9 +1215,8 @@ var _ = Describe("Static", func() {
 
 						It("IPv4: Should masquerade UDP to the wider range below the VXLAN port", func() {
 							chains := rr.StaticNATPostroutingChains(4)
-							// Rules[2] is the UDP masquerade for the IPIP tunnel; it carries the
-							// port range that excludes the custom VXLAN port. Rules[3] is the
-							// catch-all masquerade for other protocols, with no port range.
+							// Rules[2] is the UDP masquerade with the port range excluding the
+							// custom VXLAN port; Rules[3] is the catch-all with no range.
 							Expect(chains[0].Rules[2].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
 							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{}))
 						})
