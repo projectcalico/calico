@@ -846,17 +846,19 @@ func (c *L3RouteResolver) flush() {
 			}
 		}
 
-		// Apply the accumulated block workload type flags unless the route is a tunnel
-		// or host IP that merely falls within a parent block. Such an IP inside a larger
-		// block (e.g. a /32 inside a /24) should not get REMOTE_WORKLOAD — for a tunnel
-		// IP that makes isRemoteTunnelRoute() program a spurious /32 route, and for a host
-		// IP it makes the route manager program the node's own IP via the tunnel device,
-		// which breaks connectivity to the node.
+		// Apply the accumulated block workload type flags, with two exceptions.
 		//
-		// If the block is at the same CIDR as the route (e.g. a /32 block from a dedicated
-		// pool), the workload type is still needed so the route manager programs the
-		// correct directly-connected route.
-		if blockSeen && (blockMatchesRoute || (!hasTunnelRef && !hasHostRef)) {
+		// A host IP never inherits the workload type from a containing block, even one at
+		// its exact CIDR. It's reachable via its own host route; tagging it REMOTE_WORKLOAD
+		// makes the route manager program the node's own IP via the tunnel device, which
+		// breaks connectivity to the node.
+		//
+		// A tunnel IP that merely falls within a larger parent block (e.g. a /32 inside a
+		// /24) also skips the workload type, since REMOTE_WORKLOAD makes
+		// isRemoteTunnelRoute() program a spurious /32 route. A tunnel IP whose block is at
+		// the same CIDR (a dedicated /32 tunnel pool) still needs it, so the route manager
+		// programs the correct directly-connected route.
+		if blockSeen && !hasHostRef && (blockMatchesRoute || !hasTunnelRef) {
 			rt.Types |= blockTypes
 		}
 

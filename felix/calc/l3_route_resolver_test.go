@@ -372,6 +372,53 @@ var _ = Describe("L3RouteResolver", func() {
 			Expect(hostRoute.Types&proto.RouteType_REMOTE_WORKLOAD).To(BeZero(),
 				"host route should NOT have REMOTE_WORKLOAD just because it falls within a block")
 		})
+
+		// Regression guard for the suppression above. A remote block that doesn't contain
+		// the node's own host IP is a genuine remote workload route and must keep
+		// REMOTE_WORKLOAD, which it gets solely from the block type flags. Suppressing those
+		// flags unconditionally would pass the host-IP test above but break real workload
+		// routing.
+		It("should still add REMOTE_WORKLOAD to a remote block route", func() {
+			poolCIDR, _ := ip.CIDRFromString("10.0.0.0/16")
+			pool := model.IPPool{
+				CIDR:      net.IPNet{IPNet: poolCIDR.ToIPNet()},
+				VXLANMode: encap.Always,
+			}
+			l3RR.OnPoolUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key:   model.IPPoolKey{CIDR: model.PrefixFromIPNet(pool.CIDR)},
+					Value: &pool,
+				},
+			})
+
+			remoteAffinity := "host:remote-host"
+			blockCIDR := net.MustParseCIDR("10.0.1.0/24")
+			l3RR.OnBlockUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.BlockKey{CIDR: model.PrefixFromIPNet(blockCIDR)},
+					Value: &model.AllocationBlock{
+						CIDR:        blockCIDR,
+						Affinity:    &remoteAffinity,
+						Allocations: make([]*int, 256),
+						Unallocated: []int{},
+					},
+				},
+			})
+
+			// The node's host IP is outside the block, so nothing suppresses the block's
+			// workload type.
+			l3RR.onNodeUpdate("remote-host", &l3rrNodeInfo{
+				V4Addr: ip.FromString("192.168.0.2").(ip.V4Addr),
+			})
+			l3RR.flush()
+
+			routes := drainEvents()
+
+			blockRoute := findRoute(routes, "10.0.1.0/24")
+			Expect(blockRoute).NotTo(BeNil(), "expected a route for the block 10.0.1.0/24")
+			Expect(blockRoute.Types&proto.RouteType_REMOTE_WORKLOAD).NotTo(BeZero(),
+				"remote block route should keep REMOTE_WORKLOAD")
+		})
 	})
 
 	It("should not set IpPoolType but still propagate NatOutgoing for LoadBalancer-only pools", func() {
