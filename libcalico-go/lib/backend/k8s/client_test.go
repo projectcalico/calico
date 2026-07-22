@@ -2697,9 +2697,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					Name: "myfelixconfig",
 				},
 				Spec: apiv3.FelixConfigurationSpec{
-					InterfacePrefix: "xali-",
-					FloatingIPs:     ptr.To(apiv3.FloatingIPsEnabled),
-					NFTablesMode:    ptr.To(apiv3.NFTablesModeAuto),
+					InterfacePrefix:          "xali-",
+					FloatingIPs:              ptr.To(apiv3.FloatingIPsEnabled),
+					NFTablesMode:             ptr.To(apiv3.NFTablesModeAuto),
+					NFTablesFlowTableOffload: ptr.To(apiv3.NFTablesFlowTableOffloadEnabled),
 				},
 			},
 		}
