@@ -108,6 +108,13 @@ func ExternalNodeRoutes(t testing.TB) string {
 	return MustRun(t, "docker exec "+ExternalNodeName+" ip r")
 }
 
+// ExternalNodeRoutesV6 returns the IPv6 routing table of the external BGP node,
+// as produced by `ip -6 r`. Mirrors test_base.py:TestBaseV6.get_routes.
+func ExternalNodeRoutesV6(t testing.TB) string {
+	t.Helper()
+	return MustRun(t, "docker exec "+ExternalNodeName+" ip -6 r")
+}
+
 // Curl runs `curl` from the external BGP node against the given host. An IPv6
 // literal is wrapped in brackets.
 func Curl(t testing.TB, hostname string) (string, error) {
