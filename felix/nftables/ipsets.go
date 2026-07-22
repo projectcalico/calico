@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -394,10 +394,14 @@ func (s *IPSets) tryResync() error {
 	sets, err := s.nft.List(ctx, "set")
 	if err != nil {
 		if knftables.IsNotFound(err) {
-			// Table doesn't exist - nothing to resync.
-			return nil
+			// Table doesn't exist: treat as no sets programmed so the cleanup
+			// pass below resets every member tracker. Returning early here would
+			// leave stale members in the trackers and they'd never be reprogrammed
+			// once the table is recreated.
+			sets = nil
+		} else {
+			return fmt.Errorf("error listing nftables sets: %w", err)
 		}
-		return fmt.Errorf("error listing nftables sets: %s", err)
 	}
 
 	// We'll process each set in parallel, so we need a struct to hold the results.
