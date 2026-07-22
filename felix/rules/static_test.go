@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1064,6 +1064,7 @@ var _ = Describe("Static", func() {
 			Describe("with IPv4 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(4, kubeIPVSEnabled)
@@ -1075,6 +1076,14 @@ var _ = Describe("Static", func() {
 							Rules: []generictables.Rule{
 								{Action: iptables.JumpAction{Target: "cali-fip-snat"}},
 								{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
+								{
+									Match: iptables.Match().
+										ProtocolNum(ProtoUDP).
+										OutInterface(dataplanedefs.IPIPIfaceName).
+										NotSrcAddrType(generictables.AddrTypeLocal, true).
+										SrcAddrType(generictables.AddrTypeLocal, false),
+									Action: iptables.MasqAction{ToPorts: "4790-65535"},
+								},
 								{
 									Match: iptables.Match().
 										OutInterface(dataplanedefs.IPIPIfaceName).
@@ -1166,10 +1175,26 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.IPIPIfaceName).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
 											OutInterface(dataplanedefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
+									},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV4).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
@@ -1182,12 +1207,27 @@ var _ = Describe("Static", func() {
 							},
 						}))
 					})
+
+					Describe("with a high custom VXLAN port", func() {
+						BeforeEach(func() {
+							conf.VXLANPort = 60000
+						})
+
+						It("IPv4: Should masquerade UDP to the wider range below the VXLAN port", func() {
+							chains := rr.StaticNATPostroutingChains(4)
+							// Rules[2] is the UDP masquerade with the port range excluding the
+							// custom VXLAN port; Rules[3] is the catch-all with no range.
+							Expect(chains[0].Rules[2].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{}))
+						})
+					})
 				})
 			})
 
 			Describe("with IPv6 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabledV6 = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(6, kubeIPVSEnabled)
@@ -1258,6 +1298,14 @@ var _ = Describe("Static", func() {
 								Rules: []generictables.Rule{
 									{Action: iptables.JumpAction{Target: "cali-fip-snat"}},
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
 									{
 										Match: iptables.Match().
 											OutInterface(dataplanedefs.VXLANIfaceNameV6).
