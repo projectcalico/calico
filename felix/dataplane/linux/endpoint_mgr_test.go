@@ -889,7 +889,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				mockProcSys.stat,
 				"1",
 				nil, // filterMaps
-				nil, // ifceHandler
+				nil, // flowtableHandler
 				hepListener,
 				common.NewCallbacks(),
 				linkAddrsMgr,
@@ -4142,7 +4142,7 @@ var _ = Describe("EndpointManager flowtable", func() {
 			mockProcSys.stat,
 			"1",
 			&fakeMapsDataplane{}, // filterMaps
-			ftHandler,            // ifceHandler
+			ftHandler,            // flowtableHandler
 			&testHEPListener{},
 			common.NewCallbacks(),
 			linkAddrsMgr,

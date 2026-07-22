@@ -159,7 +159,7 @@ type endpointManager struct {
 	arpTable Table
 	arpMaps  nftables.MapsDataplane
 
-	ifceHandler nftables.FlowTableHandler
+	flowtableHandler nftables.FlowTableHandler
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -258,7 +258,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	ifces nftables.FlowTableHandler,
+	flowtableHandler nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -279,7 +279,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
-		ifces,
+		flowtableHandler,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsMgr,
@@ -302,7 +302,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	ifces nftables.FlowTableHandler,
+	flowtableHandler nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -324,7 +324,7 @@ func newEndpointManagerWithShims(
 		ipVersion:          ipVersion,
 		wlIfacesRegexp:     wlIfacesRegexp,
 		filterMaps:         filterMaps,
-		ifceHandler:        ifces,
+		flowtableHandler:   flowtableHandler,
 		bpfEndpointManager: bpfEndpointManager,
 
 		arpTable: arpTable,
@@ -507,7 +507,7 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 		// list even when no endpoint update accompanies it (e.g. a veth removed on pod
 		// teardown, before the WorkloadEndpoint-removed event arrives). Force the
 		// dispatch/flowtable recompute so the dead device drops out promptly.
-		if m.ifceHandler != nil && m.wlIfacesRegexp.MatchString(ifaceName) {
+		if m.flowtableHandler != nil && m.wlIfacesRegexp.MatchString(ifaceName) {
 			m.needToCheckDispatchChains = true
 		}
 		// If this interface is linked to any already-existing endpoints, mark the endpoint
@@ -923,7 +923,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
 
-			if m.ifceHandler != nil {
+			if m.flowtableHandler != nil {
 				// Only hand the flowtable interfaces that are currently up. A veth that
 				// has been deleted (pod teardown) must not end up in the flowtable, or the
 				// nft transaction is rejected and takes down the whole table.
@@ -933,7 +933,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 						wlIfces = append(wlIfces, i)
 					}
 				}
-				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
+				m.flowtableHandler.SetWorkloadInterfaces(wlIfces)
 			}
 		}
 

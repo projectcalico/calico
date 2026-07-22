@@ -536,14 +536,14 @@ func (t *NftablesTable) SetOverlayDevices(devices []string) {
 // SetWorkloadInterfaces updates the set of active workload interfaces for the flowtable.
 // Called by the endpoint manager when workload endpoints change.
 func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
-	t.workloadInterfaces = ifces
+	t.workloadInterfaces = slices.Clone(ifces)
 	t.enableFlowtable()
 }
 
 // SetExternalDevices updates the set of host/external interfaces for the flowtable. Called by
 // the flowtable manager as matching interfaces come up and go down.
 func (t *NftablesTable) SetExternalDevices(ifces []string) {
-	t.externalDevices = ifces
+	t.externalDevices = slices.Clone(ifces)
 	t.enableFlowtable()
 }
 
