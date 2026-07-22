@@ -24,11 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	shutil "github.com/termie/go-shutil"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 // diagCmd is a struct to hold a command, cmd info and filename to run diagnostic on
@@ -38,41 +35,10 @@ type diagCmd struct {
 	filename string
 }
 
-// Diags function collects diagnostic information and logs
-func Diags(args []string) error {
-	var err error
-	doc := `Usage:
-  <BINARY_NAME> node diags [--log-dir=<LOG_DIR>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-     --log-dir=<LOG_DIR>       The directory containing Calico logs.
-                               [default: /var/log/calico]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  This command is used to gather diagnostic information from a Calico node.
-  This is usually used when trying to diagnose an issue that may be related to
-  your Calico network.
-
-  This command must be run on the specific Calico node that you are gathering
-  diagnostics for.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	arguments, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(arguments) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
-	return runDiags(arguments["--log-dir"].(string))
+// Diags gathers diagnostic information and logs from a Calico node, reading
+// logs from logDir.
+func Diags(logDir string) error {
+	return runDiags(logDir)
 }
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics

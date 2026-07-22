@@ -15,13 +15,10 @@
 package cluster
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
@@ -53,128 +50,26 @@ func TestBpfJSONCmd_CollectsJSONWithTextFallback(t *testing.T) {
 	Expect(cmd.FallbackFilePath).To(Equal("/node-dir/bpf-nat-maglev.txt"))
 }
 
-func TestDiags(t *testing.T) {
+// buildDiagOpts defaults an empty since to "0s" (which kubectl reads as all
+// logs) and otherwise passes its inputs straight through. Flag parsing itself
+// is cobra's responsibility now, so it isn't re-tested here.
+func TestBuildDiagOpts(t *testing.T) {
 	RegisterTestingT(t)
-	test := func(invocation string, expectedErr error, expectedOutput string, expectedOpts *diagOpts) {
-		logrus.Infof("Test case: %v", invocation)
-		output := ""
-		opts := (*diagOpts)(nil)
-		err := diagsTestable(
-			strings.Split(invocation, " "),
-			func(a ...any) (int, error) {
-				output = fmt.Sprint(a...)
-				return 0, nil
-			}, func(o *diagOpts) error {
-				opts = o
-				return nil
-			})
-		if expectedErr == nil {
-			Expect(err).To(BeNil())
-		} else {
-			Expect(err).NotTo(BeNil())
-			Expect(err.Error()).To(Equal(expectedErr.Error()))
-		}
-		Expect(output).To(Equal(expectedOutput))
-		if expectedOpts != nil {
-			// Save having to specify Cluster and Diags in all of the cases below.
-			expectedOpts.Cluster = true
-			expectedOpts.Diags = true
-		}
-		Expect(opts).To(Equal(expectedOpts))
-	}
-	test("cluster diags",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/etc/calico/calicoctl.cfg",
-			Since:                "0s",
-			MaxLogs:              5,
-			MaxParallelism:       10,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags -h",
-		nil,
-		doc,
-		nil)
-	test("cluster diags --help",
-		nil,
-		doc,
-		nil)
-	test("cluster diags rubbish",
-		errors.New("invalid option: 'calicoctl cluster diags rubbish'.\n\n"+usage),
-		"",
-		nil)
-	test("cluster diags --rubbish",
-		errors.New("invalid option: 'calicoctl cluster diags --rubbish'.\n\n"+usage),
-		"",
-		nil)
-	test("cluster diags -c /configfile",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/configfile",
-			Since:                "0s",
-			MaxLogs:              5,
-			MaxParallelism:       10,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags --config /configfile",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/configfile",
-			Since:                "0s",
-			MaxLogs:              5,
-			MaxParallelism:       10,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags --since 3h",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/etc/calico/calicoctl.cfg",
-			Since:                "3h",
-			MaxLogs:              5,
-			MaxParallelism:       10,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags --max-logs 1 --max-parallelism 2",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/etc/calico/calicoctl.cfg",
-			Since:                "0s",
-			MaxLogs:              1,
-			MaxParallelism:       2,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags --max-logs=1",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/etc/calico/calicoctl.cfg",
-			Since:                "0s",
-			MaxLogs:              1,
-			MaxParallelism:       10,
-			FocusNodes:           "",
-			AllowVersionMismatch: false,
-		})
-	test("cluster diags --focus-node=infra1,control2",
-		nil,
-		"",
-		&diagOpts{
-			Config:               "/etc/calico/calicoctl.cfg",
-			Since:                "0s",
-			MaxLogs:              5,
-			MaxParallelism:       10,
-			FocusNodes:           "infra1,control2",
-			AllowVersionMismatch: false,
-		})
+
+	Expect(buildDiagOpts("/etc/calico/calicoctl.cfg", "", 5, 10, "", false)).To(Equal(&diagOpts{
+		Config:         "/etc/calico/calicoctl.cfg",
+		Since:          "0s",
+		MaxLogs:        5,
+		MaxParallelism: 10,
+	}))
+	Expect(buildDiagOpts("/configfile", "3h", 1, 2, "infra1,control2", true)).To(Equal(&diagOpts{
+		Config:             "/configfile",
+		Since:              "3h",
+		MaxLogs:            1,
+		MaxParallelism:     2,
+		FocusNodes:         "infra1,control2",
+		SkipTempDirCleanup: true,
+	}))
 }
 
 func TestDiagsCmdsForPod_Previous(t *testing.T) {
