@@ -570,6 +570,7 @@ func (t *NftablesTable) recalcFlowtableDevices() {
 	combined = append(combined, t.workloadInterfaces...)
 	combined = append(combined, t.externalDevices...)
 	sort.Strings(combined)
+	combined = slices.Compact(combined)
 	if !slices.Equal(t.flowtableDevices, combined) {
 		t.flowtableDevices = combined
 		t.flowtableDirty = true

@@ -129,9 +129,10 @@ func (a *actionFactory) DSCP(value uint8) generictables.Action {
 	}
 }
 
-// FlowOffload is a no-op in iptables mode; flowtable offload is nftables-only. The rule
-// renderer only emits it when nftables is active, so this is never reached in practice.
+// FlowOffload is unsupported in iptables mode; flowtable offload is nftables-only. The rule
+// renderer only emits it when nftables is active, so reaching this is a programming error.
 func (s *actionFactory) FlowOffload() generictables.Action {
+	logrus.Panic("FlowOffload is not supported in iptables mode")
 	return nil
 }
 

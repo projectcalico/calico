@@ -57,7 +57,9 @@ var _ = DescribeTable("Actions",
 )
 
 var _ = Describe("FlowOffload", func() {
-	It("renders as a no-op in iptables mode; flowtable offload is nftables-only", func() {
-		Expect(Actions().FlowOffload()).To(BeNil())
+	It("panics in iptables mode; flowtable offload is nftables-only", func() {
+		Expect(func() {
+			Actions().FlowOffload()
+		}).To(Panic())
 	})
 })
