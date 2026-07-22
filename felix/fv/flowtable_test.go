@@ -125,4 +125,22 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 			return out
 		}, "20s", "1s").Should(ContainSubstring("flowtabledummy"))
 	})
+
+	It("removes the flowtable when offload is disabled", func() {
+		// Confirm the flowtable is programmed before we disable.
+		Eventually(func() string {
+			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
+			return out
+		}, "20s", "1s").Should(ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)))
+
+		// Disabling offload restarts Felix. The forward rule is reconciled away and the flowtable
+		// object itself should be cleaned up rather than left behind.
+		tc.Felixes[0].SetEnv(map[string]string{"FELIX_NFTABLESFLOWTABLEOFFLOAD": "Disabled"})
+		tc.Felixes[0].Restart()
+
+		Eventually(func() string {
+			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
+			return out
+		}, "30s", "1s").ShouldNot(ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)))
+	})
 })

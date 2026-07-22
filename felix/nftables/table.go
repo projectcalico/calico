@@ -46,8 +46,9 @@ const (
 
 	// Object type names as returned by knftables' ListAll, used to index its
 	// result map.
-	objectTypeChain = "chain"
-	objectTypeMap   = "map"
+	objectTypeChain     = "chain"
+	objectTypeMap       = "map"
+	objectTypeFlowtable = "flowtable"
 )
 
 type FlowTableHandler interface {
@@ -261,7 +262,8 @@ type NftablesTable struct {
 	// resyncs re-assert the flowtable even when the device list is empty.
 	flowtableEnabled bool
 
-	// flowtableDirty is true when flowtableDevices has changed and needs to be programmed.
+	// flowtableDirty is true when the flowtable needs reconciling: created or updated when offload
+	// is enabled, or deleted when it is disabled but a flowtable lingers from a previous run.
 	flowtableDirty bool
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
@@ -764,6 +766,13 @@ func (t *NftablesTable) loadDataplaneState() {
 		t.logCxt.Debug("Table not found in dataplane, nothing to load.")
 	}
 
+	// If the flowtable's presence in the dataplane doesn't match whether offload is enabled, it
+	// needs reconciling: created when enabled but missing, or deleted when disabled but present.
+	hasFlowtable := slices.Contains(allObjects[objectTypeFlowtable], dataplanedefs.FlowtableName)
+	if t.flowtableEnabled != hasFlowtable {
+		t.flowtableDirty = true
+	}
+
 	// Sync maps using the pre-fetched map names. Give the maps resync its own
 	// timeout so a slow one doesn't eat into the chain read below.
 	mapsCtx, mapsCancel := context.WithTimeout(context.Background(), t.contextTimeout)
@@ -992,6 +1001,9 @@ func (t *NftablesTable) InvalidateDataplaneCache(reason string) {
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 	t.reason = reason
+
+	// Re-assert an enabled flowtable on the next resync (its device list may have drifted). The
+	// disabled case is left to loadDataplaneState, which only marks it dirty if one actually exists.
 	t.flowtableDirty = t.flowtableEnabled
 }
 
@@ -1123,15 +1135,22 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 
 	// The FORWARD chain references "flow offload @calico" whenever offload is enabled, so the
-	// flowtable must always exist, even with no devices. Add acts as create-or-update.
+	// flowtable must always exist while enabled, even with no devices (Add acts as create-or-update).
+	// When disabled we delete any flowtable left over from a previous run; the forward rule that
+	// referenced it is already reconciled away.
 	if t.flowtableDirty {
-		prio := knftables.FilterIngressPriority
-		tx.Add(&knftables.Flowtable{
-			Name:     dataplanedefs.FlowtableName,
-			Priority: &prio,
-			Devices:  t.flowtableDevices,
-		})
-		t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
+		if t.flowtableEnabled {
+			prio := knftables.FilterIngressPriority
+			tx.Add(&knftables.Flowtable{
+				Name:     dataplanedefs.FlowtableName,
+				Priority: &prio,
+				Devices:  t.flowtableDevices,
+			})
+			t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
+		} else {
+			tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+			t.gaugeNumFlowtableDevices.Set(0)
+		}
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.

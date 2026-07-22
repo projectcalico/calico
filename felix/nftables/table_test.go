@@ -1247,4 +1247,23 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
 	})
+
+	// When offload is turned off, Felix restarts and comes up without ever enabling the flowtable.
+	// It must clean up the flowtable left behind by the previous run.
+	It("should delete a leftover flowtable when offload is disabled", func() {
+		// Offload is disabled here (no SetOverlayDevices call); this first Apply just creates the table.
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// Simulate a flowtable left behind by a previous run that had offload enabled.
+		prio := knftables.FilterIngressPriority
+		tx := f.Fake().NewTransaction()
+		tx.Add(&knftables.Flowtable{Name: dataplanedefs.FlowtableName, Priority: &prio})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// The next resync should spot the stale flowtable and remove it.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+	})
 })
