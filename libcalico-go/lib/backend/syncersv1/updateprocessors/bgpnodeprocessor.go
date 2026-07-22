@@ -68,6 +68,13 @@ func (c *bgpNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, er
 		ipv4 = ""
 		ipv6 = ""
 		rrClusterID = ""
+
+		// Emit the WireGuard keys as blank strings rather than leaving them nil when
+		// unset. confd treats a nil-valued node key as a signal that the node's config
+		// is being removed and drops the node from its BGP IP cache, which breaks
+		// unrelated per-peer logic (e.g. passive mode). Blank keeps the node present.
+		wgAddrV4 = ""
+		wgAddrV6 = ""
 		if bgp := node.Spec.BGP; bgp != nil {
 			if len(bgp.IPv4Address) != 0 {
 				ip, cidr, perr := net.ParseCIDROrIP(bgp.IPv4Address)

@@ -56,8 +56,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        nil,
 			"as_num":            nil,
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -101,8 +101,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        nil,
 			"as_num":            nil,
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -129,8 +129,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        "aa:bb:cc::/128",
 			"as_num":            nil,
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -160,8 +160,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        "aa:bb:cc::ff00/120",
 			"as_num":            "12345",
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -221,8 +221,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        nil,
 			"as_num":            nil,
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -280,8 +280,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        "aa:bb:cc::ff00/120",
 			"as_num":            "12345",
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
@@ -310,8 +310,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        nil,
 			"as_num":            nil,
 			"rr_cluster_id":     "",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
@@ -336,8 +336,8 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			"network_v6":        nil,
 			"as_num":            nil,
 			"rr_cluster_id":     "255.0.0.1",
-			"wireguard_addr_v4": nil,
-			"wireguard_addr_v6": nil,
+			"wireguard_addr_v4": "",
+			"wireguard_addr_v6": "",
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -428,7 +428,6 @@ func assertBlockAffinityUpdate(kvps []*model.KVPair, expected *model.KVPair) {
 	e := fmt.Sprintf("%v \n\nnot found in\n\n [", expected)
 	for _, k := range kvps {
 		e = fmt.Sprintf("%s\n%#v", e, *k)
-
 	}
 	e += "]"
 	Expect(errors.New(e)).NotTo(HaveOccurred())
