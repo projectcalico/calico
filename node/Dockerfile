@@ -36,7 +36,9 @@ FROM almalinux:9 AS almalinux
 
 ARG RUNIT_VER
 
-RUN dnf upgrade -y && dnf install -y epel-release
+# --nobest: don't fail the build when the newest package can't be cleanly
+# installed (e.g. a mid-sync mirror offering glibc but not its lockstep siblings).
+RUN dnf upgrade -y --nobest && dnf install -y epel-release
 
 RUN dnf --enablerepo=crb install -y \
     iptables-legacy \
@@ -65,7 +67,8 @@ ARG RUNIT_VER
 
 # Update base packages to pick up security updates - must do this before adding the AlmaLinux repo,
 # and install the necessary packages from ubi repos.
-RUN microdnf upgrade -y
+# --nobest so a mid-sync mirror (newest glibc without its lockstep siblings) doesn't fail the build.
+RUN microdnf upgrade -y --nobest
 RUN microdnf install -y \
     # Don't install copious docs.
     --setopt=tsflags=nodocs \
