@@ -147,11 +147,11 @@ type bgpAdvertEnv struct {
 	ips            []string
 	externalNodeIP string
 
-	// getRoutes returns the external BGP node's routing table for the address
+	// getExternalNodeRoutes returns the external BGP node's routing table for the address
 	// family under test: utils.ExternalNodeRoutes (IPv4) or
 	// utils.ExternalNodeRoutesV6 (IPv6). The route-assertion helpers consult it
 	// so the same logic serves both families.
-	getRoutes func(testing.TB) string
+	getExternalNodeRoutes func(testing.TB) string
 
 	// ecmpParentAttrs is the text `ip route` prints between "proto bird" and the
 	// newline before the first nexthop on the parent line of a multipath route.
@@ -181,7 +181,7 @@ func TestBGPAdvert(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	// Establish the BGPPeer from the cluster nodes to the external node, with a
 	// password sourced from the shared Secret.
@@ -223,7 +223,7 @@ func TestBGPAdvertRR(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	createBGPSecret(t, cli)
 	peer := &v3.BGPPeer{
@@ -594,7 +594,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	// enough that they're programmed by the time we've queried them all.
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		routes := e.getRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if !strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s not yet advertised", cip)
@@ -607,7 +607,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	utils.ScaleDeployment(t, localSvc, e.ns, 0)
 	utils.WaitForDeployment(t, localSvc, e.ns)
 	g.Eventually(func() error {
-		routes := e.getRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s still advertised", cip)
@@ -1000,7 +1000,7 @@ func (e *bgpAdvertEnv) assertRouteContains(t *testing.T, substr string) {
 	t.Helper()
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := e.getRoutes(t); !strings.Contains(routes, substr) {
+		if routes := e.getExternalNodeRoutes(t); !strings.Contains(routes, substr) {
 			return fmt.Errorf("route table does not contain %q:\n%s", substr, routes)
 		}
 		return nil
@@ -1013,7 +1013,7 @@ func (e *bgpAdvertEnv) assertRouteNotContains(t *testing.T, substr string) {
 	t.Helper()
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := e.getRoutes(t); strings.Contains(routes, substr) {
+		if routes := e.getExternalNodeRoutes(t); strings.Contains(routes, substr) {
 			return fmt.Errorf("route table still contains %q:\n%s", substr, routes)
 		}
 		return nil
@@ -1033,7 +1033,7 @@ func (e *bgpAdvertEnv) assertEcmpRoutes(t *testing.T, dst string, via []string) 
 	}
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := e.getRoutes(t); !strings.Contains(routes, match) {
+		if routes := e.getExternalNodeRoutes(t); !strings.Contains(routes, match) {
 			return fmt.Errorf("ECMP route block not found:\n%s\nin:\n%s", match, routes)
 		}
 		return nil

@@ -28,9 +28,7 @@ import (
 // External BGP node.
 //
 // The BGP advertisement tests peer the cluster with a standalone BIRD router
-// running in a docker container on the kind network. These helpers are the Go
-// port of utils.py:start_external_node_with_bgp and the get_routes / curl
-// helpers, all of which shell out to docker.
+// running in a docker container on the kind network.
 
 // ExternalNodeName is the docker container name of the external BGP router that
 // the advertisement tests peer with. Matches the Python "kube-node-extra".
@@ -109,7 +107,7 @@ func ExternalNodeRoutes(t testing.TB) string {
 }
 
 // ExternalNodeRoutesV6 returns the IPv6 routing table of the external BGP node,
-// as produced by `ip -6 r`. Mirrors test_base.py:TestBaseV6.get_routes.
+// as produced by `ip -6 r`.
 func ExternalNodeRoutesV6(t testing.TB) string {
 	t.Helper()
 	return MustRun(t, "docker exec "+ExternalNodeName+" ip -6 r")

@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// bgp_advert_v6_test.go is the IPv6 counterpart of bgp_advert_test.go: a
-// kind-only system test for BGP advertisement of Kubernetes service IPv6
+// This is a kind-only system test for BGP advertisement of Kubernetes service IPv6
 // addresses (cluster IPs, external IPs and LoadBalancer IPs). It peers the
 // cluster with a standalone BIRD6 router on the kind network and asserts that
 // the routes the cluster advertises (and withdraws) appear in the external
 // node's IPv6 routing table.
 //
-// TestBGPAdvertV6 covers the full node-to-node-mesh topology (the Python
-// TestBGPAdvertV6 class) and TestBGPAdvertV6RR covers the route-reflector
-// topology (TestBGPAdvertV6RR). Both reuse the shared bgpAdvertEnv fixture and
+// TestBGPAdvertV6 covers the full node-to-node-mesh topology and TestBGPAdvertV6RR
+// covers the route-reflector topology. Both reuse the shared bgpAdvertEnv fixture and
 // helpers from bgp_advert_test.go, differing only in the address family (their
-// env.getRoutes reads `ip -6 r`) and the IPv6 CIDRs/addresses used.
+// env.getExternalNodeRoutes reads `ip -6 r`) and the IPv6 CIDRs/addresses used.
 
 package k8stests
 
@@ -136,7 +134,7 @@ func TestBGPAdvertV6(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, "", birdConf)
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
 
 	// Establish the BGPPeer from the cluster nodes to the external node.
 	peer := &v3.BGPPeer{
@@ -169,7 +167,7 @@ func TestBGPAdvertV6RR(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, "", birdConf)
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
 
 	peer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: extPeerName},
@@ -328,7 +326,7 @@ func (e *bgpAdvertEnv) testManyServicesV6(t *testing.T) {
 	// enough that they're programmed by the time we've queried them all.
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		routes := e.getRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if !strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s not yet advertised", cip)
@@ -341,7 +339,7 @@ func (e *bgpAdvertEnv) testManyServicesV6(t *testing.T) {
 	utils.ScaleDeployment(t, localSvc, e.ns, 0)
 	utils.WaitForDeployment(t, localSvc, e.ns)
 	g.Eventually(func() error {
-		routes := e.getRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s still advertised", cip)

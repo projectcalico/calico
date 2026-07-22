@@ -316,8 +316,7 @@ func GetSvcHostIP(t testing.TB, app, ns string) string {
 // GetSvcHostIPv6 returns the static IPv6 address (from ipv6Map) of the node
 // hosting the first pod backing the service (matched by label app=<app>).
 // Kubernetes does not expose an IPv6 address on the Node, so we look it up from
-// the pod's spec.nodeName. Mirrors _TestBGPAdvertV6.get_svc_host_ipv6, which
-// instead maps the pod's (IPv4) hostIP through the node IP lists.
+// the pod's spec.nodeName.
 func GetSvcHostIPv6(t testing.TB, app, ns string) string {
 	t.Helper()
 	pods, err := K8sClient(t).CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
