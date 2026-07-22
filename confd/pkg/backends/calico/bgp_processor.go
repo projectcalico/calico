@@ -993,10 +993,12 @@ func (c *client) processWireguardPeerFilter(config *types.BirdBGPConfig, ipVersi
 		return
 	}
 
-	// Build maps of hostname → BGP IP and hostname → WireGuard address.
+	// Build maps of hostname to BGP IP and hostname to WireGuard address.
 	bgpIPs := make(map[string]string)
 	wgAddrs := make(map[string]string)
 	for key, value := range hostKVs {
+		// Keys look like /calico/bgp/v1/host/<hostname>/<field>, which splits
+		// into 7 parts (the leading slash gives an empty first element).
 		parts := strings.Split(key, "/")
 		if len(parts) < 7 {
 			continue
@@ -1012,6 +1014,14 @@ func (c *client) processWireguardPeerFilter(config *types.BirdBGPConfig, ipVersi
 		}
 	}
 
+	// If the local node isn't running WireGuard, it reaches every peer over the
+	// normal BGP path, so leave BIRD's kernel routes in place. Only nodes that
+	// route to WireGuard peers via the WireGuard device should reject them.
+	if _, localHasWG := wgAddrs[NodeName]; !localHasWG {
+		return
+	}
+
+	// Reject BIRD's kernel route for each remote peer running WireGuard.
 	for hostname, bgpIP := range bgpIPs {
 		if hostname == NodeName {
 			continue
@@ -1019,10 +1029,7 @@ func (c *client) processWireguardPeerFilter(config *types.BirdBGPConfig, ipVersi
 		if _, hasWG := wgAddrs[hostname]; !hasWG {
 			continue
 		}
-		statement := fmt.Sprintf(
-			"  if (defined(bgp_next_hop) && bgp_next_hop = %s) then { reject; } # WireGuard routes handled by Felix.",
-			bgpIP,
-		)
+		statement := fmt.Sprintf("  if (defined(bgp_next_hop) && bgp_next_hop = %s) then { reject; } # WireGuard routes handled by Felix.", bgpIP)
 		config.WireguardPeerKernelFilter = append(config.WireguardPeerKernelFilter, statement)
 	}
 

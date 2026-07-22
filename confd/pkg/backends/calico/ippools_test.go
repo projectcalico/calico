@@ -544,6 +544,35 @@ func Test_processWireguardPeerFilter_AllWireguard(t *testing.T) {
 	}
 }
 
+// Test_processWireguardPeerFilter_LocalNoWireguard covers a mixed cluster where
+// the local node isn't running WireGuard but a remote peer is. The local node
+// routes to that peer over the normal BGP path, so we must not reject BIRD's
+// kernel route for it.
+func Test_processWireguardPeerFilter_LocalNoWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4": "10.0.0.1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v4": "192.168.1.2",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	if len(config.WireguardPeerKernelFilter) != 0 {
+		t.Errorf("Expected empty WireguardPeerKernelFilter, got: %#v",
+			config.WireguardPeerKernelFilter)
+	}
+}
+
 func ippoolTestCasesToKVPairs(t *testing.T, tcs []ippoolTestCase, ipVersion int) map[string]string {
 	cache := map[string]string{}
 	for _, tc := range tcs {
