@@ -2581,6 +2581,32 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The new LM is NOT in the deletes set.
         self.assertNotIn(self._lm_key(self.DEST_HOST), self.recent_deletes)
 
+    def test_resync_does_not_delete_dest_wep_mid_migration(self):
+        """Resync must not delete the dest WEP of an in-flight migration.
+
+        Regression test for a v3.32 bug (CI-2021): the pre-v3.33 resync's
+        deletion sweep only expected WEP names derived from each port's
+        binding:host_id - still the source host while a migration is in flight
+        - so it reaped the destination WEP and recreated it moments later,
+        making Felix on the destination host tear the endpoint down
+        mid-migration.  The reworked resync computes desired (port, host)
+        slots from binding:profile.migrating_to as well, so it should not
+        delete anything here; this test pins that down, asserting no
+        deletions at all (which also covers the source WEP and LM).
+        """
+        self._do_initial_resync()
+
+        # Start a live migration; this creates the destination WEP and
+        # LiveMigration resource in etcd.
+        self._pre_migrate()
+        self.recent_writes = {}
+        self.recent_deletes = set()
+
+        self._trigger_resync()
+
+        # Nothing should be deleted, even transiently.
+        self.assertEtcdDeletes(set())
+
     def test_resync_no_op_when_lm_already_correct(self):
         """Full resync no-ops when LM and dest WEP already match Neutron."""
         self._do_initial_resync()
