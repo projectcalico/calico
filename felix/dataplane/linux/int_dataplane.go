@@ -227,6 +227,7 @@ type Config struct {
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
@@ -1168,8 +1169,29 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
+	var flowtableHandlerV4 nftables.FlowTableHandler
+	var flowtableHandlers []nftables.FlowTableHandler
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
+
+		if config.RulesConfig.NFTablesFlowTableOffload {
+			flowtableHandlerV4 = nftablesV4RootTable
+
+			// Tell the nftables table about overlay/tunnel devices so they can be
+			// included in the flowtable for connection offload.
+			var overlayDevicesV4 []string
+			if config.RulesConfig.VXLANEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+			}
+			if config.RulesConfig.IPIPEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+			}
+			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
+				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
+			}
+			nftablesV4RootTable.SetOverlayDevices(overlayDevicesV4)
+			flowtableHandlers = append(flowtableHandlers, nftablesV4RootTable)
+		}
 	}
 
 	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
@@ -1229,6 +1251,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
+		flowtableHandlerV4,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsManagerV4,
@@ -1417,8 +1440,23 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
+		var flowtableHandlerV6 nftables.FlowTableHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+
+			if config.RulesConfig.NFTablesFlowTableOffload {
+				flowtableHandlerV6 = nftablesV6RootTable
+
+				var overlayDevicesV6 []string
+				if config.RulesConfig.VXLANEnabledV6 {
+					overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+				}
+				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
+					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
+				}
+				nftablesV6RootTable.SetOverlayDevices(overlayDevicesV6)
+				flowtableHandlers = append(flowtableHandlers, nftablesV6RootTable)
+			}
 		}
 
 		var linkAddrsManagerV6 linkaddrs.Interface
@@ -1452,6 +1490,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
+			flowtableHandlerV6,
 			nil,
 			callbacks,
 			linkAddrsManagerV6,
@@ -1503,6 +1542,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.natTables...)
 		dp.allTables = append(dp.allTables, dp.filterTables...)
 		dp.allTables = append(dp.allTables, dp.rawTables...)
+	}
+
+	if config.RulesConfig.NFTablesFlowTableOffload && config.NFTablesFlowTableDataIfacePattern != nil && len(flowtableHandlers) > 0 {
+		dp.RegisterManager(newFlowtableManager(flowtableHandlers, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	// Include cleanup tables in allTables so that they are cleaned up.

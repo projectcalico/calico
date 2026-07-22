@@ -228,9 +228,10 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
-				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
-				NFTablesMode:          configParams.NFTablesMode,
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
+				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
+				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload == string(apiv3.NFTablesFlowTableOffloadEnabled),
+				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
 					ipsets.IPFamilyV4,
@@ -391,6 +392,7 @@ func StartDataplaneDriver(
 			BPFCTLBLogFilter:                   configParams.BPFCTLBLogFilter,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			NFTablesFlowTableDataIfacePattern:  configParams.NFTablesFlowTableDataIfacePattern,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
