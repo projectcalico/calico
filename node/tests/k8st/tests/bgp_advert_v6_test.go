@@ -136,7 +136,7 @@ func TestBGPAdvertV6(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, "", birdConf)
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
 
 	// Establish the BGPPeer from the cluster nodes to the external node.
 	peer := &v3.BGPPeer{
@@ -169,7 +169,7 @@ func TestBGPAdvertV6RR(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, "", birdConf)
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ip6s, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutesV6, ecmpParentAttrs: " metric 1024 pref medium"}
 
 	peer := &v3.BGPPeer{
 		ObjectMeta: metav1.ObjectMeta{Name: extPeerName},

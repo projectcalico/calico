@@ -153,6 +153,13 @@ type bgpAdvertEnv struct {
 	// so the same logic serves both families.
 	getRoutes func(testing.TB) string
 
+	// ecmpParentAttrs is the text `ip route` prints between "proto bird" and the
+	// newline before the first nexthop on the parent line of a multipath route.
+	// It is family-specific: IPv4 (`ip r`) prints just a trailing space, whereas
+	// IPv6 (`ip -6 r`) prints " metric 1024 pref medium". assertEcmpRoutes splices
+	// it into the match block.
+	ecmpParentAttrs string
+
 	// ns is the namespace the current subtest deploys into. startTest assigns
 	// it a fresh random name per subtest so concurrent or repeated runs against
 	// the same cluster do not collide.
@@ -174,7 +181,7 @@ func TestBGPAdvert(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	// Establish the BGPPeer from the cluster nodes to the external node, with a
 	// password sourced from the shared Secret.
@@ -216,7 +223,7 @@ func TestBGPAdvertRR(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	createBGPSecret(t, cli)
 	peer := &v3.BGPPeer{
@@ -1020,7 +1027,7 @@ func (e *bgpAdvertEnv) assertEcmpRoutes(t *testing.T, dst string, via []string) 
 	t.Helper()
 	sorted := append([]string(nil), via...)
 	sort.Strings(sorted)
-	match := dst + " proto bird "
+	match := dst + " proto bird" + e.ecmpParentAttrs
 	for _, ip := range sorted {
 		match += fmt.Sprintf("\n\tnexthop via %s dev eth0 weight 1 ", ip)
 	}
