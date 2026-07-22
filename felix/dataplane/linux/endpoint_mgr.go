@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,6 +159,8 @@ type endpointManager struct {
 	arpTable Table
 	arpMaps  nftables.MapsDataplane
 
+	ifceHandler nftables.FlowTableHandler
+
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
 	pendingWlEpUpdates         map[types.WorkloadEndpointID]*proto.WorkloadEndpoint
@@ -256,6 +258,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -276,6 +279,7 @@ func newEndpointManager(
 		os.Stat,
 		defaultRPFilter,
 		filterMaps,
+		ifces,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsMgr,
@@ -298,6 +302,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
+	ifces nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -319,6 +324,7 @@ func newEndpointManagerWithShims(
 		ipVersion:          ipVersion,
 		wlIfacesRegexp:     wlIfacesRegexp,
 		filterMaps:         filterMaps,
+		ifceHandler:        ifces,
 		bpfEndpointManager: bpfEndpointManager,
 
 		arpTable: arpTable,
@@ -496,6 +502,13 @@ func (m *endpointManager) ResolveUpdateBatch() error {
 			}
 		} else {
 			m.activeUpIfaces.Discard(ifaceName)
+		}
+		// A workload interface appearing or disappearing changes the flowtable device
+		// list even when no endpoint update accompanies it (e.g. a veth removed on pod
+		// teardown, before the WorkloadEndpoint-removed event arrives). Force the
+		// dispatch/flowtable recompute so the dead device drops out promptly.
+		if m.ifceHandler != nil && m.wlIfacesRegexp.MatchString(ifaceName) {
+			m.needToCheckDispatchChains = true
 		}
 		// If this interface is linked to any already-existing endpoints, mark the endpoint
 		// status for recalculation.  If the matching endpoint changes when we do
@@ -909,6 +922,19 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			fromMappings, toMappings := m.ruleRenderer.DispatchMappings(m.activeWlEndpoints)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesFromWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, fromMappings)
 			m.filterMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesToWorkloadDispatchMap, Type: nftables.MapTypeInterfaceMatch}, toMappings)
+
+			if m.ifceHandler != nil {
+				// Only hand the flowtable interfaces that are currently up. A veth that
+				// has been deleted (pod teardown) must not end up in the flowtable, or the
+				// nft transaction is rejected and takes down the whole table.
+				wlIfces := make([]string, 0, len(fromMappings))
+				for i := range fromMappings {
+					if m.activeUpIfaces.Contains(i) {
+						wlIfces = append(wlIfces, i)
+					}
+				}
+				m.ifceHandler.SetWorkloadInterfaces(wlIfces)
+			}
 		}
 
 		// Rewrite the dispatch chains if they've changed.
