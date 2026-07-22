@@ -23,6 +23,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 )
@@ -146,8 +147,8 @@ func escapeLogPrefix(prefix string) string {
 	return fmt.Sprintf("\"%s\"", prefix)
 }
 
-func (s *actionSet) FlowOffload(ft string) generictables.Action {
-	return FlowOffloadAction{FlowTable: ft}
+func (s *actionSet) FlowOffload() generictables.Action {
+	return FlowOffloadAction{}
 }
 
 type Referrer interface {
@@ -531,14 +532,13 @@ func (a DSCPAction) String() string {
 }
 
 type FlowOffloadAction struct {
-	FlowTable       string
 	TypeFlowOffload struct{}
 }
 
 func (c FlowOffloadAction) ToFragment(features *environment.Features) string {
-	return fmt.Sprintf("flow offload @%s", c.FlowTable)
+	return fmt.Sprintf("flow offload @%s", dataplanedefs.FlowtableName)
 }
 
 func (c FlowOffloadAction) String() string {
-	return fmt.Sprintf("FlowOffload:%s", c.FlowTable)
+	return fmt.Sprintf("FlowOffload:%s", dataplanedefs.FlowtableName)
 }

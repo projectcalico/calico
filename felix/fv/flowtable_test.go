@@ -42,8 +42,6 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		// Enable flowtable offload at Felix startup rather than via a mid-test config
-		// update, which would trigger a reprogram that races the connectivity checks.
 		opts.ExtraEnvVars["FELIX_NFTABLESFLOWTABLEOFFLOAD"] = "Enabled"
 		// Match a dedicated dummy interface (created in the external-device spec) so the
 		// external-offload path is exercised without touching the felix container's real
@@ -60,19 +58,6 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 			w[i].ConfigureInInfra(infra)
 		}
 		cc = &connectivity.Checker{}
-	})
-
-	AfterEach(func() {
-		if CurrentSpecReport().Failed() {
-			logNFTDiags(tc.Felixes[0])
-		}
-		for i := range w {
-			if w[i] != nil {
-				w[i].Stop()
-			}
-		}
-		tc.Stop()
-		infra.Stop()
 	})
 
 	It("programs the flowtable over the workload interfaces", func() {

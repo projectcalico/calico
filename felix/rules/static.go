@@ -609,7 +609,7 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
 	rules := []generictables.Rule{}
 
-	if r.nft && r.NFTablesFlowTableOffload == "Enabled" {
+	if r.nft && r.NFTablesFlowTableOffload {
 		// Offload established flows here, ahead of the dispatch jumps below. Two things pin the
 		// spot: the per-workload dispatch chains terminally accept established traffic (so a rule
 		// after them never runs), and the kernel only allows flow offload in chains reached from
@@ -617,7 +617,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 		rules = append(rules,
 			generictables.Rule{
 				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
-				Action:  r.FlowOffload(dataplanedefs.FlowtableName),
+				Action:  r.FlowOffload(),
 				Comment: []string{"Offload established Calico flows."},
 			},
 		)

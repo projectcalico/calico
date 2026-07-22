@@ -25,7 +25,7 @@ func (h *recordingHandler) SetExternalDevices(ifces []string) {
 var _ = Describe("flowtableManager", func() {
 	It("tracks interfaces matching the pattern and ignores others", func() {
 		h := &recordingHandler{}
-		m := newFlowtableManager([]nftables.InterfaceHandler{h}, regexp.MustCompile("^eth"))
+		m := newFlowtableManager([]nftables.FlowTableHandler{h}, regexp.MustCompile("^eth"))
 
 		m.OnUpdate(&ifaceStateUpdate{Name: "eth0", State: ifacemonitor.StateUp})
 		m.OnUpdate(&ifaceStateUpdate{Name: "cali123", State: ifacemonitor.StateUp})

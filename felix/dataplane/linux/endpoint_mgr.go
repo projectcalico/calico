@@ -159,7 +159,7 @@ type endpointManager struct {
 	arpTable Table
 	arpMaps  nftables.MapsDataplane
 
-	ifceHandler nftables.InterfaceHandler
+	ifceHandler nftables.FlowTableHandler
 
 	// Pending updates, cleared in CompleteDeferredWork as the data is copied to the activeXYZ
 	// fields.
@@ -258,7 +258,7 @@ func newEndpointManager(
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	ifces nftables.InterfaceHandler,
+	ifces nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,
@@ -302,7 +302,7 @@ func newEndpointManagerWithShims(
 	osStat func(name string) (os.FileInfo, error),
 	defaultRPFilter string,
 	filterMaps nftables.MapsDataplane,
-	ifces nftables.InterfaceHandler,
+	ifces nftables.FlowTableHandler,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
 	linkAddrsMgr linkaddrs.Interface,

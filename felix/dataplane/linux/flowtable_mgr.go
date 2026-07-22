@@ -18,13 +18,13 @@ import (
 // interfaces and local workloads is offloaded. It is only registered when offload is enabled and
 // the pattern is non-nil.
 type flowtableManager struct {
-	handlers      []nftables.InterfaceHandler
+	handlers      []nftables.FlowTableHandler
 	devicePattern *regexp.Regexp
 	activeDevices set.Set[string]
 	dirty         bool
 }
 
-func newFlowtableManager(handlers []nftables.InterfaceHandler, devicePattern *regexp.Regexp) *flowtableManager {
+func newFlowtableManager(handlers []nftables.FlowTableHandler, devicePattern *regexp.Regexp) *flowtableManager {
 	return &flowtableManager{
 		handlers:      handlers,
 		devicePattern: devicePattern,

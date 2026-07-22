@@ -1151,12 +1151,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
-	var ifceHandlerV4 nftables.InterfaceHandler
-	var flowtableHandlers []nftables.InterfaceHandler
+	var ifceHandlerV4 nftables.FlowTableHandler
+	var flowtableHandlers []nftables.FlowTableHandler
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
-		if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" {
+		if config.RulesConfig.NFTablesFlowTableOffload {
 			ifceHandlerV4 = nftablesV4RootTable
 
 			// Tell the nftables table about overlay/tunnel devices so they can be
@@ -1422,11 +1422,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
-		var ifceHandlerV6 nftables.InterfaceHandler
+		var ifceHandlerV6 nftables.FlowTableHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 
-			if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" {
+			if config.RulesConfig.NFTablesFlowTableOffload {
 				ifceHandlerV6 = nftablesV6RootTable
 
 				var overlayDevicesV6 []string
@@ -1526,7 +1526,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.rawTables...)
 	}
 
-	if config.RulesConfig.NFTablesFlowTableOffload == "Enabled" && config.NFTablesFlowTableDataIfacePattern != nil && len(flowtableHandlers) > 0 {
+	if config.RulesConfig.NFTablesFlowTableOffload && config.NFTablesFlowTableDataIfacePattern != nil && len(flowtableHandlers) > 0 {
 		dp.RegisterManager(newFlowtableManager(flowtableHandlers, config.NFTablesFlowTableDataIfacePattern))
 	}
 

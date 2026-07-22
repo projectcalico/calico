@@ -50,7 +50,7 @@ const (
 	objectTypeMap   = "map"
 )
 
-type InterfaceHandler interface {
+type FlowTableHandler interface {
 	// SetWorkloadInterfaces updates the set of active workload interfaces. These are combined
 	// with any overlay device names to form the flowtable device list.
 	SetWorkloadInterfaces(ifces []string)
@@ -527,7 +527,7 @@ func (n *NftablesTable) IPVersion() uint8 {
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
 // flowtable device list. Called during initialization from int_dataplane.go.
 func (t *NftablesTable) SetOverlayDevices(devices []string) {
-	t.overlayDevices = devices
+	t.overlayDevices = slices.Clone(devices)
 	t.enableFlowtable()
 }
 

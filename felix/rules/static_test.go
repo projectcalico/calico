@@ -2046,13 +2046,13 @@ var _ = Describe("Flowtable offload", func() {
 
 		WorkloadIfacePrefixes: []string{"cali"},
 
-		NFTablesFlowTableOffload: "Enabled",
+		NFTablesFlowTableOffload: true,
 	}
 	renderer := NewRenderer(config, true).(*DefaultRuleRenderer)
 
 	offloadRule := generictables.Rule{
 		Match:   nftables.Match().ConntrackState("RELATED,ESTABLISHED"),
-		Action:  nftables.FlowOffloadAction{FlowTable: dataplanedefs.FlowtableName},
+		Action:  nftables.FlowOffloadAction{},
 		Comment: []string{"Offload established Calico flows."},
 	}
 
@@ -2070,7 +2070,7 @@ var _ = Describe("Flowtable offload", func() {
 
 	It("should not offload flows when flow table offload is disabled", func() {
 		disabledConfig := config
-		disabledConfig.NFTablesFlowTableOffload = ""
+		disabledConfig.NFTablesFlowTableOffload = false
 		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
 
 		chains := disabledRenderer.StaticFilterForwardChains()
