@@ -16,7 +16,7 @@ import (
 // IPAMBlockApplyConfiguration represents a declarative configuration of the IPAMBlock type for use
 // with apply.
 type IPAMBlockApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *IPAMBlockSpecApplyConfiguration `json:"spec,omitempty"`
 }

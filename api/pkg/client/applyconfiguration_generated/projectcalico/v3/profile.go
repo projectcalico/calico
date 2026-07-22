@@ -16,7 +16,7 @@ import (
 // ProfileApplyConfiguration represents a declarative configuration of the Profile type for use
 // with apply.
 type ProfileApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *ProfileSpecApplyConfiguration `json:"spec,omitempty"`
 }
