@@ -16,6 +16,7 @@ package fv_test
 
 import (
 	"fmt"
+	"regexp"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -153,6 +154,46 @@ func describeBPFOverlayTunnelAddrTests(tunnel string) bool {
 			cc.ExpectSome(w[1], w[0])
 
 			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+		})
+
+		It("should use the host IP, not the tunnel IP, as the overlay underlay source", func() {
+			// The outer (underlay) source of encapsulated host-networked traffic must be
+			// the node's own IP.  The overlay tunnel-device IP is not underlay-routable; a
+			// fabric that checks source addresses (e.g. GCP) drops packets carrying it.
+			// Connectivity alone does not catch this on a permissive underlay, so assert
+			// the outer source seen on the wire.
+			var filter []string
+			var goodSrc, badSrc, tunnelAddr string
+			switch tunnel {
+			case "vxlan":
+				tunnelAddr = tc.Felixes[0].ExpectedVXLANTunnelAddr
+				filter = []string{"-n", "-vvv", "udp", "port", "4789"}
+				goodSrc = fmt.Sprintf(`%s\.\d+ > %s\.4789: VXLAN`,
+					regexp.QuoteMeta(tc.Felixes[0].IP), regexp.QuoteMeta(tc.Felixes[1].IP))
+				badSrc = fmt.Sprintf(`%s\.\d+ > .*\.4789: VXLAN`, regexp.QuoteMeta(tunnelAddr))
+			case "ipip":
+				tunnelAddr = tc.Felixes[0].ExpectedIPIPTunnelAddr
+				filter = []string{"-n", "-vvv", "ip", "proto", "4"}
+				goodSrc = fmt.Sprintf(`%s > %s: `,
+					regexp.QuoteMeta(tc.Felixes[0].IP), regexp.QuoteMeta(tc.Felixes[1].IP))
+				badSrc = fmt.Sprintf(`%s > .*: `, regexp.QuoteMeta(tunnelAddr))
+			}
+			Expect(tunnelAddr).NotTo(BeEmpty(), "tunnel address should be assigned in TunnelAddress mode")
+
+			tcpd := tc.Felixes[0].AttachTCPDump("eth0")
+			tcpd.SetLogEnabled(true)
+			tcpd.AddMatcher("good-outer-src", regexp.MustCompile(goodSrc))
+			tcpd.AddMatcher("bad-outer-src", regexp.MustCompile(badSrc))
+			tcpd.Start(infra, filter...)
+
+			// Host-networked -> remote workload drives the encapsulated host-origin flow.
+			cc.ExpectSome(hostW[0], w[1])
+			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
+
+			Eventually(tcpd.MatchCountFn("good-outer-src"), "5s", "100ms").Should(BeNumerically(">", 0),
+				fmt.Sprintf("overlay outer source should be the node IP %s", tc.Felixes[0].IP))
+			Consistently(tcpd.MatchCountFn("bad-outer-src"), "2s", "100ms").Should(BeZero(),
+				fmt.Sprintf("overlay outer source must never be the tunnel IP %s", tunnelAddr))
 		})
 	})
 }
