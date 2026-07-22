@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -384,3 +384,79 @@ var _ = DescribeTable("NFTablesSet",
 		&knftables.Set{Name: "cali40test", Type: "inet_service"},
 	),
 )
+
+// These tests exercise the interval-set semantics the fake models: real nftables interval
+// sets (hash:net, created with knftables.IntervalFlag) reject overlapping/nested elements
+// with EEXIST, so the fake must too.
+var _ = Describe("fake nftables interval-set semantics", func() {
+	const setName = "cali40net"
+
+	var f *fakeNFT
+
+	addElements := func(keys ...string) error {
+		tx := f.NewTransaction()
+		for _, key := range keys {
+			tx.Add(&knftables.Element{Set: setName, Key: []string{key}})
+		}
+		return f.Run(context.Background(), tx)
+	}
+
+	BeforeEach(func() {
+		f = NewFake(knftables.IPv4Family, "calico")
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Table{})
+		tx.Add(&knftables.Set{
+			Name:  setName,
+			Type:  "ipv4_addr",
+			Flags: []knftables.SetFlag{knftables.IntervalFlag},
+		})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+	})
+
+	It("rejects nested CIDRs added in a single transaction", func() {
+		Expect(addElements("10.0.0.0/16", "10.0.0.0/24")).To(MatchError(ContainSubstring("File exists")))
+	})
+
+	It("rejects a CIDR that overlaps an already-programmed element", func() {
+		Expect(addElements("10.0.0.0/16")).To(Succeed())
+		Expect(addElements("10.0.0.0/24")).To(MatchError(ContainSubstring("File exists")))
+	})
+
+	It("accepts disjoint CIDRs", func() {
+		Expect(addElements("10.0.0.0/24", "10.1.0.0/24", "192.168.0.0/16")).To(Succeed())
+	})
+
+	It("allows swapping in an overlapping CIDR when the old one is deleted in the same transaction", func() {
+		Expect(addElements("10.0.0.0/24")).To(Succeed())
+
+		tx := f.NewTransaction()
+		tx.Delete(&knftables.Element{Set: setName, Key: []string{"10.0.0.0/24"}})
+		tx.Add(&knftables.Element{Set: setName, Key: []string{"10.0.0.0/16"}})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+	})
+
+	It("allows deleting an element", func() {
+		Expect(addElements("10.0.0.0/24")).To(Succeed())
+
+		tx := f.NewTransaction()
+		tx.Delete(&knftables.Element{Set: setName, Key: []string{"10.0.0.0/24"}})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+	})
+})
+
+var _ = Describe("fake nftables non-interval set", func() {
+	It("does not apply interval semantics to sets without the interval flag", func() {
+		f := NewFake(knftables.IPv4Family, "calico")
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Table{})
+		tx.Add(&knftables.Set{Name: "cali40plain", Type: "ipv4_addr"})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+
+		// No interval flag: the fake keeps exact-match semantics and tolerates keys that an
+		// interval set would reject as overlapping.
+		tx = f.NewTransaction()
+		tx.Add(&knftables.Element{Set: "cali40plain", Key: []string{"10.0.0.0/16"}})
+		tx.Add(&knftables.Element{Set: "cali40plain", Key: []string{"10.0.0.0/24"}})
+		Expect(f.Run(context.Background(), tx)).To(Succeed())
+	})
+})

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,14 @@ package nftables_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/felix/ip"
 )
 
 func ptr[A any](v A) *A { return &v }
@@ -108,7 +111,93 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
+
+	// Real nftables interval sets (those created with knftables.IntervalFlag) reject
+	// overlapping or nested elements with EEXIST, but the upstream knftables fake does
+	// not model this. Replay the transaction against a throwaway copy of the current
+	// state and fail here if it would leave any interval set holding overlapping members,
+	// so tests observe the same failure production hits against real nftables.
+	if err := f.checkIntervalOverlaps(ctx, tx); err != nil {
+		return err
+	}
+
 	return f.fake.Run(ctx, tx)
+}
+
+// checkIntervalOverlaps replays tx against a copy of the current dataplane state and
+// returns an nftables-style "File exists" error if any interval set would end up holding
+// overlapping members. It returns nil when tx would fail upstream validation anyway (the
+// real Run then surfaces that error) or when no interval set is affected.
+func (f *fakeNFT) checkIntervalOverlaps(ctx context.Context, tx *knftables.Transaction) error {
+	shadow := knftables.NewFake(f.family, f.name)
+	if dump := f.fake.Dump(); dump != "" {
+		if err := shadow.ParseDump(dump); err != nil {
+			return fmt.Errorf("nftables fake: snapshotting state for interval-set check: %w", err)
+		}
+	}
+
+	if err := shadow.Run(ctx, tx); err != nil {
+		// Not an interval-overlap problem; let the real Run reproduce this error.
+		return nil
+	}
+	if shadow.Table == nil {
+		return nil
+	}
+
+	for name, s := range shadow.Table.Sets {
+		if !isIntervalSet(s) {
+			continue
+		}
+		if err := checkIntervalSetOverlap(name, s.Elements); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isIntervalSet(s *knftables.FakeSet) bool {
+	for _, flag := range s.Flags {
+		if flag == knftables.IntervalFlag {
+			return true
+		}
+	}
+	return false
+}
+
+// checkIntervalSetOverlap returns an nft-like EEXIST error if any two elements of an
+// interval set overlap or nest. Elements whose keys aren't plain CIDRs are ignored: Felix
+// only ever puts single CIDRs (hash:net members) in interval sets.
+func checkIntervalSetOverlap(setName string, elements []*knftables.Element) error {
+	cidrs := make([]ip.CIDR, 0, len(elements))
+	for _, element := range elements {
+		if len(element.Key) != 1 {
+			continue
+		}
+		cidr, err := ip.ParseCIDROrIP(element.Key[0])
+		if err != nil {
+			continue
+		}
+		cidrs = append(cidrs, cidr)
+	}
+
+	for i := range cidrs {
+		for j := i + 1; j < len(cidrs); j++ {
+			if cidrsOverlap(cidrs[i], cidrs[j]) {
+				return fmt.Errorf("add element to set %q: %s overlaps %s: File exists", setName, cidrs[i], cidrs[j])
+			}
+		}
+	}
+	return nil
+}
+
+// cidrsOverlap reports whether a and b overlap: the one with the shorter prefix contains
+// the other's network address (nesting in either direction, or an exact match). CIDRs of
+// different families never overlap.
+func cidrsOverlap(a, b ip.CIDR) bool {
+	if a.Prefix() <= b.Prefix() {
+		return a.Contains(b.Addr())
+	}
+	return b.Contains(a.Addr())
 }
 
 func (f *fakeNFT) preRun(tx *knftables.Transaction) {
