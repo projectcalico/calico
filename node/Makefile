@@ -382,6 +382,11 @@ K8ST_GO_TO_RUN?=.
 bin/k8st.test:
 	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go test -c -o $@ ./tests/k8st/tests'
 
+# Runs both the Go k8st suite and the (legacy) pytest suite against the kind
+# cluster, propagating the real pass/fail of each. The k8st tests have now been
+# fully ported to Go, so pytest collects no tests and exits 5 ("no tests
+# collected"); we normalise that to success below so the runner stays green
+# while still running any Python test that gets added back under tests/.
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	mkdir -p report
@@ -403,6 +408,7 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	     py_rc=0; \
 	     { /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)"; echo $$? > /code/report/.go-rc; } 2>&1 | tee /code/report/$(K8ST_GO_REPORT_LOG); \
 	     pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)" || py_rc=$$?; \
+	     if [ "$$py_rc" -eq 5 ]; then py_rc=0; fi; \
 	     echo "$$py_rc" > /code/report/.py-rc; \
 	     echo "Go suite rc=$$(cat /code/report/.go-rc), Python suite rc=$$py_rc"'
 	# The Go tests are plain `go test` (not Ginkgo), so the binary emits no
