@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 package policy
 
@@ -23,13 +23,11 @@ import (
 
 // DESCRIPTION: Verify tiers.
 // DOCS_URL: https://docs.tigera.io/calico/latest/network-policy/policy-tiers/
-// PRECONDITIONS:  Because tiers are not namespaced, these tests cannot be run in parallel.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithFeature("Tiered-Policy"),
 	describe.WithWindows(),
-	describe.WithSerial(),
 	"Tiered policy tests",
 	func() {
 		var cli ctrlclient.Client
@@ -79,7 +77,9 @@ var _ = describe.CalicoDescribe(
 
 			By("Creating tier0")
 			tier0 = v3.NewTier()
-			tier0.Name = "t0"
+			// Tiers are cluster-scoped, so randomize the name to keep parallel test
+			// processes from colliding on a shared tier.
+			tier0.Name = utils.GenerateRandomName("t0")
 			tier0.Spec.Order = ptr.To(98.0)
 			tier0.Labels = map[string]string{utils.TestResourceLabel: "true"}
 			err = cli.Create(ctx, tier0)
@@ -101,11 +101,11 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy in tier0 with rules to pass to next tier.")
 				fifty := float64(50)
 				passPolicy := v3.NewNetworkPolicy()
-				passPolicy.Name = "t0.server-pass"
+				passPolicy.Name = tier0.Name + ".server-pass"
 				passPolicy.Namespace = f.Namespace.Name
 				passPolicy.Spec.Order = &fifty
 				passPolicy.Spec.Selector = `pod-name == "server"`
-				passPolicy.Spec.Tier = "t0"
+				passPolicy.Spec.Tier = tier0.Name
 				passPolicy.Spec.Ingress = []v3.Rule{
 					{
 						Action: v3.Pass,
@@ -155,7 +155,7 @@ var _ = describe.CalicoDescribe(
 
 			BeforeEach(func() {
 				tier1 = v3.NewTier()
-				tier1.Name = "t1"
+				tier1.Name = utils.GenerateRandomName("t1")
 				tier1.Labels = map[string]string{utils.TestResourceLabel: "true"}
 				tier1.Spec.Order = ptr.To(99.0)
 
@@ -174,12 +174,12 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy in tier0 with rules to pass to next tier.")
 				passPolicy := &v3.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "t0.test-pass",
+						Name:      tier0.Name + ".test-pass",
 						Namespace: f.Namespace.Name,
 					},
 					Spec: v3.NetworkPolicySpec{
 						Selector: "pod-name == 'server'",
-						Tier:     "t0",
+						Tier:     tier0.Name,
 						Ingress: []v3.Rule{
 							{
 								Action: v3.Pass,
@@ -202,12 +202,12 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy tier1 with rules to allow the passed traffic.")
 				t1Allow := &v3.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "t1.test-allow",
+						Name:      tier1.Name + ".test-allow",
 						Namespace: f.Namespace.Name,
 					},
 					Spec: v3.NetworkPolicySpec{
 						Selector: "pod-name == \"server\"",
-						Tier:     "t1",
+						Tier:     tier1.Name,
 						Ingress: []v3.Rule{
 							{
 								Action: v3.Allow,
@@ -231,12 +231,12 @@ var _ = describe.CalicoDescribe(
 				By("Creating a policy in tier0 with rules to log traffic.")
 				np := &v3.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "t0.test-pass",
+						Name:      tier0.Name + ".test-pass",
 						Namespace: f.Namespace.Name,
 					},
 					Spec: v3.NetworkPolicySpec{
 						Selector: "pod-name == \"server\"",
-						Tier:     "t0",
+						Tier:     tier0.Name,
 						Ingress: []v3.Rule{
 							{
 								Action: v3.Log,
