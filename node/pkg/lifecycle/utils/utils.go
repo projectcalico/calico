@@ -234,6 +234,69 @@ func SetNodeNetworkUnavailableCondition(
 	}
 }
 
+// NetworkReadyTaintEnabled reports whether the operator has asked us to manage the network-ready taint.
+func NetworkReadyTaintEnabled() bool {
+	return os.Getenv(names.NetworkReadyTaintEnvVar) == "true"
+}
+
+// SetNodeNetworkReadyTaint adds (present=true) or removes (present=false) the network-ready taint on
+// the given node. It retries until timeout to ride out transient API errors during startup.
+func SetNodeNetworkReadyTaint(
+	clientset kubernetes.Clientset,
+	nodeName string,
+	present bool,
+	timeout time.Duration,
+) error {
+	to := time.After(timeout)
+	var lastErr error
+	for {
+		select {
+		case <-to:
+			return fmt.Errorf("timed out updating network-ready taint, last error was: %w", lastErr)
+		default:
+			node, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+			if err != nil {
+				lastErr = err
+				log.WithError(err).Warn("Failed to get node for taint update; will retry")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			hasTaint := false
+			var kept []kapiv1.Taint
+			for _, t := range node.Spec.Taints {
+				if t.Key == names.NetworkReadyTaintKey {
+					hasTaint = true
+					continue
+				}
+				kept = append(kept, t)
+			}
+			if hasTaint == present {
+				return nil
+			}
+
+			if present {
+				node.Spec.Taints = append(node.Spec.Taints, kapiv1.Taint{
+					Key:    names.NetworkReadyTaintKey,
+					Effect: kapiv1.TaintEffectNoSchedule,
+				})
+			} else {
+				node.Spec.Taints = kept
+			}
+
+			_, err = clientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+			if err != nil {
+				lastErr = err
+				log.WithError(err).Warn("Failed to update network-ready taint; will retry")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			log.WithFields(log.Fields{"node": nodeName, "present": present}).Info("Updated network-ready taint")
+			return nil
+		}
+	}
+}
+
 // IsIPv6String returns if ip is IPv6.
 func IsIPv6String(ip string) bool {
 	netIP := net.ParseIP(ip)

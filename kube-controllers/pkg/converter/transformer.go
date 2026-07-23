@@ -38,6 +38,9 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 				Name:      pod.Name,
 				Namespace: pod.Namespace,
 				UID:       pod.UID,
+				// Labels are needed by the node condition controller to identify calico-node
+				// pods, and by the pod controller for policy matching.
+				Labels: pod.Labels,
 			},
 			Spec: v1.PodSpec{
 				NodeName:    pod.Spec.NodeName,
@@ -46,16 +49,16 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 			Status: v1.PodStatus{
 				// Strictly speaking, we could probably get away with just using PodIPs here,
 				// but better to be safe than sorry.
-				PodIP:  pod.Status.PodIP,
-				PodIPs: pod.Status.PodIPs,
-				Phase:  pod.Status.Phase,
+				PodIP:      pod.Status.PodIP,
+				PodIPs:     pod.Status.PodIPs,
+				Phase:      pod.Status.Phase,
+				Conditions: pod.Status.Conditions,
 			},
 		}
 
 		if podControllerEnabled {
-			// We only need the full labels and service account name if we are running the Pod
-			// controller, as they are sync'd to etcd for policy matching.
-			p.Labels = pod.Labels
+			// We only need the service account name if we are running the Pod
+			// controller, as it is sync'd to etcd for policy matching.
 			p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
 		}
 
