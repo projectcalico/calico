@@ -337,7 +337,7 @@ blocks:
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
+              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: BGP_STATUS
