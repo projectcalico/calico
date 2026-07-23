@@ -112,3 +112,65 @@ func TestExecCmdWriteToFile_PrimarySucceeds(t *testing.T) {
 		t.Fatalf("fallback file should not exist when primary succeeds")
 	}
 }
+
+// TestExecCmdWriteToFile_OmitIfEmpty_Failed verifies that when OmitIfEmpty is
+// set and the command fails, no output file (and no symlink) is written. This
+// is the never-restarted-sibling case: `kubectl logs --previous` fails with a
+// "not found" message, which we don't want cluttering the bundle.
+func TestExecCmdWriteToFile_OmitIfEmpty_Failed(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "pod.sidecar.previous.log")
+	linkPath := filepath.Join(dir, "links", "pod.sidecar.previous.log")
+
+	common.ExecCmdWriteToFile("[test]", common.Cmd{
+		CmdStr:      "false", // exits non-zero, as `kubectl logs --previous` does for a container with no previous incarnation
+		FilePath:    logPath,
+		SymLink:     linkPath,
+		OmitIfEmpty: true,
+	})
+
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no output file for a failed OmitIfEmpty command, stat err=%v", err)
+	}
+	if _, err := os.Lstat(linkPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no symlink for a failed OmitIfEmpty command, stat err=%v", err)
+	}
+}
+
+// TestExecCmdWriteToFile_OmitIfEmpty_EmptyOutput verifies that a command that
+// succeeds but produces only whitespace is also omitted when OmitIfEmpty is set.
+func TestExecCmdWriteToFile_OmitIfEmpty_EmptyOutput(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "pod.container.previous.log")
+
+	common.ExecCmdWriteToFile("[test]", common.Cmd{
+		CmdStr:      "echo   ", // succeeds, output is whitespace only
+		FilePath:    logPath,
+		OmitIfEmpty: true,
+	})
+
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no output file for empty OmitIfEmpty output, stat err=%v", err)
+	}
+}
+
+// TestExecCmdWriteToFile_OmitIfEmpty_NonEmpty verifies that OmitIfEmpty does not
+// suppress real output: a crashed container with previous logs is still written.
+func TestExecCmdWriteToFile_OmitIfEmpty_NonEmpty(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "pod.crasher.previous.log")
+
+	common.ExecCmdWriteToFile("[test]", common.Cmd{
+		CmdStr:      "echo panic: goodbye",
+		FilePath:    logPath,
+		OmitIfEmpty: true,
+	})
+
+	got, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("reading output file: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != "panic: goodbye" {
+		t.Fatalf("unexpected content: %q", got)
+	}
+}

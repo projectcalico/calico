@@ -108,6 +108,14 @@ type Cmd struct {
 	// version skew: e.g. try a JSON dump, fall back to the plain-text dump.
 	FallbackCmdStr   string
 	FallbackFilePath string
+
+	// OmitIfEmpty, when set, suppresses the output file (and its symlink) when
+	// the command fails or produces no output. This is for commands collected
+	// opportunistically across a set — e.g. previous-incarnation logs attempted
+	// for every container in a pod, including containers that never restarted.
+	// Those make kubectl fail with a short "not found" message; writing that as
+	// a .previous.log just clutters the bundle, so we drop it instead.
+	OmitIfEmpty bool
 }
 
 // ExecCmdWriteToFile executes the provided command c and outputs the result to a
@@ -156,6 +164,17 @@ func ExecCmdWriteToFile(logPrefix string, c Cmd) {
 				}
 			}
 		}
+	}
+
+	// Opportunistically-collected commands (OmitIfEmpty) — e.g. previous-log
+	// collection attempted for every container in a pod, including ones that
+	// never restarted — routinely "fail" for containers with no previous
+	// incarnation. Treat an error or empty output as "nothing to collect": skip
+	// the file, the symlink, and the noisy failure log rather than cluttering
+	// the bundle with kubectl's "not found" message.
+	if c.OmitIfEmpty && (err != nil || len(bytes.TrimSpace(content)) == 0) {
+		logCtx.Debugf("Nothing to collect for command %q; omitting file", c.CmdStr)
+		return
 	}
 
 	if err != nil {

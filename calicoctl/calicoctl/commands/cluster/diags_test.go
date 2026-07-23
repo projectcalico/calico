@@ -191,10 +191,10 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 
 	// A pod where even one container has restarted picks up previous-log
 	// commands for *every* container in the pod, each scoped with -c (not
-	// --all-containers). Per-container commands are independent, so a healthy
-	// sibling that has no previous incarnation fails harmlessly on its own
-	// without discarding the crashed container's logs — exactly the ones the
-	// bundle needs to explain the restart.
+	// --all-containers). The commands are marked OmitIfEmpty so a never-restarted
+	// sibling — whose `kubectl logs --previous` fails with "not found" — is
+	// dropped from the bundle rather than written as an empty .previous.log,
+	// while the crashed container's logs (the ones the bundle needs) survive.
 	restarted := &apiv1.Pod{}
 	restarted.Name = "calico-apiserver-0"
 	restarted.Status.ContainerStatuses = []apiv1.ContainerStatus{
@@ -202,14 +202,16 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 		{Name: "calico-apiserver-sidecar", RestartCount: 0},
 	}
 	cmds = diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-apiserver", restarted)
-	prev := filterStrs(cmdStrs(cmds), "--previous")
+	prevCmds := previousCmds(cmds)
 	// Both the restarted container and its never-restarted sibling are fetched,
-	// each scoped with -c, and none use --all-containers.
-	Expect(prev).To(HaveLen(2))
-	for _, p := range prev {
-		Expect(p).To(ContainSubstring("kubectl logs --previous"))
-		Expect(p).NotTo(ContainSubstring("--all-containers"))
+	// each scoped with -c, none use --all-containers, and all are OmitIfEmpty.
+	Expect(prevCmds).To(HaveLen(2))
+	for _, c := range prevCmds {
+		Expect(c.CmdStr).To(ContainSubstring("kubectl logs --previous"))
+		Expect(c.CmdStr).NotTo(ContainSubstring("--all-containers"))
+		Expect(c.OmitIfEmpty).To(BeTrue())
 	}
+	prev := cmdStrs(prevCmds)
 	Expect(prev).To(ContainElement(ContainSubstring("-c calico-apiserver")))
 	Expect(prev).To(ContainElement(ContainSubstring("-c calico-apiserver-sidecar")))
 
@@ -231,6 +233,16 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 		ContainSubstring("-c install-cni"),
 	)))
 	Expect(prev).To(ContainElement(ContainSubstring("-c calico-node")))
+}
+
+func previousCmds(cmds []common.Cmd) []common.Cmd {
+	var out []common.Cmd
+	for _, c := range cmds {
+		if strings.Contains(c.CmdStr, "--previous") {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func filterStrs(strs []string, substr string) []string {

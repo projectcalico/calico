@@ -729,15 +729,23 @@ func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace st
 	// any one container in the pod has no previous incarnation, which would
 	// lose the crashed container's logs — exactly the ones we came for.
 	// Per-container commands are independent, so a container that happens to
-	// have no previous incarnation fails harmlessly on its own without
-	// discarding any sibling's previous logs.
+	// have no previous incarnation fails harmlessly on its own.
+	//
+	// OmitIfEmpty drops the output for those never-restarted siblings: their
+	// `kubectl logs --previous` fails with a "not found" message, and we don't
+	// want that cluttering the bundle as an empty .previous.log. Attempting
+	// every container and keeping only the non-empty results means the bundle
+	// ends up with a .previous.log for exactly the containers that genuinely
+	// have previous logs, without relying on the restart-count heuristic to
+	// pick them ahead of time.
 	if podHasPreviousLogs(pod) {
 		for _, container := range allContainerNames(pod) {
 			cmds = append(cmds, common.Cmd{
-				Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
-				CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
-				FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
-				SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
+				Info:        fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
+				CmdStr:      fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
+				FilePath:    fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
+				SymLink:     fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
+				OmitIfEmpty: true,
 			})
 		}
 	}
