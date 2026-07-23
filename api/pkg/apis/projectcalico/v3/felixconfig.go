@@ -70,15 +70,15 @@ const (
 	NFTablesModeAuto     NFTablesMode = "Auto"
 )
 
-// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled. When enabled,
-// established connections that have been accepted by Calico policy are offloaded to the kernel's
-// flowtable fast path, bypassing most of the networking stack for improved throughput.
+// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for. When
+// set to "All", established connections that have been accepted by Calico policy are offloaded to
+// the kernel's flowtable fast path, bypassing most of the networking stack for improved throughput.
 // +enum
-// +kubebuilder:validation:Enum=Enabled;Disabled
+// +kubebuilder:validation:Enum=All;Disabled
 type NFTablesFlowTableOffload string
 
 const (
-	NFTablesFlowTableOffloadEnabled  NFTablesFlowTableOffload = "Enabled"
+	NFTablesFlowTableOffloadAll      NFTablesFlowTableOffload = "All"
 	NFTablesFlowTableOffloadDisabled NFTablesFlowTableOffload = "Disabled"
 )
 
@@ -690,18 +690,18 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
 
-	// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
-	// improved forwarding performance. When enabled, established connections accepted by
+	// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+	// for improved forwarding performance. When set to "All", established connections accepted by
 	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
-	// nftables mode is active. [Default: Enabled]
-	// +kubebuilder:default=Enabled
+	// nftables mode is active. [Default: All]
+	// +kubebuilder:default=All
 	NFTablesFlowTableOffload *NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
 
 	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
 	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
 	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
 	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
-	// is Enabled. [Default: ""]
+	// is not Disabled. [Default: ""]
 	NFTablesFlowTableDataIfacePattern string `json:"nftablesFlowTableDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]

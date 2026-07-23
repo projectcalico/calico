@@ -2700,7 +2700,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					InterfacePrefix:          "xali-",
 					FloatingIPs:              ptr.To(apiv3.FloatingIPsEnabled),
 					NFTablesMode:             ptr.To(apiv3.NFTablesModeAuto),
-					NFTablesFlowTableOffload: ptr.To(apiv3.NFTablesFlowTableOffloadEnabled),
+					NFTablesFlowTableOffload: ptr.To(apiv3.NFTablesFlowTableOffloadAll),
 				},
 			},
 		}

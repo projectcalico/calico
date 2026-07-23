@@ -42,7 +42,7 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		opts.ExtraEnvVars["FELIX_NFTABLESFLOWTABLEOFFLOAD"] = "Enabled"
+		opts.ExtraEnvVars["FELIX_NFTABLESFLOWTABLEOFFLOAD"] = "All"
 		// Match a dedicated dummy interface (created in the external-device spec) so the
 		// external-offload path is exercised without touching the felix container's real
 		// connectivity. No dummy interface exists in the other specs, so this is a no-op there.

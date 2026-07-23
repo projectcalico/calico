@@ -360,16 +360,16 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty"`
 	// NFTablesMode configures nftables support in Felix. [Default: Auto]
 	NFTablesMode *projectcalicov3.NFTablesMode `json:"nftablesMode,omitempty"`
-	// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
-	// improved forwarding performance. When enabled, established connections accepted by
+	// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+	// for improved forwarding performance. When set to "All", established connections accepted by
 	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
-	// nftables mode is active. [Default: Enabled]
+	// nftables mode is active. [Default: All]
 	NFTablesFlowTableOffload *projectcalicov3.NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
 	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
 	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
 	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
 	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
-	// is Enabled. [Default: ""]
+	// is not Disabled. [Default: ""]
 	NFTablesFlowTableDataIfacePattern *string `json:"nftablesFlowTableDataIfacePattern,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`

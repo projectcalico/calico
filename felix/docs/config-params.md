@@ -1167,7 +1167,7 @@ A regular expression that controls which host
 interfaces are added to the nftables flowtable, so that traffic forwarded between those
 interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
 offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
-is Enabled.
+is not Disabled.
 
 | Detail |   |
 | --- | --- |
@@ -1180,19 +1180,19 @@ is Enabled.
 
 ### `NFTablesFlowTableOffload` (config file) / `nftablesFlowTableOffload` (YAML)
 
-Controls whether nftables flowtable offload is enabled for
-improved forwarding performance. When enabled, established connections accepted by
+Controls which traffic nftables flowtable offload is enabled for, for
+improved forwarding performance. When set to "All", established connections accepted by
 Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
 nftables mode is active.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_NFTablesFlowTableOffload` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
-| Default value (above encoding) | `Enabled` |
+| Encoding (env var/config file) | One of: <code>All</code>, <code>Disabled</code> |
+| Default value (above encoding) | `All` |
 | `FelixConfiguration` field | `nftablesFlowTableOffload` (YAML) `NFTablesFlowTableOffload` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Enabled` |
+| `FelixConfiguration` schema | One of: <code>"All"</code>, <code>"Disabled"</code>. |
+| Default value (YAML) | `All` |
 
 ### `NFTablesMode` (config file) / `nftablesMode` (YAML)
 
