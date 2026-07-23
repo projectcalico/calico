@@ -189,10 +189,12 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 	cmds := diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-system", steady)
 	Expect(cmdStrs(cmds)).NotTo(ContainElement(ContainSubstring("--previous")))
 
-	// A pod whose container has restarted picks up an extra previous-log
-	// command, scoped to that specific container (not --all-containers), so a
-	// crashed container's logs survive even when sibling containers have no
-	// previous incarnation.
+	// A pod where even one container has restarted picks up previous-log
+	// commands for *every* container in the pod, each scoped with -c (not
+	// --all-containers). Per-container commands are independent, so a healthy
+	// sibling that has no previous incarnation fails harmlessly on its own
+	// without discarding the crashed container's logs — exactly the ones the
+	// bundle needs to explain the restart.
 	restarted := &apiv1.Pod{}
 	restarted.Name = "calico-apiserver-0"
 	restarted.Status.ContainerStatuses = []apiv1.ContainerStatus{
@@ -201,24 +203,34 @@ func TestDiagsCmdsForPod_Previous(t *testing.T) {
 	}
 	cmds = diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-apiserver", restarted)
 	prev := filterStrs(cmdStrs(cmds), "--previous")
-	// Only the restarted container is fetched, and it is scoped with -c.
-	Expect(prev).To(HaveLen(1))
-	Expect(prev[0]).To(ContainSubstring("kubectl logs --previous"))
-	Expect(prev[0]).To(ContainSubstring("-c calico-apiserver"))
-	Expect(prev[0]).NotTo(ContainSubstring("--all-containers"))
+	// Both the restarted container and its never-restarted sibling are fetched,
+	// each scoped with -c, and none use --all-containers.
+	Expect(prev).To(HaveLen(2))
+	for _, p := range prev {
+		Expect(p).To(ContainSubstring("kubectl logs --previous"))
+		Expect(p).NotTo(ContainSubstring("--all-containers"))
+	}
+	Expect(prev).To(ContainElement(ContainSubstring("-c calico-apiserver")))
+	Expect(prev).To(ContainElement(ContainSubstring("-c calico-apiserver-sidecar")))
 
-	// An init container that previously terminated also gets its previous logs.
+	// An init container that previously terminated also triggers collection,
+	// and its previous logs are fetched by name.
 	initTerminated := &apiv1.Pod{}
 	initTerminated.Name = "calico-node-xyz"
+	initTerminated.Status.ContainerStatuses = []apiv1.ContainerStatus{{Name: "calico-node", RestartCount: 0}}
 	initTerminated.Status.InitContainerStatuses = []apiv1.ContainerStatus{{
 		Name:                 "install-cni",
 		LastTerminationState: apiv1.ContainerState{Terminated: &apiv1.ContainerStateTerminated{ExitCode: 1}},
 	}}
 	cmds = diagsCmdsForPod("/dir", "/links", opts, "nodeA", "calico-system", initTerminated)
-	Expect(cmdStrs(cmds)).To(ContainElement(And(
+	prev = filterStrs(cmdStrs(cmds), "--previous")
+	// The terminated init container triggers collection for the whole pod, so
+	// the never-restarted main container is fetched too.
+	Expect(prev).To(ContainElement(And(
 		ContainSubstring("kubectl logs --previous"),
 		ContainSubstring("-c install-cni"),
 	)))
+	Expect(prev).To(ContainElement(ContainSubstring("-c calico-node")))
 }
 
 func filterStrs(strs []string, substr string) []string {

@@ -718,36 +718,54 @@ func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace st
 			SymLink:  fmt.Sprintf("%s/%s/%s.txt", linkDir, namespace, pod.Name),
 		},
 	}
-	// For each container that has restarted, also grab the previous
-	// incarnation's logs — those are usually the ones that explain the
-	// restart. We collect them per-container rather than with a single
-	// --all-containers invocation: `kubectl logs --previous --all-containers`
-	// fails outright if any one container in the pod has no previous
-	// incarnation, which would lose the crashed container's logs — exactly
-	// the ones we came for. Requesting only the containers that actually have
-	// a prior incarnation, one command each, sidesteps that.
-	for _, container := range containersWithPreviousLogs(pod) {
-		cmds = append(cmds, common.Cmd{
-			Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
-			FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
-			SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
-		})
+	// If any container in the pod has a prior incarnation (it restarted or has
+	// a previously terminated state), grab the previous-incarnation logs for
+	// *every* container in the pod — those are usually the ones that explain
+	// the restart, and a crashed container's siblings are often the fastest way
+	// to understand what tipped it over.
+	//
+	// We emit one command per container rather than a single --all-containers
+	// invocation: `kubectl logs --previous --all-containers` fails outright if
+	// any one container in the pod has no previous incarnation, which would
+	// lose the crashed container's logs — exactly the ones we came for.
+	// Per-container commands are independent, so a container that happens to
+	// have no previous incarnation fails harmlessly on its own without
+	// discarding any sibling's previous logs.
+	if podHasPreviousLogs(pod) {
+		for _, container := range allContainerNames(pod) {
+			cmds = append(cmds, common.Cmd{
+				Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
+				CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
+				FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
+				SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
+			})
+		}
 	}
 	return cmds
 }
 
-// containersWithPreviousLogs returns the names of the pod's containers (both
-// regular and init) that have a prior incarnation worth fetching logs from,
-// i.e. the container has restarted or has a previously terminated state.
-func containersWithPreviousLogs(pod *apiv1.Pod) []string {
+// podHasPreviousLogs reports whether any container in the pod (regular or init)
+// has a prior incarnation worth fetching logs from, i.e. the container has
+// restarted or has a previously terminated state.
+func podHasPreviousLogs(pod *apiv1.Pod) bool {
+	statuses := append([]apiv1.ContainerStatus{}, pod.Status.ContainerStatuses...)
+	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	for _, cs := range statuses {
+		if cs.RestartCount > 0 || cs.LastTerminationState.Terminated != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// allContainerNames returns the names of every container in the pod, both
+// regular and init.
+func allContainerNames(pod *apiv1.Pod) []string {
 	statuses := append([]apiv1.ContainerStatus{}, pod.Status.ContainerStatuses...)
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
 	var names []string
 	for _, cs := range statuses {
-		if cs.RestartCount > 0 || cs.LastTerminationState.Terminated != nil {
-			names = append(names, cs.Name)
-		}
+		names = append(names, cs.Name)
 	}
 	return names
 }
