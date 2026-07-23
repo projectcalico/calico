@@ -23,6 +23,7 @@ steps:
   - name: calico-tests
     services:
       - docker
+      - http-cache-proxy
     matrix:
       - name: gcp-kubeadm-stable-operator-calicobpf
         env:

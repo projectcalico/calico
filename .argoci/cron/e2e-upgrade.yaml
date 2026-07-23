@@ -29,6 +29,7 @@ steps:
   - name: calico-tests-aks-byo-cni-w-azurelinux
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_NETWORK_PLUGIN
         value: none
@@ -50,6 +51,7 @@ steps:
   - name: calico-tests-eks
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1|Feature:AutoHEPs|staged.network.policy|NoTierPrefix)
@@ -71,6 +73,7 @@ steps:
   - name: calico-tests-kubeadm-iptables
     services:
       - docker
+      - http-cache-proxy
     matrix:
       - name: aws-kubeadm-stable-3-operator-calicoiptables
         env:
@@ -87,6 +90,7 @@ steps:
   - name: calico-tests-kubeadm-bpf
     services:
       - docker
+      - http-cache-proxy
     matrix:
       - name: gcp-kubeadm-stable-operator-calicobpf
         env:
@@ -103,6 +107,7 @@ steps:
   - name: calico-tests-rke2
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: PROVISIONER
         value: gcp-rke2
@@ -122,6 +127,7 @@ steps:
   - name: calico-tests-openshift
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: PROVISIONER
         value: aws-openshift
