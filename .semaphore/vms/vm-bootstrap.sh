@@ -73,6 +73,12 @@ usermod -a -G docker ubuntu
 # the first test that needs it.
 modprobe ipip
 
+# nftables flowtable offload needs these modules. Without them Felix's feature
+# probe disables offload, so the flowtable FV tests fail (they assert the
+# flowtable is programmed) instead of exercising the feature.
+modprobe nf_flow_table
+modprobe nft_flow_offload
+
 if [ -s /etc/docker/daemon.json ] ; then
   cat /etc/docker/daemon.json | sed "\$d" | sed "\$s/\$/,/" > /tmp/daemon.json
 else

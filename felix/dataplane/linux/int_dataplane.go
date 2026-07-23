@@ -476,6 +476,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled)
 
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload && !nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane) {
+		log.Warn("NFTables flowtable offload is enabled but the kernel does not support it (nf_flow_table unavailable); disabling offload.")
+		config.RulesConfig.NFTablesFlowTableOffload = false
+	}
+
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig, nftablesEnabled)
