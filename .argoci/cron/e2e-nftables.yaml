@@ -26,6 +26,7 @@ steps:
   - name: nftables-mode-arm64-wg
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -57,6 +58,7 @@ steps:
   - name: nftables-talos
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENCAPSULATION_TYPE
         value: VXLAN
@@ -72,6 +74,7 @@ steps:
   - name: nftables-mode-eks-eks-w-aws-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_VERSION
         value: stable-1
@@ -87,6 +90,7 @@ steps:
   - name: nftables-mode-eks-eks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: helmerator
@@ -111,6 +115,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
@@ -134,6 +139,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
