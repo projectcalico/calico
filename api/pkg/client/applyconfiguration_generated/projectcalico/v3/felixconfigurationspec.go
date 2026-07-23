@@ -362,6 +362,17 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
 	// [Default: Auto]
 	NFTablesMode *projectcalicov3.NFTablesMode `json:"nftablesMode,omitempty"`
+	// NFTablesFlowTableOffload controls whether nftables flowtable offload is enabled for
+	// improved forwarding performance. When enabled, established connections accepted by
+	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+	// nftables mode is active. [Default: Enabled]
+	NFTablesFlowTableOffload *projectcalicov3.NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
+	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
+	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+	// is Enabled. [Default: ""]
+	NFTablesFlowTableDataIfacePattern *string `json:"nftablesFlowTableDataIfacePattern,omitempty"`
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *v1.Duration `json:"nftablesRefreshInterval,omitempty"`
 	// NftablesFilterAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -1537,6 +1548,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithGenericXDPEnabled(value b
 // If called multiple times, the NFTablesMode field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesMode(value projectcalicov3.NFTablesMode) *FelixConfigurationSpecApplyConfiguration {
 	b.NFTablesMode = &value
+	return b
+}
+
+// WithNFTablesFlowTableOffload sets the NFTablesFlowTableOffload field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NFTablesFlowTableOffload field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableOffload(value projectcalicov3.NFTablesFlowTableOffload) *FelixConfigurationSpecApplyConfiguration {
+	b.NFTablesFlowTableOffload = &value
+	return b
+}
+
+// WithNFTablesFlowTableDataIfacePattern sets the NFTablesFlowTableDataIfacePattern field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the NFTablesFlowTableDataIfacePattern field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithNFTablesFlowTableDataIfacePattern(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.NFTablesFlowTableDataIfacePattern = &value
 	return b
 }
 
