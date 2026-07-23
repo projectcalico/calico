@@ -33,7 +33,7 @@ func Datastore(args []string) error {
   <BINARY_NAME> datastore <command> [<args>...]
 
     migrate               Migrate the contents of an etcdv3 datastore to a Kubernetes datastore.
-    migrate-policy-names  Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the tier prefix.
+    migrate-policy-names  Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the legacy "default." tier prefix.
 
 Options:
   -h --help      Show this screen.
