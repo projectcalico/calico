@@ -1141,22 +1141,17 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 
 	// The FORWARD chain references "flow offload @calico" whenever offload is enabled, so the
-	// flowtable must always exist while enabled, even with no devices (Add acts as create-or-update).
-	// When disabled we delete any flowtable left over from a previous run; the forward rule that
-	// referenced it is already reconciled away.
-	if t.flowtableDirty {
-		if t.flowtableEnabled {
-			prio := knftables.FilterIngressPriority
-			tx.Add(&knftables.Flowtable{
-				Name:     dataplanedefs.FlowtableName,
-				Priority: &prio,
-				Devices:  t.flowtableDevices,
-			})
-			t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
-		} else {
-			tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
-			t.gaugeNumFlowtableDevices.Set(0)
-		}
+	// flowtable must exist before we write those rules (Add acts as create-or-update, and works
+	// even with no devices). The delete for the disabled case is deferred to the end of the
+	// transaction, after the referencing rule has been flushed away.
+	if t.flowtableDirty && t.flowtableEnabled {
+		prio := knftables.FilterIngressPriority
+		tx.Add(&knftables.Flowtable{
+			Name:     dataplanedefs.FlowtableName,
+			Priority: &prio,
+			Devices:  t.flowtableDevices,
+		})
+		t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
@@ -1287,6 +1282,15 @@ func (t *NftablesTable) applyUpdates() error {
 	// Delete any maps that may have been referenced by rules above.
 	for _, m := range mapUpdates.MapsToDelete {
 		tx.Delete(m)
+	}
+
+	// Delete any flowtable left over from a previous run now that offload is disabled. This has
+	// to happen after the chain updates above: nft refuses to delete a flowtable while the
+	// FORWARD rule that references it ("flow offload @calico") still exists, so the delete only
+	// succeeds once that rule has been flushed.
+	if t.flowtableDirty && !t.flowtableEnabled {
+		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		t.gaugeNumFlowtableDevices.Set(0)
 	}
 
 	if t.disabled && len(t.chainToDataplaneHashes) != 0 {
