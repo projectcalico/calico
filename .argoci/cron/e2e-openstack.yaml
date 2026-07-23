@@ -29,12 +29,10 @@ globalPrologue: |
   export INSTALLER="${INSTALLER:-packaged}"
   export PROVISIONER="${PROVISIONER:-gcp-openstack}"
 
-  # TEMPORARY (pre-merge cron-ci testing): run only the smoke subset while
-  # shaking out the ArgoCI wiring.  Revert to full-fv — the whole pytest
-  # suite, within which the multi-region tests self-activate on the jobs
-  # whose cluster has a second region (see MULTI_REGION below) — before
-  # merging.
-  export OPENSTACK_TEST_SPEC="${OPENSTACK_TEST_SPEC:-smoke}"
+  # Run the whole pytest suite (banzai's default selects only the smoke
+  # subset).  The multi-region tests within it self-activate on the jobs
+  # whose cluster has a second region — see MULTI_REGION below.
+  export OPENSTACK_TEST_SPEC="${OPENSTACK_TEST_SPEC:-full-fv}"
   source .argoci/scripts/global_prologue.sh
 globalEpilogue: |
   source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
