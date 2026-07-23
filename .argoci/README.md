@@ -14,7 +14,10 @@ migrated off Semaphore's scheduled e2e builds.
   corresponding `.semaphore/end-to-end/pipelines/*.yml` (same jobs, same
   schedule). `cc-argoci-handler` expands each into a full CronWorkflow (checkout,
   secret loading, node placement, dind, exit handler, notifications, labels,
-  metrics), picked up automatically on merge to the default branch.
+  metrics), picked up automatically on merge to the default branch. The one
+  exception to the mirroring is `cron/e2e-openstack.yaml` (the weekly
+  Calico-for-OpenStack e2e tests), which is new here rather than migrated
+  from one of this repo's Semaphore pipelines.
 
 These crons and scripts are maintained **by hand** going forward: edit the
 YAML (or the scripts) directly to change a suite's jobs, env, or schedule.
