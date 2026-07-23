@@ -1,0 +1,106 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-certification-
+schedule: 10 21 * * 1
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export DATAPLANE="${DATAPLANE:-CalicoIptables}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-certification.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export PROVISIONER="${PROVISIONER:-aws-openshift}"
+  export STERN_CHECK="${STERN_CHECK:-DISABLED}"
+  export TEST_TYPE="${TEST_TYPE:-ocp-cert}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: standalone-cluster-tests
+    services:
+      - docker
+    env:
+      - name: ENABLE_OCP_VIRT
+        value: "true"
+      - name: OPENSHIFT_CLUSTER_TYPE
+        value: Standalone
+      - name: TEST_TYPE
+        value: ocp-cert
+    matrix:
+      - name: 4-20-1
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.20.1
+      - name: 4-19-17
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.19.17
+      - name: 4-18-27
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.18.27
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: hcp-setup-hosting
+    services:
+      - docker
+    env:
+      - name: HCP_STAGE
+        value: setup-hosting
+      - name: HOSTING_CLUSTER
+        value: hcp-shared-hosting
+      - name: OPENSHIFT_CLUSTER_TYPE
+        value: HCP-hosting
+      - name: OPENSHIFT_VERSION
+        value: 4.20.1
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: hcp-hosted-setup-and-tests
+    services:
+      - docker
+    depends:
+      - hcp-setup-hosting
+    env:
+      - name: HCP_STAGE
+        value: hosted
+      - name: HOSTING_CLUSTER
+        value: hcp-shared-hosting
+      - name: OPENSHIFT_CLUSTER_TYPE
+        value: HCP-hosted
+      - name: TEST_TYPE
+        value: ocp-cert
+    matrix:
+      - name: 4-20-1
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.20.1
+      - name: 4-19-17
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.19.17
+      - name: 4-18-27
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.18.27
+    commands: |
+      .argoci/scripts/body_standard.sh
+onExit:
+  # Tear down the shared hosting cluster after the whole workflow, regardless of
+  # how the hosted matrix cells finished (onExit always runs). It gets the full
+  # globalPrologue/globalEpilogue: the prologue restores the hosting BZ_HOME and
+  # the epilogue runs bz destroy + removes the GCS handoff blob. See
+  # .argoci/design/hcp.md.
+  - name: hcp-destroy-hosting
+    services:
+      - docker
+    env:
+      - name: HCP_STAGE
+        value: destroy-hosting
+      - name: HOSTING_CLUSTER
+        value: hcp-shared-hosting
+    commands: |
+      .argoci/scripts/body_standard.sh

@@ -34,8 +34,8 @@ var _ = describe.CalicoDescribe(
 	func() {
 		var cli ctrlclient.Client
 		var checker conncheck.ConnectionTester
-		var client1 *conncheck.Client
-		var server *conncheck.Server
+		var client1 conncheck.Client
+		var server conncheck.Server
 		var ctx context.Context
 		var cancel context.CancelFunc
 

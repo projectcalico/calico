@@ -236,9 +236,9 @@ message SortOption {
 // policy trace.
 message PolicyMatch {
   PolicyKind kind = 1;
-  string tier = 2;
-  string namespace = 3;
-  string name = 4;
+  StringMatch tier = 2;
+  StringMatch namespace = 3;
+  StringMatch name = 4;
   Action action = 5;
 }
 

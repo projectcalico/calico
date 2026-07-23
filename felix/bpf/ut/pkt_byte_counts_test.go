@@ -441,3 +441,84 @@ func TestCountsHostToOutside(t *testing.T) {
 		Expect(e.B2A.Bytes).To(Equal(uint64(i * len(respPkt))))
 	}
 }
+
+// TestCountsPodToExternalNATOutgoing verifies that conntrack byte/packet
+// counters are correctly updated for NAT-outgoing (SNAT) flows from a pod
+// to an external IP.
+func TestCountsPodToExternalNATOutgoing(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "CNT5"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv4, udpL, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := udpL.(*layers.UDP)
+
+	resetCTMap(ctMap) // ensure it is clean
+	resetMap(natMap)
+
+	defer resetRTMap(rtMap)
+
+	hostIP = node1ip
+
+	// Source workload route: flagged as local workload in IPAM pool with NAT-outgoing.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool|routes.FlagNATOutgoing, 1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	countTX := 3
+	countRX := 5
+
+	k := conntrack.NewKey(17, ipv4.SrcIP, uint16(udp.SrcPort), ipv4.DstIP, uint16(udp.DstPort))
+
+	for i := 1; i <= countTX; i++ {
+		skbMark = 0
+		// Packet leaving workload - creates NORMAL entry with NAT_OUT flag
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+
+		dumpCTMap(ctMap)
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		v := ct[k]
+		e := v.Data()
+
+		Expect(e.A2B.Packets).To(Equal(uint32(i)), "Incorrect A->B packet count after TX")
+		Expect(e.A2B.Bytes).To(Equal(uint64(i*len(pktBytes))), "Incorrect A->B bytes count after TX")
+		Expect(e.B2A.Packets).To(Equal(uint32(0)), "B->A packets should be 0 after TX")
+		Expect(e.B2A.Bytes).To(Equal(uint64(0)), "B->A bytes should be 0 after TX")
+	}
+
+	respPkt := udpResponseRaw(pktBytes)
+
+	for i := 1; i <= countRX; i++ {
+		// Return traffic arriving at the workload with skb already marked as
+		// seen (simulating that the host-side BPF program already processed
+		// this packet against the node-IP conntrack entry).
+		skbMark = tcdefs.MarkSeen
+
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(respPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		})
+
+		dumpCTMap(ctMap)
+
+		ct, err := conntrack.LoadMapMem(ctMap)
+		Expect(err).NotTo(HaveOccurred())
+		v := ct[k]
+		e := v.Data()
+
+		Expect(e.A2B.Packets).To(Equal(uint32(countTX)), "A->B packets should stay at countTX")
+		Expect(e.A2B.Bytes).To(Equal(uint64(countTX*len(pktBytes))), "A->B bytes should stay at countTX*pktLen")
+		Expect(e.B2A.Packets).To(Equal(uint32(i)), "B->A packets should increment for NAT-out return traffic")
+		Expect(e.B2A.Bytes).To(Equal(uint64(i*len(respPkt))), "B->A bytes should increment for NAT-out return traffic")
+	}
+}

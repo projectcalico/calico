@@ -125,6 +125,7 @@ exports[`<Select/> it renders with no options 1`] = `
     <select
       chakrastyles="[object Object]"
       data-testid="react-select"
+      selectedoptionstyle="check"
     />
   </div>
   <span

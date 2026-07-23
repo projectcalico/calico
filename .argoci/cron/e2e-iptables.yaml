@@ -1,0 +1,829 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-iptables-
+schedule: 10 21 * * 4
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export DATAPLANE="${DATAPLANE:-CalicoIptables}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
+  export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard)}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: openshift-ocp
+    services:
+      - docker
+    env:
+      - name: INSTALLER
+        value: operator
+      - name: PROVISIONER
+        value: aws-openshift
+    matrix:
+      - name: 4-18-29
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.18.29
+      - name: 4-19-20
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.19.20
+      - name: 4-20-6
+        env:
+          - name: OPENSHIFT_VERSION
+            value: 4.20.6
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: arm64-smoke-tests-aks-arm64
+    services:
+      - docker
+    env:
+      - name: AZ_VM_SIZE
+        value: Standard_D4plds_v5
+      - name: INSTALLER
+        value: operator
+      - name: PROVISIONER
+        value: azr-aks
+      - name: STERN_CHECK
+        value: DISABLED
+    matrix:
+      - name: stable-1-azure-
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+          - name: AZ_NETWORK_PLUGIN
+            value: azure
+          - name: CLUSTER_MODE
+            value: ""
+      - name: stable-1-none-
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+          - name: AZ_NETWORK_PLUGIN
+            value: none
+          - name: CLUSTER_MODE
+            value: ""
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: arm64-smoke-tests-eks-arm64-calico-cni
+    services:
+      - docker
+    env:
+      - name: AWS_NODE_INSTANCE_TYPE
+        value: t4g.large
+      - name: EKS_CNI
+        value: calico
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: PROVISIONER
+        value: aws-eks
+      - name: STERN_CHECK
+        value: DISABLED
+    matrix:
+      - name: stable-1
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: aks-aks-w-calico-cni
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: CNI_POD_SETUP_TIMEOUT_SECONDS
+        value: "15"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: azr-aks
+    matrix:
+      - name: calico
+        env:
+          - name: CNI_PLUGIN
+            value: Calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: aks-aks-w-aks-cni
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: aks-aks-private-w-aks-cni-overlay
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: CLUSTER_MODE
+        value: private
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: NETWORK_PLUGIN_MODE
+        value: overlay
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: aks-aks-migrate-from-vendored-calico-cni-to-calico-cni
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DESIRED_POLICY
+        value: Calico
+      - name: INSTALLER
+        value: operator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: azr-aks
+      - name: USE_VENDORED_CNI
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: dual-stack-k8s-e2e-kdd
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
+      - name: ENABLE_DUAL_STACK
+        value: "true"
+      - name: K8S_E2E_EXTRA_FLAGS
+        value: --feature-gates=dualstack=true
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: KIND_CONFIG
+        value: |
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            ipFamily: dual
+            podSubnet: "192.168.0.0/16,fd00:10:244::/64"
+          nodes:
+          # the control plane node
+          - role: control-plane
+          - role: worker
+          - role: worker
+          - role: worker
+      - name: PROVISIONER
+        value: local-kind
+    matrix:
+      - name: calico-yaml
+        env:
+          - name: MANIFEST_FILE
+            value: calico.yaml
+      - name: calico-typha-yaml
+        env:
+          - name: MANIFEST_FILE
+            value: calico-typha.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: dual-stack-k8s-e2e-etcd
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_DUAL_STACK
+        value: "true"
+      - name: INSTALL_ETCD_POD
+        value: "true"
+      - name: K8S_E2E_EXTRA_FLAGS
+        value: --feature-gates=dualstack=true
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: KIND_CONFIG
+        value: |
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          networking:
+            disableDefaultCNI: true
+            ipFamily: dual
+            podSubnet: "192.168.0.0/16,fd00:10:244::/64"
+          nodes:
+          # the control plane node
+          - role: control-plane
+          - role: worker
+          - role: worker
+          - role: worker
+      - name: MANIFEST_FILE
+        value: calico-etcd.yaml
+      - name: PROVISIONER
+        value: local-kind
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: autohep-test
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_AUTOHEP
+        value: "true"
+      - name: PROVISIONER
+        value: local-kind
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: ipvs
+    services:
+      - docker
+    env:
+      - name: KUBE_PROXY_MODE
+        value: ipvs
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: usage-reporting
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: ENABLE_USAGE
+        value: "true"
+      - name: MANIFEST_FILE
+        value: calico.yaml
+      - name: PROVISIONER
+        value: local-kind
+      - name: TEST_TYPE
+        value: usage-reporting
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-beta-runs
+    services:
+      - docker
+    env:
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: beta-calico-yaml-iptables
+        env:
+          - name: K8S_VERSION
+            value: beta
+          - name: MANIFEST_FILE
+            value: calico.yaml
+          - name: KUBE_PROXY_MODE
+            value: iptables
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: k8s-distros
+    services:
+      - docker
+    env:
+      - name: K8S_VERSION
+        value: v1.31.3
+      - name: RKE_VERSION
+        value: v1.7.1
+    matrix:
+      - name: gcp-rancher
+        env:
+          - name: PROVISIONER
+            value: gcp-rancher
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-vxlan-k8s-e2e
+    services:
+      - docker
+    env:
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(WireGuard)
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: USE_VXLAN
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-k8s-e2e
+    services:
+      - docker
+    env:
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(WireGuard)
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: stable-true
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: DISABLE_IPIP
+            value: "true"
+      - name: stable-false
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: DISABLE_IPIP
+            value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-migration-kind-dual-stack
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: INSTALLER
+        value: manual
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: IP_FAMILY
+        value: dual
+      - name: OPERATOR_MIGRATE
+        value: "true"
+      - name: PRODUCT
+        value: calico
+      - name: PROVISIONER
+        value: local-kind
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: stable-1
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-migration-kind-ipv6
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: INSTALLER
+        value: manual
+      - name: IPV4_POD_CIDR
+        value: ""
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/64
+      - name: IP_FAMILY
+        value: ipv6
+      - name: OPERATOR_MIGRATE
+        value: "true"
+      - name: PRODUCT
+        value: calico
+      - name: PROVISIONER
+        value: local-kind
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: stable-1
+        env:
+          - name: K8S_VERSION
+            value: stable-1
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-regression-k8s-e2e-kdd-new
+    services:
+      - docker
+    env:
+      - name: DISABLE_IPIP
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: stable
+        env:
+          - name: K8S_VERSION
+            value: stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-regression-k8s-e2e-kdd-old
+    services:
+      - docker
+    env:
+      - name: DISABLE_IPIP
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_API_SERVER
+        value: "false"
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: stable-3
+        env:
+          - name: K8S_VERSION
+            value: stable-3
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: ENABLE_EXTERNAL_NODE
+        value: "false"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+      - name: NETWORK_PLUGIN_MODE
+        value: overlay
+      - name: PROVISIONER
+        value: azr-aks
+      - name: USE_HASH_RELEASE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-aks-w-azure-cni
+    services:
+      - docker
+    env:
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: azr-aks-stable-3-azurevnet
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable-3
+          - name: CNI_PLUGIN
+            value: AzureVNET
+      - name: azr-aks-stable-azurevnet
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable
+          - name: CNI_PLUGIN
+            value: AzureVNET
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-aks-with-calico-cni
+    services:
+      - docker
+    env:
+      - name: AKS_CNI
+        value: calico
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: azr-aks-stable-3-calico
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable-3
+          - name: CNI_PLUGIN
+            value: Calico
+      - name: azr-aks-stable-calico
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable
+          - name: CNI_PLUGIN
+            value: Calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-eks-kdd-aws-cni
+    services:
+      - docker
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: CNI_PLUGIN
+        value: AmazonVPC
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_HASH_RELEASE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-eks-kdd-calico-cni
+    services:
+      - docker
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_HASH_RELEASE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: distro-support
+    services:
+      - docker
+    env:
+      - name: CLUSTER_ROUTING_MODE
+        value: Felix
+    matrix:
+      - name: ubuntu-2404-lts-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: ubuntu-2404-lts
+          - name: PROVISIONER
+            value: gcp-kubeadm
+      - name: ubuntu-2204-lts-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: ubuntu-2204-lts
+          - name: PROVISIONER
+            value: gcp-kubeadm
+      - name: rhel-10-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: rhel-10
+          - name: PROVISIONER
+            value: gcp-kubeadm
+      - name: centos-stream-8-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: centos-stream-8
+          - name: PROVISIONER
+            value: gcp-kubeadm
+      - name: rhel-9-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: rhel-9
+          - name: PROVISIONER
+            value: gcp-kubeadm
+      - name: rocky-linux-8-gcp-kubeadm
+        env:
+          - name: CLUSTER_IMAGE
+            value: rocky-linux-8
+          - name: PROVISIONER
+            value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: datastore-k8s-e2e-kdd-old
+    services:
+      - docker
+    env:
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    matrix:
+      - name: stable-3-calico-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable-3
+          - name: MANIFEST_FILE
+            value: calico.yaml
+      - name: stable-3-calico-typha-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable-3
+          - name: MANIFEST_FILE
+            value: calico-typha.yaml
+      - name: stable-3-canal-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable-3
+          - name: MANIFEST_FILE
+            value: canal.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: datastore-k8s-e2e-kdd-new
+    services:
+      - docker
+    env:
+      - name: ENABLE_CALICOCTL_APISERVER
+        value: "true"
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    matrix:
+      - name: stable-calico-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: MANIFEST_FILE
+            value: calico.yaml
+      - name: stable-calico-typha-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: MANIFEST_FILE
+            value: calico-typha.yaml
+      - name: stable-canal-yaml
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: MANIFEST_FILE
+            value: canal.yaml
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: datastore-k8s-e2e-etcd
+    services:
+      - docker
+    env:
+      - name: INSTALL_ETCD_POD
+        value: "true"
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.skip=(Tiered RBAC)
+      - name: MANIFEST_FILE
+        value: calico-etcd.yaml
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    matrix:
+      - name: stable-3
+        env:
+          - name: K8S_VERSION
+            value: stable-3
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: migration
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: CALICO_MANIFEST
+        value: manifests/flannel-migration/calico.yaml
+      - name: INSTALLER
+        value: manual
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+      - name: K8S_VERSION
+        value: stable-1
+      - name: MIGRATION_MANIFEST
+        value: manifests/flannel-migration/migration-job.yaml
+      - name: PROVISIONER
+        value: local-kind
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: https-raw-githubusercontent-com-projectcalico-calico-v3-28-2-manifests-canal-yaml
+        env:
+          - name: DOWNLEVEL_MANIFEST
+            value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
+      - name: https-raw-githubusercontent-com-coreos-flannel-master-documentation-kube-flannel-yml
+        env:
+          - name: DOWNLEVEL_MANIFEST
+            value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+    commands: |
+      .argoci/scripts/body_flannel-migration.sh
+  - name: kubevirt-e2e-tests
+    services:
+      - docker
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp-kubevirt.yaml
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable-1.35
+      - name: NUM_KUBEVIRT_VMS
+        value: "2"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh

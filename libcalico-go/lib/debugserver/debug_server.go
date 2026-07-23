@@ -25,7 +25,11 @@ import (
 )
 
 func StartDebugPprofServer(host string, port int) {
-	log.Infof("Insecure debug port is enabled on %s:%d.", host, port)
+	if host == "localhost" {
+		log.Infof("pprof debug server enabled on %s:%d. Use kubectl port-forward for remote access.", host, port)
+	} else {
+		log.Warnf("pprof debug server enabled on %s:%d. Endpoints are unauthenticated and expose heap dumps, goroutine stacks, and CPU profiles. Use localhost and kubectl port-forward for safe remote access.", host, port)
+	}
 	_ = httppprof.Profile // Make sure we don't accidentally lose the import.
 	go func() {
 		addr := net.JoinHostPort(host, strconv.Itoa(port))

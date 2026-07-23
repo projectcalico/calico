@@ -1,0 +1,38 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-test-
+schedule: 0 0 31 2 *
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-test.yml}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export PRODUCT="${PRODUCT:-calico}"
+  export TEST_TYPE="${TEST_TYPE:-k8s-e2e}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: calico-tests
+    services:
+      - docker
+    matrix:
+      - name: gcp-kubeadm-stable-operator-calicobpf
+        env:
+          - name: PROVISIONER
+            value: gcp-kubeadm
+          - name: K8S_VERSION
+            value: stable
+          - name: INSTALLER
+            value: operator
+          - name: DATAPLANE
+            value: CalicoBPF
+    commands: |
+      .argoci/scripts/body_standard.sh

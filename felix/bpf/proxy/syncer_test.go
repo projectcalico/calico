@@ -1373,6 +1373,104 @@ var _ = Describe("BPF Syncer", func() {
 	})
 })
 
+// In BPF bootstrap mode Felix reaches the API server through the
+// default/kubernetes ClusterIP service's NAT entry. If a transient loss of that
+// service's endpoints cleared the NAT backend, Felix would sever its own
+// connection to the API server and could never learn the restored endpoints —
+// an unrecoverable deadlock that only a calico-node restart fixes. The syncer
+// must therefore retain the last-known-good backend for that service.
+var _ = Describe("BPF Syncer API server NAT preservation", func() {
+	var (
+		svcs  *mockNATMap
+		eps   *mockNATBackendMap
+		mgEps *mockMaglevMap
+		aff   *mockAffinityMap
+		rt    *proxy.RTCache
+		s     *proxy.Syncer
+	)
+
+	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1)}
+
+	apiSvcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "kubernetes"},
+	}
+	apiClusterIP := net.IPv4(10, 49, 0, 1)
+	apiPort := 443
+	apiServerIP := net.IPv4(10, 0, 1, 20)
+
+	regularSvcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "regular"},
+	}
+	regClusterIP := net.IPv4(10, 49, 0, 2)
+	regPort := 80
+
+	tcp := proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)
+	apiFrontKey := nat.NewNATKey(apiClusterIP, uint16(apiPort), tcp)
+	regFrontKey := nat.NewNATKey(regClusterIP, uint16(regPort), tcp)
+	apiBackend := nat.NewNATBackendValue(apiServerIP, 6443)
+
+	// state builds a sync state with the regular service backed by a ready
+	// endpoint. The API server service is backed by a ready endpoint when
+	// apiServerHasEP is true, otherwise it has none (the outage we reproduce).
+	state := func(apiServerHasEP bool) proxy.DPSyncerState {
+		st := proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				apiSvcKey:     svc(apiClusterIP.String(), apiPort).build(),
+				regularSvcKey: svc(regClusterIP.String(), regPort).build(),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				regularSvcKey: {ep("10.2.0.1", 8080).build()},
+			},
+		}
+		if apiServerHasEP {
+			st.EpsMap[apiSvcKey] = []k8sp.Endpoint{ep(apiServerIP.String(), 6443).build()}
+		}
+		return st
+	}
+
+	// expectAPIServerBackend asserts the API server NAT frontend has exactly one
+	// backend pointing at the API server.
+	expectAPIServerBackend := func() {
+		front, ok := svcs.m[apiFrontKey]
+		ExpectWithOffset(1, ok).To(BeTrue(), "API server NAT frontend missing")
+		ExpectWithOffset(1, front.Count()).To(Equal(uint32(1)), "API server NAT frontend must have its backend")
+		ExpectWithOffset(1, eps.m[nat.NewNATBackendKey(front.ID(), 0)]).To(Equal(apiBackend), "API server backend incorrect")
+	}
+
+	BeforeEach(func() {
+		svcs = newMockNATMap()
+		eps = newMockNATBackendMap()
+		mgEps = newMockMaglevMap()
+		aff = newMockAffinityMap()
+		rt = proxy.NewRTCache()
+		s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+	})
+
+	It("retains the API server backend across a transient loss of endpoints", func() {
+		By("programming the API server backend from real endpoints")
+		Expect(s.Apply(state(true))).NotTo(HaveOccurred())
+		expectAPIServerBackend()
+
+		By("losing all API server endpoints: the backend must be preserved")
+		Expect(s.Apply(state(false))).NotTo(HaveOccurred())
+		expectAPIServerBackend()
+
+		By("a regular service losing its endpoints still drops to zero (scoping)")
+		scoping := state(false)
+		scoping.EpsMap[regularSvcKey] = nil
+		Expect(s.Apply(scoping)).NotTo(HaveOccurred())
+		regFront, ok := svcs.m[regFrontKey]
+		Expect(ok).To(BeTrue())
+		Expect(regFront.Count()).To(Equal(uint32(0)),
+			"only the API server service is protected; regular services are not")
+		expectAPIServerBackend() // API server backend stays preserved here too.
+
+		By("API server endpoints returning: the NAT converges on the live backend")
+		Expect(s.Apply(state(true))).NotTo(HaveOccurred())
+		expectAPIServerBackend()
+	})
+})
+
 type mockNATMap struct {
 	mock.DummyMap
 	sync.Mutex

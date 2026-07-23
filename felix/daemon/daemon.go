@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -61,6 +62,7 @@ import (
 	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
+	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
@@ -160,7 +162,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var configParams *config.Config
 	var typhaDiscoverer *discovery.Discoverer
 	var numClientsCreated int
-	var k8sClientSet *kubernetes.Clientset
+	var k8sClientSet kubernetes.Interface
 	var kubernetesVersion string
 configRetry:
 	for {
@@ -220,9 +222,9 @@ configRetry:
 		}
 		log.Info("Created datastore client")
 		numClientsCreated++
-		backendClient = v3Client.(interface{ Backend() bapi.Client }).Backend()
+		backendClient = v3Client.(bapi.BackendAccessor).Backend()
 		for {
-			globalConfig, hostConfig, err := loadConfigFromDatastore(
+			globalConfig, selectorConfig, hostConfig, err := loadConfigFromDatastore(
 				ctx, backendClient, datastoreConfig, configParams.FelixHostname)
 			if err == ErrNotReady {
 				log.Warn("Waiting for datastore to be initialized (or migrated)")
@@ -237,6 +239,12 @@ configRetry:
 			_, err = configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
 			if err != nil {
 				log.WithError(err).Error("Failed update global config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			_, err = configParams.UpdateFrom(selectorConfig, config.DatastorePerSelector)
+			if err != nil {
+				log.WithError(err).Error("Failed update selector-scoped config from datastore")
 				time.Sleep(1 * time.Second)
 				continue configRetry
 			}
@@ -267,6 +275,7 @@ configRetry:
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
+		configParams.Encapsulation.NoEncapEnabled = encapCalculator.NoEncapEnabled()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -362,45 +371,7 @@ configRetry:
 
 	doGoRuntimeSetup(configParams)
 
-	if configParams.BPFEnabled {
-		// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
-		if err := dp.SupportsBPF(); err != nil {
-			log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
-			_, err := configParams.OverrideParam("BPFEnabled", "false")
-			if err != nil {
-				log.WithError(err).Panic("Bug: failed to override config parameter")
-			}
-		} else {
-			// BPF is enabled and supported. Now check for the BPFConntrackCleanupMode.
-			// With the conntrack map type changed to lru_hash, BPFConntrackModeBPFProgram isn't
-			// useful. Hence this option will be deprecated in the near future. If BPFConntrackCleanupMode
-			// is set to BPFConntrackModeBPFProgram, its reset to BPFConntrackModeUserspace.
-			log.Warn("BPF conntrack mode Auto,BPFProgram is not supported and will be deprecated soon. Falling back to userspace cleaner.")
-			_, err := configParams.OverrideParam("BPFConntrackCleanupMode", string(apiv3.BPFConntrackModeUserspace))
-			if err != nil {
-				log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
-			}
-			if configParams.BPFRedirectToPeer == "L2Only" {
-				log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
-				_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
-				if err != nil {
-					log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
-				}
-			}
-		}
-	}
-
-	if configParams.BPFEnabled && configParams.IPForwarding == "Disabled" && configParams.BPFEnforceRPF != "Disabled" {
-		// BPF mode requires IP forwarding to be enabled because the BPF RPF
-		// check fails if it is disabled.  Seems to be an incorrect check in
-		// the kernel.  FIB lookups can only be done for interfaces that have
-		// forwarding enabled.
-		log.Warning("In BPF mode, either IPForwarding must be enabled or BPFEnforceRPF must be disabled. Forcing IPForwarding to 'Enabled'.")
-		_, err := configParams.OverrideParam("IPForwarding", "Enabled")
-		if err != nil {
-			log.WithError(err).Panic("Bug: failed to override config parameter")
-		}
-	}
+	applyBPFOverrides(configParams, dp.SupportsBPF)
 
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
@@ -443,17 +414,34 @@ configRetry:
 	var dpDriverCmd *exec.Cmd
 
 	failureReportChan := make(chan string)
+	// These callbacks run on dataplane goroutines and report a shutdown
+	// reason to the shutdown monitor.  The send is on the unbuffered
+	// failureReportChan; time it out with a panic backstop so a stuck send
+	// can't hang the goroutine forever with the backstop unreachable.
 	configChangedRestartCallback := func() {
-		failureReportChan <- reasonConfigChanged
-		time.Sleep(gracefulShutdownTimeout)
+		timeout := time.After(gracefulShutdownTimeout)
+		select {
+		case failureReportChan <- reasonConfigChanged:
+		case <-timeout:
+			log.Panic("Graceful shutdown failed: timed out reporting config change")
+		}
+		<-timeout
 		log.Panic("Graceful shutdown took too long")
 	}
 	fatalErrorCallback := func(err error) {
 		log.WithError(err).Error("Shutting down due to fatal error")
-		failureReportChan <- reasonFatalError
-		time.Sleep(gracefulShutdownTimeout)
+		timeout := time.After(gracefulShutdownTimeout)
+		select {
+		case failureReportChan <- reasonFatalError:
+		case <-timeout:
+			log.Panic("Graceful shutdown failed: timed out reporting fatal error")
+		}
+		<-timeout
 		log.Panic("Graceful shutdown took too long")
 	}
+
+	// Get the IPAM client for live migration owner attribute swaps.
+	ipamClient := v3Client.IPAM()
 
 	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(
 		configParams.Copy(), // Copy to avoid concurrent access.
@@ -463,6 +451,7 @@ configRetry:
 		fatalErrorCallback,
 		k8sClientSet,
 		lookupsCache,
+		ipamClient,
 	)
 
 	// Defer reporting ready until we've started the dataplane driver.  This
@@ -569,9 +558,6 @@ configRetry:
 	} else {
 		// Use the syncer locally.
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator, configParams.IsLeader())
-
-		log.Info("using resource updates where applicable")
-		configParams.SetUseNodeResourceUpdates(true)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
@@ -608,10 +594,6 @@ configRetry:
 			break
 		}
 		healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-
-		// Typha client now requires support for node updates and will refuse
-		// to connect to an (ancient) Typha that does not support them.
-		configParams.SetUseNodeResourceUpdates(true)
 
 		go func() {
 			typhaConnection.Finished.Wait()
@@ -685,9 +667,6 @@ configRetry:
 	// calculation graph.
 	validator := calc.NewValidationFilter(asyncCalcGraph, configParams)
 
-	go syncerToValidator.SendToSinkForever(validator)
-	asyncCalcGraph.Start()
-	log.Infof("Started the processing graph")
 	var stopSignalChans []chan<- *sync.WaitGroup
 	if configParams.EndpointReportingEnabled {
 		delay := configParams.EndpointReportingDelaySecs
@@ -732,8 +711,16 @@ configRetry:
 	}
 
 	// Send the opening message to the dataplane driver, giving it its
-	// config.
+	// config.  Do this before starting the calculation graph so that we
+	// don't race with it to send the first message.  We used to start calc
+	// graph first but that could result in blocking or even deadlocking
+	// here.
 	dpConnector.ToDataplane <- configParams.ToConfigUpdate()
+
+	// Now the dataplane driver has its config, start the calculation graph.
+	go syncerToValidator.SendToSinkForever(validator)
+	asyncCalcGraph.Start()
+	log.Infof("Started the processing graph")
 
 	if configParams.PrometheusMetricsEnabled {
 		log.Info("Prometheus metrics enabled.")
@@ -954,17 +941,19 @@ var ErrNotReady = errors.New("datastore is not ready or has not been initialised
 
 func loadConfigFromDatastore(
 	ctx context.Context, client bapi.Client, cfg apiconfig.CalicoAPIConfig, hostname string,
-) (globalConfig, hostConfig map[string]string, err error) {
-	// The configuration is split over 3 different resource types and 4 different resource
+) (globalConfig, selectorConfig, hostConfig map[string]string, err error) {
+	// The configuration is split over 3 different resource types and 4+ different resource
 	// instances in the v3 data model:
 	// -  ClusterInformation (global): name "default"
 	// -  FelixConfiguration (global): name "default"
+	// -  FelixConfiguration (per-selector): any other name, matched via nodeSelector
 	// -  FelixConfiguration (per-host): name "node.<hostname>"
 	// -  Node (per-host): name: <hostname>
 	// Get the global values and host specific values separately.  We re-use the updateprocessor
 	// logic to convert the single v3 resource to a set of v1 key/values.
 	hostConfig = make(map[string]string)
 	globalConfig = make(map[string]string)
+	selectorConfig = make(map[string]string)
 	var ready bool
 	err = getAndMergeConfig(
 		ctx, client, globalConfig,
@@ -989,6 +978,14 @@ func loadConfigFromDatastore(
 	if err != nil {
 		return
 	}
+
+	// Load selector-scoped FelixConfiguration resources. List all FelixConfigurations,
+	// find the ones with a nodeSelector that matches this node's labels, and merge.
+	selectorConfig, err = loadSelectorScopedFelixConfig(ctx, client, hostname)
+	if err != nil {
+		return
+	}
+
 	err = getAndMergeConfig(
 		ctx, client, hostConfig,
 		apiv3.KindFelixConfiguration, "node."+hostname,
@@ -1009,6 +1006,87 @@ func loadConfigFromDatastore(
 	}
 
 	return
+}
+
+// loadSelectorScopedFelixConfig lists all FelixConfiguration resources, finds
+// selector-scoped ones (name not "default" and not "node.*"), evaluates their
+// nodeSelector against this node's labels, and returns the config from the
+// single winning match (the oldest by creation time).
+func loadSelectorScopedFelixConfig(
+	ctx context.Context, client bapi.Client, hostname string,
+) (map[string]string, error) {
+	result := make(map[string]string)
+
+	// Get the local node's labels for selector evaluation.
+	nodeKVP, err := client.Get(ctx, model.ResourceKey{
+		Kind: internalapi.KindNode,
+		Name: hostname,
+	}, "")
+	if err != nil {
+		switch err.(type) {
+		case cerrors.ErrorResourceDoesNotExist:
+			log.Info("Node resource does not exist, no selector-scoped config can match")
+			return result, nil
+		default:
+			return nil, err
+		}
+	}
+
+	node, ok := nodeKVP.Value.(*internalapi.Node)
+	if !ok {
+		log.Warn("Unexpected value type for Node resource during selector config loading")
+		return result, nil
+	}
+	nodeLabels := node.Labels
+
+	// List all FelixConfiguration resources.
+	felixConfigs, err := client.List(ctx, model.ResourceListOptions{
+		Kind: apiv3.KindFelixConfiguration,
+	}, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list FelixConfiguration resources: %w", err)
+	}
+
+	// Build selector config entries from the listed resources.
+	var entries []*calc.SelectorConfigEntry
+	for _, kvp := range felixConfigs.KVPairs {
+		rk, ok := kvp.Key.(model.ResourceKey)
+		if !ok {
+			continue
+		}
+		// Skip global and per-node configs.
+		if rk.Name == "default" || strings.HasPrefix(rk.Name, "node.") {
+			continue
+		}
+
+		fc, ok := kvp.Value.(*apiv3.FelixConfiguration)
+		if !ok {
+			continue
+		}
+
+		if fc.Spec.NodeSelector == nil || *fc.Spec.NodeSelector == "" {
+			continue
+		}
+		selectorStr := *fc.Spec.NodeSelector
+
+		sel, err := selector.Parse(selectorStr)
+		if err != nil {
+			log.WithError(err).WithFields(log.Fields{
+				"name":     rk.Name,
+				"selector": selectorStr,
+			}).Warn("Failed to parse nodeSelector during startup config loading, skipping")
+			continue
+		}
+
+		entries = append(entries, &calc.SelectorConfigEntry{
+			ResourceName: rk.Name,
+			Sel:          sel,
+			Config:       updateprocessors.ExtractFelixConfigFields(fc),
+			CreationTime: fc.CreationTimestamp.Time,
+		})
+	}
+
+	return calc.MergeSelectorConfigs(entries, nodeLabels), nil
 }
 
 // getAndMergeConfig gets the v3 resource configuration extracts the separate config values
@@ -1087,6 +1165,11 @@ type DataplaneConnector struct {
 	datastore         bapi.Client
 	datastorev3       client.Interface
 
+	// shutdownReportTimeout bounds how long shutDownProcess waits to hand
+	// its failure reason to the shutdown monitor before panicking as a
+	// backstop.  Overridable in tests.
+	shutdownReportTimeout time.Duration
+
 	firstStatusReportSent bool
 
 	wireguardStatUpdateFromDataplane chan *proto.WireguardStatusUpdate
@@ -1113,6 +1196,7 @@ func newConnector(configParams *config.Config,
 		statusUpdatesFromDataplaneConsumers: nil,
 		failureReportChan:                   failureReportChan,
 		dataplane:                           dataplane,
+		shutdownReportTimeout:               gracefulShutdownTimeout,
 		wireguardStatUpdateFromDataplane:    make(chan *proto.WireguardStatusUpdate, 1),
 	}
 
@@ -1297,30 +1381,50 @@ func (fc *DataplaneConnector) reconcileWireguardStatUpdate(dpPubKey string, ipVe
 	return nil
 }
 
-func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane() {
-	var current *proto.WireguardStatusUpdate
+func (fc *DataplaneConnector) handleWireguardStatUpdateFromDataplane(
+	reconcile func(pubKey string, ipVersion proto.IPVersion) error,
+	done <-chan struct{},
+) {
+	// pending tracks the latest desired public key per IP version that we have
+	// not yet successfully written to the datastore. We must track per IP
+	// version: v4 and v6 status updates are independent, and an in-flight
+	// retry for one version must not be displaced by an arriving update for
+	// the other.
+	pending := make(map[proto.IPVersion]string)
 	var ticker *jitter.Ticker
 	var retryC <-chan time.Time
 
 	for {
 		// Block until we either get an update or it's time to retry a failed update.
 		select {
-		case current = <-fc.wireguardStatUpdateFromDataplane:
-			log.Debugf("Wireguard status update from dataplane driver: %s, IP version: %d", current.PublicKey, current.IpVersion)
+		case msg := <-fc.wireguardStatUpdateFromDataplane:
+			log.Debugf("Wireguard status update from dataplane driver: %s, IP version: %d", msg.PublicKey, msg.IpVersion)
+			pending[msg.IpVersion] = msg.PublicKey
 		case <-retryC:
 			log.Debug("retrying failed Wireguard status update")
+		case <-done:
+			if ticker != nil {
+				ticker.Stop()
+			}
+			return
 		}
 		if ticker != nil {
 			ticker.Stop()
+			ticker = nil
+			retryC = nil
 		}
 
-		// Try and reconcile the current wireguard status data.
-		err := fc.reconcileWireguardStatUpdate(current.PublicKey, current.IpVersion)
-		if err == nil {
-			current = nil
-			retryC = nil
-			ticker = nil
-		} else {
+		// Reconcile every IP version that has a pending update. Drop entries
+		// that succeed; on any failure, schedule a retry tick.
+		anyFailed := false
+		for ipVersion, pubKey := range pending {
+			if err := reconcile(pubKey, ipVersion); err != nil {
+				anyFailed = true
+				continue
+			}
+			delete(pending, ipVersion)
+		}
+		if anyFailed {
 			// retry reconciling between 2-4 seconds.
 			ticker = jitter.NewTicker(2*time.Second, 2*time.Second)
 			retryC = ticker.C
@@ -1358,8 +1462,8 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				return fc.config.Encapsulation
 			}()
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 {
-				log.Warn("IPIP and/or VXLAN encapsulation changed, need to restart.")
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
+				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}
 		}
@@ -1369,13 +1473,28 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 	}
 }
 
+// shutDownProcess reports the given reason to the shutdown monitor
+// (monitorAndManageShutdown) and then blocks, expecting the monitor to tear
+// the process down.  It never returns; callers rely on that.
+//
+// Both steps have a panic backstop.  Reporting the reason is a blocking send
+// on the unbuffered failureReportChan, so we time it out: if the monitor
+// isn't reading (e.g. it hasn't started yet at start-of-day), we panic rather
+// than deadlock.  Once the reason is delivered we wait out the remainder of
+// the same timer and panic if the managed shutdown hasn't finished.
 func (fc *DataplaneConnector) shutDownProcess(reason string) {
-	// Send a failure report to the managed shutdown thread then give it
-	// a few seconds to do the shutdown.
-	fc.failureReportChan <- reason
-	time.Sleep(5 * time.Second)
-	// The graceful shutdown failed, terminate the process.
-	log.Panic("Managed shutdown failed. Panicking.")
+	timeout := time.After(fc.shutdownReportTimeout)
+	select {
+	case fc.failureReportChan <- reason:
+	case <-timeout:
+		log.WithField("reason", reason).Panic(
+			"Managed shutdown failed: timed out reporting shutdown reason. Panicking.")
+	}
+	// time.After fires only once; the send won the select above, so this
+	// receives the eventual tick, giving the monitor the full timeout to
+	// tear us down.
+	<-timeout
+	log.WithField("reason", reason).Panic("Managed shutdown failed. Panicking.")
 }
 
 // Start creates goroutines for:
@@ -1390,7 +1509,7 @@ func (fc *DataplaneConnector) Start() {
 	go fc.readMessagesFromDataplane()
 
 	// Start a background thread to handle Wireguard update to Node.
-	go fc.handleWireguardStatUpdateFromDataplane()
+	go fc.handleWireguardStatUpdateFromDataplane(fc.reconcileWireguardStatUpdate, nil)
 
 	log.WithFields(log.Fields{
 		"statusUpdatesFromDataplaneConsumers": len(fc.statusUpdatesFromDataplaneConsumers),
@@ -1469,6 +1588,53 @@ func (fc *DataplaneConnector) handleConfigUpdate(msg *proto.ConfigUpdate) {
 func (fc *DataplaneConnector) ApplyNoRestartConfig(old, new *config.Config) {
 	if !reflect.DeepEqual(old.HealthTimeoutOverrides, new.HealthTimeoutOverrides) {
 		health.SetGlobalTimeoutOverrides(new.HealthTimeoutOverrides)
+	}
+}
+
+// applyBPFOverrides checks if BPF mode is enabled and supported, and applies
+// any necessary config overrides for BPF mode compatibility.
+func applyBPFOverrides(configParams *config.Config, supportsBPF func() error) {
+	if !configParams.BPFEnabled {
+		return
+	}
+
+	// Check for BPF dataplane support before we do anything that relies on the flag being set one way or another.
+	if err := supportsBPF(); err != nil {
+		log.WithError(err).Error("BPF dataplane mode enabled but not supported by the kernel.  Disabling BPF mode.")
+		_, err := configParams.OverrideParam("BPFEnabled", "false")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter")
+		}
+		return
+	}
+
+	// With the conntrack map type changed to lru_hash, BPFConntrackModeBPFProgram isn't
+	// useful. Hence this option will be deprecated in the near future. If BPFConntrackCleanupMode
+	// is set to BPFConntrackModeBPFProgram, its reset to BPFConntrackModeUserspace.
+	log.Warn("BPF conntrack mode Auto,BPFProgram is not supported and will be deprecated soon. Falling back to userspace cleaner.")
+	_, err := configParams.OverrideParam("BPFConntrackCleanupMode", string(apiv3.BPFConntrackModeUserspace))
+	if err != nil {
+		log.WithError(err).Panic("Bug: failed to override config parameter BPFConntrackCleanupMode")
+	}
+
+	if configParams.BPFRedirectToPeer == "L2Only" {
+		log.Warn("BPFRedirectToPeer 'L2Only' is deprecated and equals 'Enabled' now.")
+		_, err := configParams.OverrideParam("BPFRedirectToPeer", "Enabled")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter BPFRedirectToPeer")
+		}
+	}
+
+	// BPF mode requires IP forwarding to be enabled because the BPF RPF
+	// check fails if it is disabled.  Seems to be an incorrect check in
+	// the kernel.  FIB lookups can only be done for interfaces that have
+	// forwarding enabled.
+	if configParams.IPForwarding == "Disabled" && configParams.BPFEnforceRPF != "Disabled" {
+		log.Warning("In BPF mode, either IPForwarding must be enabled or BPFEnforceRPF must be disabled. Forcing IPForwarding to 'Enabled'.")
+		_, err := configParams.OverrideParam("IPForwarding", "Enabled")
+		if err != nil {
+			log.WithError(err).Panic("Bug: failed to override config parameter")
+		}
 	}
 }
 

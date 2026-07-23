@@ -720,7 +720,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 
 	member = "192.168.1.1"
@@ -735,7 +735,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 }
 

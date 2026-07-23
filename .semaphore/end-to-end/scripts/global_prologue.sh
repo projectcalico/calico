@@ -20,6 +20,10 @@ set -o pipefail
 
 echo "[INFO] starting prologue"
 
+echo "[INFO] Configuring needrestart to auto mode to prevent interactive prompts hanging CI jobs..."
+sudo mkdir -p /etc/needrestart/conf.d 2>/dev/null || true
+printf '\044nrconf{restart} = '\''a'\'';\n' | sudo tee /etc/needrestart/conf.d/50-autorestart.conf > /dev/null 2>/dev/null || true
+
 echo "[INFO] Clean out language tools we don't use to free up disk"
 sudo rm -rf ~/{.kerl,.kiex,.npm,.nvm,.phpbrew,.rbenv,.sbt} /opt/{apache-maven*,firefox*,scala} /usr/lib/jvm /usr/local/{aws2,golang,phantomjs*} /root/.local/share/heroku /usr/local/lib/heroku
 
@@ -42,8 +46,7 @@ RANDOM_TOKEN2=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || true)
 echo "[INFO] random tokens: ${RANDOM_TOKEN1} ${RANDOM_TOKEN2}"
 
 echo "[INFO] Installing jq..."
-sudo apt-get -o Acquire::Retries=5 update  -y
-sudo apt-get install -o Acquire::Retries=5 jq -y
+install-package --skip-update jq
 
 echo "[INFO] exporting default env vars..."
 export SEMAPHORE_PIPELINE_STARTED_AT=$(date +%s)
@@ -73,7 +76,7 @@ export DOCKER_UCP_VERSION=${DOCKER_UCP_VERSION:-"3.3.0"}
 export ENABLE_ALP=${ENABLE_ALP:-"false"}
 export USE_HASH_RELEASE=${USE_HASH_RELEASE:-"true"}
 export USE_LATEST_RELEASE=${USE_LATEST_RELEASE:-"false"}
-export RELEASE_STREAM=${RELEASE_STREAM:-master}
+export RELEASE_STREAM=${RELEASE_STREAM:-$( _branch="${SEMAPHORE_GIT_BRANCH:-master}"; [[ "${_branch}" =~ ^release-(v[0-9]+\.[0-9]+)$ ]] && echo "${BASH_REMATCH[1]}" || echo "master" )}
 export K8S_E2E_EXTRA_FLAGS=${K8S_E2E_EXTRA_FLAGS:-" --e2ecfg.calicoctl-opensource-image=calico/ctl:release-${RELEASE_STREAM} "}
 export HELM_PATCH=${HELM_PATCH:-"0"}
 export CALICOCTL_INSTALL_TYPE=${CALICOCTL_INSTALL_TYPE:-"binary"}
@@ -93,8 +96,6 @@ export GS_BUCKET=${GS_BUCKET-semaphore_diags}
 export BANZAI_CORE_BRANCH=${BANZAI_CORE_BRANCH:-""}
 export BZ_TASK_VERSION=${BZ_TASK_VERSION:-"v2.8.1"}
 export SEMAPHORE_AGENT_UPLOAD_JOB_LOGS=${SEMAPHORE_AGENT_UPLOAD_JOB_LOGS:-"when-trimmed"}
-
-export RELEASE_STREAM=${RELEASE_STREAM:-master}
 
 if [[ "${BANZAI_CORE_BRANCH}" != "" ]]; then BANZAI_CORE_BRANCH="--core-branch ${BANZAI_CORE_BRANCH}"; fi
 
@@ -149,11 +150,11 @@ azure_cli_cmd="$azure_cli_cmd; az login --service-principal -u ${AZ_SP_ID} -p ${
 if [[ $PROVISIONER =~ ^azr-.* ]]; then eval "$azure_cli_cmd"; fi
 
 install_tools_cmd="echo \"[INFO] installing addtional tools for c1...\""
-install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 unzip -y && sudo needrestart -r a"
+install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing unzip...\" && install-package --skip-update unzip"
 install_tools_cmd="$install_tools_cmd; echo \"[INFO] Installing requests...\" && pip3 install --retries=20 --upgrade requests"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$install_tools_cmd"; fi
 
-if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; sudo NEEDRESTART_SUSPEND=1 NEEDRESTART_MODE=a apt-get install -o Acquire::Retries=5 -y putty-tools && sudo needrestart -r a; fi
+if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-tools..."; install-package --skip-update putty-tools; fi
 
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
@@ -172,14 +173,18 @@ hcp_scripts="$hcp_scripts; git clone git@github.com:tigera/banzai-utils.git \"${
 hcp_scripts="$hcp_scripts; cp -R \"${HOME}/banzai-utils\"/ocp-hcp/*.sh \"${BZ_GLOBAL_BIN}\""
 if [[ "${HCP_ENABLED}" == "true" ]]; then eval $hcp_scripts; fi
 
+# Gate `cache store` behind `&&` (not `;`) so a failed `bz init` fails the prologue
+# here. `set -o pipefail` (above) makes the init pipeline reflect bz init's exit status,
+# but with an unconditional `cache store` after `;` the line still reports success, so a
+# failed init is masked and the job continues without an initialised profile.
 std="echo \"[INFO] Initializing Banzai profile...\""
 std="$std; bz init profile -n ${SEMAPHORE_JOB_ID} --skip-prompt ${BANZAI_CORE_BRANCH} --secretsPath $HOME/secrets 2>&1 | tee >(gzip --stdout > ${BZ_LOGS_DIR}/initialize.log.gz)"
-std="$std; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+std="$std && cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
 
 hcp="unset CLUSTER_NAME; unset DIAGS_ARCHIVE_FILENAME; unset K8S_VERSION"
 hcp="$hcp; echo \"[INFO] starting hcp init...\""
 hcp="$hcp; hcp-init.sh 2>&1 | tee \"${BZ_LOGS_DIR}/initialize.log\""
-hcp="$hcp; cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
+hcp="$hcp && cache store ${SEMAPHORE_JOB_ID} ${BZ_HOME}"
 
 restore_hcp_hosting="echo \"[INFO] Restoring from ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} cache\""
 restore_hcp_hosting="$restore_hcp_hosting; cache restore ${SEMAPHORE_WORKFLOW_ID}-hosting-${HOSTING_CLUSTER} |& tee ${BZ_LOGS_DIR}/restore.log"

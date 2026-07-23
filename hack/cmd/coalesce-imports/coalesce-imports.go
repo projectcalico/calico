@@ -26,7 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils/logformat"
 )
 
 var logLevel = flag.String("log-level", "fatal", "Log level, one of fatal, error, info, debug, etc.")
@@ -128,7 +128,7 @@ func processFile(fileName string) (err error) {
 }
 
 func configureLogging() {
-	logutils.ConfigureFormatter("coalesce-imports")
+	logformat.ConfigureFormatter("coalesce-imports")
 	logrus.SetLevel(logrus.FatalLevel)
 	logLevel, err := logrus.ParseLevel(*logLevel)
 	if err != nil {

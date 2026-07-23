@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type IPAMHandleInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.IPAMHandleList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.IPAMHandle, err error)
+	Apply(ctx context.Context, iPAMHandle *applyconfigurationgeneratedprojectcalicov3.IPAMHandleApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.IPAMHandle, err error)
 	IPAMHandleExpansion
 }
 
 // iPAMHandles implements IPAMHandleInterface
 type iPAMHandles struct {
-	*gentype.ClientWithList[*projectcalicov3.IPAMHandle, *projectcalicov3.IPAMHandleList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.IPAMHandle, *projectcalicov3.IPAMHandleList, *applyconfigurationgeneratedprojectcalicov3.IPAMHandleApplyConfiguration]
 }
 
 // newIPAMHandles returns a IPAMHandles
 func newIPAMHandles(c *ProjectcalicoV3Client, namespace string) *iPAMHandles {
 	return &iPAMHandles{
-		gentype.NewClientWithList[*projectcalicov3.IPAMHandle, *projectcalicov3.IPAMHandleList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.IPAMHandle, *projectcalicov3.IPAMHandleList, *applyconfigurationgeneratedprojectcalicov3.IPAMHandleApplyConfiguration](
 			"ipamhandles",
 			c.RESTClient(),
 			scheme.ParameterCodec,

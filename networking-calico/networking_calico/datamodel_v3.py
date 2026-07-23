@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -73,17 +73,19 @@ def put(
       e.g. "12345", and indicates that the write should only proceed if
       replacing an existing value with that mod_revision.
 
-    Returns True if the write happened successfully; False if not.
+    Returns the resource's metadata UID (a string) if the write happened
+    successfully; None if not.  The returned UID is truthy on success, so
+    callers that previously checked truthiness are unaffected.
     """
     key = _build_key(resource_kind, namespace, name)
     value = None
     try:
-        # Get the existing resource so we can persist its metadata.
+        # Get the existing resource so we can persist its metadata. _get_with_metadata
+        # returns value=None if the existing JSON is corrupt — the `if value is None`
+        # branch below then rebuilds the structure from scratch, same as KeyNotFound.
         value, _ = _get_with_metadata(resource_kind, namespace, name)
     except etcdv3.KeyNotFound:
         pass
-    except ValueError:
-        LOG.warning("etcd value not valid JSON, so ignoring")
     if value is None:
         # Build basic resource structure.
         value = {
@@ -116,7 +118,10 @@ def put(
         value["metadata"]["labels"] = labels
     # Set the new spec (overriding whatever may already be there).
     value["spec"] = spec
-    return etcdv3.put(key, json.dumps(value), mod_revision=mod_revision)
+    uid = value["metadata"]["uid"]
+    if etcdv3.put(key, json.dumps(value), mod_revision=mod_revision):
+        return uid
+    return None
 
 
 def get(resource_kind, name):
@@ -136,10 +141,38 @@ def get(resource_kind, name):
     - mod_revision is the etcdv3 revision at which the resource was last
       modified.
 
-    Raises etcdv3.KeyNotFound if there is no resource with that kind and name.
+    Raises etcdv3.KeyNotFound if there is no resource with that kind and name.  If the
+    existing etcd value is not valid JSON, returns (None, mod_revision) so the caller
+    can overwrite it via a CAS write at that mod_revision.
     """
     value, mod_revision = _get_with_metadata(resource_kind, NOT_NAMESPACED, name)
-    return value["spec"], mod_revision
+    spec = value["spec"] if value is not None else None
+    return spec, mod_revision
+
+
+def get_namespaced(resource_kind, namespace, name, with_labels_and_annotations=False):
+    """Read a single Calico v3 resource from etcdv3.
+
+    Returns either ``(spec, mod_revision)`` or ``((spec, labels, annotations),
+    mod_revision)`` depending on ``with_labels_and_annotations``.  This mirrors the
+    per-tuple shape that :func:`get_all` returns for the matching kind, so callers can
+    use the result interchangeably.  Raises :class:`etcdv3.KeyNotFound` if the key is
+    absent.  If the existing etcd value is not valid JSON, the spec / (spec, labels,
+    annotations) tuple is replaced by None / (None, None, None) so resync can repair
+    the corrupt entry via a CAS write at the returned mod_revision (same shape as
+    get_all()).
+    """
+    value, mod_revision = _get_with_metadata(resource_kind, namespace, name)
+    if value is None:
+        if with_labels_and_annotations:
+            return (None, None, None), mod_revision
+        return None, mod_revision
+    spec = value["spec"]
+    if with_labels_and_annotations:
+        labels = value["metadata"].get("labels", {})
+        annotations = value["metadata"].get("annotations", {})
+        return (spec, labels, annotations), mod_revision
+    return spec, mod_revision
 
 
 def delete_legacy(resource_kind, name_prefix=""):
@@ -225,6 +258,17 @@ def delete(resource_kind, namespace, name, mod_revision=None):
     return etcdv3.delete(key, mod_revision=mod_revision)
 
 
+def get_uid(resource_kind, namespace, name):
+    """Read the metadata UID of a Calico v3 resource."""
+    try:
+        value, _ = _get_with_metadata(resource_kind, namespace, name)
+    except etcdv3.KeyNotFound:
+        return "unknown"
+    if value is None:
+        return "unknown"
+    return value.get("metadata", {}).get("uid", "unknown")
+
+
 SANITIZE_LABEL_MAX_LENGTH = 63
 
 
@@ -254,6 +298,8 @@ def _is_namespaced(resource_kind):
     if resource_kind == "WorkloadEndpoint":
         return True
     if resource_kind == "NetworkPolicy":
+        return True
+    if resource_kind == "LiveMigration":
         return True
     return False
 
@@ -287,9 +333,18 @@ def _build_key(resource_kind, namespace, name):
 
 
 def _get_with_metadata(resource_kind, namespace, name):
-    # Note: 'with_metadata' here means including the Calico data model
-    # metadata, as well as the etcdv3 mod_revision.
+    # Note: 'with_metadata' here means including the Calico data model metadata, as well
+    # as the etcdv3 mod_revision.
+    #
+    # On invalid JSON, returns (None, mod_revision) rather than raising ValueError, so
+    # resync (and other callers) can repair a corrupt etcd entry — using the
+    # mod_revision in a CAS write — instead of aborting.  Mirrors the spec=None
+    # behaviour of get_all().  Callers are responsible for handling a None value.
     key = _build_key(resource_kind, namespace, name)
     value_as_string, mod_revision = etcdv3.get(key)
-    value = json.loads(value_as_string)
+    try:
+        value = json.loads(value_as_string)
+    except ValueError:
+        LOG.warning("etcd value not valid JSON for %s", key)
+        value = None
     return value, mod_revision

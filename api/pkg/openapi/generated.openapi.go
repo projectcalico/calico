@@ -8,461 +8,475 @@
 package openapi
 
 import (
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
 	v1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	runtime "k8s.io/apimachinery/pkg/runtime"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
+	version "k8s.io/apimachinery/pkg/version"
 	common "k8s.io/kube-openapi/pkg/common"
 	spec "k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.AllocationAttribute":                schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.AutoHostEndpointConfig":             schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfiguration":                   schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfigurationList":               schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfigurationSpec":               schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus":                    schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter":                          schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterList":                      schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6":            schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6":                    schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec":                      schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword":                        schema_pkg_apis_projectcalico_v3_BGPPassword(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer":                            schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerList":                        schema_pkg_apis_projectcalico_v3_BGPPeerList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerSpec":                        schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts":               schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinity":                      schema_pkg_apis_projectcalico_v3_BlockAffinity(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinityList":                  schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinitySpec":                  schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeAgentStatus":              schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPRouteStatus":           schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPStatus":                schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodePeer":                     schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRoute":                    schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRouteLearnedFrom":         schema_pkg_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatus":                   schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusList":               schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusSpec":               schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusStatus":             schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformation":                 schema_pkg_apis_projectcalico_v3_ClusterInformation(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformationList":             schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformationSpec":             schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community":                          schema_pkg_apis_projectcalico_v3_Community(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ControllersConfig":                  schema_pkg_apis_projectcalico_v3_ControllersConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort":                       schema_pkg_apis_projectcalico_v3_EndpointPort(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule":                         schema_pkg_apis_projectcalico_v3_EntityRule(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfiguration":                 schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfigurationList":             schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfigurationSpec":             schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicy":                schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicyList":            schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec":            schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSet":                   schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetList":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetSpec":               schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPMatch":                          schema_pkg_apis_projectcalico_v3_HTTPMatch(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPPath":                           schema_pkg_apis_projectcalico_v3_HTTPPath(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride":              schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpoint":                       schema_pkg_apis_projectcalico_v3_HostEndpoint(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointList":                   schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec":                   schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields":                         schema_pkg_apis_projectcalico_v3_ICMPFields(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlock":                          schema_pkg_apis_projectcalico_v3_IPAMBlock(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlockList":                      schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlockSpec":                      schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration":                  schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationList":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec":              schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandle":                         schema_pkg_apis_projectcalico_v3_IPAMHandle(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandleList":                     schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandleSpec":                     schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPIPConfiguration":                  schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool":                             schema_pkg_apis_projectcalico_v3_IPPool(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolList":                         schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec":                         schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus":                       schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation":                      schema_pkg_apis_projectcalico_v3_IPReservation(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationList":                  schema_pkg_apis_projectcalico_v3_IPReservationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec":                  schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfiguration":       schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationList":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec":   schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationStatus": schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig":       schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig":          schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig":          schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicy":                      schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicyList":                  schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec":                  schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSet":                         schema_pkg_apis_projectcalico_v3_NetworkSet(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSetList":                     schema_pkg_apis_projectcalico_v3_NetworkSetList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSetSpec":                     schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig":               schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig":             schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement":                schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Profile":                            schema_pkg_apis_projectcalico_v3_Profile(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileList":                        schema_pkg_apis_projectcalico_v3_ProfileList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec":                        schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort":                          schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange":                  schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange":                    schema_pkg_apis_projectcalico_v3_RouteTableRange(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule":                               schema_pkg_apis_projectcalico_v3_Rule(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata":                       schema_pkg_apis_projectcalico_v3_RuleMetadata(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig":     schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountMatch":                schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock":              schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock":             schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock":         schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch":                       schema_pkg_apis_projectcalico_v3_ServiceMatch(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicy":          schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicyList":      schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec":      schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicy":      schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicyList":  schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec":  schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicy":                schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicyList":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec":            schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template":                           schema_pkg_apis_projectcalico_v3_Template(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier":                               schema_pkg_apis_projectcalico_v3_Tier(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierList":                           schema_pkg_apis_projectcalico_v3_TierList(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec":                           schema_pkg_apis_projectcalico_v3_TierSpec(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus":                         schema_pkg_apis_projectcalico_v3_TierStatus(ref),
-		"github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig":   schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
-		"github.com/projectcalico/api/pkg/lib/numorstring.DSCP":                                     schema_api_pkg_lib_numorstring_DSCP(ref),
-		"github.com/projectcalico/api/pkg/lib/numorstring.Port":                                     schema_api_pkg_lib_numorstring_Port(ref),
-		"github.com/projectcalico/api/pkg/lib/numorstring.Protocol":                                 schema_api_pkg_lib_numorstring_Protocol(ref),
-		"github.com/projectcalico/api/pkg/lib/numorstring.Uint8OrString":                            schema_api_pkg_lib_numorstring_Uint8OrString(ref),
-		"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource":                                       schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
-		"k8s.io/api/core/v1.Affinity":                                    schema_k8sio_api_core_v1_Affinity(ref),
-		"k8s.io/api/core/v1.AppArmorProfile":                             schema_k8sio_api_core_v1_AppArmorProfile(ref),
-		"k8s.io/api/core/v1.AttachedVolume":                              schema_k8sio_api_core_v1_AttachedVolume(ref),
-		"k8s.io/api/core/v1.AvoidPods":                                   schema_k8sio_api_core_v1_AvoidPods(ref),
-		"k8s.io/api/core/v1.AzureDiskVolumeSource":                       schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
-		"k8s.io/api/core/v1.AzureFilePersistentVolumeSource":             schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.AzureFileVolumeSource":                       schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
-		"k8s.io/api/core/v1.Binding":                                     schema_k8sio_api_core_v1_Binding(ref),
-		"k8s.io/api/core/v1.CSIPersistentVolumeSource":                   schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.CSIVolumeSource":                             schema_k8sio_api_core_v1_CSIVolumeSource(ref),
-		"k8s.io/api/core/v1.Capabilities":                                schema_k8sio_api_core_v1_Capabilities(ref),
-		"k8s.io/api/core/v1.CephFSPersistentVolumeSource":                schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.CephFSVolumeSource":                          schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
-		"k8s.io/api/core/v1.CinderPersistentVolumeSource":                schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.CinderVolumeSource":                          schema_k8sio_api_core_v1_CinderVolumeSource(ref),
-		"k8s.io/api/core/v1.ClientIPConfig":                              schema_k8sio_api_core_v1_ClientIPConfig(ref),
-		"k8s.io/api/core/v1.ClusterTrustBundleProjection":                schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
-		"k8s.io/api/core/v1.ComponentCondition":                          schema_k8sio_api_core_v1_ComponentCondition(ref),
-		"k8s.io/api/core/v1.ComponentStatus":                             schema_k8sio_api_core_v1_ComponentStatus(ref),
-		"k8s.io/api/core/v1.ComponentStatusList":                         schema_k8sio_api_core_v1_ComponentStatusList(ref),
-		"k8s.io/api/core/v1.ConfigMap":                                   schema_k8sio_api_core_v1_ConfigMap(ref),
-		"k8s.io/api/core/v1.ConfigMapEnvSource":                          schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
-		"k8s.io/api/core/v1.ConfigMapKeySelector":                        schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
-		"k8s.io/api/core/v1.ConfigMapList":                               schema_k8sio_api_core_v1_ConfigMapList(ref),
-		"k8s.io/api/core/v1.ConfigMapNodeConfigSource":                   schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
-		"k8s.io/api/core/v1.ConfigMapProjection":                         schema_k8sio_api_core_v1_ConfigMapProjection(ref),
-		"k8s.io/api/core/v1.ConfigMapVolumeSource":                       schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
-		"k8s.io/api/core/v1.Container":                                   schema_k8sio_api_core_v1_Container(ref),
-		"k8s.io/api/core/v1.ContainerExtendedResourceRequest":            schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
-		"k8s.io/api/core/v1.ContainerImage":                              schema_k8sio_api_core_v1_ContainerImage(ref),
-		"k8s.io/api/core/v1.ContainerPort":                               schema_k8sio_api_core_v1_ContainerPort(ref),
-		"k8s.io/api/core/v1.ContainerResizePolicy":                       schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
-		"k8s.io/api/core/v1.ContainerRestartRule":                        schema_k8sio_api_core_v1_ContainerRestartRule(ref),
-		"k8s.io/api/core/v1.ContainerRestartRuleOnExitCodes":             schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
-		"k8s.io/api/core/v1.ContainerState":                              schema_k8sio_api_core_v1_ContainerState(ref),
-		"k8s.io/api/core/v1.ContainerStateRunning":                       schema_k8sio_api_core_v1_ContainerStateRunning(ref),
-		"k8s.io/api/core/v1.ContainerStateTerminated":                    schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
-		"k8s.io/api/core/v1.ContainerStateWaiting":                       schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
-		"k8s.io/api/core/v1.ContainerStatus":                             schema_k8sio_api_core_v1_ContainerStatus(ref),
-		"k8s.io/api/core/v1.ContainerUser":                               schema_k8sio_api_core_v1_ContainerUser(ref),
-		"k8s.io/api/core/v1.DaemonEndpoint":                              schema_k8sio_api_core_v1_DaemonEndpoint(ref),
-		"k8s.io/api/core/v1.DownwardAPIProjection":                       schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
-		"k8s.io/api/core/v1.DownwardAPIVolumeFile":                       schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
-		"k8s.io/api/core/v1.DownwardAPIVolumeSource":                     schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
-		"k8s.io/api/core/v1.EmptyDirVolumeSource":                        schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
-		"k8s.io/api/core/v1.EndpointAddress":                             schema_k8sio_api_core_v1_EndpointAddress(ref),
-		"k8s.io/api/core/v1.EndpointPort":                                schema_k8sio_api_core_v1_EndpointPort(ref),
-		"k8s.io/api/core/v1.EndpointSubset":                              schema_k8sio_api_core_v1_EndpointSubset(ref),
-		"k8s.io/api/core/v1.Endpoints":                                   schema_k8sio_api_core_v1_Endpoints(ref),
-		"k8s.io/api/core/v1.EndpointsList":                               schema_k8sio_api_core_v1_EndpointsList(ref),
-		"k8s.io/api/core/v1.EnvFromSource":                               schema_k8sio_api_core_v1_EnvFromSource(ref),
-		"k8s.io/api/core/v1.EnvVar":                                      schema_k8sio_api_core_v1_EnvVar(ref),
-		"k8s.io/api/core/v1.EnvVarSource":                                schema_k8sio_api_core_v1_EnvVarSource(ref),
-		"k8s.io/api/core/v1.EphemeralContainer":                          schema_k8sio_api_core_v1_EphemeralContainer(ref),
-		"k8s.io/api/core/v1.EphemeralContainerCommon":                    schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
-		"k8s.io/api/core/v1.EphemeralVolumeSource":                       schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
-		"k8s.io/api/core/v1.Event":                                       schema_k8sio_api_core_v1_Event(ref),
-		"k8s.io/api/core/v1.EventList":                                   schema_k8sio_api_core_v1_EventList(ref),
-		"k8s.io/api/core/v1.EventSeries":                                 schema_k8sio_api_core_v1_EventSeries(ref),
-		"k8s.io/api/core/v1.EventSource":                                 schema_k8sio_api_core_v1_EventSource(ref),
-		"k8s.io/api/core/v1.ExecAction":                                  schema_k8sio_api_core_v1_ExecAction(ref),
-		"k8s.io/api/core/v1.FCVolumeSource":                              schema_k8sio_api_core_v1_FCVolumeSource(ref),
-		"k8s.io/api/core/v1.FileKeySelector":                             schema_k8sio_api_core_v1_FileKeySelector(ref),
-		"k8s.io/api/core/v1.FlexPersistentVolumeSource":                  schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.FlexVolumeSource":                            schema_k8sio_api_core_v1_FlexVolumeSource(ref),
-		"k8s.io/api/core/v1.FlockerVolumeSource":                         schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
-		"k8s.io/api/core/v1.GCEPersistentDiskVolumeSource":               schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
-		"k8s.io/api/core/v1.GRPCAction":                                  schema_k8sio_api_core_v1_GRPCAction(ref),
-		"k8s.io/api/core/v1.GitRepoVolumeSource":                         schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
-		"k8s.io/api/core/v1.GlusterfsPersistentVolumeSource":             schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.GlusterfsVolumeSource":                       schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
-		"k8s.io/api/core/v1.HTTPGetAction":                               schema_k8sio_api_core_v1_HTTPGetAction(ref),
-		"k8s.io/api/core/v1.HTTPHeader":                                  schema_k8sio_api_core_v1_HTTPHeader(ref),
-		"k8s.io/api/core/v1.HostAlias":                                   schema_k8sio_api_core_v1_HostAlias(ref),
-		"k8s.io/api/core/v1.HostIP":                                      schema_k8sio_api_core_v1_HostIP(ref),
-		"k8s.io/api/core/v1.HostPathVolumeSource":                        schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
-		"k8s.io/api/core/v1.ISCSIPersistentVolumeSource":                 schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.ISCSIVolumeSource":                           schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
-		"k8s.io/api/core/v1.ImageVolumeSource":                           schema_k8sio_api_core_v1_ImageVolumeSource(ref),
-		"k8s.io/api/core/v1.KeyToPath":                                   schema_k8sio_api_core_v1_KeyToPath(ref),
-		"k8s.io/api/core/v1.Lifecycle":                                   schema_k8sio_api_core_v1_Lifecycle(ref),
-		"k8s.io/api/core/v1.LifecycleHandler":                            schema_k8sio_api_core_v1_LifecycleHandler(ref),
-		"k8s.io/api/core/v1.LimitRange":                                  schema_k8sio_api_core_v1_LimitRange(ref),
-		"k8s.io/api/core/v1.LimitRangeItem":                              schema_k8sio_api_core_v1_LimitRangeItem(ref),
-		"k8s.io/api/core/v1.LimitRangeList":                              schema_k8sio_api_core_v1_LimitRangeList(ref),
-		"k8s.io/api/core/v1.LimitRangeSpec":                              schema_k8sio_api_core_v1_LimitRangeSpec(ref),
-		"k8s.io/api/core/v1.LinuxContainerUser":                          schema_k8sio_api_core_v1_LinuxContainerUser(ref),
-		"k8s.io/api/core/v1.List":                                        schema_k8sio_api_core_v1_List(ref),
-		"k8s.io/api/core/v1.LoadBalancerIngress":                         schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
-		"k8s.io/api/core/v1.LoadBalancerStatus":                          schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
-		"k8s.io/api/core/v1.LocalObjectReference":                        schema_k8sio_api_core_v1_LocalObjectReference(ref),
-		"k8s.io/api/core/v1.LocalVolumeSource":                           schema_k8sio_api_core_v1_LocalVolumeSource(ref),
-		"k8s.io/api/core/v1.ModifyVolumeStatus":                          schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
-		"k8s.io/api/core/v1.NFSVolumeSource":                             schema_k8sio_api_core_v1_NFSVolumeSource(ref),
-		"k8s.io/api/core/v1.Namespace":                                   schema_k8sio_api_core_v1_Namespace(ref),
-		"k8s.io/api/core/v1.NamespaceCondition":                          schema_k8sio_api_core_v1_NamespaceCondition(ref),
-		"k8s.io/api/core/v1.NamespaceList":                               schema_k8sio_api_core_v1_NamespaceList(ref),
-		"k8s.io/api/core/v1.NamespaceSpec":                               schema_k8sio_api_core_v1_NamespaceSpec(ref),
-		"k8s.io/api/core/v1.NamespaceStatus":                             schema_k8sio_api_core_v1_NamespaceStatus(ref),
-		"k8s.io/api/core/v1.Node":                                        schema_k8sio_api_core_v1_Node(ref),
-		"k8s.io/api/core/v1.NodeAddress":                                 schema_k8sio_api_core_v1_NodeAddress(ref),
-		"k8s.io/api/core/v1.NodeAffinity":                                schema_k8sio_api_core_v1_NodeAffinity(ref),
-		"k8s.io/api/core/v1.NodeCondition":                               schema_k8sio_api_core_v1_NodeCondition(ref),
-		"k8s.io/api/core/v1.NodeConfigSource":                            schema_k8sio_api_core_v1_NodeConfigSource(ref),
-		"k8s.io/api/core/v1.NodeConfigStatus":                            schema_k8sio_api_core_v1_NodeConfigStatus(ref),
-		"k8s.io/api/core/v1.NodeDaemonEndpoints":                         schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
-		"k8s.io/api/core/v1.NodeFeatures":                                schema_k8sio_api_core_v1_NodeFeatures(ref),
-		"k8s.io/api/core/v1.NodeList":                                    schema_k8sio_api_core_v1_NodeList(ref),
-		"k8s.io/api/core/v1.NodeProxyOptions":                            schema_k8sio_api_core_v1_NodeProxyOptions(ref),
-		"k8s.io/api/core/v1.NodeRuntimeHandler":                          schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
-		"k8s.io/api/core/v1.NodeRuntimeHandlerFeatures":                  schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
-		"k8s.io/api/core/v1.NodeSelector":                                schema_k8sio_api_core_v1_NodeSelector(ref),
-		"k8s.io/api/core/v1.NodeSelectorRequirement":                     schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
-		"k8s.io/api/core/v1.NodeSelectorTerm":                            schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
-		"k8s.io/api/core/v1.NodeSpec":                                    schema_k8sio_api_core_v1_NodeSpec(ref),
-		"k8s.io/api/core/v1.NodeStatus":                                  schema_k8sio_api_core_v1_NodeStatus(ref),
-		"k8s.io/api/core/v1.NodeSwapStatus":                              schema_k8sio_api_core_v1_NodeSwapStatus(ref),
-		"k8s.io/api/core/v1.NodeSystemInfo":                              schema_k8sio_api_core_v1_NodeSystemInfo(ref),
-		"k8s.io/api/core/v1.ObjectFieldSelector":                         schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
-		"k8s.io/api/core/v1.ObjectReference":                             schema_k8sio_api_core_v1_ObjectReference(ref),
-		"k8s.io/api/core/v1.PersistentVolume":                            schema_k8sio_api_core_v1_PersistentVolume(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaim":                       schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimCondition":              schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimList":                   schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimSpec":                   schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimStatus":                 schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimTemplate":               schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
-		"k8s.io/api/core/v1.PersistentVolumeClaimVolumeSource":           schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
-		"k8s.io/api/core/v1.PersistentVolumeList":                        schema_k8sio_api_core_v1_PersistentVolumeList(ref),
-		"k8s.io/api/core/v1.PersistentVolumeSource":                      schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.PersistentVolumeSpec":                        schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
-		"k8s.io/api/core/v1.PersistentVolumeStatus":                      schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
-		"k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource":            schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
-		"k8s.io/api/core/v1.Pod":                                         schema_k8sio_api_core_v1_Pod(ref),
-		"k8s.io/api/core/v1.PodAffinity":                                 schema_k8sio_api_core_v1_PodAffinity(ref),
-		"k8s.io/api/core/v1.PodAffinityTerm":                             schema_k8sio_api_core_v1_PodAffinityTerm(ref),
-		"k8s.io/api/core/v1.PodAntiAffinity":                             schema_k8sio_api_core_v1_PodAntiAffinity(ref),
-		"k8s.io/api/core/v1.PodAttachOptions":                            schema_k8sio_api_core_v1_PodAttachOptions(ref),
-		"k8s.io/api/core/v1.PodCertificateProjection":                    schema_k8sio_api_core_v1_PodCertificateProjection(ref),
-		"k8s.io/api/core/v1.PodCondition":                                schema_k8sio_api_core_v1_PodCondition(ref),
-		"k8s.io/api/core/v1.PodDNSConfig":                                schema_k8sio_api_core_v1_PodDNSConfig(ref),
-		"k8s.io/api/core/v1.PodDNSConfigOption":                          schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
-		"k8s.io/api/core/v1.PodExecOptions":                              schema_k8sio_api_core_v1_PodExecOptions(ref),
-		"k8s.io/api/core/v1.PodExtendedResourceClaimStatus":              schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
-		"k8s.io/api/core/v1.PodIP":                                       schema_k8sio_api_core_v1_PodIP(ref),
-		"k8s.io/api/core/v1.PodList":                                     schema_k8sio_api_core_v1_PodList(ref),
-		"k8s.io/api/core/v1.PodLogOptions":                               schema_k8sio_api_core_v1_PodLogOptions(ref),
-		"k8s.io/api/core/v1.PodOS":                                       schema_k8sio_api_core_v1_PodOS(ref),
-		"k8s.io/api/core/v1.PodPortForwardOptions":                       schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
-		"k8s.io/api/core/v1.PodProxyOptions":                             schema_k8sio_api_core_v1_PodProxyOptions(ref),
-		"k8s.io/api/core/v1.PodReadinessGate":                            schema_k8sio_api_core_v1_PodReadinessGate(ref),
-		"k8s.io/api/core/v1.PodResourceClaim":                            schema_k8sio_api_core_v1_PodResourceClaim(ref),
-		"k8s.io/api/core/v1.PodResourceClaimStatus":                      schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
-		"k8s.io/api/core/v1.PodSchedulingGate":                           schema_k8sio_api_core_v1_PodSchedulingGate(ref),
-		"k8s.io/api/core/v1.PodSecurityContext":                          schema_k8sio_api_core_v1_PodSecurityContext(ref),
-		"k8s.io/api/core/v1.PodSignature":                                schema_k8sio_api_core_v1_PodSignature(ref),
-		"k8s.io/api/core/v1.PodSpec":                                     schema_k8sio_api_core_v1_PodSpec(ref),
-		"k8s.io/api/core/v1.PodStatus":                                   schema_k8sio_api_core_v1_PodStatus(ref),
-		"k8s.io/api/core/v1.PodStatusResult":                             schema_k8sio_api_core_v1_PodStatusResult(ref),
-		"k8s.io/api/core/v1.PodTemplate":                                 schema_k8sio_api_core_v1_PodTemplate(ref),
-		"k8s.io/api/core/v1.PodTemplateList":                             schema_k8sio_api_core_v1_PodTemplateList(ref),
-		"k8s.io/api/core/v1.PodTemplateSpec":                             schema_k8sio_api_core_v1_PodTemplateSpec(ref),
-		"k8s.io/api/core/v1.PortStatus":                                  schema_k8sio_api_core_v1_PortStatus(ref),
-		"k8s.io/api/core/v1.PortworxVolumeSource":                        schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
-		"k8s.io/api/core/v1.PreferAvoidPodsEntry":                        schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
-		"k8s.io/api/core/v1.PreferredSchedulingTerm":                     schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
-		"k8s.io/api/core/v1.Probe":                                       schema_k8sio_api_core_v1_Probe(ref),
-		"k8s.io/api/core/v1.ProbeHandler":                                schema_k8sio_api_core_v1_ProbeHandler(ref),
-		"k8s.io/api/core/v1.ProjectedVolumeSource":                       schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
-		"k8s.io/api/core/v1.QuobyteVolumeSource":                         schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
-		"k8s.io/api/core/v1.RBDPersistentVolumeSource":                   schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.RBDVolumeSource":                             schema_k8sio_api_core_v1_RBDVolumeSource(ref),
-		"k8s.io/api/core/v1.RangeAllocation":                             schema_k8sio_api_core_v1_RangeAllocation(ref),
-		"k8s.io/api/core/v1.ReplicationController":                       schema_k8sio_api_core_v1_ReplicationController(ref),
-		"k8s.io/api/core/v1.ReplicationControllerCondition":              schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
-		"k8s.io/api/core/v1.ReplicationControllerList":                   schema_k8sio_api_core_v1_ReplicationControllerList(ref),
-		"k8s.io/api/core/v1.ReplicationControllerSpec":                   schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
-		"k8s.io/api/core/v1.ReplicationControllerStatus":                 schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
-		"k8s.io/api/core/v1.ResourceClaim":                               schema_k8sio_api_core_v1_ResourceClaim(ref),
-		"k8s.io/api/core/v1.ResourceFieldSelector":                       schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
-		"k8s.io/api/core/v1.ResourceHealth":                              schema_k8sio_api_core_v1_ResourceHealth(ref),
-		"k8s.io/api/core/v1.ResourceQuota":                               schema_k8sio_api_core_v1_ResourceQuota(ref),
-		"k8s.io/api/core/v1.ResourceQuotaList":                           schema_k8sio_api_core_v1_ResourceQuotaList(ref),
-		"k8s.io/api/core/v1.ResourceQuotaSpec":                           schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
-		"k8s.io/api/core/v1.ResourceQuotaStatus":                         schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
-		"k8s.io/api/core/v1.ResourceRequirements":                        schema_k8sio_api_core_v1_ResourceRequirements(ref),
-		"k8s.io/api/core/v1.ResourceStatus":                              schema_k8sio_api_core_v1_ResourceStatus(ref),
-		"k8s.io/api/core/v1.SELinuxOptions":                              schema_k8sio_api_core_v1_SELinuxOptions(ref),
-		"k8s.io/api/core/v1.ScaleIOPersistentVolumeSource":               schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.ScaleIOVolumeSource":                         schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
-		"k8s.io/api/core/v1.ScopeSelector":                               schema_k8sio_api_core_v1_ScopeSelector(ref),
-		"k8s.io/api/core/v1.ScopedResourceSelectorRequirement":           schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
-		"k8s.io/api/core/v1.SeccompProfile":                              schema_k8sio_api_core_v1_SeccompProfile(ref),
-		"k8s.io/api/core/v1.Secret":                                      schema_k8sio_api_core_v1_Secret(ref),
-		"k8s.io/api/core/v1.SecretEnvSource":                             schema_k8sio_api_core_v1_SecretEnvSource(ref),
-		"k8s.io/api/core/v1.SecretKeySelector":                           schema_k8sio_api_core_v1_SecretKeySelector(ref),
-		"k8s.io/api/core/v1.SecretList":                                  schema_k8sio_api_core_v1_SecretList(ref),
-		"k8s.io/api/core/v1.SecretProjection":                            schema_k8sio_api_core_v1_SecretProjection(ref),
-		"k8s.io/api/core/v1.SecretReference":                             schema_k8sio_api_core_v1_SecretReference(ref),
-		"k8s.io/api/core/v1.SecretVolumeSource":                          schema_k8sio_api_core_v1_SecretVolumeSource(ref),
-		"k8s.io/api/core/v1.SecurityContext":                             schema_k8sio_api_core_v1_SecurityContext(ref),
-		"k8s.io/api/core/v1.SerializedReference":                         schema_k8sio_api_core_v1_SerializedReference(ref),
-		"k8s.io/api/core/v1.Service":                                     schema_k8sio_api_core_v1_Service(ref),
-		"k8s.io/api/core/v1.ServiceAccount":                              schema_k8sio_api_core_v1_ServiceAccount(ref),
-		"k8s.io/api/core/v1.ServiceAccountList":                          schema_k8sio_api_core_v1_ServiceAccountList(ref),
-		"k8s.io/api/core/v1.ServiceAccountTokenProjection":               schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
-		"k8s.io/api/core/v1.ServiceList":                                 schema_k8sio_api_core_v1_ServiceList(ref),
-		"k8s.io/api/core/v1.ServicePort":                                 schema_k8sio_api_core_v1_ServicePort(ref),
-		"k8s.io/api/core/v1.ServiceProxyOptions":                         schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
-		"k8s.io/api/core/v1.ServiceSpec":                                 schema_k8sio_api_core_v1_ServiceSpec(ref),
-		"k8s.io/api/core/v1.ServiceStatus":                               schema_k8sio_api_core_v1_ServiceStatus(ref),
-		"k8s.io/api/core/v1.SessionAffinityConfig":                       schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
-		"k8s.io/api/core/v1.SleepAction":                                 schema_k8sio_api_core_v1_SleepAction(ref),
-		"k8s.io/api/core/v1.StorageOSPersistentVolumeSource":             schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
-		"k8s.io/api/core/v1.StorageOSVolumeSource":                       schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
-		"k8s.io/api/core/v1.Sysctl":                                      schema_k8sio_api_core_v1_Sysctl(ref),
-		"k8s.io/api/core/v1.TCPSocketAction":                             schema_k8sio_api_core_v1_TCPSocketAction(ref),
-		"k8s.io/api/core/v1.Taint":                                       schema_k8sio_api_core_v1_Taint(ref),
-		"k8s.io/api/core/v1.Toleration":                                  schema_k8sio_api_core_v1_Toleration(ref),
-		"k8s.io/api/core/v1.TopologySelectorLabelRequirement":            schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
-		"k8s.io/api/core/v1.TopologySelectorTerm":                        schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
-		"k8s.io/api/core/v1.TopologySpreadConstraint":                    schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
-		"k8s.io/api/core/v1.TypedLocalObjectReference":                   schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
-		"k8s.io/api/core/v1.TypedObjectReference":                        schema_k8sio_api_core_v1_TypedObjectReference(ref),
-		"k8s.io/api/core/v1.Volume":                                      schema_k8sio_api_core_v1_Volume(ref),
-		"k8s.io/api/core/v1.VolumeDevice":                                schema_k8sio_api_core_v1_VolumeDevice(ref),
-		"k8s.io/api/core/v1.VolumeMount":                                 schema_k8sio_api_core_v1_VolumeMount(ref),
-		"k8s.io/api/core/v1.VolumeMountStatus":                           schema_k8sio_api_core_v1_VolumeMountStatus(ref),
-		"k8s.io/api/core/v1.VolumeNodeAffinity":                          schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
-		"k8s.io/api/core/v1.VolumeProjection":                            schema_k8sio_api_core_v1_VolumeProjection(ref),
-		"k8s.io/api/core/v1.VolumeResourceRequirements":                  schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
-		"k8s.io/api/core/v1.VolumeSource":                                schema_k8sio_api_core_v1_VolumeSource(ref),
-		"k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource":              schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
-		"k8s.io/api/core/v1.WeightedPodAffinityTerm":                     schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
-		"k8s.io/api/core/v1.WindowsSecurityContextOptions":               schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
-		"k8s.io/api/networking/v1.HTTPIngressPath":                       schema_k8sio_api_networking_v1_HTTPIngressPath(ref),
-		"k8s.io/api/networking/v1.HTTPIngressRuleValue":                  schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref),
-		"k8s.io/api/networking/v1.IPAddress":                             schema_k8sio_api_networking_v1_IPAddress(ref),
-		"k8s.io/api/networking/v1.IPAddressList":                         schema_k8sio_api_networking_v1_IPAddressList(ref),
-		"k8s.io/api/networking/v1.IPAddressSpec":                         schema_k8sio_api_networking_v1_IPAddressSpec(ref),
-		"k8s.io/api/networking/v1.IPBlock":                               schema_k8sio_api_networking_v1_IPBlock(ref),
-		"k8s.io/api/networking/v1.Ingress":                               schema_k8sio_api_networking_v1_Ingress(ref),
-		"k8s.io/api/networking/v1.IngressBackend":                        schema_k8sio_api_networking_v1_IngressBackend(ref),
-		"k8s.io/api/networking/v1.IngressClass":                          schema_k8sio_api_networking_v1_IngressClass(ref),
-		"k8s.io/api/networking/v1.IngressClassList":                      schema_k8sio_api_networking_v1_IngressClassList(ref),
-		"k8s.io/api/networking/v1.IngressClassParametersReference":       schema_k8sio_api_networking_v1_IngressClassParametersReference(ref),
-		"k8s.io/api/networking/v1.IngressClassSpec":                      schema_k8sio_api_networking_v1_IngressClassSpec(ref),
-		"k8s.io/api/networking/v1.IngressList":                           schema_k8sio_api_networking_v1_IngressList(ref),
-		"k8s.io/api/networking/v1.IngressLoadBalancerIngress":            schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref),
-		"k8s.io/api/networking/v1.IngressLoadBalancerStatus":             schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref),
-		"k8s.io/api/networking/v1.IngressPortStatus":                     schema_k8sio_api_networking_v1_IngressPortStatus(ref),
-		"k8s.io/api/networking/v1.IngressRule":                           schema_k8sio_api_networking_v1_IngressRule(ref),
-		"k8s.io/api/networking/v1.IngressRuleValue":                      schema_k8sio_api_networking_v1_IngressRuleValue(ref),
-		"k8s.io/api/networking/v1.IngressServiceBackend":                 schema_k8sio_api_networking_v1_IngressServiceBackend(ref),
-		"k8s.io/api/networking/v1.IngressSpec":                           schema_k8sio_api_networking_v1_IngressSpec(ref),
-		"k8s.io/api/networking/v1.IngressStatus":                         schema_k8sio_api_networking_v1_IngressStatus(ref),
-		"k8s.io/api/networking/v1.IngressTLS":                            schema_k8sio_api_networking_v1_IngressTLS(ref),
-		"k8s.io/api/networking/v1.NetworkPolicy":                         schema_k8sio_api_networking_v1_NetworkPolicy(ref),
-		"k8s.io/api/networking/v1.NetworkPolicyEgressRule":               schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref),
-		"k8s.io/api/networking/v1.NetworkPolicyIngressRule":              schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref),
-		"k8s.io/api/networking/v1.NetworkPolicyList":                     schema_k8sio_api_networking_v1_NetworkPolicyList(ref),
-		"k8s.io/api/networking/v1.NetworkPolicyPeer":                     schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref),
-		"k8s.io/api/networking/v1.NetworkPolicyPort":                     schema_k8sio_api_networking_v1_NetworkPolicyPort(ref),
-		"k8s.io/api/networking/v1.NetworkPolicySpec":                     schema_k8sio_api_networking_v1_NetworkPolicySpec(ref),
-		"k8s.io/api/networking/v1.ParentReference":                       schema_k8sio_api_networking_v1_ParentReference(ref),
-		"k8s.io/api/networking/v1.ServiceBackendPort":                    schema_k8sio_api_networking_v1_ServiceBackendPort(ref),
-		"k8s.io/api/networking/v1.ServiceCIDR":                           schema_k8sio_api_networking_v1_ServiceCIDR(ref),
-		"k8s.io/api/networking/v1.ServiceCIDRList":                       schema_k8sio_api_networking_v1_ServiceCIDRList(ref),
-		"k8s.io/api/networking/v1.ServiceCIDRSpec":                       schema_k8sio_api_networking_v1_ServiceCIDRSpec(ref),
-		"k8s.io/api/networking/v1.ServiceCIDRStatus":                     schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                  schema_pkg_apis_meta_v1_APIGroup(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroupList":              schema_pkg_apis_meta_v1_APIGroupList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource":               schema_pkg_apis_meta_v1_APIResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIResourceList":           schema_pkg_apis_meta_v1_APIResourceList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.APIVersions":               schema_pkg_apis_meta_v1_APIVersions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ApplyOptions":              schema_pkg_apis_meta_v1_ApplyOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Condition":                 schema_pkg_apis_meta_v1_Condition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.CreateOptions":             schema_pkg_apis_meta_v1_CreateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.DeleteOptions":             schema_pkg_apis_meta_v1_DeleteOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Duration":                  schema_pkg_apis_meta_v1_Duration(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldSelectorRequirement":  schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1":                  schema_pkg_apis_meta_v1_FieldsV1(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GetOptions":                schema_pkg_apis_meta_v1_GetOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupKind":                 schema_pkg_apis_meta_v1_GroupKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupResource":             schema_pkg_apis_meta_v1_GroupResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersion":              schema_pkg_apis_meta_v1_GroupVersion(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery":  schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionKind":          schema_pkg_apis_meta_v1_GroupVersionKind(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionResource":      schema_pkg_apis_meta_v1_GroupVersionResource(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.InternalEvent":             schema_pkg_apis_meta_v1_InternalEvent(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector":             schema_pkg_apis_meta_v1_LabelSelector(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement":  schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.List":                      schema_pkg_apis_meta_v1_List(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta":                  schema_pkg_apis_meta_v1_ListMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ListOptions":               schema_pkg_apis_meta_v1_ListOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry":        schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime":                 schema_pkg_apis_meta_v1_MicroTime(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta":                schema_pkg_apis_meta_v1_ObjectMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference":            schema_pkg_apis_meta_v1_OwnerReference(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata":     schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadataList": schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Patch":                     schema_pkg_apis_meta_v1_Patch(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.PatchOptions":              schema_pkg_apis_meta_v1_PatchOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions":             schema_pkg_apis_meta_v1_Preconditions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.RootPaths":                 schema_pkg_apis_meta_v1_RootPaths(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR": schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Status":                    schema_pkg_apis_meta_v1_Status(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause":               schema_pkg_apis_meta_v1_StatusCause(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails":             schema_pkg_apis_meta_v1_StatusDetails(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Table":                     schema_pkg_apis_meta_v1_Table(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition":     schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableOptions":              schema_pkg_apis_meta_v1_TableOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRow":                  schema_pkg_apis_meta_v1_TableRow(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition":         schema_pkg_apis_meta_v1_TableRowCondition(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Time":                      schema_pkg_apis_meta_v1_Time(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.Timestamp":                 schema_pkg_apis_meta_v1_Timestamp(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.TypeMeta":                  schema_pkg_apis_meta_v1_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.UpdateOptions":             schema_pkg_apis_meta_v1_UpdateOptions(ref),
-		"k8s.io/apimachinery/pkg/apis/meta/v1.WatchEvent":                schema_pkg_apis_meta_v1_WatchEvent(ref),
-		"k8s.io/apimachinery/pkg/runtime.RawExtension":                   schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
-		"k8s.io/apimachinery/pkg/runtime.TypeMeta":                       schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
-		"k8s.io/apimachinery/pkg/runtime.Unknown":                        schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
-		"k8s.io/apimachinery/pkg/util/intstr.IntOrString":                schema_apimachinery_pkg_util_intstr_IntOrString(ref),
-		"k8s.io/apimachinery/pkg/version.Info":                           schema_k8sio_apimachinery_pkg_version_Info(ref),
+		v3.AllocationAttribute{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref),
+		v3.AutoHostEndpointConfig{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref),
+		v3.BGPConfiguration{}.OpenAPIModelName():                          schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref),
+		v3.BGPConfigurationList{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref),
+		v3.BGPConfigurationSpec{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref),
+		v3.BGPDaemonStatus{}.OpenAPIModelName():                           schema_pkg_apis_projectcalico_v3_BGPDaemonStatus(ref),
+		v3.BGPFilter{}.OpenAPIModelName():                                 schema_pkg_apis_projectcalico_v3_BGPFilter(ref),
+		v3.BGPFilterAddCommunity{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref),
+		v3.BGPFilterCommunityMatch{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref),
+		v3.BGPFilterList{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_BGPFilterList(ref),
+		v3.BGPFilterOperation{}.OpenAPIModelName():                        schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref),
+		v3.BGPFilterPrefixLengthV4{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV4(ref),
+		v3.BGPFilterPrefixLengthV6{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref),
+		v3.BGPFilterPrependASPath{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref),
+		v3.BGPFilterRuleV4{}.OpenAPIModelName():                           schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref),
+		v3.BGPFilterRuleV6{}.OpenAPIModelName():                           schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref),
+		v3.BGPFilterSetPriority{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref),
+		v3.BGPFilterSpec{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref),
+		v3.BGPPassword{}.OpenAPIModelName():                               schema_pkg_apis_projectcalico_v3_BGPPassword(ref),
+		v3.BGPPeer{}.OpenAPIModelName():                                   schema_pkg_apis_projectcalico_v3_BGPPeer(ref),
+		v3.BGPPeerList{}.OpenAPIModelName():                               schema_pkg_apis_projectcalico_v3_BGPPeerList(ref),
+		v3.BGPPeerSpec{}.OpenAPIModelName():                               schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref),
+		v3.BPFConntrackTimeouts{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_BPFConntrackTimeouts(ref),
+		v3.BlockAffinity{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_BlockAffinity(ref),
+		v3.BlockAffinityList{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref),
+		v3.BlockAffinitySpec{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_BlockAffinitySpec(ref),
+		v3.CalicoNodeAgentStatus{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref),
+		v3.CalicoNodeBGPRouteStatus{}.OpenAPIModelName():                  schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref),
+		v3.CalicoNodeBGPStatus{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref),
+		v3.CalicoNodePeer{}.OpenAPIModelName():                            schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref),
+		v3.CalicoNodeRoute{}.OpenAPIModelName():                           schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref),
+		v3.CalicoNodeRouteLearnedFrom{}.OpenAPIModelName():                schema_pkg_apis_projectcalico_v3_CalicoNodeRouteLearnedFrom(ref),
+		v3.CalicoNodeStatus{}.OpenAPIModelName():                          schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref),
+		v3.CalicoNodeStatusList{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref),
+		v3.CalicoNodeStatusSpec{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref),
+		v3.CalicoNodeStatusStatus{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref),
+		v3.ClusterInformation{}.OpenAPIModelName():                        schema_pkg_apis_projectcalico_v3_ClusterInformation(ref),
+		v3.ClusterInformationList{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref),
+		v3.ClusterInformationSpec{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref),
+		v3.Community{}.OpenAPIModelName():                                 schema_pkg_apis_projectcalico_v3_Community(ref),
+		v3.ControllersConfig{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_ControllersConfig(ref),
+		v3.EndpointPort{}.OpenAPIModelName():                              schema_pkg_apis_projectcalico_v3_EndpointPort(ref),
+		v3.EntityRule{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_EntityRule(ref),
+		v3.FelixConfiguration{}.OpenAPIModelName():                        schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref),
+		v3.FelixConfigurationList{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref),
+		v3.FelixConfigurationSpec{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref),
+		v3.GlobalNetworkPolicy{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref),
+		v3.GlobalNetworkPolicyList{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref),
+		v3.GlobalNetworkPolicySpec{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref),
+		v3.GlobalNetworkSet{}.OpenAPIModelName():                          schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref),
+		v3.GlobalNetworkSetList{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref),
+		v3.GlobalNetworkSetSpec{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref),
+		v3.HTTPMatch{}.OpenAPIModelName():                                 schema_pkg_apis_projectcalico_v3_HTTPMatch(ref),
+		v3.HTTPPath{}.OpenAPIModelName():                                  schema_pkg_apis_projectcalico_v3_HTTPPath(ref),
+		v3.HealthTimeoutOverride{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref),
+		v3.HostEndpoint{}.OpenAPIModelName():                              schema_pkg_apis_projectcalico_v3_HostEndpoint(ref),
+		v3.HostEndpointList{}.OpenAPIModelName():                          schema_pkg_apis_projectcalico_v3_HostEndpointList(ref),
+		v3.HostEndpointSpec{}.OpenAPIModelName():                          schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref),
+		v3.ICMPFields{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_ICMPFields(ref),
+		v3.IPAMBlock{}.OpenAPIModelName():                                 schema_pkg_apis_projectcalico_v3_IPAMBlock(ref),
+		v3.IPAMBlockList{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref),
+		v3.IPAMBlockSpec{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref),
+		v3.IPAMConfiguration{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref),
+		v3.IPAMConfigurationList{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref),
+		v3.IPAMConfigurationSpec{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref),
+		v3.IPAMHandle{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_IPAMHandle(ref),
+		v3.IPAMHandleList{}.OpenAPIModelName():                            schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref),
+		v3.IPAMHandleSpec{}.OpenAPIModelName():                            schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref),
+		v3.IPIPConfiguration{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_IPIPConfiguration(ref),
+		v3.IPPool{}.OpenAPIModelName():                                    schema_pkg_apis_projectcalico_v3_IPPool(ref),
+		v3.IPPoolList{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_IPPoolList(ref),
+		v3.IPPoolSpec{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref),
+		v3.IPPoolStatus{}.OpenAPIModelName():                              schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref),
+		v3.IPReservation{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_IPReservation(ref),
+		v3.IPReservationList{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_IPReservationList(ref),
+		v3.IPReservationSpec{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref),
+		v3.KubeControllersConfiguration{}.OpenAPIModelName():              schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref),
+		v3.KubeControllersConfigurationList{}.OpenAPIModelName():          schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref),
+		v3.KubeControllersConfigurationSpec{}.OpenAPIModelName():          schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref),
+		v3.KubeControllersConfigurationStatus{}.OpenAPIModelName():        schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref),
+		v3.LoadBalancerControllerConfig{}.OpenAPIModelName():              schema_pkg_apis_projectcalico_v3_LoadBalancerControllerConfig(ref),
+		v3.MigrationControllerConfig{}.OpenAPIModelName():                 schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref),
+		v3.NamespaceControllerConfig{}.OpenAPIModelName():                 schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref),
+		v3.NetworkPolicy{}.OpenAPIModelName():                             schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref),
+		v3.NetworkPolicyList{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref),
+		v3.NetworkPolicySpec{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref),
+		v3.NetworkSet{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_NetworkSet(ref),
+		v3.NetworkSetList{}.OpenAPIModelName():                            schema_pkg_apis_projectcalico_v3_NetworkSetList(ref),
+		v3.NetworkSetSpec{}.OpenAPIModelName():                            schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref),
+		v3.NodeControllerConfig{}.OpenAPIModelName():                      schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref),
+		v3.PolicyControllerConfig{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref),
+		v3.PrefixAdvertisement{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref),
+		v3.Profile{}.OpenAPIModelName():                                   schema_pkg_apis_projectcalico_v3_Profile(ref),
+		v3.ProfileList{}.OpenAPIModelName():                               schema_pkg_apis_projectcalico_v3_ProfileList(ref),
+		v3.ProfileSpec{}.OpenAPIModelName():                               schema_pkg_apis_projectcalico_v3_ProfileSpec(ref),
+		v3.ProtoPort{}.OpenAPIModelName():                                 schema_pkg_apis_projectcalico_v3_ProtoPort(ref),
+		v3.RouteTableIDRange{}.OpenAPIModelName():                         schema_pkg_apis_projectcalico_v3_RouteTableIDRange(ref),
+		v3.RouteTableRange{}.OpenAPIModelName():                           schema_pkg_apis_projectcalico_v3_RouteTableRange(ref),
+		v3.Rule{}.OpenAPIModelName():                                      schema_pkg_apis_projectcalico_v3_Rule(ref),
+		v3.RuleMetadata{}.OpenAPIModelName():                              schema_pkg_apis_projectcalico_v3_RuleMetadata(ref),
+		v3.ServiceAccountControllerConfig{}.OpenAPIModelName():            schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref),
+		v3.ServiceAccountMatch{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_ServiceAccountMatch(ref),
+		v3.ServiceClusterIPBlock{}.OpenAPIModelName():                     schema_pkg_apis_projectcalico_v3_ServiceClusterIPBlock(ref),
+		v3.ServiceExternalIPBlock{}.OpenAPIModelName():                    schema_pkg_apis_projectcalico_v3_ServiceExternalIPBlock(ref),
+		v3.ServiceLoadBalancerIPBlock{}.OpenAPIModelName():                schema_pkg_apis_projectcalico_v3_ServiceLoadBalancerIPBlock(ref),
+		v3.ServiceMatch{}.OpenAPIModelName():                              schema_pkg_apis_projectcalico_v3_ServiceMatch(ref),
+		v3.StagedGlobalNetworkPolicy{}.OpenAPIModelName():                 schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref),
+		v3.StagedGlobalNetworkPolicyList{}.OpenAPIModelName():             schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref),
+		v3.StagedGlobalNetworkPolicySpec{}.OpenAPIModelName():             schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref),
+		v3.StagedKubernetesNetworkPolicy{}.OpenAPIModelName():             schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref),
+		v3.StagedKubernetesNetworkPolicyList{}.OpenAPIModelName():         schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref),
+		v3.StagedKubernetesNetworkPolicySpec{}.OpenAPIModelName():         schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref),
+		v3.StagedNetworkPolicy{}.OpenAPIModelName():                       schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref),
+		v3.StagedNetworkPolicyList{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref),
+		v3.StagedNetworkPolicySpec{}.OpenAPIModelName():                   schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref),
+		v3.Template{}.OpenAPIModelName():                                  schema_pkg_apis_projectcalico_v3_Template(ref),
+		v3.Tier{}.OpenAPIModelName():                                      schema_pkg_apis_projectcalico_v3_Tier(ref),
+		v3.TierList{}.OpenAPIModelName():                                  schema_pkg_apis_projectcalico_v3_TierList(ref),
+		v3.TierSpec{}.OpenAPIModelName():                                  schema_pkg_apis_projectcalico_v3_TierSpec(ref),
+		v3.TierStatus{}.OpenAPIModelName():                                schema_pkg_apis_projectcalico_v3_TierStatus(ref),
+		v3.WorkloadEndpointControllerConfig{}.OpenAPIModelName():          schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref),
+		numorstring.DSCP{}.OpenAPIModelName():                             schema_api_pkg_lib_numorstring_DSCP(ref),
+		numorstring.Port{}.OpenAPIModelName():                             schema_api_pkg_lib_numorstring_Port(ref),
+		numorstring.Protocol{}.OpenAPIModelName():                         schema_api_pkg_lib_numorstring_Protocol(ref),
+		numorstring.Uint8OrString{}.OpenAPIModelName():                    schema_api_pkg_lib_numorstring_Uint8OrString(ref),
+		v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName():          schema_k8sio_api_core_v1_AWSElasticBlockStoreVolumeSource(ref),
+		v1.Affinity{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_Affinity(ref),
+		v1.AppArmorProfile{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_AppArmorProfile(ref),
+		v1.AttachedVolume{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_AttachedVolume(ref),
+		v1.AvoidPods{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_AvoidPods(ref),
+		v1.AzureDiskVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_AzureDiskVolumeSource(ref),
+		v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_AzureFilePersistentVolumeSource(ref),
+		v1.AzureFileVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_AzureFileVolumeSource(ref),
+		v1.Binding{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_Binding(ref),
+		v1.CSIPersistentVolumeSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref),
+		v1.CSIVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_CSIVolumeSource(ref),
+		v1.Capabilities{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_Capabilities(ref),
+		v1.CephFSPersistentVolumeSource{}.OpenAPIModelName():              schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref),
+		v1.CephFSVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_CephFSVolumeSource(ref),
+		v1.CinderPersistentVolumeSource{}.OpenAPIModelName():              schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref),
+		v1.CinderVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_CinderVolumeSource(ref),
+		v1.ClientIPConfig{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ClientIPConfig(ref),
+		v1.ClusterTrustBundleProjection{}.OpenAPIModelName():              schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref),
+		v1.ComponentCondition{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ComponentCondition(ref),
+		v1.ComponentStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ComponentStatus(ref),
+		v1.ComponentStatusList{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ComponentStatusList(ref),
+		v1.ConfigMap{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_ConfigMap(ref),
+		v1.ConfigMapEnvSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ConfigMapEnvSource(ref),
+		v1.ConfigMapKeySelector{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ConfigMapKeySelector(ref),
+		v1.ConfigMapList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ConfigMapList(ref),
+		v1.ConfigMapNodeConfigSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ConfigMapNodeConfigSource(ref),
+		v1.ConfigMapProjection{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ConfigMapProjection(ref),
+		v1.ConfigMapVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref),
+		v1.Container{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Container(ref),
+		v1.ContainerExtendedResourceRequest{}.OpenAPIModelName():          schema_k8sio_api_core_v1_ContainerExtendedResourceRequest(ref),
+		v1.ContainerImage{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ContainerImage(ref),
+		v1.ContainerPort{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ContainerPort(ref),
+		v1.ContainerResizePolicy{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerResizePolicy(ref),
+		v1.ContainerRestartRule{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ContainerRestartRule(ref),
+		v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName():           schema_k8sio_api_core_v1_ContainerRestartRuleOnExitCodes(ref),
+		v1.ContainerState{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ContainerState(ref),
+		v1.ContainerStateRunning{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerStateRunning(ref),
+		v1.ContainerStateTerminated{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_ContainerStateTerminated(ref),
+		v1.ContainerStateWaiting{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ContainerStateWaiting(ref),
+		v1.ContainerStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ContainerStatus(ref),
+		v1.ContainerUser{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ContainerUser(ref),
+		v1.DaemonEndpoint{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_DaemonEndpoint(ref),
+		v1.DownwardAPIProjection{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_DownwardAPIProjection(ref),
+		v1.DownwardAPIVolumeFile{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref),
+		v1.DownwardAPIVolumeSource{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref),
+		v1.EmptyDirVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_EmptyDirVolumeSource(ref),
+		v1.EndpointAddress{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_EndpointAddress(ref),
+		v1.EndpointPort{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_EndpointPort(ref),
+		v1.EndpointSubset{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_EndpointSubset(ref),
+		v1.Endpoints{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Endpoints(ref),
+		v1.EndpointsList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_EndpointsList(ref),
+		v1.EnvFromSource{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_EnvFromSource(ref),
+		v1.EnvVar{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_EnvVar(ref),
+		v1.EnvVarSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_EnvVarSource(ref),
+		v1.EphemeralContainer{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_EphemeralContainer(ref),
+		v1.EphemeralContainerCommon{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_EphemeralContainerCommon(ref),
+		v1.EphemeralVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_EphemeralVolumeSource(ref),
+		v1.Event{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Event(ref),
+		v1.EventList{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_EventList(ref),
+		v1.EventSeries{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_EventSeries(ref),
+		v1.EventSource{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_EventSource(ref),
+		v1.ExecAction{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_ExecAction(ref),
+		v1.FCVolumeSource{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_FCVolumeSource(ref),
+		v1.FileKeySelector{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_FileKeySelector(ref),
+		v1.FlexPersistentVolumeSource{}.OpenAPIModelName():                schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref),
+		v1.FlexVolumeSource{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_FlexVolumeSource(ref),
+		v1.FlockerVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_FlockerVolumeSource(ref),
+		v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName():             schema_k8sio_api_core_v1_GCEPersistentDiskVolumeSource(ref),
+		v1.GRPCAction{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_GRPCAction(ref),
+		v1.GitRepoVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_GitRepoVolumeSource(ref),
+		v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_GlusterfsPersistentVolumeSource(ref),
+		v1.GlusterfsVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_GlusterfsVolumeSource(ref),
+		v1.HTTPGetAction{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_HTTPGetAction(ref),
+		v1.HTTPHeader{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_HTTPHeader(ref),
+		v1.HostAlias{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_HostAlias(ref),
+		v1.HostIP{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_HostIP(ref),
+		v1.HostPathVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_HostPathVolumeSource(ref),
+		v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName():               schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref),
+		v1.ISCSIVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ISCSIVolumeSource(ref),
+		v1.ImageVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ImageVolumeSource(ref),
+		v1.ImageVolumeStatus{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ImageVolumeStatus(ref),
+		v1.KeyToPath{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_KeyToPath(ref),
+		v1.Lifecycle{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Lifecycle(ref),
+		v1.LifecycleHandler{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_LifecycleHandler(ref),
+		v1.LimitRange{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_LimitRange(ref),
+		v1.LimitRangeItem{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeItem(ref),
+		v1.LimitRangeList{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeList(ref),
+		v1.LimitRangeSpec{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_LimitRangeSpec(ref),
+		v1.LinuxContainerUser{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_LinuxContainerUser(ref),
+		v1.List{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_List(ref),
+		v1.LoadBalancerIngress{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_LoadBalancerIngress(ref),
+		v1.LoadBalancerStatus{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_LoadBalancerStatus(ref),
+		v1.LocalObjectReference{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_LocalObjectReference(ref),
+		v1.LocalVolumeSource{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_LocalVolumeSource(ref),
+		v1.ModifyVolumeStatus{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ModifyVolumeStatus(ref),
+		v1.NFSVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_NFSVolumeSource(ref),
+		v1.Namespace{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_Namespace(ref),
+		v1.NamespaceCondition{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_NamespaceCondition(ref),
+		v1.NamespaceList{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NamespaceList(ref),
+		v1.NamespaceSpec{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NamespaceSpec(ref),
+		v1.NamespaceStatus{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_NamespaceStatus(ref),
+		v1.Node{}.OpenAPIModelName():                                      schema_k8sio_api_core_v1_Node(ref),
+		v1.NodeAddress{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_NodeAddress(ref),
+		v1.NodeAffinity{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeAffinity(ref),
+		v1.NodeAllocatableResourceClaimStatus{}.OpenAPIModelName():        schema_k8sio_api_core_v1_NodeAllocatableResourceClaimStatus(ref),
+		v1.NodeCondition{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_NodeCondition(ref),
+		v1.NodeConfigSource{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeConfigSource(ref),
+		v1.NodeConfigStatus{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeConfigStatus(ref),
+		v1.NodeDaemonEndpoints{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref),
+		v1.NodeFeatures{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeFeatures(ref),
+		v1.NodeList{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_NodeList(ref),
+		v1.NodeProxyOptions{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeProxyOptions(ref),
+		v1.NodeRuntimeHandler{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_NodeRuntimeHandler(ref),
+		v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName():                schema_k8sio_api_core_v1_NodeRuntimeHandlerFeatures(ref),
+		v1.NodeSelector{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_NodeSelector(ref),
+		v1.NodeSelectorRequirement{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_NodeSelectorRequirement(ref),
+		v1.NodeSelectorTerm{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_NodeSelectorTerm(ref),
+		v1.NodeSpec{}.OpenAPIModelName():                                  schema_k8sio_api_core_v1_NodeSpec(ref),
+		v1.NodeStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_NodeStatus(ref),
+		v1.NodeSwapStatus{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_NodeSwapStatus(ref),
+		v1.NodeSystemInfo{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_NodeSystemInfo(ref),
+		v1.ObjectFieldSelector{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ObjectFieldSelector(ref),
+		v1.ObjectReference{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_ObjectReference(ref),
+		v1.PersistentVolume{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PersistentVolume(ref),
+		v1.PersistentVolumeClaim{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_PersistentVolumeClaim(ref),
+		v1.PersistentVolumeClaimCondition{}.OpenAPIModelName():            schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref),
+		v1.PersistentVolumeClaimList{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref),
+		v1.PersistentVolumeClaimSpec{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref),
+		v1.PersistentVolumeClaimStatus{}.OpenAPIModelName():               schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref),
+		v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName():             schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref),
+		v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName():         schema_k8sio_api_core_v1_PersistentVolumeClaimVolumeSource(ref),
+		v1.PersistentVolumeList{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PersistentVolumeList(ref),
+		v1.PersistentVolumeSource{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PersistentVolumeSource(ref),
+		v1.PersistentVolumeSpec{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PersistentVolumeSpec(ref),
+		v1.PersistentVolumeStatus{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PersistentVolumeStatus(ref),
+		v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName():          schema_k8sio_api_core_v1_PhotonPersistentDiskVolumeSource(ref),
+		v1.Pod{}.OpenAPIModelName():                                       schema_k8sio_api_core_v1_Pod(ref),
+		v1.PodAffinity{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_PodAffinity(ref),
+		v1.PodAffinityTerm{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodAffinityTerm(ref),
+		v1.PodAntiAffinity{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodAntiAffinity(ref),
+		v1.PodAttachOptions{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodAttachOptions(ref),
+		v1.PodCertificateProjection{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_PodCertificateProjection(ref),
+		v1.PodCondition{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodCondition(ref),
+		v1.PodDNSConfig{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodDNSConfig(ref),
+		v1.PodDNSConfigOption{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_PodDNSConfigOption(ref),
+		v1.PodExecOptions{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_PodExecOptions(ref),
+		v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName():            schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref),
+		v1.PodIP{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodIP(ref),
+		v1.PodList{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PodList(ref),
+		v1.PodLogOptions{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_PodLogOptions(ref),
+		v1.PodOS{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_PodOS(ref),
+		v1.PodPortForwardOptions{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_PodPortForwardOptions(ref),
+		v1.PodProxyOptions{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodProxyOptions(ref),
+		v1.PodReadinessGate{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodReadinessGate(ref),
+		v1.PodResourceClaim{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_PodResourceClaim(ref),
+		v1.PodResourceClaimStatus{}.OpenAPIModelName():                    schema_k8sio_api_core_v1_PodResourceClaimStatus(ref),
+		v1.PodSchedulingGate{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_PodSchedulingGate(ref),
+		v1.PodSchedulingGroup{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_PodSchedulingGroup(ref),
+		v1.PodSecurityContext{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_PodSecurityContext(ref),
+		v1.PodSignature{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_PodSignature(ref),
+		v1.PodSpec{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_PodSpec(ref),
+		v1.PodStatus{}.OpenAPIModelName():                                 schema_k8sio_api_core_v1_PodStatus(ref),
+		v1.PodStatusResult{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodStatusResult(ref),
+		v1.PodTemplate{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_PodTemplate(ref),
+		v1.PodTemplateList{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodTemplateList(ref),
+		v1.PodTemplateSpec{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_PodTemplateSpec(ref),
+		v1.PortStatus{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_PortStatus(ref),
+		v1.PortworxVolumeSource{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PortworxVolumeSource(ref),
+		v1.PreferAvoidPodsEntry{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref),
+		v1.PreferredSchedulingTerm{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref),
+		v1.Probe{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Probe(ref),
+		v1.ProbeHandler{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_ProbeHandler(ref),
+		v1.ProjectedVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ProjectedVolumeSource(ref),
+		v1.QuobyteVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_QuobyteVolumeSource(ref),
+		v1.RBDPersistentVolumeSource{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref),
+		v1.RBDVolumeSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_RBDVolumeSource(ref),
+		v1.RangeAllocation{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_RangeAllocation(ref),
+		v1.ReplicationController{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ReplicationController(ref),
+		v1.ReplicationControllerCondition{}.OpenAPIModelName():            schema_k8sio_api_core_v1_ReplicationControllerCondition(ref),
+		v1.ReplicationControllerList{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ReplicationControllerList(ref),
+		v1.ReplicationControllerSpec{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_ReplicationControllerSpec(ref),
+		v1.ReplicationControllerStatus{}.OpenAPIModelName():               schema_k8sio_api_core_v1_ReplicationControllerStatus(ref),
+		v1.ResourceClaim{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ResourceClaim(ref),
+		v1.ResourceFieldSelector{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_ResourceFieldSelector(ref),
+		v1.ResourceHealth{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ResourceHealth(ref),
+		v1.ResourceQuota{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ResourceQuota(ref),
+		v1.ResourceQuotaList{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ResourceQuotaList(ref),
+		v1.ResourceQuotaSpec{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_ResourceQuotaSpec(ref),
+		v1.ResourceQuotaStatus{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ResourceQuotaStatus(ref),
+		v1.ResourceRequirements{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_ResourceRequirements(ref),
+		v1.ResourceStatus{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ResourceStatus(ref),
+		v1.SELinuxOptions{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_SELinuxOptions(ref),
+		v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName():             schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref),
+		v1.ScaleIOVolumeSource{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref),
+		v1.ScopeSelector{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ScopeSelector(ref),
+		v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName():         schema_k8sio_api_core_v1_ScopedResourceSelectorRequirement(ref),
+		v1.SeccompProfile{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_SeccompProfile(ref),
+		v1.Secret{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Secret(ref),
+		v1.SecretEnvSource{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecretEnvSource(ref),
+		v1.SecretKeySelector{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_SecretKeySelector(ref),
+		v1.SecretList{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_SecretList(ref),
+		v1.SecretProjection{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_SecretProjection(ref),
+		v1.SecretReference{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecretReference(ref),
+		v1.SecretVolumeSource{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_SecretVolumeSource(ref),
+		v1.SecurityContext{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_SecurityContext(ref),
+		v1.SerializedReference{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_SerializedReference(ref),
+		v1.Service{}.OpenAPIModelName():                                   schema_k8sio_api_core_v1_Service(ref),
+		v1.ServiceAccount{}.OpenAPIModelName():                            schema_k8sio_api_core_v1_ServiceAccount(ref),
+		v1.ServiceAccountList{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_ServiceAccountList(ref),
+		v1.ServiceAccountTokenProjection{}.OpenAPIModelName():             schema_k8sio_api_core_v1_ServiceAccountTokenProjection(ref),
+		v1.ServiceList{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServiceList(ref),
+		v1.ServicePort{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServicePort(ref),
+		v1.ServiceProxyOptions{}.OpenAPIModelName():                       schema_k8sio_api_core_v1_ServiceProxyOptions(ref),
+		v1.ServiceSpec{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_ServiceSpec(ref),
+		v1.ServiceStatus{}.OpenAPIModelName():                             schema_k8sio_api_core_v1_ServiceStatus(ref),
+		v1.SessionAffinityConfig{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_SessionAffinityConfig(ref),
+		v1.SleepAction{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_SleepAction(ref),
+		v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName():           schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref),
+		v1.StorageOSVolumeSource{}.OpenAPIModelName():                     schema_k8sio_api_core_v1_StorageOSVolumeSource(ref),
+		v1.Sysctl{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Sysctl(ref),
+		v1.TCPSocketAction{}.OpenAPIModelName():                           schema_k8sio_api_core_v1_TCPSocketAction(ref),
+		v1.Taint{}.OpenAPIModelName():                                     schema_k8sio_api_core_v1_Taint(ref),
+		v1.Toleration{}.OpenAPIModelName():                                schema_k8sio_api_core_v1_Toleration(ref),
+		v1.TopologySelectorLabelRequirement{}.OpenAPIModelName():          schema_k8sio_api_core_v1_TopologySelectorLabelRequirement(ref),
+		v1.TopologySelectorTerm{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_TopologySelectorTerm(ref),
+		v1.TopologySpreadConstraint{}.OpenAPIModelName():                  schema_k8sio_api_core_v1_TopologySpreadConstraint(ref),
+		v1.TypedLocalObjectReference{}.OpenAPIModelName():                 schema_k8sio_api_core_v1_TypedLocalObjectReference(ref),
+		v1.TypedObjectReference{}.OpenAPIModelName():                      schema_k8sio_api_core_v1_TypedObjectReference(ref),
+		v1.Volume{}.OpenAPIModelName():                                    schema_k8sio_api_core_v1_Volume(ref),
+		v1.VolumeDevice{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_VolumeDevice(ref),
+		v1.VolumeMount{}.OpenAPIModelName():                               schema_k8sio_api_core_v1_VolumeMount(ref),
+		v1.VolumeMountStatus{}.OpenAPIModelName():                         schema_k8sio_api_core_v1_VolumeMountStatus(ref),
+		v1.VolumeNodeAffinity{}.OpenAPIModelName():                        schema_k8sio_api_core_v1_VolumeNodeAffinity(ref),
+		v1.VolumeProjection{}.OpenAPIModelName():                          schema_k8sio_api_core_v1_VolumeProjection(ref),
+		v1.VolumeResourceRequirements{}.OpenAPIModelName():                schema_k8sio_api_core_v1_VolumeResourceRequirements(ref),
+		v1.VolumeSource{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_VolumeSource(ref),
+		v1.VolumeStatus{}.OpenAPIModelName():                              schema_k8sio_api_core_v1_VolumeStatus(ref),
+		v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName():            schema_k8sio_api_core_v1_VsphereVirtualDiskVolumeSource(ref),
+		v1.WeightedPodAffinityTerm{}.OpenAPIModelName():                   schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref),
+		v1.WindowsSecurityContextOptions{}.OpenAPIModelName():             schema_k8sio_api_core_v1_WindowsSecurityContextOptions(ref),
+		networkingv1.HTTPIngressPath{}.OpenAPIModelName():                 schema_k8sio_api_networking_v1_HTTPIngressPath(ref),
+		networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName():            schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref),
+		networkingv1.IPAddress{}.OpenAPIModelName():                       schema_k8sio_api_networking_v1_IPAddress(ref),
+		networkingv1.IPAddressList{}.OpenAPIModelName():                   schema_k8sio_api_networking_v1_IPAddressList(ref),
+		networkingv1.IPAddressSpec{}.OpenAPIModelName():                   schema_k8sio_api_networking_v1_IPAddressSpec(ref),
+		networkingv1.IPBlock{}.OpenAPIModelName():                         schema_k8sio_api_networking_v1_IPBlock(ref),
+		networkingv1.Ingress{}.OpenAPIModelName():                         schema_k8sio_api_networking_v1_Ingress(ref),
+		networkingv1.IngressBackend{}.OpenAPIModelName():                  schema_k8sio_api_networking_v1_IngressBackend(ref),
+		networkingv1.IngressClass{}.OpenAPIModelName():                    schema_k8sio_api_networking_v1_IngressClass(ref),
+		networkingv1.IngressClassList{}.OpenAPIModelName():                schema_k8sio_api_networking_v1_IngressClassList(ref),
+		networkingv1.IngressClassParametersReference{}.OpenAPIModelName(): schema_k8sio_api_networking_v1_IngressClassParametersReference(ref),
+		networkingv1.IngressClassSpec{}.OpenAPIModelName():                schema_k8sio_api_networking_v1_IngressClassSpec(ref),
+		networkingv1.IngressList{}.OpenAPIModelName():                     schema_k8sio_api_networking_v1_IngressList(ref),
+		networkingv1.IngressLoadBalancerIngress{}.OpenAPIModelName():      schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref),
+		networkingv1.IngressLoadBalancerStatus{}.OpenAPIModelName():       schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref),
+		networkingv1.IngressPortStatus{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_IngressPortStatus(ref),
+		networkingv1.IngressRule{}.OpenAPIModelName():                     schema_k8sio_api_networking_v1_IngressRule(ref),
+		networkingv1.IngressRuleValue{}.OpenAPIModelName():                schema_k8sio_api_networking_v1_IngressRuleValue(ref),
+		networkingv1.IngressServiceBackend{}.OpenAPIModelName():           schema_k8sio_api_networking_v1_IngressServiceBackend(ref),
+		networkingv1.IngressSpec{}.OpenAPIModelName():                     schema_k8sio_api_networking_v1_IngressSpec(ref),
+		networkingv1.IngressStatus{}.OpenAPIModelName():                   schema_k8sio_api_networking_v1_IngressStatus(ref),
+		networkingv1.IngressTLS{}.OpenAPIModelName():                      schema_k8sio_api_networking_v1_IngressTLS(ref),
+		networkingv1.NetworkPolicy{}.OpenAPIModelName():                   schema_k8sio_api_networking_v1_NetworkPolicy(ref),
+		networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName():         schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref),
+		networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName():        schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref),
+		networkingv1.NetworkPolicyList{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_NetworkPolicyList(ref),
+		networkingv1.NetworkPolicyPeer{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref),
+		networkingv1.NetworkPolicyPort{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_NetworkPolicyPort(ref),
+		networkingv1.NetworkPolicySpec{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_NetworkPolicySpec(ref),
+		networkingv1.ParentReference{}.OpenAPIModelName():                 schema_k8sio_api_networking_v1_ParentReference(ref),
+		networkingv1.ServiceBackendPort{}.OpenAPIModelName():              schema_k8sio_api_networking_v1_ServiceBackendPort(ref),
+		networkingv1.ServiceCIDR{}.OpenAPIModelName():                     schema_k8sio_api_networking_v1_ServiceCIDR(ref),
+		networkingv1.ServiceCIDRList{}.OpenAPIModelName():                 schema_k8sio_api_networking_v1_ServiceCIDRList(ref),
+		networkingv1.ServiceCIDRSpec{}.OpenAPIModelName():                 schema_k8sio_api_networking_v1_ServiceCIDRSpec(ref),
+		networkingv1.ServiceCIDRStatus{}.OpenAPIModelName():               schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref),
+		metav1.APIGroup{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_APIGroup(ref),
+		metav1.APIGroupList{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_APIGroupList(ref),
+		metav1.APIResource{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_APIResource(ref),
+		metav1.APIResourceList{}.OpenAPIModelName():                       schema_pkg_apis_meta_v1_APIResourceList(ref),
+		metav1.APIVersions{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_APIVersions(ref),
+		metav1.ApplyOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_ApplyOptions(ref),
+		metav1.Condition{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_Condition(ref),
+		metav1.CreateOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_CreateOptions(ref),
+		metav1.DeleteOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_DeleteOptions(ref),
+		metav1.Duration{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_Duration(ref),
+		metav1.FieldSelectorRequirement{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_FieldSelectorRequirement(ref),
+		metav1.FieldsV1{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_FieldsV1(ref),
+		metav1.GetOptions{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_GetOptions(ref),
+		metav1.GroupKind{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_GroupKind(ref),
+		metav1.GroupResource{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_GroupResource(ref),
+		metav1.GroupVersion{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_GroupVersion(ref),
+		metav1.GroupVersionForDiscovery{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_GroupVersionForDiscovery(ref),
+		metav1.GroupVersionKind{}.OpenAPIModelName():                      schema_pkg_apis_meta_v1_GroupVersionKind(ref),
+		metav1.GroupVersionResource{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_GroupVersionResource(ref),
+		metav1.InternalEvent{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_InternalEvent(ref),
+		metav1.LabelSelector{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_LabelSelector(ref),
+		metav1.LabelSelectorRequirement{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_LabelSelectorRequirement(ref),
+		metav1.List{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_List(ref),
+		metav1.ListMeta{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_ListMeta(ref),
+		metav1.ListOptions{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_ListOptions(ref),
+		metav1.ManagedFieldsEntry{}.OpenAPIModelName():                    schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref),
+		metav1.MicroTime{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_MicroTime(ref),
+		metav1.ObjectMeta{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_ObjectMeta(ref),
+		metav1.OwnerReference{}.OpenAPIModelName():                        schema_pkg_apis_meta_v1_OwnerReference(ref),
+		metav1.PartialObjectMetadata{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_PartialObjectMetadata(ref),
+		metav1.PartialObjectMetadataList{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref),
+		metav1.Patch{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_Patch(ref),
+		metav1.PatchOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_PatchOptions(ref),
+		metav1.Preconditions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_Preconditions(ref),
+		metav1.RootPaths{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_RootPaths(ref),
+		metav1.ServerAddressByClientCIDR{}.OpenAPIModelName():             schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref),
+		metav1.ShardInfo{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_ShardInfo(ref),
+		metav1.Status{}.OpenAPIModelName():                                schema_pkg_apis_meta_v1_Status(ref),
+		metav1.StatusCause{}.OpenAPIModelName():                           schema_pkg_apis_meta_v1_StatusCause(ref),
+		metav1.StatusDetails{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_StatusDetails(ref),
+		metav1.Table{}.OpenAPIModelName():                                 schema_pkg_apis_meta_v1_Table(ref),
+		metav1.TableColumnDefinition{}.OpenAPIModelName():                 schema_pkg_apis_meta_v1_TableColumnDefinition(ref),
+		metav1.TableOptions{}.OpenAPIModelName():                          schema_pkg_apis_meta_v1_TableOptions(ref),
+		metav1.TableRow{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_TableRow(ref),
+		metav1.TableRowCondition{}.OpenAPIModelName():                     schema_pkg_apis_meta_v1_TableRowCondition(ref),
+		metav1.Time{}.OpenAPIModelName():                                  schema_pkg_apis_meta_v1_Time(ref),
+		metav1.Timestamp{}.OpenAPIModelName():                             schema_pkg_apis_meta_v1_Timestamp(ref),
+		metav1.TypeMeta{}.OpenAPIModelName():                              schema_pkg_apis_meta_v1_TypeMeta(ref),
+		metav1.UpdateOptions{}.OpenAPIModelName():                         schema_pkg_apis_meta_v1_UpdateOptions(ref),
+		metav1.WatchEvent{}.OpenAPIModelName():                            schema_pkg_apis_meta_v1_WatchEvent(ref),
+		runtime.RawExtension{}.OpenAPIModelName():                         schema_k8sio_apimachinery_pkg_runtime_RawExtension(ref),
+		runtime.TypeMeta{}.OpenAPIModelName():                             schema_k8sio_apimachinery_pkg_runtime_TypeMeta(ref),
+		runtime.Unknown{}.OpenAPIModelName():                              schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
+		intstr.IntOrString{}.OpenAPIModelName():                           schema_apimachinery_pkg_util_intstr_IntOrString(ref),
+		version.Info{}.OpenAPIModelName():                                 schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
 }
 
@@ -470,17 +484,20 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "AllocationAttribute holds metadata associated with a single IP allocation within a block.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"handle_id": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "HandleID is the ID of the IPAM handle that owns this allocation.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"secondary": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "ActiveOwnerAttrs stores attributes of the primary owner of this allocation (e.g., pod name, namespace).",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -493,9 +510,10 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
-					"alternate": {
+					"alternateOwnerAttrs": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -506,11 +524,19 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 									},
 								},
 							},
+						},
+					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
+		Dependencies: []string{
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -534,6 +560,11 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 						},
 					},
 					"templates": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Templates contains definition for creating AutoHostEndpoints",
 							Type:        []string{"array"},
@@ -541,7 +572,7 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template"),
+										Ref:     ref(v3.Template{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -551,7 +582,7 @@ func schema_pkg_apis_projectcalico_v3_AutoHostEndpointConfig(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Template"},
+			v3.Template{}.OpenAPIModelName()},
 	}
 }
 
@@ -578,13 +609,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref common.ReferenceCallb
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfigurationSpec"),
+							Ref:     ref(v3.BGPConfigurationSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -592,7 +623,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfiguration(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.BGPConfigurationSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -620,7 +651,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceC
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -630,18 +661,18 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfiguration"),
+										Ref:     ref(v3.BGPConfiguration{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.BGPConfiguration{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -676,7 +707,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"serviceLoadBalancerIPs": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -686,7 +717,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock"),
+										Ref:     ref(v3.ServiceLoadBalancerIPBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -695,7 +726,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"serviceExternalIPs": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -705,7 +736,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock"),
+										Ref:     ref(v3.ServiceExternalIPBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -714,7 +745,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"serviceClusterIPs": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -724,7 +755,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock"),
+										Ref:     ref(v3.ServiceClusterIPBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -740,7 +771,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"communities": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -750,7 +781,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community"),
+										Ref:     ref(v3.Community{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -759,7 +790,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"prefixAdvertisements": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "set",
+								"x-kubernetes-list-type": "atomic",
 							},
 						},
 						SchemaProps: spec.SchemaProps{
@@ -769,7 +800,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement"),
+										Ref:     ref(v3.PrefixAdvertisement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -785,13 +816,13 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					"nodeMeshPassword": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Optional BGP password for full node-to-mesh peerings. This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword"),
+							Ref:         ref(v3.BGPPassword{}.OpenAPIModelName()),
 						},
 					},
 					"nodeMeshMaxRestartTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time to allow for software restart for node-to-mesh peerings.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used. This field can only be set on the default BGPConfiguration instance and requires that NodeMesh is enabled",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"bindMode": {
@@ -842,11 +873,25 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 							Format:      "",
 						},
 					},
+					"ipv4NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv4NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv4 workload routes. This must match the value configured in FelixConfiguration. BIRD uses this to identify elevated-priority routes during live migration and to override local workload routes with higher-priority BGP-learned routes. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPv6NormalRoutePriority is the normal route priority (metric) that Felix uses for IPv6 workload routes. This must match the value configured in FelixConfiguration. BIRD uses this to identify elevated-priority routes during live migration and to override local workload routes with higher-priority BGP-learned routes. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.Community", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PrefixAdvertisement", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceClusterIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceExternalIPBlock", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceLoadBalancerIPBlock", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			v3.BGPPassword{}.OpenAPIModelName(), v3.Community{}.OpenAPIModelName(), v3.PrefixAdvertisement{}.OpenAPIModelName(), v3.ServiceClusterIPBlock{}.OpenAPIModelName(), v3.ServiceExternalIPBlock{}.OpenAPIModelName(), v3.ServiceLoadBalancerIPBlock{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -921,13 +966,13 @@ func schema_pkg_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) co
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec"),
+							Ref:     ref(v3.BGPFilterSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -935,7 +980,72 @@ func schema_pkg_apis_projectcalico_v3_BGPFilter(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.BGPFilterSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterAddCommunity(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterAddCommunity specifies a BGP community to add to a route.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"value": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Value is the BGP community to add.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"value"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterCommunityMatch(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule. Currently exactly one community value must be specified. A MatchOperator field may be introduced in the future to support anyOf/allOf semantics with multiple values.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"values": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Values is a list of BGP community values to match against. Exactly one value must be specified.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"values"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
 	}
 }
 
@@ -963,7 +1073,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -973,18 +1083,56 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterList(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter"),
+										Ref:     ref(v3.BGPFilter{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilter", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.BGPFilter{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterOperation(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterOperation is a discriminated union representing a single route modification. Exactly one field must be set.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"addCommunity": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AddCommunity adds the specified BGP community to the route.",
+							Ref:         ref(v3.BGPFilterAddCommunity{}.OpenAPIModelName()),
+						},
+					},
+					"prependASPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PrependASPath prepends the specified AS numbers to the route's AS path.",
+							Ref:         ref(v3.BGPFilterPrependASPath{}.OpenAPIModelName()),
+						},
+					},
+					"setPriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SetPriority sets the route's priority (metric), in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Ref:         ref(v3.BGPFilterSetPriority{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+		Dependencies: []string{
+			v3.BGPFilterAddCommunity{}.OpenAPIModelName(), v3.BGPFilterPrependASPath{}.OpenAPIModelName(), v3.BGPFilterSetPriority{}.OpenAPIModelName()},
 	}
 }
 
@@ -1046,40 +1194,124 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterPrefixLengthV6(ref common.Referen
 	}
 }
 
+func schema_pkg_apis_projectcalico_v3_BGPFilterPrependASPath(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterPrependASPath specifies AS numbers to prepend to a route's AS path.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"prefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Prefix is the sequence of AS numbers to prepend to the route's AS path. The resulting path starts with these AS numbers in the order listed; e.g. [65000, 65001] produces the path \"65000 65001 <original>\".",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"prefix"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterRuleV4 defines a BGP filter rule consisting a single IPv4 CIDR block and a filter action for this CIDR.",
+				Description: "BGPFilterRuleV4 defines a BGP filter rule consisting of match criteria, a terminal action, and optional operations to apply to matching routes.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply when the route being exported or imported \"matches\" the given CIDR - where the definition of \"matches\" is according to MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation, <prefix>/<length>.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"),
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"10.0.0.0/8\" with MatchOperator \"In\" and PrefixLength {min: 16, max: 24} matches any route within 10.0.0.0/8 whose prefix length is between /16 and /24.  Requires CIDR to be set; if CIDR is omitted, PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own prefix length is used as the minimum and /32 (for V4) as the maximum.",
+							Ref:         ref(v3.BGPFilterPrefixLengthV4{}.OpenAPIModelName()),
 						},
 					},
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If set to \"RemotePeers\": for export rules, this filter rule will only apply to routes learned from BGP peers (i.e. re-advertised routes), not locally originated routes. For import rules, this field is redundant because imported routes are by definition from BGP peers.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"interface": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply to routes with an outgoing interface that matches Interface.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"matchOperator": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "MatchOperator defines how the route's prefix is compared against CIDR.  \"Equal\" requires an exact prefix match, \"In\" requires the route to be contained within the CIDR (or equal), \"NotEqual\" and \"NotIn\" are their negations.  Only meaningful when CIDR is also specified. Required when CIDR is set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes being imported from or exported to a BGP peer of the specified type.  If empty, the rule applies to all peers.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"communities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
+							Ref:         ref(v3.BGPFilterCommunityMatch{}.OpenAPIModelName()),
+						},
+					},
+					"asPathPrefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"action": {
@@ -1087,6 +1319,25 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 							Default: "",
 							Type:    []string{"string"},
 							Format:  "",
+						},
+					},
+					"operations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v3.BGPFilterOperation{}.OpenAPIModelName()),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1099,7 +1350,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV4(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV4"},
+			v3.BGPFilterCommunityMatch{}.OpenAPIModelName(), v3.BGPFilterOperation{}.OpenAPIModelName(), v3.BGPFilterPrefixLengthV4{}.OpenAPIModelName()},
 	}
 }
 
@@ -1107,36 +1358,81 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "BGPFilterRuleV6 defines a BGP filter rule consisting a single IPv6 CIDR block and a filter action for this CIDR.",
+				Description: "BGPFilterRuleV6 defines a BGP filter rule consisting of match criteria, a terminal action, and optional operations to apply to matching routes.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply when the route being exported or imported \"matches\" the given CIDR - where the definition of \"matches\" is according to MatchOperator and PrefixLength.  CIDR should be in conventional CIDR notation, <prefix>/<length>.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"prefixLength": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"),
+							Description: "PrefixLength further constrains the CIDR match by restricting the range of allowed prefix lengths.  For example, CIDR \"fd00::/8\" with MatchOperator \"In\" and PrefixLength {min: 48, max: 64} matches any route within fd00::/8 whose prefix length is between /48 and /64.  Requires CIDR to be set; if CIDR is omitted, PrefixLength is ignored.  If PrefixLength is nil and CIDR is set, the CIDR's own prefix length is used as the minimum and /128 (for V6) as the maximum.",
+							Ref:         ref(v3.BGPFilterPrefixLengthV6{}.OpenAPIModelName()),
 						},
 					},
 					"source": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If set to \"RemotePeers\": for export rules, this filter rule will only apply to routes learned from BGP peers (i.e. re-advertised routes), not locally originated routes. For import rules, this field is redundant because imported routes are by definition from BGP peers.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"interface": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "If non-empty, this filter rule will only apply to routes with an outgoing interface that matches Interface.",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"matchOperator": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "MatchOperator defines how the route's prefix is compared against CIDR.  \"Equal\" requires an exact prefix match, \"In\" requires the route to be contained within the CIDR (or equal), \"NotEqual\" and \"NotIn\" are their negations.  Only meaningful when CIDR is also specified. Required when CIDR is set.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"peerType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes being imported from or exported to a BGP peer of the specified type.  If empty, the rule applies to all peers.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"communities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes that carry the specified BGP community.  On import, this matches communities set by the remote peer.  On export, this matches communities already present on the route, whether received from a BGP peer (e.g. on a route reflector re-advertising to an eBGP peer) or added locally by an import filter or an earlier export rule's AddCommunity operation.",
+							Ref:         ref(v3.BGPFilterCommunityMatch{}.OpenAPIModelName()),
+						},
+					},
+					"asPathPrefix": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "If non-empty, this filter rule will only apply to routes whose AS path begins with the specified sequence of AS numbers.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
+					"priority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "If set, this filter rule will only apply to routes with the given priority, in the same units as the ...RoutePriority fields in FelixConfiguration.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 					"action": {
@@ -1144,6 +1440,25 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 							Default: "",
 							Type:    []string{"string"},
 							Format:  "",
+						},
+					},
+					"operations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Operations is an ordered list of route modifications to apply to matching routes before accepting them.  Only valid when Action is \"Accept\"; specifying operations with \"Reject\" is rejected by validation.  Each entry must set exactly one operation field.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v3.BGPFilterOperation{}.OpenAPIModelName()),
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1156,7 +1471,33 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterRuleV6(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterPrefixLengthV6"},
+			v3.BGPFilterCommunityMatch{}.OpenAPIModelName(), v3.BGPFilterOperation{}.OpenAPIModelName(), v3.BGPFilterPrefixLengthV6{}.OpenAPIModelName()},
+	}
+}
+
+func schema_pkg_apis_projectcalico_v3_BGPFilterSetPriority(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BGPFilterSetPriority specifies a route priority to set.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"value": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Value is the priority to set, in the same units as FelixConfiguration's ...RoutePriority fields.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+				},
+				Required: []string{"value"},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-map-type": "atomic",
+				},
+			},
+		},
 	}
 }
 
@@ -1168,6 +1509,11 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"exportV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1175,13 +1521,18 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4"),
+										Ref:     ref(v3.BGPFilterRuleV4{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"importV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv4 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1189,13 +1540,18 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4"),
+										Ref:     ref(v3.BGPFilterRuleV4{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"exportV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on exporting routes to a peer.",
 							Type:        []string{"array"},
@@ -1203,13 +1559,18 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"),
+										Ref:     ref(v3.BGPFilterRuleV6{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"importV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of IPv6 BGPFilter rules acting on importing routes from a peer.",
 							Type:        []string{"array"},
@@ -1217,7 +1578,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"),
+										Ref:     ref(v3.BGPFilterRuleV6{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1227,7 +1588,7 @@ func schema_pkg_apis_projectcalico_v3_BGPFilterSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV4", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPFilterRuleV6"},
+			v3.BGPFilterRuleV4{}.OpenAPIModelName(), v3.BGPFilterRuleV6{}.OpenAPIModelName()},
 	}
 }
 
@@ -1241,14 +1602,14 @@ func schema_pkg_apis_projectcalico_v3_BGPPassword(ref common.ReferenceCallback) 
 					"secretKeyRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a key of a secret in the node pod's namespace.",
-							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+							Ref:         ref(v1.SecretKeySelector{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretKeySelector"},
+			v1.SecretKeySelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -1275,13 +1636,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) comm
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerSpec"),
+							Ref:     ref(v3.BGPPeerSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -1289,7 +1650,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeer(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeerSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.BGPPeerSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1317,7 +1678,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) 
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -1327,18 +1688,18 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer"),
+										Ref:     ref(v3.BGPPeer{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPeer", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.BGPPeer{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1408,7 +1769,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					"password": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Optional BGP password for the peerings generated by this BGPPeer resource.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword"),
+							Ref:         ref(v3.BGPPassword{}.OpenAPIModelName()),
 						},
 					},
 					"sourceAddress": {
@@ -1421,13 +1782,13 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 					"maxRestartTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time to allow for software restart.  When specified, this is configured as the graceful restart timeout.  When not specified, the BIRD default of 120s is used.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"keepaliveTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "KeepaliveTime specifies the delay in seconds between sending consecutive Keepalive messages. When specified, this configures the BGP keepalive timer for the peerings generated by this BGPPeer resource. If not specified, BIRD uses its default keepalive time (one third of the hold time).",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"numAllowedLocalASNumbers": {
@@ -1452,6 +1813,11 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 						},
 					},
 					"filters": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "The ordered set of BGPFilters applied on this BGP peer.",
 							Type:        []string{"array"},
@@ -1484,7 +1850,7 @@ func schema_pkg_apis_projectcalico_v3_BGPPeerSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPPassword", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			v3.BGPPassword{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -1580,13 +1946,13 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinity(ref common.ReferenceCallback
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinitySpec"),
+							Ref:     ref(v3.BlockAffinitySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -1594,7 +1960,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinity(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinitySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.BlockAffinitySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1622,7 +1988,7 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCall
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -1632,18 +1998,18 @@ func schema_pkg_apis_projectcalico_v3_BlockAffinityList(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinity"),
+										Ref:     ref(v3.BlockAffinity{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BlockAffinity", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.BlockAffinity{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -1711,21 +2077,21 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeAgentStatus(ref common.Reference
 						SchemaProps: spec.SchemaProps{
 							Description: "BIRDV4 represents the latest observed status of bird4.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus"),
+							Ref:         ref(v3.BGPDaemonStatus{}.OpenAPIModelName()),
 						},
 					},
 					"birdV6": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BIRDV6 represents the latest observed status of bird6.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus"),
+							Ref:         ref(v3.BGPDaemonStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BGPDaemonStatus"},
+			v3.BGPDaemonStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -1737,6 +2103,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"routesV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "RoutesV4 represents IPv4 routes on the node.",
 							Type:        []string{"array"},
@@ -1744,13 +2115,18 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRoute"),
+										Ref:     ref(v3.CalicoNodeRoute{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"routesV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "RoutesV6 represents IPv6 routes on the node.",
 							Type:        []string{"array"},
@@ -1758,7 +2134,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRoute"),
+										Ref:     ref(v3.CalicoNodeRoute{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1768,7 +2144,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPRouteStatus(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRoute"},
+			v3.CalicoNodeRoute{}.OpenAPIModelName()},
 	}
 }
 
@@ -1812,6 +2188,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 						},
 					},
 					"peersV4": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PeersV4 represents IPv4 BGP peers status on the node.",
 							Type:        []string{"array"},
@@ -1819,13 +2200,18 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodePeer"),
+										Ref:     ref(v3.CalicoNodePeer{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"peersV6": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PeersV6 represents IPv6 BGP peers status on the node.",
 							Type:        []string{"array"},
@@ -1833,7 +2219,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodePeer"),
+										Ref:     ref(v3.CalicoNodePeer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -1844,7 +2230,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeBGPStatus(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodePeer"},
+			v3.CalicoNodePeer{}.OpenAPIModelName()},
 	}
 }
 
@@ -1864,7 +2250,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodePeer(ref common.ReferenceCallbac
 					},
 					"type": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Type indicates whether this peer is configured via the node-to-node mesh, or via en explicit global or per-node BGPPeer object.",
+							Description: "Type indicates whether this peer is configured via the node-to-node mesh, or via an explicit global or per-node BGPPeer object.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -1928,14 +2314,14 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeRoute(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "LearnedFrom contains information regarding where this route originated.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRouteLearnedFrom"),
+							Ref:         ref(v3.CalicoNodeRouteLearnedFrom{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeRouteLearnedFrom"},
+			v3.CalicoNodeRouteLearnedFrom{}.OpenAPIModelName()},
 	}
 }
 
@@ -1989,19 +2375,19 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref common.ReferenceCallb
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusSpec"),
+							Ref:     ref(v3.CalicoNodeStatusSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusStatus"),
+							Ref:     ref(v3.CalicoNodeStatusStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -2009,7 +2395,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatus(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatusStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.CalicoNodeStatusSpec{}.OpenAPIModelName(), v3.CalicoNodeStatusStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2037,7 +2423,7 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceC
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -2047,18 +2433,18 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatus"),
+										Ref:     ref(v3.CalicoNodeStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.CalicoNodeStatus{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2077,6 +2463,11 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusSpec(ref common.ReferenceC
 						},
 					},
 					"classes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Classes declares the types of information to monitor for this calico/node, and allows for selective status reporting about certain subsets of information.",
 							Type:        []string{"array"},
@@ -2114,35 +2505,35 @@ func schema_pkg_apis_projectcalico_v3_CalicoNodeStatusStatus(ref common.Referenc
 					"lastUpdated": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LastUpdated is a timestamp representing the server time when CalicoNodeStatus object last updated. It is represented in RFC3339 form and is in UTC.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"agent": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Agent holds agent status on the node.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeAgentStatus"),
+							Ref:         ref(v3.CalicoNodeAgentStatus{}.OpenAPIModelName()),
 						},
 					},
 					"bgp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BGP holds node BGP status.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPStatus"),
+							Ref:         ref(v3.CalicoNodeBGPStatus{}.OpenAPIModelName()),
 						},
 					},
 					"routes": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Routes reports routes known to the Calico BGP daemon on the node.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPRouteStatus"),
+							Ref:         ref(v3.CalicoNodeBGPRouteStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeAgentStatus", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPRouteStatus", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.CalicoNodeBGPStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			v3.CalicoNodeAgentStatus{}.OpenAPIModelName(), v3.CalicoNodeBGPRouteStatus{}.OpenAPIModelName(), v3.CalicoNodeBGPStatus{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -2169,13 +2560,13 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformation(ref common.ReferenceCal
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformationSpec"),
+							Ref:     ref(v3.ClusterInformationSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -2183,7 +2574,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformation(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.ClusterInformationSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2211,7 +2602,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref common.Referenc
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -2221,18 +2612,18 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationList(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformation"),
+										Ref:     ref(v3.ClusterInformation{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ClusterInformation", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.ClusterInformation{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2240,26 +2631,26 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.Referenc
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ClusterInformationSpec contains the values of describing the cluster.",
+				Description: "ClusterInformationSpec contains the values of describing the cluster. This resource is managed automatically by Calico components and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"clusterGUID": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterGUID is the GUID of the cluster",
+							Description: "ClusterGUID is the unique identifier for this cluster, generated automatically at install time.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"clusterType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ClusterType describes the type of the cluster",
+							Description: "ClusterType describes the type of the cluster, e.g., \"k8s,bgp,kubeadm\". Set automatically based on the detected environment.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"calicoVersion": {
 						SchemaProps: spec.SchemaProps{
-							Description: "CalicoVersion is the version of Calico that the cluster is running",
+							Description: "CalicoVersion is the version of Calico running on the cluster, set automatically by calico/node.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2273,7 +2664,7 @@ func schema_pkg_apis_projectcalico_v3_ClusterInformationSpec(ref common.Referenc
 					},
 					"variant": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Variant declares which variant of Calico should be active.",
+							Description: "Variant declares which variant of Calico is active.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -2326,50 +2717,50 @@ func schema_pkg_apis_projectcalico_v3_ControllersConfig(ref common.ReferenceCall
 					"node": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Node enables and configures the node controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig"),
+							Ref:         ref(v3.NodeControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 					"policy": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Policy enables and configures the policy controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig"),
+							Ref:         ref(v3.PolicyControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 					"workloadEndpoint": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WorkloadEndpoint enables and configures the workload endpoint controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig"),
+							Ref:         ref(v3.WorkloadEndpointControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 					"serviceAccount": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceAccount enables and configures the service account controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig"),
+							Ref:         ref(v3.ServiceAccountControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 					"namespace": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Namespace enables and configures the namespace controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig"),
+							Ref:         ref(v3.NamespaceControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 					"loadBalancer": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LoadBalancer enables and configures the LoadBalancer controller. Enabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig"),
+							Ref:         ref(v3.LoadBalancerControllerConfig{}.OpenAPIModelName()),
 						},
 					},
-					"policyMigration": {
+					"migration": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Migration enables and configures migration controllers.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig"),
+							Ref:         ref(v3.MigrationControllerConfig{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.LoadBalancerControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.MigrationControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NamespaceControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.NodeControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.PolicyControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountControllerConfig", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.WorkloadEndpointControllerConfig"},
+			v3.LoadBalancerControllerConfig{}.OpenAPIModelName(), v3.MigrationControllerConfig{}.OpenAPIModelName(), v3.NamespaceControllerConfig{}.OpenAPIModelName(), v3.NodeControllerConfig{}.OpenAPIModelName(), v3.PolicyControllerConfig{}.OpenAPIModelName(), v3.ServiceAccountControllerConfig{}.OpenAPIModelName(), v3.WorkloadEndpointControllerConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -2388,7 +2779,7 @@ func schema_pkg_apis_projectcalico_v3_EndpointPort(ref common.ReferenceCallback)
 					},
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+							Ref: ref(numorstring.Protocol{}.OpenAPIModelName()),
 						},
 					},
 					"port": {
@@ -2403,7 +2794,7 @@ func schema_pkg_apis_projectcalico_v3_EndpointPort(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+			numorstring.Protocol{}.OpenAPIModelName()},
 	}
 }
 
@@ -2451,25 +2842,35 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 					"services": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Services is an optional field that contains options for matching Kubernetes Services. If specified, only traffic that originates from or terminates at endpoints within the selected service(s) will be matched, and only to/from each endpoint's port.\n\nServices cannot be specified on the same rule as Selector, NotSelector, NamespaceSelector, Nets, NotNets or ServiceAccounts.\n\nPorts and NotPorts can only be specified with Services on ingress rules.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch"),
+							Ref:         ref(v3.ServiceMatch{}.OpenAPIModelName()),
 						},
 					},
 					"ports": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Description: "Ports is an optional field that restricts the rule to only apply to traffic that has a source (destination) port that matches one of these ranges/values. This value is a list of integers or strings that represent ranges of ports.\n\nSince only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+										Ref: ref(numorstring.Port{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"notNets": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NotNets is the negated version of the Nets field. listType=set",
+							Description: "NotNets is the negated version of the Nets field.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -2490,13 +2891,18 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 						},
 					},
 					"notPorts": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "NotPorts is the negated version of the Ports field. Since only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\" or \"UDP\".",
+							Description: "NotPorts is the negated version of the Ports field. Since only some protocols have ports, if any ports are specified it requires the Protocol match in the Rule to be set to \"TCP\", \"UDP\", or \"SCTP\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+										Ref: ref(numorstring.Port{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -2505,14 +2911,14 @@ func schema_pkg_apis_projectcalico_v3_EntityRule(ref common.ReferenceCallback) c
 					"serviceAccounts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or terminates at) a pod running as a matching service account.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountMatch"),
+							Ref:         ref(v3.ServiceAccountMatch{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceAccountMatch", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ServiceMatch", "github.com/projectcalico/api/pkg/lib/numorstring.Port"},
+			v3.ServiceAccountMatch{}.OpenAPIModelName(), v3.ServiceMatch{}.OpenAPIModelName(), numorstring.Port{}.OpenAPIModelName()},
 	}
 }
 
@@ -2539,13 +2945,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref common.ReferenceCal
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfigurationSpec"),
+							Ref:     ref(v3.FelixConfigurationSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -2553,7 +2959,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfiguration(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.FelixConfigurationSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2581,7 +2987,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref common.Referenc
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -2591,18 +2997,18 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationList(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfiguration"),
+										Ref:     ref(v3.FelixConfiguration{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.FelixConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.FelixConfiguration{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -2613,6 +3019,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 				Description: "FelixConfigurationSpec contains the values of the Felix configuration.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
+					"nodeSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeSelector is an optional label selector that restricts this FelixConfiguration to apply only to nodes that match the given selector. This field is only valid on FelixConfiguration resources whose name is not \"default\" and does not start with \"node.\". For resources named \"default\", the configuration applies globally to all nodes. For resources named \"node.<nodename>\", the configuration applies to the named node only.\n\nAt most one selector-scoped FelixConfiguration should match any given node. If multiple selector-scoped resources match, the oldest (by creation timestamp) is used and a warning is logged. This prevents an accidentally created conflicting resource from disrupting an existing, working configuration.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"useInternalDataplaneDriver": {
 						SchemaProps: spec.SchemaProps{
 							Description: "UseInternalDataplaneDriver, if true, Felix will use its internal dataplane programming logic.  If false, it will launch an external dataplane driver and communicate with it over protobuf.",
@@ -2630,7 +3043,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"dataplaneWatchdogTimeout": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DataplaneWatchdogTimeout is the readiness/liveness timeout used for Felix's (internal) dataplane driver. Deprecated: replaced by the generic HealthTimeoutOverrides.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"ipv6Support": {
@@ -2643,31 +3056,31 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"routeRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RouteRefreshInterval is the period at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable route refresh. [Default: 90s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"interfaceRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "InterfaceRefreshInterval is the period at which Felix rescans local interfaces to verify their state. The rescan can be disabled by setting the interval to 0.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"iptablesRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IptablesRefreshInterval is the period at which Felix re-checks the IP sets in the dataplane to ensure that no other process has accidentally broken Calico's rules. Set to 0 to disable IP sets refresh. Note: the default for this value is lower than the other refresh intervals as a workaround for a Linux kernel bug that was fixed in kernel version 4.11. If you are using v4.11 or greater you may want to set this to, a higher value to reduce Felix CPU usage. [Default: 10s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"iptablesPostWriteCheckInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IptablesPostWriteCheckInterval is the period after Felix has done a write to the dataplane that it schedules an extra read back in order to check the write was not clobbered by another process. This should only occur if another application on the system doesn't respect the iptables lock. [Default: 1s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"iptablesLockProbeInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IptablesLockProbeInterval configures the interval between attempts to claim the xtables lock.  Shorter intervals are more responsive but use more CPU.  [Default: 50ms]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"featureDetectOverride": {
@@ -2687,7 +3100,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"ipsetsRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IpsetsRefreshInterval controls the period at which Felix re-checks all IP sets to look for discrepancies. Set to 0 to disable the periodic refresh. [Default: 90s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"maxIpsetSize": {
@@ -2707,13 +3120,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"xdpRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no other process has accidentally broken Calico's BPF maps or attached programs. Set to 0 to disable XDP refresh. [Default: 90s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"netlinkTimeout": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NetlinkTimeout is the timeout when talking to the kernel over the netlink protocol, used for programming routes, rules, and other kernel objects. [Default: 10s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"metadataAddr": {
@@ -2908,13 +3321,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"reportingInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable. Must be non-zero in OpenStack deployments. [Default: 30s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"reportingTTL": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReportingTTL is the time-to-live setting for process-wide status reports. [Default: 90s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"endpointReportingEnabled": {
@@ -2927,7 +3340,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"endpointReportingDelay": {
 						SchemaProps: spec.SchemaProps{
 							Description: "EndpointReportingDelay is the delay before Felix reports endpoint status to the datastore. This is only used by the OpenStack integration. [Default: 1s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"endpointStatusPathPrefix": {
@@ -2973,6 +3386,11 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						},
 					},
 					"healthTimeoutOverrides": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "HealthTimeoutOverrides allows the internal watchdog timeouts of individual subcomponents to be overridden.  This is useful for working around \"false positive\" liveness timeouts that can occur in particularly stressful workloads or if CPU is constrained.  For a list of active subcomponents, see Felix's logs.",
 							Type:        []string{"array"},
@@ -2980,7 +3398,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride"),
+										Ref:     ref(v3.HealthTimeoutOverride{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3051,7 +3469,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"prometheusMetricsClientAuth": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"RequireAndVerifyClientCert\".",
+							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3064,7 +3482,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort"),
+										Ref:     ref(v3.ProtoPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3078,7 +3496,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort"),
+										Ref:     ref(v3.ProtoPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3091,7 +3509,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+										Ref: ref(numorstring.Port{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3114,19 +3532,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"usageReportingInitialDelay": {
 						SchemaProps: spec.SchemaProps{
 							Description: "UsageReportingInitialDelay controls the minimum delay before Felix makes a report. [Default: 300s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"usageReportingInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "UsageReportingInterval controls the interval at which Felix makes reports. [Default: 86400s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"natPortRange": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NATPortRange specifies the range of ports that is used for port mapping when doing outgoing NAT. When unset the default behavior of the network stack is used.",
-							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+							Ref:         ref(numorstring.Port{}.OpenAPIModelName()),
 						},
 					},
 					"natOutgoingAddress": {
@@ -3217,19 +3635,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"debugSimulateCalcGraphHangAfter": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugSimulateCalcGraphHangAfter is used to simulate a hang in the calculation graph after the specified duration. This is useful in tests of the watchdog system only!",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"debugSimulateDataplaneHangAfter": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugSimulateDataplaneHangAfter is used to simulate a hang in the dataplane after the specified duration. This is useful in tests of the watchdog system only!",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"debugSimulateDataplaneApplyDelay": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DebugSimulateDataplaneApplyDelay adds an artificial delay to every dataplane operation.  This is useful for simulating a heavily loaded system for test purposes only.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"debugHost": {
@@ -3276,7 +3694,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesMode configures nftables support in Felix. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Description: "NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the nftables dataplane if kube-proxy is detected to be running in nftables mode. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},
@@ -3285,7 +3703,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"nftablesRefreshInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"nftablesFilterAllowAction": {
@@ -3320,6 +3738,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"bpfOverlayHostSourceIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  \"TunnelAddress\" (the default) assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour of clusters upgraded from earlier releases.  \"HostAddress\" uses the node's own IP directly and does not assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: TunnelAddress]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -3362,7 +3787,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfConntrackTimeouts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFConntrackTimers overrides the default values for the specified conntrack timer if set. Each value can be either a duration or `Auto` to pick the value from a Linux conntrack timeout.\n\nConfigurable timers are: CreationGracePeriod, TCPSynSent, TCPEstablished, TCPFinsSeen, TCPResetSeen, UDPTimeout, GenericTimeout, ICMPTimeout.\n\nUnset values are replaced by the default values with a warning log for incorrect values.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts"),
+							Ref:         ref(v3.BPFConntrackTimeouts{}.OpenAPIModelName()),
+						},
+					},
+					"bpfIPFragTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly. This is the maximum time that the BPF dataplane will wait for all fragments of a fragmented IP packet to arrive before discarding them.  If left unset, the value is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30 seconds). [Default: unset - read from net.ipv4.ipfrag_time]",
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"bpfLogFilters": {
@@ -3462,7 +3893,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfKubeProxyMinSyncPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFKubeProxyMinSyncPeriod, in BPF mode, controls the minimum time between updates to the dataplane for Felix's embedded kube-proxy.  Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by batching up more work.  [Default: 1s]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"bpfKubeProxyHealthzPort": {
@@ -3475,7 +3906,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"bpfPSNATPorts": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFPSNATPorts sets the range from which we randomly pick a port if there is a source port collision. This should be within the ephemeral range as defined by RFC 6056 (1024–65535) and preferably outside the  ephemeral ranges used by common operating systems. Linux uses 32768–60999, while others mostly use the IANA defined range 49152–65535. It is not necessarily a problem if this range overlaps with the operating systems. Both ends of the range are inclusive. [Default: 20000:29999]",
-							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Port"),
+							Ref:         ref(numorstring.Port{}.OpenAPIModelName()),
 						},
 					},
 					"bpfMapSizeNATFrontend": {
@@ -3555,6 +3986,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"bpfIPFragmentReassemblyEnabled": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that reassembles out-of-order IP fragments from external networks. This program requires a kernel newer than 5.10. When enabled (the default) and the program fails to load, Felix reports not-ready until the user sets this to false. When false, fragmented packets from external sources are dropped. [Default: true]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"bpfEnforceRPF": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnforceRPF enforce strict RPF on all host interfaces with BPF programs regardless of what is the per-interfaces or global setting. Possible values are Disabled, Strict or Loose. [Default: Loose]",
@@ -3623,7 +4061,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"istioDSCPMark": {
 						SchemaProps: spec.SchemaProps{
 							Description: "IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used with other Istio installation. [Default: 23]",
-							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.DSCP"),
+							Ref:         ref(numorstring.DSCP{}.OpenAPIModelName()),
 						},
 					},
 					"cgroupV2Path": {
@@ -3642,7 +4080,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfRedirectToPeer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device. Note that the legacy \"L2Only\" option is now deprecated and if set it is treated like \"Enabled. Setting this option to \"Enabled\" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard), which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path. As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]",
+							Description: "BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device. Note that the legacy \"L2Only\" option is now deprecated and if set it is treated like \"Enabled\". Setting this option to \"Enabled\" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard), which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path. As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3657,7 +4095,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"flowLogsFlushInterval": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FlowLogsFlushInterval configures the interval at which Felix exports flow logs.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"flowLogsCollectorDebugTrace": {
@@ -3703,7 +4141,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange"),
+										Ref:     ref(v3.RouteTableIDRange{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -3712,7 +4150,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"routeTableRange": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated in favor of RouteTableRanges. Calico programs additional Linux route tables for various purposes. RouteTableRange specifies the indices of the route tables that Calico should use.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange"),
+							Ref:         ref(v3.RouteTableRange{}.OpenAPIModelName()),
 						},
 					},
 					"routeSyncDisabled": {
@@ -3720,6 +4158,40 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "RouteSyncDisabled will disable all operations performed on the route table. Set to true to run in network-policy mode only.",
 							Type:        []string{"boolean"},
 							Format:      "",
+						},
+					},
+					"ipv4NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for a normal priority Calico-programmed IPv4 route.  Note, higher values mean lower priority. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv4ElevatedRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for an elevated priority Calico-programmed IPv4 route.  Note, higher values mean lower priority.  Elevated priority is used during VM live migration, and for optimal behaviour IPv4ElevatedRoutePriority must be less than IPv4NormalRoutePriority [Default: 512]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6NormalRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for a normal priority Calico-programmed IPv6 route.  Note, higher values mean lower priority. [Default: 1024]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"ipv6ElevatedRoutePriority": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Route Priority value for an elevated priority Calico-programmed IPv6 route.  Note, higher values mean lower priority.  Elevated priority is used during VM live migration, and for optimal behaviour IPv6ElevatedRoutePriority must be less than IPv6NormalRoutePriority [Default: 512]",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"liveMigrationRouteConvergenceTime": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LiveMigrationRouteConvergenceTime is the time to keep elevated route priority after a VM live migration completes.  This allows routes to converge across the cluster before reverting to normal priority. [Default: 30s]",
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"wireguardEnabled": {
@@ -3802,7 +4274,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					"wireguardKeepAlive": {
 						SchemaProps: spec.SchemaProps{
 							Description: "WireguardPersistentKeepAlive controls Wireguard PersistentKeepalive option. Set 0 to disable. [Default: 0]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"awsSrcDstCheck": {
@@ -3838,6 +4310,19 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Description: "FloatingIPs configures whether or not Felix will program non-OpenStack floating IP addresses.  (OpenStack-derived floating IPs are always programmed, regardless of this setting.)",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"localSubnetL2Reachability": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LocalSubnetL2Reachability controls whether Felix automatically responds to ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and selected LoadBalancer VIPs that fall within the same subnet as the host interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host subnet are reachable from the local L2 segment without BGP. [Default: Disabled]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"localSubnetL2ReachabilityRefreshInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0 to disable periodic re-announcement, leaving only the one-shot announce when an IP is added. [Default: 120s]",
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"windowsManageFirewallRules": {
@@ -3893,7 +4378,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.BPFConntrackTimeouts", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HealthTimeoutOverride", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProtoPort", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableIDRange", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RouteTableRange", "github.com/projectcalico/api/pkg/lib/numorstring.DSCP", "github.com/projectcalico/api/pkg/lib/numorstring.Port", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			v3.BPFConntrackTimeouts{}.OpenAPIModelName(), v3.HealthTimeoutOverride{}.OpenAPIModelName(), v3.ProtoPort{}.OpenAPIModelName(), v3.RouteTableIDRange{}.OpenAPIModelName(), v3.RouteTableRange{}.OpenAPIModelName(), numorstring.DSCP{}.OpenAPIModelName(), numorstring.Port{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -3920,13 +4405,13 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCa
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec"),
+							Ref:     ref(v3.GlobalNetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -3934,7 +4419,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicy(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.GlobalNetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -3962,7 +4447,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.Referen
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -3972,18 +4457,18 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicyList(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicy"),
+										Ref:     ref(v3.GlobalNetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.GlobalNetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4008,28 +4493,38 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4064,21 +4559,21 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 					},
 					"doNotTrack": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DoNotTrack indicates whether packets matched by the rules in this policy should go through the data plane's connection tracking, such as Linux conntrack.  If True, the rules in this policy are applied before any data plane connection tracking, and packets allowed by this policy are marked as not to be tracked.",
+							Description: "DoNotTrack indicates whether packets matched by the rules in this policy should go through the data plane's connection tracking, such as Linux conntrack.  If True, the rules in this policy are applied before any data plane connection tracking, and packets allowed by this policy are marked as not to be tracked. Requires ApplyOnForward to be true.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"preDNAT": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PreDNAT indicates to apply the rules in this policy before any DNAT.",
+							Description: "PreDNAT indicates to apply the rules in this policy before any DNAT. Requires ApplyOnForward to be true. Cannot be used with DoNotTrack, and the policy must not contain egress rules.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"applyOnForward": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ApplyOnForward indicates to apply the rules in this policy on forward traffic.",
+							Description: "ApplyOnForward indicates to apply the rules in this policy on forward traffic. Must be set to true when DoNotTrack or PreDNAT is true.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -4098,6 +4593,11 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -4116,7 +4616,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkPolicySpec(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+			v3.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -4143,13 +4643,13 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref common.ReferenceCallb
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetSpec"),
+							Ref:     ref(v3.GlobalNetworkSetSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4157,7 +4657,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSet(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSetSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.GlobalNetworkSetSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4185,7 +4685,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceC
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -4195,18 +4695,18 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSet"),
+										Ref:     ref(v3.GlobalNetworkSet{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.GlobalNetworkSet", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.GlobalNetworkSet{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4224,7 +4724,7 @@ func schema_pkg_apis_projectcalico_v3_GlobalNetworkSetSpec(ref common.ReferenceC
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The list of IP networks that belong to this set.",
+							Description: "The list of IP networks that belong to this set. Each entry must be in CIDR notation, e.g. \"192.168.1.0/24\". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -4251,6 +4751,11 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"methods": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Methods is an optional field that restricts the rule to apply only to HTTP requests that use one of the listed HTTP Methods (e.g. GET, PUT, etc.) Multiple methods are OR'd together.",
 							Type:        []string{"array"},
@@ -4266,6 +4771,11 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 						},
 					},
 					"paths": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Paths is an optional field that restricts the rule to apply to HTTP requests that use one of the listed HTTP Paths. Multiple paths are OR'd together. e.g: - exact: /foo - prefix: /bar NOTE: Each entry may ONLY specify either a `exact` or a `prefix` match. The validator will check for it.",
 							Type:        []string{"array"},
@@ -4273,7 +4783,7 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPPath"),
+										Ref:     ref(v3.HTTPPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4283,7 +4793,7 @@ func schema_pkg_apis_projectcalico_v3_HTTPMatch(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPPath"},
+			v3.HTTPPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -4327,7 +4837,7 @@ func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.Reference
 					},
 					"timeout": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref: ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4335,7 +4845,7 @@ func schema_pkg_apis_projectcalico_v3_HealthTimeoutOverride(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -4362,13 +4872,13 @@ func schema_pkg_apis_projectcalico_v3_HostEndpoint(ref common.ReferenceCallback)
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec"),
+							Ref:     ref(v3.HostEndpointSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4376,7 +4886,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpoint(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpointSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.HostEndpointSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4404,7 +4914,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallb
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -4414,18 +4924,18 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointList(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpoint"),
+										Ref:     ref(v3.HostEndpoint{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.HostEndpoint", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.HostEndpoint{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4491,6 +5001,11 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 						},
 					},
 					"ports": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Ports contains the endpoint's named ports, which may be referenced in security policy rules.",
 							Type:        []string{"array"},
@@ -4498,7 +5013,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort"),
+										Ref:     ref(v3.EndpointPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4508,7 +5023,7 @@ func schema_pkg_apis_projectcalico_v3_HostEndpointSpec(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EndpointPort"},
+			v3.EndpointPort{}.OpenAPIModelName()},
 	}
 }
 
@@ -4562,13 +5077,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) co
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlockSpec"),
+							Ref:     ref(v3.IPAMBlockSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4576,7 +5091,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlock(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlockSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.IPAMBlockSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4604,7 +5119,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -4614,18 +5129,18 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockList(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlock"),
+										Ref:     ref(v3.IPAMBlock{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMBlock", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.IPAMBlock{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4633,7 +5148,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMBlockSpec contains the specification for an IPAMBlock resource.",
+				Description: "IPAMBlockSpec contains the specification for an IPAMBlock resource. This resource is managed internally by Calico IPAM and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"cidr": {
@@ -4654,10 +5169,15 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 					"affinityClaimTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time at which affinity was claimed.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"allocations": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Array of allocations in-use within this block. nil entries mean the allocation is free. For non-nil entries at index i, the index is the ordinal of the allocation within this block and the value is the index of the associated attributes in the Attributes array.",
 							Type:        []string{"array"},
@@ -4672,6 +5192,11 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 						},
 					},
 					"unallocated": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Unallocated is an ordered list of allocations which are free in the block.",
 							Type:        []string{"array"},
@@ -4687,6 +5212,11 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 						},
 					},
 					"attributes": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Attributes is an array of arbitrary metadata associated with allocations in the block. To find attributes for a given allocation, use the value of the allocation's entry in the Allocations array as the index of the element in this array.",
 							Type:        []string{"array"},
@@ -4694,7 +5224,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.AllocationAttribute"),
+										Ref:     ref(v3.AllocationAttribute{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -4745,7 +5275,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMBlockSpec(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.AllocationAttribute", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			v3.AllocationAttribute{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -4773,13 +5303,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCall
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec"),
+							Ref:     ref(v3.IPAMConfigurationSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4787,7 +5317,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfiguration(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfigurationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.IPAMConfigurationSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4815,7 +5345,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.Reference
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -4825,18 +5355,18 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationList(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration"),
+										Ref:     ref(v3.IPAMConfiguration{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.IPAMConfiguration{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4877,6 +5407,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Format:      "",
 						},
 					},
+					"ipCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to minimize immediate reuse).",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"strictAffinity", "autoAllocateBlocks"},
 			},
@@ -4907,13 +5444,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandle(ref common.ReferenceCallback) c
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandleSpec"),
+							Ref:     ref(v3.IPAMHandleSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -4921,7 +5458,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandle(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandleSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.IPAMHandleSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4949,7 +5486,7 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallbac
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -4959,18 +5496,18 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandle"),
+										Ref:     ref(v3.IPAMHandle{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPAMHandle", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.IPAMHandle{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -4978,19 +5515,21 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "IPAMHandleSpec contains the specification for an IPAMHandle resource.",
+				Description: "IPAMHandleSpec contains the specification for an IPAMHandle resource. This resource is managed internally by Calico IPAM and should not be modified manually.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"handleID": {
 						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
+							Description: "HandleID is the unique identifier for this allocation handle.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"block": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Description: "Block maps block CIDRs to the number of allocations from that block held by this handle.",
+							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
 								Schema: &spec.Schema{
@@ -5005,9 +5544,10 @@ func schema_pkg_apis_projectcalico_v3_IPAMHandleSpec(ref common.ReferenceCallbac
 					},
 					"deleted": {
 						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
+							Description: "Deleted is an internal flag used to prevent races during handle cleanup. Should not be set manually.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
 						},
 					},
 				},
@@ -5066,18 +5606,18 @@ func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) commo
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec"),
+							Ref:     ref(v3.IPPoolSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus"),
+							Ref: ref(v3.IPPoolStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -5085,7 +5625,7 @@ func schema_pkg_apis_projectcalico_v3_IPPool(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPoolStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.IPPoolSpec{}.OpenAPIModelName(), v3.IPPoolStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5113,7 +5653,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) c
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -5123,18 +5663,18 @@ func schema_pkg_apis_projectcalico_v3_IPPoolList(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool"),
+										Ref:     ref(v3.IPPool{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPPool", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.IPPool{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5216,7 +5756,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "AllowedUse controls what the IP pool will be used for.  If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility",
+							Description: "AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to [\"Tunnel\", \"Workload\"] for back-compatibility. Valid values: \"Tunnel\", \"Workload\", \"LoadBalancer\".",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -5250,13 +5790,21 @@ func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback)
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Type: []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5266,7 +5814,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolStatus(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -5294,13 +5842,13 @@ func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec"),
+							Ref:     ref(v3.IPReservationSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -5308,7 +5856,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservation(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservationSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.IPReservationSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5336,7 +5884,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCall
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -5346,18 +5894,18 @@ func schema_pkg_apis_projectcalico_v3_IPReservationList(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation"),
+										Ref:     ref(v3.IPReservation{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.IPReservation", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.IPReservation{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5375,7 +5923,7 @@ func schema_pkg_apis_projectcalico_v3_IPReservationSpec(ref common.ReferenceCall
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ReservedCIDRs is a list of CIDRs and/or IP addresses that Calico IPAM will exclude from new allocations.",
+							Description: "ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations. Each entry must be in CIDR notation (e.g., \"10.0.0.0/24\" or \"10.0.0.1/32\" for a single IP).",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -5417,19 +5965,19 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref common.Re
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec"),
+							Ref:     ref(v3.KubeControllersConfigurationSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationStatus"),
+							Ref:     ref(v3.KubeControllersConfigurationStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -5437,7 +5985,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfiguration(ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.KubeControllersConfigurationSpec{}.OpenAPIModelName(), v3.KubeControllersConfigurationStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5465,7 +6013,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref commo
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -5475,18 +6023,18 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationList(ref commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfiguration"),
+										Ref:     ref(v3.KubeControllersConfiguration{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfiguration", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.KubeControllersConfiguration{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5514,7 +6062,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 					"etcdV3CompactionPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"prometheusMetricsPort": {
@@ -5528,7 +6076,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 						SchemaProps: spec.SchemaProps{
 							Description: "Controllers enables and configures individual Kubernetes controllers",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ControllersConfig"),
+							Ref:         ref(v3.ControllersConfig{}.OpenAPIModelName()),
 						},
 					},
 					"debugProfilePort": {
@@ -5543,7 +6091,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationSpec(ref commo
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ControllersConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			v3.ControllersConfig{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -5557,7 +6105,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref com
 					"runningConfig": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RunningConfig contains the effective config that is running in the kube-controllers pod, after merging the API resource with any environment variables.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec"),
+							Ref:         ref(v3.KubeControllersConfigurationSpec{}.OpenAPIModelName()),
 						},
 					},
 					"environmentVars": {
@@ -5580,7 +6128,7 @@ func schema_pkg_apis_projectcalico_v3_KubeControllersConfigurationStatus(ref com
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.KubeControllersConfigurationSpec"},
+			v3.KubeControllersConfigurationSpec{}.OpenAPIModelName()},
 	}
 }
 
@@ -5609,7 +6157,7 @@ func schema_pkg_apis_projectcalico_v3_MigrationControllerConfig(ref common.Refer
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"enabled": {
+					"policyNameMigrator": {
 						SchemaProps: spec.SchemaProps{
 							Description: "PolicyNameMigrator enables or disables the Policy Name Migrator, which migrates old-style Calico backend policy names to use v3 style names.",
 							Type:        []string{"string"},
@@ -5626,20 +6174,20 @@ func schema_pkg_apis_projectcalico_v3_NamespaceControllerConfig(ref common.Refer
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "NamespaceControllerConfig configures the service account controller, which syncs Kubernetes service accounts to Calico profiles (only used for etcdv3 datastore).",
+				Description: "NamespaceControllerConfig configures the namespace controller, which syncs Kubernetes namespaces to Calico profiles (only used for etcdv3 datastore).",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"reconcilerPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -5666,13 +6214,13 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec"),
+							Ref:     ref(v3.NetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -5680,7 +6228,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicy(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.NetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5708,7 +6256,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCall
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -5718,18 +6266,18 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicyList(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicy"),
+										Ref:     ref(v3.NetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.NetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5754,28 +6302,38 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -5816,6 +6374,11 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -5834,7 +6397,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkPolicySpec(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+			v3.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -5861,13 +6424,13 @@ func schema_pkg_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) c
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSetSpec"),
+							Ref:     ref(v3.NetworkSetSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -5875,7 +6438,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSet(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSetSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.NetworkSetSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5903,7 +6466,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallbac
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -5913,18 +6476,18 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSet"),
+										Ref:     ref(v3.NetworkSet{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.NetworkSet", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.NetworkSet{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -5942,7 +6505,7 @@ func schema_pkg_apis_projectcalico_v3_NetworkSetSpec(ref common.ReferenceCallbac
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The list of IP networks that belong to this set.",
+							Description: "The list of IP networks that belong to this set. Each entry must be in CIDR notation, e.g. \"192.168.1.0/24\". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
@@ -5971,7 +6534,7 @@ func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceC
 					"reconcilerPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 					"syncLabels": {
@@ -5984,20 +6547,20 @@ func schema_pkg_apis_projectcalico_v3_NodeControllerConfig(ref common.ReferenceC
 					"hostEndpoint": {
 						SchemaProps: spec.SchemaProps{
 							Description: "HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.AutoHostEndpointConfig"),
+							Ref:         ref(v3.AutoHostEndpointConfig{}.OpenAPIModelName()),
 						},
 					},
 					"leakGracePeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LeakGracePeriod is the period used by the controller to determine if an IP address has been leaked. Set to 0 to disable IP garbage collection. [Default: 15m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.AutoHostEndpointConfig", "k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			v3.AutoHostEndpointConfig{}.OpenAPIModelName(), metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -6011,14 +6574,14 @@ func schema_pkg_apis_projectcalico_v3_PolicyControllerConfig(ref common.Referenc
 					"reconcilerPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -6037,6 +6600,11 @@ func schema_pkg_apis_projectcalico_v3_PrefixAdvertisement(ref common.ReferenceCa
 						},
 					},
 					"communities": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Communities can be list of either community names already defined in `Specs.Communities` or community value of format `aa:nn` or `aa:nn:mm`. For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number. For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number. Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.",
 							Type:        []string{"array"},
@@ -6085,13 +6653,13 @@ func schema_pkg_apis_projectcalico_v3_Profile(ref common.ReferenceCallback) comm
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec"),
+							Ref:     ref(v3.ProfileSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -6099,7 +6667,7 @@ func schema_pkg_apis_projectcalico_v3_Profile(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.ProfileSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.ProfileSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6127,7 +6695,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) 
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -6137,18 +6705,18 @@ func schema_pkg_apis_projectcalico_v3_ProfileList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Profile"),
+										Ref:     ref(v3.Profile{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Profile", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.Profile{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6160,28 +6728,38 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6189,7 +6767,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 					},
 					"labelsToApply": {
 						SchemaProps: spec.SchemaProps{
-							Description: "An option set of labels to apply to each endpoint (in addition to their own labels) referencing this profile.  If labels configured on the endpoint have keys matching those labels inherited from the profile, the endpoint label values take precedence.",
+							Description: "An optional set of labels to apply to each endpoint (in addition to their own labels) referencing this profile. If a label key from the profile conflicts with a label already present on the endpoint, the endpoint's own label value takes precedence.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -6207,7 +6785,7 @@ func schema_pkg_apis_projectcalico_v3_ProfileSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+			v3.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -6322,51 +6900,51 @@ func schema_pkg_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Protocol is an optional field that restricts the rule to only apply to traffic of a specific IP protocol. Required if any of the EntityRules contain Ports (because ports only apply to certain protocols).\n\nMust be one of these string values: \"TCP\", \"UDP\", \"ICMP\", \"ICMPv6\", \"SCTP\", \"UDPLite\" or an integer in the range 1-255.",
-							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+							Ref:         ref(numorstring.Protocol{}.OpenAPIModelName()),
 						},
 					},
 					"icmp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ICMP is an optional field that restricts the rule to apply to a specific type and code of ICMP traffic.  This should only be specified if the Protocol field is set to \"ICMP\" or \"ICMPv6\".",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields"),
+							Ref:         ref(v3.ICMPFields{}.OpenAPIModelName()),
 						},
 					},
 					"notProtocol": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NotProtocol is the negated version of the Protocol field.",
-							Ref:         ref("github.com/projectcalico/api/pkg/lib/numorstring.Protocol"),
+							Ref:         ref(numorstring.Protocol{}.OpenAPIModelName()),
 						},
 					},
 					"notICMP": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NotICMP is the negated version of the ICMP field.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields"),
+							Ref:         ref(v3.ICMPFields{}.OpenAPIModelName()),
 						},
 					},
 					"source": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Source contains the match criteria that apply to source entity.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule"),
+							Ref:         ref(v3.EntityRule{}.OpenAPIModelName()),
 						},
 					},
 					"destination": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Destination contains the match criteria that apply to destination entity.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule"),
+							Ref:         ref(v3.EntityRule{}.OpenAPIModelName()),
 						},
 					},
 					"http": {
 						SchemaProps: spec.SchemaProps{
 							Description: "HTTP contains match criteria that apply to HTTP requests.",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPMatch"),
+							Ref:         ref(v3.HTTPMatch{}.OpenAPIModelName()),
 						},
 					},
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Metadata contains additional information for this rule",
-							Ref:         ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata"),
+							Ref:         ref(v3.RuleMetadata{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -6374,7 +6952,7 @@ func schema_pkg_apis_projectcalico_v3_Rule(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.EntityRule", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.HTTPMatch", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.ICMPFields", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.RuleMetadata", "github.com/projectcalico/api/pkg/lib/numorstring.Protocol"},
+			v3.EntityRule{}.OpenAPIModelName(), v3.HTTPMatch{}.OpenAPIModelName(), v3.ICMPFields{}.OpenAPIModelName(), v3.RuleMetadata{}.OpenAPIModelName(), numorstring.Protocol{}.OpenAPIModelName()},
 	}
 }
 
@@ -6416,14 +6994,14 @@ func schema_pkg_apis_projectcalico_v3_ServiceAccountControllerConfig(ref common.
 					"reconcilerPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -6588,13 +7166,13 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.Refer
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec"),
+							Ref:     ref(v3.StagedGlobalNetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -6602,7 +7180,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicy(ref common.Refer
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.StagedGlobalNetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6630,7 +7208,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.R
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -6640,18 +7218,18 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicyList(ref common.R
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicy"),
+										Ref:     ref(v3.StagedGlobalNetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedGlobalNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.StagedGlobalNetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6683,28 +7261,38 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6712,7 +7300,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -6773,6 +7361,11 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -6791,7 +7384,7 @@ func schema_pkg_apis_projectcalico_v3_StagedGlobalNetworkPolicySpec(ref common.R
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+			v3.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -6819,13 +7412,13 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.R
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec"),
+							Ref:     ref(v3.StagedKubernetesNetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -6833,7 +7426,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicy(ref common.R
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.StagedKubernetesNetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6861,7 +7454,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref comm
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -6871,18 +7464,18 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicyList(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicy"),
+										Ref:     ref(v3.StagedKubernetesNetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedKubernetesNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.StagedKubernetesNetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -6903,10 +7496,15 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects the pods to which this NetworkPolicy object applies. The array of ingress rules is applied to any pods selected by this field. Multiple network policies can select the same set of pods. In this case, the ingress rules for each are combined additively. This field is NOT optional and follows standard label selector semantics. An empty podSelector matches all pods in this namespace.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "List of ingress rules to be applied to the selected pods. Traffic is allowed to a pod if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic source is the pod's local node, OR if the traffic matches at least one ingress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy does not allow any traffic (and serves solely to ensure that the pods it selects are isolated by default)",
 							Type:        []string{"array"},
@@ -6914,13 +7512,18 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyIngressRule"),
+										Ref:     ref(networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "List of egress rules to be applied to the selected pods. Outgoing traffic is allowed if there are no NetworkPolicies selecting the pod (and cluster policy otherwise allows the traffic), OR if the traffic matches at least one egress rule across all of the NetworkPolicy objects whose podSelector matches the pod. If this field is empty then this NetworkPolicy limits all outgoing traffic (and serves solely to ensure that the pods it selects are isolated by default). This field is beta-level in 1.8",
 							Type:        []string{"array"},
@@ -6928,7 +7531,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyEgressRule"),
+										Ref:     ref(networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -6959,7 +7562,7 @@ func schema_pkg_apis_projectcalico_v3_StagedKubernetesNetworkPolicySpec(ref comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicyEgressRule", "k8s.io/api/networking/v1.NetworkPolicyIngressRule", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName(), networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -6987,13 +7590,13 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCa
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec"),
+							Ref:     ref(v3.StagedNetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -7001,7 +7604,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicy(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.StagedNetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7029,7 +7632,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.Referen
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -7039,18 +7642,18 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicyList(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicy"),
+										Ref:     ref(v3.StagedNetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.StagedNetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.StagedNetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7082,28 +7685,38 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"ingress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of ingress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 					"egress": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
-							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply.",
+							Description: "The ordered set of egress rules.  Each rule contains a set of packet match criteria and a corresponding action to apply. Limited to 1024 rules per policy.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"),
+										Ref:     ref(v3.Rule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -7111,7 +7724,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 					},
 					"selector": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The selector is an expression used to pick pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
+							Description: "The selector is an expression used to pick out the endpoints that the policy should be applied to.\n\nSelector expressions follow this syntax:\n\n\tlabel == \"string_literal\"  ->  comparison, e.g. my_label == \"foo bar\"\n\tlabel != \"string_literal\"   ->  not equal; also matches if label is not present\n\tlabel in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is one of \"a\", \"b\", \"c\"\n\tlabel not in { \"a\", \"b\", \"c\", ... }  ->  true if the value of label X is not one of \"a\", \"b\", \"c\"\n\thas(label_name)  -> True if that label is present\n\t! expr -> negation of expr\n\texpr && expr  -> Short-circuit and\n\texpr || expr  -> Short-circuit or\n\t( expr ) -> parens for grouping\n\tall() or the empty selector -> matches all endpoints.\n\nLabel names are allowed to contain alphanumerics, -, _ and /. String literals are more permissive but they do not support escape characters.\n\nExamples (with made-up labels):\n\n\ttype == \"webserver\" && deployment == \"prod\"\n\ttype in {\"frontend\", \"backend\"}\n\tdeployment != \"dev\"\n\t! has(label_name)",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7144,6 +7757,11 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 						},
 					},
 					"performanceHints": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "PerformanceHints contains a list of hints to Calico's policy engine to help process the policy more efficiently.  Hints never change the enforcement behaviour of the policy.\n\nCurrently, the only available hint is \"AssumeNeededOnEveryNode\".  When that hint is set on a policy, Felix will act as if the policy matches a local endpoint even if it does not. This is useful for \"preloading\" any large static policies that are known to be used on every node. If the policy is _not_ used on a particular node then the work done to preload the policy (and to maintain it) is wasted.",
 							Type:        []string{"array"},
@@ -7162,7 +7780,7 @@ func schema_pkg_apis_projectcalico_v3_StagedNetworkPolicySpec(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Rule"},
+			v3.Rule{}.OpenAPIModelName()},
 	}
 }
 
@@ -7222,6 +7840,22 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 							},
 						},
 					},
+					"annotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Annotations adds the specified annotations to the generated AutoHostEndpoint.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"nodeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "NodeSelector allows the AutoHostEndpoint to be created only for specific nodes",
@@ -7259,19 +7893,19 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec"),
+							Ref:     ref(v3.TierSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus"),
+							Ref:     ref(v3.TierStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -7279,7 +7913,7 @@ func schema_pkg_apis_projectcalico_v3_Tier(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierSpec", "github.com/projectcalico/api/pkg/apis/projectcalico/v3.TierStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v3.TierSpec{}.OpenAPIModelName(), v3.TierStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7307,7 +7941,7 @@ func schema_pkg_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) com
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -7317,18 +7951,18 @@ func schema_pkg_apis_projectcalico_v3_TierList(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier"),
+										Ref:     ref(v3.Tier{}.OpenAPIModelName()),
 									},
 								},
 							},
 						},
 					},
 				},
-				Required: []string{"metadata", "items"},
+				Required: []string{"items"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/projectcalico/api/pkg/apis/projectcalico/v3.Tier", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v3.Tier{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7348,7 +7982,7 @@ func schema_pkg_apis_projectcalico_v3_TierSpec(ref common.ReferenceCallback) com
 					},
 					"defaultAction": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DefaultAction specifies the action applied to workloads selected by a policy in the tier, but not rule matched the workload's traffic. [Default: Deny]",
+							Description: "DefaultAction specifies the action applied to traffic that matches a policy in the tier but does not match any rule within that policy. [Default: Deny]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -7367,6 +8001,14 @@ func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) c
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"conditions": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-map-keys": []interface{}{
+									"type",
+								},
+								"x-kubernetes-list-type": "map",
+							},
+						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Conditions represents the latest observed set of conditions for the resource. A tier with a \"Ready\" condition set to \"True\" is operating as expected.",
 							Type:        []string{"array"},
@@ -7374,7 +8016,7 @@ func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -7384,7 +8026,7 @@ func schema_pkg_apis_projectcalico_v3_TierStatus(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -7398,14 +8040,14 @@ func schema_pkg_apis_projectcalico_v3_WorkloadEndpointControllerConfig(ref commo
 					"reconcilerPeriod": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref:         ref(metav1.Duration{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			metav1.Duration{}.OpenAPIModelName()},
 	}
 }
 
@@ -7508,26 +8150,26 @@ func schema_k8sio_api_core_v1_Affinity(ref common.ReferenceCallback) common.Open
 					"nodeAffinity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Describes node affinity scheduling rules for the pod.",
-							Ref:         ref("k8s.io/api/core/v1.NodeAffinity"),
+							Ref:         ref(v1.NodeAffinity{}.OpenAPIModelName()),
 						},
 					},
 					"podAffinity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Describes pod affinity scheduling rules (e.g. co-locate this pod in the same node, zone, etc. as some other pod(s)).",
-							Ref:         ref("k8s.io/api/core/v1.PodAffinity"),
+							Ref:         ref(v1.PodAffinity{}.OpenAPIModelName()),
 						},
 					},
 					"podAntiAffinity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Describes pod anti-affinity scheduling rules (e.g. avoid putting this pod in the same node, zone, etc. as some other pod(s)).",
-							Ref:         ref("k8s.io/api/core/v1.PodAntiAffinity"),
+							Ref:         ref(v1.PodAntiAffinity{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeAffinity", "k8s.io/api/core/v1.PodAffinity", "k8s.io/api/core/v1.PodAntiAffinity"},
+			v1.NodeAffinity{}.OpenAPIModelName(), v1.PodAffinity{}.OpenAPIModelName(), v1.PodAntiAffinity{}.OpenAPIModelName()},
 	}
 }
 
@@ -7623,7 +8265,7 @@ func schema_k8sio_api_core_v1_AvoidPods(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PreferAvoidPodsEntry"),
+										Ref:     ref(v1.PreferAvoidPodsEntry{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -7633,7 +8275,7 @@ func schema_k8sio_api_core_v1_AvoidPods(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PreferAvoidPodsEntry"},
+			v1.PreferAvoidPodsEntry{}.OpenAPIModelName()},
 	}
 }
 
@@ -7807,14 +8449,14 @@ func schema_k8sio_api_core_v1_Binding(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"target": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The target object that you want to bind to the standard object.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -7822,7 +8464,7 @@ func schema_k8sio_api_core_v1_Binding(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -7882,31 +8524,31 @@ func schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref common.ReferenceCall
 					"controllerPublishSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "controllerPublishSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI ControllerPublishVolume and ControllerUnpublishVolume calls. This field is optional, and may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"nodeStageSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nodeStageSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodeStageVolume and NodeStageVolume and NodeUnstageVolume calls. This field is optional, and may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"nodePublishSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nodePublishSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodePublishVolume and NodeUnpublishVolume calls. This field is optional, and may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"controllerExpandSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "controllerExpandSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI ControllerExpandVolume call. This field is optional, and may be empty if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"nodeExpandSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nodeExpandSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodeExpandVolume call. This field is optional, may be omitted if no secret is required. If the secret object contains more than one secret, all secrets are passed.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -7914,7 +8556,7 @@ func schema_k8sio_api_core_v1_CSIPersistentVolumeSource(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -7966,7 +8608,7 @@ func schema_k8sio_api_core_v1_CSIVolumeSource(ref common.ReferenceCallback) comm
 					"nodePublishSecretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nodePublishSecretRef is a reference to the secret object containing sensitive information to pass to the CSI driver to complete the CSI NodePublishVolume and NodeUnpublishVolume calls. This field is optional, and  may be empty if no secret is required. If the secret object contains more than one secret, all secret references are passed.",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -7974,7 +8616,7 @@ func schema_k8sio_api_core_v1_CSIVolumeSource(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -8082,7 +8724,7 @@ func schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref common.ReferenceC
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty. More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -8097,7 +8739,7 @@ func schema_k8sio_api_core_v1_CephFSPersistentVolumeSource(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -8152,7 +8794,7 @@ func schema_k8sio_api_core_v1_CephFSVolumeSource(ref common.ReferenceCallback) c
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is Optional: SecretRef is reference to the authentication secret for User, default is empty. More info: https://examples.k8s.io/volumes/cephfs/README.md#how-to-use-it",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -8167,7 +8809,7 @@ func schema_k8sio_api_core_v1_CephFSVolumeSource(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -8203,7 +8845,7 @@ func schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref common.ReferenceC
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is Optional: points to a secret object containing parameters used to connect to OpenStack.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -8211,7 +8853,7 @@ func schema_k8sio_api_core_v1_CinderPersistentVolumeSource(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -8247,7 +8889,7 @@ func schema_k8sio_api_core_v1_CinderVolumeSource(ref common.ReferenceCallback) c
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is optional: points to a secret object containing parameters used to connect to OpenStack.",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -8255,7 +8897,7 @@ func schema_k8sio_api_core_v1_CinderVolumeSource(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -8303,7 +8945,7 @@ func schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref common.ReferenceC
 					"labelSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Select all ClusterTrustBundles that match this label selector.  Only has effect if signerName is set.  Mutually-exclusive with name.  If unset, interpreted as \"match nothing\".  If set but empty, interpreted as \"match everything\".",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"optional": {
@@ -8326,7 +8968,7 @@ func schema_k8sio_api_core_v1_ClusterTrustBundleProjection(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -8399,7 +9041,7 @@ func schema_k8sio_api_core_v1_ComponentStatus(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"conditions": {
@@ -8420,7 +9062,7 @@ func schema_k8sio_api_core_v1_ComponentStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ComponentCondition"),
+										Ref:     ref(v1.ComponentCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8430,7 +9072,7 @@ func schema_k8sio_api_core_v1_ComponentStatus(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ComponentCondition", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.ComponentCondition{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -8459,7 +9101,7 @@ func schema_k8sio_api_core_v1_ComponentStatusList(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -8470,7 +9112,7 @@ func schema_k8sio_api_core_v1_ComponentStatusList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ComponentStatus"),
+										Ref:     ref(v1.ComponentStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8481,7 +9123,7 @@ func schema_k8sio_api_core_v1_ComponentStatusList(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ComponentStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.ComponentStatus{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -8510,7 +9152,7 @@ func schema_k8sio_api_core_v1_ConfigMap(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"immutable": {
@@ -8555,7 +9197,7 @@ func schema_k8sio_api_core_v1_ConfigMap(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -8654,7 +9296,7 @@ func schema_k8sio_api_core_v1_ConfigMapList(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -8665,7 +9307,7 @@ func schema_k8sio_api_core_v1_ConfigMapList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ConfigMap"),
+										Ref:     ref(v1.ConfigMap{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8676,7 +9318,7 @@ func schema_k8sio_api_core_v1_ConfigMapList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ConfigMap", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.ConfigMap{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -8760,7 +9402,7 @@ func schema_k8sio_api_core_v1_ConfigMapProjection(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.KeyToPath"),
+										Ref:     ref(v1.KeyToPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8777,7 +9419,7 @@ func schema_k8sio_api_core_v1_ConfigMapProjection(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.KeyToPath"},
+			v1.KeyToPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -8809,7 +9451,7 @@ func schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.KeyToPath"),
+										Ref:     ref(v1.KeyToPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8833,7 +9475,7 @@ func schema_k8sio_api_core_v1_ConfigMapVolumeSource(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.KeyToPath"},
+			v1.KeyToPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -8925,7 +9567,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerPort"),
+										Ref:     ref(v1.ContainerPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8944,7 +9586,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvFromSource"),
+										Ref:     ref(v1.EnvFromSource{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8968,7 +9610,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+										Ref:     ref(v1.EnvVar{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -8978,7 +9620,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Compute Resources required by this container. Cannot be updated. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"resizePolicy": {
@@ -8988,13 +9630,13 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "Resources resize policy for the container.",
+							Description: "Resources resize policy for the container. This field cannot be set on ephemeral containers.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerResizePolicy"),
+										Ref:     ref(v1.ContainerResizePolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9020,7 +9662,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerRestartRule"),
+										Ref:     ref(v1.ContainerRestartRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9044,7 +9686,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeMount"),
+										Ref:     ref(v1.VolumeMount{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9068,7 +9710,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeDevice"),
+										Ref:     ref(v1.VolumeDevice{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9077,25 +9719,25 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 					"livenessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Periodic probe of container liveness. Container will be restarted if the probe fails. Cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"readinessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Periodic probe of container service readiness. Container will be removed from service endpoints if the probe fails. Cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"startupProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod's lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Actions that the management system should take in response to container lifecycle events. Cannot be updated.",
-							Ref:         ref("k8s.io/api/core/v1.Lifecycle"),
+							Ref:         ref(v1.Lifecycle{}.OpenAPIModelName()),
 						},
 					},
 					"terminationMessagePath": {
@@ -9124,7 +9766,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 					"securityContext": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SecurityContext defines the security options the container should be run with. If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext. More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
-							Ref:         ref("k8s.io/api/core/v1.SecurityContext"),
+							Ref:         ref(v1.SecurityContext{}.OpenAPIModelName()),
 						},
 					},
 					"stdin": {
@@ -9153,7 +9795,7 @@ func schema_k8sio_api_core_v1_Container(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerPort", "k8s.io/api/core/v1.ContainerResizePolicy", "k8s.io/api/core/v1.ContainerRestartRule", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.Lifecycle", "k8s.io/api/core/v1.Probe", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeDevice", "k8s.io/api/core/v1.VolumeMount"},
+			v1.ContainerPort{}.OpenAPIModelName(), v1.ContainerResizePolicy{}.OpenAPIModelName(), v1.ContainerRestartRule{}.OpenAPIModelName(), v1.EnvFromSource{}.OpenAPIModelName(), v1.EnvVar{}.OpenAPIModelName(), v1.Lifecycle{}.OpenAPIModelName(), v1.Probe{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), v1.SecurityContext{}.OpenAPIModelName(), v1.VolumeDevice{}.OpenAPIModelName(), v1.VolumeMount{}.OpenAPIModelName()},
 	}
 }
 
@@ -9334,7 +9976,7 @@ func schema_k8sio_api_core_v1_ContainerRestartRule(ref common.ReferenceCallback)
 					"exitCodes": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Represents the exit codes to check on container exits.",
-							Ref:         ref("k8s.io/api/core/v1.ContainerRestartRuleOnExitCodes"),
+							Ref:         ref(v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -9342,7 +9984,7 @@ func schema_k8sio_api_core_v1_ContainerRestartRule(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerRestartRuleOnExitCodes"},
+			v1.ContainerRestartRuleOnExitCodes{}.OpenAPIModelName()},
 	}
 }
 
@@ -9397,26 +10039,26 @@ func schema_k8sio_api_core_v1_ContainerState(ref common.ReferenceCallback) commo
 					"waiting": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Details about a waiting container",
-							Ref:         ref("k8s.io/api/core/v1.ContainerStateWaiting"),
+							Ref:         ref(v1.ContainerStateWaiting{}.OpenAPIModelName()),
 						},
 					},
 					"running": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Details about a running container",
-							Ref:         ref("k8s.io/api/core/v1.ContainerStateRunning"),
+							Ref:         ref(v1.ContainerStateRunning{}.OpenAPIModelName()),
 						},
 					},
 					"terminated": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Details about a terminated container",
-							Ref:         ref("k8s.io/api/core/v1.ContainerStateTerminated"),
+							Ref:         ref(v1.ContainerStateTerminated{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerStateRunning", "k8s.io/api/core/v1.ContainerStateTerminated", "k8s.io/api/core/v1.ContainerStateWaiting"},
+			v1.ContainerStateRunning{}.OpenAPIModelName(), v1.ContainerStateTerminated{}.OpenAPIModelName(), v1.ContainerStateWaiting{}.OpenAPIModelName()},
 	}
 }
 
@@ -9430,14 +10072,14 @@ func schema_k8sio_api_core_v1_ContainerStateRunning(ref common.ReferenceCallback
 					"startedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time at which the container was last (re-)started",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -9480,13 +10122,13 @@ func schema_k8sio_api_core_v1_ContainerStateTerminated(ref common.ReferenceCallb
 					"startedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time at which previous execution of the container started",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"finishedAt": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time at which the container last terminated",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"containerID": {
@@ -9501,7 +10143,7 @@ func schema_k8sio_api_core_v1_ContainerStateTerminated(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -9551,14 +10193,14 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "State holds details about the container's current condition.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ContainerState"),
+							Ref:         ref(v1.ContainerState{}.OpenAPIModelName()),
 						},
 					},
 					"lastState": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LastTerminationState holds the last termination state of the container to help debug container crashes and restarts. This field is not populated if the container is still running and RestartCount is 0.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ContainerState"),
+							Ref:         ref(v1.ContainerState{}.OpenAPIModelName()),
 						},
 					},
 					"ready": {
@@ -9624,7 +10266,7 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 					"resources": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Resources represents the compute resource requests and limits that have been successfully enacted on the running container after it has been started or has been successfully resized.",
-							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"volumeMounts": {
@@ -9645,7 +10287,7 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeMountStatus"),
+										Ref:     ref(v1.VolumeMountStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9654,7 +10296,7 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 					"user": {
 						SchemaProps: spec.SchemaProps{
 							Description: "User represents user identity information initially attached to the first process of the container",
-							Ref:         ref("k8s.io/api/core/v1.ContainerUser"),
+							Ref:         ref(v1.ContainerUser{}.OpenAPIModelName()),
 						},
 					},
 					"allocatedResourcesStatus": {
@@ -9675,7 +10317,7 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ResourceStatus"),
+										Ref:     ref(v1.ResourceStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9694,7 +10336,7 @@ func schema_k8sio_api_core_v1_ContainerStatus(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerState", "k8s.io/api/core/v1.ContainerUser", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.ResourceStatus", "k8s.io/api/core/v1.VolumeMountStatus", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.ContainerState{}.OpenAPIModelName(), v1.ContainerUser{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), v1.ResourceStatus{}.OpenAPIModelName(), v1.VolumeMountStatus{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -9708,14 +10350,14 @@ func schema_k8sio_api_core_v1_ContainerUser(ref common.ReferenceCallback) common
 					"linux": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Linux holds user identity information initially attached to the first process of the containers in Linux. Note that the actual running identity can be changed if the process has enough privilege to do so.",
-							Ref:         ref("k8s.io/api/core/v1.LinuxContainerUser"),
+							Ref:         ref(v1.LinuxContainerUser{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LinuxContainerUser"},
+			v1.LinuxContainerUser{}.OpenAPIModelName()},
 	}
 }
 
@@ -9761,7 +10403,7 @@ func schema_k8sio_api_core_v1_DownwardAPIProjection(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.DownwardAPIVolumeFile"),
+										Ref:     ref(v1.DownwardAPIVolumeFile{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9771,7 +10413,7 @@ func schema_k8sio_api_core_v1_DownwardAPIProjection(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.DownwardAPIVolumeFile"},
+			v1.DownwardAPIVolumeFile{}.OpenAPIModelName()},
 	}
 }
 
@@ -9793,13 +10435,13 @@ func schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref common.ReferenceCallback
 					"fieldRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Required: Selects a field of the pod: only annotations, labels, name, namespace and uid are supported.",
-							Ref:         ref("k8s.io/api/core/v1.ObjectFieldSelector"),
+							Ref:         ref(v1.ObjectFieldSelector{}.OpenAPIModelName()),
 						},
 					},
 					"resourceFieldRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, requests.cpu and requests.memory) are currently supported.",
-							Ref:         ref("k8s.io/api/core/v1.ResourceFieldSelector"),
+							Ref:         ref(v1.ResourceFieldSelector{}.OpenAPIModelName()),
 						},
 					},
 					"mode": {
@@ -9814,7 +10456,7 @@ func schema_k8sio_api_core_v1_DownwardAPIVolumeFile(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ObjectFieldSelector", "k8s.io/api/core/v1.ResourceFieldSelector"},
+			v1.ObjectFieldSelector{}.OpenAPIModelName(), v1.ResourceFieldSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -9838,7 +10480,7 @@ func schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.DownwardAPIVolumeFile"),
+										Ref:     ref(v1.DownwardAPIVolumeFile{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -9855,7 +10497,7 @@ func schema_k8sio_api_core_v1_DownwardAPIVolumeSource(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.DownwardAPIVolumeFile"},
+			v1.DownwardAPIVolumeFile{}.OpenAPIModelName()},
 	}
 }
 
@@ -9919,7 +10561,7 @@ func schema_k8sio_api_core_v1_EndpointAddress(ref common.ReferenceCallback) comm
 					"targetRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Reference to object providing the endpoint.",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -9932,7 +10574,7 @@ func schema_k8sio_api_core_v1_EndpointAddress(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ObjectReference"},
+			v1.ObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -10005,7 +10647,7 @@ func schema_k8sio_api_core_v1_EndpointSubset(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EndpointAddress"),
+										Ref:     ref(v1.EndpointAddress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10024,7 +10666,7 @@ func schema_k8sio_api_core_v1_EndpointSubset(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EndpointAddress"),
+										Ref:     ref(v1.EndpointAddress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10043,7 +10685,7 @@ func schema_k8sio_api_core_v1_EndpointSubset(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EndpointPort"),
+										Ref:     ref(v1.EndpointPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10053,7 +10695,7 @@ func schema_k8sio_api_core_v1_EndpointSubset(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EndpointAddress", "k8s.io/api/core/v1.EndpointPort"},
+			v1.EndpointAddress{}.OpenAPIModelName(), v1.EndpointPort{}.OpenAPIModelName()},
 	}
 }
 
@@ -10082,7 +10724,7 @@ func schema_k8sio_api_core_v1_Endpoints(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"subsets": {
@@ -10098,7 +10740,7 @@ func schema_k8sio_api_core_v1_Endpoints(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EndpointSubset"),
+										Ref:     ref(v1.EndpointSubset{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10108,7 +10750,7 @@ func schema_k8sio_api_core_v1_Endpoints(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EndpointSubset", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.EndpointSubset{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -10137,7 +10779,7 @@ func schema_k8sio_api_core_v1_EndpointsList(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -10148,7 +10790,7 @@ func schema_k8sio_api_core_v1_EndpointsList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Endpoints"),
+										Ref:     ref(v1.Endpoints{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10159,7 +10801,7 @@ func schema_k8sio_api_core_v1_EndpointsList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Endpoints", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Endpoints{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -10180,20 +10822,20 @@ func schema_k8sio_api_core_v1_EnvFromSource(ref common.ReferenceCallback) common
 					"configMapRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The ConfigMap to select from",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapEnvSource"),
+							Ref:         ref(v1.ConfigMapEnvSource{}.OpenAPIModelName()),
 						},
 					},
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Secret to select from",
-							Ref:         ref("k8s.io/api/core/v1.SecretEnvSource"),
+							Ref:         ref(v1.SecretEnvSource{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ConfigMapEnvSource", "k8s.io/api/core/v1.SecretEnvSource"},
+			v1.ConfigMapEnvSource{}.OpenAPIModelName(), v1.SecretEnvSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -10222,7 +10864,7 @@ func schema_k8sio_api_core_v1_EnvVar(ref common.ReferenceCallback) common.OpenAP
 					"valueFrom": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Source for the environment variable's value. Cannot be used if value is not empty.",
-							Ref:         ref("k8s.io/api/core/v1.EnvVarSource"),
+							Ref:         ref(v1.EnvVarSource{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -10230,7 +10872,7 @@ func schema_k8sio_api_core_v1_EnvVar(ref common.ReferenceCallback) common.OpenAP
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVarSource"},
+			v1.EnvVarSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -10244,38 +10886,38 @@ func schema_k8sio_api_core_v1_EnvVarSource(ref common.ReferenceCallback) common.
 					"fieldRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.",
-							Ref:         ref("k8s.io/api/core/v1.ObjectFieldSelector"),
+							Ref:         ref(v1.ObjectFieldSelector{}.OpenAPIModelName()),
 						},
 					},
 					"resourceFieldRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.",
-							Ref:         ref("k8s.io/api/core/v1.ResourceFieldSelector"),
+							Ref:         ref(v1.ResourceFieldSelector{}.OpenAPIModelName()),
 						},
 					},
 					"configMapKeyRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a key of a ConfigMap.",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapKeySelector"),
+							Ref:         ref(v1.ConfigMapKeySelector{}.OpenAPIModelName()),
 						},
 					},
 					"secretKeyRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Selects a key of a secret in the pod's namespace",
-							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+							Ref:         ref(v1.SecretKeySelector{}.OpenAPIModelName()),
 						},
 					},
 					"fileKeyRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FileKeyRef selects a key of the env file. Requires the EnvFiles feature gate to be enabled.",
-							Ref:         ref("k8s.io/api/core/v1.FileKeySelector"),
+							Ref:         ref(v1.FileKeySelector{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ConfigMapKeySelector", "k8s.io/api/core/v1.FileKeySelector", "k8s.io/api/core/v1.ObjectFieldSelector", "k8s.io/api/core/v1.ResourceFieldSelector", "k8s.io/api/core/v1.SecretKeySelector"},
+			v1.ConfigMapKeySelector{}.OpenAPIModelName(), v1.FileKeySelector{}.OpenAPIModelName(), v1.ObjectFieldSelector{}.OpenAPIModelName(), v1.ResourceFieldSelector{}.OpenAPIModelName(), v1.SecretKeySelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -10367,7 +11009,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerPort"),
+										Ref:     ref(v1.ContainerPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10386,7 +11028,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvFromSource"),
+										Ref:     ref(v1.EnvFromSource{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10410,7 +11052,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+										Ref:     ref(v1.EnvVar{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10420,7 +11062,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "Resources are not allowed for ephemeral containers. Ephemeral containers use spare resources already allocated to the pod.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"resizePolicy": {
@@ -10436,7 +11078,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerResizePolicy"),
+										Ref:     ref(v1.ContainerResizePolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10462,7 +11104,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerRestartRule"),
+										Ref:     ref(v1.ContainerRestartRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10486,7 +11128,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeMount"),
+										Ref:     ref(v1.VolumeMount{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10510,7 +11152,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeDevice"),
+										Ref:     ref(v1.VolumeDevice{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10519,25 +11161,25 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 					"livenessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"readinessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"startupProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Lifecycle is not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Lifecycle"),
+							Ref:         ref(v1.Lifecycle{}.OpenAPIModelName()),
 						},
 					},
 					"terminationMessagePath": {
@@ -10566,7 +11208,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 					"securityContext": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Optional: SecurityContext defines the security options the ephemeral container should be run with. If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.",
-							Ref:         ref("k8s.io/api/core/v1.SecurityContext"),
+							Ref:         ref(v1.SecurityContext{}.OpenAPIModelName()),
 						},
 					},
 					"stdin": {
@@ -10602,7 +11244,7 @@ func schema_k8sio_api_core_v1_EphemeralContainer(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerPort", "k8s.io/api/core/v1.ContainerResizePolicy", "k8s.io/api/core/v1.ContainerRestartRule", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.Lifecycle", "k8s.io/api/core/v1.Probe", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeDevice", "k8s.io/api/core/v1.VolumeMount"},
+			v1.ContainerPort{}.OpenAPIModelName(), v1.ContainerResizePolicy{}.OpenAPIModelName(), v1.ContainerRestartRule{}.OpenAPIModelName(), v1.EnvFromSource{}.OpenAPIModelName(), v1.EnvVar{}.OpenAPIModelName(), v1.Lifecycle{}.OpenAPIModelName(), v1.Probe{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), v1.SecurityContext{}.OpenAPIModelName(), v1.VolumeDevice{}.OpenAPIModelName(), v1.VolumeMount{}.OpenAPIModelName()},
 	}
 }
 
@@ -10694,7 +11336,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerPort"),
+										Ref:     ref(v1.ContainerPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10713,7 +11355,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvFromSource"),
+										Ref:     ref(v1.EnvFromSource{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10737,7 +11379,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EnvVar"),
+										Ref:     ref(v1.EnvVar{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10747,7 +11389,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 						SchemaProps: spec.SchemaProps{
 							Description: "Resources are not allowed for ephemeral containers. Ephemeral containers use spare resources already allocated to the pod.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"resizePolicy": {
@@ -10763,7 +11405,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerResizePolicy"),
+										Ref:     ref(v1.ContainerResizePolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10789,7 +11431,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerRestartRule"),
+										Ref:     ref(v1.ContainerRestartRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10813,7 +11455,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeMount"),
+										Ref:     ref(v1.VolumeMount{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10837,7 +11479,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeDevice"),
+										Ref:     ref(v1.VolumeDevice{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -10846,25 +11488,25 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 					"livenessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"readinessProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"startupProbe": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Probes are not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Probe"),
+							Ref:         ref(v1.Probe{}.OpenAPIModelName()),
 						},
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Lifecycle is not allowed for ephemeral containers.",
-							Ref:         ref("k8s.io/api/core/v1.Lifecycle"),
+							Ref:         ref(v1.Lifecycle{}.OpenAPIModelName()),
 						},
 					},
 					"terminationMessagePath": {
@@ -10893,7 +11535,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 					"securityContext": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Optional: SecurityContext defines the security options the ephemeral container should be run with. If set, the fields of SecurityContext override the equivalent fields of PodSecurityContext.",
-							Ref:         ref("k8s.io/api/core/v1.SecurityContext"),
+							Ref:         ref(v1.SecurityContext{}.OpenAPIModelName()),
 						},
 					},
 					"stdin": {
@@ -10922,7 +11564,7 @@ func schema_k8sio_api_core_v1_EphemeralContainerCommon(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerPort", "k8s.io/api/core/v1.ContainerResizePolicy", "k8s.io/api/core/v1.ContainerRestartRule", "k8s.io/api/core/v1.EnvFromSource", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.Lifecycle", "k8s.io/api/core/v1.Probe", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.SecurityContext", "k8s.io/api/core/v1.VolumeDevice", "k8s.io/api/core/v1.VolumeMount"},
+			v1.ContainerPort{}.OpenAPIModelName(), v1.ContainerResizePolicy{}.OpenAPIModelName(), v1.ContainerRestartRule{}.OpenAPIModelName(), v1.EnvFromSource{}.OpenAPIModelName(), v1.EnvVar{}.OpenAPIModelName(), v1.Lifecycle{}.OpenAPIModelName(), v1.Probe{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), v1.SecurityContext{}.OpenAPIModelName(), v1.VolumeDevice{}.OpenAPIModelName(), v1.VolumeMount{}.OpenAPIModelName()},
 	}
 }
 
@@ -10936,14 +11578,14 @@ func schema_k8sio_api_core_v1_EphemeralVolumeSource(ref common.ReferenceCallback
 					"volumeClaimTemplate": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Will be used to create a stand-alone PVC to provision the volume. The pod in which this EphemeralVolumeSource is embedded will be the owner of the PVC, i.e. the PVC will be deleted together with the pod.  The name of the PVC will be `<pod name>-<volume name>` where `<volume name>` is the name from the `PodSpec.Volumes` array entry. Pod validation will reject the pod if the concatenated name is not valid for a PVC (for example, too long).\n\nAn existing PVC with that name that is not owned by the pod will *not* be used for the pod to avoid using an unrelated volume by mistake. Starting the pod is then blocked until the unrelated PVC is removed. If such a pre-created PVC is meant to be used by the pod, the PVC has to updated with an owner reference to the pod once the pod exists. Normally this should not be necessary, but it may be useful when manually reconstructing a broken cluster.\n\nThis field is read-only and no changes will be made by Kubernetes to the PVC after it has been created.\n\nRequired, must not be nil.",
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimTemplate"),
+							Ref:         ref(v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolumeClaimTemplate"},
+			v1.PersistentVolumeClaimTemplate{}.OpenAPIModelName()},
 	}
 }
 
@@ -10972,14 +11614,14 @@ func schema_k8sio_api_core_v1_Event(ref common.ReferenceCallback) common.OpenAPI
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"involvedObject": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The object that this event is about.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -11000,19 +11642,19 @@ func schema_k8sio_api_core_v1_Event(ref common.ReferenceCallback) common.OpenAPI
 						SchemaProps: spec.SchemaProps{
 							Description: "The component reporting this event. Should be a short machine understandable string.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.EventSource"),
+							Ref:         ref(v1.EventSource{}.OpenAPIModelName()),
 						},
 					},
 					"firstTimestamp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The time at which the event was first recorded. (Time of server receipt is in TypeMeta.)",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"lastTimestamp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The time at which the most recent occurrence of this event was recorded.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"count": {
@@ -11032,13 +11674,13 @@ func schema_k8sio_api_core_v1_Event(ref common.ReferenceCallback) common.OpenAPI
 					"eventTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time when this Event was first observed.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime"),
+							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 					"series": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Data about the Event series this event represents or nil if it's a singleton Event.",
-							Ref:         ref("k8s.io/api/core/v1.EventSeries"),
+							Ref:         ref(v1.EventSeries{}.OpenAPIModelName()),
 						},
 					},
 					"action": {
@@ -11051,7 +11693,7 @@ func schema_k8sio_api_core_v1_Event(ref common.ReferenceCallback) common.OpenAPI
 					"related": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Optional secondary object for more complex actions.",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"reportingComponent": {
@@ -11075,7 +11717,7 @@ func schema_k8sio_api_core_v1_Event(ref common.ReferenceCallback) common.OpenAPI
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EventSeries", "k8s.io/api/core/v1.EventSource", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			v1.EventSeries{}.OpenAPIModelName(), v1.EventSource{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.MicroTime{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -11104,7 +11746,7 @@ func schema_k8sio_api_core_v1_EventList(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -11115,7 +11757,7 @@ func schema_k8sio_api_core_v1_EventList(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Event"),
+										Ref:     ref(v1.Event{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -11126,7 +11768,7 @@ func schema_k8sio_api_core_v1_EventList(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Event", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Event{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -11147,14 +11789,14 @@ func schema_k8sio_api_core_v1_EventSeries(ref common.ReferenceCallback) common.O
 					"lastObservedTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time of the last occurrence observed",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime"),
+							Ref:         ref(metav1.MicroTime{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.MicroTime"},
+			metav1.MicroTime{}.OpenAPIModelName()},
 	}
 }
 
@@ -11368,7 +12010,7 @@ func schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref common.ReferenceCal
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is Optional: SecretRef is reference to the secret object containing sensitive information to pass to the plugin scripts. This may be empty if no secret object is specified. If the secret object contains more than one secret, all secrets are passed to the plugin scripts.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -11399,7 +12041,7 @@ func schema_k8sio_api_core_v1_FlexPersistentVolumeSource(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -11428,7 +12070,7 @@ func schema_k8sio_api_core_v1_FlexVolumeSource(ref common.ReferenceCallback) com
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is Optional: secretRef is reference to the secret object containing sensitive information to pass to the plugin scripts. This may be empty if no secret object is specified. If the secret object contains more than one secret, all secrets are passed to the plugin scripts.",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -11459,7 +12101,7 @@ func schema_k8sio_api_core_v1_FlexVolumeSource(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -11697,7 +12339,7 @@ func schema_k8sio_api_core_v1_HTTPGetAction(ref common.ReferenceCallback) common
 					"port": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.",
-							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"host": {
@@ -11728,7 +12370,7 @@ func schema_k8sio_api_core_v1_HTTPGetAction(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.HTTPHeader"),
+										Ref:     ref(v1.HTTPHeader{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -11739,7 +12381,7 @@ func schema_k8sio_api_core_v1_HTTPGetAction(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.HTTPHeader", "k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+			v1.HTTPHeader{}.OpenAPIModelName(), intstr.IntOrString{}.OpenAPIModelName()},
 	}
 }
 
@@ -11957,7 +12599,7 @@ func schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref common.ReferenceCa
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is the CHAP Secret for iSCSI target and initiator authentication",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"initiatorName": {
@@ -11972,7 +12614,7 @@ func schema_k8sio_api_core_v1_ISCSIPersistentVolumeSource(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -12066,7 +12708,7 @@ func schema_k8sio_api_core_v1_ISCSIVolumeSource(ref common.ReferenceCallback) co
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is the CHAP Secret for iSCSI target and initiator authentication",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"initiatorName": {
@@ -12081,7 +12723,7 @@ func schema_k8sio_api_core_v1_ISCSIVolumeSource(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -12108,6 +12750,27 @@ func schema_k8sio_api_core_v1_ImageVolumeSource(ref common.ReferenceCallback) co
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func schema_k8sio_api_core_v1_ImageVolumeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ImageVolumeStatus represents the image-based volume status.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"imageRef": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ImageRef is the digest of the image used for this volume. It should have a value that's similar to the pod's status.containerStatuses[i].imageID. The ImageRef length should not exceed 256 characters.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"imageRef"},
 			},
 		},
 	}
@@ -12160,13 +12823,13 @@ func schema_k8sio_api_core_v1_Lifecycle(ref common.ReferenceCallback) common.Ope
 					"postStart": {
 						SchemaProps: spec.SchemaProps{
 							Description: "PostStart is called immediately after a container is created. If the handler fails, the container is terminated and restarted according to its restart policy. Other management of the container blocks until the hook completes. More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks",
-							Ref:         ref("k8s.io/api/core/v1.LifecycleHandler"),
+							Ref:         ref(v1.LifecycleHandler{}.OpenAPIModelName()),
 						},
 					},
 					"preStop": {
 						SchemaProps: spec.SchemaProps{
 							Description: "PreStop is called immediately before a container is terminated due to an API request or management event such as liveness/startup probe failure, preemption, resource contention, etc. The handler is not called if the container crashes or exits. The Pod's termination grace period countdown begins before the PreStop hook is executed. Regardless of the outcome of the handler, the container will eventually terminate within the Pod's termination grace period (unless delayed by finalizers). Other management of the container blocks until the hook completes or until the termination grace period is reached. More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks",
-							Ref:         ref("k8s.io/api/core/v1.LifecycleHandler"),
+							Ref:         ref(v1.LifecycleHandler{}.OpenAPIModelName()),
 						},
 					},
 					"stopSignal": {
@@ -12181,7 +12844,7 @@ func schema_k8sio_api_core_v1_Lifecycle(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LifecycleHandler"},
+			v1.LifecycleHandler{}.OpenAPIModelName()},
 	}
 }
 
@@ -12195,32 +12858,32 @@ func schema_k8sio_api_core_v1_LifecycleHandler(ref common.ReferenceCallback) com
 					"exec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Exec specifies a command to execute in the container.",
-							Ref:         ref("k8s.io/api/core/v1.ExecAction"),
+							Ref:         ref(v1.ExecAction{}.OpenAPIModelName()),
 						},
 					},
 					"httpGet": {
 						SchemaProps: spec.SchemaProps{
 							Description: "HTTPGet specifies an HTTP GET request to perform.",
-							Ref:         ref("k8s.io/api/core/v1.HTTPGetAction"),
+							Ref:         ref(v1.HTTPGetAction{}.OpenAPIModelName()),
 						},
 					},
 					"tcpSocket": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated. TCPSocket is NOT supported as a LifecycleHandler and kept for backward compatibility. There is no validation of this field and lifecycle hooks will fail at runtime when it is specified.",
-							Ref:         ref("k8s.io/api/core/v1.TCPSocketAction"),
+							Ref:         ref(v1.TCPSocketAction{}.OpenAPIModelName()),
 						},
 					},
 					"sleep": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Sleep represents a duration that the container should sleep.",
-							Ref:         ref("k8s.io/api/core/v1.SleepAction"),
+							Ref:         ref(v1.SleepAction{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ExecAction", "k8s.io/api/core/v1.HTTPGetAction", "k8s.io/api/core/v1.SleepAction", "k8s.io/api/core/v1.TCPSocketAction"},
+			v1.ExecAction{}.OpenAPIModelName(), v1.HTTPGetAction{}.OpenAPIModelName(), v1.SleepAction{}.OpenAPIModelName(), v1.TCPSocketAction{}.OpenAPIModelName()},
 	}
 }
 
@@ -12249,21 +12912,21 @@ func schema_k8sio_api_core_v1_LimitRange(ref common.ReferenceCallback) common.Op
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the limits enforced. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.LimitRangeSpec"),
+							Ref:         ref(v1.LimitRangeSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LimitRangeSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.LimitRangeSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -12386,7 +13049,7 @@ func schema_k8sio_api_core_v1_LimitRangeList(ref common.ReferenceCallback) commo
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -12397,7 +13060,7 @@ func schema_k8sio_api_core_v1_LimitRangeList(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LimitRange"),
+										Ref:     ref(v1.LimitRange{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12408,7 +13071,7 @@ func schema_k8sio_api_core_v1_LimitRangeList(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LimitRange", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.LimitRange{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -12432,7 +13095,7 @@ func schema_k8sio_api_core_v1_LimitRangeSpec(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LimitRangeItem"),
+										Ref:     ref(v1.LimitRangeItem{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12443,7 +13106,7 @@ func schema_k8sio_api_core_v1_LimitRangeSpec(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LimitRangeItem"},
+			v1.LimitRangeItem{}.OpenAPIModelName()},
 	}
 }
 
@@ -12522,7 +13185,7 @@ func schema_k8sio_api_core_v1_List(ref common.ReferenceCallback) common.OpenAPID
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -12532,7 +13195,7 @@ func schema_k8sio_api_core_v1_List(ref common.ReferenceCallback) common.OpenAPID
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
+										Ref: ref(runtime.RawExtension{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12543,7 +13206,7 @@ func schema_k8sio_api_core_v1_List(ref common.ReferenceCallback) common.OpenAPID
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/apimachinery/pkg/runtime.RawExtension"},
+			metav1.ListMeta{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 
@@ -12588,7 +13251,7 @@ func schema_k8sio_api_core_v1_LoadBalancerIngress(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PortStatus"),
+										Ref:     ref(v1.PortStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12598,7 +13261,7 @@ func schema_k8sio_api_core_v1_LoadBalancerIngress(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PortStatus"},
+			v1.PortStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -12622,7 +13285,7 @@ func schema_k8sio_api_core_v1_LoadBalancerStatus(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LoadBalancerIngress"),
+										Ref:     ref(v1.LoadBalancerIngress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12632,7 +13295,7 @@ func schema_k8sio_api_core_v1_LoadBalancerStatus(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LoadBalancerIngress"},
+			v1.LoadBalancerIngress{}.OpenAPIModelName()},
 	}
 }
 
@@ -12783,28 +13446,28 @@ func schema_k8sio_api_core_v1_Namespace(ref common.ReferenceCallback) common.Ope
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the behavior of the Namespace. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NamespaceSpec"),
+							Ref:         ref(v1.NamespaceSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status describes the current status of a Namespace. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NamespaceStatus"),
+							Ref:         ref(v1.NamespaceStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NamespaceSpec", "k8s.io/api/core/v1.NamespaceStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.NamespaceSpec{}.OpenAPIModelName(), v1.NamespaceStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -12834,7 +13497,7 @@ func schema_k8sio_api_core_v1_NamespaceCondition(ref common.ReferenceCallback) c
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Last time the condition transitioned from one status to another.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -12856,7 +13519,7 @@ func schema_k8sio_api_core_v1_NamespaceCondition(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -12885,7 +13548,7 @@ func schema_k8sio_api_core_v1_NamespaceList(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -12896,7 +13559,7 @@ func schema_k8sio_api_core_v1_NamespaceList(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Namespace"),
+										Ref:     ref(v1.Namespace{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12907,7 +13570,7 @@ func schema_k8sio_api_core_v1_NamespaceList(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Namespace", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Namespace{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -12977,7 +13640,7 @@ func schema_k8sio_api_core_v1_NamespaceStatus(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NamespaceCondition"),
+										Ref:     ref(v1.NamespaceCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -12987,7 +13650,7 @@ func schema_k8sio_api_core_v1_NamespaceStatus(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NamespaceCondition"},
+			v1.NamespaceCondition{}.OpenAPIModelName()},
 	}
 }
 
@@ -13016,28 +13679,28 @@ func schema_k8sio_api_core_v1_Node(ref common.ReferenceCallback) common.OpenAPID
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the behavior of a node. https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NodeSpec"),
+							Ref:         ref(v1.NodeSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the node. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NodeStatus"),
+							Ref:         ref(v1.NodeStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSpec", "k8s.io/api/core/v1.NodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.NodeSpec{}.OpenAPIModelName(), v1.NodeStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -13081,7 +13744,7 @@ func schema_k8sio_api_core_v1_NodeAffinity(ref common.ReferenceCallback) common.
 					"requiredDuringSchedulingIgnoredDuringExecution": {
 						SchemaProps: spec.SchemaProps{
 							Description: "If the affinity requirements specified by this field are not met at scheduling time, the pod will not be scheduled onto the node. If the affinity requirements specified by this field cease to be met at some point during pod execution (e.g. due to an update), the system may or may not try to eventually evict the pod from its node.",
-							Ref:         ref("k8s.io/api/core/v1.NodeSelector"),
+							Ref:         ref(v1.NodeSelector{}.OpenAPIModelName()),
 						},
 					},
 					"preferredDuringSchedulingIgnoredDuringExecution": {
@@ -13097,7 +13760,7 @@ func schema_k8sio_api_core_v1_NodeAffinity(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PreferredSchedulingTerm"),
+										Ref:     ref(v1.PreferredSchedulingTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13107,7 +13770,65 @@ func schema_k8sio_api_core_v1_NodeAffinity(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSelector", "k8s.io/api/core/v1.PreferredSchedulingTerm"},
+			v1.NodeSelector{}.OpenAPIModelName(), v1.PreferredSchedulingTerm{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_core_v1_NodeAllocatableResourceClaimStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeAllocatableResourceClaimStatus describes the status of node allocatable resources allocated via DRA.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"resourceClaimName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ResourceClaimName is the resource claim referenced by the pod that resulted in this node allocatable resource allocation.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"containers": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "set",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "Containers lists the names of all containers in this pod that reference the claim.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"resources": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Resources is a map of the node-allocatable resource name to the aggregate quantity allocated to the claim.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"resourceClaimName", "resources"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -13137,13 +13858,13 @@ func schema_k8sio_api_core_v1_NodeCondition(ref common.ReferenceCallback) common
 					"lastHeartbeatTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Last time we got an update on a given condition.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Last time the condition transit from one status to another.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -13165,7 +13886,7 @@ func schema_k8sio_api_core_v1_NodeCondition(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -13179,14 +13900,14 @@ func schema_k8sio_api_core_v1_NodeConfigSource(ref common.ReferenceCallback) com
 					"configMap": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ConfigMap is a reference to a Node's ConfigMap",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapNodeConfigSource"),
+							Ref:         ref(v1.ConfigMapNodeConfigSource{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ConfigMapNodeConfigSource"},
+			v1.ConfigMapNodeConfigSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -13200,19 +13921,19 @@ func schema_k8sio_api_core_v1_NodeConfigStatus(ref common.ReferenceCallback) com
 					"assigned": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Assigned reports the checkpointed config the node will try to use. When Node.Spec.ConfigSource is updated, the node checkpoints the associated config payload to local disk, along with a record indicating intended config. The node refers to this record to choose its config checkpoint, and reports this record in Assigned. Assigned only updates in the status after the record has been checkpointed to disk. When the Kubelet is restarted, it tries to make the Assigned config the Active config by loading and validating the checkpointed payload identified by Assigned.",
-							Ref:         ref("k8s.io/api/core/v1.NodeConfigSource"),
+							Ref:         ref(v1.NodeConfigSource{}.OpenAPIModelName()),
 						},
 					},
 					"active": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Active reports the checkpointed config the node is actively using. Active will represent either the current version of the Assigned config, or the current LastKnownGood config, depending on whether attempting to use the Assigned config results in an error.",
-							Ref:         ref("k8s.io/api/core/v1.NodeConfigSource"),
+							Ref:         ref(v1.NodeConfigSource{}.OpenAPIModelName()),
 						},
 					},
 					"lastKnownGood": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LastKnownGood reports the checkpointed config the node will fall back to when it encounters an error attempting to use the Assigned config. The Assigned config becomes the LastKnownGood config when the node determines that the Assigned config is stable and correct. This is currently implemented as a 10-minute soak period starting when the local record of Assigned config is updated. If the Assigned config is Active at the end of this period, it becomes the LastKnownGood. Note that if Spec.ConfigSource is reset to nil (use local defaults), the LastKnownGood is also immediately reset to nil, because the local default config is always assumed good. You should not make assumptions about the node's method of determining config stability and correctness, as this may change or become configurable in the future.",
-							Ref:         ref("k8s.io/api/core/v1.NodeConfigSource"),
+							Ref:         ref(v1.NodeConfigSource{}.OpenAPIModelName()),
 						},
 					},
 					"error": {
@@ -13226,7 +13947,7 @@ func schema_k8sio_api_core_v1_NodeConfigStatus(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeConfigSource"},
+			v1.NodeConfigSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -13241,14 +13962,14 @@ func schema_k8sio_api_core_v1_NodeDaemonEndpoints(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "Endpoint on which Kubelet is listening.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.DaemonEndpoint"),
+							Ref:         ref(v1.DaemonEndpoint{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.DaemonEndpoint"},
+			v1.DaemonEndpoint{}.OpenAPIModelName()},
 	}
 }
 
@@ -13297,7 +14018,7 @@ func schema_k8sio_api_core_v1_NodeList(ref common.ReferenceCallback) common.Open
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -13308,7 +14029,7 @@ func schema_k8sio_api_core_v1_NodeList(ref common.ReferenceCallback) common.Open
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Node"),
+										Ref:     ref(v1.Node{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13319,7 +14040,7 @@ func schema_k8sio_api_core_v1_NodeList(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Node", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Node{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -13375,14 +14096,14 @@ func schema_k8sio_api_core_v1_NodeRuntimeHandler(ref common.ReferenceCallback) c
 					"features": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Supported features.",
-							Ref:         ref("k8s.io/api/core/v1.NodeRuntimeHandlerFeatures"),
+							Ref:         ref(v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeRuntimeHandlerFeatures"},
+			v1.NodeRuntimeHandlerFeatures{}.OpenAPIModelName()},
 	}
 }
 
@@ -13433,7 +14154,7 @@ func schema_k8sio_api_core_v1_NodeSelector(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeSelectorTerm"),
+										Ref:     ref(v1.NodeSelectorTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13449,7 +14170,7 @@ func schema_k8sio_api_core_v1_NodeSelector(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSelectorTerm"},
+			v1.NodeSelectorTerm{}.OpenAPIModelName()},
 	}
 }
 
@@ -13524,7 +14245,7 @@ func schema_k8sio_api_core_v1_NodeSelectorTerm(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeSelectorRequirement"),
+										Ref:     ref(v1.NodeSelectorRequirement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13543,7 +14264,7 @@ func schema_k8sio_api_core_v1_NodeSelectorTerm(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeSelectorRequirement"),
+										Ref:     ref(v1.NodeSelectorRequirement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13558,7 +14279,7 @@ func schema_k8sio_api_core_v1_NodeSelectorTerm(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSelectorRequirement"},
+			v1.NodeSelectorRequirement{}.OpenAPIModelName()},
 	}
 }
 
@@ -13624,7 +14345,7 @@ func schema_k8sio_api_core_v1_NodeSpec(ref common.ReferenceCallback) common.Open
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Taint"),
+										Ref:     ref(v1.Taint{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13633,7 +14354,7 @@ func schema_k8sio_api_core_v1_NodeSpec(ref common.ReferenceCallback) common.Open
 					"configSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Deprecated: Previously used to specify the source of the node's configuration for the DynamicKubeletConfig feature. This feature is removed.",
-							Ref:         ref("k8s.io/api/core/v1.NodeConfigSource"),
+							Ref:         ref(v1.NodeConfigSource{}.OpenAPIModelName()),
 						},
 					},
 					"externalID": {
@@ -13647,7 +14368,7 @@ func schema_k8sio_api_core_v1_NodeSpec(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeConfigSource", "k8s.io/api/core/v1.Taint"},
+			v1.NodeConfigSource{}.OpenAPIModelName(), v1.Taint{}.OpenAPIModelName()},
 	}
 }
 
@@ -13712,7 +14433,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeCondition"),
+										Ref:     ref(v1.NodeCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13736,7 +14457,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeAddress"),
+										Ref:     ref(v1.NodeAddress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13746,14 +14467,14 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 						SchemaProps: spec.SchemaProps{
 							Description: "Endpoints of daemons running on the Node.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NodeDaemonEndpoints"),
+							Ref:         ref(v1.NodeDaemonEndpoints{}.OpenAPIModelName()),
 						},
 					},
 					"nodeInfo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Set of ids/uuids to uniquely identify the node. More info: https://kubernetes.io/docs/reference/node/node-status/#info",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NodeSystemInfo"),
+							Ref:         ref(v1.NodeSystemInfo{}.OpenAPIModelName()),
 						},
 					},
 					"images": {
@@ -13769,7 +14490,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerImage"),
+										Ref:     ref(v1.ContainerImage{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13808,7 +14529,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.AttachedVolume"),
+										Ref:     ref(v1.AttachedVolume{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13817,7 +14538,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 					"config": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status of the config assigned to the node via the dynamic Kubelet config feature.",
-							Ref:         ref("k8s.io/api/core/v1.NodeConfigStatus"),
+							Ref:         ref(v1.NodeConfigStatus{}.OpenAPIModelName()),
 						},
 					},
 					"runtimeHandlers": {
@@ -13833,7 +14554,7 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.NodeRuntimeHandler"),
+										Ref:     ref(v1.NodeRuntimeHandler{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -13842,14 +14563,34 @@ func schema_k8sio_api_core_v1_NodeStatus(ref common.ReferenceCallback) common.Op
 					"features": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Features describes the set of features implemented by the CRI implementation.",
-							Ref:         ref("k8s.io/api/core/v1.NodeFeatures"),
+							Ref:         ref(v1.NodeFeatures{}.OpenAPIModelName()),
+						},
+					},
+					"declaredFeatures": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "DeclaredFeatures represents the features related to feature gates that are declared by the node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AttachedVolume", "k8s.io/api/core/v1.ContainerImage", "k8s.io/api/core/v1.NodeAddress", "k8s.io/api/core/v1.NodeCondition", "k8s.io/api/core/v1.NodeConfigStatus", "k8s.io/api/core/v1.NodeDaemonEndpoints", "k8s.io/api/core/v1.NodeFeatures", "k8s.io/api/core/v1.NodeRuntimeHandler", "k8s.io/api/core/v1.NodeSystemInfo", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.AttachedVolume{}.OpenAPIModelName(), v1.ContainerImage{}.OpenAPIModelName(), v1.NodeAddress{}.OpenAPIModelName(), v1.NodeCondition{}.OpenAPIModelName(), v1.NodeConfigStatus{}.OpenAPIModelName(), v1.NodeDaemonEndpoints{}.OpenAPIModelName(), v1.NodeFeatures{}.OpenAPIModelName(), v1.NodeRuntimeHandler{}.OpenAPIModelName(), v1.NodeSystemInfo{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -13963,7 +14704,7 @@ func schema_k8sio_api_core_v1_NodeSystemInfo(ref common.ReferenceCallback) commo
 					"swap": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Swap Info reported by the node.",
-							Ref:         ref("k8s.io/api/core/v1.NodeSwapStatus"),
+							Ref:         ref(v1.NodeSwapStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -13971,7 +14712,7 @@ func schema_k8sio_api_core_v1_NodeSystemInfo(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSwapStatus"},
+			v1.NodeSwapStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -14101,28 +14842,28 @@ func schema_k8sio_api_core_v1_PersistentVolume(ref common.ReferenceCallback) com
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec defines a specification of a persistent volume owned by the cluster. Provisioned by an administrator. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeSpec"),
+							Ref:         ref(v1.PersistentVolumeSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "status represents the current information/status for the persistent volume. Populated by the system. Read-only. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistent-volumes",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeStatus"),
+							Ref:         ref(v1.PersistentVolumeStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolumeSpec", "k8s.io/api/core/v1.PersistentVolumeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PersistentVolumeSpec{}.OpenAPIModelName(), v1.PersistentVolumeStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -14151,28 +14892,28 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaim(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec defines the desired characteristics of a volume requested by a pod author. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimSpec"),
+							Ref:         ref(v1.PersistentVolumeClaimSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "status represents the current information/status of a persistent volume claim. Read-only. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimStatus"),
+							Ref:         ref(v1.PersistentVolumeClaimStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolumeClaimSpec", "k8s.io/api/core/v1.PersistentVolumeClaimStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PersistentVolumeClaimSpec{}.OpenAPIModelName(), v1.PersistentVolumeClaimStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -14202,13 +14943,13 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref common.Referenc
 					"lastProbeTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "lastProbeTime is the time we probed the condition.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "lastTransitionTime is the time the condition transitioned from one status to another.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -14230,7 +14971,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimCondition(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -14259,7 +15000,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref common.ReferenceCall
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -14270,7 +15011,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PersistentVolumeClaim"),
+										Ref:     ref(v1.PersistentVolumeClaim{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -14281,7 +15022,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimList(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolumeClaim", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.PersistentVolumeClaim{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -14316,14 +15057,14 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref common.ReferenceCall
 					"selector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "selector is a label query over volumes to consider for binding.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"resources": {
 						SchemaProps: spec.SchemaProps{
-							Description: "resources represents the minimum resources the volume should have. If RecoverVolumeExpansionFailure feature is enabled users are allowed to specify resource requirements that are lower than previous value but must still be higher than capacity recorded in the status field of the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources",
+							Description: "resources represents the minimum resources the volume should have. Users are allowed to specify resource requirements that are lower than previous value but must still be higher than capacity recorded in the status field of the claim. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#resources",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.VolumeResourceRequirements"),
+							Ref:         ref(v1.VolumeResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"volumeName": {
@@ -14351,13 +15092,13 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref common.ReferenceCall
 					"dataSource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "dataSource field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. When the AnyVolumeDataSource feature gate is enabled, dataSource contents will be copied to dataSourceRef, and dataSourceRef contents will be copied to dataSource when dataSourceRef.namespace is not specified. If the namespace is specified, then dataSourceRef will not be copied to dataSource.",
-							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
+							Ref:         ref(v1.TypedLocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"dataSourceRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "dataSourceRef specifies the object from which to populate the volume with data, if a non-empty volume is desired. This may be any object from a non-empty API group (non core object) or a PersistentVolumeClaim object. When this field is specified, volume binding will only succeed if the type of the specified object matches some installed volume populator or dynamic provisioner. This field will replace the functionality of the dataSource field and as such if both fields are non-empty, they must have the same value. For backwards compatibility, when namespace isn't specified in dataSourceRef, both fields (dataSource and dataSourceRef) will be set to the same value automatically if one of them is empty and the other is non-empty. When namespace is specified in dataSourceRef, dataSource isn't set to the same value and must be empty. There are three important differences between dataSource and dataSourceRef: * While dataSource only allows two specific types of objects, dataSourceRef\n  allows any non-core object, as well as PersistentVolumeClaim objects.\n* While dataSource ignores disallowed values (dropping them), dataSourceRef\n  preserves all values, and generates an error if a disallowed value is\n  specified.\n* While dataSource only allows local objects, dataSourceRef allows objects\n  in any namespaces.\n(Beta) Using this field requires the AnyVolumeDataSource feature gate to be enabled. (Alpha) Using the namespace field of dataSourceRef requires the CrossNamespaceVolumeDataSource feature gate to be enabled.",
-							Ref:         ref("k8s.io/api/core/v1.TypedObjectReference"),
+							Ref:         ref(v1.TypedObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"volumeAttributesClassName": {
@@ -14371,7 +15112,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimSpec(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.TypedLocalObjectReference", "k8s.io/api/core/v1.TypedObjectReference", "k8s.io/api/core/v1.VolumeResourceRequirements", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			v1.TypedLocalObjectReference{}.OpenAPIModelName(), v1.TypedObjectReference{}.OpenAPIModelName(), v1.VolumeResourceRequirements{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -14443,7 +15184,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PersistentVolumeClaimCondition"),
+										Ref:     ref(v1.PersistentVolumeClaimCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -14451,7 +15192,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref common.ReferenceCa
 					},
 					"allocatedResources": {
 						SchemaProps: spec.SchemaProps{
-							Description: "allocatedResources tracks the resources allocated to a PVC including its capacity. Key names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered reserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation is requested. For storage quota, the larger value from allocatedResources and PVC.spec.resources is used. If allocatedResources is not set, PVC.spec.resources alone is used for quota calculation. If a volume expansion capacity request is lowered, allocatedResources is only lowered if there are no expansion operations in progress and if the actual volume capacity is equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName should ignore the update for the purpose it was designed. For example - a controller that only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid resources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.",
+							Description: "allocatedResources tracks the resources allocated to a PVC including its capacity. Key names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered reserved and hence may not be used.\n\nCapacity reported here may be larger than the actual capacity when a volume expansion operation is requested. For storage quota, the larger value from allocatedResources and PVC.spec.resources is used. If allocatedResources is not set, PVC.spec.resources alone is used for quota calculation. If a volume expansion capacity request is lowered, allocatedResources is only lowered if there are no expansion operations in progress and if the actual volume capacity is equal or lower than the requested capacity.\n\nA controller that receives PVC update with previously unknown resourceName should ignore the update for the purpose it was designed. For example - a controller that only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid resources associated with PVC.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -14470,7 +15211,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref common.ReferenceCa
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "allocatedResourceStatuses stores status of resource being resized for the given PVC. Key names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered reserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus should ignore the update for the purpose it was designed. For example - a controller that only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid resources associated with PVC.\n\nThis is an alpha field and requires enabling RecoverVolumeExpansionFailure feature.",
+							Description: "allocatedResourceStatuses stores status of resource being resized for the given PVC. Key names follow standard Kubernetes label syntax. Valid values are either:\n\t* Un-prefixed keys:\n\t\t- storage - the capacity of the volume.\n\t* Custom resources must use implementation-defined prefixed names such as \"example.com/my-custom-resource\"\nApart from above values - keys that are unprefixed or have kubernetes.io prefix are considered reserved and hence may not be used.\n\nClaimResourceStatus can be in any of following states:\n\t- ControllerResizeInProgress:\n\t\tState set when resize controller starts resizing the volume in control-plane.\n\t- ControllerResizeFailed:\n\t\tState set when resize has failed in resize controller with a terminal error.\n\t- NodeResizePending:\n\t\tState set when resize controller has finished resizing the volume but further resizing of\n\t\tvolume is needed on the node.\n\t- NodeResizeInProgress:\n\t\tState set when kubelet starts resizing the volume.\n\t- NodeResizeFailed:\n\t\tState set when resizing has failed in kubelet with a terminal error. Transient errors don't set\n\t\tNodeResizeFailed.\nFor example: if expanding a PVC for more capacity - this field can be one of the following states:\n\t- pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"ControllerResizeFailed\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizePending\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeInProgress\"\n     - pvc.status.allocatedResourceStatus['storage'] = \"NodeResizeFailed\"\nWhen this field is not set, it means that no resize operation is in progress for the given PVC.\n\nA controller that receives PVC update with previously unknown resourceName or ClaimResourceStatus should ignore the update for the purpose it was designed. For example - a controller that only is responsible for resizing capacity of the volume, should ignore PVC updates that change other valid resources associated with PVC.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,
@@ -14495,14 +15236,14 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimStatus(ref common.ReferenceCa
 					"modifyVolumeStatus": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ModifyVolumeStatus represents the status object of ControllerModifyVolume operation. When this is unset, there is no ModifyVolume operation being attempted.",
-							Ref:         ref("k8s.io/api/core/v1.ModifyVolumeStatus"),
+							Ref:         ref(v1.ModifyVolumeStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ModifyVolumeStatus", "k8s.io/api/core/v1.PersistentVolumeClaimCondition", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.ModifyVolumeStatus{}.OpenAPIModelName(), v1.PersistentVolumeClaimCondition{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -14517,14 +15258,14 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref common.Reference
 						SchemaProps: spec.SchemaProps{
 							Description: "May contain labels and annotations that will be copied into the PVC when creating it. No other fields are allowed and will be rejected during validation.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The specification for the PersistentVolumeClaim. The entire content is copied unchanged into the PVC that gets created from this template. The same fields as in a PersistentVolumeClaim are also valid here.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimSpec"),
+							Ref:         ref(v1.PersistentVolumeClaimSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -14532,7 +15273,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeClaimTemplate(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolumeClaimSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PersistentVolumeClaimSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -14590,7 +15331,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeList(ref common.ReferenceCallback)
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -14601,7 +15342,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeList(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PersistentVolume"),
+										Ref:     ref(v1.PersistentVolume{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -14612,7 +15353,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeList(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PersistentVolume", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.PersistentVolume{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -14626,140 +15367,140 @@ func schema_k8sio_api_core_v1_PersistentVolumeSource(ref common.ReferenceCallbac
 					"gcePersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gcePersistentDisk represents a GCE Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Provisioned by an admin. Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk",
-							Ref:         ref("k8s.io/api/core/v1.GCEPersistentDiskVolumeSource"),
+							Ref:         ref(v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"awsElasticBlockStore": {
 						SchemaProps: spec.SchemaProps{
 							Description: "awsElasticBlockStore represents an AWS Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore",
-							Ref:         ref("k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource"),
+							Ref:         ref(v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"hostPath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "hostPath represents a directory on the host. Provisioned by a developer or tester. This is useful for single-node development and testing only! On-host storage is not supported in any way and WILL NOT WORK in a multi-node cluster. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath",
-							Ref:         ref("k8s.io/api/core/v1.HostPathVolumeSource"),
+							Ref:         ref(v1.HostPathVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"glusterfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "glusterfs represents a Glusterfs volume that is attached to a host and exposed to the pod. Provisioned by an admin. Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported. More info: https://examples.k8s.io/volumes/glusterfs/README.md",
-							Ref:         ref("k8s.io/api/core/v1.GlusterfsPersistentVolumeSource"),
+							Ref:         ref(v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"nfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nfs represents an NFS mount on the host. Provisioned by an admin. More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
-							Ref:         ref("k8s.io/api/core/v1.NFSVolumeSource"),
+							Ref:         ref(v1.NFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"rbd": {
 						SchemaProps: spec.SchemaProps{
 							Description: "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime. Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported. More info: https://examples.k8s.io/volumes/rbd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.RBDPersistentVolumeSource"),
+							Ref:         ref(v1.RBDPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"iscsi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "iscsi represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Provisioned by an admin.",
-							Ref:         ref("k8s.io/api/core/v1.ISCSIPersistentVolumeSource"),
+							Ref:         ref(v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cinder": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cinder represents a cinder volume attached and mounted on kubelets host machine. Deprecated: Cinder is deprecated. All operations for the in-tree cinder type are redirected to the cinder.csi.openstack.org CSI driver. More info: https://examples.k8s.io/mysql-cinder-pd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.CinderPersistentVolumeSource"),
+							Ref:         ref(v1.CinderPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cephfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime. Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.CephFSPersistentVolumeSource"),
+							Ref:         ref(v1.CephFSPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"fc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
-							Ref:         ref("k8s.io/api/core/v1.FCVolumeSource"),
+							Ref:         ref(v1.FCVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flocker": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running. Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.FlockerVolumeSource"),
+							Ref:         ref(v1.FlockerVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flexVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.",
-							Ref:         ref("k8s.io/api/core/v1.FlexPersistentVolumeSource"),
+							Ref:         ref(v1.FlexPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureFile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureFile represents an Azure File Service mount on the host and bind mount to the pod. Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type are redirected to the file.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureFilePersistentVolumeSource"),
+							Ref:         ref(v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"vsphereVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine. Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type are redirected to the csi.vsphere.vmware.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"),
+							Ref:         ref(v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"quobyte": {
 						SchemaProps: spec.SchemaProps{
 							Description: "quobyte represents a Quobyte mount on the host that shares a pod's lifetime. Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.QuobyteVolumeSource"),
+							Ref:         ref(v1.QuobyteVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod. Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type are redirected to the disk.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureDiskVolumeSource"),
+							Ref:         ref(v1.AzureDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"photonPersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine. Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource"),
+							Ref:         ref(v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"portworxVolume": {
 						SchemaProps: spec.SchemaProps{
-							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate is on.",
-							Ref:         ref("k8s.io/api/core/v1.PortworxVolumeSource"),
+							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver.",
+							Ref:         ref(v1.PortworxVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"scaleIO": {
 						SchemaProps: spec.SchemaProps{
 							Description: "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes. Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.ScaleIOPersistentVolumeSource"),
+							Ref:         ref(v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"local": {
 						SchemaProps: spec.SchemaProps{
 							Description: "local represents directly-attached storage with node affinity",
-							Ref:         ref("k8s.io/api/core/v1.LocalVolumeSource"),
+							Ref:         ref(v1.LocalVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"storageos": {
 						SchemaProps: spec.SchemaProps{
 							Description: "storageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod. Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported. More info: https://examples.k8s.io/volumes/storageos/README.md",
-							Ref:         ref("k8s.io/api/core/v1.StorageOSPersistentVolumeSource"),
+							Ref:         ref(v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"csi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "csi represents storage that is handled by an external CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.CSIPersistentVolumeSource"),
+							Ref:         ref(v1.CSIPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/api/core/v1.AzureDiskVolumeSource", "k8s.io/api/core/v1.AzureFilePersistentVolumeSource", "k8s.io/api/core/v1.CSIPersistentVolumeSource", "k8s.io/api/core/v1.CephFSPersistentVolumeSource", "k8s.io/api/core/v1.CinderPersistentVolumeSource", "k8s.io/api/core/v1.FCVolumeSource", "k8s.io/api/core/v1.FlexPersistentVolumeSource", "k8s.io/api/core/v1.FlockerVolumeSource", "k8s.io/api/core/v1.GCEPersistentDiskVolumeSource", "k8s.io/api/core/v1.GlusterfsPersistentVolumeSource", "k8s.io/api/core/v1.HostPathVolumeSource", "k8s.io/api/core/v1.ISCSIPersistentVolumeSource", "k8s.io/api/core/v1.LocalVolumeSource", "k8s.io/api/core/v1.NFSVolumeSource", "k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource", "k8s.io/api/core/v1.PortworxVolumeSource", "k8s.io/api/core/v1.QuobyteVolumeSource", "k8s.io/api/core/v1.RBDPersistentVolumeSource", "k8s.io/api/core/v1.ScaleIOPersistentVolumeSource", "k8s.io/api/core/v1.StorageOSPersistentVolumeSource", "k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"},
+			v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName(), v1.AzureDiskVolumeSource{}.OpenAPIModelName(), v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName(), v1.CSIPersistentVolumeSource{}.OpenAPIModelName(), v1.CephFSPersistentVolumeSource{}.OpenAPIModelName(), v1.CinderPersistentVolumeSource{}.OpenAPIModelName(), v1.FCVolumeSource{}.OpenAPIModelName(), v1.FlexPersistentVolumeSource{}.OpenAPIModelName(), v1.FlockerVolumeSource{}.OpenAPIModelName(), v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName(), v1.HostPathVolumeSource{}.OpenAPIModelName(), v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName(), v1.LocalVolumeSource{}.OpenAPIModelName(), v1.NFSVolumeSource{}.OpenAPIModelName(), v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.PortworxVolumeSource{}.OpenAPIModelName(), v1.QuobyteVolumeSource{}.OpenAPIModelName(), v1.RBDPersistentVolumeSource{}.OpenAPIModelName(), v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName(), v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName(), v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -14787,133 +15528,133 @@ func schema_k8sio_api_core_v1_PersistentVolumeSpec(ref common.ReferenceCallback)
 					"gcePersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gcePersistentDisk represents a GCE Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Provisioned by an admin. Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk",
-							Ref:         ref("k8s.io/api/core/v1.GCEPersistentDiskVolumeSource"),
+							Ref:         ref(v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"awsElasticBlockStore": {
 						SchemaProps: spec.SchemaProps{
 							Description: "awsElasticBlockStore represents an AWS Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore",
-							Ref:         ref("k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource"),
+							Ref:         ref(v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"hostPath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "hostPath represents a directory on the host. Provisioned by a developer or tester. This is useful for single-node development and testing only! On-host storage is not supported in any way and WILL NOT WORK in a multi-node cluster. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath",
-							Ref:         ref("k8s.io/api/core/v1.HostPathVolumeSource"),
+							Ref:         ref(v1.HostPathVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"glusterfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "glusterfs represents a Glusterfs volume that is attached to a host and exposed to the pod. Provisioned by an admin. Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported. More info: https://examples.k8s.io/volumes/glusterfs/README.md",
-							Ref:         ref("k8s.io/api/core/v1.GlusterfsPersistentVolumeSource"),
+							Ref:         ref(v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"nfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nfs represents an NFS mount on the host. Provisioned by an admin. More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
-							Ref:         ref("k8s.io/api/core/v1.NFSVolumeSource"),
+							Ref:         ref(v1.NFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"rbd": {
 						SchemaProps: spec.SchemaProps{
 							Description: "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime. Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported. More info: https://examples.k8s.io/volumes/rbd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.RBDPersistentVolumeSource"),
+							Ref:         ref(v1.RBDPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"iscsi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "iscsi represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Provisioned by an admin.",
-							Ref:         ref("k8s.io/api/core/v1.ISCSIPersistentVolumeSource"),
+							Ref:         ref(v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cinder": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cinder represents a cinder volume attached and mounted on kubelets host machine. Deprecated: Cinder is deprecated. All operations for the in-tree cinder type are redirected to the cinder.csi.openstack.org CSI driver. More info: https://examples.k8s.io/mysql-cinder-pd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.CinderPersistentVolumeSource"),
+							Ref:         ref(v1.CinderPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cephfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime. Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.CephFSPersistentVolumeSource"),
+							Ref:         ref(v1.CephFSPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"fc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
-							Ref:         ref("k8s.io/api/core/v1.FCVolumeSource"),
+							Ref:         ref(v1.FCVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flocker": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flocker represents a Flocker volume attached to a kubelet's host machine and exposed to the pod for its usage. This depends on the Flocker control service being running. Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.FlockerVolumeSource"),
+							Ref:         ref(v1.FlockerVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flexVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.",
-							Ref:         ref("k8s.io/api/core/v1.FlexPersistentVolumeSource"),
+							Ref:         ref(v1.FlexPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureFile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureFile represents an Azure File Service mount on the host and bind mount to the pod. Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type are redirected to the file.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureFilePersistentVolumeSource"),
+							Ref:         ref(v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"vsphereVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine. Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type are redirected to the csi.vsphere.vmware.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"),
+							Ref:         ref(v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"quobyte": {
 						SchemaProps: spec.SchemaProps{
 							Description: "quobyte represents a Quobyte mount on the host that shares a pod's lifetime. Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.QuobyteVolumeSource"),
+							Ref:         ref(v1.QuobyteVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod. Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type are redirected to the disk.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureDiskVolumeSource"),
+							Ref:         ref(v1.AzureDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"photonPersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine. Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource"),
+							Ref:         ref(v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"portworxVolume": {
 						SchemaProps: spec.SchemaProps{
-							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate is on.",
-							Ref:         ref("k8s.io/api/core/v1.PortworxVolumeSource"),
+							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver.",
+							Ref:         ref(v1.PortworxVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"scaleIO": {
 						SchemaProps: spec.SchemaProps{
 							Description: "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes. Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.ScaleIOPersistentVolumeSource"),
+							Ref:         ref(v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"local": {
 						SchemaProps: spec.SchemaProps{
 							Description: "local represents directly-attached storage with node affinity",
-							Ref:         ref("k8s.io/api/core/v1.LocalVolumeSource"),
+							Ref:         ref(v1.LocalVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"storageos": {
 						SchemaProps: spec.SchemaProps{
 							Description: "storageOS represents a StorageOS volume that is attached to the kubelet's host machine and mounted into the pod. Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported. More info: https://examples.k8s.io/volumes/storageos/README.md",
-							Ref:         ref("k8s.io/api/core/v1.StorageOSPersistentVolumeSource"),
+							Ref:         ref(v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"csi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "csi represents storage that is handled by an external CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.CSIPersistentVolumeSource"),
+							Ref:         ref(v1.CSIPersistentVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"accessModes": {
@@ -14945,7 +15686,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeSpec(ref common.ReferenceCallback)
 						},
 						SchemaProps: spec.SchemaProps{
 							Description: "claimRef is part of a bi-directional binding between PersistentVolume and PersistentVolumeClaim. Expected to be non-nil when bound. claim.VolumeName is the authoritative bind between PV and PVC. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#binding",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"persistentVolumeReclaimPolicy": {
@@ -14993,8 +15734,8 @@ func schema_k8sio_api_core_v1_PersistentVolumeSpec(ref common.ReferenceCallback)
 					},
 					"nodeAffinity": {
 						SchemaProps: spec.SchemaProps{
-							Description: "nodeAffinity defines constraints that limit what nodes this volume can be accessed from. This field influences the scheduling of pods that use this volume.",
-							Ref:         ref("k8s.io/api/core/v1.VolumeNodeAffinity"),
+							Description: "nodeAffinity defines constraints that limit what nodes this volume can be accessed from. This field influences the scheduling of pods that use this volume. This field is mutable if MutablePVNodeAffinity feature gate is enabled.",
+							Ref:         ref(v1.VolumeNodeAffinity{}.OpenAPIModelName()),
 						},
 					},
 					"volumeAttributesClassName": {
@@ -15008,7 +15749,7 @@ func schema_k8sio_api_core_v1_PersistentVolumeSpec(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/api/core/v1.AzureDiskVolumeSource", "k8s.io/api/core/v1.AzureFilePersistentVolumeSource", "k8s.io/api/core/v1.CSIPersistentVolumeSource", "k8s.io/api/core/v1.CephFSPersistentVolumeSource", "k8s.io/api/core/v1.CinderPersistentVolumeSource", "k8s.io/api/core/v1.FCVolumeSource", "k8s.io/api/core/v1.FlexPersistentVolumeSource", "k8s.io/api/core/v1.FlockerVolumeSource", "k8s.io/api/core/v1.GCEPersistentDiskVolumeSource", "k8s.io/api/core/v1.GlusterfsPersistentVolumeSource", "k8s.io/api/core/v1.HostPathVolumeSource", "k8s.io/api/core/v1.ISCSIPersistentVolumeSource", "k8s.io/api/core/v1.LocalVolumeSource", "k8s.io/api/core/v1.NFSVolumeSource", "k8s.io/api/core/v1.ObjectReference", "k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource", "k8s.io/api/core/v1.PortworxVolumeSource", "k8s.io/api/core/v1.QuobyteVolumeSource", "k8s.io/api/core/v1.RBDPersistentVolumeSource", "k8s.io/api/core/v1.ScaleIOPersistentVolumeSource", "k8s.io/api/core/v1.StorageOSPersistentVolumeSource", "k8s.io/api/core/v1.VolumeNodeAffinity", "k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName(), v1.AzureDiskVolumeSource{}.OpenAPIModelName(), v1.AzureFilePersistentVolumeSource{}.OpenAPIModelName(), v1.CSIPersistentVolumeSource{}.OpenAPIModelName(), v1.CephFSPersistentVolumeSource{}.OpenAPIModelName(), v1.CinderPersistentVolumeSource{}.OpenAPIModelName(), v1.FCVolumeSource{}.OpenAPIModelName(), v1.FlexPersistentVolumeSource{}.OpenAPIModelName(), v1.FlockerVolumeSource{}.OpenAPIModelName(), v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.GlusterfsPersistentVolumeSource{}.OpenAPIModelName(), v1.HostPathVolumeSource{}.OpenAPIModelName(), v1.ISCSIPersistentVolumeSource{}.OpenAPIModelName(), v1.LocalVolumeSource{}.OpenAPIModelName(), v1.NFSVolumeSource{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.PortworxVolumeSource{}.OpenAPIModelName(), v1.QuobyteVolumeSource{}.OpenAPIModelName(), v1.RBDPersistentVolumeSource{}.OpenAPIModelName(), v1.ScaleIOPersistentVolumeSource{}.OpenAPIModelName(), v1.StorageOSPersistentVolumeSource{}.OpenAPIModelName(), v1.VolumeNodeAffinity{}.OpenAPIModelName(), v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -15044,14 +15785,14 @@ func schema_k8sio_api_core_v1_PersistentVolumeStatus(ref common.ReferenceCallbac
 					"lastPhaseTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "lastPhaseTransitionTime is the time the phase transitioned from one to another and automatically resets to current time everytime a volume phase transitions.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -15109,28 +15850,28 @@ func schema_k8sio_api_core_v1_Pod(ref common.ReferenceCallback) common.OpenAPIDe
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of the pod. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodSpec"),
+							Ref:         ref(v1.PodSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the pod. This data may not be up to date. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodStatus"),
+							Ref:         ref(v1.PodStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodSpec", "k8s.io/api/core/v1.PodStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PodSpec{}.OpenAPIModelName(), v1.PodStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -15154,7 +15895,7 @@ func schema_k8sio_api_core_v1_PodAffinity(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodAffinityTerm"),
+										Ref:     ref(v1.PodAffinityTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15173,7 +15914,7 @@ func schema_k8sio_api_core_v1_PodAffinity(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.WeightedPodAffinityTerm"),
+										Ref:     ref(v1.WeightedPodAffinityTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15183,7 +15924,7 @@ func schema_k8sio_api_core_v1_PodAffinity(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodAffinityTerm", "k8s.io/api/core/v1.WeightedPodAffinityTerm"},
+			v1.PodAffinityTerm{}.OpenAPIModelName(), v1.WeightedPodAffinityTerm{}.OpenAPIModelName()},
 	}
 }
 
@@ -15197,7 +15938,7 @@ func schema_k8sio_api_core_v1_PodAffinityTerm(ref common.ReferenceCallback) comm
 					"labelSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "A label query over a set of resources, in this case pods. If it's null, this PodAffinityTerm matches with no Pods.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"namespaces": {
@@ -15231,7 +15972,7 @@ func schema_k8sio_api_core_v1_PodAffinityTerm(ref common.ReferenceCallback) comm
 					"namespaceSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "A label query over the set of namespaces that the term applies to. The term is applied to the union of the namespaces selected by this field and the ones listed in the namespaces field. null selector and null or empty namespaces list means \"this pod's namespace\". An empty selector ({}) matches all namespaces.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"matchLabelKeys": {
@@ -15279,7 +16020,7 @@ func schema_k8sio_api_core_v1_PodAffinityTerm(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -15303,7 +16044,7 @@ func schema_k8sio_api_core_v1_PodAntiAffinity(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodAffinityTerm"),
+										Ref:     ref(v1.PodAffinityTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15322,7 +16063,7 @@ func schema_k8sio_api_core_v1_PodAntiAffinity(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.WeightedPodAffinityTerm"),
+										Ref:     ref(v1.WeightedPodAffinityTerm{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15332,7 +16073,7 @@ func schema_k8sio_api_core_v1_PodAntiAffinity(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodAffinityTerm", "k8s.io/api/core/v1.WeightedPodAffinityTerm"},
+			v1.PodAffinityTerm{}.OpenAPIModelName(), v1.WeightedPodAffinityTerm{}.OpenAPIModelName()},
 	}
 }
 
@@ -15447,6 +16188,22 @@ func schema_k8sio_api_core_v1_PodCertificateProjection(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"userAnnotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "userAnnotations allow pod authors to pass additional information to the signer implementation.  Kubernetes does not restrict or validate this metadata in any way.\n\nThese values are copied verbatim into the `spec.unverifiedUserAnnotations` field of the PodCertificateRequest objects that Kubelet creates.\n\nEntries are subject to the same validation as object metadata annotations, with the addition that all keys must be domain-prefixed. No restrictions are placed on values, except an overall size limitation on the entire field.\n\nSigners should document the keys and values they support. Signers should deny requests that contain keys they do not recognize.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"signerName", "keyType"},
 			},
@@ -15471,7 +16228,7 @@ func schema_k8sio_api_core_v1_PodCondition(ref common.ReferenceCallback) common.
 					},
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this represents the .metadata.generation that the pod condition was set based upon. This is an alpha field. Enable PodObservedGenerationTracking to be able to use this field.",
+							Description: "If set, this represents the .metadata.generation that the pod condition was set based upon.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -15487,13 +16244,13 @@ func schema_k8sio_api_core_v1_PodCondition(ref common.ReferenceCallback) common.
 					"lastProbeTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Last time we probed the condition.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Last time the condition transitioned from one status to another.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -15515,7 +16272,7 @@ func schema_k8sio_api_core_v1_PodCondition(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -15579,7 +16336,7 @@ func schema_k8sio_api_core_v1_PodDNSConfig(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodDNSConfigOption"),
+										Ref:     ref(v1.PodDNSConfigOption{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15589,7 +16346,7 @@ func schema_k8sio_api_core_v1_PodDNSConfig(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodDNSConfigOption"},
+			v1.PodDNSConfigOption{}.OpenAPIModelName()},
 	}
 }
 
@@ -15723,7 +16480,7 @@ func schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerExtendedResourceRequest"),
+										Ref:     ref(v1.ContainerExtendedResourceRequest{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15742,7 +16499,7 @@ func schema_k8sio_api_core_v1_PodExtendedResourceClaimStatus(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerExtendedResourceRequest"},
+			v1.ContainerExtendedResourceRequest{}.OpenAPIModelName()},
 	}
 }
 
@@ -15793,7 +16550,7 @@ func schema_k8sio_api_core_v1_PodList(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -15804,7 +16561,7 @@ func schema_k8sio_api_core_v1_PodList(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Pod"),
+										Ref:     ref(v1.Pod{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -15815,7 +16572,7 @@ func schema_k8sio_api_core_v1_PodList(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Pod", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Pod{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -15871,7 +16628,7 @@ func schema_k8sio_api_core_v1_PodLogOptions(ref common.ReferenceCallback) common
 					"sinceTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "An RFC3339 timestamp from which to show logs. If this value precedes the time a pod was started, only logs since the pod start will be returned. If this value is in the future, no logs will be returned. Only one of sinceSeconds or sinceTime may be specified.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"timestamps": {
@@ -15913,7 +16670,7 @@ func schema_k8sio_api_core_v1_PodLogOptions(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -16046,7 +16803,7 @@ func schema_k8sio_api_core_v1_PodResourceClaim(ref common.ReferenceCallback) com
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "PodResourceClaim references exactly one ResourceClaim, either directly or by naming a ResourceClaimTemplate which is then turned into a ResourceClaim for the pod.\n\nIt adds a name to it that uniquely identifies the ResourceClaim inside the Pod. Containers that need access to the ResourceClaim reference it with this name.",
+				Description: "PodResourceClaim references exactly one ResourceClaim, either directly or by naming a ResourceClaimTemplate which is then turned into a ResourceClaim for the pod.\n\nIt adds a name to it that uniquely identifies the ResourceClaim inside the Pod. Containers that need access to the ResourceClaim reference it with this name.\n\nWhen the DRAWorkloadResourceClaims feature gate is enabled and this Pod belongs to a PodGroup, a PodResourceClaim is matched to a PodGroupResourceClaim if all of their fields are equal (Name, ResourceClaimName, and ResourceClaimTemplateName). A matched claim references a single ResourceClaim shared across all Pods in the PodGroup, reserved for the PodGroup in ResourceClaimStatus.ReservedFor rather than for individual Pods.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"name": {
@@ -16066,7 +16823,7 @@ func schema_k8sio_api_core_v1_PodResourceClaim(ref common.ReferenceCallback) com
 					},
 					"resourceClaimTemplateName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceClaimTemplateName is the name of a ResourceClaimTemplate object in the same namespace as this pod.\n\nThe template will be used to create a new ResourceClaim, which will be bound to this pod. When this pod is deleted, the ResourceClaim will also be deleted. The pod name and resource name, along with a generated component, will be used to form a unique name for the ResourceClaim, which will be recorded in pod.status.resourceClaimStatuses.\n\nThis field is immutable and no changes will be made to the corresponding ResourceClaim by the control plane after creating the ResourceClaim.\n\nExactly one of ResourceClaimName and ResourceClaimTemplateName must be set.",
+							Description: "ResourceClaimTemplateName is the name of a ResourceClaimTemplate object in the same namespace as this pod.\n\nThe template will be used to create a new ResourceClaim, which will be bound to this pod. When this pod is deleted, the ResourceClaim will also be deleted. The pod name and resource name, along with a generated component, will be used to form a unique name for the ResourceClaim, which will be recorded in pod.status.resourceClaimStatuses.\n\nWhen the DRAWorkloadResourceClaims feature gate is enabled and the pod belongs to a PodGroup that defines a PodGroupResourceClaim with the same Name and ResourceClaimTemplateName, this PodResourceClaim resolves to the ResourceClaim generated for the PodGroup. All pods in the group that define an equivalent PodResourceClaim matching the PodGroupResourceClaim's Name and ResourceClaimTemplateName share the same generated ResourceClaim. ResourceClaims generated for a PodGroup are owned by the PodGroup and their lifecycles are tied to the PodGroup instead of any individual pod.\n\nThis field is immutable and no changes will be made to the corresponding ResourceClaim by the control plane after creating the ResourceClaim.\n\nExactly one of ResourceClaimName and ResourceClaimTemplateName must be set.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -16095,7 +16852,7 @@ func schema_k8sio_api_core_v1_PodResourceClaimStatus(ref common.ReferenceCallbac
 					},
 					"resourceClaimName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceClaimName is the name of the ResourceClaim that was generated for the Pod in the namespace of the Pod. If this is unset, then generating a ResourceClaim was not necessary. The pod.spec.resourceClaims entry can be ignored in this case.",
+							Description: "ResourceClaimName is the name of the ResourceClaim that was generated for the Pod in the namespace of the Pod.\n\nWhen the DRAWorkloadResourceClaims feature is enabled and the corresponding PodResourceClaim matches a PodGroupResourceClaim made by the Pod's PodGroup, then this is the name of the ResourceClaim generated and reserved for the PodGroup.\n\nIf this is unset, then generating a ResourceClaim was not necessary. The pod.spec.resourceClaims entry can be ignored in this case.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -16129,6 +16886,37 @@ func schema_k8sio_api_core_v1_PodSchedulingGate(ref common.ReferenceCallback) co
 	}
 }
 
+func schema_k8sio_api_core_v1_PodSchedulingGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PodSchedulingGroup identifies the runtime scheduling group instance that a Pod belongs to. The scheduler uses this information to apply workload-aware scheduling semantics. Exactly one field must be specified.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"podGroupName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "PodGroupName specifies the name of the standalone PodGroup object that represents the runtime instance of this group. Must be a DNS subdomain.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: spec.Extensions{
+					"x-kubernetes-unions": []interface{}{
+						map[string]interface{}{
+							"fields-to-discriminateBy": map[string]interface{}{
+								"podGroupName": "PodGroupName",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_k8sio_api_core_v1_PodSecurityContext(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -16139,13 +16927,13 @@ func schema_k8sio_api_core_v1_PodSecurityContext(ref common.ReferenceCallback) c
 					"seLinuxOptions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The SELinux context to be applied to all containers. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.SELinuxOptions"),
+							Ref:         ref(v1.SELinuxOptions{}.OpenAPIModelName()),
 						},
 					},
 					"windowsOptions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Windows specific settings applied to all containers. If unspecified, the options within a container's SecurityContext will be used. If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence. Note that this field cannot be set when spec.os.name is linux.",
-							Ref:         ref("k8s.io/api/core/v1.WindowsSecurityContextOptions"),
+							Ref:         ref(v1.WindowsSecurityContextOptions{}.OpenAPIModelName()),
 						},
 					},
 					"runAsUser": {
@@ -16217,7 +17005,7 @@ func schema_k8sio_api_core_v1_PodSecurityContext(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Sysctl"),
+										Ref:     ref(v1.Sysctl{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16234,13 +17022,13 @@ func schema_k8sio_api_core_v1_PodSecurityContext(ref common.ReferenceCallback) c
 					"seccompProfile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The seccomp options to use by the containers in this pod. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.SeccompProfile"),
+							Ref:         ref(v1.SeccompProfile{}.OpenAPIModelName()),
 						},
 					},
 					"appArmorProfile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "appArmorProfile is the AppArmor options to use by the containers in this pod. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.AppArmorProfile"),
+							Ref:         ref(v1.AppArmorProfile{}.OpenAPIModelName()),
 						},
 					},
 					"seLinuxChangePolicy": {
@@ -16254,7 +17042,7 @@ func schema_k8sio_api_core_v1_PodSecurityContext(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AppArmorProfile", "k8s.io/api/core/v1.SELinuxOptions", "k8s.io/api/core/v1.SeccompProfile", "k8s.io/api/core/v1.Sysctl", "k8s.io/api/core/v1.WindowsSecurityContextOptions"},
+			v1.AppArmorProfile{}.OpenAPIModelName(), v1.SELinuxOptions{}.OpenAPIModelName(), v1.SeccompProfile{}.OpenAPIModelName(), v1.Sysctl{}.OpenAPIModelName(), v1.WindowsSecurityContextOptions{}.OpenAPIModelName()},
 	}
 }
 
@@ -16268,14 +17056,14 @@ func schema_k8sio_api_core_v1_PodSignature(ref common.ReferenceCallback) common.
 					"podController": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Reference to controller whose pods should avoid this node.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference"),
+							Ref:         ref(metav1.OwnerReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference"},
+			metav1.OwnerReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -16304,7 +17092,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Volume"),
+										Ref:     ref(v1.Volume{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16328,7 +17116,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Container"),
+										Ref:     ref(v1.Container{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16352,7 +17140,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Container"),
+										Ref:     ref(v1.Container{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16376,7 +17164,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.EphemeralContainer"),
+										Ref:     ref(v1.EphemeralContainer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16492,7 +17280,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					"securityContext": {
 						SchemaProps: spec.SchemaProps{
 							Description: "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
-							Ref:         ref("k8s.io/api/core/v1.PodSecurityContext"),
+							Ref:         ref(v1.PodSecurityContext{}.OpenAPIModelName()),
 						},
 					},
 					"imagePullSecrets": {
@@ -16513,7 +17301,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
+										Ref:     ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16536,7 +17324,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					"affinity": {
 						SchemaProps: spec.SchemaProps{
 							Description: "If specified, the pod's scheduling constraints",
-							Ref:         ref("k8s.io/api/core/v1.Affinity"),
+							Ref:         ref(v1.Affinity{}.OpenAPIModelName()),
 						},
 					},
 					"schedulerName": {
@@ -16559,7 +17347,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Toleration"),
+										Ref:     ref(v1.Toleration{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16583,7 +17371,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.HostAlias"),
+										Ref:     ref(v1.HostAlias{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16606,7 +17394,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					"dnsConfig": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",
-							Ref:         ref("k8s.io/api/core/v1.PodDNSConfig"),
+							Ref:         ref(v1.PodDNSConfig{}.OpenAPIModelName()),
 						},
 					},
 					"readinessGates": {
@@ -16622,7 +17410,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodReadinessGate"),
+										Ref:     ref(v1.PodReadinessGate{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16683,7 +17471,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.TopologySpreadConstraint"),
+										Ref:     ref(v1.TopologySpreadConstraint{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16699,12 +17487,12 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					"os": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Specifies the OS of the containers in the pod. Some pod and container fields are restricted if this is set.\n\nIf the OS field is set to linux, the following fields must be unset: -securityContext.windowsOptions\n\nIf the OS field is set to windows, following fields must be unset: - spec.hostPID - spec.hostIPC - spec.hostUsers - spec.resources - spec.securityContext.appArmorProfile - spec.securityContext.seLinuxOptions - spec.securityContext.seccompProfile - spec.securityContext.fsGroup - spec.securityContext.fsGroupChangePolicy - spec.securityContext.sysctls - spec.shareProcessNamespace - spec.securityContext.runAsUser - spec.securityContext.runAsGroup - spec.securityContext.supplementalGroups - spec.securityContext.supplementalGroupsPolicy - spec.containers[*].securityContext.appArmorProfile - spec.containers[*].securityContext.seLinuxOptions - spec.containers[*].securityContext.seccompProfile - spec.containers[*].securityContext.capabilities - spec.containers[*].securityContext.readOnlyRootFilesystem - spec.containers[*].securityContext.privileged - spec.containers[*].securityContext.allowPrivilegeEscalation - spec.containers[*].securityContext.procMount - spec.containers[*].securityContext.runAsUser - spec.containers[*].securityContext.runAsGroup",
-							Ref:         ref("k8s.io/api/core/v1.PodOS"),
+							Ref:         ref(v1.PodOS{}.OpenAPIModelName()),
 						},
 					},
 					"hostUsers": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Use the host's user namespace. Optional: Default to true. If set to true or not present, the pod will be run in the host user namespace, useful for when the pod needs a feature only available to the host user namespace, such as loading a kernel module with CAP_SYS_MODULE. When set to false, a new userns is created for the pod. Setting false is useful for mitigating container breakout vulnerabilities even allowing users to run their containers as root without actually having root privileges on the host. This field is alpha-level and is only honored by servers that enable the UserNamespacesSupport feature.",
+							Description: "Use the host's user namespace. Optional: Default to true. If set to true or not present, the pod will be run in the host user namespace, useful for when the pod needs a feature only available to the host user namespace, such as loading a kernel module with CAP_SYS_MODULE. When set to false, a new userns is created for the pod. Setting false is useful for mitigating container breakout vulnerabilities even allowing users to run their containers as root without actually having root privileges on the host.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -16727,7 +17515,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodSchedulingGate"),
+										Ref:     ref(v1.PodSchedulingGate{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16745,13 +17533,13 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 							},
 						},
 						SchemaProps: spec.SchemaProps{
-							Description: "ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.\n\nThis is an alpha field and requires enabling the DynamicResourceAllocation feature gate.\n\nThis field is immutable.",
+							Description: "ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.\n\nThis is a stable field but requires that the DynamicResourceAllocation feature gate is enabled.\n\nThis field is immutable.",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodResourceClaim"),
+										Ref:     ref(v1.PodResourceClaim{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16760,7 +17548,7 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 					"resources": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Resources is the total amount of CPU and Memory resources required by all containers in the pod. It supports specifying Requests and Limits for \"cpu\", \"memory\" and \"hugepages-\" resource names only. ResourceClaims are not supported.\n\nThis field enables fine-grained control over resource allocation for the entire pod, allowing resource sharing among containers in a pod.\n\nThis is an alpha field and requires enabling the PodLevelResources feature gate.",
-							Ref:         ref("k8s.io/api/core/v1.ResourceRequirements"),
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
 						},
 					},
 					"hostnameOverride": {
@@ -16770,12 +17558,18 @@ func schema_k8sio_api_core_v1_PodSpec(ref common.ReferenceCallback) common.OpenA
 							Format:      "",
 						},
 					},
+					"schedulingGroup": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SchedulingGroup provides a reference to the immediate scheduling runtime grouping object that this Pod belongs to. This field is used by the scheduler to identify the group and apply the correct group scheduling policies. The association with a group also impacts other lifecycle aspects of a Pod that are relevant in a wider context of scheduling like preemption, resource attachment, etc. If not specified, the Pod is treated as a single unit in all of these aspects. The group object referenced by this field may not exist at the time the Pod is created. This field is immutable, but a group object with the same name may be recreated with different policies. Doing this during pod scheduling may result in the placement not conforming to the expected policies.",
+							Ref:         ref(v1.PodSchedulingGroup{}.OpenAPIModelName()),
+						},
+					},
 				},
 				Required: []string{"containers"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.EphemeralContainer", "k8s.io/api/core/v1.HostAlias", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodOS", "k8s.io/api/core/v1.PodReadinessGate", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSchedulingGate", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.TopologySpreadConstraint", "k8s.io/api/core/v1.Volume", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.Affinity{}.OpenAPIModelName(), v1.Container{}.OpenAPIModelName(), v1.EphemeralContainer{}.OpenAPIModelName(), v1.HostAlias{}.OpenAPIModelName(), v1.LocalObjectReference{}.OpenAPIModelName(), v1.PodDNSConfig{}.OpenAPIModelName(), v1.PodOS{}.OpenAPIModelName(), v1.PodReadinessGate{}.OpenAPIModelName(), v1.PodResourceClaim{}.OpenAPIModelName(), v1.PodSchedulingGate{}.OpenAPIModelName(), v1.PodSchedulingGroup{}.OpenAPIModelName(), v1.PodSecurityContext{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), v1.Toleration{}.OpenAPIModelName(), v1.TopologySpreadConstraint{}.OpenAPIModelName(), v1.Volume{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -16788,7 +17582,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 				Properties: map[string]spec.Schema{
 					"observedGeneration": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If set, this represents the .metadata.generation that the pod status was set based upon. This is an alpha field. Enable PodObservedGenerationTracking to be able to use this field.",
+							Description: "If set, this represents the .metadata.generation that the pod status was set based upon. The PodObservedGenerationTracking feature gate must be enabled to use this field.",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
@@ -16819,7 +17613,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodCondition"),
+										Ref:     ref(v1.PodCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16868,7 +17662,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.HostIP"),
+										Ref:     ref(v1.HostIP{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16899,7 +17693,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodIP"),
+										Ref:     ref(v1.PodIP{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16908,7 +17702,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 					"startTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "RFC 3339 date and time at which the object was acknowledged by the Kubelet. This is before the Kubelet pulled the container image(s) for the pod.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"initContainerStatuses": {
@@ -16924,7 +17718,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerStatus"),
+										Ref:     ref(v1.ContainerStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16943,7 +17737,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerStatus"),
+										Ref:     ref(v1.ContainerStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -16970,7 +17764,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ContainerStatus"),
+										Ref:     ref(v1.ContainerStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -17001,7 +17795,7 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodResourceClaimStatus"),
+										Ref:     ref(v1.PodResourceClaimStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -17010,14 +17804,53 @@ func schema_k8sio_api_core_v1_PodStatus(ref common.ReferenceCallback) common.Ope
 					"extendedResourceClaimStatus": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status of extended resource claim backed by DRA.",
-							Ref:         ref("k8s.io/api/core/v1.PodExtendedResourceClaimStatus"),
+							Ref:         ref(v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName()),
+						},
+					},
+					"allocatedResources": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AllocatedResources is the total requests allocated for this pod by the node. If pod-level requests are not set, this will be the total requests aggregated across containers in the pod.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("k8s.io/apimachinery/pkg/api/resource.Quantity"),
+									},
+								},
+							},
+						},
+					},
+					"resources": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Resources represents the compute resource requests and limits that have been applied at the pod level if pod-level requests or limits are set in PodSpec.Resources",
+							Ref:         ref(v1.ResourceRequirements{}.OpenAPIModelName()),
+						},
+					},
+					"nodeAllocatableResourceClaimStatuses": {
+						VendorExtensible: spec.VendorExtensible{
+							Extensions: spec.Extensions{
+								"x-kubernetes-list-type": "atomic",
+							},
+						},
+						SchemaProps: spec.SchemaProps{
+							Description: "NodeAllocatableResourceClaimStatuses contains the status of node-allocatable resources that were allocated for this pod through DRA claims. This includes resources currently reported in v1.Node `status.allocatable` that are not extended resources (see https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#extended-resources). Examples include \"cpu\", \"memory\", \"ephemeral-storage\", and hugepages.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref(v1.NodeAllocatableResourceClaimStatus{}.OpenAPIModelName()),
+									},
+								},
+							},
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ContainerStatus", "k8s.io/api/core/v1.HostIP", "k8s.io/api/core/v1.PodCondition", "k8s.io/api/core/v1.PodExtendedResourceClaimStatus", "k8s.io/api/core/v1.PodIP", "k8s.io/api/core/v1.PodResourceClaimStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			v1.ContainerStatus{}.OpenAPIModelName(), v1.HostIP{}.OpenAPIModelName(), v1.NodeAllocatableResourceClaimStatus{}.OpenAPIModelName(), v1.PodCondition{}.OpenAPIModelName(), v1.PodExtendedResourceClaimStatus{}.OpenAPIModelName(), v1.PodIP{}.OpenAPIModelName(), v1.PodResourceClaimStatus{}.OpenAPIModelName(), v1.ResourceRequirements{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity", metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -17046,21 +17879,21 @@ func schema_k8sio_api_core_v1_PodStatusResult(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the pod. This data may not be up to date. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodStatus"),
+							Ref:         ref(v1.PodStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PodStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17089,21 +17922,21 @@ func schema_k8sio_api_core_v1_PodTemplate(ref common.ReferenceCallback) common.O
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"template": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Template defines the pods that will be created from this pod template. https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodTemplateSpec"),
+							Ref:         ref(v1.PodTemplateSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodTemplateSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PodTemplateSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17132,7 +17965,7 @@ func schema_k8sio_api_core_v1_PodTemplateList(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -17143,7 +17976,7 @@ func schema_k8sio_api_core_v1_PodTemplateList(ref common.ReferenceCallback) comm
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodTemplate"),
+										Ref:     ref(v1.PodTemplate{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -17154,7 +17987,7 @@ func schema_k8sio_api_core_v1_PodTemplateList(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodTemplate", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.PodTemplate{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17169,21 +18002,21 @@ func schema_k8sio_api_core_v1_PodTemplateSpec(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Specification of the desired behavior of the pod. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodSpec"),
+							Ref:         ref(v1.PodSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.PodSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17272,13 +18105,13 @@ func schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref common.ReferenceCallback)
 						SchemaProps: spec.SchemaProps{
 							Description: "The class of pods.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodSignature"),
+							Ref:         ref(v1.PodSignature{}.OpenAPIModelName()),
 						},
 					},
 					"evictionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time at which this entry was added to the list.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -17300,7 +18133,7 @@ func schema_k8sio_api_core_v1_PreferAvoidPodsEntry(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodSignature", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			v1.PodSignature{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -17323,7 +18156,7 @@ func schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "A node selector term, associated with the corresponding weight.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.NodeSelectorTerm"),
+							Ref:         ref(v1.NodeSelectorTerm{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -17331,7 +18164,7 @@ func schema_k8sio_api_core_v1_PreferredSchedulingTerm(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSelectorTerm"},
+			v1.NodeSelectorTerm{}.OpenAPIModelName()},
 	}
 }
 
@@ -17345,25 +18178,25 @@ func schema_k8sio_api_core_v1_Probe(ref common.ReferenceCallback) common.OpenAPI
 					"exec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Exec specifies a command to execute in the container.",
-							Ref:         ref("k8s.io/api/core/v1.ExecAction"),
+							Ref:         ref(v1.ExecAction{}.OpenAPIModelName()),
 						},
 					},
 					"httpGet": {
 						SchemaProps: spec.SchemaProps{
 							Description: "HTTPGet specifies an HTTP GET request to perform.",
-							Ref:         ref("k8s.io/api/core/v1.HTTPGetAction"),
+							Ref:         ref(v1.HTTPGetAction{}.OpenAPIModelName()),
 						},
 					},
 					"tcpSocket": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TCPSocket specifies a connection to a TCP port.",
-							Ref:         ref("k8s.io/api/core/v1.TCPSocketAction"),
+							Ref:         ref(v1.TCPSocketAction{}.OpenAPIModelName()),
 						},
 					},
 					"grpc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "GRPC specifies a GRPC HealthCheckRequest.",
-							Ref:         ref("k8s.io/api/core/v1.GRPCAction"),
+							Ref:         ref(v1.GRPCAction{}.OpenAPIModelName()),
 						},
 					},
 					"initialDelaySeconds": {
@@ -17412,7 +18245,7 @@ func schema_k8sio_api_core_v1_Probe(ref common.ReferenceCallback) common.OpenAPI
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ExecAction", "k8s.io/api/core/v1.GRPCAction", "k8s.io/api/core/v1.HTTPGetAction", "k8s.io/api/core/v1.TCPSocketAction"},
+			v1.ExecAction{}.OpenAPIModelName(), v1.GRPCAction{}.OpenAPIModelName(), v1.HTTPGetAction{}.OpenAPIModelName(), v1.TCPSocketAction{}.OpenAPIModelName()},
 	}
 }
 
@@ -17426,32 +18259,32 @@ func schema_k8sio_api_core_v1_ProbeHandler(ref common.ReferenceCallback) common.
 					"exec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Exec specifies a command to execute in the container.",
-							Ref:         ref("k8s.io/api/core/v1.ExecAction"),
+							Ref:         ref(v1.ExecAction{}.OpenAPIModelName()),
 						},
 					},
 					"httpGet": {
 						SchemaProps: spec.SchemaProps{
 							Description: "HTTPGet specifies an HTTP GET request to perform.",
-							Ref:         ref("k8s.io/api/core/v1.HTTPGetAction"),
+							Ref:         ref(v1.HTTPGetAction{}.OpenAPIModelName()),
 						},
 					},
 					"tcpSocket": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TCPSocket specifies a connection to a TCP port.",
-							Ref:         ref("k8s.io/api/core/v1.TCPSocketAction"),
+							Ref:         ref(v1.TCPSocketAction{}.OpenAPIModelName()),
 						},
 					},
 					"grpc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "GRPC specifies a GRPC HealthCheckRequest.",
-							Ref:         ref("k8s.io/api/core/v1.GRPCAction"),
+							Ref:         ref(v1.GRPCAction{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ExecAction", "k8s.io/api/core/v1.GRPCAction", "k8s.io/api/core/v1.HTTPGetAction", "k8s.io/api/core/v1.TCPSocketAction"},
+			v1.ExecAction{}.OpenAPIModelName(), v1.GRPCAction{}.OpenAPIModelName(), v1.HTTPGetAction{}.OpenAPIModelName(), v1.TCPSocketAction{}.OpenAPIModelName()},
 	}
 }
 
@@ -17475,7 +18308,7 @@ func schema_k8sio_api_core_v1_ProjectedVolumeSource(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.VolumeProjection"),
+										Ref:     ref(v1.VolumeProjection{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -17492,7 +18325,7 @@ func schema_k8sio_api_core_v1_ProjectedVolumeSource(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.VolumeProjection"},
+			v1.VolumeProjection{}.OpenAPIModelName()},
 	}
 }
 
@@ -17623,7 +18456,7 @@ func schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref common.ReferenceCall
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is name of the authentication secret for RBDUser. If provided overrides keyring. Default is nil. More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -17638,7 +18471,7 @@ func schema_k8sio_api_core_v1_RBDPersistentVolumeSource(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -17711,7 +18544,7 @@ func schema_k8sio_api_core_v1_RBDVolumeSource(ref common.ReferenceCallback) comm
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef is name of the authentication secret for RBDUser. If provided overrides keyring. Default is nil. More info: https://examples.k8s.io/volumes/rbd/README.md#how-to-use-it",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"readOnly": {
@@ -17726,7 +18559,7 @@ func schema_k8sio_api_core_v1_RBDVolumeSource(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -17755,7 +18588,7 @@ func schema_k8sio_api_core_v1_RangeAllocation(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"range": {
@@ -17778,7 +18611,7 @@ func schema_k8sio_api_core_v1_RangeAllocation(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17807,28 +18640,28 @@ func schema_k8sio_api_core_v1_ReplicationController(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "If the Labels of a ReplicationController are empty, they are defaulted to be the same as the Pod(s) that the replication controller manages. Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the specification of the desired behavior of the replication controller. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ReplicationControllerSpec"),
+							Ref:         ref(v1.ReplicationControllerSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status is the most recently observed status of the replication controller. This data may be out of date by some window of time. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ReplicationControllerStatus"),
+							Ref:         ref(v1.ReplicationControllerStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ReplicationControllerSpec", "k8s.io/api/core/v1.ReplicationControllerStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.ReplicationControllerSpec{}.OpenAPIModelName(), v1.ReplicationControllerStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17858,7 +18691,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerCondition(ref common.Referenc
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The last time the condition transitioned from one status to another.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -17880,7 +18713,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerCondition(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -17909,7 +18742,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerList(ref common.ReferenceCall
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -17920,7 +18753,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerList(ref common.ReferenceCall
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ReplicationController"),
+										Ref:     ref(v1.ReplicationController{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -17931,7 +18764,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerList(ref common.ReferenceCall
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ReplicationController", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.ReplicationController{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -17982,14 +18815,14 @@ func schema_k8sio_api_core_v1_ReplicationControllerSpec(ref common.ReferenceCall
 					"template": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Template is the object that describes the pod that will be created if insufficient replicas are detected. This takes precedence over a TemplateRef. The only allowed template.spec.restartPolicy value is \"Always\". More info: https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller#pod-template",
-							Ref:         ref("k8s.io/api/core/v1.PodTemplateSpec"),
+							Ref:         ref(v1.PodTemplateSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodTemplateSpec"},
+			v1.PodTemplateSpec{}.OpenAPIModelName()},
 	}
 }
 
@@ -18054,7 +18887,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerStatus(ref common.ReferenceCa
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ReplicationControllerCondition"),
+										Ref:     ref(v1.ReplicationControllerCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -18065,7 +18898,7 @@ func schema_k8sio_api_core_v1_ReplicationControllerStatus(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ReplicationControllerCondition"},
+			v1.ReplicationControllerCondition{}.OpenAPIModelName()},
 	}
 }
 
@@ -18162,6 +18995,13 @@ func schema_k8sio_api_core_v1_ResourceHealth(ref common.ReferenceCallback) commo
 							Format:      "",
 						},
 					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Message provides human-readable context for Health (e.g. \"ECC error count exceeded threshold\"). This field is populated by the kubelet when ResourceHealthStatusMessage is enabled if the DRA plugin returns a message, and is null otherwise.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"resourceID"},
 			},
@@ -18194,28 +19034,28 @@ func schema_k8sio_api_core_v1_ResourceQuota(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the desired quota. https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ResourceQuotaSpec"),
+							Ref:         ref(v1.ResourceQuotaSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Status defines the actual enforced quota and its current usage. https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ResourceQuotaStatus"),
+							Ref:         ref(v1.ResourceQuotaStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceQuotaSpec", "k8s.io/api/core/v1.ResourceQuotaStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.ResourceQuotaSpec{}.OpenAPIModelName(), v1.ResourceQuotaStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -18244,7 +19084,7 @@ func schema_k8sio_api_core_v1_ResourceQuotaList(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -18255,7 +19095,7 @@ func schema_k8sio_api_core_v1_ResourceQuotaList(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ResourceQuota"),
+										Ref:     ref(v1.ResourceQuota{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -18266,7 +19106,7 @@ func schema_k8sio_api_core_v1_ResourceQuotaList(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceQuota", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.ResourceQuota{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -18315,14 +19155,14 @@ func schema_k8sio_api_core_v1_ResourceQuotaSpec(ref common.ReferenceCallback) co
 					"scopeSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "scopeSelector is also a collection of filters like scopes that must match each object tracked by a quota but expressed using ScopeSelectorOperator in combination with possible values. For a resource to match, both scopes AND scopeSelector (if specified in spec), must be matched.",
-							Ref:         ref("k8s.io/api/core/v1.ScopeSelector"),
+							Ref:         ref(v1.ScopeSelector{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ScopeSelector", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.ScopeSelector{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -18420,7 +19260,7 @@ func schema_k8sio_api_core_v1_ResourceRequirements(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ResourceClaim"),
+										Ref:     ref(v1.ResourceClaim{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -18430,7 +19270,7 @@ func schema_k8sio_api_core_v1_ResourceRequirements(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceClaim", "k8s.io/apimachinery/pkg/api/resource.Quantity"},
+			v1.ResourceClaim{}.OpenAPIModelName(), "k8s.io/apimachinery/pkg/api/resource.Quantity"},
 	}
 }
 
@@ -18465,7 +19305,7 @@ func schema_k8sio_api_core_v1_ResourceStatus(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ResourceHealth"),
+										Ref:     ref(v1.ResourceHealth{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -18476,7 +19316,7 @@ func schema_k8sio_api_core_v1_ResourceStatus(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceHealth"},
+			v1.ResourceHealth{}.OpenAPIModelName()},
 	}
 }
 
@@ -18547,7 +19387,7 @@ func schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref common.Reference
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef references to the secret for ScaleIO user and other sensitive information. If this is not provided, Login operation will fail.",
-							Ref:         ref("k8s.io/api/core/v1.SecretReference"),
+							Ref:         ref(v1.SecretReference{}.OpenAPIModelName()),
 						},
 					},
 					"sslEnabled": {
@@ -18606,7 +19446,7 @@ func schema_k8sio_api_core_v1_ScaleIOPersistentVolumeSource(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretReference"},
+			v1.SecretReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -18636,7 +19476,7 @@ func schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref common.ReferenceCallback) 
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef references to the secret for ScaleIO user and other sensitive information. If this is not provided, Login operation will fail.",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 					"sslEnabled": {
@@ -18695,7 +19535,7 @@ func schema_k8sio_api_core_v1_ScaleIOVolumeSource(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -18719,7 +19559,7 @@ func schema_k8sio_api_core_v1_ScopeSelector(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ScopedResourceSelectorRequirement"),
+										Ref:     ref(v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -18734,7 +19574,7 @@ func schema_k8sio_api_core_v1_ScopeSelector(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ScopedResourceSelectorRequirement"},
+			v1.ScopedResourceSelectorRequirement{}.OpenAPIModelName()},
 	}
 }
 
@@ -18857,7 +19697,7 @@ func schema_k8sio_api_core_v1_Secret(ref common.ReferenceCallback) common.OpenAP
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"immutable": {
@@ -18909,7 +19749,7 @@ func schema_k8sio_api_core_v1_Secret(ref common.ReferenceCallback) common.OpenAP
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19008,7 +19848,7 @@ func schema_k8sio_api_core_v1_SecretList(ref common.ReferenceCallback) common.Op
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -19019,7 +19859,7 @@ func schema_k8sio_api_core_v1_SecretList(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Secret"),
+										Ref:     ref(v1.Secret{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19030,7 +19870,7 @@ func schema_k8sio_api_core_v1_SecretList(ref common.ReferenceCallback) common.Op
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Secret", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Secret{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19062,7 +19902,7 @@ func schema_k8sio_api_core_v1_SecretProjection(ref common.ReferenceCallback) com
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.KeyToPath"),
+										Ref:     ref(v1.KeyToPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19079,7 +19919,7 @@ func schema_k8sio_api_core_v1_SecretProjection(ref common.ReferenceCallback) com
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.KeyToPath"},
+			v1.KeyToPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -19142,7 +19982,7 @@ func schema_k8sio_api_core_v1_SecretVolumeSource(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.KeyToPath"),
+										Ref:     ref(v1.KeyToPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19166,7 +20006,7 @@ func schema_k8sio_api_core_v1_SecretVolumeSource(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.KeyToPath"},
+			v1.KeyToPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -19180,7 +20020,7 @@ func schema_k8sio_api_core_v1_SecurityContext(ref common.ReferenceCallback) comm
 					"capabilities": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The capabilities to add/drop when running containers. Defaults to the default set of capabilities granted by the container runtime. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.Capabilities"),
+							Ref:         ref(v1.Capabilities{}.OpenAPIModelName()),
 						},
 					},
 					"privileged": {
@@ -19193,13 +20033,13 @@ func schema_k8sio_api_core_v1_SecurityContext(ref common.ReferenceCallback) comm
 					"seLinuxOptions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The SELinux context to be applied to the container. If unspecified, the container runtime will allocate a random SELinux context for each container.  May also be set in PodSecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.SELinuxOptions"),
+							Ref:         ref(v1.SELinuxOptions{}.OpenAPIModelName()),
 						},
 					},
 					"windowsOptions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The Windows specific settings applied to all containers. If unspecified, the options from the PodSecurityContext will be used. If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence. Note that this field cannot be set when spec.os.name is linux.",
-							Ref:         ref("k8s.io/api/core/v1.WindowsSecurityContextOptions"),
+							Ref:         ref(v1.WindowsSecurityContextOptions{}.OpenAPIModelName()),
 						},
 					},
 					"runAsUser": {
@@ -19239,7 +20079,7 @@ func schema_k8sio_api_core_v1_SecurityContext(ref common.ReferenceCallback) comm
 					},
 					"procMount": {
 						SchemaProps: spec.SchemaProps{
-							Description: "procMount denotes the type of proc mount to use for the containers. The default value is Default which uses the container runtime defaults for readonly paths and masked paths. This requires the ProcMountType feature flag to be enabled. Note that this field cannot be set when spec.os.name is windows.\n\nPossible enum values:\n - `\"Default\"` uses the container runtime defaults for readonly and masked paths for /proc. Most container runtimes mask certain paths in /proc to avoid accidental security exposure of special devices or information.\n - `\"Unmasked\"` bypasses the default masking behavior of the container runtime and ensures the newly created /proc the container stays in tact with no modifications.",
+							Description: "procMount denotes the type of proc mount to use for the containers. The default value is Default which uses the container runtime defaults for readonly paths and masked paths. Note that this field cannot be set when spec.os.name is windows.\n\nPossible enum values:\n - `\"Default\"` uses the container runtime defaults for readonly and masked paths for /proc. Most container runtimes mask certain paths in /proc to avoid accidental security exposure of special devices or information.\n - `\"Unmasked\"` bypasses the default masking behavior of the container runtime and ensures the newly created /proc the container stays in tact with no modifications.",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Default", "Unmasked"},
@@ -19248,20 +20088,20 @@ func schema_k8sio_api_core_v1_SecurityContext(ref common.ReferenceCallback) comm
 					"seccompProfile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The seccomp options to use by this container. If seccomp options are provided at both the pod & container level, the container options override the pod options. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.SeccompProfile"),
+							Ref:         ref(v1.SeccompProfile{}.OpenAPIModelName()),
 						},
 					},
 					"appArmorProfile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "appArmorProfile is the AppArmor options to use by this container. If set, this profile overrides the pod's appArmorProfile. Note that this field cannot be set when spec.os.name is windows.",
-							Ref:         ref("k8s.io/api/core/v1.AppArmorProfile"),
+							Ref:         ref(v1.AppArmorProfile{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AppArmorProfile", "k8s.io/api/core/v1.Capabilities", "k8s.io/api/core/v1.SELinuxOptions", "k8s.io/api/core/v1.SeccompProfile", "k8s.io/api/core/v1.WindowsSecurityContextOptions"},
+			v1.AppArmorProfile{}.OpenAPIModelName(), v1.Capabilities{}.OpenAPIModelName(), v1.SELinuxOptions{}.OpenAPIModelName(), v1.SeccompProfile{}.OpenAPIModelName(), v1.WindowsSecurityContextOptions{}.OpenAPIModelName()},
 	}
 }
 
@@ -19290,14 +20130,14 @@ func schema_k8sio_api_core_v1_SerializedReference(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "The reference to an object in the system.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ObjectReference"},
+			v1.ObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -19326,28 +20166,28 @@ func schema_k8sio_api_core_v1_Service(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Spec defines the behavior of a service. https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ServiceSpec"),
+							Ref:         ref(v1.ServiceSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Most recently observed status of the service. Populated by the system. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.ServiceStatus"),
+							Ref:         ref(v1.ServiceStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ServiceSpec", "k8s.io/api/core/v1.ServiceStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.ServiceSpec{}.OpenAPIModelName(), v1.ServiceStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19376,7 +20216,7 @@ func schema_k8sio_api_core_v1_ServiceAccount(ref common.ReferenceCallback) commo
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"secrets": {
@@ -19397,7 +20237,7 @@ func schema_k8sio_api_core_v1_ServiceAccount(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ObjectReference"),
+										Ref:     ref(v1.ObjectReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19416,7 +20256,7 @@ func schema_k8sio_api_core_v1_ServiceAccount(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
+										Ref:     ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19433,7 +20273,7 @@ func schema_k8sio_api_core_v1_ServiceAccount(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.ObjectReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			v1.LocalObjectReference{}.OpenAPIModelName(), v1.ObjectReference{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19462,7 +20302,7 @@ func schema_k8sio_api_core_v1_ServiceAccountList(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -19473,7 +20313,7 @@ func schema_k8sio_api_core_v1_ServiceAccountList(ref common.ReferenceCallback) c
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ServiceAccount"),
+										Ref:     ref(v1.ServiceAccount{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19484,7 +20324,7 @@ func schema_k8sio_api_core_v1_ServiceAccountList(ref common.ReferenceCallback) c
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ServiceAccount", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.ServiceAccount{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19549,7 +20389,7 @@ func schema_k8sio_api_core_v1_ServiceList(ref common.ReferenceCallback) common.O
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -19560,7 +20400,7 @@ func schema_k8sio_api_core_v1_ServiceList(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Service"),
+										Ref:     ref(v1.Service{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19571,7 +20411,7 @@ func schema_k8sio_api_core_v1_ServiceList(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.Service", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			v1.Service{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -19616,7 +20456,7 @@ func schema_k8sio_api_core_v1_ServicePort(ref common.ReferenceCallback) common.O
 					"targetPort": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Number or name of the port to access on the pods targeted by the service. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME. If this is a string, it will be looked up as a named port in the target Pod's container ports. If this is not specified, the value of the 'port' field is used (an identity map). This field is ignored for services with clusterIP=None, and should be omitted or set equal to the 'port' field. More info: https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service",
-							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"nodePort": {
@@ -19631,7 +20471,7 @@ func schema_k8sio_api_core_v1_ServicePort(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+			intstr.IntOrString{}.OpenAPIModelName()},
 	}
 }
 
@@ -19695,7 +20535,7 @@ func schema_k8sio_api_core_v1_ServiceSpec(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.ServicePort"),
+										Ref:     ref(v1.ServicePort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19844,7 +20684,7 @@ func schema_k8sio_api_core_v1_ServiceSpec(ref common.ReferenceCallback) common.O
 					"sessionAffinityConfig": {
 						SchemaProps: spec.SchemaProps{
 							Description: "sessionAffinityConfig contains the configurations of session affinity.",
-							Ref:         ref("k8s.io/api/core/v1.SessionAffinityConfig"),
+							Ref:         ref(v1.SessionAffinityConfig{}.OpenAPIModelName()),
 						},
 					},
 					"ipFamilies": {
@@ -19909,7 +20749,7 @@ func schema_k8sio_api_core_v1_ServiceSpec(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ServicePort", "k8s.io/api/core/v1.SessionAffinityConfig"},
+			v1.ServicePort{}.OpenAPIModelName(), v1.SessionAffinityConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -19924,7 +20764,7 @@ func schema_k8sio_api_core_v1_ServiceStatus(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "LoadBalancer contains the current status of the load-balancer, if one is present.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.LoadBalancerStatus"),
+							Ref:         ref(v1.LoadBalancerStatus{}.OpenAPIModelName()),
 						},
 					},
 					"conditions": {
@@ -19945,7 +20785,7 @@ func schema_k8sio_api_core_v1_ServiceStatus(ref common.ReferenceCallback) common
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -19955,7 +20795,7 @@ func schema_k8sio_api_core_v1_ServiceStatus(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LoadBalancerStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+			v1.LoadBalancerStatus{}.OpenAPIModelName(), metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -19969,14 +20809,14 @@ func schema_k8sio_api_core_v1_SessionAffinityConfig(ref common.ReferenceCallback
 					"clientIP": {
 						SchemaProps: spec.SchemaProps{
 							Description: "clientIP contains the configurations of Client IP based session affinity.",
-							Ref:         ref("k8s.io/api/core/v1.ClientIPConfig"),
+							Ref:         ref(v1.ClientIPConfig{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ClientIPConfig"},
+			v1.ClientIPConfig{}.OpenAPIModelName()},
 	}
 }
 
@@ -20040,14 +20880,14 @@ func schema_k8sio_api_core_v1_StorageOSPersistentVolumeSource(ref common.Referen
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
-							Ref:         ref("k8s.io/api/core/v1.ObjectReference"),
+							Ref:         ref(v1.ObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ObjectReference"},
+			v1.ObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -20089,14 +20929,14 @@ func schema_k8sio_api_core_v1_StorageOSVolumeSource(ref common.ReferenceCallback
 					"secretRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secretRef specifies the secret to use for obtaining the StorageOS API credentials.  If not specified, default values will be attempted.",
-							Ref:         ref("k8s.io/api/core/v1.LocalObjectReference"),
+							Ref:         ref(v1.LocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.LocalObjectReference"},
+			v1.LocalObjectReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -20140,7 +20980,7 @@ func schema_k8sio_api_core_v1_TCPSocketAction(ref common.ReferenceCallback) comm
 					"port": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.",
-							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"host": {
@@ -20155,7 +20995,7 @@ func schema_k8sio_api_core_v1_TCPSocketAction(ref common.ReferenceCallback) comm
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+			intstr.IntOrString{}.OpenAPIModelName()},
 	}
 }
 
@@ -20193,7 +21033,7 @@ func schema_k8sio_api_core_v1_Taint(ref common.ReferenceCallback) common.OpenAPI
 					"timeAdded": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TimeAdded represents the time at which the taint was added.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -20201,7 +21041,7 @@ func schema_k8sio_api_core_v1_Taint(ref common.ReferenceCallback) common.OpenAPI
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -20221,10 +21061,10 @@ func schema_k8sio_api_core_v1_Toleration(ref common.ReferenceCallback) common.Op
 					},
 					"operator": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Operator represents a key's relationship to the value. Valid operators are Exists and Equal. Defaults to Equal. Exists is equivalent to wildcard for value, so that a pod can tolerate all taints of a particular category.\n\nPossible enum values:\n - `\"Equal\"`\n - `\"Exists\"`",
+							Description: "Operator represents a key's relationship to the value. Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal. Exists is equivalent to wildcard for value, so that a pod can tolerate all taints of a particular category. Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).\n\nPossible enum values:\n - `\"Equal\"`\n - `\"Exists\"`\n - `\"Gt\"`\n - `\"Lt\"`",
 							Type:        []string{"string"},
 							Format:      "",
-							Enum:        []interface{}{"Equal", "Exists"},
+							Enum:        []interface{}{"Equal", "Exists", "Gt", "Lt"},
 						},
 					},
 					"value": {
@@ -20317,7 +21157,7 @@ func schema_k8sio_api_core_v1_TopologySelectorTerm(ref common.ReferenceCallback)
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.TopologySelectorLabelRequirement"),
+										Ref:     ref(v1.TopologySelectorLabelRequirement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -20332,7 +21172,7 @@ func schema_k8sio_api_core_v1_TopologySelectorTerm(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.TopologySelectorLabelRequirement"},
+			v1.TopologySelectorLabelRequirement{}.OpenAPIModelName()},
 	}
 }
 
@@ -20371,7 +21211,7 @@ func schema_k8sio_api_core_v1_TopologySpreadConstraint(ref common.ReferenceCallb
 					"labelSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LabelSelector is used to find matching pods. Pods that match this label selector are counted to determine the number of pods in their corresponding topology domain.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"minDomains": {
@@ -20422,7 +21262,7 @@ func schema_k8sio_api_core_v1_TopologySpreadConstraint(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -20530,181 +21370,181 @@ func schema_k8sio_api_core_v1_Volume(ref common.ReferenceCallback) common.OpenAP
 					"hostPath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "hostPath represents a pre-existing file or directory on the host machine that is directly exposed to the container. This is generally used for system agents or other privileged things that are allowed to see the host machine. Most containers will NOT need this. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath",
-							Ref:         ref("k8s.io/api/core/v1.HostPathVolumeSource"),
+							Ref:         ref(v1.HostPathVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"emptyDir": {
 						SchemaProps: spec.SchemaProps{
 							Description: "emptyDir represents a temporary directory that shares a pod's lifetime. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
-							Ref:         ref("k8s.io/api/core/v1.EmptyDirVolumeSource"),
+							Ref:         ref(v1.EmptyDirVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"gcePersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gcePersistentDisk represents a GCE Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk",
-							Ref:         ref("k8s.io/api/core/v1.GCEPersistentDiskVolumeSource"),
+							Ref:         ref(v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"awsElasticBlockStore": {
 						SchemaProps: spec.SchemaProps{
 							Description: "awsElasticBlockStore represents an AWS Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore",
-							Ref:         ref("k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource"),
+							Ref:         ref(v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"gitRepo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gitRepo represents a git repository at a particular revision. Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir into the Pod's container.",
-							Ref:         ref("k8s.io/api/core/v1.GitRepoVolumeSource"),
+							Ref:         ref(v1.GitRepoVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"secret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secret represents a secret that should populate this volume. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret",
-							Ref:         ref("k8s.io/api/core/v1.SecretVolumeSource"),
+							Ref:         ref(v1.SecretVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"nfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nfs represents an NFS mount on the host that shares a pod's lifetime More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
-							Ref:         ref("k8s.io/api/core/v1.NFSVolumeSource"),
+							Ref:         ref(v1.NFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"iscsi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "iscsi represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi",
-							Ref:         ref("k8s.io/api/core/v1.ISCSIVolumeSource"),
+							Ref:         ref(v1.ISCSIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"glusterfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime. Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.GlusterfsVolumeSource"),
+							Ref:         ref(v1.GlusterfsVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"persistentVolumeClaim": {
 						SchemaProps: spec.SchemaProps{
 							Description: "persistentVolumeClaimVolumeSource represents a reference to a PersistentVolumeClaim in the same namespace. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims",
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimVolumeSource"),
+							Ref:         ref(v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"rbd": {
 						SchemaProps: spec.SchemaProps{
 							Description: "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime. Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.RBDVolumeSource"),
+							Ref:         ref(v1.RBDVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flexVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.",
-							Ref:         ref("k8s.io/api/core/v1.FlexVolumeSource"),
+							Ref:         ref(v1.FlexVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cinder": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cinder represents a cinder volume attached and mounted on kubelets host machine. Deprecated: Cinder is deprecated. All operations for the in-tree cinder type are redirected to the cinder.csi.openstack.org CSI driver. More info: https://examples.k8s.io/mysql-cinder-pd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.CinderVolumeSource"),
+							Ref:         ref(v1.CinderVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cephfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime. Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.CephFSVolumeSource"),
+							Ref:         ref(v1.CephFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flocker": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running. Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.FlockerVolumeSource"),
+							Ref:         ref(v1.FlockerVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"downwardAPI": {
 						SchemaProps: spec.SchemaProps{
 							Description: "downwardAPI represents downward API about the pod that should populate this volume",
-							Ref:         ref("k8s.io/api/core/v1.DownwardAPIVolumeSource"),
+							Ref:         ref(v1.DownwardAPIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"fc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
-							Ref:         ref("k8s.io/api/core/v1.FCVolumeSource"),
+							Ref:         ref(v1.FCVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureFile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureFile represents an Azure File Service mount on the host and bind mount to the pod. Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type are redirected to the file.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureFileVolumeSource"),
+							Ref:         ref(v1.AzureFileVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"configMap": {
 						SchemaProps: spec.SchemaProps{
 							Description: "configMap represents a configMap that should populate this volume",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapVolumeSource"),
+							Ref:         ref(v1.ConfigMapVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"vsphereVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine. Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type are redirected to the csi.vsphere.vmware.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"),
+							Ref:         ref(v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"quobyte": {
 						SchemaProps: spec.SchemaProps{
 							Description: "quobyte represents a Quobyte mount on the host that shares a pod's lifetime. Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.QuobyteVolumeSource"),
+							Ref:         ref(v1.QuobyteVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod. Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type are redirected to the disk.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureDiskVolumeSource"),
+							Ref:         ref(v1.AzureDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"photonPersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine. Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource"),
+							Ref:         ref(v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"projected": {
 						SchemaProps: spec.SchemaProps{
 							Description: "projected items for all in one resources secrets, configmaps, and downward API",
-							Ref:         ref("k8s.io/api/core/v1.ProjectedVolumeSource"),
+							Ref:         ref(v1.ProjectedVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"portworxVolume": {
 						SchemaProps: spec.SchemaProps{
-							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate is on.",
-							Ref:         ref("k8s.io/api/core/v1.PortworxVolumeSource"),
+							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver.",
+							Ref:         ref(v1.PortworxVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"scaleIO": {
 						SchemaProps: spec.SchemaProps{
 							Description: "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes. Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.ScaleIOVolumeSource"),
+							Ref:         ref(v1.ScaleIOVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"storageos": {
 						SchemaProps: spec.SchemaProps{
 							Description: "storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes. Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.StorageOSVolumeSource"),
+							Ref:         ref(v1.StorageOSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"csi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.",
-							Ref:         ref("k8s.io/api/core/v1.CSIVolumeSource"),
+							Ref:         ref(v1.CSIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"ephemeral": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ephemeral represents a volume that is handled by a cluster storage driver. The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts, and deleted when the pod is removed.\n\nUse this if: a) the volume is only needed while the pod runs, b) features of normal volumes like restoring from snapshot or capacity\n   tracking are needed,\nc) the storage driver is specified through a storage class, and d) the storage driver supports dynamic volume provisioning through\n   a PersistentVolumeClaim (see EphemeralVolumeSource for more\n   information on the connection between this volume type\n   and PersistentVolumeClaim).\n\nUse PersistentVolumeClaim or one of the vendor-specific APIs for volumes that persist for longer than the lifecycle of an individual pod.\n\nUse CSI for light-weight local ephemeral volumes if the CSI driver is meant to be used that way - see the documentation of the driver for more information.\n\nA pod can use both types of ephemeral volumes and persistent volumes at the same time.",
-							Ref:         ref("k8s.io/api/core/v1.EphemeralVolumeSource"),
+							Ref:         ref(v1.EphemeralVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"image": {
 						SchemaProps: spec.SchemaProps{
-							Description: "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine. The volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails. - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present. - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation. A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message. The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field. The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images. The volume will be mounted read-only (ro) and non-executable files (noexec). Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33. The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.",
-							Ref:         ref("k8s.io/api/core/v1.ImageVolumeSource"),
+							Description: "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine. The volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails. - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present. - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation. A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message. The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field. The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images. The volume will be mounted read-only (ro). Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33. The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.",
+							Ref:         ref(v1.ImageVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -20712,7 +21552,7 @@ func schema_k8sio_api_core_v1_Volume(ref common.ReferenceCallback) common.OpenAP
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/api/core/v1.AzureDiskVolumeSource", "k8s.io/api/core/v1.AzureFileVolumeSource", "k8s.io/api/core/v1.CSIVolumeSource", "k8s.io/api/core/v1.CephFSVolumeSource", "k8s.io/api/core/v1.CinderVolumeSource", "k8s.io/api/core/v1.ConfigMapVolumeSource", "k8s.io/api/core/v1.DownwardAPIVolumeSource", "k8s.io/api/core/v1.EmptyDirVolumeSource", "k8s.io/api/core/v1.EphemeralVolumeSource", "k8s.io/api/core/v1.FCVolumeSource", "k8s.io/api/core/v1.FlexVolumeSource", "k8s.io/api/core/v1.FlockerVolumeSource", "k8s.io/api/core/v1.GCEPersistentDiskVolumeSource", "k8s.io/api/core/v1.GitRepoVolumeSource", "k8s.io/api/core/v1.GlusterfsVolumeSource", "k8s.io/api/core/v1.HostPathVolumeSource", "k8s.io/api/core/v1.ISCSIVolumeSource", "k8s.io/api/core/v1.ImageVolumeSource", "k8s.io/api/core/v1.NFSVolumeSource", "k8s.io/api/core/v1.PersistentVolumeClaimVolumeSource", "k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource", "k8s.io/api/core/v1.PortworxVolumeSource", "k8s.io/api/core/v1.ProjectedVolumeSource", "k8s.io/api/core/v1.QuobyteVolumeSource", "k8s.io/api/core/v1.RBDVolumeSource", "k8s.io/api/core/v1.ScaleIOVolumeSource", "k8s.io/api/core/v1.SecretVolumeSource", "k8s.io/api/core/v1.StorageOSVolumeSource", "k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"},
+			v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName(), v1.AzureDiskVolumeSource{}.OpenAPIModelName(), v1.AzureFileVolumeSource{}.OpenAPIModelName(), v1.CSIVolumeSource{}.OpenAPIModelName(), v1.CephFSVolumeSource{}.OpenAPIModelName(), v1.CinderVolumeSource{}.OpenAPIModelName(), v1.ConfigMapVolumeSource{}.OpenAPIModelName(), v1.DownwardAPIVolumeSource{}.OpenAPIModelName(), v1.EmptyDirVolumeSource{}.OpenAPIModelName(), v1.EphemeralVolumeSource{}.OpenAPIModelName(), v1.FCVolumeSource{}.OpenAPIModelName(), v1.FlexVolumeSource{}.OpenAPIModelName(), v1.FlockerVolumeSource{}.OpenAPIModelName(), v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.GitRepoVolumeSource{}.OpenAPIModelName(), v1.GlusterfsVolumeSource{}.OpenAPIModelName(), v1.HostPathVolumeSource{}.OpenAPIModelName(), v1.ISCSIVolumeSource{}.OpenAPIModelName(), v1.ImageVolumeSource{}.OpenAPIModelName(), v1.NFSVolumeSource{}.OpenAPIModelName(), v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName(), v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.PortworxVolumeSource{}.OpenAPIModelName(), v1.ProjectedVolumeSource{}.OpenAPIModelName(), v1.QuobyteVolumeSource{}.OpenAPIModelName(), v1.RBDVolumeSource{}.OpenAPIModelName(), v1.ScaleIOVolumeSource{}.OpenAPIModelName(), v1.SecretVolumeSource{}.OpenAPIModelName(), v1.StorageOSVolumeSource{}.OpenAPIModelName(), v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()},
 	}
 }
 
@@ -20849,10 +21689,18 @@ func schema_k8sio_api_core_v1_VolumeMountStatus(ref common.ReferenceCallback) co
 							Format:      "",
 						},
 					},
+					"volumeStatus": {
+						SchemaProps: spec.SchemaProps{
+							Description: "volumeStatus represents volume-type-specific status about the mounted volume.",
+							Ref:         ref(v1.VolumeStatus{}.OpenAPIModelName()),
+						},
+					},
 				},
 				Required: []string{"name", "mountPath"},
 			},
 		},
+		Dependencies: []string{
+			v1.VolumeStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -20866,14 +21714,14 @@ func schema_k8sio_api_core_v1_VolumeNodeAffinity(ref common.ReferenceCallback) c
 					"required": {
 						SchemaProps: spec.SchemaProps{
 							Description: "required specifies hard node constraints that must be met.",
-							Ref:         ref("k8s.io/api/core/v1.NodeSelector"),
+							Ref:         ref(v1.NodeSelector{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.NodeSelector"},
+			v1.NodeSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -20887,44 +21735,44 @@ func schema_k8sio_api_core_v1_VolumeProjection(ref common.ReferenceCallback) com
 					"secret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secret information about the secret data to project",
-							Ref:         ref("k8s.io/api/core/v1.SecretProjection"),
+							Ref:         ref(v1.SecretProjection{}.OpenAPIModelName()),
 						},
 					},
 					"downwardAPI": {
 						SchemaProps: spec.SchemaProps{
 							Description: "downwardAPI information about the downwardAPI data to project",
-							Ref:         ref("k8s.io/api/core/v1.DownwardAPIProjection"),
+							Ref:         ref(v1.DownwardAPIProjection{}.OpenAPIModelName()),
 						},
 					},
 					"configMap": {
 						SchemaProps: spec.SchemaProps{
 							Description: "configMap information about the configMap data to project",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapProjection"),
+							Ref:         ref(v1.ConfigMapProjection{}.OpenAPIModelName()),
 						},
 					},
 					"serviceAccountToken": {
 						SchemaProps: spec.SchemaProps{
 							Description: "serviceAccountToken is information about the serviceAccountToken data to project",
-							Ref:         ref("k8s.io/api/core/v1.ServiceAccountTokenProjection"),
+							Ref:         ref(v1.ServiceAccountTokenProjection{}.OpenAPIModelName()),
 						},
 					},
 					"clusterTrustBundle": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ClusterTrustBundle allows a pod to access the `.spec.trustBundle` field of ClusterTrustBundle objects in an auto-updating file.\n\nAlpha, gated by the ClusterTrustBundleProjection feature gate.\n\nClusterTrustBundle objects can either be selected by name, or by the combination of signer name and a label selector.\n\nKubelet performs aggressive normalization of the PEM contents written into the pod filesystem.  Esoteric PEM features such as inter-block comments and block headers are stripped.  Certificates are deduplicated. The ordering of certificates within the file is arbitrary, and Kubelet may change the order over time.",
-							Ref:         ref("k8s.io/api/core/v1.ClusterTrustBundleProjection"),
+							Ref:         ref(v1.ClusterTrustBundleProjection{}.OpenAPIModelName()),
 						},
 					},
 					"podCertificate": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Projects an auto-rotating credential bundle (private key and certificate chain) that the pod can use either as a TLS client or server.\n\nKubelet generates a private key and uses it to send a PodCertificateRequest to the named signer.  Once the signer approves the request and issues a certificate chain, Kubelet writes the key and certificate chain to the pod filesystem.  The pod does not start until certificates have been issued for each podCertificate projected volume source in its spec.\n\nKubelet will begin trying to rotate the certificate at the time indicated by the signer using the PodCertificateRequest.Status.BeginRefreshAt timestamp.\n\nKubelet can write a single file, indicated by the credentialBundlePath field, or separate files, indicated by the keyPath and certificateChainPath fields.\n\nThe credential bundle is a single file in PEM format.  The first PEM entry is the private key (in PKCS#8 format), and the remaining PEM entries are the certificate chain issued by the signer (typically, signers will return their certificate chain in leaf-to-root order).\n\nPrefer using the credential bundle format, since your application code can read it atomically.  If you use keyPath and certificateChainPath, your application must make two separate file reads. If these coincide with a certificate rotation, it is possible that the private key and leaf certificate you read may not correspond to each other.  Your application will need to check for this condition, and re-read until they are consistent.\n\nThe named signer controls chooses the format of the certificate it issues; consult the signer implementation's documentation to learn how to use the certificates it issues.",
-							Ref:         ref("k8s.io/api/core/v1.PodCertificateProjection"),
+							Ref:         ref(v1.PodCertificateProjection{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.ClusterTrustBundleProjection", "k8s.io/api/core/v1.ConfigMapProjection", "k8s.io/api/core/v1.DownwardAPIProjection", "k8s.io/api/core/v1.PodCertificateProjection", "k8s.io/api/core/v1.SecretProjection", "k8s.io/api/core/v1.ServiceAccountTokenProjection"},
+			v1.ClusterTrustBundleProjection{}.OpenAPIModelName(), v1.ConfigMapProjection{}.OpenAPIModelName(), v1.DownwardAPIProjection{}.OpenAPIModelName(), v1.PodCertificateProjection{}.OpenAPIModelName(), v1.SecretProjection{}.OpenAPIModelName(), v1.ServiceAccountTokenProjection{}.OpenAPIModelName()},
 	}
 }
 
@@ -20981,188 +21829,209 @@ func schema_k8sio_api_core_v1_VolumeSource(ref common.ReferenceCallback) common.
 					"hostPath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "hostPath represents a pre-existing file or directory on the host machine that is directly exposed to the container. This is generally used for system agents or other privileged things that are allowed to see the host machine. Most containers will NOT need this. More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath",
-							Ref:         ref("k8s.io/api/core/v1.HostPathVolumeSource"),
+							Ref:         ref(v1.HostPathVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"emptyDir": {
 						SchemaProps: spec.SchemaProps{
 							Description: "emptyDir represents a temporary directory that shares a pod's lifetime. More info: https://kubernetes.io/docs/concepts/storage/volumes#emptydir",
-							Ref:         ref("k8s.io/api/core/v1.EmptyDirVolumeSource"),
+							Ref:         ref(v1.EmptyDirVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"gcePersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gcePersistentDisk represents a GCE Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: GCEPersistentDisk is deprecated. All operations for the in-tree gcePersistentDisk type are redirected to the pd.csi.storage.gke.io CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#gcepersistentdisk",
-							Ref:         ref("k8s.io/api/core/v1.GCEPersistentDiskVolumeSource"),
+							Ref:         ref(v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"awsElasticBlockStore": {
 						SchemaProps: spec.SchemaProps{
 							Description: "awsElasticBlockStore represents an AWS Disk resource that is attached to a kubelet's host machine and then exposed to the pod. Deprecated: AWSElasticBlockStore is deprecated. All operations for the in-tree awsElasticBlockStore type are redirected to the ebs.csi.aws.com CSI driver. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore",
-							Ref:         ref("k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource"),
+							Ref:         ref(v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"gitRepo": {
 						SchemaProps: spec.SchemaProps{
 							Description: "gitRepo represents a git repository at a particular revision. Deprecated: GitRepo is deprecated. To provision a container with a git repo, mount an EmptyDir into an InitContainer that clones the repo using git, then mount the EmptyDir into the Pod's container.",
-							Ref:         ref("k8s.io/api/core/v1.GitRepoVolumeSource"),
+							Ref:         ref(v1.GitRepoVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"secret": {
 						SchemaProps: spec.SchemaProps{
 							Description: "secret represents a secret that should populate this volume. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret",
-							Ref:         ref("k8s.io/api/core/v1.SecretVolumeSource"),
+							Ref:         ref(v1.SecretVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"nfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "nfs represents an NFS mount on the host that shares a pod's lifetime More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs",
-							Ref:         ref("k8s.io/api/core/v1.NFSVolumeSource"),
+							Ref:         ref(v1.NFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"iscsi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "iscsi represents an ISCSI Disk resource that is attached to a kubelet's host machine and then exposed to the pod. More info: https://kubernetes.io/docs/concepts/storage/volumes/#iscsi",
-							Ref:         ref("k8s.io/api/core/v1.ISCSIVolumeSource"),
+							Ref:         ref(v1.ISCSIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"glusterfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "glusterfs represents a Glusterfs mount on the host that shares a pod's lifetime. Deprecated: Glusterfs is deprecated and the in-tree glusterfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.GlusterfsVolumeSource"),
+							Ref:         ref(v1.GlusterfsVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"persistentVolumeClaim": {
 						SchemaProps: spec.SchemaProps{
 							Description: "persistentVolumeClaimVolumeSource represents a reference to a PersistentVolumeClaim in the same namespace. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims",
-							Ref:         ref("k8s.io/api/core/v1.PersistentVolumeClaimVolumeSource"),
+							Ref:         ref(v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"rbd": {
 						SchemaProps: spec.SchemaProps{
 							Description: "rbd represents a Rados Block Device mount on the host that shares a pod's lifetime. Deprecated: RBD is deprecated and the in-tree rbd type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.RBDVolumeSource"),
+							Ref:         ref(v1.RBDVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flexVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flexVolume represents a generic volume resource that is provisioned/attached using an exec based plugin. Deprecated: FlexVolume is deprecated. Consider using a CSIDriver instead.",
-							Ref:         ref("k8s.io/api/core/v1.FlexVolumeSource"),
+							Ref:         ref(v1.FlexVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cinder": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cinder represents a cinder volume attached and mounted on kubelets host machine. Deprecated: Cinder is deprecated. All operations for the in-tree cinder type are redirected to the cinder.csi.openstack.org CSI driver. More info: https://examples.k8s.io/mysql-cinder-pd/README.md",
-							Ref:         ref("k8s.io/api/core/v1.CinderVolumeSource"),
+							Ref:         ref(v1.CinderVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"cephfs": {
 						SchemaProps: spec.SchemaProps{
 							Description: "cephFS represents a Ceph FS mount on the host that shares a pod's lifetime. Deprecated: CephFS is deprecated and the in-tree cephfs type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.CephFSVolumeSource"),
+							Ref:         ref(v1.CephFSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"flocker": {
 						SchemaProps: spec.SchemaProps{
 							Description: "flocker represents a Flocker volume attached to a kubelet's host machine. This depends on the Flocker control service being running. Deprecated: Flocker is deprecated and the in-tree flocker type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.FlockerVolumeSource"),
+							Ref:         ref(v1.FlockerVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"downwardAPI": {
 						SchemaProps: spec.SchemaProps{
 							Description: "downwardAPI represents downward API about the pod that should populate this volume",
-							Ref:         ref("k8s.io/api/core/v1.DownwardAPIVolumeSource"),
+							Ref:         ref(v1.DownwardAPIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"fc": {
 						SchemaProps: spec.SchemaProps{
 							Description: "fc represents a Fibre Channel resource that is attached to a kubelet's host machine and then exposed to the pod.",
-							Ref:         ref("k8s.io/api/core/v1.FCVolumeSource"),
+							Ref:         ref(v1.FCVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureFile": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureFile represents an Azure File Service mount on the host and bind mount to the pod. Deprecated: AzureFile is deprecated. All operations for the in-tree azureFile type are redirected to the file.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureFileVolumeSource"),
+							Ref:         ref(v1.AzureFileVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"configMap": {
 						SchemaProps: spec.SchemaProps{
 							Description: "configMap represents a configMap that should populate this volume",
-							Ref:         ref("k8s.io/api/core/v1.ConfigMapVolumeSource"),
+							Ref:         ref(v1.ConfigMapVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"vsphereVolume": {
 						SchemaProps: spec.SchemaProps{
 							Description: "vsphereVolume represents a vSphere volume attached and mounted on kubelets host machine. Deprecated: VsphereVolume is deprecated. All operations for the in-tree vsphereVolume type are redirected to the csi.vsphere.vmware.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"),
+							Ref:         ref(v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"quobyte": {
 						SchemaProps: spec.SchemaProps{
 							Description: "quobyte represents a Quobyte mount on the host that shares a pod's lifetime. Deprecated: Quobyte is deprecated and the in-tree quobyte type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.QuobyteVolumeSource"),
+							Ref:         ref(v1.QuobyteVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"azureDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "azureDisk represents an Azure Data Disk mount on the host and bind mount to the pod. Deprecated: AzureDisk is deprecated. All operations for the in-tree azureDisk type are redirected to the disk.csi.azure.com CSI driver.",
-							Ref:         ref("k8s.io/api/core/v1.AzureDiskVolumeSource"),
+							Ref:         ref(v1.AzureDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"photonPersistentDisk": {
 						SchemaProps: spec.SchemaProps{
 							Description: "photonPersistentDisk represents a PhotonController persistent disk attached and mounted on kubelets host machine. Deprecated: PhotonPersistentDisk is deprecated and the in-tree photonPersistentDisk type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource"),
+							Ref:         ref(v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"projected": {
 						SchemaProps: spec.SchemaProps{
 							Description: "projected items for all in one resources secrets, configmaps, and downward API",
-							Ref:         ref("k8s.io/api/core/v1.ProjectedVolumeSource"),
+							Ref:         ref(v1.ProjectedVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"portworxVolume": {
 						SchemaProps: spec.SchemaProps{
-							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver when the CSIMigrationPortworx feature-gate is on.",
-							Ref:         ref("k8s.io/api/core/v1.PortworxVolumeSource"),
+							Description: "portworxVolume represents a portworx volume attached and mounted on kubelets host machine. Deprecated: PortworxVolume is deprecated. All operations for the in-tree portworxVolume type are redirected to the pxd.portworx.com CSI driver.",
+							Ref:         ref(v1.PortworxVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"scaleIO": {
 						SchemaProps: spec.SchemaProps{
 							Description: "scaleIO represents a ScaleIO persistent volume attached and mounted on Kubernetes nodes. Deprecated: ScaleIO is deprecated and the in-tree scaleIO type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.ScaleIOVolumeSource"),
+							Ref:         ref(v1.ScaleIOVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"storageos": {
 						SchemaProps: spec.SchemaProps{
 							Description: "storageOS represents a StorageOS volume attached and mounted on Kubernetes nodes. Deprecated: StorageOS is deprecated and the in-tree storageos type is no longer supported.",
-							Ref:         ref("k8s.io/api/core/v1.StorageOSVolumeSource"),
+							Ref:         ref(v1.StorageOSVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"csi": {
 						SchemaProps: spec.SchemaProps{
 							Description: "csi (Container Storage Interface) represents ephemeral storage that is handled by certain external CSI drivers.",
-							Ref:         ref("k8s.io/api/core/v1.CSIVolumeSource"),
+							Ref:         ref(v1.CSIVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"ephemeral": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ephemeral represents a volume that is handled by a cluster storage driver. The volume's lifecycle is tied to the pod that defines it - it will be created before the pod starts, and deleted when the pod is removed.\n\nUse this if: a) the volume is only needed while the pod runs, b) features of normal volumes like restoring from snapshot or capacity\n   tracking are needed,\nc) the storage driver is specified through a storage class, and d) the storage driver supports dynamic volume provisioning through\n   a PersistentVolumeClaim (see EphemeralVolumeSource for more\n   information on the connection between this volume type\n   and PersistentVolumeClaim).\n\nUse PersistentVolumeClaim or one of the vendor-specific APIs for volumes that persist for longer than the lifecycle of an individual pod.\n\nUse CSI for light-weight local ephemeral volumes if the CSI driver is meant to be used that way - see the documentation of the driver for more information.\n\nA pod can use both types of ephemeral volumes and persistent volumes at the same time.",
-							Ref:         ref("k8s.io/api/core/v1.EphemeralVolumeSource"),
+							Ref:         ref(v1.EphemeralVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 					"image": {
 						SchemaProps: spec.SchemaProps{
-							Description: "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine. The volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails. - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present. - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation. A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message. The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field. The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images. The volume will be mounted read-only (ro) and non-executable files (noexec). Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33. The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.",
-							Ref:         ref("k8s.io/api/core/v1.ImageVolumeSource"),
+							Description: "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine. The volume is resolved at pod startup depending on which PullPolicy value is provided:\n\n- Always: the kubelet always attempts to pull the reference. Container creation will fail If the pull fails. - Never: the kubelet never pulls the reference and only uses a local image or artifact. Container creation will fail if the reference isn't present. - IfNotPresent: the kubelet pulls if the reference isn't already present on disk. Container creation will fail if the reference isn't present and the pull fails.\n\nThe volume gets re-resolved if the pod gets deleted and recreated, which means that new remote content will become available on pod recreation. A failure to resolve or pull the image during pod startup will block containers from starting and may add significant latency. Failures will be retried using normal volume backoff and will be reported on the pod reason and message. The types of objects that may be mounted by this volume are defined by the container runtime implementation on a host machine and at minimum must include all valid types supported by the container image field. The OCI object gets mounted in a single directory (spec.containers[*].volumeMounts.mountPath) by merging the manifest layers in the same way as for container images. The volume will be mounted read-only (ro). Sub path mounts for containers are not supported (spec.containers[*].volumeMounts.subpath) before 1.33. The field spec.securityContext.fsGroupChangePolicy has no effect on this volume type.",
+							Ref:         ref(v1.ImageVolumeSource{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.AWSElasticBlockStoreVolumeSource", "k8s.io/api/core/v1.AzureDiskVolumeSource", "k8s.io/api/core/v1.AzureFileVolumeSource", "k8s.io/api/core/v1.CSIVolumeSource", "k8s.io/api/core/v1.CephFSVolumeSource", "k8s.io/api/core/v1.CinderVolumeSource", "k8s.io/api/core/v1.ConfigMapVolumeSource", "k8s.io/api/core/v1.DownwardAPIVolumeSource", "k8s.io/api/core/v1.EmptyDirVolumeSource", "k8s.io/api/core/v1.EphemeralVolumeSource", "k8s.io/api/core/v1.FCVolumeSource", "k8s.io/api/core/v1.FlexVolumeSource", "k8s.io/api/core/v1.FlockerVolumeSource", "k8s.io/api/core/v1.GCEPersistentDiskVolumeSource", "k8s.io/api/core/v1.GitRepoVolumeSource", "k8s.io/api/core/v1.GlusterfsVolumeSource", "k8s.io/api/core/v1.HostPathVolumeSource", "k8s.io/api/core/v1.ISCSIVolumeSource", "k8s.io/api/core/v1.ImageVolumeSource", "k8s.io/api/core/v1.NFSVolumeSource", "k8s.io/api/core/v1.PersistentVolumeClaimVolumeSource", "k8s.io/api/core/v1.PhotonPersistentDiskVolumeSource", "k8s.io/api/core/v1.PortworxVolumeSource", "k8s.io/api/core/v1.ProjectedVolumeSource", "k8s.io/api/core/v1.QuobyteVolumeSource", "k8s.io/api/core/v1.RBDVolumeSource", "k8s.io/api/core/v1.ScaleIOVolumeSource", "k8s.io/api/core/v1.SecretVolumeSource", "k8s.io/api/core/v1.StorageOSVolumeSource", "k8s.io/api/core/v1.VsphereVirtualDiskVolumeSource"},
+			v1.AWSElasticBlockStoreVolumeSource{}.OpenAPIModelName(), v1.AzureDiskVolumeSource{}.OpenAPIModelName(), v1.AzureFileVolumeSource{}.OpenAPIModelName(), v1.CSIVolumeSource{}.OpenAPIModelName(), v1.CephFSVolumeSource{}.OpenAPIModelName(), v1.CinderVolumeSource{}.OpenAPIModelName(), v1.ConfigMapVolumeSource{}.OpenAPIModelName(), v1.DownwardAPIVolumeSource{}.OpenAPIModelName(), v1.EmptyDirVolumeSource{}.OpenAPIModelName(), v1.EphemeralVolumeSource{}.OpenAPIModelName(), v1.FCVolumeSource{}.OpenAPIModelName(), v1.FlexVolumeSource{}.OpenAPIModelName(), v1.FlockerVolumeSource{}.OpenAPIModelName(), v1.GCEPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.GitRepoVolumeSource{}.OpenAPIModelName(), v1.GlusterfsVolumeSource{}.OpenAPIModelName(), v1.HostPathVolumeSource{}.OpenAPIModelName(), v1.ISCSIVolumeSource{}.OpenAPIModelName(), v1.ImageVolumeSource{}.OpenAPIModelName(), v1.NFSVolumeSource{}.OpenAPIModelName(), v1.PersistentVolumeClaimVolumeSource{}.OpenAPIModelName(), v1.PhotonPersistentDiskVolumeSource{}.OpenAPIModelName(), v1.PortworxVolumeSource{}.OpenAPIModelName(), v1.ProjectedVolumeSource{}.OpenAPIModelName(), v1.QuobyteVolumeSource{}.OpenAPIModelName(), v1.RBDVolumeSource{}.OpenAPIModelName(), v1.ScaleIOVolumeSource{}.OpenAPIModelName(), v1.SecretVolumeSource{}.OpenAPIModelName(), v1.StorageOSVolumeSource{}.OpenAPIModelName(), v1.VsphereVirtualDiskVolumeSource{}.OpenAPIModelName()},
+	}
+}
+
+func schema_k8sio_api_core_v1_VolumeStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "VolumeStatus represents the status of a mounted volume. At most one of its members must be specified.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"image": {
+						SchemaProps: spec.SchemaProps{
+							Description: "image represents an OCI object (a container image or artifact) pulled and mounted on the kubelet's host machine.",
+							Ref:         ref(v1.ImageVolumeStatus{}.OpenAPIModelName()),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			v1.ImageVolumeStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -21228,7 +22097,7 @@ func schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Required. A pod affinity term, associated with the corresponding weight.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/core/v1.PodAffinityTerm"),
+							Ref:         ref(v1.PodAffinityTerm{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -21236,7 +22105,7 @@ func schema_k8sio_api_core_v1_WeightedPodAffinityTerm(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.PodAffinityTerm"},
+			v1.PodAffinityTerm{}.OpenAPIModelName()},
 	}
 }
 
@@ -21307,7 +22176,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressPath(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "backend defines the referenced service endpoint to which the traffic will be forwarded to.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IngressBackend"),
+							Ref:         ref(networkingv1.IngressBackend{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -21315,7 +22184,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressPath(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressBackend"},
+			networkingv1.IngressBackend{}.OpenAPIModelName()},
 	}
 }
 
@@ -21339,7 +22208,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref common.ReferenceCal
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.HTTPIngressPath"),
+										Ref:     ref(networkingv1.HTTPIngressPath{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21350,7 +22219,7 @@ func schema_k8sio_api_networking_v1_HTTPIngressRuleValue(ref common.ReferenceCal
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.HTTPIngressPath"},
+			networkingv1.HTTPIngressPath{}.OpenAPIModelName()},
 	}
 }
 
@@ -21379,21 +22248,22 @@ func schema_k8sio_api_networking_v1_IPAddress(ref common.ReferenceCallback) comm
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec is the desired state of the IPAddress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IPAddressSpec"),
+							Ref:         ref(networkingv1.IPAddressSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
+				Required: []string{"spec"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IPAddressSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			networkingv1.IPAddressSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21422,7 +22292,7 @@ func schema_k8sio_api_networking_v1_IPAddressList(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -21433,7 +22303,7 @@ func schema_k8sio_api_networking_v1_IPAddressList(ref common.ReferenceCallback) 
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IPAddress"),
+										Ref:     ref(networkingv1.IPAddress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21444,7 +22314,7 @@ func schema_k8sio_api_networking_v1_IPAddressList(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IPAddress", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			networkingv1.IPAddress{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21458,7 +22328,7 @@ func schema_k8sio_api_networking_v1_IPAddressSpec(ref common.ReferenceCallback) 
 					"parentRef": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ParentRef references the resource that an IPAddress is attached to. An IPAddress must reference a parent object.",
-							Ref:         ref("k8s.io/api/networking/v1.ParentReference"),
+							Ref:         ref(networkingv1.ParentReference{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -21466,7 +22336,7 @@ func schema_k8sio_api_networking_v1_IPAddressSpec(ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.ParentReference"},
+			networkingv1.ParentReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -21537,28 +22407,28 @@ func schema_k8sio_api_networking_v1_Ingress(ref common.ReferenceCallback) common
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec is the desired state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IngressSpec"),
+							Ref:         ref(networkingv1.IngressSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "status is the current state of the Ingress. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IngressStatus"),
+							Ref:         ref(networkingv1.IngressStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressSpec", "k8s.io/api/networking/v1.IngressStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			networkingv1.IngressSpec{}.OpenAPIModelName(), networkingv1.IngressStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21572,20 +22442,20 @@ func schema_k8sio_api_networking_v1_IngressBackend(ref common.ReferenceCallback)
 					"service": {
 						SchemaProps: spec.SchemaProps{
 							Description: "service references a service as a backend. This is a mutually exclusive setting with \"Resource\".",
-							Ref:         ref("k8s.io/api/networking/v1.IngressServiceBackend"),
+							Ref:         ref(networkingv1.IngressServiceBackend{}.OpenAPIModelName()),
 						},
 					},
 					"resource": {
 						SchemaProps: spec.SchemaProps{
 							Description: "resource is an ObjectRef to another Kubernetes resource in the namespace of the Ingress object. If resource is specified, a service.Name and service.Port must not be specified. This is a mutually exclusive setting with \"Service\".",
-							Ref:         ref("k8s.io/api/core/v1.TypedLocalObjectReference"),
+							Ref:         ref(v1.TypedLocalObjectReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.TypedLocalObjectReference", "k8s.io/api/networking/v1.IngressServiceBackend"},
+			v1.TypedLocalObjectReference{}.OpenAPIModelName(), networkingv1.IngressServiceBackend{}.OpenAPIModelName()},
 	}
 }
 
@@ -21614,21 +22484,21 @@ func schema_k8sio_api_networking_v1_IngressClass(ref common.ReferenceCallback) c
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec is the desired state of the IngressClass. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IngressClassSpec"),
+							Ref:         ref(networkingv1.IngressClassSpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressClassSpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			networkingv1.IngressClassSpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21657,7 +22527,7 @@ func schema_k8sio_api_networking_v1_IngressClassList(ref common.ReferenceCallbac
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -21668,7 +22538,7 @@ func schema_k8sio_api_networking_v1_IngressClassList(ref common.ReferenceCallbac
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IngressClass"),
+										Ref:     ref(networkingv1.IngressClass{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21679,7 +22549,7 @@ func schema_k8sio_api_networking_v1_IngressClassList(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressClass", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			networkingv1.IngressClass{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21751,14 +22621,14 @@ func schema_k8sio_api_networking_v1_IngressClassSpec(ref common.ReferenceCallbac
 					"parameters": {
 						SchemaProps: spec.SchemaProps{
 							Description: "parameters is a link to a custom resource containing additional configuration for the controller. This is optional if the controller does not require extra parameters.",
-							Ref:         ref("k8s.io/api/networking/v1.IngressClassParametersReference"),
+							Ref:         ref(networkingv1.IngressClassParametersReference{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressClassParametersReference"},
+			networkingv1.IngressClassParametersReference{}.OpenAPIModelName()},
 	}
 }
 
@@ -21787,7 +22657,7 @@ func schema_k8sio_api_networking_v1_IngressList(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -21798,7 +22668,7 @@ func schema_k8sio_api_networking_v1_IngressList(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.Ingress"),
+										Ref:     ref(networkingv1.Ingress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21809,7 +22679,7 @@ func schema_k8sio_api_networking_v1_IngressList(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.Ingress", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			networkingv1.Ingress{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -21847,7 +22717,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref common.Refere
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IngressPortStatus"),
+										Ref:     ref(networkingv1.IngressPortStatus{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21857,7 +22727,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerIngress(ref common.Refere
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressPortStatus"},
+			networkingv1.IngressPortStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -21881,7 +22751,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref common.Referen
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IngressLoadBalancerIngress"),
+										Ref:     ref(networkingv1.IngressLoadBalancerIngress{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -21891,7 +22761,7 @@ func schema_k8sio_api_networking_v1_IngressLoadBalancerStatus(ref common.Referen
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressLoadBalancerIngress"},
+			networkingv1.IngressLoadBalancerIngress{}.OpenAPIModelName()},
 	}
 }
 
@@ -21949,14 +22819,14 @@ func schema_k8sio_api_networking_v1_IngressRule(ref common.ReferenceCallback) co
 					},
 					"http": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/api/networking/v1.HTTPIngressRuleValue"),
+							Ref: ref(networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.HTTPIngressRuleValue"},
+			networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName()},
 	}
 }
 
@@ -21969,14 +22839,14 @@ func schema_k8sio_api_networking_v1_IngressRuleValue(ref common.ReferenceCallbac
 				Properties: map[string]spec.Schema{
 					"http": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("k8s.io/api/networking/v1.HTTPIngressRuleValue"),
+							Ref: ref(networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.HTTPIngressRuleValue"},
+			networkingv1.HTTPIngressRuleValue{}.OpenAPIModelName()},
 	}
 }
 
@@ -21999,7 +22869,7 @@ func schema_k8sio_api_networking_v1_IngressServiceBackend(ref common.ReferenceCa
 						SchemaProps: spec.SchemaProps{
 							Description: "port of the referenced service. A port name or port number is required for a IngressServiceBackend.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.ServiceBackendPort"),
+							Ref:         ref(networkingv1.ServiceBackendPort{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -22007,7 +22877,7 @@ func schema_k8sio_api_networking_v1_IngressServiceBackend(ref common.ReferenceCa
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.ServiceBackendPort"},
+			networkingv1.ServiceBackendPort{}.OpenAPIModelName()},
 	}
 }
 
@@ -22028,7 +22898,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 					"defaultBackend": {
 						SchemaProps: spec.SchemaProps{
 							Description: "defaultBackend is the backend that should handle requests that don't match any rule. If Rules are not specified, DefaultBackend must be specified. If DefaultBackend is not set, the handling of requests that do not match any of the rules will be up to the Ingress controller.",
-							Ref:         ref("k8s.io/api/networking/v1.IngressBackend"),
+							Ref:         ref(networkingv1.IngressBackend{}.OpenAPIModelName()),
 						},
 					},
 					"tls": {
@@ -22044,7 +22914,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IngressTLS"),
+										Ref:     ref(networkingv1.IngressTLS{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22063,7 +22933,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.IngressRule"),
+										Ref:     ref(networkingv1.IngressRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22073,7 +22943,7 @@ func schema_k8sio_api_networking_v1_IngressSpec(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressBackend", "k8s.io/api/networking/v1.IngressRule", "k8s.io/api/networking/v1.IngressTLS"},
+			networkingv1.IngressBackend{}.OpenAPIModelName(), networkingv1.IngressRule{}.OpenAPIModelName(), networkingv1.IngressTLS{}.OpenAPIModelName()},
 	}
 }
 
@@ -22088,14 +22958,14 @@ func schema_k8sio_api_networking_v1_IngressStatus(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "loadBalancer contains the current status of the load-balancer.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.IngressLoadBalancerStatus"),
+							Ref:         ref(networkingv1.IngressLoadBalancerStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IngressLoadBalancerStatus"},
+			networkingv1.IngressLoadBalancerStatus{}.OpenAPIModelName()},
 	}
 }
 
@@ -22164,21 +23034,21 @@ func schema_k8sio_api_networking_v1_NetworkPolicy(ref common.ReferenceCallback) 
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec represents the specification of the desired behavior for this NetworkPolicy.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.NetworkPolicySpec"),
+							Ref:         ref(networkingv1.NetworkPolicySpec{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicySpec", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			networkingv1.NetworkPolicySpec{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -22202,7 +23072,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyPort"),
+										Ref:     ref(networkingv1.NetworkPolicyPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22221,7 +23091,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref common.Reference
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyPeer"),
+										Ref:     ref(networkingv1.NetworkPolicyPeer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22231,7 +23101,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyEgressRule(ref common.Reference
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicyPeer", "k8s.io/api/networking/v1.NetworkPolicyPort"},
+			networkingv1.NetworkPolicyPeer{}.OpenAPIModelName(), networkingv1.NetworkPolicyPort{}.OpenAPIModelName()},
 	}
 }
 
@@ -22255,7 +23125,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyPort"),
+										Ref:     ref(networkingv1.NetworkPolicyPort{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22274,7 +23144,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref common.Referenc
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyPeer"),
+										Ref:     ref(networkingv1.NetworkPolicyPeer{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22284,7 +23154,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyIngressRule(ref common.Referenc
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicyPeer", "k8s.io/api/networking/v1.NetworkPolicyPort"},
+			networkingv1.NetworkPolicyPeer{}.OpenAPIModelName(), networkingv1.NetworkPolicyPort{}.OpenAPIModelName()},
 	}
 }
 
@@ -22313,7 +23183,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyList(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -22324,7 +23194,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyList(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicy"),
+										Ref:     ref(networkingv1.NetworkPolicy{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22335,7 +23205,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyList(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicy", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			networkingv1.NetworkPolicy{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -22349,26 +23219,26 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPeer(ref common.ReferenceCallba
 					"podSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "podSelector is a label selector which selects pods. This field follows standard label selector semantics; if present but empty, it selects all pods.\n\nIf namespaceSelector is also set, then the NetworkPolicyPeer as a whole selects the pods matching podSelector in the Namespaces selected by NamespaceSelector. Otherwise it selects the pods matching podSelector in the policy's own namespace.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"namespaceSelector": {
 						SchemaProps: spec.SchemaProps{
 							Description: "namespaceSelector selects namespaces using cluster-scoped labels. This field follows standard label selector semantics; if present but empty, it selects all namespaces.\n\nIf podSelector is also set, then the NetworkPolicyPeer as a whole selects the pods matching podSelector in the namespaces selected by namespaceSelector. Otherwise it selects all pods in the namespaces selected by namespaceSelector.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"ipBlock": {
 						SchemaProps: spec.SchemaProps{
 							Description: "ipBlock defines policy on a particular IPBlock. If this field is set then neither of the other fields can be.",
-							Ref:         ref("k8s.io/api/networking/v1.IPBlock"),
+							Ref:         ref(networkingv1.IPBlock{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.IPBlock", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			networkingv1.IPBlock{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -22390,7 +23260,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPort(ref common.ReferenceCallba
 					"port": {
 						SchemaProps: spec.SchemaProps{
 							Description: "port represents the port on the given protocol. This can either be a numerical or named port on a pod. If this field is not provided, this matches all port names and numbers. If present, only traffic on the specified protocol AND port will be matched.",
-							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
+							Ref:         ref(intstr.IntOrString{}.OpenAPIModelName()),
 						},
 					},
 					"endPort": {
@@ -22404,7 +23274,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicyPort(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/util/intstr.IntOrString"},
+			intstr.IntOrString{}.OpenAPIModelName()},
 	}
 }
 
@@ -22419,7 +23289,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 						SchemaProps: spec.SchemaProps{
 							Description: "podSelector selects the pods to which this NetworkPolicy object applies. The array of rules is applied to any pods selected by this field. An empty selector matches all pods in the policy's namespace. Multiple network policies can select the same set of pods. In this case, the ingress rules for each are combined additively. This field is optional. If it is not specified, it defaults to an empty selector.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"),
+							Ref:         ref(metav1.LabelSelector{}.OpenAPIModelName()),
 						},
 					},
 					"ingress": {
@@ -22435,7 +23305,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyIngressRule"),
+										Ref:     ref(networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22454,7 +23324,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.NetworkPolicyEgressRule"),
+										Ref:     ref(networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22485,7 +23355,7 @@ func schema_k8sio_api_networking_v1_NetworkPolicySpec(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.NetworkPolicyEgressRule", "k8s.io/api/networking/v1.NetworkPolicyIngressRule", "k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelector"},
+			networkingv1.NetworkPolicyEgressRule{}.OpenAPIModelName(), networkingv1.NetworkPolicyIngressRule{}.OpenAPIModelName(), metav1.LabelSelector{}.OpenAPIModelName()},
 	}
 }
 
@@ -22588,28 +23458,28 @@ func schema_k8sio_api_networking_v1_ServiceCIDR(ref common.ReferenceCallback) co
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Description: "spec is the desired state of the ServiceCIDR. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.ServiceCIDRSpec"),
+							Ref:         ref(networkingv1.ServiceCIDRSpec{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Description: "status represents the current state of the ServiceCIDR. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/api/networking/v1.ServiceCIDRStatus"),
+							Ref:         ref(networkingv1.ServiceCIDRStatus{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.ServiceCIDRSpec", "k8s.io/api/networking/v1.ServiceCIDRStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			networkingv1.ServiceCIDRSpec{}.OpenAPIModelName(), networkingv1.ServiceCIDRStatus{}.OpenAPIModelName(), metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -22638,7 +23508,7 @@ func schema_k8sio_api_networking_v1_ServiceCIDRList(ref common.ReferenceCallback
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -22649,7 +23519,7 @@ func schema_k8sio_api_networking_v1_ServiceCIDRList(ref common.ReferenceCallback
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/networking/v1.ServiceCIDR"),
+										Ref:     ref(networkingv1.ServiceCIDR{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22660,7 +23530,7 @@ func schema_k8sio_api_networking_v1_ServiceCIDRList(ref common.ReferenceCallback
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/networking/v1.ServiceCIDR", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			networkingv1.ServiceCIDR{}.OpenAPIModelName(), metav1.ListMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -22722,7 +23592,7 @@ func schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref common.ReferenceCallba
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.Condition"),
+										Ref:     ref(metav1.Condition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22732,7 +23602,7 @@ func schema_k8sio_api_networking_v1_ServiceCIDRStatus(ref common.ReferenceCallba
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Condition"},
+			metav1.Condition{}.OpenAPIModelName()},
 	}
 }
 
@@ -22778,7 +23648,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery"),
+										Ref:     ref(metav1.GroupVersionForDiscovery{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22788,7 +23658,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 						SchemaProps: spec.SchemaProps{
 							Description: "preferredVersion is the version preferred by the API server, which probably is the storage version.",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery"),
+							Ref:         ref(metav1.GroupVersionForDiscovery{}.OpenAPIModelName()),
 						},
 					},
 					"serverAddressByClientCIDRs": {
@@ -22804,7 +23674,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR"),
+										Ref:     ref(metav1.ServerAddressByClientCIDR{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22815,7 +23685,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.GroupVersionForDiscovery", "k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR"},
+			metav1.GroupVersionForDiscovery{}.OpenAPIModelName(), metav1.ServerAddressByClientCIDR{}.OpenAPIModelName()},
 	}
 }
 
@@ -22853,7 +23723,7 @@ func schema_pkg_apis_meta_v1_APIGroupList(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup"),
+										Ref:     ref(metav1.APIGroup{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -22864,7 +23734,7 @@ func schema_pkg_apis_meta_v1_APIGroupList(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup"},
+			metav1.APIGroup{}.OpenAPIModelName()},
 	}
 }
 
@@ -23032,7 +23902,7 @@ func schema_pkg_apis_meta_v1_APIResourceList(ref common.ReferenceCallback) commo
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.APIResource"),
+										Ref:     ref(metav1.APIResource{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -23043,7 +23913,7 @@ func schema_pkg_apis_meta_v1_APIResourceList(ref common.ReferenceCallback) commo
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.APIResource"},
+			metav1.APIResource{}.OpenAPIModelName()},
 	}
 }
 
@@ -23101,7 +23971,7 @@ func schema_pkg_apis_meta_v1_APIVersions(ref common.ReferenceCallback) common.Op
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR"),
+										Ref:     ref(metav1.ServerAddressByClientCIDR{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -23112,7 +23982,7 @@ func schema_pkg_apis_meta_v1_APIVersions(ref common.ReferenceCallback) common.Op
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ServerAddressByClientCIDR"},
+			metav1.ServerAddressByClientCIDR{}.OpenAPIModelName()},
 	}
 }
 
@@ -23213,7 +24083,7 @@ func schema_pkg_apis_meta_v1_Condition(ref common.ReferenceCallback) common.Open
 					"lastTransitionTime": {
 						SchemaProps: spec.SchemaProps{
 							Description: "lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"reason": {
@@ -23237,7 +24107,7 @@ func schema_pkg_apis_meta_v1_Condition(ref common.ReferenceCallback) common.Open
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -23333,7 +24203,7 @@ func schema_pkg_apis_meta_v1_DeleteOptions(ref common.ReferenceCallback) common.
 					"preconditions": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be returned.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions"),
+							Ref:         ref(metav1.Preconditions{}.OpenAPIModelName()),
 						},
 					},
 					"orphanDependents": {
@@ -23381,7 +24251,7 @@ func schema_pkg_apis_meta_v1_DeleteOptions(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Preconditions"},
+			metav1.Preconditions{}.OpenAPIModelName()},
 	}
 }
 
@@ -23738,7 +24608,7 @@ func schema_pkg_apis_meta_v1_LabelSelector(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement"),
+										Ref:     ref(metav1.LabelSelectorRequirement{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -23753,7 +24623,7 @@ func schema_pkg_apis_meta_v1_LabelSelector(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.LabelSelectorRequirement"},
+			metav1.LabelSelectorRequirement{}.OpenAPIModelName()},
 	}
 }
 
@@ -23832,7 +24702,7 @@ func schema_pkg_apis_meta_v1_List(ref common.ReferenceCallback) common.OpenAPIDe
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -23842,7 +24712,7 @@ func schema_pkg_apis_meta_v1_List(ref common.ReferenceCallback) common.OpenAPIDe
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Ref: ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
+										Ref: ref(runtime.RawExtension{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -23853,7 +24723,7 @@ func schema_pkg_apis_meta_v1_List(ref common.ReferenceCallback) common.OpenAPIDe
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/apimachinery/pkg/runtime.RawExtension"},
+			metav1.ListMeta{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 
@@ -23892,9 +24762,17 @@ func schema_pkg_apis_meta_v1_ListMeta(ref common.ReferenceCallback) common.OpenA
 							Format:      "int64",
 						},
 					},
+					"shardInfo": {
+						SchemaProps: spec.SchemaProps{
+							Description: "shardInfo is set when the list is a filtered subset of the full collection, as selected by a shard selector on the request. It echoes back the selector so clients can verify which shard they received and merge sharded responses. Clients should not cache sharded list responses as a full representation of the collection.\n\nThis is an alpha field and requires enabling the ShardedListAndWatch feature gate.",
+							Ref:         ref(metav1.ShardInfo{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			metav1.ShardInfo{}.OpenAPIModelName()},
 	}
 }
 
@@ -23989,6 +24867,13 @@ func schema_pkg_apis_meta_v1_ListOptions(ref common.ReferenceCallback) common.Op
 							Format:      "",
 						},
 					},
+					"shardSelector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "shardSelector restricts the list of returned objects using a CEL-based shard selector expression. The format uses the shardRange() function combined with || (logical OR) to specify one or more hash ranges:\n\n  shardRange(object.metadata.uid, '0x0', '0x8000000000000000')\n  shardRange(object.metadata.uid, '0x0', '0x8000000000000000') || shardRange(object.metadata.uid, '0x8000000000000000', '0x10000000000000000')\n\nField paths use CEL-style object-rooted syntax (e.g. \"object.metadata.uid\"), NOT the fieldSelector format (\"metadata.uid\"). Currently supported paths:\n  - object.metadata.uid\n  - object.metadata.namespace\n\nhexStart and hexEnd are single-quoted CEL string literals with a '0x' prefix, defining the inclusive lower and exclusive upper bounds over the 64-bit FNV-1a hash space. The full range is [0x0, 0x10000000000000000), where the exclusive upper bound equals 2^64.\n\nExamples:\n  2-shard split:\n    shard 0: shardRange(object.metadata.uid, '0x0000000000000000', '0x8000000000000000')\n    shard 1: shardRange(object.metadata.uid, '0x8000000000000000', '0x10000000000000000')\n  4-shard split:\n    shard 0: shardRange(object.metadata.uid, '0x0000000000000000', '0x4000000000000000')\n    shard 1: shardRange(object.metadata.uid, '0x4000000000000000', '0x8000000000000000')\n    shard 2: shardRange(object.metadata.uid, '0x8000000000000000', '0xc000000000000000')\n    shard 3: shardRange(object.metadata.uid, '0xc000000000000000', '0x10000000000000000')\n\nThis is an alpha field and requires enabling the ShardedListAndWatch feature gate.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
@@ -24026,7 +24911,7 @@ func schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref common.ReferenceCallback) co
 					"time": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Time is the timestamp of when the ManagedFields entry was added. The timestamp will also be updated if a field is added, the manager changes any of the owned fields value or removes a field. The timestamp does not update when a field is removed from the entry because another manager took it over.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"fieldsType": {
@@ -24039,7 +24924,7 @@ func schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref common.ReferenceCallback) co
 					"fieldsV1": {
 						SchemaProps: spec.SchemaProps{
 							Description: "FieldsV1 holds the first JSON version format as described in the \"FieldsV1\" type.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1"),
+							Ref:         ref(metav1.FieldsV1{}.OpenAPIModelName()),
 						},
 					},
 					"subresource": {
@@ -24053,7 +24938,7 @@ func schema_pkg_apis_meta_v1_ManagedFieldsEntry(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.FieldsV1", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.FieldsV1{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -24128,13 +25013,13 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 					"creationTimestamp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "CreationTimestamp is a timestamp representing the server time when this object was created. It is not guaranteed to be set in happens-before order across separate operations. Clients may not set this value. It is represented in RFC3339 form and is in UTC.\n\nPopulated by the system. Read-only. Null for lists. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"deletionTimestamp": {
 						SchemaProps: spec.SchemaProps{
 							Description: "DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This field is set by the server when a graceful deletion is requested by the user, and is not directly settable by a client. The resource is expected to be deleted (no longer visible from resource lists, and not reachable by name) after the time in this field, once the finalizers list is empty. As long as the finalizers list contains items, deletion is blocked. Once the deletionTimestamp is set, this value may not be unset or be set further into the future, although it may be shortened or the resource may be deleted prior to this time. For example, a user may request that a pod is deleted in 30 seconds. The Kubelet will react by sending a graceful termination signal to the containers in the pod. After that 30 seconds, the Kubelet will send a hard termination signal (SIGKILL) to the container and after cleanup, remove the pod from the API. In the presence of network partitions, this object may still exist after this timestamp, until an administrator or automated process can determine the resource is fully terminated. If not set, graceful deletion of the object has not been requested.\n\nPopulated by the system when a graceful deletion is requested. Read-only. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Time"),
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
 						},
 					},
 					"deletionGracePeriodSeconds": {
@@ -24194,7 +25079,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference"),
+										Ref:     ref(metav1.OwnerReference{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24234,7 +25119,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry"),
+										Ref:     ref(metav1.ManagedFieldsEntry{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24244,7 +25129,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ManagedFieldsEntry", "k8s.io/apimachinery/pkg/apis/meta/v1.OwnerReference", "k8s.io/apimachinery/pkg/apis/meta/v1.Time"},
+			metav1.ManagedFieldsEntry{}.OpenAPIModelName(), metav1.OwnerReference{}.OpenAPIModelName(), metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -24338,14 +25223,14 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadata(ref common.ReferenceCallback)
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:         ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			metav1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -24374,7 +25259,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref common.ReferenceCallb
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -24385,7 +25270,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref common.ReferenceCallb
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata"),
+										Ref:     ref(metav1.PartialObjectMetadata{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24396,7 +25281,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref common.ReferenceCallb
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.PartialObjectMetadata"},
+			metav1.ListMeta{}.OpenAPIModelName(), metav1.PartialObjectMetadata{}.OpenAPIModelName()},
 	}
 }
 
@@ -24570,6 +25455,28 @@ func schema_pkg_apis_meta_v1_ServerAddressByClientCIDR(ref common.ReferenceCallb
 	}
 }
 
+func schema_pkg_apis_meta_v1_ShardInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ShardInfo describes the shard selector that was applied to produce a list response. Its presence on a list response indicates the list is a filtered subset.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"selector": {
+						SchemaProps: spec.SchemaProps{
+							Description: "selector is the shard selector string from the request, echoed back so clients can verify which shard they received and merge responses from multiple shards.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"selector"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_meta_v1_Status(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -24595,7 +25502,7 @@ func schema_pkg_apis_meta_v1_Status(ref common.ReferenceCallback) common.OpenAPI
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"status": {
@@ -24620,14 +25527,9 @@ func schema_pkg_apis_meta_v1_Status(ref common.ReferenceCallback) common.OpenAPI
 						},
 					},
 					"details": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-list-type": "atomic",
-							},
-						},
 						SchemaProps: spec.SchemaProps{
 							Description: "Extended data associated with the reason.  Each reason may define its own extended details. This field is optional and the data returned is not guaranteed to conform to any schema except that defined by the reason type.",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails"),
+							Ref:         ref(metav1.StatusDetails{}.OpenAPIModelName()),
 						},
 					},
 					"code": {
@@ -24641,7 +25543,7 @@ func schema_pkg_apis_meta_v1_Status(ref common.ReferenceCallback) common.OpenAPI
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.StatusDetails"},
+			metav1.ListMeta{}.OpenAPIModelName(), metav1.StatusDetails{}.OpenAPIModelName()},
 	}
 }
 
@@ -24727,7 +25629,7 @@ func schema_pkg_apis_meta_v1_StatusDetails(ref common.ReferenceCallback) common.
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause"),
+										Ref:     ref(metav1.StatusCause{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24744,7 +25646,7 @@ func schema_pkg_apis_meta_v1_StatusDetails(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.StatusCause"},
+			metav1.StatusCause{}.OpenAPIModelName()},
 	}
 }
 
@@ -24773,7 +25675,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 							Default:     map[string]interface{}{},
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:         ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"columnDefinitions": {
@@ -24789,7 +25691,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition"),
+										Ref:     ref(metav1.TableColumnDefinition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24808,7 +25710,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.TableRow"),
+										Ref:     ref(metav1.TableRow{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24819,7 +25721,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", "k8s.io/apimachinery/pkg/apis/meta/v1.TableColumnDefinition", "k8s.io/apimachinery/pkg/apis/meta/v1.TableRow"},
+			metav1.ListMeta{}.OpenAPIModelName(), metav1.TableColumnDefinition{}.OpenAPIModelName(), metav1.TableRow{}.OpenAPIModelName()},
 	}
 }
 
@@ -24950,7 +25852,7 @@ func schema_pkg_apis_meta_v1_TableRow(ref common.ReferenceCallback) common.OpenA
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition"),
+										Ref:     ref(metav1.TableRowCondition{}.OpenAPIModelName()),
 									},
 								},
 							},
@@ -24959,7 +25861,7 @@ func schema_pkg_apis_meta_v1_TableRow(ref common.ReferenceCallback) common.OpenA
 					"object": {
 						SchemaProps: spec.SchemaProps{
 							Description: "This field contains the requested additional information about each object based on the includeObject policy when requesting the Table. If \"None\", this field is empty, if \"Object\" this will be the default serialization of the object for the current API version, and if \"Metadata\" (the default) will contain the object metadata. Check the returned kind and apiVersion of the object before parsing. The media type of the object will always match the enclosing list - if this as a JSON table, these will be JSON encoded objects.",
-							Ref:         ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
+							Ref:         ref(runtime.RawExtension{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -24967,7 +25869,7 @@ func schema_pkg_apis_meta_v1_TableRow(ref common.ReferenceCallback) common.OpenA
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.TableRowCondition", "k8s.io/apimachinery/pkg/runtime.RawExtension"},
+			metav1.TableRowCondition{}.OpenAPIModelName(), runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 
@@ -25162,7 +26064,7 @@ func schema_pkg_apis_meta_v1_WatchEvent(ref common.ReferenceCallback) common.Ope
 					"object": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Object is:\n * If Type is Added or Modified: the new state of the object.\n * If Type is Deleted: the state of the object immediately before deletion.\n * If Type is Error: *Status is recommended; other types may make sense\n   depending on context.",
-							Ref:         ref("k8s.io/apimachinery/pkg/runtime.RawExtension"),
+							Ref:         ref(runtime.RawExtension{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -25170,7 +26072,7 @@ func schema_pkg_apis_meta_v1_WatchEvent(ref common.ReferenceCallback) common.Ope
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/runtime.RawExtension"},
+			runtime.RawExtension{}.OpenAPIModelName()},
 	}
 }
 

@@ -1,4 +1,4 @@
-- name: "Node: Build"
+- name: "Node: Static checks and UT"
   run:
     when: "${CHANGE_IN(node)}"
   dependencies:
@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
     agent:
       machine:
         type: f1-standard-4
@@ -14,17 +14,24 @@
     prologue:
       commands:
         - cd node
+    # Image builds (image, image-windows) are handled by the Prerequisites
+    # "Build: node image" block and the "Node: multi-arch build" block
+    # respectively, so we only run the unique checks here.
     jobs:
-      - name: "Node: CI"
+      - name: "Node: Static checks"
         priority:
           # This job is on the critical path so we increase its priority.
           - value: 51
             when: "pull_request =~ '.+'"
         commands:
-          - ../.semaphore/run-and-monitor ci.log make ci
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
+          - ../.semaphore/run-and-monitor static-checks.log make static-checks
+      - name: "Node: UT"
+        priority:
+          # This job is on the critical path so we increase its priority.
+          - value: 51
+            when: "pull_request =~ '.+'"
+        commands:
+          - ../.semaphore/run-and-monitor ut.log make ut
     epilogue:
       always:
         commands:
@@ -33,7 +40,8 @@
   run:
     when: "${CHANGE_IN(node)}"
   dependencies:
-    - "Node: Build"
+    - Prerequisites
+    - "Build: nftables RPMs"
   task:
     prologue:
       commands:
@@ -43,9 +51,17 @@
         matrix:
           - env_var: ARCH
             values:
+              - arm64
               - ppc64le
               - s390x
         commands:
+          # Load the per-arch patched nftables RPMs producer image (built/cached
+          # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
+          # resolves locally without re-pulling from Docker Hub.
+          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+          - zstd -d --rm /tmp/nft-rpms.tar.zst
+          - docker load -i /tmp/nft-rpms.tar
+          - rm -f /tmp/nft-rpms.tar
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
       - name: "Node: build Windows archive"
         commands:
@@ -53,34 +69,18 @@
       - name: "Node: build Windows image"
         commands:
           - ../.semaphore/run-and-monitor build-windows-image.log make image-windows
-- name: "Node: Build - native arm64 runner"
-  run:
-    when: "${CHANGE_IN(node)}"
-  dependencies:
-    - "Node: Build"
-  task:
-    agent:
-      machine:
-        type: s1-aws-arm64-2
-    prologue:
-      commands:
-        - cd node
-    jobs:
-      - name: "Node: build arm64 image"
-        commands:
-          - ../.semaphore/run-and-monitor build-arm64.log make image ARCH=arm64
 - name: "Node: kind-cluster tests"
   run:
     # KinD tests also build and run all the other images.
-    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Prerequisites"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
       - name: CI_GROUP_LABEL
-        value: "node"
+        value: "calico"
       - name: CI_JOB_LABEL
         value: "kind-cluster-tests"
     prologue:
@@ -91,7 +91,9 @@
         - gcloud config set project unique-caldron-775
         - cd node
         - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-        - export ZONE=europe-west3-c
+        # Spread the test VMs across the zones of this region (by available
+        # capacity); see .semaphore/vms/run-tests-on-vms.
+        - export REGION=europe-west3
         - export VM_PREFIX=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-kind-
         - echo VM_PREFIX=${VM_PREFIX}
         - export COMPONENT=node
@@ -102,6 +104,9 @@
       - name: "Node: kind-cluster tests"
         execution_time_limit:
           minutes: 120
+        env_vars:
+          - name: JOB_TIMEOUT_MINUTES
+            value: "120"
         commands:
           - ../.semaphore/vms/run-tests-on-vms ${VM_PREFIX}
     epilogue:

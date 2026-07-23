@@ -1,0 +1,395 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-patch-verification-
+schedule: 10 21 * * 3
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-patch-verification.yml}"
+  export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise)}"
+  export K8S_VERSION="${K8S_VERSION:-stable-3}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: kind-tests
+    jobSize: large
+    services:
+      - docker
+    env:
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: ENABLE_AUTO_HEP
+        value: "true"
+      - name: INSTALLER
+        value: helmerator
+      - name: IPV4_POD_CIDR
+        value: ""
+      - name: IPV6_POD_CIDR
+        value: fd00:10:244::/56
+      - name: IP_FAMILY
+        value: ipv6
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: local-kind
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: manifests-flannel-migration
+    services:
+      - docker
+    env:
+      - name: AWS_NODE_INSTANCE_TYPE
+        value: t3.large
+      - name: CALICO_MANIFEST
+        value: manifests/flannel-migration/calico.yaml
+      - name: CLUSTER_IMAGE
+        value: jammy-22.04
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: DOWNLEVEL_MANIFEST
+        value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: manual
+      - name: IPV4_POD_CIDR
+        value: 192.168.0.0/16
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable
+      - name: MIGRATION_MANIFEST
+        value: manifests/flannel-migration/migration-job.yaml
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: PROVISIONER
+        value: aws-kubeadm
+    commands: |
+      .argoci/scripts/body_flannel-migration.sh
+  - name: manifests-canal
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2204-lts
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: GOOGLE_MACHINE_TYPE
+        value: e2-standard-2
+      - name: INSTALLER
+        value: manual
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable
+      - name: MANIFEST_FILE
+        value: canal.yaml
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: manifests-canal-migration
+    services:
+      - docker
+    env:
+      - name: CALICO_MANIFEST
+        value: manifests/flannel-migration/calico.yaml
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2204-lts
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: DOWNLEVEL_MANIFEST
+        value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
+      - name: GOOGLE_MACHINE_TYPE
+        value: e2-standard-2
+      - name: INSTALLER
+        value: manual
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable
+      - name: MIGRATION_MANIFEST
+        value: manifests/flannel-migration/migration-job.yaml
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_flannel-migration.sh
+  - name: manifests-calico-etcd
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2404-lts-amd64
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: ENCAPSULATION_TYPE
+        value: IPIP
+      - name: GOOGLE_MACHINE_TYPE
+        value: e2-standard-2
+      - name: INSTALLER
+        value: manual
+      - name: INSTALL_ETCD_POD
+        value: "true"
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable
+      - name: KUBE_PROXY_MODE
+        value: ipvs
+      - name: MANIFEST_FILE
+        value: calico-etcd.yaml
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: manifests-operator-migration
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2404-lts-amd64
+      - name: DATAPLANE
+        value: CalicoNftables
+      - name: ENCAPSULATION_TYPE
+        value: IPIP
+      - name: GOOGLE_MACHINE_TYPE
+        value: e2-standard-2
+      - name: INSTALLER
+        value: manual
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+        value: --env IP_FAMILY
+      - name: K8S_VERSION
+        value: stable
+      - name: KUBE_PROXY_MODE
+        value: nftables
+      - name: MANIFEST_FILE
+        value: calico.yaml
+      - name: NAT_OUTGOING
+        value: Enabled
+      - name: OPERATOR_MIGRATE
+        value: "true"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-aks-w-aks-cni-overlay
+    services:
+      - docker
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: CNI_PLUGIN
+        value: AzureVNET
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_VERSION
+        value: stable-1
+      - name: NETWORK_PLUGIN_MODE
+        value: overlay
+      - name: PROVISIONER
+        value: azr-aks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-eks-w-calico-cni
+    services:
+      - docker
+    env:
+      - name: AWS_NODE_INSTANCE_TYPE
+        value: t3.large
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: EKS_AMI_FAMILY
+        value: AmazonLinux2023
+      - name: ENABLE_NODE_LOCAL_DNS_CACHE
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: helmerator
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
+      - name: K8S_VERSION
+        value: stable-3
+      - name: PROVISIONER
+        value: aws-eks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-eks-w-aws-cni
+    services:
+      - docker
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: AWS_NODE_INSTANCE_TYPE
+        value: t3.large
+      - name: CNI_PLUGIN
+        value: AmazonVPC
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: INSTALLER
+        value: operator
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IPV4_POD_CIDR
+        value: 172.16.0.0/16
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-windows-aws-kubeadm-containerd
+    services:
+      - docker
+    env:
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: ENABLE_AUTO_HEP
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: helmerator
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: WINDOWS_CONTAINER_RUNTIME
+        value: containerd:2.1.1
+      - name: WINDOWS_OS_VERSION
+        value: "2022"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-windows-aws-kubeadm-docker
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: jammy-22.04
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DATAPLANE
+        value: CalicoNftables
+      - name: ENABLE_AUTO_HEP
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: INSTALLER
+        value: helmerator
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_VERSION
+        value: stable-3
+      - name: KUBE_PROXY_MODE
+        value: nftables
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+      - name: WINDOWS_OS_VERSION
+        value: "1809"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: operator-helmerator-rke2
+    services:
+      - docker
+    env:
+      - name: CLUSTER_IMAGE
+        value: ubuntu-2204-lts
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: ENABLE_AUTO_HEP
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: operator
+      - name: IP_FAMILY
+        value: ipv4
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: gcp-rke2
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: kubevirt-e2e-tests
+    services:
+      - docker
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp-kubevirt.yaml
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable-1.35
+      - name: NUM_KUBEVIRT_VMS
+        value: "2"
+      - name: PROVISIONER
+        value: gcp-kubeadm
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: openshift
+    services:
+      - docker
+    env:
+      - name: DATAPLANE
+        value: CalicoBPF
+      - name: INSTALLER
+        value: operator
+      - name: IP_FAMILY
+        value: ipv4
+      - name: OPENSHIFT_VERSION
+        value: 4.18.17
+      - name: PROVISIONER
+        value: aws-openshift
+    commands: |
+      .argoci/scripts/body_standard.sh

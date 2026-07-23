@@ -26,6 +26,13 @@ func UseV4IPPool(poolName string) func(*corev1.Pod) {
 	}
 }
 
+// WithNodeName returns a Pod customizer that pins a pod to a specific node.
+func WithNodeName(name string) func(*corev1.Pod) {
+	return func(pod *corev1.Pod) {
+		pod.Spec.NodeName = name
+	}
+}
+
 // AvoidEachOther is a Pod customizer that adds PodAntiAffinity rules to avoid
 // scheduling the Pod on the same node as other Pods deployed with this customizer.
 func AvoidEachOther(pod *corev1.Pod) {

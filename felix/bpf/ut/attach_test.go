@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -99,7 +99,7 @@ func newBPFTestEpMgr(
 // countSubPrograms counts the number of sub-programs that would be loaded for a given AttachType.
 // This uses the GetApplicableSubProgs API from the hook package.
 func countSubPrograms(at hook.AttachType) int {
-	applicableProgs := hook.GetApplicableSubProgs(at, false)
+	applicableProgs := hook.GetApplicableSubProgs(at, nil)
 	return len(applicableProgs)
 }
 
@@ -132,10 +132,11 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFIpv6Enabled:          ipv6Enabled,
-			BPFAttachType:           "TCX",
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
+			BPFIpv6Enabled:                 ipv6Enabled,
+			BPFAttachType:                  "TCX",
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -183,38 +184,55 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			ToHostDrop: false,
 			DSR:        false,
 		}))
-		Expect(atIng).NotTo(HaveKey(hook.AttachType{
+		// IPv6 host attach is present whenever IPv6 is enabled, regardless
+		// of whether a v6 host IP has been provided yet. Programs attach
+		// with HOST_IPv6=0; the few BPF features that need a real host IP
+		// (VXLAN return-path encap) drop with the DroppedNoHostIP counter
+		// until the host IP becomes known.
+		v6HostIng := hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
-		Expect(atEg).NotTo(HaveKey(hook.AttachType{
+		}
+		v6HostEg := hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
+		}
+		if ipv6Enabled {
+			Expect(atIng).To(HaveKey(v6HostIng))
+			Expect(atEg).To(HaveKey(v6HostEg))
+		} else {
+			Expect(atIng).NotTo(HaveKey(v6HostIng))
+			Expect(atEg).NotTo(HaveKey(v6HostEg))
+		}
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
+		// When IPv6 is enabled, BPF programs attach for both v4 and v6
+		// regardless of whether v6 host IP has arrived yet (the v6 globals
+		// just hold HOST_IP=0), so both ready flags are set.
+		expectedReady := ifstate.FlgIPv4Ready
 		if ipv6Enabled {
+			expectedReady |= ifstate.FlgIPv6Ready
 			Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload0.Attrs().Index))))
 			workloadep0State := ifstateMap[ifstate.NewKey(uint32(workload0.Attrs().Index))]
-			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready))
+			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | expectedReady))
 		}
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
-		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgHEP))
+		Expect(hostep1State.Flags()).To(Equal(expectedReady | ifstate.FlgHEP))
 
 		if ipv6Enabled {
 			// IPv6 address update
 			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
+			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -605,8 +623,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				RulesConfig: rules.Config{
 					EndpointToHostAction: "RETURN",
 				},
-				BPFExtToServiceConnmark: 0,
-				BPFPolicyDebugEnabled:   true,
+				BPFExtToServiceConnmark:        0,
+				BPFPolicyDebugEnabled:          true,
+				BPFIPFragmentReassemblyEnabled: true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -665,10 +684,17 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// We got no new updates, we still have the same programs attached
+		// Even without HostMetadata yet, the new manager re-attaches
+		// programs (with HOST_IP=0) so that a Felix restart with a
+		// missing/cleared Node IP doesn't leave interfaces unprogrammed.
+		// The pinned attach IDs differ from the pre-restart ones.
 		attached2, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attached2).To(Equal(attached))
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attached2).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attached2[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attached2[iface].Egress))
+		}
 
 		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
@@ -698,12 +724,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		attachedNew, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		// All programs are replaced by now
+		// HostMetadataUpdate triggers another re-attach so programs pick
+		// up the real HOST_IP. attachedNew differs from both the
+		// pre-restart attach IDs and the post-restart HOST_IP=0 attach IDs.
 		// XXX down infaces are not removed yet
 		for _, iface := range []string{"hostep2", "workloadep2"} {
 			Expect(attachedNew).To(HaveKey(iface))
 			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
 			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+			Expect(attached2[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached2[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
 		}
 	})
 
@@ -739,8 +769,9 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 				RulesConfig: rules.Config{
 					EndpointToHostAction: "RETURN",
 				},
-				BPFExtToServiceConnmark: 0,
-				BPFPolicyDebugEnabled:   true,
+				BPFExtToServiceConnmark:        0,
+				BPFPolicyDebugEnabled:          true,
+				BPFIPFragmentReassemblyEnabled: true,
 			},
 			bpfmaps,
 			regexp.MustCompile("^workloadep[123]"),
@@ -802,8 +833,9 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -843,7 +875,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 
 	// Verify that QoS map state is correctly created
 	qosMap := commonMaps.QoSMap
-	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1)
+	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1, qos.IPFamilyV4)
 	qosValBytes1, err := qosMap.Get(qosKey1.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal1 := qos.ValueFromBytes(qosValBytes1)
@@ -852,7 +884,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(qosVal1.PacketRateTokens()).To(Equal(int16(-1)))
 	Expect(qosVal1.PacketRateLastUpdate()).To(Equal(uint64(0)))
 
-	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0)
+	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0, qos.IPFamilyV4)
 	qosValBytes2, err := qosMap.Get(qosKey2.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal2 := qos.ValueFromBytes(qosValBytes2)
@@ -986,8 +1018,9 @@ func TestRepeatedAttach(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[123]"),
@@ -1019,81 +1052,6 @@ func TestRepeatedAttach(t *testing.T) {
 	Expect(ingProg[0].Handle).To(Equal(ingressProg[0].Handle))
 	Expect(egrProg[0].Pref).To(Equal(ingressProg[0].Pref))
 	Expect(egrProg[0].Handle).To(Equal(ingressProg[0].Handle))
-}
-
-func TestCTLBAttachLegacy(t *testing.T) {
-	RegisterTestingT(t)
-
-	testCtlbAttachLegacy := func(v4, v6 bool) {
-		bpfmaps, err := bpfmap.CreateBPFMaps(false)
-		Expect(err).NotTo(HaveOccurred())
-
-		commonMaps := bpfmaps.CommonMaps
-		err = nat.InstallConnectTimeLoadBalancerLegacy(v4, v6, "", "debug", 60*time.Second, false, commonMaps.CTLBProgramsMaps)
-		Expect(err).NotTo(HaveOccurred())
-
-		checkPinPath := func(pinPath string, mustExist bool) {
-			_, err := os.Stat(pinPath)
-			if mustExist {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
-		}
-
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v4", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v46", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_connect_v6", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_sendmsg_v6", false)
-		checkPinPath("/sys/fs/bpf/ctlb/calico_recvmsg_v6", false)
-
-		cmd := exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
-		out, err := cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		if v4 {
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v4"))
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v46"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v46"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v46"))
-		} else if v6 {
-			Expect(string(out)).Should(ContainSubstring("calico_connect_v6"))
-			Expect(string(out)).Should(ContainSubstring("calico_sendmsg_v6"))
-			Expect(string(out)).Should(ContainSubstring("calico_recvmsg_v6"))
-		}
-		err = nat.RemoveConnectTimeLoadBalancer(v4, "")
-		Expect(err).NotTo(HaveOccurred())
-
-		cmd = exec.Command("bpftool", "cgroup", "show", "/run/calico/cgroup")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		if v4 {
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v4"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v46"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v46"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v46"))
-		} else if v6 {
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_connect_v6"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_sendmsg_v6"))
-			Expect(string(out)).ShouldNot(ContainSubstring("calico_recvmsg_v6"))
-		}
-		cmd = exec.Command("bpftool", "prog", "show")
-		out, err = cmd.Output()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_connect"))
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_send"))
-		Expect(string(out)).ShouldNot(ContainSubstring("calico_recv"))
-	}
-	testCtlbAttachLegacy(true, false)
-	testCtlbAttachLegacy(false, true)
-	testCtlbAttachLegacy(true, true)
 }
 
 func TestCTLBAttach(t *testing.T) {
@@ -1201,9 +1159,10 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 			RulesConfig: rules.Config{
 				EndpointToHostAction: "RETURN",
 			},
-			BPFExtToServiceConnmark: 0,
-			BPFPolicyDebugEnabled:   true,
-			BPFAttachType:           v3.BPFAttachOptionTCX,
+			BPFExtToServiceConnmark:        0,
+			BPFPolicyDebugEnabled:          true,
+			BPFIPFragmentReassemblyEnabled: true,
+			BPFAttachType:                  v3.BPFAttachOptionTCX,
 		},
 		bpfmaps,
 		regexp.MustCompile("^workloadep[0123]"),
@@ -1295,9 +1254,10 @@ func TestAttachTcx(t *testing.T) {
 		RulesConfig: rules.Config{
 			EndpointToHostAction: "RETURN",
 		},
-		BPFExtToServiceConnmark: 0,
-		BPFPolicyDebugEnabled:   true,
-		BPFAttachType:           v3.BPFAttachOptionTCX,
+		BPFExtToServiceConnmark:        0,
+		BPFPolicyDebugEnabled:          true,
+		BPFIPFragmentReassemblyEnabled: true,
+		BPFAttachType:                  v3.BPFAttachOptionTCX,
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -1404,6 +1364,84 @@ func TestAttachTcx(t *testing.T) {
 	Expect(len(tcxProgs)).To(Equal(1))
 }
 
+func TestAttachNetkit(t *testing.T) {
+	RegisterTestingT(t)
+
+	if !tc.IsNetkitSupported() {
+		t.Skip("Netkit not supported on this kernel")
+	}
+
+	bpfmaps, err := bpfmap.CreateBPFMaps(false)
+	Expect(err).NotTo(HaveOccurred())
+
+	loglevel := "off"
+	bpfConfig := &linux.Config{
+		Hostname:              "uthost",
+		BPFLogLevel:           loglevel,
+		BPFDataIfacePattern:   regexp.MustCompile("^hostep[12]"),
+		VXLANMTU:              1000,
+		VXLANPort:             1234,
+		BPFNodePortDSREnabled: false,
+		RulesConfig: rules.Config{
+			EndpointToHostAction: "RETURN",
+		},
+		BPFExtToServiceConnmark: 0,
+		BPFPolicyDebugEnabled:   true,
+		BPFAttachType:           v3.BPFAttachOptionTCX, // Global default is TCX; netkit is auto-detected per device.
+	}
+
+	bpfEpMgr, err := newBPFTestEpMgr(
+		bpfConfig,
+		bpfmaps,
+		regexp.MustCompile("^workloadep[0123]"),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Create a netkit device instead of a veth. Felix should auto-detect it
+	// and use native netkit BPF attachment.
+	workload0 := createNetkitName("workloadep0")
+	defer deleteLink(workload0)
+
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
+	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
+	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+		Id: &proto.WorkloadEndpointID{
+			OrchestratorId: "k8s",
+			WorkloadId:     "workloadep0",
+			EndpointId:     "workloadep0",
+		},
+		Endpoint: &proto.WorkloadEndpoint{Name: "workloadep0"},
+	})
+	err = bpfEpMgr.CompleteDeferredWork()
+	Expect(err).NotTo(HaveOccurred())
+
+	// Netkit should not create a qdisc.
+	hasQdisc, err := tc.HasQdisc("workloadep0")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(hasQdisc).To(BeFalse())
+
+	// No TC programs should be attached.
+	progs, err := tc.ListAttachedPrograms("workloadep0", hook.Ingress.String(), true)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(progs)).To(Equal(0))
+
+	// No TCX programs should be attached.
+	tcxProgs, err := tc.ListAttachedTcxPrograms("workloadep0", "ingress")
+	Expect(err).NotTo(HaveOccurred())
+	Expect(len(tcxProgs)).To(Equal(0))
+
+	// No TCX pins should exist.
+	_, err = os.Stat(bpfdefs.TcxPinDir + "/workloadep0_ingress")
+	Expect(err).To(HaveOccurred())
+
+	// Netkit pins should exist for both ingress and egress.
+	_, err = os.Stat(bpfdefs.NetkitPinDir + "/workloadep0_ingress")
+	Expect(err).NotTo(HaveOccurred())
+	_, err = os.Stat(bpfdefs.NetkitPinDir + "/workloadep0_egress")
+	Expect(err).NotTo(HaveOccurred())
+}
+
 func TestLogFilters(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -1422,9 +1460,10 @@ func TestLogFilters(t *testing.T) {
 		RulesConfig: rules.Config{
 			EndpointToHostAction: "RETURN",
 		},
-		BPFExtToServiceConnmark: 0,
-		BPFPolicyDebugEnabled:   true,
-		BPFLogFilters:           map[string]string{"hostep1": "tcp"},
+		BPFExtToServiceConnmark:        0,
+		BPFPolicyDebugEnabled:          true,
+		BPFIPFragmentReassemblyEnabled: true,
+		BPFLogFilters:                  map[string]string{"hostep1": "tcp"},
 	}
 
 	bpfEpMgr, err := newBPFTestEpMgr(
@@ -1552,9 +1591,9 @@ func BenchmarkAttachProgram(b *testing.B) {
 	err = ap.AttachProgram()
 	Expect(err).NotTo(HaveOccurred())
 
-	logLevel := log.GetLevel()
-	log.SetLevel(log.PanicLevel)
-	defer log.SetLevel(logLevel)
+	logLevel := logrus.GetLevel()
+	logrus.SetLevel(logrus.PanicLevel)
+	defer logrus.SetLevel(logLevel)
 
 	b.StartTimer()
 

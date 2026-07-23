@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
@@ -88,7 +89,8 @@ func NewEmitter(opts ...Option) *Emitter {
 	if err != nil {
 		logrus.Fatalf("Error creating emitter client: %v", err)
 	}
-	logrus.WithField("url", e.url).Info("Created emitter client.")
+	// Do not log the raw emitter URL — it may contain credentials in userinfo or query params.
+	logrus.WithField("url", logutils.RedactURL(e.url)).Info("Created emitter client.")
 
 	if e.kcli == nil {
 		logrus.Warn("No k8s client provided, will not be able to cache state.")
@@ -98,6 +100,12 @@ func NewEmitter(opts ...Option) *Emitter {
 }
 
 func (e *Emitter) Run(ctx context.Context) {
+	// Start certificate file watchers for the emitter client. These goroutines
+	// will exit when ctx is cancelled.
+	if err := e.client.watchCerts(ctx); err != nil {
+		logrus.WithError(err).Fatal("Failed to start certificate watchers")
+	}
+
 	// Start by loading any state cached in our configmap, which will allow us to better pick up where we left off
 	// in the event of a restart.
 	if err := e.loadCachedState(); err != nil {
@@ -147,7 +155,8 @@ func (e *Emitter) Run(ctx context.Context) {
 
 		// Emit the bucket.
 		if err := e.emit(bucket); err != nil {
-			logrus.Errorf("Error emitting flows to %s: %v", e.url, err)
+			// Do not log the raw emitter URL — use redactURL to mask userinfo.
+			logrus.Errorf("Error emitting flows to %s: %v", logutils.RedactURL(e.url), err)
 			e.retry(key)
 			continue
 		}
@@ -226,22 +235,21 @@ func (e *Emitter) emit(bucket *storage.FlowCollection) error {
 }
 
 func (e *Emitter) collectionToReader(bucket *storage.FlowCollection) (*bytes.Reader, error) {
-	body := []byte{}
-	for _, flow := range bucket.Flows {
-		if len(body) != 0 {
-			// Include a separator between logs.
-			body = append(body, []byte("\n")...)
+	// Pre-size the buffer to reduce reallocations. A typical JSON-encoded flow is ~500 bytes.
+	buf := bytes.NewBuffer(make([]byte, 0, len(bucket.Flows)*512))
+	for i, flow := range bucket.Flows {
+		if i > 0 {
+			buf.WriteByte('\n')
 		}
 
-		// Convert to public format.
 		f := types.FlowToProto(&flow)
 		flowJSON, err := json.Marshal(f)
 		if err != nil {
-			return nil, fmt.Errorf("error marshalling flow: %v", err)
+			return nil, fmt.Errorf("error marshalling flow: %w", err)
 		}
-		body = append(body, flowJSON...)
+		buf.Write(flowJSON)
 	}
-	return bytes.NewReader(body), nil
+	return bytes.NewReader(buf.Bytes()), nil
 }
 
 // saveState updates cached metadata stored across restart. We use a configmap to
@@ -259,7 +267,7 @@ func (e *Emitter) saveState() error {
 	defer cancel()
 	cm := &corev1.ConfigMap{}
 	if err := e.kcli.Get(ctx, configMapKey, cm); err != nil && !errors.IsNotFound(err) {
-		return fmt.Errorf("error getting configmap: %v", err)
+		return fmt.Errorf("error getting configmap: %w", err)
 	} else if errors.IsNotFound(err) {
 		// Configmap doesn't exist, create it.
 		cm.Name = configMapKey.Name
@@ -276,14 +284,14 @@ func (e *Emitter) saveState() error {
 
 	if cm.ResourceVersion == "" {
 		// Create the configmap.
-		if err := e.kcli.Create(context.Background(), cm); err != nil {
-			return fmt.Errorf("error creating configmap: %v", err)
+		if err := e.kcli.Create(ctx, cm); err != nil {
+			return fmt.Errorf("error creating configmap: %w", err)
 		}
 		logCtx.Debug("Created configmap")
 	} else {
 		// Update the configmap.
-		if err := e.kcli.Update(context.Background(), cm); err != nil {
-			return fmt.Errorf("error updating configmap: %v", err)
+		if err := e.kcli.Update(ctx, cm); err != nil {
+			return fmt.Errorf("error updating configmap: %w", err)
 		}
 		logCtx.Debug("Updated configmap")
 	}

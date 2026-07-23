@@ -68,6 +68,7 @@ type Source uint8
 const (
 	Default Source = iota
 	DatastoreGlobal
+	DatastorePerSelector
 	DatastorePerHost
 	ConfigFile
 	EnvironmentVariable
@@ -82,7 +83,7 @@ const (
 	DefaultConntrackPollingInterval = time.Duration(5) * time.Second
 )
 
-var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastoreGlobal}
+var SourcesInDescendingOrder = []Source{InternalOverride, EnvironmentVariable, ConfigFile, DatastorePerHost, DatastorePerSelector, DatastoreGlobal}
 
 func (source Source) String() string {
 	switch source {
@@ -90,6 +91,8 @@ func (source Source) String() string {
 		return "<default>"
 	case DatastoreGlobal:
 		return "datastore (global)"
+	case DatastorePerSelector:
+		return "datastore (per-node-selector)"
 	case DatastorePerHost:
 		return "datastore (per-host)"
 	case ConfigFile:
@@ -188,12 +191,14 @@ type Config struct {
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
+	BPFOverlayHostSourceIP             string            `config:"oneof(TunnelAddress,HostAddress);TunnelAddress;non-zero"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
 	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
 	BPFConntrackLogLevel               string            `config:"oneof(off,debug);off;non-zero"`
 	BPFConntrackCleanupMode            string            `config:"oneof(Auto,Userspace,BPFProgram);Auto"`
 	BPFConntrackTimeouts               map[string]string `config:"keyvaluelist;CreationGracePeriod=10s,TCPSynSent=20s,TCPEstablished=1h,TCPFinsSeen=Auto,TCPResetSeen=40s,UDPTimeout=60s,GenericTimeout=10m,ICMPTimeout=5s"`
+	BPFIPFragTimeout                   time.Duration     `config:"seconds;0"`
 	BPFLogFilters                      map[string]string `config:"keyvaluelist;;"`
 	BPFCTLBLogFilter                   string            `config:"oneof(all);;"`
 	BPFDataIfacePattern                *regexp.Regexp    `config:"regexp;^((en|wl|ww|sl|ib)[Popsx].*|(eth|wlan|wwan|bond).*)"`
@@ -219,6 +224,7 @@ type Config struct {
 	BPFMapSizeIPSets                   int               `config:"int;1048576;non-zero"`
 	BPFMapSizeIfState                  int               `config:"int;1000;non-zero"`
 	BPFHostConntrackBypass             bool              `config:"bool;false"`
+	BPFIPFragmentReassemblyEnabled     bool              `config:"bool;true"`
 	BPFEnforceRPF                      string            `config:"oneof(Disabled,Strict,Loose);Loose;non-zero"`
 	BPFPolicyDebugEnabled              bool              `config:"bool;true"`
 	BPFForceTrackPacketsFromIfaces     []string          `config:"iface-filter-slice;docker+"`
@@ -370,6 +376,18 @@ type Config struct {
 	// IPs are always programmed, regardless of this setting.
 	FloatingIPs string `config:"oneof(Enabled,Disabled);Disabled"`
 
+	// LocalSubnetL2Reachability controls whether Felix automatically responds to
+	// ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+	// selected LoadBalancer VIPs that overlap the host subnet. [Default: Disabled]
+	LocalSubnetL2Reachability string `config:"oneof(Disabled,PodsAndLoadBalancers);Disabled"`
+
+	// LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+	// (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for, keeping
+	// neighbor caches and switch forwarding tables warm even when the set of
+	// proxied IPs is unchanged. Set to 0 to disable periodic re-announcement,
+	// leaving only the one-shot announce when an IP is added. [Default: 120s]
+	LocalSubnetL2ReachabilityRefreshInterval time.Duration `config:"seconds;120"`
+
 	// WindowsManageFirewallRules configures whether or not Felix will program Windows Firewall rules. [Default: Disabled]
 	WindowsManageFirewallRules string `config:"oneof(Enabled,Disabled);Disabled"`
 
@@ -417,7 +435,7 @@ type Config struct {
 	PrometheusMetricsCAFile     string `config:"string;"`
 	PrometheusMetricsCertFile   string `config:"string;"`
 	PrometheusMetricsKeyFile    string `config:"string;"`
-	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);RequireAndVerifyClientCert"`
+	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
@@ -464,6 +482,14 @@ type Config struct {
 	RouteTableRange   idalloc.IndexRange   `config:"route-table-range;;die-on-fail"`
 	RouteTableRanges  []idalloc.IndexRange `config:"route-table-ranges;;die-on-fail"`
 	RouteSyncDisabled bool                 `config:"bool;false"`
+
+	// Routing priority values.
+	IPv4NormalRoutePriority   int `config:"int(1:2147483646);1024"`
+	IPv4ElevatedRoutePriority int `config:"int(1:2147483646);512"`
+	IPv6NormalRoutePriority   int `config:"int(1:2147483646);1024"`
+	IPv6ElevatedRoutePriority int `config:"int(1:2147483646);512"`
+
+	LiveMigrationRouteConvergenceTime time.Duration `config:"seconds;30"`
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
@@ -514,8 +540,6 @@ type Config struct {
 	Err error
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
-
-	useNodeResourceUpdates bool
 
 	RequireMTUFile bool `config:"bool;false"`
 
@@ -1234,14 +1258,6 @@ func mustParseOptionalInt(rawValue string, defaultVal int, fieldName string) int
 	return value
 }
 
-func (config *Config) SetUseNodeResourceUpdates(b bool) {
-	config.useNodeResourceUpdates = b
-}
-
-func (config *Config) UseNodeResourceUpdates() bool {
-	return config.useNodeResourceUpdates
-}
-
 func (config *Config) RawValues() map[string]string {
 	cp := map[string]string{}
 	maps.Copy(cp, config.rawValues)
@@ -1324,4 +1340,5 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
+	NoEncapEnabled bool
 }

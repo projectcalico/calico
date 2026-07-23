@@ -820,6 +820,11 @@ func cmdDel(args *skel.CmdArgs) error {
 					logger.WithField("ip", ip).Info("IP already released during cleanup, skipping")
 					continue
 				}
+				if _, ok := err.(cerrors.ErrorIPInCooldown); ok {
+					// IP was already released, and is in cooldown.
+					logger.WithField("ip", ip).Info("IP already released during cleanup and in cooldown, skipping")
+					continue
+				}
 				logger.WithError(err).WithField("ip", ip).Error("Failed to get assignment attributes for post-cleanup check")
 				return fmt.Errorf("failed to verify owner attributes after cleanup for IP %s: %w", ip, err)
 			}

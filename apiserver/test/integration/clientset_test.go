@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package integration
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -34,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -1847,6 +1849,9 @@ func TestCalicoNodeStatusClient(t *testing.T) {
 			if err := testCalicoNodeStatusClient(client, name); err != nil {
 				t.Fatal(err)
 			}
+			if err := testCalicoNodeStatusUpdateStatus(client); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 
@@ -1903,6 +1908,97 @@ func testCalicoNodeStatusClient(client calicoclient.Interface, name string) erro
 	return nil
 }
 
+func testCalicoNodeStatusUpdateStatus(client calicoclient.Interface) error {
+	seconds := uint32(10)
+	caliconodestatusClient := client.ProjectcalicoV3().CalicoNodeStatuses()
+	caliconodestatus := &v3.CalicoNodeStatus{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-caliconodestatus-updatestatus"},
+		Spec: v3.CalicoNodeStatusSpec{
+			Node: "node1",
+			Classes: []v3.NodeStatusClassType{
+				v3.NodeStatusClassTypeAgent,
+			},
+			UpdatePeriodSeconds: &seconds,
+		},
+		Status: v3.CalicoNodeStatusStatus{
+			LastUpdated: metav1.Now(),
+		},
+	}
+	ctx := context.Background()
+
+	// Create with status populated. The status subresource should strip
+	// the status on create.
+	created, err := caliconodestatusClient.Create(ctx, caliconodestatus, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("error creating caliconodestatus (%s)", err)
+	}
+	if !created.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("status was set on create: %v", created.Status)
+	}
+
+	// Use UpdateStatus to set the status.
+	toUpdate := created.DeepCopy()
+	toUpdate.Status.LastUpdated = metav1.Now()
+	toUpdate.Status.Agent = v3.CalicoNodeAgentStatus{
+		BIRDV4: v3.BGPDaemonStatus{State: v3.BGPDaemonStateReady},
+	}
+	updated, err := caliconodestatusClient.UpdateStatus(ctx, toUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling UpdateStatus (%s)", err)
+	}
+	if updated.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("UpdateStatus did not persist status")
+	}
+	if updated.Status.Agent.BIRDV4.State != v3.BGPDaemonStateReady {
+		return fmt.Errorf("UpdateStatus did not persist agent status")
+	}
+
+	// Use Update to modify spec, verify status is not wiped.
+	specUpdate := updated.DeepCopy()
+	newSeconds := uint32(20)
+	specUpdate.Spec.UpdatePeriodSeconds = &newSeconds
+	specUpdate.Status = v3.CalicoNodeStatusStatus{}
+	afterSpecUpdate, err := caliconodestatusClient.Update(ctx, specUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling Update (%s)", err)
+	}
+	if *afterSpecUpdate.Spec.UpdatePeriodSeconds != 20 {
+		return fmt.Errorf("Update did not persist spec change")
+	}
+	if afterSpecUpdate.Status.LastUpdated.IsZero() {
+		return fmt.Errorf("Update wiped status")
+	}
+	if afterSpecUpdate.Status.Agent.BIRDV4.State != v3.BGPDaemonStateReady {
+		return fmt.Errorf("Update wiped agent status")
+	}
+
+	// Verify UpdateStatus does not modify spec or labels.
+	statusUpdate := afterSpecUpdate.DeepCopy()
+	statusUpdate.Labels = map[string]string{"should": "not-persist"}
+	statusUpdate.Spec.UpdatePeriodSeconds = &seconds
+	statusUpdate.Status.Agent.BIRDV4.State = v3.BGPDaemonStateNotReady
+	afterStatusUpdate, err := caliconodestatusClient.UpdateStatus(ctx, statusUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("error calling UpdateStatus for isolation check (%s)", err)
+	}
+	if afterStatusUpdate.Status.Agent.BIRDV4.State != v3.BGPDaemonStateNotReady {
+		return fmt.Errorf("UpdateStatus did not persist new status")
+	}
+	if _, ok := afterStatusUpdate.Labels["should"]; ok {
+		return fmt.Errorf("UpdateStatus persisted labels")
+	}
+	if *afterStatusUpdate.Spec.UpdatePeriodSeconds != 20 {
+		return fmt.Errorf("UpdateStatus modified spec")
+	}
+
+	err = caliconodestatusClient.Delete(ctx, "test-caliconodestatus-updatestatus", metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("error deleting caliconodestatus (%s)", err)
+	}
+
+	return nil
+}
+
 // TestIPAMConfigClient exercises the IPAMConfig client.
 func TestIPAMConfigClient(t *testing.T) {
 	rootTestFunc := func() func(t *testing.T) {
@@ -1941,6 +2037,10 @@ func testIPAMConfigClient(client calicoclient.Interface) error {
 	if err != nil {
 		return fmt.Errorf("error listing IPAMConfigurations: %s", err)
 	}
+
+	// Delete any pre-existing "default" left by a prior test run or by Calico
+	// initialization on the test cluster (GetIPAMConfig auto-creates it).
+	_ = ipamConfigClient.Delete(ctx, name, metav1.DeleteOptions{})
 
 	// Should not be able to create a non-default IPAM config.
 	badConfig := ipamConfig.DeepCopy()
@@ -2147,39 +2247,39 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	bgpFilterClient := client.ProjectcalicoV3().BGPFilters()
 	r1v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r1v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r2v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r2v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r3v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
 	r3v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Interface:     "*.calico",
 		Action:        v3.Accept,
 	}
@@ -2195,13 +2295,13 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 	r5v4 := v3.BGPFilterRuleV4{
 		CIDR:          "10.10.10.0/24",
-		MatchOperator: v3.In,
+		MatchOperator: v3.MatchOperatorIn,
 		Source:        v3.BGPFilterSourceRemotePeers,
 		Action:        v3.Accept,
 	}
 	r5v6 := v3.BGPFilterRuleV6{
 		CIDR:          "dead:beef:1::/64",
-		MatchOperator: v3.Equal,
+		MatchOperator: v3.MatchOperatorEqual,
 		Action:        v3.Accept,
 	}
 	r6v4 := v3.BGPFilterRuleV4{
@@ -2260,19 +2360,19 @@ func testBGPFilterClient(client calicoclient.Interface, name string) error {
 	}
 
 	for i := range size {
-		if bgpFilterNew.Spec.ExportV4[i] != bgpFilter.Spec.ExportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV4[i], bgpFilter.Spec.ExportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV4, bgpFilterNew.Spec.ExportV4)
 		}
-		if bgpFilterNew.Spec.ImportV4[i] != bgpFilter.Spec.ImportV4[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV4[i], bgpFilter.Spec.ImportV4[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV4: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV4, bgpFilterNew.Spec.ImportV4)
 		}
-		if bgpFilterNew.Spec.ExportV6[i] != bgpFilter.Spec.ExportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ExportV6[i], bgpFilter.Spec.ExportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ExportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ExportV6, bgpFilterNew.Spec.ExportV6)
 		}
-		if bgpFilterNew.Spec.ImportV6[i] != bgpFilter.Spec.ImportV6[i] {
+		if !reflect.DeepEqual(bgpFilterNew.Spec.ImportV6[i], bgpFilter.Spec.ImportV6[i]) {
 			return fmt.Errorf("didn't get the correct object back from the server. Incorrect ImportV6: \n%+v\n%+v",
 				bgpFilter.Spec.ImportV6, bgpFilterNew.Spec.ImportV6)
 		}
@@ -2415,4 +2515,113 @@ func testPolicyWatch(client calicoclient.Interface) error {
 	}
 
 	return nil
+}
+
+// TestServerSideApplyCreate locks in the fix for
+// https://github.com/projectcalico/calico/issues/12841. A server-side apply of a
+// tiered policy that doesn't exist yet reaches the apiserver as an update with
+// forceAllowCreate set, not as a Create. The tier RBAC check must not turn that
+// into a NotFound; the policy should be created.
+func TestServerSideApplyCreate(t *testing.T) {
+	client, shutdownServer := getFreshAPIServerAndClient(t, func() runtime.Object {
+		return &v3.GlobalNetworkPolicy{}
+	})
+	defer shutdownServer()
+
+	ctx := context.Background()
+	pc := client.ProjectcalicoV3()
+	const fieldManager = "ssa-test"
+
+	// applyCreate marshals obj and applies it, then runs getAfter to confirm the
+	// server created it. patch and getAfter close over the typed client for the
+	// resource under test, since each has its own concrete return type.
+	applyCreate := func(t *testing.T, obj runtime.Object, name string, patch func(data []byte) error, getAfter func() error) {
+		t.Helper()
+		data, err := json.Marshal(obj)
+		if err != nil {
+			t.Fatalf("failed to marshal %s: %v", name, err)
+		}
+		if err := patch(data); err != nil {
+			t.Fatalf("server-side apply create of %s failed: %v", name, err)
+		}
+		if err := getAfter(); err != nil {
+			t.Fatalf("%s was not created by server-side apply: %v", name, err)
+		}
+	}
+
+	t.Run("GlobalNetworkPolicy", func(t *testing.T) {
+		c := pc.GlobalNetworkPolicies()
+		obj := &v3.GlobalNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindGlobalNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "gnp-ssa"},
+			Spec:       v3.GlobalNetworkPolicySpec{Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("NetworkPolicy", func(t *testing.T) {
+		c := pc.NetworkPolicies("default")
+		obj := &v3.NetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "np-ssa", Namespace: "default"},
+			Spec:       v3.NetworkPolicySpec{Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("StagedGlobalNetworkPolicy", func(t *testing.T) {
+		c := pc.StagedGlobalNetworkPolicies()
+		obj := &v3.StagedGlobalNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindStagedGlobalNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "sgnp-ssa"},
+			Spec:       v3.StagedGlobalNetworkPolicySpec{StagedAction: "Set", Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
+
+	t.Run("StagedNetworkPolicy", func(t *testing.T) {
+		c := pc.StagedNetworkPolicies("default")
+		obj := &v3.StagedNetworkPolicy{
+			TypeMeta:   metav1.TypeMeta{APIVersion: v3.GroupVersionCurrent, Kind: v3.KindStagedNetworkPolicy},
+			ObjectMeta: metav1.ObjectMeta{Name: "snp-ssa", Namespace: "default"},
+			Spec:       v3.StagedNetworkPolicySpec{StagedAction: "Set", Selector: "all()"},
+		}
+		applyCreate(t, obj, obj.Name,
+			func(data []byte) error {
+				_, err := c.Patch(ctx, obj.Name, types.ApplyPatchType, data, metav1.PatchOptions{FieldManager: fieldManager})
+				return err
+			},
+			func() error {
+				_, err := c.Get(ctx, obj.Name, metav1.GetOptions{})
+				return err
+			},
+		)
+	})
 }

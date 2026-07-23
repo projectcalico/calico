@@ -77,7 +77,7 @@ const semanticTokens = {
     },
     'tigera-color-on-surface': {
         _light: 'tigeraBlack',
-        _dark: 'tigeraGrey.200',
+        _dark: 'tigeraGrey.50',
     },
     'tigera-color-surface-secondary': {
         _light: 'tigeraGrey.100',

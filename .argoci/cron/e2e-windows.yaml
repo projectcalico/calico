@@ -1,0 +1,58 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
+version: condensed
+generateName: e2e-windows-
+schedule: 10 21 * * 5
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export CREATE_WINDOWS_NODES="${CREATE_WINDOWS_NODES:-true}"
+  export E2E_PROCS="${E2E_PROCS:-1}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-windows.yml}"
+  export INSTALLER="${INSTALLER:-operator}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\])}"
+  export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
+  export RUN_LOCAL_TESTS="${RUN_LOCAL_TESTS:-true}"
+  export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  - name: calico-windows-azr-aso-2022-stable-nftables-vxlan
+    services:
+      - docker
+    env:
+      - name: DATAPLANE
+        value: CalicoNftables
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: azr-aso
+      - name: WINDOWS_OS
+        value: "2022"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni
+    services:
+      - docker
+    env:
+      - name: DATAPLANE
+        value: CalicoIptables
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: azr-aks
+      - name: USE_VENDORED_CNI
+        value: "true"
+      - name: WINDOWS_OS
+        value: "2022"
+    commands: |
+      .argoci/scripts/body_standard.sh

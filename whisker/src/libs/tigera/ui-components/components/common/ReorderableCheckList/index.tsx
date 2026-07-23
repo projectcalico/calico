@@ -184,7 +184,7 @@ const ReorderableCheckList = <T,>({
                 <ModalFooter sx={styles.footer}>
                     <Button
                         onClick={onClose}
-                        variant={'outline'}
+                        variant='neutral'
                         mr={4}
                         sx={styles.footerButton}
                     >

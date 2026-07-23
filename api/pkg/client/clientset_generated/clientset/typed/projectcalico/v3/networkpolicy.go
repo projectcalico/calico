@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type NetworkPolicyInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.NetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.NetworkPolicy, err error)
+	Apply(ctx context.Context, networkPolicy *applyconfigurationgeneratedprojectcalicov3.NetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.NetworkPolicy, err error)
 	NetworkPolicyExpansion
 }
 
 // networkPolicies implements NetworkPolicyInterface
 type networkPolicies struct {
-	*gentype.ClientWithList[*projectcalicov3.NetworkPolicy, *projectcalicov3.NetworkPolicyList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.NetworkPolicy, *projectcalicov3.NetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.NetworkPolicyApplyConfiguration]
 }
 
 // newNetworkPolicies returns a NetworkPolicies
 func newNetworkPolicies(c *ProjectcalicoV3Client, namespace string) *networkPolicies {
 	return &networkPolicies{
-		gentype.NewClientWithList[*projectcalicov3.NetworkPolicy, *projectcalicov3.NetworkPolicyList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.NetworkPolicy, *projectcalicov3.NetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.NetworkPolicyApplyConfiguration](
 			"networkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,
