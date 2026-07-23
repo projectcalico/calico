@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -394,10 +394,14 @@ func (s *IPSets) tryResync() error {
 	sets, err := s.nft.List(ctx, "set")
 	if err != nil {
 		if knftables.IsNotFound(err) {
-			// Table doesn't exist - nothing to resync.
-			return nil
+			// Table doesn't exist: treat as no sets programmed so the cleanup
+			// pass below resets every member tracker. Returning early here would
+			// leave stale members in the trackers and they'd never be reprogrammed
+			// once the table is recreated.
+			sets = nil
+		} else {
+			return fmt.Errorf("error listing nftables sets: %w", err)
 		}
-		return fmt.Errorf("error listing nftables sets: %s", err)
 	}
 
 	// We'll process each set in parallel, so we need a struct to hold the results.
@@ -449,46 +453,62 @@ func (s *IPSets) tryResync() error {
 		// set metadata and extracting the type. However, knftables does not yet support this operation. For now,
 		// assume that we haven't modified the type of an IP set across Felix versions.
 
-		// Build a set of canonicalized elements in the set by first converting to Felix's internal string representation,
-		// and then canonicalizing the members to match the format that we use in the desired state.
-		strElems := []string{}
-		unknownElems := set.New[SetMember]()
+		// Build the set of members currently in the dataplane, converting each element back to
+		// Felix's internal representation. Members this Felix can't parse - an unexpected arity, or
+		// an element the kernel returned in a form we don't recognise (e.g. a range rather than a
+		// CIDR for a hash:net set) - are recorded as unknown so they get reconciled, rather than
+		// panicking and crash-looping Felix on every resync.
+		wantIPV6 := s.IPVersionConfig.Family == ipsets.IPFamilyV6
+		elemsSet := set.New[SetMember]()
 		for _, e := range setData.elems {
+			var strElem string
 			switch metadata.Type {
 			case ipsets.IPSetTypeHashIP, ipsets.IPSetTypeHashNet:
-				if len(e.Key) == 1 {
-					// These types are just IP addresses / CIDRs.
-					strElems = append(strElems, e.Key[0])
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// These types are just IP addresses / CIDRs.
+				if len(e.Key) != 1 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = e.Key[0]
 			case ipsets.IPSetTypeHashIPPort:
-				if len(e.Key) == 3 {
-					// This is a concatination of IP, protocol and port. Format it back into Felix's internal representation.
-					strElems = append(strElems, fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2]))
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A concatenation of IP, protocol and port.
+				if len(e.Key) != 3 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = fmt.Sprintf("%s,%s:%s", e.Key[0], e.Key[1], e.Key[2])
 			case ipsets.IPSetTypeBitmapPort:
-				if len(e.Key) == 1 {
-					// A single port.
-					strElems = append(strElems, e.Key[0])
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A single port.
+				if len(e.Key) != 1 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = e.Key[0]
 			case ipsets.IPSetTypeHashNetNet:
-				if len(e.Key) == 2 {
-					// This is a concatination of two CIDRs. Format it back into Felix's internal representation.
-					strElems = append(strElems, fmt.Sprintf("%s,%s", e.Key[0], e.Key[1]))
-				} else {
-					unknownElems.Add(UnknownMember(e.Key))
+				// A concatenation of two CIDRs.
+				if len(e.Key) != 2 {
+					elemsSet.Add(UnknownMember(e.Key))
+					continue
 				}
+				strElem = fmt.Sprintf("%s,%s", e.Key[0], e.Key[1])
 			default:
-				unknownElems.Add(UnknownMember(e.Key))
+				elemsSet.Add(UnknownMember(e.Key))
+				continue
 			}
+
+			// Skip members of the wrong IP version, matching the desired-state path's filtering.
+			if wantIPV6 != metadata.Type.IsMemberIPV6(strElem) {
+				continue
+			}
+
+			// Unlike the desired-state path, a member we can't parse here is treated as unknown, not fatal.
+			member, ok := parseMember(metadata.Type, strElem)
+			if !ok {
+				elemsSet.Add(UnknownMember(e.Key))
+				continue
+			}
+			elemsSet.Add(member)
 		}
-		elemsSet := s.filterAndCanonicaliseMembers(metadata.Type, strElems)
-		elemsSet.AddAll(unknownElems.Slice())
 
 		memberTracker := s.getOrCreateMemberTracker(setName)
 		numExtrasExpected := memberTracker.PendingDeletions().Len()
@@ -798,82 +818,102 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 }
 
 // CanonicaliseMember converts the string representation of an nftables set member to a canonical
-// object of some kind that implements the IPSetMember interface.  The object is required to by hashable.
+// object of some kind that implements the SetMember interface. The object is required to be hashable.
+// It panics on a member it can't parse: desired-state members are Felix-generated, so a parse failure
+// is a bug. The dataplane-readback path uses parseMember directly to tolerate bad input instead.
 func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
+	m, ok := parseMember(t, member)
+	if !ok {
+		log.WithFields(log.Fields{
+			"type":   string(t),
+			"member": member,
+		}).Panic("Failed to canonicalise IP set member")
+	}
+	return m
+}
+
+// parseMember converts the string representation of an nftables set member to a canonical SetMember,
+// returning ok=false instead of panicking when it can't parse the member. The dataplane-readback path
+// calls it directly so an element the kernel returns in an unexpected form (or one programmed by a
+// different Felix) is treated as unknown and reconciled, rather than crashing Felix. CanonicaliseMember
+// wraps it and panics for the desired-state path, where a parse failure is a bug.
+func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
 	switch t {
 	case ipsets.IPSetTypeHashIP:
-		// Convert the string into our ip.Addr type, which is backed by an array.
 		ipAddr := ip.FromIPOrCIDRString(member)
 		if ipAddr == nil {
-			// This should be prevented by validation in libcalico-go.
-			log.WithField("ip", member).Panic("Failed to parse IP")
-			panic("Failed to parse IP part of IP,port member")
+			return nil, false
 		}
-		return simpleMember(ipAddr.String())
+		return simpleMember(ipAddr.String()), true
 	case ipsets.IPSetTypeHashIPPort:
-		// The member should be of the format "IP,protocol:port"
 		parts := strings.Split(member, ",")
 		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP,proto:port set member")
+			return nil, false
 		}
 		ipAddr := ip.FromIPOrCIDRString(parts[0])
 		if ipAddr == nil {
-			// This should be prevented by validation.
-			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
-			panic("Failed to parse IP part of IP,port member")
+			return nil, false
 		}
-		parts = strings.Split(parts[1], ":")
-		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
+		portParts := strings.Split(parts[1], ":")
+		if len(portParts) != 2 {
+			return nil, false
 		}
-		proto := parts[0]
-		port, err := strconv.Atoi(parts[1])
-		if err != nil {
-			log.WithField("member", member).WithError(err).Panic("Bad port")
+		port, err := strconv.Atoi(portParts[1])
+		if err != nil || port < 0 || port > math.MaxUint16 {
+			return nil, false
 		}
-		if port > math.MaxUint16 || port < 0 {
-			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
-		}
+		proto := portParts[0]
 
-		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
-		// the address as an interface by storing one fewer interface headers.  That is worthwhile
-		// because we store many IP set members.
+		// Return a dedicated struct for V4 or V6. This slightly reduces occupancy over storing the
+		// address as an interface by storing one fewer interface header, which matters because we
+		// store many IP set members.
 		if ipAddr.Version() == 4 {
-			return v4IPPortMember{
-				IP:       ipAddr.(ip.V4Addr),
-				Port:     uint16(port),
-				Protocol: proto,
+			v4, ok := ipAddr.(ip.V4Addr)
+			if !ok {
+				return nil, false
 			}
-		} else {
-			return v6IPPortMember{
-				IP:       ipAddr.(ip.V6Addr),
-				Port:     uint16(port),
-				Protocol: proto,
-			}
+			return v4IPPortMember{IP: v4, Port: uint16(port), Protocol: proto}, true
 		}
+		v6, ok := ipAddr.(ip.V6Addr)
+		if !ok {
+			return nil, false
+		}
+		return v6IPPortMember{IP: v6, Port: uint16(port), Protocol: proto}, true
 	case ipsets.IPSetTypeHashNet:
-		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
-		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
-		// suffix.
-		return simpleMember(ip.MustParseCIDROrIP(member).String())
+		cidr, err := ip.ParseCIDROrIP(member)
+		if err != nil {
+			return nil, false
+		}
+		return simpleMember(cidr.String()), true
 	case ipsets.IPSetTypeHashNetNet:
 		cidrs := strings.Split(member, ",")
-		return netNet{
-			net1: ip.MustParseCIDROrIP(cidrs[0]),
-			net2: ip.MustParseCIDROrIP(cidrs[1]),
+		if len(cidrs) != 2 {
+			return nil, false
 		}
+		net1, err := ip.ParseCIDROrIP(cidrs[0])
+		if err != nil {
+			return nil, false
+		}
+		net2, err := ip.ParseCIDROrIP(cidrs[1])
+		if err != nil {
+			return nil, false
+		}
+		return netNet{net1: net1, net2: net2}, true
 	case ipsets.IPSetTypeBitmapPort:
-		// Trim the family if it exists
-		if member[0] == 'v' {
+		// Trim the family prefix (e.g. "v4,") if present.
+		if len(member) > 0 && member[0] == 'v' {
+			if len(member) < 3 {
+				return nil, false
+			}
 			member = member[3:]
 		}
 		port, err := strconv.Atoi(member)
-		if err == nil && port >= 0 && port <= 0xffff {
-			return simpleMember(member)
+		if err != nil || port < 0 || port > 0xffff {
+			return nil, false
 		}
+		return simpleMember(member), true
 	}
-	log.WithField("type", string(t)).Warn("Unknown IPSetType")
-	return nil
+	return nil, false
 }
 
 // setType returns the nftables type to use for the given IPSetType and IP version.
