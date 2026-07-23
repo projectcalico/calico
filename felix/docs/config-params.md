@@ -1180,8 +1180,8 @@ is not Disabled.
 
 ### `NFTablesFlowTableOffload` (config file) / `nftablesFlowTableOffload` (YAML)
 
-Controls which traffic nftables flowtable offload is enabled for, for
-improved forwarding performance. When set to "All", established connections accepted by
+Controls which traffic nftables flowtable offload is enabled for,
+for improved forwarding performance. When set to "All", established connections accepted by
 Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
 nftables mode is active.
 
