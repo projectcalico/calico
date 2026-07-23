@@ -301,7 +301,7 @@ blocks:
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+              value: --ginkgo.focus=(Dataplane:LB)
             - name: BGP_STATUS
               value: Enabled
             # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
