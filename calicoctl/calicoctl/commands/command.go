@@ -115,6 +115,12 @@ node instance.`,
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Display the version of this binary",
+		Long:  `Display version information for calicoctl, and for the cluster when it can be reached.`,
+		Example: `  # Show client and cluster versions.
+  calicoctl version
+
+  # Show only the client version.
+  calicoctl version --client`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			poll, _ := cmd.Flags().GetString("poll")
