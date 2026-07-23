@@ -38,6 +38,9 @@ func newIPAMCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ipam",
 		Short: "IP address management",
+		Long: `Inspect and manage how Calico allocates IP addresses. These commands check
+datastore integrity, release addresses, show usage, and tune IPAM
+configuration.`,
 	}
 	cmd.AddCommand(
 		newIPAMCheckCommand(),
@@ -53,6 +56,11 @@ func newIPAMCheckCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Check the integrity of the IPAM datastructures",
+		Long: `Check the integrity of Calico's IPAM data structures and report leaked or
+improperly allocated IP addresses. The report it produces can later be passed
+to ipam release.`,
+		Example: `  # Check IPAM and write a report of problem IPs.
+  calicoctl ipam check --show-problem-ips -o report.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			showAllIPs, _ := cmd.Flags().GetBool("show-all-ips")
@@ -112,6 +120,14 @@ func newIPAMReleaseCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "release",
 		Short: "Release a Calico assigned IP address",
+		Long: `Release one or more Calico-assigned IP addresses. Release a single address
+with --ip, or release the leaked addresses identified in a report from ipam
+check.`,
+		Example: `  # Release a single IP.
+  calicoctl ipam release --ip 10.0.0.1
+
+  # Release leaked IPs from a check report.
+  calicoctl ipam release --from-report report.json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			ip, _ := cmd.Flags().GetString("ip")
@@ -174,6 +190,14 @@ func newIPAMShowCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show details of a Calico assigned IP address or overall IP usage",
+		Long: `Show details of Calico IP address usage. With no flags it summarizes pool
+usage; the flags drill into a specific address, individual blocks, borrowed
+addresses, or the current IPAM configuration.`,
+		Example: `  # Summarize IP pool usage.
+  calicoctl ipam show
+
+  # Check whether a specific IP is in use.
+  calicoctl ipam show --ip 10.0.0.1`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			ip, _ := cmd.Flags().GetString("ip")
@@ -222,7 +246,11 @@ func newIPAMSplitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "split NUMBER",
 		Short: "Split an IP pool into the specified number of smaller IP pools",
-		Args:  cobra.ExactArgs(1),
+		Long: `Split an IP pool into the given number of smaller pools of equal size. Useful
+for carving a large pool into per-zone or per-node pools.`,
+		Example: `  # Split a pool into 4 smaller pools.
+  calicoctl ipam split 4 --name my-pool`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			cidr, _ := cmd.Flags().GetString("cidr")
@@ -251,6 +279,10 @@ func newIPAMConfigureCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "configure",
 		Short: "Configure IPAM",
+		Long: `Configure cluster-wide Calico IPAM settings, such as strict affinity and the
+maximum number of blocks per host.`,
+		Example: `  # Require strict affinity (disable IP borrowing).
+  calicoctl ipam configure --strictaffinity=true`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			strictAffinity, _ := cmd.Flags().GetString("strictaffinity")

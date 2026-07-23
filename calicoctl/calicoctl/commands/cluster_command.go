@@ -24,6 +24,7 @@ func newClusterCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Access cluster information",
+		Long:  `Access cluster-wide Calico information.`,
 	}
 	cmd.AddCommand(newClusterDiagsCommand())
 	return cmd
@@ -33,6 +34,10 @@ func newClusterDiagsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diags",
 		Short: "Collect snapshot of diagnostic info and logs related to Calico at the cluster-level",
+		Long: `Collect a snapshot of cluster-wide Calico diagnostics and logs. Unlike node
+diags, which runs on a single host, this gathers information across the
+cluster.`,
+		Example: `  calicoctl cluster diags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			since, _ := cmd.Flags().GetString("since")
