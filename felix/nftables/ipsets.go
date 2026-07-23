@@ -818,89 +818,25 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 }
 
 // CanonicaliseMember converts the string representation of an nftables set member to a canonical
-// object of some kind that implements the IPSetMember interface.  The object is required to by hashable.
+// object of some kind that implements the SetMember interface. The object is required to be hashable.
+// It panics on a member it can't parse: desired-state members are Felix-generated, so a parse failure
+// is a bug. The dataplane-readback path uses parseMember directly to tolerate bad input instead.
 func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
-	switch t {
-	case ipsets.IPSetTypeHashIP:
-		// Convert the string into our ip.Addr type, which is backed by an array.
-		ipAddr := ip.FromIPOrCIDRString(member)
-		if ipAddr == nil {
-			// This should be prevented by validation in libcalico-go.
-			log.WithField("ip", member).Panic("Failed to parse IP")
-			panic("Failed to parse IP part of IP,port member")
-		}
-		return simpleMember(ipAddr.String())
-	case ipsets.IPSetTypeHashIPPort:
-		// The member should be of the format "IP,protocol:port"
-		parts := strings.Split(member, ",")
-		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP,proto:port set member")
-		}
-		ipAddr := ip.FromIPOrCIDRString(parts[0])
-		if ipAddr == nil {
-			// This should be prevented by validation.
-			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
-			panic("Failed to parse IP part of IP,port member")
-		}
-		parts = strings.Split(parts[1], ":")
-		if len(parts) != 2 {
-			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
-		}
-		proto := parts[0]
-		port, err := strconv.Atoi(parts[1])
-		if err != nil {
-			log.WithField("member", member).WithError(err).Panic("Bad port")
-		}
-		if port > math.MaxUint16 || port < 0 {
-			log.WithField("member", member).Panic("Bad port range (should be between 0 and 65535)")
-		}
-
-		// Return a dedicated struct for V4 or V6.  This slightly reduces occupancy over storing
-		// the address as an interface by storing one fewer interface headers.  That is worthwhile
-		// because we store many IP set members.
-		if ipAddr.Version() == 4 {
-			return v4IPPortMember{
-				IP:       ipAddr.(ip.V4Addr),
-				Port:     uint16(port),
-				Protocol: proto,
-			}
-		} else {
-			return v6IPPortMember{
-				IP:       ipAddr.(ip.V6Addr),
-				Port:     uint16(port),
-				Protocol: proto,
-			}
-		}
-	case ipsets.IPSetTypeHashNet:
-		// Convert the string into our ip.CIDR type, which is backed by a struct.  When
-		// pretty-printing, the hash:net ipset type prints IPs with no "/32" or "/128"
-		// suffix.
-		return simpleMember(ip.MustParseCIDROrIP(member).String())
-	case ipsets.IPSetTypeHashNetNet:
-		cidrs := strings.Split(member, ",")
-		return netNet{
-			net1: ip.MustParseCIDROrIP(cidrs[0]),
-			net2: ip.MustParseCIDROrIP(cidrs[1]),
-		}
-	case ipsets.IPSetTypeBitmapPort:
-		// Trim the family if it exists
-		if member[0] == 'v' {
-			member = member[3:]
-		}
-		port, err := strconv.Atoi(member)
-		if err == nil && port >= 0 && port <= 0xffff {
-			return simpleMember(member)
-		}
+	m, ok := parseMember(t, member)
+	if !ok {
+		log.WithFields(log.Fields{
+			"type":   string(t),
+			"member": member,
+		}).Panic("Failed to canonicalise IP set member")
 	}
-	log.WithField("type", string(t)).Warn("Unknown IPSetType")
-	return nil
+	return m
 }
 
-// parseMember is the non-panicking twin of CanonicaliseMember, used only on the dataplane-readback
-// path. It returns ok=false instead of panicking when a member can't be parsed, so an element the
-// kernel returns in an unexpected form (or one programmed by a different Felix) is treated as
-// unknown and reconciled rather than crashing Felix. CanonicaliseMember stays strict because
-// desired-state members are Felix-generated and a parse failure there is a bug.
+// parseMember converts the string representation of an nftables set member to a canonical SetMember,
+// returning ok=false instead of panicking when it can't parse the member. The dataplane-readback path
+// calls it directly so an element the kernel returns in an unexpected form (or one programmed by a
+// different Felix) is treated as unknown and reconciled, rather than crashing Felix. CanonicaliseMember
+// wraps it and panics for the desired-state path, where a parse failure is a bug.
 func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
 	switch t {
 	case ipsets.IPSetTypeHashIP:
@@ -927,6 +863,10 @@ func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
 			return nil, false
 		}
 		proto := portParts[0]
+
+		// Return a dedicated struct for V4 or V6. This slightly reduces occupancy over storing the
+		// address as an interface by storing one fewer interface header, which matters because we
+		// store many IP set members.
 		if ipAddr.Version() == 4 {
 			v4, ok := ipAddr.(ip.V4Addr)
 			if !ok {
