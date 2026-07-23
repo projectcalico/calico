@@ -16,7 +16,9 @@ package flowlog
 
 import (
 	"fmt"
+	"net"
 	"reflect"
+	"sort"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -34,6 +36,12 @@ import (
 
 const (
 	unsetIntField = -1
+
+	// MaxIPsPerFlowLog bounds the number of distinct source / destination IP addresses retained per
+	// flow log. Aggregated flows (e.g. at FlowPrefixName level) can span many connections, so the IP
+	// sets are capped to keep memory and downstream wire size bounded. Once the cap is reached,
+	// additional distinct addresses are dropped.
+	MaxIPsPerFlowLog = 100
 )
 
 type empty struct{}
@@ -151,6 +159,11 @@ func (f *FlowSpec) ContainsActiveRefs(mu *metric.Update) bool {
 func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, includeLabels bool, includePolicies bool) []*FlowLog {
 	stats := f.toFlowProcessReportedStats()
 
+	// Collect the bounded source / destination IP sets once. The connection tuples retain their
+	// real IPs even when fm.Tuple has been zeroed for aggregation, so these are populated regardless
+	// of aggregation level.
+	srcIPs, dstIPs := f.collectIPs()
+
 	flogs := make([]*FlowLog, 0, len(stats))
 	for _, stat := range stats {
 		fl := &FlowLog{
@@ -158,6 +171,8 @@ func (f *FlowSpec) ToFlowLogs(fm FlowMeta, startTime, endTime time.Time, include
 			StartTime:                startTime,
 			EndTime:                  endTime,
 			FlowProcessReportedStats: stat,
+			SourceIPs:                srcIPs,
+			DestIPs:                  dstIPs,
 		}
 
 		if includeLabels {
@@ -560,6 +575,43 @@ func (f *FlowStatsByProcess) toFlowProcessReportedStats() []FlowProcessReportedS
 	return reportedStats
 }
 
+// collectIPs returns the bounded sets of distinct source and destination IP addresses observed
+// across all connections tracked for this flow. The connection tuples retain their real IPs even
+// when the FlowMeta tuple has been zeroed for aggregation, so we read them from flowsRefs here.
+// Each set is deduplicated, sorted for deterministic output, and truncated to MaxIPsPerFlowLog.
+func (f *FlowStatsByProcess) collectIPs() (srcIPs, dstIPs []string) {
+	stats, ok := f.statsByProcessName[FieldNotIncluded]
+	if !ok {
+		return nil, nil
+	}
+
+	srcSeen := make(map[[16]byte]struct{})
+	dstSeen := make(map[[16]byte]struct{})
+	for t := range stats.flowsRefs {
+		srcFull := len(srcSeen) >= MaxIPsPerFlowLog
+		dstFull := len(dstSeen) >= MaxIPsPerFlowLog
+		if srcFull && dstFull {
+			// Both sets are at capacity; nothing more to collect.
+			break
+		}
+		if !srcFull && t.Src != EmptyIP {
+			if _, seen := srcSeen[t.Src]; !seen {
+				srcSeen[t.Src] = struct{}{}
+				srcIPs = append(srcIPs, net.IP(t.Src[:]).String())
+			}
+		}
+		if !dstFull && t.Dst != EmptyIP {
+			if _, seen := dstSeen[t.Dst]; !seen {
+				dstSeen[t.Dst] = struct{}{}
+				dstIPs = append(dstIPs, net.IP(t.Dst[:]).String())
+			}
+		}
+	}
+	sort.Strings(srcIPs)
+	sort.Strings(dstIPs)
+	return srcIPs, dstIPs
+}
+
 // FlowProcessReportedStats contains FlowReportedStats along with process information.
 type FlowProcessReportedStats struct {
 	FlowReportedStats
@@ -574,4 +626,12 @@ type FlowLog struct {
 	FlowProcessReportedStats
 
 	FlowEnforcedPolicySet, FlowPendingPolicySet FlowPolicySet
+
+	// SourceIPs and DestIPs are the bounded sets of distinct source / destination IP addresses
+	// observed for the connections aggregated into this flow log. The IPs are preserved here even
+	// when the aggregation level (e.g. FlowPrefixName) zeroes the per-flow Tuple, so that
+	// downstream consumers such as Goldmane can still report them. The sets are capped at
+	// MaxIPsPerFlowLog entries and are best-effort rather than exhaustive.
+	SourceIPs []string
+	DestIPs   []string
 }
