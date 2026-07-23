@@ -30,6 +30,15 @@ func newGetCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get [KIND [NAME...]]",
 		Short: "Get a resource by file, directory, stdin, or type and name",
+		Long: `Get one or more Calico resources - all resources of a type, specific ones by
+name, or those described in a file. Output can be a table (the default), YAML,
+JSON, or a custom template; the YAML and JSON output can be fed back into apply
+or replace.`,
+		Example: `  # List all network policies.
+  calicoctl get networkpolicy
+
+  # Get specific policies as YAML.
+  calicoctl get networkpolicy my-policy-1 my-policy-2 -o yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 

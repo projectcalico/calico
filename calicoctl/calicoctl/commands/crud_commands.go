@@ -39,6 +39,14 @@ func newCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a resource by file, directory or stdin",
+		Long: `Create one or more Calico resources from a file, directory, or stdin, in YAML
+or JSON format. Use create when you want the command to fail if a resource
+already exists; use apply if you'd rather create-or-update.`,
+		Example: `  # Create resources from a file.
+  calicoctl create -f ./policy.yaml
+
+  # Create resources from stdin.
+  cat policy.json | calicoctl create -f -`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			parsedArgs["--skip-exists"], _ = cmd.Flags().GetBool("skip-exists")
@@ -54,6 +62,15 @@ func newApplyCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Apply a resource by file, directory or stdin",
+		Long: `Create or update one or more Calico resources from a file, directory, or stdin,
+in YAML or JSON format. Apply adds resources that don't exist yet and updates
+those that do, so it's the right choice when you don't care whether the resource
+is already present.`,
+		Example: `  # Apply resources from a file.
+  calicoctl apply -f ./policy.yaml
+
+  # Apply resources from stdin.
+  cat policy.json | calicoctl apply -f -`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			return createOrApplyOrValidate(parsedArgs, "apply")
@@ -67,6 +84,11 @@ func newReplaceCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "replace",
 		Short: "Replace a resource by file, directory or stdin",
+		Long: `Replace one or more existing Calico resources from a file, directory, or stdin,
+in YAML or JSON format. Replace fails if a resource doesn't already exist; use
+apply if you want it created in that case.`,
+		Example: `  # Replace resources from a file.
+  calicoctl replace -f ./policy.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			results := common.ExecuteConfigCommand(parsedArgs, common.ActionUpdate)
@@ -81,6 +103,12 @@ func newValidateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate a resource by file, directory or stdin without applying it",
+		Long: `Validate one or more Calico resources from a file, directory, or stdin without
+applying them. Validation runs entirely offline - checking syntax, structure,
+and schema without touching the datastore - so it's useful for catching errors
+before you apply resources to a cluster.`,
+		Example: `  # Validate resources in a file.
+  calicoctl validate -f ./policy.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			return createOrApplyOrValidate(parsedArgs, "validate")
@@ -192,6 +220,14 @@ func newDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete [KIND [NAME...]]",
 		Short: "Delete a resource by file, directory, stdin, or type and name",
+		Long: `Delete one or more Calico resources, either by type and name or from a file,
+directory, or stdin. Deleting a resource that doesn't exist is treated as an
+error unless --skip-not-exists is set.`,
+		Example: `  # Delete specific policies by name.
+  calicoctl delete networkpolicy foo bar
+
+  # Delete the resources described in a file.
+  calicoctl delete -f ./policy.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			parsedArgs["--skip-not-exists"], _ = cmd.Flags().GetBool("skip-not-exists")
@@ -240,7 +276,11 @@ func newPatchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch KIND NAME",
 		Short: "Patch a pre-existing resource in place",
-		Args:  cobra.ExactArgs(2),
+		Long: `Patch a single existing Calico resource in place. Use patch to change specific
+fields without supplying the whole resource, as you'd have to with replace.`,
+		Example: `  # Set a route reflector cluster ID on a node.
+  calicoctl patch node node-0 --patch '{"spec":{"bgp":{"routeReflectorClusterID":"224.0.0.1"}}}'`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			parsedArgs := argsFromCRUDFlags(cmd, args)
 			parsedArgs["--patch"], _ = cmd.Flags().GetString("patch")
