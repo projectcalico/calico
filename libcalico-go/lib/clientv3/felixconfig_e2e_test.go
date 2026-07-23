@@ -53,6 +53,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
 		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
 		NFTablesMode:                   ptr.To(apiv3.NFTablesModeAuto),
+		NFTablesFlowTableOffload:       ptr.To(apiv3.NFTablesFlowTableOffloadEnabled),
 	}
 	spec2 := apiv3.FelixConfigurationSpec{
 		UseInternalDataplaneDriver:     &ptrFalse,
@@ -63,6 +64,7 @@ var _ = testutils.E2eDatastoreDescribe("FelixConfiguration tests", testutils.Dat
 		BPFConnectTimeLoadBalancing:    &ctlbEnabled,
 		BPFHostNetworkedNATWithoutCTLB: &hostNetworkedNATDisabled,
 		NFTablesMode:                   ptr.To(apiv3.NFTablesModeDisabled),
+		NFTablesFlowTableOffload:       ptr.To(apiv3.NFTablesFlowTableOffloadEnabled),
 	}
 
 	DescribeTable("FelixConfiguration e2e CRUD tests",
