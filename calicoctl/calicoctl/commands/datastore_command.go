@@ -33,7 +33,7 @@ func newDatastoreCommand() *cobra.Command {
 func newMigratePolicyNamesCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "migrate-policy-names",
-		Short: "Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the tier prefix",
+		Short: "Rewrite pre-v3.32 policy names in an etcdv3 datastore to drop the legacy \"default.\" tier prefix",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			config, _ := cmd.Flags().GetString("config")
 			allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch")
