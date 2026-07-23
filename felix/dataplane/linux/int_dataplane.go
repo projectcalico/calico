@@ -476,9 +476,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled)
 
-	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload && !nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane) {
-		log.Warn("NFTables flowtable offload is enabled but the kernel does not support it (nf_flow_table unavailable); disabling offload.")
-		config.RulesConfig.NFTablesFlowTableOffload = false
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
+		// module but isn't autoloaded, this lets detection succeed. Kernels that have it built in
+		// or genuinely lack it are unaffected and fall through to the probe result.
+		mp := newModProbe(moduleFlowTable, newRealCmd)
+		out, err := mp.Exec()
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleFlowTable)
+
+		if !nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane) {
+			log.Warn("NFTables flowtable offload is enabled but the kernel does not support it (nf_flow_table unavailable); disabling offload.")
+			config.RulesConfig.NFTablesFlowTableOffload = false
+		}
 	}
 
 	ruleRenderer := config.RuleRendererOverride
