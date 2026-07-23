@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"sigs.k8s.io/knftables"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
@@ -44,9 +46,25 @@ const (
 
 	// Object type names as returned by knftables' ListAll, used to index its
 	// result map.
-	objectTypeChain = "chain"
-	objectTypeMap   = "map"
+	objectTypeChain     = "chain"
+	objectTypeMap       = "map"
+	objectTypeFlowtable = "flowtable"
 )
+
+type FlowTableHandler interface {
+	// SetWorkloadInterfaces updates the set of active workload interfaces. These are combined
+	// with any overlay device names to form the flowtable device list.
+	SetWorkloadInterfaces(ifces []string)
+
+	// SetOverlayDevices updates the set of overlay/tunnel devices (e.g. vxlan.calico, tunl0) to
+	// include in the flowtable. Only devices that currently exist in the kernel may be passed, or
+	// nft rejects the whole transaction.
+	SetOverlayDevices(devices []string)
+
+	// SetExternalDevices updates the set of host/external interfaces to include in the
+	// flowtable, so traffic forwarded between them and local workloads is offloaded.
+	SetExternalDevices(ifces []string)
+}
 
 var (
 	// Define the top-level chains for each table.
@@ -164,6 +182,10 @@ var (
 		Name: "felix_nft_rules",
 		Help: "Number of active nftables rules in the Calico table.",
 	}, []string{"ip_version"})
+	gaugeNumFlowtableDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_nft_flowtable_devices",
+		Help: "Number of devices attached to the Calico nftables flowtable.",
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -173,6 +195,7 @@ func init() {
 	prometheus.MustRegister(countNumListErrors)
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
+	prometheus.MustRegister(gaugeNumFlowtableDevices)
 }
 
 // NftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -224,6 +247,30 @@ type NftablesTable struct {
 
 	inSyncWithDataPlane bool
 
+	// overlayDevices contains the names of tunnel/overlay devices (e.g., vxlan.calico, tunl0)
+	// that should be included in the flowtable device list.
+	overlayDevices []string
+
+	// workloadInterfaces contains the names of active workload interfaces, updated by the
+	// endpoint manager via SetWorkloadInterfaces.
+	workloadInterfaces []string
+
+	// externalDevices contains host/external interface names (matched against the configured
+	// data-interface pattern) to include in the flowtable device list.
+	externalDevices []string
+
+	// flowtableDevices is the combined, sorted list of all devices for the flowtable.
+	// Updated when either overlayDevices or workloadInterfaces changes.
+	flowtableDevices []string
+
+	// flowtableEnabled is set by the setters below, which only fire when offload is enabled. It lets
+	// resyncs re-assert the flowtable even when the device list is empty.
+	flowtableEnabled bool
+
+	// flowtableDirty is true when the flowtable needs reconciling: created or updated when offload
+	// is enabled, or deleted when it is disabled but a flowtable lingers from a previous run.
+	flowtableDirty bool
+
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
 	// to what we calculate from chainToContents.
@@ -249,8 +296,9 @@ type NftablesTable struct {
 	logCxt               *logrus.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	gaugeNumChains prometheus.Gauge
-	gaugeNumRules  prometheus.Gauge
+	gaugeNumChains           prometheus.Gauge
+	gaugeNumRules            prometheus.Gauge
+	gaugeNumFlowtableDevices prometheus.Gauge
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdshim.CmdFactory
@@ -449,9 +497,10 @@ func newTable(
 		timeSleep: sleep,
 		timeNow:   now,
 
-		gaugeNumChains: gaugeNumChains.WithLabelValues(gaugeLabel),
-		gaugeNumRules:  gaugeNumRules.WithLabelValues(gaugeLabel),
-		opReporter:     options.OpRecorder,
+		gaugeNumChains:           gaugeNumChains.WithLabelValues(gaugeLabel),
+		gaugeNumRules:            gaugeNumRules.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableDevices: gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
+		opReporter:               options.OpRecorder,
 
 		disabled: options.Disabled,
 
@@ -480,6 +529,60 @@ func (n *NftablesTable) Name() string {
 
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+// SetOverlayDevices sets the overlay/tunnel device names that should be included in the
+// flowtable device list. Called by the flowtable manager as tunnel devices come up and go
+// down, so only devices that currently exist are passed through.
+func (t *NftablesTable) SetOverlayDevices(devices []string) {
+	t.overlayDevices = slices.Clone(devices)
+	t.enableFlowtable()
+}
+
+// SetWorkloadInterfaces updates the set of active workload interfaces for the flowtable.
+// Called by the endpoint manager when workload endpoints change.
+func (t *NftablesTable) SetWorkloadInterfaces(ifces []string) {
+	t.workloadInterfaces = slices.Clone(ifces)
+	t.enableFlowtable()
+}
+
+// SetExternalDevices updates the set of host/external interfaces for the flowtable. Called by
+// the flowtable manager as matching interfaces come up and go down.
+func (t *NftablesTable) SetExternalDevices(ifces []string) {
+	t.externalDevices = slices.Clone(ifces)
+	t.enableFlowtable()
+}
+
+// GaugeNumFlowtableDevices exposes the felix_nft_flowtable_devices gauge for this table, for
+// use by tests outside this package.
+func (t *NftablesTable) GaugeNumFlowtableDevices() prometheus.Gauge {
+	return t.gaugeNumFlowtableDevices
+}
+
+// enableFlowtable turns on offload and recalculates the device list. The first enable marks
+// the flowtable dirty even when there are no devices, so the always-present FORWARD rule has
+// a flowtable to reference.
+func (t *NftablesTable) enableFlowtable() {
+	if !t.flowtableEnabled {
+		t.flowtableEnabled = true
+		t.flowtableDirty = true
+	}
+	t.recalcFlowtableDevices()
+}
+
+// recalcFlowtableDevices combines overlay and workload interfaces into a sorted device list.
+// If the list changed, it marks the flowtable as dirty for the next Apply().
+func (t *NftablesTable) recalcFlowtableDevices() {
+	combined := make([]string, 0, len(t.overlayDevices)+len(t.workloadInterfaces)+len(t.externalDevices))
+	combined = append(combined, t.overlayDevices...)
+	combined = append(combined, t.workloadInterfaces...)
+	combined = append(combined, t.externalDevices...)
+	sort.Strings(combined)
+	combined = slices.Compact(combined)
+	if !slices.Equal(t.flowtableDevices, combined) {
+		t.flowtableDevices = combined
+		t.flowtableDirty = true
+	}
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -667,6 +770,13 @@ func (t *NftablesTable) loadDataplaneState() {
 		// Table doesn't exist yet. Carry on with no objects so we program it
 		// from scratch.
 		t.logCxt.Debug("Table not found in dataplane, nothing to load.")
+	}
+
+	// If the flowtable's presence in the dataplane doesn't match whether offload is enabled, it
+	// needs reconciling: created when enabled but missing, or deleted when disabled but present.
+	hasFlowtable := slices.Contains(allObjects[objectTypeFlowtable], dataplanedefs.FlowtableName)
+	if t.flowtableEnabled != hasFlowtable {
+		t.flowtableDirty = true
 	}
 
 	// Sync maps using the pre-fetched map names. Give the maps resync its own
@@ -897,6 +1007,10 @@ func (t *NftablesTable) InvalidateDataplaneCache(reason string) {
 	logCxt.Debug("Invalidating dataplane cache")
 	t.inSyncWithDataPlane = false
 	t.reason = reason
+
+	// Re-assert an enabled flowtable on the next resync (its device list may have drifted). The
+	// disabled case is left to loadDataplaneState, which only marks it dirty if one actually exists.
+	t.flowtableDirty = t.flowtableEnabled
 }
 
 func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
@@ -1023,6 +1137,25 @@ func (t *NftablesTable) applyUpdates() error {
 				// Chain doesn't exist in dataplane, mark it for creation.
 				tx.Add(&baseChain)
 			}
+		}
+	}
+
+	// The FORWARD chain references "flow offload @calico" whenever offload is enabled, so the
+	// flowtable must always exist while enabled, even with no devices (Add acts as create-or-update).
+	// When disabled we delete any flowtable left over from a previous run; the forward rule that
+	// referenced it is already reconciled away.
+	if t.flowtableDirty {
+		if t.flowtableEnabled {
+			prio := knftables.FilterIngressPriority
+			tx.Add(&knftables.Flowtable{
+				Name:     dataplanedefs.FlowtableName,
+				Priority: &prio,
+				Devices:  t.flowtableDevices,
+			})
+			t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
+		} else {
+			tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+			t.gaugeNumFlowtableDevices.Set(0)
 		}
 	}
 
@@ -1187,6 +1320,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
+	t.flowtableDirty = false
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {
