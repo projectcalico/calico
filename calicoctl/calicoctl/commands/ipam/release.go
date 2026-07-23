@@ -19,18 +19,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 
-	docopt "github.com/docopt/docopt-go"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -39,115 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-// Release implements the "calicoctl ipam release" command, which supports releasing single IPs and releasing
-// batches of leaked IPs and handles from an IPAM report.
-func Release(args []string, version string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam release [--ip=<IP>] [--from-report=<REPORT>]... [--config=<CONFIG>] [--force] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-     --ip=<IP>                 IP address to release.
-     --from-report=<REPORT>    Release all leaked addresses from the report.  If multiple reports are specified then
-                               only leaked IPs common to all reports will be released - by generating reports at
-                               different times, e.g. separated by an hour, this can be used to provide additional
-                               certainty that the IPs are truly leaked rather than in a transient state of assignment.
-                               At least one of the reports should be newly generated.
-     --force                   Force release of leaked addresses.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam release command releases an IP address from the Calico IP Address
-  Manager that was been previously assigned to an endpoint.  When an IP address
-  is released, it becomes available for assignment to any endpoint.
-
-  Note that this does not remove the IP from any existing endpoints that may be
-  using it, so only use this command to clean up addresses from endpoints that
-  were not cleanly removed from Calico.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	// Load config.
-	cf := parsedArgs["--config"].(string)
-	cfg, err := clientmgr.LoadClientConfig(cf)
-	if err != nil {
-		return err
-	}
-
-	// Set QPS - we want to increase this because we may need to send many IPAM requests
-	// in a short period of time in order to release a large number of addresses.
-	cfg.Spec.K8sClientQPS = float32(100)
-
-	// Create a new backend client.
-	client, err := clientmgr.NewClientFromConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	ipamClient := client.IPAM()
-
-	if report := parsedArgs["--from-report"]; report != nil {
-		reportFiles := parsedArgs["--from-report"].([]string)
-		if len(reportFiles) > 0 {
-			force := false
-			if parsedArgs["--force"] != nil {
-				force = parsedArgs["--force"].(bool)
-			}
-			err = releaseFromReports(ctx, client, force, reportFiles, version)
-			if err != nil {
-				return err
-			}
-			fmt.Println("You may now unlock the data store.")
-			return nil
-		}
-	}
-
-	if ip := parsedArgs["--ip"]; ip != nil {
-		passedIP := parsedArgs["--ip"].(string)
-		ip := argutils.ValidateIP(passedIP)
-		opt := libipam.ReleaseOptions{Address: ip.String()}
-
-		// Call ReleaseIPs releases the IP and returns an empty slice as unallocatedIPs if
-		// release was successful else it returns back the slice with the IP passed in.
-		unallocatedIPs, _, err := ipamClient.ReleaseIPs(ctx, opt)
-		if err != nil {
-			return fmt.Errorf("error: %v", err)
-		}
-
-		// Couldn't release the IP if the slice is not empty or IP might already be released/unassigned.
-		// This is not exactly an error, so not returning it to the caller.
-		if len(unallocatedIPs) != 0 {
-			return fmt.Errorf("IP address %s is not assigned", ip)
-		}
-
-		// If unallocatedIPs slice is empty then IP was released Successfully.
-		fmt.Printf("Successfully released IP address %s\n", ip)
-	}
-
-	return nil
-}
-
-func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
+func ReleaseFromReports(ctx context.Context, c clientv3.Interface, force bool, reportFiles []string, version string) error {
 	// Grab the cluster info for checking against the report metadata.
 	clusterInfo, err := c.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
@@ -156,9 +41,9 @@ func releaseFromReports(ctx context.Context, c clientv3.Interface, force bool, r
 
 	// Load the reports.
 	var foundCurrent bool
-	var reports []Report
+	var reports []CheckReport
 	for _, reportFile := range reportFiles {
-		r := Report{}
+		r := CheckReport{}
 		bytes, err := os.ReadFile(reportFile)
 		if err != nil {
 			return err
@@ -243,12 +128,12 @@ func releaseIPs(ctx context.Context, c clientv3.Interface, notInUseIPs map[strin
 	}
 }
 
-func mergeReports(reports []Report) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
+func mergeReports(reports []CheckReport) (notInUseIPs map[string]libipam.ReleaseOptions, notInUseHandles map[string]HandleInfo) {
 	for _, report := range reports {
 		mergedIPs := make(map[string]libipam.ReleaseOptions)
 		for _, allocations := range report.Allocations {
 			for _, a := range allocations {
-				if a.InUse {
+				if a.InUse || a.CoolingDown {
 					continue
 				}
 				if _, ok := notInUseIPs[a.IP]; notInUseIPs != nil && !ok {
@@ -282,11 +167,8 @@ func releaseHandles(notInUseHandles map[string]HandleInfo, c clientv3.Interface)
 	fmt.Printf("Deleting %d handles...\n", len(notInUseHandles))
 	fmt.Println("Key: '.' = Deleted OK; 'x' = skip, handle missing/changed.")
 	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
 	var numReleased, numConflict, numErrors int
-	bc := c.(accessor).Backend()
+	bc := c.(bapi.BackendAccessor).Backend()
 
 	type result struct {
 		Handle HandleInfo

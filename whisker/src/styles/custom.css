@@ -1,0 +1,106 @@
+@theme {
+    /**
+   * Table, tabs, and menu semantic tokens
+   */
+
+    /* TABLE */
+
+    /* Selected row backgrounds */
+    --color-tigera-token-table-selected: var(--color-tigera-token-bg-brand);
+    --color-tigera-token-table-selected-hovered: var(
+        --color-tigera-token-bg-brand-hovered
+    );
+    --color-tigera-token-table-selected-pressed: var(
+        --color-tigera-token-bg-brand-pressed
+    );
+
+    /* Expanded rows */
+    --color-tigera-token-bg-table-expanded: var(
+        --color-tigera-token-elevation-sunken
+    );
+
+    /* Table header */
+    --color-tigera-token-bg-table-header: var(--color-tigera-color-neutral-50);
+
+    /* Foreground for selected rows */
+    --color-tigera-token-on-table-selected: var(
+        --color-tigera-token-fg-inverted
+    );
+
+    /* TABS */
+
+    --color-tigera-token-tabs-selected: var(
+        --color-tigera-color-medium-gold-500
+    );
+
+    /* MENU */
+
+    --color-tigera-token-bg-nav-menu: var(--color-tigera-color-neutral-50);
+    --color-tigera-token-bg-nav-menu-active: var(
+        --color-tigera-color-neutral-200
+    );
+    --color-tigera-token-bg-nav-menu-hovered: var(
+        --color-tigera-color-neutral-200
+    );
+
+    --color-tigera-token-on-nav-menu: var(--color-tigera-color-neutral-1200);
+    --color-tigera-token-on-nav-menu-active: var(
+        --color-tigera-color-neutral-1200
+    );
+    --color-tigera-token-on-nav-menu-hovered: var(
+        --color-tigera-color-neutral-600
+    );
+}
+
+.dark {
+    /* TABLE */
+
+    --color-tigera-token-table-selected: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-600) 35%,
+        transparent
+    );
+    --color-tigera-token-table-selected-hovered: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-700) 35%,
+        transparent
+    );
+    --color-tigera-token-table-selected-pressed: color-mix(
+        in srgb,
+        var(--color-tigera-color-medium-gold-800) 35%,
+        transparent
+    );
+
+    --color-tigera-token-bg-table-expanded: var(
+        --color-tigera-token-elevation-sunken
+    );
+
+    --color-tigera-token-bg-table-header: rgba(
+        31,
+        31,
+        32,
+        1
+    ); /* non alpha variant of tigera-token-bg-neutral due to sticky header no opacity requirement*/
+
+    --color-tigera-token-on-table-selected: var(
+        --color-tigera-token-fg-default
+    );
+
+    /* TABS */
+
+    --color-tigera-token-tabs-selected: var(--color-tigera-token-bg-brand);
+    /* MENU */
+
+    --color-tigera-token-bg-nav-menu: var(--color-tigera-color-neutral-950);
+    --color-tigera-token-bg-nav-menu-active: transparent;
+    --color-tigera-token-bg-nav-menu-hovered: var(
+        --color-tigera-color-medium-gold-500
+    );
+    --color-tigera-token-on-nav-menu: var(--color-tigera-token-white);
+    --color-tigera-token-on-nav-menu-active: var(
+        --color-tigera-color-medium-gold-500
+    );
+    --color-tigera-token-on-nav-menu-hovered: var(
+        --color-tigera-color-neutral-950
+    );
+}

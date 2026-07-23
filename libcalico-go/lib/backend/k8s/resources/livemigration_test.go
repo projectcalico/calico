@@ -89,12 +89,12 @@ var _ = Describe("LiveMigrationClient", func() {
 				Kind:       internalapi.KindLiveMigration,
 				APIVersion: apiv3.GroupVersionCurrent,
 			}))
-			Expect(*lm.Spec.Destination.Selector).To(Equal(
-				"kubevirt.io/vmi-name == 'my-vmi' && kubevirt.io/migrationJobUID == 'uid-123'",
+			Expect(*lm.Spec.Target.Selector).To(Equal(
+				"(vmi.kubevirt.io/id == 'my-vmi' || vm.kubevirt.io/name == 'my-vmi') && kubevirt.io/migrationJobUID == 'uid-123'",
 			))
-			Expect(*lm.Spec.Source).To(Equal(types.NamespacedName{
-				Name:      "source-pod-abc",
-				Namespace: "test-ns",
+			Expect(lm.Spec.Source.Workload).To(Equal(&internalapi.WorkloadIdentifier{
+				OrchestratorID: "k8s",
+				WorkloadID:     "test-ns/source-pod-abc",
 			}))
 			Expect(kvp.Key).To(Equal(model.ResourceKey{
 				Kind:      internalapi.KindLiveMigration,
@@ -132,19 +132,22 @@ var _ = Describe("LiveMigrationClient", func() {
 			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 		})
 
-		It("returns not-found when VMIM is in matching phase but missing sourcePod", func() {
+		It("returns LiveMigration without Source when VMIM is missing sourcePod", func() {
 			vmim := newVMIM("test-ns", "vmim-no-source", "100", kubevirtv1.MigrationRunning, "my-vmi", "", "uid-123")
 			kvFake := kubevirtfake.NewSimpleClientset(vmim)
 
 			client := newLiveMigrationClient(kvFake)
-			_, err := client.Get(ctx, model.ResourceKey{
+			kvp, err := client.Get(ctx, model.ResourceKey{
 				Kind:      internalapi.KindLiveMigration,
 				Namespace: "test-ns",
 				Name:      "vmim-no-source",
 			}, "")
 
-			Expect(err).To(HaveOccurred())
-			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvp).NotTo(BeNil())
+			lm := kvp.Value.(*internalapi.LiveMigration)
+			Expect(lm.Spec.Source).To(BeNil())
+			Expect(lm.Spec.Target).NotTo(BeNil())
 		})
 	})
 
@@ -166,12 +169,12 @@ var _ = Describe("LiveMigrationClient", func() {
 			lm1 := kvps.KVPairs[0].Value.(*internalapi.LiveMigration)
 			Expect(lm1.Name).To(Equal("vmim-1"))
 			Expect(lm1.Namespace).To(Equal("test-ns"))
-			Expect(lm1.Spec.Source.Name).To(Equal("src-pod-1"))
+			Expect(lm1.Spec.Source.Workload.WorkloadID).To(Equal("test-ns/src-pod-1"))
 
 			lm2 := kvps.KVPairs[1].Value.(*internalapi.LiveMigration)
 			Expect(lm2.Name).To(Equal("vmim-2"))
 			Expect(lm2.Namespace).To(Equal("test-ns"))
-			Expect(lm2.Spec.Source.Name).To(Equal("src-pod-2"))
+			Expect(lm2.Spec.Source.Workload.WorkloadID).To(Equal("test-ns/src-pod-2"))
 		})
 
 		It("lists VMIMs across all namespaces", func() {
@@ -214,9 +217,18 @@ var _ = Describe("LiveMigrationClient", func() {
 			}, "")
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(kvps.KVPairs).To(HaveLen(1))
-			lm := kvps.KVPairs[0].Value.(*internalapi.LiveMigration)
-			Expect(lm.Name).To(Equal("vmim-running"))
+			// Both matching and noSourcePod are in matching phases; noSourcePod
+			// now emits a LiveMigration without Source (SourcePod is optional).
+			Expect(kvps.KVPairs).To(HaveLen(2))
+
+			// Verify that only the expected LiveMigrations are returned.
+			var names []string
+			for _, kvp := range kvps.KVPairs {
+				lm := kvp.Value.(*internalapi.LiveMigration)
+				names = append(names, lm.Name)
+			}
+			Expect(names).To(ConsistOf("vmim-running", "vmim-no-src"))
+			Expect(names).NotTo(ContainElement("vmim-succeeded"))
 		})
 	})
 
@@ -245,7 +257,7 @@ var _ = Describe("LiveMigrationClient", func() {
 					lm := event.New.Value.(*internalapi.LiveMigration)
 					Expect(lm.Name).To(Equal("vmim-watch-1"))
 					Expect(lm.Namespace).To(Equal("test-ns"))
-					Expect(lm.Spec.Source.Name).To(Equal("src-pod-w"))
+					Expect(lm.Spec.Source.Workload.WorkloadID).To(Equal("test-ns/src-pod-w"))
 				case <-timer.C:
 					Fail(fmt.Sprintf("expected a watch event before timer expired"))
 				}
@@ -306,7 +318,7 @@ var _ = Describe("LiveMigrationClient", func() {
 			w.Stop()
 		})
 
-		It("does not emit events for non-matching VMIMs", func() {
+		It("emits LiveMigration for Scheduling phase VMIMs", func() {
 			kvFake := kubevirtfake.NewSimpleClientset()
 
 			client := newLiveMigrationClient(kvFake)
@@ -316,8 +328,41 @@ var _ = Describe("LiveMigrationClient", func() {
 			}, api.WatchOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			// Create a non-matching VMIM (Scheduling phase).
-			vmim := newVMIM("test-ns", "vmim-sched", "400", kubevirtv1.MigrationScheduling, "vmi-s", "src-pod-s", "uid-s")
+			// Create a Scheduling phase VMIM — now a matching phase.
+			vmim := newVMIM("test-ns", "vmim-sched", "400", kubevirtv1.MigrationScheduling, "vmi-s", "", "uid-s")
+			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			timer := time.NewTimer(200 * time.Millisecond)
+			defer timer.Stop()
+			select {
+			case event := <-w.ResultChan():
+				Expect(event.Error).NotTo(HaveOccurred())
+				Expect(event.Type).To(Equal(api.WatchAdded))
+				Expect(event.New.Value).NotTo(BeNil())
+				lm := event.New.Value.(*internalapi.LiveMigration)
+				Expect(lm.Name).To(Equal("vmim-sched"))
+				Expect(lm.Spec.Source).To(BeNil())
+				Expect(lm.Spec.Target).NotTo(BeNil())
+			case <-timer.C:
+				Fail("expected a watch event for Scheduling phase VMIM")
+			}
+
+			w.Stop()
+		})
+
+		It("does not emit LiveMigration for Pending phase VMIMs", func() {
+			kvFake := kubevirtfake.NewSimpleClientset()
+
+			client := newLiveMigrationClient(kvFake)
+			w, err := client.Watch(ctx, model.ResourceListOptions{
+				Namespace: "test-ns",
+				Kind:      internalapi.KindLiveMigration,
+			}, api.WatchOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a Pending phase VMIM — non-matching.
+			vmim := newVMIM("test-ns", "vmim-pending", "400", kubevirtv1.MigrationPending, "vmi-s", "", "uid-s")
 			_, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Create(ctx, vmim, metav1.CreateOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -330,7 +375,7 @@ var _ = Describe("LiveMigrationClient", func() {
 				Expect(event.Type).To(Equal(api.WatchAdded))
 				Expect(event.New.Value).To(BeNil())
 			case <-timer.C:
-				// Expected: no event received.
+				Fail("expected a watch event for Pending phase VMIM")
 			}
 
 			w.Stop()
@@ -380,10 +425,15 @@ var _ = Describe("LiveMigrationClient", func() {
 						Expect(e.New).NotTo(BeNil())
 						Expect(e.New.Value).To(BeAssignableToTypeOf(&internalapi.LiveMigration{}))
 						lm := e.New.Value.(*internalapi.LiveMigration)
-						Expect(lm.Spec.Source.Namespace).To(Equal("test-ns"))
-						Expect(lm.Spec.Source.Name).To(Equal("virt-launcher-vm12-snq7w"))
-						Expect(lm.Spec.Destination.NamespacedName).To(BeNil())
-						Expect(*lm.Spec.Destination.Selector).To(Equal("kubevirt.io/vmi-name == 'vm12' && kubevirt.io/migrationJobUID == 'c05275a7-f85b-42d5-a1d0-acdd49c26d57'"))
+						Expect(lm.Spec.Target.WorkloadEndpoint).To(BeNil())
+						Expect(*lm.Spec.Target.Selector).To(Equal("(vmi.kubevirt.io/id == 'vm12' || vm.kubevirt.io/name == 'vm12') && kubevirt.io/migrationJobUID == 'c05275a7-f85b-42d5-a1d0-acdd49c26d57'"))
+						// Source is only populated when MigrationState.SourcePod is available.
+						if lm.Spec.Source != nil {
+							Expect(lm.Spec.Source.Workload).To(Equal(&internalapi.WorkloadIdentifier{
+								OrchestratorID: "k8s",
+								WorkloadID:     "test-ns/virt-launcher-vm12-snq7w",
+							}))
+						}
 					})
 				}
 
@@ -409,13 +459,13 @@ var _ = Describe("LiveMigrationClient", func() {
 				vmim.Status.Phase = kubevirtv1.MigrationScheduled
 				vmim, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Update(ctx, vmim, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				expectEventWithNilValue(api.WatchModified)
+				expectLiveMigration()
 
 				By("PreparingTarget")
 				vmim.Status.Phase = kubevirtv1.MigrationPreparingTarget
 				vmim, err = kvFake.KubevirtV1().VirtualMachineInstanceMigrations("test-ns").Update(ctx, vmim, metav1.UpdateOptions{})
 				Expect(err).NotTo(HaveOccurred())
-				expectEventWithNilValue(api.WatchModified)
+				expectLiveMigration()
 
 				By("TargetReady")
 				vmim.Status.Phase = kubevirtv1.MigrationTargetReady

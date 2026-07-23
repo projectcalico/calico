@@ -5,14 +5,6 @@
 #ifndef __CALI_PARSING_H__
 #define __CALI_PARSING_H__
 
-#include <linux/tcp.h>
-#include <linux/udp.h>
-#ifdef IPVER6
-#include <linux/icmpv6.h>
-#else
-#include <linux/icmp.h>
-#endif
-
 #include "counters.h"
 #include "routes.h"
 #include "skb.h"
@@ -21,6 +13,7 @@
 #define PARSING_OK 0
 #define PARSING_OK_V6 1
 #define PARSING_ALLOW_WITHOUT_ENFORCING_POLICY 2
+#define PARSING_FRAG_STORED 3
 #define PARSING_ERROR -1
 
 static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset, void *buf, __u32 len);
@@ -58,12 +51,9 @@ static CALI_BPF_INLINE int bpf_load_bytes(struct cali_tc_ctx *ctx, __u32 offset,
 	int ret;
 
 #if CALI_F_XDP
-#ifdef BPF_CORE_SUPPORTED
 	if (bpf_core_enum_value_exists(enum bpf_func_id, BPF_FUNC_xdp_load_bytes)) {
 		ret = bpf_xdp_load_bytes(ctx->xdp, offset, buf, len);
-	} else
-#endif
-	{
+	} else {
 		return -22 /* EINVAL */;
 	}
 #else /* CALI_F_XDP */
@@ -178,24 +168,25 @@ static CALI_BPF_INLINE int tc_state_fill_from_nexthdr(struct cali_tc_ctx *ctx, b
 			}
 		}
 		if (ctx->state->dport == WG_PORT) {
-			/* Wireguard packet. Allow if to/from known Calico host. */
+			/* Wireguard packet. Fast-allow if to/from a known Calico host so
+			 * that a user's HEP policy cannot accidentally block the cluster's
+			 * own host-to-host WireGuard mesh. Otherwise fall through to
+			 * policy: WG_PORT defaults to 51820, which is also the stock
+			 * WireGuard port, so the traffic may belong to a user-managed
+			 * WireGuard unrelated to Calico - we must not drop it outright. */
 			if (CALI_F_FROM_HEP) {
 				if (rt_addr_is_remote_host(&ctx->state->ip_src)) {
 					CALI_DEBUG("Wireguard packet from known Calico host, allow.");
 					goto allow;
 				} else {
-					CALI_DEBUG("Wireguard packet from unknown source, drop.");
-					deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
-					goto deny;
+					CALI_DEBUG("Wireguard packet from unknown source, fall through to policy.");
 				}
 			} else if (CALI_F_TO_HEP && !CALI_F_L3_DEV) {
 				if (rt_addr_is_remote_host(&ctx->state->ip_dst)) {
 					CALI_DEBUG("Wireguard packet to known Calico host, allow.");
 					goto allow;
 				} else {
-					CALI_DEBUG("Wireguard packet to unknown dest, drop.");
-					deny_reason(ctx, CALI_REASON_UNAUTH_SOURCE);
-					goto deny;
+					CALI_DEBUG("Wireguard packet to unknown dest, fall through to policy.");
 				}
 			}
 		}

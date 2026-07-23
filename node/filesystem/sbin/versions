@@ -1,5 +1,5 @@
 #!/bin/sh
-calico-node -v 
+calico version
 
 echo ""
 bird --version

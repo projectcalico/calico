@@ -68,7 +68,7 @@ func printCalicoNodeStatus(status *calico.CalicoNodeStatus, options printers.Gen
 
 	var classes strings.Builder
 	for _, class := range status.Spec.Classes {
-		classes.WriteString(fmt.Sprintf("%s,", class))
+		fmt.Fprintf(&classes, "%s,", class)
 	}
 	classesStr := strings.TrimSuffix(classes.String(), ",")
 

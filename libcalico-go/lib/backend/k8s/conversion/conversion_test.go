@@ -1810,7 +1810,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
+					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.Port{PortName: "foo"}},
 				},
 			},
 		))
@@ -1955,7 +1955,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 				Protocol: &protoTCP, // Defaulted to TCP.
 				Source:   apiv3.EntityRule{},
 				Destination: apiv3.EntityRule{
-					Ports:    []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
+					Ports:    []numorstring.Port{numorstring.SinglePort(80), numorstring.Port{PortName: "foo"}},
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 			},
@@ -2173,7 +2173,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					Selector: "projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
+					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.Port{PortName: "foo"}},
 				},
 			},
 		))

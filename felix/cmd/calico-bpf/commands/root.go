@@ -27,7 +27,8 @@ var (
 	cfgFile  string
 	logLevel string
 
-	ipv6 *bool
+	ipv6       *bool
+	jsonOutput *bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -45,7 +46,14 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, setLogLevel)
+	// Scope to rootCmd instead of cobra.OnInitialize: the latter is global,
+	// so registering it here would fire initConfig (which exits 1 when
+	// HOME is unset) for every cobra dispatch in the consolidated calico
+	// binary, not just calico-bpf.
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		initConfig()
+		setLogLevel()
+	}
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -56,6 +64,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Set log level")
 
 	ipv6 = rootCmd.PersistentFlags().BoolP("ipv6", "6", false, "Use IPv6 instead of IPv4")
+	jsonOutput = rootCmd.PersistentFlags().BoolP("json", "j", false, "Output in JSON format")
 	rootCmd.SetOut(os.Stdout)
 }
 

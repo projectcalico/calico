@@ -35,7 +35,7 @@ const (
 )
 
 // struct cali_tc_state {
-//    struct perf_event_header eventhdr;  // 64 bits
+//    struct event_header eventhdr;  // 64 bits
 //    __be32 ip_src;
 //    __be32 ip_src1;
 //    __be32 ip_src2;
@@ -74,7 +74,7 @@ const (
 // };
 
 type State struct {
-	perfEventHeader     uint64
+	eventHeader         uint64
 	SrcAddr             uint32
 	SrcAddr1            uint32
 	SrcAddr2            uint32

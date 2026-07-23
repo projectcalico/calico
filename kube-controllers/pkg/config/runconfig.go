@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,6 +96,7 @@ type AutoHostEndpointTemplate struct {
 	InterfaceCIDRs   []string
 	InterfacePattern string
 	Labels           map[string]string
+	Annotations      map[string]string
 	NodeSelector     string
 }
 
@@ -471,6 +472,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					InterfacePattern: template.InterfacePattern,
 					NodeSelector:     template.NodeSelector,
 					Labels:           template.Labels,
+					Annotations:      template.Annotations,
 				}
 
 				templates = append(templates, rcTemplate)
@@ -508,6 +510,7 @@ func mergeAutoHostEndpoints(envVars map[string]string, status *v3.KubeController
 					InterfacePattern: rcTemplate.InterfacePattern,
 					NodeSelector:     rcTemplate.NodeSelector,
 					Labels:           rcTemplate.Labels,
+					Annotations:      rcTemplate.Annotations,
 				}
 
 				templates = append(templates, scTemplate)

@@ -92,7 +92,7 @@ const OmniFilterList: React.FC<
     return (
         <Flex __css={listStyles} {...rest}>
             {React.Children.map(children as any, (child: React.ReactElement) =>
-                visibleFilterIds.includes(child.props.filterId)
+                visibleFilterIds.includes(child?.props.filterId)
                     ? React.cloneElement(child, child.props)
                     : null,
             )}
@@ -125,7 +125,7 @@ const OmniFilterList: React.FC<
                 <Button
                     data-testid='omnifilterlist-reset'
                     aria-label={labelResetAria}
-                    variant='ghost'
+                    variant='neutral'
                     onClick={() => onResetVisible()}
                 >
                     {labelReset}

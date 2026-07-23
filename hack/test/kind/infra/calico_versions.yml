@@ -4,35 +4,15 @@ title: latest
 components:
   libcalico-go:
     version: master
-  typha:
-    version: test-build
   node:
-    version: test-build
-  cni:
     version: test-build
   node-windows:
     version: test-build
   cni-windows:
     version: test-build
-  kube-controllers:
-    version: test-build
-  goldmane:
-    version: test-build
-  flexvol:
-    version: test-build
-  apiserver:
-    version: test-build
-  csi:
-    version: test-build
-  csi-node-driver-registrar:
-    version: test-build
-  key-cert-provisioner:
-    version: test-build
-  webhooks:
+  calico:
     version: test-build
   whisker:
-    version: test-build
-  whisker-backend:
     version: test-build
   envoy-gateway:
     version: test-build
@@ -40,5 +20,13 @@ components:
     version: test-build
   envoy-ratelimit:
     version: test-build
-  guardian:
+  istio-pilot:
+    version: test-build
+  istio-install-cni:
+    version: test-build
+  istio-ztunnel:
+    version: test-build
+  istio-proxyv2:
+    version: test-build
+  third-party-cni-plugins:
     version: test-build

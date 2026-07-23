@@ -27,6 +27,7 @@ import (
 	"math/big"
 	"math/bits"
 	"net"
+	"net/netip"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -91,7 +92,7 @@ func (a V4Addr) String() string {
 
 func (a V4Addr) AsBinary() string {
 	var ipInBinary strings.Builder
-	ipInBinary.WriteString(fmt.Sprintf("%04b", 4))
+	fmt.Fprintf(&ipInBinary, "%04b", 4)
 	for ii := range net.IPv4len {
 		temp := fmt.Sprintf("%08b", a[ii])
 		ipInBinary.WriteString(temp)
@@ -156,7 +157,7 @@ func (a V6Addr) String() string {
 
 func (a V6Addr) AsBinary() string {
 	var ipInBinary strings.Builder
-	ipInBinary.WriteString(fmt.Sprintf("%04b", 6))
+	fmt.Fprintf(&ipInBinary, "%04b", 6)
 	for ii := range net.IPv6len {
 		temp := fmt.Sprintf("%08b", a[ii])
 		ipInBinary.WriteString(temp)
@@ -241,7 +242,7 @@ func (c V4CIDR) String() string {
 
 func (c V4CIDR) AsBinary() string {
 	var ipInBinary strings.Builder
-	ipInBinary.WriteString(fmt.Sprintf("%04b", 4))
+	fmt.Fprintf(&ipInBinary, "%04b", 4)
 	for ii := range net.IPv4len {
 		temp := fmt.Sprintf("%08b", c.addr[ii])
 		ipInBinary.WriteString(temp)
@@ -307,7 +308,7 @@ func (c V6CIDR) String() string {
 
 func (c V6CIDR) AsBinary() string {
 	var ipInBinary strings.Builder
-	ipInBinary.WriteString(fmt.Sprintf("%04b", 6))
+	fmt.Fprintf(&ipInBinary, "%04b", 6)
 	for ii := range net.IPv6len {
 		temp := fmt.Sprintf("%08b", c.addr[ii])
 		ipInBinary.WriteString(temp)
@@ -356,6 +357,26 @@ func CIDRFromString(cidrStr string) (CIDR, error) {
 
 func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 	return CIDRFromIPNet(&ipNet.IPNet)
+}
+
+// CIDRFromPrefix converts a netip.Prefix to a CIDR.
+// The prefix is masked to ensure canonical representation.
+func CIDRFromPrefix(p netip.Prefix) CIDR {
+	p = p.Masked()
+	addr := p.Addr()
+	bits := p.Bits()
+	if addr.Is4() {
+		raw := addr.As4()
+		return V4CIDR{
+			addr:   V4Addr(raw),
+			prefix: uint8(bits),
+		}
+	}
+	raw := addr.As16()
+	return V6CIDR{
+		addr:   V6Addr(raw),
+		prefix: uint8(bits),
+	}
 }
 
 func CIDRsFromCalicoNets(ipNets []calinet.IPNet) []CIDR {

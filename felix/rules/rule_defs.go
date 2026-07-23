@@ -64,7 +64,7 @@ const (
 	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
 	IPSetIDDSCPEndpoints = "dscp-src-net"
 
-	IPSetIDAllPools             = "all-ipam-pools"
+	IPSetIDNetworkPools         = "network-ip-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
 	IPSetIDAllHostNets        = "all-hosts-net"
@@ -91,6 +91,10 @@ const (
 
 	NftablesToWorkloadDispatchMap   = ChainNamePrefix + "to-wl-dispatch"
 	NftablesFromWorkloadDispatchMap = ChainNamePrefix + "from-wl-dispatch"
+
+	WorkloadARPPfx         = ChainNamePrefix + "arp-"
+	NftablesARPDispatchMap = ChainNamePrefix + "arp-dispatch"
+	ChainARPDispatch       = ChainNamePrefix + "arp-dispatch"
 
 	ChainDispatchToHostEndpoint          = ChainNamePrefix + "to-host-endpoint"
 	ChainDispatchFromHostEndpoint        = ChainNamePrefix + "from-host-endpoint"
@@ -457,6 +461,7 @@ type Config struct {
 	NATOutgoingAddress             net.IP
 	NATOutgoingExclusions          string
 	BPFEnabled                     bool
+	BPFOverlayIPOnDevice           bool
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 

@@ -42,6 +42,10 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_SET_DSCP	0x8000 /* marks connections that needs to set DSCP */
 #define CALI_CT_FLAG_MAGLEV	0X10000 /* marks Maglev connections. Allows packets of an existing to arrive via a different tunnel after failover. */
 #define CALI_CT_FLAG_SEND_RESET	0x20000 /* marks connections where we should send a TCP RST on behalf of the workload */
+#define CALI_CT_FLAG_CONNLIMIT_INGRESS	0x40000 /* marks connections counted against an ingress connection limit */
+#define CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED	0x80000 /* marks connections rejected by the ingress connection limit */
+#define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
+#define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
 
 struct calico_ct_leg {
 	__u64 bytes;
@@ -70,11 +74,21 @@ struct calico_ct_leg {
 struct calico_ct_value {
 	__u64 rst_seen;
 	__u64 last_seen;	// 8
-	__u8 type;		// 16
-	__u8 flags;
+	// type/flags/flags3/flags4 are overlaid with type_flags_word so the
+	// close-path connlimit decrement can claim CONNLIMIT_DEC with a single
+	// atomic (__sync_fetch_and_or) on a properly-typed 4-byte-aligned word
+	// rather than a __u8-to-__u32 pointer cast. See
+	// qos_connlimit_decrement_for_ct.
+	union {
+		struct {
+			__u8 type;	// 16
+			__u8 flags;
 
-	__u8 flags3;
-	__u8 flags4;
+			__u8 flags3;
+			__u8 flags4;
+		};
+		__u32 type_flags_word;
+	};
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
@@ -118,6 +132,13 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 #else
 	COMPILE_TIME_ASSERT((sizeof(struct calico_ct_value) == 88))
 #endif
+	// qos_connlimit_decrement_for_ct claims CONNLIMIT_DEC with an atomic OR on
+	// type_flags_word; on little-endian (amd64/arm64, the BPF dataplane arches)
+	// flags3 must be byte 2 of the word for the bit to land there. Guard the
+	// offset so a struct reshuffle fails the build rather than corrupting a
+	// neighbouring field.
+	COMPILE_TIME_ASSERT(__builtin_offsetof(struct calico_ct_value, flags3) -
+			__builtin_offsetof(struct calico_ct_value, type_flags_word) == 2)
 #pragma clang diagnostic pop
 }
 
@@ -126,6 +147,13 @@ static CALI_BPF_INLINE void __xxx_compile_asserts(void) {
 	(v)->flags2 |= (((f) >> 8) & 0xff);	\
 	(v)->flags3 |= (((f) >> 16) & 0xff);	\
 	(v)->flags4 |= (((f) >> 24) & 0xff);	\
+} while(0)
+
+#define ct_value_clear_flags(v, f) do {		\
+	(v)->flags &= ~((f) & 0xff);		\
+	(v)->flags2 &= ~(((f) >> 8) & 0xff);	\
+	(v)->flags3 &= ~(((f) >> 16) & 0xff);	\
+	(v)->flags4 &= ~(((f) >> 24) & 0xff);	\
 } while(0)
 
 #define ct_value_get_flags(v) ({									\

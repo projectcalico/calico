@@ -46,13 +46,6 @@ func NewRandomFlow(start int64) *proto.Flow {
 		0: "policy-1",
 		1: "policy-2",
 	}
-	indices := map[int]int64{
-		0: 0,
-		1: 1,
-		2: 2,
-		3: 3,
-	}
-
 	dstNs := randomFromMap(namespaces)
 	srcNs := randomFromMap(namespaces)
 	action := randomFromMap(actions)
@@ -81,7 +74,7 @@ func NewRandomFlow(start int64) *proto.Flow {
 						Name:        randomFromMap(policies),
 						Namespace:   polNs,
 						Action:      action,
-						PolicyIndex: randomFromMap(indices),
+						PolicyIndex: 0,
 						RuleIndex:   0,
 					},
 					{

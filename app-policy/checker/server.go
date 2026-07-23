@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	core_v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -86,8 +87,19 @@ func (as *authServer) RegisterGRPCServices(gs *grpc.Server) {
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
 	hostname, _ := os.Hostname()
 	logCtx := log.WithContext(ctx).WithField("hostname", hostname)
+	// Do not log req.Attributes.String() or req.String(), they contain sensitive HTTP
+	// headers (Authorization, Cookie) and request bodies.
+	// Strip query string from the path — Envoy's :path pseudo-header includes it,
+	// and query parameters may carry tokens or credentials.
 	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
-		logCtx.Debug("Check start: ", req.Attributes.String())
+		httpPath := req.GetAttributes().GetRequest().GetHttp().GetPath()
+		if i := strings.IndexByte(httpPath, '?'); i >= 0 {
+			httpPath = httpPath[:i]
+		}
+		logCtx.WithFields(log.Fields{
+			"method": req.GetAttributes().GetRequest().GetHttp().GetMethod(),
+			"path":   httpPath,
+		}).Debug("Check start")
 	}
 
 	resp := &authz.CheckResponse{Status: &status.Status{Code: INTERNAL}}
@@ -152,11 +164,12 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 		}
 	})
 
+	// Do not log the full CheckRequest, it may contain sensitive HTTP headers and bodies.
 	if logCtx.Logger.IsLevelEnabled(log.DebugLevel) {
 		logCtx.WithFields(log.Fields{
 			"code": code.Code(resp.Status.Code),
 			"msg":  resp.Status.Message,
-		}).Debug("Check complete: ", req.String())
+		}).Debug("Check complete")
 	}
 
 	return resp, nil

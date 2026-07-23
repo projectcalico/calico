@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var gaugeNumActiveSelectors = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -63,7 +62,7 @@ type endpointCallbacks interface {
 }
 
 type configCallbacks interface {
-	OnConfigUpdate(globalConfig, hostConfig map[string]string)
+	OnConfigUpdate(globalConfig, selectorConfig, hostConfig map[string]string)
 	OnDatastoreNotReady()
 }
 
@@ -72,11 +71,7 @@ type encapCallbacks interface {
 }
 
 type passthruCallbacks interface {
-	OnHostIPUpdate(hostname string, ip *net.IP)
-	OnHostIPRemove(hostname string)
-	OnHostIPv6Update(hostname string, ip *net.IP)
-	OnHostIPv6Remove(hostname string)
-	OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string)
+	OnHostMetadataUpdate(hostname string, info *HostInfo)
 	OnHostMetadataRemove(hostname string)
 	OnIPPoolUpdate(model.IPPoolKey, *model.IPPool)
 	OnIPPoolRemove(model.IPPoolKey)
@@ -133,6 +128,7 @@ type CalcGraph struct {
 	profileDecoder          *ProfileDecoder
 	encapsulationResolver   *EncapsulationResolver
 	policyResolver          *PolicyResolver
+	liveMigrationCalculator *LiveMigrationCalculator
 }
 
 func (g *CalcGraph) OnUpdates(updates []api.Update) {
@@ -223,8 +219,18 @@ func NewCalculationGraph(
 	//             ...
 	//
 	activeRulesCalc := NewActiveRulesCalculator()
-	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 	cg.activeRulesCalculator = activeRulesCalc
+
+	// Create and register the live migration calculator on localEndpointDispatcher BEFORE
+	// the active rules calculator.  This ensures the LMC sees WEP updates first, so its
+	// wepData is already populated when the ARC fires computed selector match callbacks.
+	cg.liveMigrationCalculator = NewLiveMigrationCalculator(cg.activeRulesCalculator)
+	localEndpointDispatcher.Register(
+		model.WorkloadEndpointKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
+
+	activeRulesCalc.RegisterWith(localEndpointDispatcher, allUpdDispatcher)
 
 	// The active rules calculator only figures out which rules are active, it doesn't extract
 	// any information from the rules.  The rule scanner takes the output from the active rules
@@ -303,7 +309,7 @@ func NewCalculationGraph(
 	//                   |
 	//               <dataplane>
 	//
-	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode == "Enabled")
+	ipsetMemberIndex := labelindex.NewSelectorAndNamedPortIndex(conf.NFTablesMode != "Disabled")
 	ipsetMemberIndex.OnAlive = liveCallback
 	// Wire up the inputs to the IP set member index.
 	ipsetMemberIndex.RegisterWith(allUpdDispatcher)
@@ -378,6 +384,15 @@ func NewCalculationGraph(
 	polResolver.RegisterCallback(callbacks)
 	cg.policyResolver = polResolver
 
+	// Wire up the live migration calculator's output callback and remaining dispatcher
+	// registration, now that polResolver exists.  (The LMC was created and registered on
+	// localEndpointDispatcher earlier, before the ARC, to ensure correct dispatch ordering.)
+	cg.liveMigrationCalculator.OnEndpointComputedData = polResolver.OnEndpointComputedDataUpdate
+	allUpdDispatcher.Register(
+		model.ResourceKey{},
+		cg.liveMigrationCalculator.OnUpdate,
+	)
+
 	if conf.IsIstioAmbientModeEnabled() {
 		_ = NewIstioCalculator(activeRulesCalc, ruleScanner, callbacks, ipsetMemberIndex, polResolver.OnEndpointComputedDataUpdate)
 	}
@@ -400,7 +415,7 @@ func NewCalculationGraph(
 	//         |
 	//      <dataplane>
 	//
-	hostIPPassthru := NewDataplanePassthru(callbacks, conf.Ipv6Support)
+	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
 	cg.hostIPPassthru = hostIPPassthru
 
@@ -418,7 +433,7 @@ func NewCalculationGraph(
 		//         |
 		//      <dataplane>
 		//
-		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates(), conf.RouteSource)
+		l3RR := NewL3RouteResolver(hostname, callbacks, conf.RouteSource)
 		l3RR.RegisterWith(allUpdDispatcher, localEndpointDispatcher)
 		l3RR.OnAlive = liveCallback
 		cg.l3RouteResolver = l3RR
@@ -437,7 +452,7 @@ func NewCalculationGraph(
 	//      <dataplane>
 	//
 	if conf.Encapsulation.VXLANEnabled || conf.Encapsulation.VXLANEnabledV6 {
-		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
+		vxlanResolver := NewVXLANResolver(hostname, callbacks)
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 		cg.vxlanResolver = vxlanResolver
 	}

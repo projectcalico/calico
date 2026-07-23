@@ -15,6 +15,7 @@
 package types
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 	"unique"
@@ -311,6 +312,10 @@ func flowKeyIntoProto(k *FlowKey, pfk *proto.FlowKey) {
 	if err := goproto.Unmarshal([]byte(policies), pfk.Policies); err != nil {
 		logrus.WithError(err).Error("Failed to unmarshal policy trace")
 	}
+	if pfk.Policies != nil {
+		sortPolicyHits(pfk.Policies.EnforcedPolicies)
+		sortPolicyHits(pfk.Policies.PendingPolicies)
+	}
 }
 
 func FlowToProto(f *Flow) *proto.Flow {
@@ -364,7 +369,15 @@ func FlowLogPolicyToProto(h unique.Handle[string]) *proto.PolicyTrace {
 			logrus.WithError(err).Error("Failed to unmarshal policy trace")
 		}
 	}
+	sortPolicyHits(p.EnforcedPolicies)
+	sortPolicyHits(p.PendingPolicies)
 	return &p
+}
+
+func sortPolicyHits(hits []*proto.PolicyHit) {
+	slices.SortFunc(hits, func(a, b *proto.PolicyHit) int {
+		return cmp.Compare(a.PolicyIndex, b.PolicyIndex)
+	})
 }
 
 func toHandles(labels []string) unique.Handle[string] {

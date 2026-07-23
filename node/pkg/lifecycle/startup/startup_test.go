@@ -1,4 +1,4 @@
-// Copyright (c) 2016,2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2021,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -446,6 +446,30 @@ var _ = Describe("FV tests against a real etcd", func() {
 			"192.168.0.0/16", randomULAPool, "Off", "Off", "Off", true, false, 26, 122, "all()", "all()", false, false),
 	)
 
+	It("should honor CALICO_IPV6POOL_VXLAN when the IPv4 pool is disabled", func() {
+		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+		Expect(err).NotTo(HaveOccurred())
+		c, err := client.New(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(*cfg)
+		Expect(err).NotTo(HaveOccurred())
+		err = be.Clean()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer temporarilySetEnv("CALICO_IPV4POOL_CIDR", "none")()
+		defer temporarilySetEnv("CALICO_IPV6POOL_VXLAN", "Always")()
+
+		configureIPPools(ctx, c, kubeadmConfig)
+
+		poolList, err := c.IPPools().List(ctx, options.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(poolList.Items).To(HaveLen(1))
+
+		pool := poolList.Items[0]
+		Expect(pool.Name).To(Equal(DEFAULT_IPV6_POOL_NAME))
+		Expect(pool.Spec.VXLANMode).To(Equal(apiv3.VXLANModeAlways))
+	})
+
 	It("should properly clear node IPs", func() {
 		cfg, err := apiconfig.LoadClientConfigFromEnvironment()
 		Expect(err).NotTo(HaveOccurred())
@@ -727,6 +751,30 @@ var _ = Describe("FV tests against a real etcd", func() {
 			By("being empty", func() {
 				Expect(clusterInfo.Spec.ClusterType).To(Equal(""))
 			})
+		})
+
+		It("should create the default IPAMConfiguration", func() {
+			cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+			Expect(err).NotTo(HaveOccurred())
+
+			c, err := client.New(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(*cfg)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(be.Clean()).To(Succeed())
+
+			node := getNode(ctx, c, utils.DetermineNodeName())
+			Expect(ensureDefaultConfig(ctx, cfg, c, node, OSTypeLinux, nil, nil)).To(Succeed())
+
+			// The default must carry the real IPAM defaults, not the zero value.
+			// AutoAllocateBlocks in particular has to be true, or IPAM can't hand out blocks.
+			ipamConfig, err := c.IPAMConfiguration().Get(ctx, "default", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ipamConfig.Spec.AutoAllocateBlocks).To(BeTrue())
+			Expect(ipamConfig.Spec.StrictAffinity).To(BeFalse())
+			Expect(ipamConfig.Spec.KubeVirtVMAddressPersistence).NotTo(BeNil())
+			Expect(*ipamConfig.Spec.KubeVirtVMAddressPersistence).To(Equal(apiv3.VMAddressPersistenceEnabled))
 		})
 
 		It("should respect the env var", func() {

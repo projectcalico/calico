@@ -9,6 +9,7 @@ export default {
             fontWeight: '900',
             letterSpacing: 'normal',
             minWidth: '100%',
+            backgroundColor: 'experimental-token-bg-empty!important',
             '& > tbody > tr > td': {
                 borderBottom: 'none',
                 whiteSpace: 'normal',

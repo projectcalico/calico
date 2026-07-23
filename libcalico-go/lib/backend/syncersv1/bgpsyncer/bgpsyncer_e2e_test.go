@@ -17,6 +17,7 @@ package bgpsyncer_test
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -175,7 +176,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			)
 			Expect(err).NotTo(HaveOccurred())
 			// The pool will add as single entry ( +1 )
-			poolKeyV1 := model.IPPoolKey{CIDR: net.MustParseCIDR("192.124.0.0/21")}
+			poolKeyV1 := model.IPPoolKey{CIDR: netip.MustParsePrefix("192.124.0.0/21")}
 			expectedCacheSize += 1
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectData(model.KVPair{
@@ -188,6 +189,7 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 					IPAM:           true,
 					Disabled:       false,
 					AssignmentMode: apiv3.Automatic,
+					AllowedUses:    []apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseWorkload, apiv3.IPPoolAllowedUseTunnel},
 				},
 				Revision: pool.ResourceVersion,
 			})
@@ -220,28 +222,28 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 						ExportV4: []apiv3.BGPFilterRuleV4{
 							{
 								CIDR:          "10.10.10.0/24",
-								MatchOperator: apiv3.In,
+								MatchOperator: apiv3.MatchOperatorIn,
 								Action:        apiv3.Accept,
 							},
 						},
 						ImportV4: []apiv3.BGPFilterRuleV4{
 							{
 								CIDR:          "11.11.11.0/24",
-								MatchOperator: apiv3.NotIn,
+								MatchOperator: apiv3.MatchOperatorNotIn,
 								Action:        apiv3.Reject,
 							},
 						},
 						ExportV6: []apiv3.BGPFilterRuleV6{
 							{
 								CIDR:          "dead:beef:1::/64",
-								MatchOperator: apiv3.Equal,
+								MatchOperator: apiv3.MatchOperatorEqual,
 								Action:        apiv3.Accept,
 							},
 						},
 						ImportV6: []apiv3.BGPFilterRuleV6{
 							{
 								CIDR:          "dead:beef:2::/64",
-								MatchOperator: apiv3.NotEqual,
+								MatchOperator: apiv3.MatchOperatorNotEqual,
 								Action:        apiv3.Reject,
 							},
 						},
@@ -281,7 +283,8 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				current := syncTester.GetCacheEntries()
 				for _, kvp := range current {
 					if kab, ok := kvp.Key.(model.BlockAffinityKey); ok {
-						if kab.Host == "127.0.0.1" && poolCIDRNet.Contains(kab.CIDR.IP) && kab.AffinityType == string(ipam.AffinityTypeHost) {
+						kabCIDR := model.IPNetFromPrefix(kab.CIDR)
+						if kab.Host == "127.0.0.1" && poolCIDRNet.Contains(kabCIDR.IP) && kab.AffinityType == string(ipam.AffinityTypeHost) {
 							blockAffinityKeyV1 = kab
 							break
 						}

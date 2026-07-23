@@ -33,8 +33,8 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -76,6 +76,7 @@ var (
 	globalFelixConfigName     = "default"
 	felixNodeConfigNamePrefix = "node."
 	globalBGPConfigName       = "default"
+	globalIPAMConfigName      = "default"
 )
 
 type runConf struct {
@@ -482,10 +483,19 @@ func getMonitorPollInterval() time.Duration {
 }
 
 func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface, node *internalapi.Node, k8sNode *v1.Node) bool {
+	ok, err := configureAndCheckIPAddressSubnetsErr(ctx, cli, node, k8sNode)
+	if err != nil {
+		log.WithError(err).Error("Failed to configure IP addresses")
+		utils.Terminate()
+	}
+	return ok
+}
+
+func configureAndCheckIPAddressSubnetsErr(ctx context.Context, cli client.Interface, node *internalapi.Node, k8sNode *v1.Node) (bool, error) {
 	// If Calico is running in policy only mode we don't need to write BGP related
 	// details to the Node.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
-		return false
+		return false, nil
 	}
 	// Configure and verify the node IP addresses and subnets.
 	checkConflicts, err := configureIPsAndSubnets(node, k8sNode, func(incl []string, excl []string, version ...int) ([]autodetection.Interface, error) {
@@ -501,22 +511,19 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 			clearNodeIPs(ctx, cli, node, clearv4, clearv6)
 		}
 
-		utils.Terminate()
+		return false, fmt.Errorf("failed to configure IP addresses and subnets: %w", err)
 	}
 
 	if node.Spec.BGP.IPv4Address == "" && node.Spec.BGP.IPv6Address == "" {
 		if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
-			log.Error("No IPv4 or IPv6 addresses configured or detected, required for Calico networking")
-			// Unrecoverable error, terminate to restart.
-			utils.Terminate()
-		} else {
-			log.Info("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
-			// Bail here setting BGPSpec to nil (if empty) to pass validation.
-			if reflect.DeepEqual(node.Spec.BGP, &internalapi.NodeBGPSpec{}) {
-				node.Spec.BGP = nil
-			}
-			return checkConflicts
+			return false, fmt.Errorf("no IPv4 or IPv6 addresses configured or detected, required for Calico networking")
 		}
+		log.Info("No IPv4 or IPv6 addresses configured or detected. Some features may not work properly.")
+		// Bail here setting BGPSpec to nil (if empty) to pass validation.
+		if reflect.DeepEqual(node.Spec.BGP, &internalapi.NodeBGPSpec{}) {
+			node.Spec.BGP = nil
+		}
+		return checkConflicts, nil
 	}
 
 	// If we report an IP change (v4 or v6) we should verify there are no
@@ -531,61 +538,62 @@ func configureAndCheckIPAddressSubnets(ctx context.Context, cli client.Interface
 			if node.ResourceVersion != "" {
 				clearNodeIPs(ctx, cli, node, clearv4, clearv6)
 			}
-			utils.Terminate()
+			return false, fmt.Errorf("conflicting node detected: %w", err)
 		}
 	}
 
-	return checkConflicts
+	return checkConflicts, nil
 }
 
-func MonitorIPAddressSubnets() {
-	ctx := context.Background()
+// MonitorIPAddressSubnetsWithContext is the context-aware variant of
+// MonitorIPAddressSubnets for use when running as a goroutine in a
+// consolidated process.
+func MonitorIPAddressSubnetsWithContext(ctx context.Context) error {
 	_, cli := calicoclient.CreateClient()
 	nodeName := utils.DetermineNodeName()
-
 	pollInterval := getMonitorPollInterval()
 
 	var clientset *kubernetes.Clientset
-	var config *rest.Config
 	var k8sNode *v1.Node
-	var err error
 	var node *internalapi.Node
 
-	// Determine the Kubernetes node name. Default to the Calico node name unless an explicit
-	// value is provided.
 	k8sNodeName := nodeName
 	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
 		k8sNodeName = nodeRef
 	}
-	if config, err = winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
-		// Create the k8s clientset.
+	if config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG")); err == nil {
 		clientset, err = kubernetes.NewForConfig(config)
 		if err != nil {
-			log.WithError(err).Error("Failed to create clientset")
-			return
+			return fmt.Errorf("failed to create clientset: %w", err)
 		}
 	}
 
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
 	for {
-		<-time.After(pollInterval)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
 		log.Debugf("Checking node IP address every %v", pollInterval)
 
-		// Every polling interval, try to get the k8s Node and use the latest K8s node IP to configure.
 		if clientset != nil {
+			var err error
 			k8sNode, err = clientset.CoreV1().Nodes().Get(ctx, k8sNodeName, metav1.GetOptions{})
 			if err != nil {
-				log.WithError(err).Error("Failed to read Node from datastore")
-				return
+				return fmt.Errorf("failed to read Node from datastore: %w", err)
 			}
 		}
 
-		// Every polling interval, try to get new node configuration.
 		node = getNode(ctx, cli, nodeName)
 
-		updated := configureAndCheckIPAddressSubnets(ctx, cli, node, k8sNode)
+		updated, err := configureAndCheckIPAddressSubnetsErr(ctx, cli, node, k8sNode)
+		if err != nil {
+			return err
+		}
 		if updated {
-			// Apply the updated node resource.
-			// we try updating the resource up to 3 times, in case of transient issues.
 			for range 3 {
 				_, err := CreateOrUpdate(ctx, cli, node)
 				if err == nil {
@@ -1081,7 +1089,6 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	if ipv4PoolEnabled {
 		ipv4IpipModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 		ipv4VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
-		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
 
 		ipv4BlockSizeEnvVar = os.Getenv("CALICO_IPV4POOL_BLOCK_SIZE")
 		if ipv4BlockSizeEnvVar != "" {
@@ -1115,6 +1122,8 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	}
 
 	if ipv6PoolEnabled {
+		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
+
 		ipv6BlockSizeEnvVar = os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
 		if ipv6BlockSizeEnvVar != "" {
 			ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
@@ -1473,7 +1482,11 @@ func ensureDefaultConfig(
 		}
 	}
 
-	return ensureDefaultBGPConfigExists(ctx, c)
+	if err := ensureDefaultBGPConfigExists(ctx, c); err != nil {
+		return err
+	}
+
+	return ensureDefaultIPAMConfigExists(ctx, c)
 }
 
 func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error {
@@ -1497,6 +1510,47 @@ func ensureDefaultBGPConfigExists(ctx context.Context, c client.Interface) error
 			log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
 		} else {
 			log.WithError(err).WithField("BGPConfig", newBGPConf).Errorf("Error creating default BGPConfiguration.")
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureDefaultIPAMConfigExists(ctx context.Context, c client.Interface) error {
+	_, err := c.IPAMConfiguration().Get(ctx, globalIPAMConfigName, options.GetOptions{})
+	if err == nil {
+		log.Debug("Default IPAMConfiguration exists.")
+		return nil
+	}
+
+	_, ok := err.(cerrors.ErrorResourceDoesNotExist)
+	if !ok {
+		log.WithError(err).WithField("IPAMConfiguration", globalIPAMConfigName).Errorf("Error getting default IPAMConfiguration.")
+		return err
+	}
+
+	// The meaningful IPAM defaults are not the zero value, so set them
+	// explicitly. The kubebuilder defaults only apply through the apiserver
+	// admission path, not on a direct client Create.
+	newIPAMConf := api.NewIPAMConfiguration()
+	newIPAMConf.Name = globalIPAMConfigName
+	newIPAMConf.Spec.AutoAllocateBlocks = true
+	newIPAMConf.Spec.MaxBlocksPerHost = 0
+	newIPAMConf.Spec.KubeVirtVMAddressPersistence = ptr.To(api.VMAddressPersistenceEnabled)
+
+	// Leave StrictAffinity disabled, matching the previous default. Windows
+	// nodes require it enabled, but it's a single global setting and Windows
+	// clusters are usually mixed with Linux, so we can't pick the right value
+	// from one node at startup without racing the others. Windows clusters
+	// enable it explicitly via "calicoctl ipam configure", and GetIPAMConfig
+	// enforces it for Windows nodes.
+	newIPAMConf.Spec.StrictAffinity = false
+	_, err = c.IPAMConfiguration().Create(ctx, newIPAMConf, options.SetOptions{})
+	if err != nil {
+		if conflict, exists := err.(cerrors.ErrorResourceAlreadyExists); exists {
+			log.Infof("Ignoring conflict when setting value %s", conflict.Identifier)
+		} else {
+			log.WithError(err).WithField("IPAMConfiguration", newIPAMConf).Errorf("Error creating default IPAMConfiguration.")
 			return err
 		}
 	}

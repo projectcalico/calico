@@ -141,6 +141,19 @@ EOF
     return 1
   fi
 
+  # NICs reference subnet-aso directly; ASO does not retry NIC creation if
+  # the subnet hasn't reconciled in Azure yet, so gate on the subnet too.
+  if ! wait_for_aso_resource "virtualnetworkssubnet" "subnet-aso" "aso" "300s"; then
+    log_error "Failed to create Subnet"
+    return 1
+  fi
+
+  # NICs also reference aso-sg; same race class as the subnet.
+  if ! wait_for_aso_resource "networksecuritygroup" "aso-sg" "aso" "300s"; then
+    log_error "Failed to create Network Security Group"
+    return 1
+  fi
+
   # Step 3: Secrets
   log_info "Creating secrets..."
   ${KUBECTL} apply -f ${ASO_DIR}/infra/manifests/password.yaml
@@ -184,6 +197,38 @@ EOF
     return 1
   fi
 
+  # VirtualMachine Ready means Azure provisioned the VM — NOT that the
+  # CustomScript extensions that install containerd (Linux) or configure
+  # OpenSSH / runtime (Windows) have finished. Without an explicit gate
+  # here, downstream scripts race the extension and time out 5+ minutes
+  # later inside the VM with no useful diagnostic.
+  log_info "Waiting for VM extensions to finish reconciling..."
+  local ext_resources=()
+  for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-linux-${i}-containerd")
+  done
+  for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+    ext_resources+=("vm-windows-${i}-openssh")
+    ext_resources+=("vm-windows-${i}-customextension")
+  done
+
+  local failed_exts=()
+  for ext in "${ext_resources[@]}"; do
+    if ! wait_for_aso_resource "virtualmachinesextension" "$ext" "aso" "$ASO_TIMEOUT_DEFAULT"; then
+      log_error "VirtualMachinesExtension $ext failed to become ready"
+      failed_exts+=("$ext")
+      ${KUBECTL} describe virtualmachinesextension "$ext" -n aso | tail -30
+    else
+      log_info "VirtualMachinesExtension $ext is ready"
+    fi
+  done
+
+  if [[ ${#failed_exts[@]} -gt 0 ]]; then
+    log_error "Failed VirtualMachinesExtension resources: ${failed_exts[*]}"
+    log_info "Use '${KUBECTL} describe virtualmachinesextension <name> -n aso' for more details"
+    return 1
+  fi
+
   log_info "All ASO v2 resources applied and reconciled successfully"
 }
 
@@ -199,11 +244,12 @@ function wait_for_aso_resource() {
 
   log_info "Waiting for $resource_type/$resource_name in namespace $namespace (timeout: $timeout)..."
 
-  # First, wait for the resource to exist (up to 60 seconds)
+  # First, wait for the resource to exist (up to 120 seconds — controller restarts
+  # or webhook backpressure occasionally push past 60s).
   local wait_count=0
   while ! ${KUBECTL} get "$resource_type/$resource_name" -n "$namespace" >/dev/null 2>&1; do
-    if [[ $wait_count -ge 60 ]]; then
-      log_fail "$resource_type/$resource_name does not exist after 60 seconds"
+    if [[ $wait_count -ge 120 ]]; then
+      log_fail "$resource_type/$resource_name does not exist after 120 seconds"
       return 1
     fi
     log_info "Waiting for $resource_type/$resource_name to be created... (${wait_count}s)"
@@ -240,6 +286,17 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # The VirtualMachine Ready condition does NOT propagate NIC/PIP failures,
+    # so we must explicitly wait on those before reading their status fields.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
@@ -281,6 +338,16 @@ function get_and_export_node_ips() {
     log_info "Ensuring ${vm_name} is ready with ASO v2 status check..."
     if ! wait_for_aso_resource "virtualmachine" "${vm_name}" "aso" "480s"; then
       log_error "${vm_name} did not become ready in time"
+      return 1
+    fi
+
+    # See note above: VM Ready does not imply NIC/PIP Ready.
+    if ! wait_for_aso_resource "networkinterface" "${nic_name}" "aso" "300s"; then
+      log_error "${nic_name} did not become ready"
+      return 1
+    fi
+    if ! wait_for_aso_resource "publicipaddress" "${pip_name}" "aso" "300s"; then
+      log_error "${pip_name} did not become ready"
       return 1
     fi
 
@@ -660,6 +727,29 @@ function diagnose_aso_resources() {
         ${KUBECTL} get virtualmachine $vm -n aso -o yaml | grep -A 20 "status:" | grep -E "(conditions|ready|message|reason)"
       fi
     done
+
+    # Per-extension health. The summary above only shows finalizers, which
+    # tells us the resources exist but NOT whether the CustomScript
+    # extensions on each VM actually finished (Ready/provisioningState).
+    # That's what we need to debug "containerd not ready" style timeouts.
+    log_info "Detailed VirtualMachinesExtension status:"
+    local ext_names=()
+    for ((i=1; i<=${LINUX_NODE_COUNT}; i++)); do
+      ext_names+=("vm-linux-${i}-containerd")
+    done
+    for ((i=1; i<=${WINDOWS_NODE_COUNT}; i++)); do
+      ext_names+=("vm-windows-${i}-openssh")
+      ext_names+=("vm-windows-${i}-customextension")
+    done
+    for ext in "${ext_names[@]}"; do
+      if ${KUBECTL} get virtualmachinesextension "$ext" -n aso &>/dev/null; then
+        echo "--- VirtualMachinesExtension: $ext ---"
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='{range .status.conditions[*]}  type={.type} status={.status} reason={.reason} message={.message}{"\n"}{end}' 2>/dev/null
+        ${KUBECTL} get virtualmachinesextension "$ext" -n aso \
+          -o jsonpath='  provisioningState={.status.provisioningState}{"\n"}' 2>/dev/null
+      fi
+    done
   else
     log_info "Namespace aso does not exist"
   fi
@@ -670,6 +760,17 @@ function delete_rg() {
 
   # Verify required environment variables
   : "${AZURE_RESOURCE_GROUP:?Environment variable empty or not defined.}"
+
+  # Verify az CLI is installed and authenticated
+  if ! command -v az >/dev/null 2>&1; then
+    log_error "Azure CLI ('az') is not installed or not available in PATH."
+    return 1
+  fi
+  local az_error
+  if ! az_error="$(az account show 2>&1)"; then
+    log_error "Unable to use Azure CLI account context: ${az_error}. Running 'az login' may be needed."
+    return 1
+  fi
 
   # Check if resource group exists
   log_info "Checking if resource group '${AZURE_RESOURCE_GROUP}' exists..."

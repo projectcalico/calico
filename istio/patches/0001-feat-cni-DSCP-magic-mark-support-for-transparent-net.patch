@@ -1,0 +1,122 @@
+From b05474f6fb70169d709f5366b3a5918984cd22a0 Mon Sep 17 00:00:00 2001
+From: Seth Malaki <seth@tigera.io>
+Date: Sun, 7 Dec 2025 09:44:57 +0000
+Subject: [PATCH] feat(cni): DSCP magic mark support for transparent network
+ policies
+
+---
+ cni/pkg/cmd/root.go               |  2 ++
+ cni/pkg/config/config.go          |  7 +++++++
+ cni/pkg/constants/constants.go    |  1 +
+ cni/pkg/iptables/iptables.go      | 10 ++++++++++
+ cni/pkg/nodeagent/options.go      |  1 +
+ cni/pkg/nodeagent/server_linux.go |  1 +
+ 6 files changed, 22 insertions(+)
+
+diff --git a/cni/pkg/cmd/root.go b/cni/pkg/cmd/root.go
+index 47a3ef1..0b0a895 100644
+--- a/cni/pkg/cmd/root.go
++++ b/cni/pkg/cmd/root.go
+@@ -128,6 +128,7 @@ var rootCmd = &cobra.Command{
+ 					ReconcilePodRulesOnStartup: cfg.InstallConfig.AmbientReconcilePodRulesOnStartup,
+ 					NativeNftables:             cfg.InstallConfig.NativeNftables,
+ 					ForceIptablesBinary:        cfg.InstallConfig.ForceIptablesBinary,
++					MagicDSCPMark:              cfg.InstallConfig.MagicDSCPMark,
+ 				})
+ 			if err != nil {
+ 				return fmt.Errorf("failed to create ambient nodeagent service: %v", err)
+@@ -334,6 +335,7 @@ func constructConfig() (*config.Config, error) {
+ 
+ 		NativeNftables:      viper.GetBool(constants.NativeNftables),
+ 		ForceIptablesBinary: os.Getenv("FORCE_IPTABLES_BINARY"),
++		MagicDSCPMark:       viper.GetInt(constants.MagicDSCPMark),
+ 	}
+ 
+ 	if len(installCfg.K8sNodeName) == 0 {
+diff --git a/cni/pkg/config/config.go b/cni/pkg/config/config.go
+index 98e8a86..5d0d491 100644
+--- a/cni/pkg/config/config.go
++++ b/cni/pkg/config/config.go
+@@ -67,6 +67,9 @@ type AmbientConfig struct {
+ 	Reconcile              bool       `json:"RECONCILE"`
+ 	CleanupOnly            bool       `json:"CLEANUP_ONLY"`
+ 	ForceApply             bool       `json:"FORCE_APPLY"`
++
++	// Calico tweak for Transparent Network Policies
++	MagicDSCPMark int `json:"MAGIC_DSCP_MARK"`
+ }
+ 
+ // GetConfig converts AmbientConfig to tools common config format
+@@ -164,6 +167,9 @@ type InstallConfig struct {
+ 
+ 	// Choose which iptables binary to use (legacy or nft)
+ 	ForceIptablesBinary string
++
++	// Calico tweak for Transparent Network Policies
++	MagicDSCPMark int
+ }
+ 
+ // RepairConfig struct defines the Istio CNI race repair configuration
+@@ -242,6 +248,7 @@ func (c InstallConfig) String() string {
+ 
+ 	b.WriteString("NativeNftables: " + fmt.Sprint(c.NativeNftables) + "\n")
+ 	b.WriteString("ForceIptablesBinary: " + fmt.Sprint(c.ForceIptablesBinary) + "\n")
++	b.WriteString("MagicDSCPMark: " + fmt.Sprint(c.MagicDSCPMark) + "\n")
+ 	return b.String()
+ }
+ 
+diff --git a/cni/pkg/constants/constants.go b/cni/pkg/constants/constants.go
+index 1f09085..947f34b 100644
+--- a/cni/pkg/constants/constants.go
++++ b/cni/pkg/constants/constants.go
+@@ -49,6 +49,7 @@ const (
+ 	EnableAmbientDetectionRetry       = "enable-ambient-detection-retry"
+ 
+ 	NativeNftables = "native-nftables"
++	MagicDSCPMark  = "magic-dscp-mark"
+ 
+ 	// Repair
+ 	RepairEnabled            = "repair-enabled"
+diff --git a/cni/pkg/iptables/iptables.go b/cni/pkg/iptables/iptables.go
+index f4588a5..c9cf364 100644
+--- a/cni/pkg/iptables/iptables.go
++++ b/cni/pkg/iptables/iptables.go
+@@ -283,6 +283,16 @@ func (cfg *IptablesConfigurator) AppendInpodRules(podOverrides config.PodLevelOv
+ 		"-j", "CONNMARK",
+ 		"--set-xmark", inpodTproxyMark)
+ 
++	// DSCP magic mark rule for transparent network policies
++	if cfg.cfg.MagicDSCPMark > 0 {
++		iptablesBuilder.AppendRule(ChainInpodPrerouting, "nat",
++			"-p", "tcp",
++			"-m", "dscp", "--dscp", fmt.Sprintf("%#x", cfg.cfg.MagicDSCPMark),
++			"-j", "REDIRECT",
++			"--to-port", fmt.Sprint(config.ZtunnelInboundPort),
++		)
++	}
++
+ 	if !podOverrides.IngressMode {
+ 		// Handle healthcheck probes from the host node. In the host netns, before the packet enters the pod, we SNAT
+ 		// the healthcheck packet to a fixed IP if the packet is coming from a node-local process with a socket.
+diff --git a/cni/pkg/nodeagent/options.go b/cni/pkg/nodeagent/options.go
+index ee23e41..4623fd4 100644
+--- a/cni/pkg/nodeagent/options.go
++++ b/cni/pkg/nodeagent/options.go
+@@ -56,4 +56,5 @@ type AmbientArgs struct {
+ 	ReconcilePodRulesOnStartup bool
+ 	NativeNftables             bool
+ 	ForceIptablesBinary        string
++	MagicDSCPMark              int
+ }
+diff --git a/cni/pkg/nodeagent/server_linux.go b/cni/pkg/nodeagent/server_linux.go
+index 2086d01..f7e0cf8 100644
+--- a/cni/pkg/nodeagent/server_linux.go
++++ b/cni/pkg/nodeagent/server_linux.go
+@@ -47,6 +47,7 @@ func initMeshDataplane(client kube.Client, args AmbientArgs) (*meshDataplane, er
+ 		HostProbeSNATAddress:   HostProbeSNATIP,
+ 		HostProbeV6SNATAddress: HostProbeSNATIPV6,
+ 		Reconcile:              args.ReconcilePodRulesOnStartup,
++		MagicDSCPMark:          args.MagicDSCPMark,
+ 	}
+ 
+ 	useNftables := args.NativeNftables

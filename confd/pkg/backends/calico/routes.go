@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
-	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 const (
@@ -65,8 +64,8 @@ type routeGenerator struct {
 	resyncKnownRoutesTrigger   chan struct{}
 }
 
-// NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
+// NewRouteGenerator initializes the route generator using the provided K8s client.
+func NewRouteGenerator(c *client, k8sClient kubernetes.Interface) (rg *routeGenerator, err error) {
 	// Determine the node name we'll use to check for local endpoints.
 	// This value should match the name of the node in the Kubernetes API.
 	// Prefer CALICO_K8S_NODE_REF, and fall back to the Calico node name.
@@ -76,7 +75,6 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	}
 	log.Debugf("Route generator configured to use node name %s", nodename)
 
-	// initialize empty route generator
 	rg = &routeGenerator{
 		client:                     c,
 		nodeName:                   nodename,
@@ -85,24 +83,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		resyncKnownRoutesTrigger:   make(chan struct{}, 1),
 	}
 
-	// set up k8s client
-	// attempt 1: KUBECONFIG env var
-	cfgFile := os.Getenv("KUBECONFIG")
-	cfg, err := winutils.BuildConfigFromFlags("", cfgFile)
-	if err != nil {
-		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
-		// attempt 2: in cluster config
-		if cfg, err = winutils.GetInClusterConfig(); err != nil {
-			return
-		}
-	}
-	client, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return
-	}
-
-	// set up services informer
-	svcWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "services", "", fields.Everything())
+	// Set up services informer.
+	svcWatcher := cache.NewListWatchFromClient(k8sClient.CoreV1().RESTClient(), "services", "", fields.Everything())
 	svcHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onSvcAdd, UpdateFunc: rg.onSvcUpdate, DeleteFunc: rg.onSvcDelete}
 	rg.svcIndexer, rg.svcInformer = cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: svcWatcher,
@@ -112,8 +94,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 		Indexers:      cache.Indexers{},
 	})
 
-	// set up endpoints informer
-	epWatcher := cache.NewListWatchFromClient(client.DiscoveryV1().RESTClient(), "endpointslices", "", fields.Everything())
+	// Set up endpoint slices informer.
+	epWatcher := cache.NewListWatchFromClient(k8sClient.DiscoveryV1().RESTClient(), "endpointslices", "", fields.Everything())
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewInformerWithOptions(cache.InformerOptions{
 		ListerWatcher: epWatcher,
@@ -226,10 +208,17 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *discoveryv1.Endpoi
 	var key string
 	var eps []*discoveryv1.EndpointSlice
 	if svc == nil {
-		eps = append(eps, ep)
-		// ep received but svc nil
+		// An EndpointSlice changed but we weren't handed the Service; look it up.
 		if svc, key = rg.getServiceForEndpoints(ep); svc == nil {
 			return
+		}
+		// Advertisement is a per-Service decision: this node should advertise the
+		// route if it has a ready local endpoint in ANY of the Service's
+		// EndpointSlices. Evaluate them all rather than just the slice that
+		// changed - otherwise a not-ready (or removed) endpoint in one slice could
+		// wrongly withdraw a route that another slice still justifies.
+		if eps, _ = rg.getEndpointsForService(svc); len(eps) == 0 {
+			eps = append(eps, ep)
 		}
 	} else if ep == nil {
 		// svc received but ep nil
@@ -542,30 +531,37 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, eps []*discovery
 		if _, ok := svcIPFamilies[epFamily]; !ok {
 			continue
 		}
-		for _, subset := range ep.Endpoints {
-			// not interested in subset.NotReadyAddresses
+		for _, endpoint := range ep.Endpoints {
+			// Skip not-ready endpoints (nil Ready means ready, per the EndpointSlice API)
+			// the dataplane only programs ready endpoints as backends, so advertising for one would black-hole traffic.
+			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+				continue
+			}
 			if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-				// For Cluster services, advertise if we have any endpoints
+				// For Cluster services, advertise if we have any ready endpoint.
 				logc.Debugf("Advertising cluster service")
 				return true
 			} else {
-				// For Local services, only advertise if we have local endpoints
-				if subset.NodeName != nil && *subset.NodeName == rg.nodeName {
+				// For Local services, only advertise if we have a ready local endpoint.
+				if endpoint.NodeName != nil && *endpoint.NodeName == rg.nodeName {
 					logc.Debugf("Advertising local service")
 					return true
 				}
 			}
 		}
 	}
+
 	logc.Debugf("Skipping service with no local endpoints")
 	return false
 }
 
 // unsetRouteForSvc removes the route from the svcClusterRouteMap
-// but checks to see if it wasn't already deleted by its sibling resource
+// but checks to see if it wasn't already deleted by its sibling resource.
+// Only called from delete handlers, so it must use the deletion-handling
+// key func to unwrap any cache.DeletedFinalStateUnknown tombstone.
 func (rg *routeGenerator) unsetRouteForSvc(obj any) {
 	// generate key
-	key, err := cache.MetaNamespaceKeyFunc(obj)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
 	if err != nil {
 		log.WithError(err).Warn("unsetRouteForSvc: error on retrieving key for object, passing")
 		return

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/projectcalico/calico/felix/bpf/allowsources"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	"github.com/projectcalico/calico/felix/bpf/counters"
@@ -38,34 +39,38 @@ import (
 )
 
 type IPMaps struct {
-	IpsetsMap    maps.Map
-	ArpMap       maps.Map
-	FailsafesMap maps.Map
-	FrontendMap  maps.Map
-	BackendMap   maps.Map
-	AffinityMap  maps.Map
-	RouteMap     maps.Map
-	CtMap        maps.Map
-	SrMsgMap     maps.Map
-	CtNatsMap    maps.Map
-	CtCleanupMap maps.Map
-	MaglevMap    maps.Map
-	IPFragMap    maps.Map
-	IPFragFwdMap maps.Map
+	IpsetsMap       maps.Map
+	ArpMap          maps.Map
+	FailsafesMap    maps.Map
+	FrontendMap     maps.Map
+	BackendMap      maps.Map
+	AffinityMap     maps.Map
+	RouteMap        maps.Map
+	CtMap           maps.Map
+	SrMsgMap        maps.Map
+	CtNatsMap       maps.Map
+	CtCleanupMap    maps.Map
+	MaglevMap       maps.Map
+	IPFragMap       maps.Map
+	IPFragFwdMap    maps.Map
+	AllowSourcesMap maps.Map
 }
 
 type CommonMaps struct {
-	StateMap         maps.Map
-	IfStateMap       maps.Map
-	RuleCountersMap  maps.Map
-	CountersMap      maps.Map
-	ProgramsMaps     []maps.Map
-	JumpMaps         []maps.MapWithDeleteIfExists
-	XDPProgramsMap   maps.Map
-	XDPJumpMap       maps.MapWithDeleteIfExists
-	ProfilingMap     maps.Map
-	CTLBProgramsMaps []maps.Map
-	QoSMap           maps.MapWithUpdateWithFlags
+	StateMap           maps.Map
+	IfStateMap         maps.Map
+	RuleCountersMap    maps.Map
+	CountersMap        maps.Map
+	ProgramsMaps       []maps.Map
+	JumpMaps           []maps.MapWithDeleteIfExists
+	NetkitProgramsMaps []maps.Map
+	NetkitJumpMaps     []maps.MapWithDeleteIfExists
+	XDPProgramsMap     maps.Map
+	XDPJumpMap         maps.MapWithDeleteIfExists
+	ProfilingMap       maps.Map
+	CTLBProgramsMaps   []maps.Map
+	QoSMap             maps.MapWithUpdateWithFlags
+	QoSConnMap         maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -99,10 +104,16 @@ func getCommonMaps() *CommonMaps {
 		ProfilingMap:     profiling.Map(),
 		CTLBProgramsMaps: nat.ProgramsMaps(),
 		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
+		QoSConnMap:       qos.ConnMap().(maps.MapWithUpdateWithFlags),
 	}
 	jumpMaps := jump.Maps()
 	for _, jm := range jumpMaps {
 		commonMaps.JumpMaps = append(commonMaps.JumpMaps, jm.(maps.MapWithDeleteIfExists))
+	}
+	commonMaps.NetkitProgramsMaps = hook.NewNetkitProgramsMaps()
+	netkitJumpMaps := jump.NetkitMaps()
+	for _, jm := range netkitJumpMaps {
+		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, jm.(maps.MapWithDeleteIfExists))
 	}
 	return commonMaps
 }
@@ -129,20 +140,21 @@ func getIPMaps(ipFamily int) *IPMaps {
 	}
 
 	return &IPMaps{
-		IpsetsMap:    getmap(ipsets.Map, ipsets.MapV6),
-		ArpMap:       getmap(arp.Map, arp.MapV6),
-		FailsafesMap: getmap(failsafes.Map, failsafes.MapV6),
-		FrontendMap:  getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6),
-		BackendMap:   getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6),
-		AffinityMap:  getmap(nat.AffinityMap, nat.AffinityMapV6),
-		RouteMap:     getmap(routes.Map, routes.MapV6),
-		CtMap:        getmap(conntrack.Map, conntrack.MapV6),
-		CtCleanupMap: getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
-		SrMsgMap:     getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
-		CtNatsMap:    getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
-		MaglevMap:    getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6),
-		IPFragMap:    getmap(ipfrags.Map, nil),
-		IPFragFwdMap: getmap(ipfrags.FwdMap, nil),
+		IpsetsMap:       getmap(ipsets.Map, ipsets.MapV6),
+		ArpMap:          getmap(arp.Map, arp.MapV6),
+		FailsafesMap:    getmap(failsafes.Map, failsafes.MapV6),
+		FrontendMap:     getmapWithExistsCheck(nat.FrontendMap, nat.FrontendMapV6),
+		BackendMap:      getmapWithExistsCheck(nat.BackendMap, nat.BackendMapV6),
+		AffinityMap:     getmap(nat.AffinityMap, nat.AffinityMapV6),
+		RouteMap:        getmap(routes.Map, routes.MapV6),
+		CtMap:           getmap(conntrack.Map, conntrack.MapV6),
+		CtCleanupMap:    getmapWithExistsCheck(conntrack.CleanupMap, conntrack.CleanupMapV6),
+		SrMsgMap:        getmap(nat.SendRecvMsgMap, nat.SendRecvMsgMapV6),
+		CtNatsMap:       getmap(nat.AllNATsMsgMap, nat.AllNATsMsgMapV6),
+		MaglevMap:       getmapWithExistsCheck(nat.MaglevMap, nat.MaglevMapV6),
+		IPFragMap:       getmap(ipfrags.Map, nil),
+		IPFragFwdMap:    getmap(ipfrags.FwdMap, nil),
+		AllowSourcesMap: getmap(allowsources.Map, allowsources.MapV6),
 	}
 }
 
@@ -197,10 +209,15 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.XDPJumpMap,
 		c.ProfilingMap,
 		c.QoSMap,
+		c.QoSConnMap,
 	}
 	mapslice = append(mapslice, c.ProgramsMaps...)
+	mapslice = append(mapslice, c.NetkitProgramsMaps...)
 	mapslice = append(mapslice, c.CTLBProgramsMaps...)
 	for _, m := range c.JumpMaps {
+		mapslice = append(mapslice, m)
+	}
+	for _, m := range c.NetkitJumpMaps {
 		mapslice = append(mapslice, m)
 	}
 	return mapslice
@@ -222,6 +239,7 @@ func (i *IPMaps) slice() []maps.Map {
 		i.MaglevMap,
 		i.IPFragMap,
 		i.IPFragFwdMap,
+		i.AllowSourcesMap,
 	}
 }
 

@@ -1,0 +1,343 @@
+# DMs a PR author on Slack when their PR's Semaphore CI finishes.
+#
+# Opt-in is a repo *variable* (not a secret — Slack member IDs aren't
+# sensitive): CI_NOTIFY_MAP, a comma-separated list of
+#   <github-login>:<slack-member-id>
+# pairs, e.g.
+#   CI_NOTIFY_MAP = "tomastigera:U01ABCD2EFG, alice:U09ZYX8WVUT"
+# Set it with:  gh variable set CI_NOTIFY_MAP --body 'login:Uxxxx,...'
+#
+# Delivery uses the gh-pr-monitor Slack bot. Its token is a repo secret
+# GH_PR_MONITOR_BOT_TOKEN; the bot needs chat:write + im:write scopes — it
+# opens a DM to the author's member ID with conversations.open, then posts
+# to that channel. (im:write is required; without it conversations.open
+# returns missing_scope and no DM is sent.)
+#
+# The workflow is a no-op (never fails noisily) if the variable/secret
+# are unset, the author hasn't opted in, or Slack is unreachable.
+
+name: CI finished Slack notify
+
+on:
+  status: {}
+  # Manual test path: simulate a finished-CI status for a given PR, so the
+  # full chain (resolve -> opt-in lookup -> DM) can be exercised on demand
+  # without waiting for real CI. Dispatchable only once this file is on the
+  # default branch (a GitHub limitation), so it's for post-merge sanity
+  # checks, not pre-merge testing.
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to notify about"
+        required: true
+        type: string
+      state:
+        description: "Simulated CI outcome"
+        required: false
+        default: success
+        type: choice
+        options: [success, failure, error]
+
+# Semaphore re-posts the same terminal status several times per commit.
+# Dedup claims a git ref named after (commit, state) atomically — see "Claim
+# dedup marker" below — so concurrent duplicate events race to create the
+# same ref and exactly one wins. No concurrency group is needed: the claim
+# is atomic on GitHub's side, so runs don't need to be serialized to avoid
+# a double-send race. Markers only matter for the duplicate-event burst
+# (minutes), so each run opportunistically prunes markers older than 2 days
+# — see "Prune stale dedup markers" — keeping refs/ci-notify/* bounded.
+
+permissions:
+  pull-requests: read
+  # git ref create/delete (the dedup marker) lives under contents. This
+  # replaced an actions/cache-based marker: GitHub's Jun 2026 change to
+  # issue read-only cache tokens for "untrusted trigger" events (a `status`
+  # event from Semaphore's GitHub App qualifies) made actions/cache/save
+  # silently no-op forever here, so the old marker never persisted and every
+  # duplicate status event kept sending its own DM.
+  contents: write
+
+jobs:
+  notify:
+    # Fire once when the aggregate Semaphore status reaches a terminal
+    # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # Manual workflow_dispatch runs always proceed (state comes from input).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.context == 'ci/semaphoreci/pr: Calico' &&
+       (github.event.state == 'success' ||
+        github.event.state == 'failure' ||
+        github.event.state == 'error'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
+      SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
+      # On a status event these come from the event; on workflow_dispatch
+      # STATE falls through to the input and SHA is empty.
+      STATE: ${{ github.event.state || inputs.state }}
+      SHA: ${{ github.event.sha }}
+    steps:
+      - name: Skip if not configured
+        id: gate
+        run: |
+          if [[ -z "${CI_NOTIFY_MAP}" || -z "${SLACK_BOT_TOKEN}" ]]; then
+            echo "::notice::CI_NOTIFY_MAP variable or GH_PR_MONITOR_BOT_TOKEN secret missing — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve PR + author
+        id: resolve
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
+        run: |
+          if [[ -n "$INPUT_PR" ]]; then
+            # Manual run: trust only a numeric PR number (guards against
+            # injection via the free-form dispatch input).
+            if [[ ! "$INPUT_PR" =~ ^[0-9]+$ ]]; then
+              echo "::error::pr_number must be numeric, got '$INPUT_PR'"
+              exit 1
+            fi
+            PR="$INPUT_PR"
+          else
+            # Status event: resolve PR from SHA. Use the search API rather
+            # than repos/$REPO/commits/$SHA/pulls — the latter does not
+            # return PRs whose head commit lives on a fork, and
+            # projectcalico/calico PRs all come from forks.
+            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                   --jq '.items[0].number // empty')
+            if [[ -z "$PR" ]]; then
+              echo "::notice::no open PR for sha=$SHA — skipping"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          # pr.json holds the free-form title; it stays on the runner disk
+          # and is read with jq in later steps. It is never routed through
+          # GITHUB_OUTPUT or workflow expressions — those would be a script-injection
+          # vector for an attacker-chosen PR title.
+          gh api "repos/$REPO/pulls/$PR" \
+            --jq '{login: .user.login, title: .title, url: .html_url}' > pr.json
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+      - name: Look up author's Slack ID
+        id: lookup
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true'
+        run: |
+          # Read the login from pr.json (not a step output) — keep all
+          # PR-derived text off the workflow-expression interpolation path.
+          LOGIN=$(jq -r .login pr.json)
+          # CI_NOTIFY_MAP is "login:slackid, login:slackid, ...".
+          # Logins are [A-Za-z0-9-] and Slack IDs are [A-Z0-9], so ':'
+          # is an unambiguous delimiter. Split entries on ',' (one per line),
+          # then strip whitespace *inside awk per record* — a global
+          # `tr -d '[:space:]'` would also delete the newlines and re-join
+          # every entry into one line, concatenating an ID with the next
+          # entry's login (e.g. "Uxxxxnextlogin").
+          SLACK_ID=$(printf '%s' "$CI_NOTIFY_MAP" \
+            | tr ',' '\n' \
+            | awk -F: -v u="$LOGIN" '{gsub(/[[:space:]]/, "")} $1==u {print $2; exit}')
+          if [[ -z "$SLACK_ID" ]]; then
+            echo "::notice::author '$LOGIN' not in CI_NOTIFY_MAP — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Dedup: claim a git ref named after (commit, state) before sending.
+      # Ref creation is atomic on GitHub's side, so concurrent duplicate
+      # status events race to create the same ref and exactly one wins —
+      # no concurrency group or serialization required. A non-"already
+      # exists" failure fails OPEN (proceeds to send) rather than silently
+      # swallowing a real notification on an API hiccup. Status events only
+      # (SHA non-empty); manual workflow_dispatch runs always proceed.
+      - name: Claim dedup marker (atomic)
+        id: claim
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && env.SHA != ''
+        run: |
+          set +e
+          ERR=$(gh api "repos/$REPO/git/refs" --method POST \
+            -f ref="refs/ci-notify/${SHA}-${STATE}" -f sha="$SHA" 2>&1 >/dev/null)
+          RC=$?
+          set -e
+          if [[ $RC -eq 0 ]]; then
+            echo "claimed=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$ERR" == *"Reference already exists"* ]]; then
+            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
+            echo "claimed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::dedup ref-claim failed unexpectedly ($ERR) — proceeding without dedup for this run"
+            echo "claimed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # On failure/error, sem-ai-ci-triage posts a failure-analysis comment
+      # — but it runs concurrently on the same status event and only after
+      # its LLM backend responds, so the comment usually isn't there yet.
+      # Poll briefly for it so the DM can deep-link to the analysis. Success
+      # never gets a triage comment, so we skip the poll entirely there.
+      - name: Wait for sem-ai-triage comment
+        id: triage
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true' &&
+          steps.claim.outputs.claimed != 'false' &&
+          env.STATE != 'success'
+        env:
+          PR: ${{ steps.resolve.outputs.pr }}
+          # When CI finished, per GitHub (status events only; empty on a
+          # manual workflow_dispatch). Used as the freshness reference below.
+          EVENT_CREATED_AT: ${{ github.event.created_at }}
+        run: |
+          MARKER="<!-- sem-ai-ci-triage -->"
+          COMMENT_URL=""
+
+          # Freshness gate: triage upserts a single comment per PR, so a
+          # comment from an *earlier* failure can already exist. Accept it
+          # only if it was updated after this CI run finished — i.e. triage
+          # (which is triggered by the same status event) has rewritten it
+          # for the current run. Compare GitHub-server timestamps on both
+          # sides (event created_at vs comment updated_at); ISO-8601 UTC
+          # sorts lexicographically, so a string '>' is a time comparison.
+          # If triage lags we keep polling; if it skips the run entirely the
+          # comment never goes fresh and we correctly omit the link. On a
+          # manual run there is no event time, so skip the gate.
+          REF="$EVENT_CREATED_AT"
+          if [[ -n "$REF" ]]; then
+            FRESH="and (.updated_at > \"$REF\")"
+          else
+            FRESH=""
+          fi
+
+          # Bound the query with `since` (filters by updated_at): triage's
+          # comment is always recent, so a 2h window keeps the result to
+          # ~1 page instead of walking every comment 12 times — avoids the
+          # API churn/rate-limit risk of an unbounded --paginate in a loop.
+          SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # ~120s budget (12 x 10s). Triage typically comments well within
+          # this; if not, we just omit the analysis link from the DM.
+          for _ in $(seq 1 12); do
+            COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
+              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH)][-1].html_url // empty")
+            [[ -n "$COMMENT_URL" ]] && break
+            sleep 10
+          done
+          # html_url is a github.com URL (safe charset) — OK via GITHUB_OUTPUT.
+          echo "comment_url=$COMMENT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack DM
+        id: send
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true' &&
+          steps.claim.outputs.claimed != 'false'
+        env:
+          SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
+          PR: ${{ steps.resolve.outputs.pr }}
+          TRIAGE_COMMENT_URL: ${{ steps.triage.outputs.comment_url }}
+        run: |
+          # TITLE/URL come from pr.json via jq, never from a workflow expression.
+          TITLE=$(jq -r .title pr.json)
+          URL=$(jq -r .url pr.json)
+
+          case "$STATE" in
+            success) EMOJI=":white_check_mark:" WORD="passed" ;;
+            failure) EMOJI=":x:"                WORD="failed" ;;
+            error)   EMOJI=":warning:"          WORD="errored" ;;
+            *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
+          esac
+
+          # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
+          TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
+          # On failure/error, point at the sem-ai triage analysis on the PR
+          # (which itself links the run), when triage actually posted one (it
+          # skips on PASS or backend hiccups). No raw CI-run link on any
+          # outcome — the PR link above is the lead.
+          if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
+            TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+          fi
+
+          # Resolve the member ID to a DM channel with conversations.open
+          # (requires im:write) and post to *that* channel. Passing the bare
+          # member ID as chat.postMessage's `channel` instead returns
+          # `channel_not_found` — the IM has to be opened first. Soft-fail
+          # throughout: never break the build on a Slack hiccup.
+          slack() {
+            # $1 = method, $2 = json body. Echoes the response; never fails.
+            set +e
+            curl -sS --max-time 30 -X POST "https://slack.com/api/$1" \
+              -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+              -H 'Content-Type: application/json; charset=utf-8' \
+              --data-binary "$2"
+            set -e
+          }
+          # jq stderr suppressed: an empty/non-JSON response (Slack unreachable)
+          # just yields ok=false/error=unknown and takes the warning branch.
+          ok()  { printf '%s' "$1" | jq -r '.ok // false'   2>/dev/null; }
+          err() { printf '%s' "$1" | jq -r '.error // "unknown"' 2>/dev/null; }
+
+          OPEN=$(slack conversations.open "$(jq -n --arg u "$SLACK_ID" '{users: $u}')")
+          if [[ "$(ok "$OPEN")" != "true" ]]; then
+            # missing_scope -> bot lacks im:write; user_not_found -> wrong
+            # member ID or wrong workspace for this token. Both surface here
+            # instead of as an opaque channel_not_found from postMessage.
+            echo "::warning::Slack conversations.open failed for $SLACK_ID: $(err "$OPEN")"
+            exit 0
+          fi
+          CHANNEL=$(printf '%s' "$OPEN" | jq -r '.channel.id')
+
+          RESP=$(slack chat.postMessage \
+            "$(jq -n --arg c "$CHANNEL" --arg t "$TEXT" '{channel: $c, text: $t, unfurl_links: false}')")
+          if [[ "$(ok "$RESP")" != "true" ]]; then
+            echo "::warning::Slack DM failed: $(err "$RESP")"
+          else
+            echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
+            echo "sent=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A failed send must release the claim, or a transient Slack outage on
+      # the run that won the race would permanently suppress the
+      # notification for this (sha, state) — no other duplicate event would
+      # retry, since the ref would already exist. Best-effort: a delete
+      # hiccup must never fail the notifier — the DM attempt is already done.
+      - name: Release dedup marker if send failed
+        if: steps.claim.outputs.claimed == 'true' && steps.send.outputs.sent != 'true'
+        continue-on-error: true
+        run: gh api "repos/$REPO/git/refs/ci-notify/${SHA}-${STATE}" --method DELETE
+
+      # Housekeeping: markers are dead weight once the duplicate-event burst
+      # (minutes) has passed, so prune any older than 2 days here rather than
+      # in a separate scheduled workflow — keeps the whole mechanism in this
+      # file and refs/ci-notify/* from growing without bound. Age proxy is
+      # the committer date of the ref's target commit (the marker is created
+      # moments after that commit's CI finishes). Best-effort throughout: a
+      # failed prune must never fail the notifier, and a missed one just
+      # waits for the next run. Duplicate runs may race to delete the same
+      # ref — the loser's 422 is swallowed.
+      - name: Prune stale dedup markers
+        if: steps.claim.outcome == 'success'
+        continue-on-error: true
+        run: |
+          CUTOFF=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$REPO/git/matching-refs/ci-notify/" --paginate \
+            --jq '.[] | "\(.ref) \(.object.sha)"' \
+          | while read -r REF OBJ; do
+              # Never prune this run's own marker: a push can carry an old
+              # committer date (e.g. an untouched branch pushed late), and
+              # deleting our own marker would re-open the dedup window while
+              # duplicate events are still arriving.
+              [[ "$REF" == "refs/ci-notify/${SHA}-${STATE}" ]] && continue
+              DATE=$(gh api "repos/$REPO/commits/$OBJ" --jq .commit.committer.date) || continue
+              # ISO-8601 UTC sorts lexicographically, so '<' compares times.
+              if [[ "$DATE" < "$CUTOFF" ]]; then
+                gh api "repos/$REPO/git/$REF" --method DELETE \
+                  && echo "pruned $REF (target committed $DATE)" \
+                  || echo "::notice::could not prune $REF"
+              fi
+            done

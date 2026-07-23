@@ -521,6 +521,7 @@ func (r *RouteTable) SetRoutes(routeClass RouteClass, ifaceName string, targets 
 
 	// Clean out the pending ARP list, then recalculate it below.
 	delete(r.permanentARPs, ifaceName)
+	r.ifacesToARP.Discard(ifaceName)
 	for routeKey, target := range newTargets {
 		// addOwningIface() calls recalculateDesiredKernelRoute.
 		r.addOwningIface(routeClass, ifaceName, routeKey)
@@ -588,6 +589,7 @@ func (r *RouteTable) updatePermanentARP(ifaceName string, addr ip.Addr, mac net.
 		r.permanentARPs[ifaceName] = map[ip.Addr]net.HardwareAddr{}
 	}
 	r.permanentARPs[ifaceName][addr] = mac
+	r.ifacesToARP.Add(ifaceName)
 }
 
 func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
@@ -598,6 +600,7 @@ func (r *RouteTable) removePermanentARP(ifaceName string, addr ip.Addr) {
 		delete(arps, addr)
 		if len(arps) == 0 {
 			delete(r.permanentARPs, ifaceName)
+			r.ifacesToARP.Discard(ifaceName)
 		}
 	}
 }
@@ -770,13 +773,15 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	kernRoute := kernelRoute{
 		Type:     bestTarget.RouteType(),
 		Scope:    bestTarget.RouteScope(),
-		GW:       bestTarget.GW,
 		Src:      src,
-		Ifindex:  bestIfaceIdx,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: proto,
+		MTU:      bestTarget.MTU,
 	}
 	if len(bestTarget.MultiPath) > 0 {
+		// Note: GW/Ifindex deliberately left unset; the kernel reports
+		// multi-path routes with no top-level OIF (and InterfaceNone maps to
+		// ifindex 1 for IPv6, which would never round-trip).
 		for _, nh := range bestTarget.MultiPath {
 			ifIndex, ok := r.ifaceIndexForName(nh.IfaceName)
 			if !ok {
@@ -790,7 +795,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	} else {
 		kernRoute.GW = bestTarget.GW
 		kernRoute.Ifindex = bestIfaceIdx
-		kernRoute.MTU = bestTarget.MTU
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{
@@ -931,11 +935,11 @@ func (r *RouteTable) attemptApply(attempt int) (err error) {
 }
 
 func (r *RouteTable) maybeCleanUpGracePeriods() {
-	if time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
+	if r.time.Since(r.lastGracePeriodCleanup) < r.routeCleanupGracePeriod {
 		return
 	}
 	for k, v := range r.ifaceIndexToGraceInfo {
-		if time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
+		if r.time.Since(v.FirstSeen) < r.routeCleanupGracePeriod {
 			continue
 		}
 		if _, ok := r.ifaceIndexToName[k]; ok {
@@ -945,6 +949,7 @@ func (r *RouteTable) maybeCleanUpGracePeriods() {
 
 		r.livenessCallback()
 	}
+	r.lastGracePeriodCleanup = r.time.Now()
 }
 
 func (r *RouteTable) maybeResyncWithDataplane() error {
@@ -956,6 +961,7 @@ func (r *RouteTable) maybeResyncWithDataplane() error {
 
 	if r.fullResyncNeeded {
 		// Mark to reprogram static ARP for all interfaces.
+		r.ifacesToARP.Clear()
 		for ifaceName := range r.permanentARPs {
 			r.ifacesToARP.Add(ifaceName)
 		}
@@ -1004,7 +1010,7 @@ func (r *RouteTable) doFullResync(nl netlinkshim.Interface) error {
 			}
 
 			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || !oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
 			seenKeys.Add(routeKey)
@@ -1114,7 +1120,7 @@ func (r *RouteTable) resyncIface(nl netlinkshim.Interface, ifaceName string) err
 			}
 
 			routeKey, kernRoute := r.netlinkRouteToKernelRoute(&scratchRoute)
-			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || oldRoute.Equals(kernRoute) {
+			if oldRoute, ok := r.kernelRoutes.Dataplane().Get(routeKey); !ok || !oldRoute.Equals(kernRoute) {
 				r.kernelRoutes.Dataplane().Set(routeKey, kernRoute)
 			}
 			seenRoutes.Add(routeKey)
@@ -1523,31 +1529,39 @@ func (r *RouteTable) applyUpdates(attempt int) error {
 		return deltatracker.IterActionUpdateDataplane
 	})
 
+	// Program static ARP entries for dirty interfaces.  We iterate ifacesToARP
+	// (the dirty set) rather than permanentARPs (all desired state) since the
+	// dirty set is typically much smaller between resyncs.
+	//
+	// Static ARP entries help in two ways:
+	//
+	// 1. They slightly reduce TTFP (time to first ping) for a new endpoint, by
+	// removing the need for the host kernel to send an ARP request to the
+	// endpoint and to wait for its response.
+	//
+	// 2. They support VMs with a restrictive arp_ignore setting.  For example,
+	// we are aware of OpenStack VMs with arp_ignore set to 2, which means
+	// "reply only if the target IP address is local address configured on the
+	// incoming interface and both with the sender's IP address are part from
+	// same subnet on this interface" - which will never be True for the way
+	// that Calico provisions VM IPs.
+	//
+	// For (2) it is important that Felix maintains the ARP programming for an
+	// interface beyond the point when that interface is first configured.  In
+	// particular, dnsmasq overwrites our ARP programming - with an entry that
+	// is identical to ours, except without the PERMANENT flag - when it
+	// receives a DHCP request from an OpenStack VM and issues its IP address.
+	// Also interface flaps can lose the ARP programming.  In all such cases,
+	// our PERMANENT static ARP programming needs to be reinstated; otherwise
+	// we lose connectivity to VMs with arp_ignore=2.
 	arpErrs := map[string]error{}
-	for ifaceName, addrToMAC := range r.permanentARPs {
-		if !r.ifacesToARP.Contains(ifaceName) {
+	for ifaceName := range r.ifacesToARP.All() {
+		addrToMAC := r.permanentARPs[ifaceName]
+		if len(addrToMAC) == 0 {
+			// Defensive: no ARP entries for this interface, nothing to do.
+			r.ifacesToARP.Discard(ifaceName)
 			continue
 		}
-		// Add static ARP entries (for workload endpoints).  As far as we're aware, this
-		// helps in two ways.
-		//
-		// 1. It slightly reduces the TTFP (time to first ping) for a new endpoint, by
-		// removing the need for the host kernel to send an ARP request to the endpoint and
-		// to wait for its response.
-		//
-		// 2. It supports VMs with a restrictive arp_ignore setting.  For example, we are
-		// aware of OpenStack VMs with arp_ignore set to 2, which means "reply only if the
-		// target IP address is local address configured on the incoming interface and both
-		// with the sender's IP address are part from same subnet on this interface" - which
-		// will never be True for the way that Calico provisions VM IPs.
-		//
-		// For (2) it is important that Felix maintains the ARP programming for an interface
-		// beyond the point when that interface is first configured.  In particular, dnsmasq
-		// overwrites our ARP programming - with an entry that is identical to ours, except
-		// without the PERMANENT flag - when it receives a DHCP request from an OpenStack VM
-		// and issues its IP address.  Also interface flaps can lose the ARP programming.
-		// In all such cases, our PERMANENT static ARP programming needs to be reinstated;
-		// otherwise we lose connectivity to VMs with arp_ignore=2.
 		ifaceIdx, ok := r.ifaceIndexForName(ifaceName)
 		if !ok {
 			// Asked to add ARP entries but the interface isn't known (yet).

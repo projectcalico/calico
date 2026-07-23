@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type GlobalNetworkSetInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.GlobalNetworkSetList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.GlobalNetworkSet, err error)
+	Apply(ctx context.Context, globalNetworkSet *applyconfigurationgeneratedprojectcalicov3.GlobalNetworkSetApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.GlobalNetworkSet, err error)
 	GlobalNetworkSetExpansion
 }
 
 // globalNetworkSets implements GlobalNetworkSetInterface
 type globalNetworkSets struct {
-	*gentype.ClientWithList[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList, *applyconfigurationgeneratedprojectcalicov3.GlobalNetworkSetApplyConfiguration]
 }
 
 // newGlobalNetworkSets returns a GlobalNetworkSets
 func newGlobalNetworkSets(c *ProjectcalicoV3Client) *globalNetworkSets {
 	return &globalNetworkSets{
-		gentype.NewClientWithList[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.GlobalNetworkSet, *projectcalicov3.GlobalNetworkSetList, *applyconfigurationgeneratedprojectcalicov3.GlobalNetworkSetApplyConfiguration](
 			"globalnetworksets",
 			c.RESTClient(),
 			scheme.ParameterCodec,

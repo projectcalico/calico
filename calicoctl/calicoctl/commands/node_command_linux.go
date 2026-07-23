@@ -1,0 +1,128 @@
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package commands
+
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/node"
+)
+
+func newNodeCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "node",
+		Short: "Calico node management",
+		Long: `Manage a Calico node instance. These commands run directly on the compute host
+where the node is running, and cover starting the node, checking its status,
+and gathering diagnostics.`,
+	}
+	cmd.AddCommand(
+		newNodeStatusCommand(),
+		newNodeDiagsCommand(),
+		newNodeChecksystemCommand(),
+		newNodeRunCommand(),
+	)
+	return cmd
+}
+
+func newNodeStatusCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "View the current status of a Calico node",
+		Long: `Show the current status of the Calico node on this host, including uptime and
+BGP peering states. Must be run on the node whose status you want.`,
+		Example: `  calicoctl node status`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return node.Status()
+		},
+	}
+}
+
+func newNodeDiagsCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "diags",
+		Short: "Gather a diagnostics bundle for a Calico node",
+		Long: `Gather a diagnostics bundle from the Calico node on this host. Run it on the
+affected node when troubleshooting a networking problem; it collects logs and
+system information useful for diagnosis.`,
+		Example: `  calicoctl node diags`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			logDir, _ := cmd.Flags().GetString("log-dir")
+			return node.Diags(logDir)
+		},
+	}
+	cmd.Flags().String("log-dir", "/var/log/calico", "The directory containing Calico logs.")
+	return cmd
+}
+
+func newNodeChecksystemCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "checksystem",
+		Short:   "Verify the compute host is able to run a Calico node instance",
+		Long:    `Verify that this host meets the system requirements to run a Calico node instance.`,
+		Example: `  calicoctl node checksystem`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			kernelConfig, _ := cmd.Flags().GetString("kernel-config")
+			return node.Checksystem(kernelConfig)
+		},
+	}
+	cmd.Flags().StringP("kernel-config", "f", "", "Override the Kernel config file location.")
+	return cmd
+}
+
+func newNodeRunCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run the Calico node container image",
+		Long: `Start the Calico node container on this host. Runs the calico/node image with
+the supplied networking options; most options mirror fields on the node
+resource and are autodetected when omitted.`,
+		Example: `  # Start calico/node, autodetecting the IPv4 address.
+  calicoctl node run --ip autodetect --ip-autodetection-method can-reach=8.8.8.8`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := node.RunConfig{}
+			c.IP, _ = cmd.Flags().GetString("ip")
+			c.IP6, _ = cmd.Flags().GetString("ip6")
+			c.AS, _ = cmd.Flags().GetString("as")
+			c.Name, _ = cmd.Flags().GetString("name")
+			c.IPAutodetectionMethod, _ = cmd.Flags().GetString("ip-autodetection-method")
+			c.IP6AutodetectionMethod, _ = cmd.Flags().GetString("ip6-autodetection-method")
+			c.LogDir, _ = cmd.Flags().GetString("log-dir")
+			c.NodeImage, _ = cmd.Flags().GetString("node-image")
+			c.Backend, _ = cmd.Flags().GetString("backend")
+			c.Config, _ = cmd.Flags().GetString("config")
+			c.FelixConfig, _ = cmd.Flags().GetString("felix-config")
+			c.DryRun, _ = cmd.Flags().GetBool("dryrun")
+			c.InitSystem, _ = cmd.Flags().GetBool("init-system")
+			c.NoDefaultIPPools, _ = cmd.Flags().GetBool("no-default-ippools")
+			return node.Run(c)
+		},
+	}
+	cmd.Flags().String("ip", "", "Set the local IPv4 routing address for this node.")
+	cmd.Flags().String("ip6", "", "Set the local IPv6 routing address for this node.")
+	cmd.Flags().String("as", "", "Set the AS number for this node.")
+	cmd.Flags().String("name", "", "The name of the Calico node.")
+	cmd.Flags().String("ip-autodetection-method", "first-found", "Specify the autodetection method for detecting the local IPv4 routing address.")
+	cmd.Flags().String("ip6-autodetection-method", "first-found", "Specify the autodetection method for detecting the local IPv6 routing address.")
+	cmd.Flags().String("log-dir", "/var/log/calico", "The directory containing Calico logs.")
+	cmd.Flags().String("node-image", "quay.io/calico/node:latest", "Docker image to use for Calico's per-node container.")
+	cmd.Flags().String("backend", "bird", "Specify which networking backend to use (bird|none).")
+	cmd.Flags().Bool("dryrun", false, "Output the appropriate command, without starting the container.")
+	cmd.Flags().Bool("init-system", false, "Run the appropriate command to use with an init system.")
+	cmd.Flags().Bool("no-default-ippools", false, "Do not create default pools upon startup.")
+	cmd.Flags().String("felix-config", "", "Path to the file containing Felix configuration.")
+	addConfigFlag(cmd)
+	return cmd
+}

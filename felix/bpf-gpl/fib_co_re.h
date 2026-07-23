@@ -75,6 +75,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 		goto deny;
 	}
 
+	CALI_DEBUG("forward_or_drop fib %d", fwd_fib(&ctx->state->fwd));
+	CALI_DEBUG("forward_or_drop mark 0x%x", ctx->state->fwd.mark);
+	CALI_DEBUG("forward_or_drop state flags 0x%llx", state->flags);
+
 	if (!bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
 		if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK && ctx->state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL) {
 			/* needs to go via routing in netfilter unless we have access
@@ -87,7 +91,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct cali_tc_ctx *ctx)
 	}
 
 #ifndef IPVER6
-        if ((CALI_F_FROM_HOST || CALI_F_FROM_WEP) && (ctx->state->flags & CALI_ST_FIRST_FRAG)) {
+        if (ctx->state->ip_proto != IPPROTO_ICMP_46 && ctx->state->flags & CALI_ST_FIRST_FRAG) {
 		/* Revalidate the access to the packet */
 		if (skb_refresh_validate_ptrs(ctx, UDP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);
@@ -192,6 +196,10 @@ skip_redir_ifindex:
 
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
+			__u32 __fib_ifindex = ctx->skb->ifindex;
+			if (CALI_F_FROM_WEP && ctx->globals->data.host_ifindex) {
+				__fib_ifindex = ctx->globals->data.host_ifindex;
+			}
 			*fib_params(ctx) = (struct bpf_fib_lookup) {
 #ifdef IPVER6
 				.family = 10, /* AF_INET6 */
@@ -199,12 +207,21 @@ skip_redir_ifindex:
 				.family = 2, /* AF_INET */
 #endif
 				.tot_len = 0,
-				.ifindex = ctx->skb->ifindex,
+				.ifindex = __fib_ifindex,
 				.l4_protocol = state->ip_proto,
 			};
 
+			/* Only reply traffic of an external client hitting a local
+			 * service must carry EXT_TO_SVC_MARK into the FIB lookup so
+			 * the RPDB routes it back the way the request arrived. For
+			 * ordinary pod-originated egress the mark must stay 0 so a
+			 * host source-based routing rule (e.g. AWS VPC CNI's per-pod
+			 * rule) selects the pod's own interface. */
 			if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
-				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK &&
+						(state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL)) {
+					fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				}
 			}
 
 #ifdef IPVER6
@@ -237,14 +254,19 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
+			ipv6_addr_t local_ip_copy = CALI_CONFIGURABLE(host_tunnel_ip);
+			if (ip_void(local_ip_copy)) {
+				local_ip_copy = CALI_CONFIGURABLE(host_ip);
+			}
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &local_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
-			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			key.local_ipv4 = ip_void(HOST_TUNNEL_IP) ? bpf_htonl(HOST_IP) : bpf_htonl(HOST_TUNNEL_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
-			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
+			size = sizeof(struct bpf_tunnel_key);
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
@@ -284,14 +306,19 @@ skip_redir_ifindex:
 			__u64 flags = 0;
 			__u32 size = 0;
 #ifdef IPVER6
+			ipv6_addr_t local_ip_copy = CALI_CONFIGURABLE(host_tunnel_ip);
+			if (ip_void(local_ip_copy)) {
+				local_ip_copy = CALI_CONFIGURABLE(host_ip);
+			}
 			ipv6_addr_t_to_be32_4_ip(key.remote_ipv6, &dest_rt->next_hop);
+			ipv6_addr_t_to_be32_4_ip(key.local_ipv6, &local_ip_copy);
 			flags |= BPF_F_TUNINFO_IPV6;
-			size = offsetof(struct bpf_tunnel_key, local_ipv6);
 #else
 			key.remote_ipv4 = bpf_htonl(dest_rt->next_hop);
+			key.local_ipv4 = ip_void(HOST_TUNNEL_IP) ? bpf_htonl(HOST_IP) : bpf_htonl(HOST_TUNNEL_IP);
 			flags |= BPF_F_ZERO_CSUM_TX;
-			size = offsetof(struct bpf_tunnel_key, local_ipv4);
 #endif
+			size = sizeof(struct bpf_tunnel_key);
 
 			int err = bpf_skb_set_tunnel_key(ctx->skb, &key, size, flags);
 			CALI_DEBUG("bpf_skb_set_tunnel_key %d nh " IP_FMT, err, &dest_rt->next_hop);
@@ -365,9 +392,15 @@ try_fib_external:
 			.l4_protocol = state->ip_proto,
 		};
 
+		/* See the note above the matching guard in the local-dest path:
+		 * only external-client-to-local-service reply traffic gets the
+		 * mark; ordinary pod egress leaves it 0 for host source routing. */
 		if (bpf_core_field_exists(((struct bpf_fib_lookup *)0)->mark)) {
-			fib_params(ctx)->mark = EXT_TO_SVC_MARK;
-			CALI_DEBUG("FIB mark=0x%d", fib_params(ctx)->mark);
+			if (CALI_F_FROM_WEP && EXT_TO_SVC_MARK &&
+					(state->ct_result.flags & CALI_CT_FLAG_EXT_LOCAL)) {
+				fib_params(ctx)->mark = EXT_TO_SVC_MARK;
+				CALI_DEBUG("FIB mark=0x%x", fib_params(ctx)->mark);
+			}
 		}
 
 		if (state->ip_proto != IPPROTO_ICMP_46) {
@@ -573,7 +606,11 @@ deny:
 	rc = TC_ACT_SHOT;
 
 allow:
-	if (CALI_LOG_LEVEL_INFO >= CALI_LOG_LEVEL_INFO || PROFILING) {
+	if (CALI_F_VXLAN && CALI_F_TO_HOST && rc != TC_ACT_SHOT) {
+		bpf_skb_change_type(ctx->skb, PACKET_HOST);
+	}
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO || PROFILING) {
 		__u64 prog_end_time = bpf_ktime_get_ns();
 
 		if (PROFILING) {
@@ -587,9 +624,6 @@ allow:
 			CALI_INFO("Final result=DENY (%d). Program execution time: %lluns",
 					ctx->state->fwd.reason, prog_end_time-state->prog_start_time);
 		} else {
-			if (CALI_F_VXLAN && CALI_F_TO_HOST) {
-				bpf_skb_change_type(ctx->skb, PACKET_HOST);
-			}
 			CALI_INFO("Final result=ALLOW rc %d. Program execution time: %lluns",
 					rc, prog_end_time-state->prog_start_time);
 		}

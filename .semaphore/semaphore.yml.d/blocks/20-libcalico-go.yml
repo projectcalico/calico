@@ -6,7 +6,7 @@
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "libcalico-go"
+        value: "calico"
     prologue:
       commands:
         - cd libcalico-go
@@ -15,16 +15,11 @@
       - name: "libcalico-go: CI (crd.projectcalico.org/v1)"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
-        env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
 
       - name: "libcalico-go: CI (projectcalico.org/v3)"
         commands:
           - ../.semaphore/run-and-monitor make-ci.log make ci
         env_vars:
-          - name: STORE_BUILD_CACHE
-            value: "true"
           - name: CALICO_API_GROUP
             value: projectcalico.org/v3
           - name: GINKGO_SKIP

@@ -153,7 +153,9 @@ func (m *streamManager) Run(ctx context.Context) {
 		case req := <-m.streamRequests:
 			stream := m.register(req)
 			req.respCh <- stream
-			m.backfillRequests <- stream
+			if stream != nil {
+				m.backfillRequests <- stream
+			}
 		case id := <-m.closedStreamsCh:
 			m.unregister(id)
 		case <-ctx.Done():

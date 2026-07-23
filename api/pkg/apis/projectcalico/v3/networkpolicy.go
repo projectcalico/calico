@@ -28,7 +28,7 @@ const (
 // NetworkPolicyList is a list of Policy objects.
 type NetworkPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []NetworkPolicy `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -47,6 +47,8 @@ type NetworkPolicy struct {
 	Spec NetworkPolicySpec `json:"spec" protobuf:"bytes,2,opt,name=spec"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.selector) || !self.selector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')",message="global() can only be used in an EntityRule namespaceSelector",reason=FieldValueInvalid
 type NetworkPolicySpec struct {
 	// The name of the tier that this policy belongs to.  If this is omitted, the default
 	// tier (name is "default") is assumed.  The specified tier must exist in order to create
@@ -64,11 +66,15 @@ type NetworkPolicySpec struct {
 	Order *float64 `json:"order,omitempty"`
 
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
+	// +kubebuilder:validation:MaxItems=1024
+	// +listType=atomic
 	Ingress []Rule `json:"ingress,omitempty" validate:"omitempty,dive"`
 
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
+	// +kubebuilder:validation:MaxItems=1024
+	// +listType=atomic
 	Egress []Rule `json:"egress,omitempty" validate:"omitempty,dive"`
 
 	// The selector is an expression used to pick out the endpoints that the policy should
@@ -96,6 +102,7 @@ type NetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
+	// +kubebuilder:validation:MaxLength=1024
 	Selector string `json:"selector,omitempty" validate:"selector"`
 
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
@@ -115,9 +122,10 @@ type NetworkPolicySpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=2
 	// +listType=set
-	Types []PolicyType `json:"types,omitempty" validate:"omitempty,dive,policyType"`
+	Types []PolicyType `json:"types,omitempty"`
 
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
+	// +kubebuilder:validation:MaxLength=1024
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// PerformanceHints contains a list of hints to Calico's policy engine to
@@ -130,6 +138,7 @@ type NetworkPolicySpec struct {
 	// any large static policies that are known to be used on every node.
 	// If the policy is _not_ used on a particular node then the work
 	// done to preload the policy (and to maintain it) is wasted.
+	// +listType=set
 	PerformanceHints []PolicyPerformanceHint `json:"performanceHints,omitempty" validate:"omitempty,unique,dive,oneof=AssumeNeededOnEveryNode"`
 }
 

@@ -181,7 +181,7 @@ var _ = Describe("Health timeouts", func() {
 			Expect(aggregator.Summary().Live).To(BeTrue())
 			Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
 				"+-----------+---------+----------------+-----------------+----------------+",
-				"| COMPONENT | TIMEOUT |    LIVENESS    |    READINESS    |     DETAIL     |",
+				"| COMPONENT | TIMEOUT | LIVENESS       | READINESS       | DETAIL         |",
 				"+-----------+---------+----------------+-----------------+----------------+",
 				"| source1   | 100ms   | -              | reporting ready |                |",
 				"| source2   | -       | reporting live | reporting ready | but very busy! |",
@@ -217,7 +217,7 @@ var _ = Describe("Health timeouts", func() {
 				Expect(aggregator.Summary().Live).To(BeTrue())
 				Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
 					"+-----------+------------------+----------------+-----------------+----------------+",
-					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
+					"| COMPONENT | TIMEOUT          | LIVENESS       | READINESS       | DETAIL         |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | reporting ready |                |",
 					"| source2   | -                | reporting live | reporting ready | but very busy! |",
@@ -230,7 +230,7 @@ var _ = Describe("Health timeouts", func() {
 				Expect(aggregator.Summary().Live).To(BeTrue())
 				Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
 					"+-----------+------------------+----------------+-----------------+----------------+",
-					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
+					"| COMPONENT | TIMEOUT          | LIVENESS       | READINESS       | DETAIL         |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | reporting ready |                |",
 					"| source2   | -                | reporting live | reporting ready | but very busy! |",
@@ -243,7 +243,7 @@ var _ = Describe("Health timeouts", func() {
 				Expect(aggregator.Summary().Live).To(BeTrue())
 				Expect(aggregator.Summary().Detail).To(Equal(strings.Join([]string{
 					"+-----------+------------------+----------------+-----------------+----------------+",
-					"| COMPONENT |     TIMEOUT      |    LIVENESS    |    READINESS    |     DETAIL     |",
+					"| COMPONENT | TIMEOUT          | LIVENESS       | READINESS       | DETAIL         |",
 					"+-----------+------------------+----------------+-----------------+----------------+",
 					"| source1   | 300ms (override) | -              | timed out       |                |",
 					"| source2   | -                | reporting live | reporting ready | but very busy! |",

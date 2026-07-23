@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type BGPConfigurationInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.BGPConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.BGPConfiguration, err error)
+	Apply(ctx context.Context, bGPConfiguration *applyconfigurationgeneratedprojectcalicov3.BGPConfigurationApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.BGPConfiguration, err error)
 	BGPConfigurationExpansion
 }
 
 // bGPConfigurations implements BGPConfigurationInterface
 type bGPConfigurations struct {
-	*gentype.ClientWithList[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList, *applyconfigurationgeneratedprojectcalicov3.BGPConfigurationApplyConfiguration]
 }
 
 // newBGPConfigurations returns a BGPConfigurations
 func newBGPConfigurations(c *ProjectcalicoV3Client) *bGPConfigurations {
 	return &bGPConfigurations{
-		gentype.NewClientWithList[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.BGPConfiguration, *projectcalicov3.BGPConfigurationList, *applyconfigurationgeneratedprojectcalicov3.BGPConfigurationApplyConfiguration](
 			"bgpconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,

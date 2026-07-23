@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -2644,7 +2645,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.0.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         cidr,
+					CIDR:         model.PrefixFromIPNet(cidr),
 					Host:         nodename,
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -2658,7 +2659,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			cidr := net.MustParseCIDR("10.0.1.0/26")
 			kvp := model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         cidr,
+					CIDR:         model.PrefixFromIPNet(cidr),
 					Host:         "othernode",
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -2995,9 +2996,9 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(getNode.Value.(*internalapi.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 		})
 
-		By("Syncing HostIPs over the Syncer", func() {
+		By("Syncing the Node over the Syncer", func() {
 			expectExist := []api.Update{
-				{KVPair: model.KVPair{Key: model.HostIPKey{Hostname: nodeHostname}}, UpdateType: api.UpdateTypeKVUpdated},
+				{KVPair: model.KVPair{Key: model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}}, UpdateType: api.UpdateTypeKVUpdated},
 			}
 
 			// Expect the snapshot to include the right keys.
@@ -3014,7 +3015,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			snapshotSyncer.Start()
 
 			expectNotExist := []model.KVPair{
-				{Key: model.HostIPKey{Hostname: nodeHostname}},
+				{Key: model.ResourceKey{Name: nodeHostname, Kind: internalapi.KindNode}},
 			}
 
 			// Expect the snapshot to have not received the update.
@@ -3819,7 +3820,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block affinity.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockAffinityKey{
-					CIDR:         net.MustParseCIDR("10.0.0.0/26"),
+					CIDR:         netip.MustParsePrefix("10.0.0.0/26"),
 					Host:         "test-hostname",
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
@@ -3854,7 +3855,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			// Create a block.
 			_, err = c.Create(ctx, &model.KVPair{
 				Key: model.BlockKey{
-					CIDR: net.MustParseCIDR("10.0.0.0/26"),
+					CIDR: netip.MustParsePrefix("10.0.0.0/26"),
 				},
 				Value: &model.AllocationBlock{
 					Affinity:    nil,
@@ -3994,6 +3995,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			kvpRes.Value.(*model.IPAMConfig).MaxBlocksPerHost = 1000
+			kvpRes.Value.(*model.IPAMConfig).IPCooldownSeconds = 120
 
 			kvpRes, err = c.Update(ctx, kvpRes)
 			Expect(err).NotTo(HaveOccurred())
@@ -4004,6 +4006,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.MaxBlocksPerHost).To(Equal(int32(1000)))
+			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).Spec.IPCooldownSeconds).To(Equal(int32(120)))
 			Expect(kvpRes.Value.(*apiv3.IPAMConfiguration).CreationTimestamp).To(Equal(createdAt))
 		})
 

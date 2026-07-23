@@ -89,9 +89,8 @@ func ConfigureLogging(configParams *config.Config) {
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := max(logLevelFile, logLevelScreen)
-	if logLevelSyslog > mostVerboseLevel {
-		mostVerboseLevel = logLevelScreen
-	}
+	mostVerboseLevel = max(logLevelSyslog, mostVerboseLevel)
+
 	// Disable all more-verbose levels using the global setting, this ensures that debug logs
 	// are filtered out as early as possible.
 	log.SetLevel(mostVerboseLevel)

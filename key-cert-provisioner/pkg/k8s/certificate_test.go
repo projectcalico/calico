@@ -48,7 +48,7 @@ var _ = Describe("Test Certificates", func() {
 	)
 
 	BeforeEach(func() {
-		clientset = fake.NewSimpleClientset()
+		clientset = fake.NewClientset()
 		config = &cfg.Config{
 			Signer:    signer,
 			CSRName:   csrName,

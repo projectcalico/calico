@@ -15,6 +15,8 @@
 package daemon
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
@@ -171,3 +173,127 @@ func discoverTyphaAddrs(params *config.Config, sClient *fake.Clientset) ([]disco
 	disc := createTyphaDiscoverer(params, sClient)
 	return disc.LoadTyphaAddrs()
 }
+
+var _ = Describe("applyBPFOverrides", func() {
+	var configParams *config.Config
+
+	bpfSupported := func() error { return nil }
+	bpfNotSupported := func() error { return fmt.Errorf("BPF not supported") }
+
+	BeforeEach(func() {
+		configParams = config.New()
+	})
+
+	It("should be a no-op when BPF is not enabled", func() {
+		// IPForwarding defaults to Enabled; set to Disabled to detect unwanted override.
+		_, err := configParams.UpdateFrom(map[string]string{
+			"IPForwarding": "Disabled",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.BPFEnabled).To(BeFalse())
+		Expect(configParams.IPForwarding).To(Equal("Disabled"))
+	})
+
+	It("should disable BPF when not supported by kernel", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled": "true",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfNotSupported)
+
+		Expect(configParams.BPFEnabled).To(BeFalse())
+	})
+
+	It("should override BPFConntrackCleanupMode to Userspace", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled": "true",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.BPFConntrackCleanupMode).To(Equal("Userspace"))
+	})
+
+	It("should override BPFRedirectToPeer from L2Only to Enabled", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":        "true",
+			"BPFRedirectToPeer": "L2Only",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.BPFRedirectToPeer).To(Equal("Enabled"))
+	})
+
+	It("should not override BPFRedirectToPeer when not L2Only", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":        "true",
+			"BPFRedirectToPeer": "Disabled",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.BPFRedirectToPeer).To(Equal("Disabled"))
+	})
+
+	It("should force IPForwarding to Enabled when Disabled with RPF enabled", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":    "true",
+			"IPForwarding":  "Disabled",
+			"BPFEnforceRPF": "Strict",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.IPForwarding).To(Equal("Enabled"))
+	})
+
+	It("should not force IPForwarding when RPF is Disabled", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":    "true",
+			"IPForwarding":  "Disabled",
+			"BPFEnforceRPF": "Disabled",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.IPForwarding).To(Equal("Disabled"))
+	})
+
+	It("should not override IPForwarding when already Enabled", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":   "true",
+			"IPForwarding": "Enabled",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfSupported)
+
+		Expect(configParams.IPForwarding).To(Equal("Enabled"))
+	})
+
+	It("should not apply other overrides when BPF is not supported", func() {
+		_, err := configParams.UpdateFrom(map[string]string{
+			"BPFEnabled":        "true",
+			"IPForwarding":      "Disabled",
+			"BPFRedirectToPeer": "L2Only",
+		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
+
+		applyBPFOverrides(configParams, bpfNotSupported)
+
+		// BPF disabled, but no other overrides should have been applied.
+		Expect(configParams.BPFEnabled).To(BeFalse())
+		Expect(configParams.IPForwarding).To(Equal("Disabled"))
+		Expect(configParams.BPFRedirectToPeer).To(Equal("L2Only"))
+	})
+})

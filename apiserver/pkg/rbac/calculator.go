@@ -40,13 +40,14 @@ import (
 type Verb string
 
 const (
-	VerbGet    Verb = "get"
-	VerbList   Verb = "list"
-	VerbUpdate Verb = "update"
-	VerbCreate Verb = "create"
-	VerbPatch  Verb = "patch"
-	VerbDelete Verb = "delete"
-	VerbWatch  Verb = "watch"
+	VerbGet              Verb = "get"
+	VerbList             Verb = "list"
+	VerbUpdate           Verb = "update"
+	VerbCreate           Verb = "create"
+	VerbPatch            Verb = "patch"
+	VerbDelete           Verb = "delete"
+	VerbDeleteCollection Verb = "deletecollection"
+	VerbWatch            Verb = "watch"
 )
 
 const (
@@ -59,7 +60,7 @@ const (
 )
 
 var AllVerbs = []Verb{
-	VerbGet, VerbList, VerbUpdate, VerbCreate, VerbPatch, VerbDelete, VerbWatch,
+	VerbGet, VerbList, VerbUpdate, VerbCreate, VerbPatch, VerbDelete, VerbDeleteCollection, VerbWatch,
 }
 
 // Calculator provides methods to determine RBAC permissions for a user.

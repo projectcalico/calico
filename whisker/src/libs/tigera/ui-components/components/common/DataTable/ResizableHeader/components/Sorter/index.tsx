@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, useColorModeValue } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import {
     TableAscendingSortIcon,
     TableSortIcon,
@@ -13,29 +13,23 @@ interface SorterProps {
 const Sorter: React.FC<React.PropsWithChildren<SorterProps>> = ({
     isActive,
     isDescending,
-}) => {
-    const activeColor = useColorModeValue(
-        'tigeraBlueMedium40',
-        'tigeraGoldMedium',
-    );
-    const inactiveColor = useColorModeValue('tigeraGrey.600', 'tigeraGrey.400');
-
-    return (
-        <Box
-            as={
-                !isActive
-                    ? TableSortIcon
-                    : isDescending
-                      ? TableSortIcon
-                      : TableAscendingSortIcon
-            }
-            fill={isActive ? activeColor : inactiveColor}
-            style={{
-                marginLeft: '4px',
-                ...(!isActive && { transform: 'scaleY(1)' }),
-            }}
-        />
-    );
-};
+}) => (
+    <Box
+        as={
+            !isActive
+                ? TableSortIcon
+                : isDescending
+                  ? TableSortIcon
+                  : TableAscendingSortIcon
+        }
+        sx={{
+            fill: isActive
+                ? 'experimental-token-bg-brand-accent'
+                : 'experimental-color-neutral.300',
+            marginLeft: '4px',
+            ...(!isActive && { transform: 'scaleY(1)' }),
+        }}
+    />
+);
 
 export default Sorter;

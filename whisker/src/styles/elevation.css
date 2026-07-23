@@ -1,0 +1,47 @@
+@theme {
+    /**
+   * Elevation tokens are used to represent how containers are layered on top of each other.
+   *
+   * References:
+   * - https://atlassian.design/foundations/elevation
+   * - https://designsystem.backbase.com/latest/design-tokens/semantic-colors/background-colors-mLRqePLh#search-242c855f-4858-4e29-b05e-310db7945eebJ
+   */
+
+    --color-tigera-token-elevation-sunken: var(--color-tigera-color-neutral-50);
+    --color-tigera-token-elevation-page: var(--color-tigera-color-neutral-0);
+    --color-tigera-token-elevation-surface: var(--color-tigera-color-neutral-0);
+    --color-tigera-token-elevation-surface-shadow: 0px 0px 8px
+        rgba(20, 20, 20, 0.05);
+
+    --color-tigera-token-elevation-overlay: var(--color-tigera-color-neutral-0);
+    --color-tigera-token-elevation-overlay-shadow: 0px 0px 8px
+        rgba(20, 20, 20, 0.1);
+
+    --color-tigera-token-elevation-overlay-inverted: var(
+        --color-tigera-color-neutral-1100
+    );
+}
+
+.dark {
+    --color-tigera-token-elevation-sunken: var(
+        --color-tigera-color-neutral-1200
+    );
+    --color-tigera-token-elevation-page: var(--color-tigera-color-neutral-1100);
+
+    --color-tigera-token-elevation-surface: var(
+        --color-tigera-color-neutral-1000
+    );
+
+    --color-tigera-token-elevation-surface-shadow: 0px 0px 8px
+        rgba(37, 38, 39, 0.1);
+
+    --color-tigera-token-elevation-overlay: var(
+        --color-tigera-color-neutral-1000
+    );
+    --color-tigera-token-elevation-overlay-shadow: 0px 0px 8px
+        rgba(37, 38, 39, 0.1);
+
+    --color-tigera-token-elevation-overlay-inverted: var(
+        --color-tigera-color-medium-gold-200
+    );
+}

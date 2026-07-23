@@ -68,24 +68,6 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 				}
 			}
 
-			switch k := update.Key.(type) {
-			case model.NodeKey:
-				// TODO: This should be in its own filter.
-				// Special case: we can't serialize Node keys but Felix only cares
-				// about the host metadata anyway.  Extract the Host IP.
-				update.Key = model.HostIPKey(k)
-				if update.Value != nil {
-					node, ok := update.Value.(*model.Node)
-					if ok {
-						update.Value = node.FelixIPv4
-					} else {
-						logCxt.WithField("value", update.Value).Warn(
-							"NodeKey value wasn't a *Node; treating as missing")
-						update.Value = nil
-					}
-				}
-			}
-
 			switch v := update.Value.(type) {
 			case *model.WorkloadEndpoint:
 				if v.Name == "" {

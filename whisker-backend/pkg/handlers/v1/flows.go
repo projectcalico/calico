@@ -18,8 +18,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
@@ -55,7 +53,9 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	logger := ctx.Logger()
 	logger.Debug("List flows called.")
 
-	logrus.WithField("filter", params.Filters).Debug("Applying filters.")
+	// Do not log filter objects or flow objects — they may contain user identifiers and
+	// flow metadata that could be a bulk-exfil vector.
+	logger.Debug("Applying filters.")
 
 	filter := toProtoFilter(params.Filters)
 	if params.Watch {
@@ -68,7 +68,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 
 		flowStream, err := hdlr.flowCli.Stream(ctx, flowReq)
 		if err != nil {
-			logger.WithError(err).Error("failed to stream flows")
+			logger.Error("failed to stream flows", "error", err)
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
@@ -80,11 +80,11 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 						logger.Debug("EOF received, breaking stream.")
 						return
 					} else if err != nil {
-						logger.WithError(err).Error("Failed to stream flows.")
+						logger.Error("Failed to stream flows.", "error", err)
 						break
 					}
 
-					logrus.WithField("flow", flow).Debug("Received flow from stream.")
+					logger.Debug("Received flow from stream.")
 					if !yield(protoToFlow(flow.Flow)) {
 						return
 					}
@@ -102,7 +102,7 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 
 		meta, flows, err := hdlr.flowCli.List(ctx, flowReq)
 		if err != nil {
-			logger.WithError(err).Error("failed to list flows")
+			logger.Error("failed to list flows", "error", err)
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
@@ -131,7 +131,7 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 
 	hintsMeta, gmhints, err := hdlr.flowCli.FilterHints(ctx, req)
 	if err != nil {
-		logger.WithError(err).Error("failed to list filter hints")
+		logger.Error("failed to list filter hints", "error", err)
 		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
 			SetStatus(http.StatusInternalServerError).
 			SetError("Internal Server Error")

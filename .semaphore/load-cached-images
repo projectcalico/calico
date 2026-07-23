@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Load pre-built Docker images from GCS cache, if available.
+# Touch marker files so Make skips rebuilding.
+
+set -euo pipefail
+
+ARCH=${ARCH:-amd64}
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+load_image() {
+    local name=$1
+    local gcs_path=$2
+    local marker=$3
+
+    if ! gcloud storage cp "${GCS_WORKFLOW_DIR}/${gcs_path}" "/tmp/${gcs_path}" 2>/dev/null; then
+        echo "No cached ${name} image found, will build from source."
+        return
+    fi
+
+    echo "Loading cached ${name} image..."
+    local tar_path="/tmp/${gcs_path%.zst}"
+    zstd -d --rm -o "${tar_path}" "/tmp/${gcs_path}"
+    docker load -i "${tar_path}"
+    rm -f "${tar_path}"
+
+    if [ -n "$marker" ]; then
+        mkdir -p "$(dirname "$marker")"
+        touch "$marker"
+    fi
+}
+
+load_image "calico/calico"  "calico-image.tar.zst"  "${REPO_ROOT}/cmd/calico/.image.created-${ARCH}"
+load_image "calico/node"    "node-image.tar.zst"    "${REPO_ROOT}/node/.image.created-${ARCH}"
+load_image "calico/whisker" "whisker-image.tar.zst" "${REPO_ROOT}/whisker/.image.created-${ARCH}"

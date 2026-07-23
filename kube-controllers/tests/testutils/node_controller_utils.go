@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ func RunNodeController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfil
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
 		"-v", fmt.Sprintf("%s:/admin.pem", admin),
 		"-v", fmt.Sprintf("%s:/admin-key.pem", adminKey),
-		os.Getenv("CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
 }
 
 func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile string, env map[string]string) *containers.Container {
@@ -76,7 +76,7 @@ func RunKubeControllerWithEnv(datastoreType apiconfig.DatastoreType, etcdIP, kco
 		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-v", fmt.Sprintf("%s:%s", kconfigfile, kconfigfile),
-		os.Getenv("CONTAINER_NAME"))
+		os.Getenv("CONTAINER_NAME"), "component", "kube-controllers")
 
 	return containers.Run("calico-kube-controllers",
 		containers.RunOpts{AutoRemove: true},
@@ -96,7 +96,7 @@ func ExpectNodeLabels(c client.Interface, labels map[string]string, node string)
 	return nil
 }
 
-func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[string]string, expectedIPs, expectedProfiles []string, interfaceName string) error {
+func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels, expectedAnnotations map[string]string, expectedIPs, expectedProfiles []string, interfaceName string) error {
 	hep, err := c.HostEndpoints().Get(context.Background(), hepName, options.GetOptions{})
 	if err != nil {
 		return err
@@ -106,11 +106,17 @@ func ExpectHostendpoint(c client.Interface, hepName string, expectedLabels map[s
 		return fmt.Errorf("interfaceName does not match. Expected: %q, Actual: %q", interfaceName, hep.Spec.InterfaceName)
 	}
 	if len(hep.Spec.Ports) > 0 {
-		return fmt.Errorf("expected ports to be empty. Actual: %q", hep.Spec.Ports)
+		return fmt.Errorf("expected ports to be empty. Actual: %v", hep.Spec.Ports)
 	}
 
 	if !reflect.DeepEqual(hep.Labels, expectedLabels) {
 		s := fmt.Sprintf("labels do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedLabels, hep.Labels)
+		logrus.Warn(s)
+		return errors.New(s)
+	}
+
+	if !reflect.DeepEqual(hep.Annotations, expectedAnnotations) {
+		s := fmt.Sprintf("annotations do not match.\n\nExpected: %#v\n  Actual: %#v\n", expectedAnnotations, hep.Annotations)
 		logrus.Warn(s)
 		return errors.New(s)
 	}

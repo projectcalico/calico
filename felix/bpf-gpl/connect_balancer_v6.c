@@ -25,12 +25,8 @@
 
 #undef debug_ip
 
-#ifdef BPF_CORE_SUPPORTED
 #define IP_FMT "[%pI6]"
 #define debug_ip(ip) (&(ip))
-#else
-#define debug_ip(ip) (bpf_htonl((ip)[3]))
-#endif
 
 SEC("cgroup/connect6")
 int calico_connect_v6(struct bpf_sock_addr *ctx)

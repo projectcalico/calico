@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type StagedKubernetesNetworkPolicyInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.StagedKubernetesNetworkPolicyList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
+	Apply(ctx context.Context, stagedKubernetesNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedKubernetesNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedKubernetesNetworkPolicy, err error)
 	StagedKubernetesNetworkPolicyExpansion
 }
 
 // stagedKubernetesNetworkPolicies implements StagedKubernetesNetworkPolicyInterface
 type stagedKubernetesNetworkPolicies struct {
-	*gentype.ClientWithList[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.StagedKubernetesNetworkPolicyApplyConfiguration]
 }
 
 // newStagedKubernetesNetworkPolicies returns a StagedKubernetesNetworkPolicies
 func newStagedKubernetesNetworkPolicies(c *ProjectcalicoV3Client, namespace string) *stagedKubernetesNetworkPolicies {
 	return &stagedKubernetesNetworkPolicies{
-		gentype.NewClientWithList[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.StagedKubernetesNetworkPolicy, *projectcalicov3.StagedKubernetesNetworkPolicyList, *applyconfigurationgeneratedprojectcalicov3.StagedKubernetesNetworkPolicyApplyConfiguration](
 			"stagedkubernetesnetworkpolicies",
 			c.RESTClient(),
 			scheme.ParameterCodec,

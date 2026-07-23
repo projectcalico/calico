@@ -1,0 +1,96 @@
+# Connectivity test workloads for migration testing. A client pod continuously
+# probes the server pod via a Service. After migration, we check the client's
+# logs for any probe failures — there should be zero packet loss since the
+# dataplane state is cached while the datastore is locked.
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: migration-test
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  namespace: migration-test
+  labels:
+    app: migration-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: migration-server
+  template:
+    metadata:
+      labels:
+        app: migration-server
+    spec:
+      containers:
+      - name: server
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          mkdir -p /www
+          echo "ok" > /www/index.html
+          httpd -f -p 8080 -h /www
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 2
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  namespace: migration-test
+spec:
+  selector:
+    app: migration-server
+  ports:
+  - port: 80
+    targetPort: 8080
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client
+  namespace: migration-test
+  labels:
+    app: migration-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: migration-client
+  template:
+    metadata:
+      labels:
+        app: migration-client
+    spec:
+      containers:
+      - name: client
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "PROBE_START $(date +%s)"
+          while true; do
+            ts=$(date +%s)
+            if wget -q -T 2 -O /dev/null http://server.migration-test.svc.cluster.local 2>/dev/null; then
+              echo "PROBE_OK $ts"
+            else
+              echo "PROBE_FAIL $ts"
+            fi
+            sleep 1
+          done

@@ -7,7 +7,7 @@ exports[`<Tabs/> it renders 1`] = `
   >
     <div
       aria-orientation="horizontal"
-      class="chakra-tabs__tablist css-3qqir2"
+      class="chakra-tabs__tablist css-8fgait"
       role="tablist"
     >
       <a
@@ -64,7 +64,7 @@ exports[`<Tabs/> it renders 1`] = `
     >
       <div
         aria-labelledby="tabs-_r_0_--tab-0"
-        class="chakra-tabs__tab-panel css-18ruvq3"
+        class="chakra-tabs__tab-panel css-cbbbo5"
         data-testid="tabs-tab-panel"
         hidden=""
         id="tabs-_r_0_--tabpanel-0"
@@ -73,7 +73,7 @@ exports[`<Tabs/> it renders 1`] = `
       />
       <div
         aria-labelledby="tabs-_r_0_--tab-1"
-        class="chakra-tabs__tab-panel css-18ruvq3"
+        class="chakra-tabs__tab-panel css-cbbbo5"
         data-testid="tabs-tab-panel"
         hidden=""
         id="tabs-_r_0_--tabpanel-1"
@@ -82,7 +82,7 @@ exports[`<Tabs/> it renders 1`] = `
       />
       <div
         aria-labelledby="tabs-_r_0_--tab-2"
-        class="chakra-tabs__tab-panel css-18ruvq3"
+        class="chakra-tabs__tab-panel css-cbbbo5"
         data-testid="tabs-tab-panel"
         id="tabs-_r_0_--tabpanel-2"
         role="tabpanel"

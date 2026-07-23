@@ -17,6 +17,7 @@ type RowProps = {
     handleCheckboxKey: ({ keyCode }: any, cell: any) => void;
     style?: any;
     onClick?: (row: RowType) => void;
+    isLast?: boolean;
 };
 
 export const Row: React.FC<RowProps> = ({
@@ -31,9 +32,11 @@ export const Row: React.FC<RowProps> = ({
     handleCheckboxKey,
     style = {},
     onClick,
+    isLast,
 }) => {
     const isRowChecked =
         checkedRows && checkedRows.includes(row.original[keyProp]);
+
     return (
         <Tr
             as='div'
@@ -52,21 +55,34 @@ export const Row: React.FC<RowProps> = ({
             }}
             data-expanded={row.isExpanded}
             sx={{
-                _hover: row.isExpanded
-                    ? {
-                          color: 'tigeraBlack',
-                          bg: 'tigeraBlueMedium',
-                      }
-                    : {
-                          color: 'tigeraBlack',
-                          bg: 'tigera-color-table-row-hover',
-                      },
+                _hover: {
+                    bg: 'experimental-token-bg-neutral-subtle:hovered',
+                },
+                _active: {
+                    bg: 'experimental-token-bg-neutral-subtle:pressed',
+                },
                 cursor: has(row, 'isExpanded') ? 'pointer' : 'cursor',
-                bg: row.isExpanded
-                    ? 'tigera-color-table-row-expanded !important'
-                    : isRowChecked
-                      ? 'tigeraBlueLight'
-                      : 'tigera-color-table-row',
+                bg: 'experimental-token-bg-neutral-subtle',
+
+                ...(isRowChecked && {
+                    bg: 'experimental-token-bg-brand-subtle',
+                    _hover: {
+                        bg: 'experimental-token-bg-brand-subtle:hovered',
+                    },
+                    _active: {
+                        bg: 'experimental-token-bg-brand-subtle:pressed',
+                    },
+                }),
+                ...(row.isExpanded && {
+                    color: 'experimental-token-on-table-selected',
+                    _hover: {
+                        bg: 'experimental-token-table-selected:hovered',
+                    },
+                    _active: {
+                        bg: 'experimental-token-table-selected:pressed',
+                    },
+                    bg: 'experimental-token-table-selected',
+                }),
                 ...(hasFixedHeader && index === 0
                     ? {
                           mt: 8, // this positions first row under fixed header
@@ -115,6 +131,9 @@ export const Row: React.FC<RowProps> = ({
                                   }),
                             ...(cell.column?.id === EXPANDO_COLUMN_ID && {
                                 pr: 0,
+                            }),
+                            ...(isLast && {
+                                borderBottom: 'none',
                             }),
                         }}
                         {...(isFirstExpandoCell && {

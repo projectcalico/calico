@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Jiawei Huang <jiawei@tigera.io>
+Date: Thu, 13 Mar 2026 00:00:00 +0000
+Subject: [PATCH] Fix pointer slice append in IPAMBlockSpec Allocations
+
+applyconfiguration-gen incorrectly dereferences pointer arguments for []*int
+fields. Allocations is []*int, so appending *values[i] produces an int, not
+*int. The fix is to append values[i] directly.
+
+TODO: This is the same []*int issue that 0001 works around for controller-gen.
+We should update applyconfiguration-gen to handle []*int properly itself.
+---
+ api/pkg/client/applyconfiguration_generated/projectcalico/v3/ipamblockspec.go | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/ipamblockspec.go b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/ipamblockspec.go
+--- a/api/pkg/client/applyconfiguration_generated/projectcalico/v3/ipamblockspec.go
++++ b/api/pkg/client/applyconfiguration_generated/projectcalico/v3/ipamblockspec.go
+@@ -85,7 +85,7 @@
+ 		if values[i] == nil {
+ 			panic("nil value passed to WithAllocations")
+ 		}
+-		b.Allocations = append(b.Allocations, *values[i])
++		b.Allocations = append(b.Allocations, values[i])
+ 	}
+ 	return b
+ }
+--
+2.34.1
+

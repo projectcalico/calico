@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,13 +45,14 @@ type MockDataplane struct {
 	activeVTEPs                    map[string]types.VXLANTunnelEndpointUpdate
 	activeWireguardEndpoints       map[string]types.WireguardEndpointUpdate
 	activeWireguardV6Endpoints     map[string]types.WireguardEndpointV6Update
-	activeHostMetadataV4V6         map[string]*proto.HostMetadataV4V6Update
+	activeHostMetadata             map[string]*proto.HostMetadataUpdate
 	activeRoutes                   set.Set[types.RouteUpdate]
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
 	endpointToAllPolicyIDs         map[string][]types.PolicyID
 	endpointToProfiles             map[string][]string
+	endpointToLiveMigrationRole    map[string]proto.LiveMigrationRole
 	serviceAccounts                map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	namespaces                     map[types.NamespaceID]*proto.NamespaceUpdate
 	config                         map[string]string
@@ -158,12 +159,12 @@ func (d *MockDataplane) ActiveWireguardV6Endpoints() set.Set[types.WireguardEndp
 	return cp
 }
 
-func (d *MockDataplane) ActiveHostMetadataV4V6() map[string]*proto.HostMetadataV4V6Update {
+func (d *MockDataplane) ActiveHostMetadata() map[string]*proto.HostMetadataUpdate {
 	d.Lock()
 	defer d.Unlock()
 
-	cp := make(map[string]*proto.HostMetadataV4V6Update)
-	for _, v := range d.activeHostMetadataV4V6 {
+	cp := make(map[string]*proto.HostMetadataUpdate)
+	for _, v := range d.activeHostMetadata {
 		cp[v.Hostname] = v
 	}
 
@@ -188,6 +189,13 @@ func (d *MockDataplane) EndpointToProfiles() map[string][]string {
 	}
 
 	return epToProfCopy
+}
+
+func (d *MockDataplane) EndpointToLiveMigrationRole() map[string]proto.LiveMigrationRole {
+	d.Lock()
+	defer d.Unlock()
+
+	return maps.Clone(d.endpointToLiveMigrationRole)
 }
 
 func (d *MockDataplane) EndpointToPolicyOrder() map[string][]TierInfo {
@@ -279,11 +287,12 @@ func NewMockDataplane() *MockDataplane {
 		activeVTEPs:                    make(map[string]types.VXLANTunnelEndpointUpdate),
 		activeWireguardEndpoints:       make(map[string]types.WireguardEndpointUpdate),
 		activeWireguardV6Endpoints:     make(map[string]types.WireguardEndpointV6Update),
-		activeHostMetadataV4V6:         make(map[string]*proto.HostMetadataV4V6Update),
+		activeHostMetadata:             make(map[string]*proto.HostMetadataUpdate),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
 		endpointToProfiles:             make(map[string][]string),
+		endpointToLiveMigrationRole:    make(map[string]proto.LiveMigrationRole),
 		endpointToAllPolicyIDs:         make(map[string][]types.PolicyID),
 		serviceAccounts:                make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
 		namespaces:                     make(map[types.NamespaceID]*proto.NamespaceUpdate),
@@ -418,12 +427,18 @@ func (d *MockDataplane) OnEvent(event any) {
 					"update %v to be active", profID, event))
 		}
 		d.endpointToProfiles[id.String()] = event.Endpoint.ProfileIds
+		if event.Endpoint.LiveMigrationRole != proto.LiveMigrationRole_NO_ROLE {
+			d.endpointToLiveMigrationRole[id.String()] = event.Endpoint.LiveMigrationRole
+		} else {
+			delete(d.endpointToLiveMigrationRole, id.String())
+		}
 	case *proto.WorkloadEndpointRemove:
 		id := workloadId(types.ProtoToWorkloadEndpointID(event.GetId()))
 		delete(d.endpointToPolicyOrder, id.String())
 		delete(d.endpointToUntrackedPolicyOrder, id.String())
 		delete(d.endpointToPreDNATPolicyOrder, id.String())
 		delete(d.endpointToProfiles, id.String())
+		delete(d.endpointToLiveMigrationRole, id.String())
 		delete(d.endpointToAllPolicyIDs, id.String())
 	case *proto.HostEndpointUpdate:
 		tiers := event.Endpoint.Tiers
@@ -500,11 +515,11 @@ func (d *MockDataplane) OnEvent(event any) {
 		delete(d.activeWireguardV6Endpoints, event.Hostname)
 	case *proto.Encapsulation:
 		d.encapsulation = event
-	case *proto.HostMetadataV4V6Update:
-		d.activeHostMetadataV4V6[event.Hostname] = event
-	case *proto.HostMetadataV4V6Remove:
-		Expect(d.activeHostMetadataV4V6).To(HaveKey(event.Hostname), "delete for unknown HostmetadataV4V6")
-		delete(d.activeHostMetadataV4V6, event.Hostname)
+	case *proto.HostMetadataUpdate:
+		d.activeHostMetadata[event.Hostname] = event
+	case *proto.HostMetadataRemove:
+		Expect(d.activeHostMetadata).To(HaveKey(event.Hostname), "delete for unknown HostMetadata")
+		delete(d.activeHostMetadata, event.Hostname)
 	}
 }
 

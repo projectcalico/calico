@@ -20,24 +20,19 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"time"
 
-	"github.com/docopt/docopt-go"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/loadbalancer"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -45,98 +40,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
-
-// IPAM takes keyword with an IP address then calls the subcommands.
-func Check(args []string, version string) error {
-	doc := constants.DatastoreIntro + `Usage:
-  <BINARY_NAME> ipam check [--config=<CONFIG>] [--show-all-ips] [--show-problem-ips] [-o <FILE>] [--kubeconfig <KUBECONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -o --output=<FILE>           Path to output report file.
-     --show-all-ips            Print all IPs that are checked.
-     --show-problem-ips        Print all IPs that are leaked or not allocated properly.
-  -c --config=<CONFIG>         Path to the file containing connection configuration in
-                               YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --kubeconfig=<KUBECONFIG> Path to Kubeconfig file
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  The ipam check command checks the integrity of the IPAM datastructures against Kubernetes.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, version)
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-
-	// Create a new backend client from env vars.
-	cf := parsedArgs["--config"].(string)
-	client, err := clientmgr.NewClient(cf)
-	if err != nil {
-		return err
-	}
-
-	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc := client.(accessor).Backend()
-
-	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
-	// Otherwise, we need to build one ourselves.
-	var kubeClient *kubernetes.Clientset
-	if kc, ok := bc.(*k8s.KubeClient); ok {
-		// Pull from the kdd client.
-		kubeClient = kc.ClientSet
-	} else {
-		kubeConfigPath := os.Getenv("KUBECONFIG")
-
-		if parsedArgs["--kubeconfig"] != nil {
-			kubeConfigPath = parsedArgs["--kubeconfig"].(string)
-		}
-
-		if kubeConfigPath == "" {
-			return fmt.Errorf("KUBECONFIG environment variable or --kubeconfig parameter not set")
-		}
-
-		kubeConfig, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
-		if err != nil {
-			return err
-		}
-
-		kubeClient, err = kubernetes.NewForConfig(kubeConfig)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Pull out CLI args.
-	showAllIPs := parsedArgs["--show-all-ips"].(bool)
-	showProblemIPs := showAllIPs || parsedArgs["--show-problem-ips"].(bool)
-	outFile := ""
-	if arg := parsedArgs["--output"]; arg != nil {
-		outFile = arg.(string)
-	}
-
-	// Build the checker.
-	checker := NewIPAMChecker(kubeClient, client, bc, showAllIPs, showProblemIPs, outFile, version)
-	return checker.checkIPAM(ctx)
-}
 
 func NewIPAMChecker(k8sClient kubernetes.Interface,
 	v3Client clientv3.Interface,
@@ -190,7 +93,7 @@ type IPAMChecker struct {
 	outFile string
 }
 
-func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
+func (c *IPAMChecker) CheckIPAM(ctx context.Context) error {
 	fmt.Println("Checking IPAM for inconsistencies...")
 	fmt.Println()
 
@@ -205,9 +108,11 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 	c.clusterGUID = clusterInfo.Spec.ClusterGUID
 
 	var numAllocs int
+	var blocks *model.KVPairList
 	{
 		fmt.Println("Loading all IPAM blocks...")
-		blocks, err := c.backendClient.List(ctx, model.BlockListOptions{}, "")
+		var err error
+		blocks, err = c.backendClient.List(ctx, model.BlockListOptions{}, "")
 		if err != nil {
 			return fmt.Errorf("failed to list IPAM blocks: %w", err)
 		}
@@ -374,6 +279,18 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 		fmt.Printf("Scanning for IPs that are allocated but not actually in use...\n")
 		for ip, allocs := range c.allocations {
 			if _, ok := c.inUseIPs[ip]; !ok {
+				// If the IP is in a cooldown state, do not report it as a problem/leak.
+				coolingDown := false
+				for _, alloc := range allocs {
+					if alloc.CoolingDown {
+						coolingDown = true
+						break
+					}
+				}
+				if coolingDown {
+					continue
+				}
+
 				if c.showProblemIPs {
 					for _, alloc := range allocs {
 						fmt.Printf("  %s leaked; attrs %v\n", ip, alloc.GetAttrString())
@@ -466,6 +383,20 @@ func (c *IPAMChecker) checkIPAM(ctx context.Context) error {
 		fmt.Printf("Found %d handles mentioned in blocks with no matching handle resource.\n", len(missingHandles))
 	}
 
+	var invalidBlocks []string
+	{
+		fmt.Printf("Validating IPAMBlock structures...\n")
+		for _, kvp := range blocks.KVPairs {
+			b := kvp.Value.(*model.AllocationBlock)
+			if err := validateBlock(b); err != nil {
+				fmt.Printf("  IPAMBlock %s is invalid: %s\n", kvp.Key, err)
+				numProblems++
+				invalidBlocks = append(invalidBlocks, kvp.Key.String())
+			}
+		}
+		fmt.Printf("Found %d invalid IPAMBlocks.\n", len(invalidBlocks))
+	}
+
 	fmt.Printf("Check complete; found %d problems.\n", numProblems)
 
 	if c.outFile != "" {
@@ -488,7 +419,56 @@ func getWEPIPs(w internalapi.WorkloadEndpoint) ([]string, error) {
 	return ips, nil
 }
 
-type Report struct {
+func validateBlock(b *model.AllocationBlock) error {
+	// Check that all non-nil Allocations point to valid attributes.
+	seenAttribs := set.New[int]()
+	seenOrdinals := set.New[int]()
+	var o int
+	for o = 0; o < b.NumAddresses(); o++ {
+		if b.Allocations[o] == nil {
+			continue
+		}
+		attrIdx := *b.Allocations[o]
+		if attrIdx < 0 || attrIdx >= len(b.Attributes) {
+			return fmt.Errorf("allocation %d indexes a nonexistent attribute %d", o, attrIdx)
+		}
+		seenAttribs.Add(attrIdx)
+		seenOrdinals.Add(o)
+	}
+
+	// Check that all attributes are pointed to
+	for i := range b.Attributes {
+		if !seenAttribs.Contains(i) {
+			return fmt.Errorf("attribute index %d exists but is not indexed by an allocation", i)
+		}
+		releasedAt := b.Attributes[i].ReleasedAt
+		if releasedAt != nil && releasedAt.After(time.Now()) {
+			return fmt.Errorf("attribute index %d has releasedAt in the future, suggesting clock skew", i)
+		}
+	}
+
+	// Check that all unallocated ordinals are unique and not seen.
+	for i, o := range b.Unallocated {
+		if o < 0 || o >= len(b.Allocations) {
+			return fmt.Errorf("ordinal %d appears in the Unallocated array but is out of the block", o)
+		}
+		if slices.Contains(b.Unallocated[:i], o) {
+			return fmt.Errorf("ordinal %d appears more than once in Unallocated array", o)
+		}
+		if seenOrdinals.Contains(o) {
+			return fmt.Errorf("ordinal %d is allocated but appears in Unallocated", o)
+		}
+	}
+
+	if len(b.Unallocated)+seenOrdinals.Len() != b.NumAddresses() {
+		return fmt.Errorf("expected %d addresses in this block, but Unallocated (%d) + Allocated (%d) = %d",
+			b.NumAddresses(), len(b.Unallocated), seenOrdinals.Len(), len(b.Unallocated)+seenOrdinals.Len())
+	}
+
+	return nil
+}
+
+type CheckReport struct {
 	// Version of the code that produced the report.
 	Version string `json:"version"`
 
@@ -504,7 +484,7 @@ type Report struct {
 }
 
 func (c *IPAMChecker) printReport() {
-	r := Report{
+	r := CheckReport{
 		Version:             c.version,
 		ClusterGUID:         c.clusterGUID,
 		ClusterType:         c.clusterType,
@@ -541,6 +521,12 @@ func (c *IPAMChecker) recordAllocation(b *model.AllocationBlock, ord int) {
 		} else if attrs.HandleID != nil {
 			alloc.Handle = *attrs.HandleID
 			c.recordInUseHandle(alloc.Handle)
+		}
+		if attrs.ReleasedAt != nil {
+			// Record this as cooling down. We do not have access
+			// to the IPAMConfig here to determine if this could
+			// be deallocated at this time.
+			alloc.CoolingDown = true
 		}
 		if n := attrs.ActiveOwnerAttrs["node"]; n != "" {
 			node = n
@@ -669,6 +655,9 @@ type Allocation struct {
 
 	// Borrowed is true if this IP is from a block that is not affine to the node.
 	Borrowed bool `json:"borrowed,omitempty"`
+
+	// CoolingDown is true if this IP is still allocatd but in its cooldown period.
+	CoolingDown bool `json:"coolingDown,omitempty"`
 
 	// List of objects which are using this IP.
 	Owners []string `json:"owners"`

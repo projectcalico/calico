@@ -343,6 +343,16 @@ func (m matchCriteria) OutInterfaceVMAP(mapname string) generictables.MatchCrite
 	return m
 }
 
+func (m matchCriteria) ARPOperation(op string) generictables.MatchCriteria {
+	log.Panic("ARPOperation not supported in iptables")
+	return m
+}
+
+func (m matchCriteria) ARPSrcIP(ip string) generictables.MatchCriteria {
+	log.Panic("ARPSrcIP not supported in iptables")
+	return m
+}
+
 func PortsToMultiport(ports []uint16) string {
 	portFragments := make([]string, len(ports))
 	for i, port := range ports {

@@ -6,10 +6,6 @@
 #define __CALI_FIB_H__
 
 #include "fib_common.h"
-#ifdef BPF_CORE_SUPPORTED
 #include "fib_co_re.h"
-#else
-#include "fib_legacy.h"
-#endif
 
 #endif /* __CALI_FIB_H__ */

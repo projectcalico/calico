@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -33,18 +34,21 @@ type KubeControllersConfigurationInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.KubeControllersConfigurationList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.KubeControllersConfiguration, err error)
+	Apply(ctx context.Context, kubeControllersConfiguration *applyconfigurationgeneratedprojectcalicov3.KubeControllersConfigurationApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.KubeControllersConfiguration, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, kubeControllersConfiguration *applyconfigurationgeneratedprojectcalicov3.KubeControllersConfigurationApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.KubeControllersConfiguration, err error)
 	KubeControllersConfigurationExpansion
 }
 
 // kubeControllersConfigurations implements KubeControllersConfigurationInterface
 type kubeControllersConfigurations struct {
-	*gentype.ClientWithList[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList, *applyconfigurationgeneratedprojectcalicov3.KubeControllersConfigurationApplyConfiguration]
 }
 
 // newKubeControllersConfigurations returns a KubeControllersConfigurations
 func newKubeControllersConfigurations(c *ProjectcalicoV3Client) *kubeControllersConfigurations {
 	return &kubeControllersConfigurations{
-		gentype.NewClientWithList[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.KubeControllersConfiguration, *projectcalicov3.KubeControllersConfigurationList, *applyconfigurationgeneratedprojectcalicov3.KubeControllersConfigurationApplyConfiguration](
 			"kubecontrollersconfigurations",
 			c.RESTClient(),
 			scheme.ParameterCodec,

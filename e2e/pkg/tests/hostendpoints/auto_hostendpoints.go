@@ -149,8 +149,8 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 		ginkgo.Context("with policies in place", func() {
 			var checker conncheck.ConnectionTester
-			var server *conncheck.Server
-			var cliHostNet *conncheck.Client
+			var server conncheck.Server
+			var cliHostNet conncheck.Client
 
 			ginkgo.BeforeEach(func() {
 				checker = conncheck.NewConnectionTester(f)
@@ -241,7 +241,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			})
 
 			ginkgo.Context("with egress policy", func() {
-				var clientPod *conncheck.Client
+				var clientPod conncheck.Client
 
 				ginkgo.BeforeEach(func() {
 					clientNode := getNodeHostname(nodes.Items[1])
@@ -313,6 +313,15 @@ func updateHostEndpointConfig(client ctrlclient.Client, desiredKCC v3.KubeContro
 		err := client.Get(context.Background(), types.NamespacedName{Name: "default"}, &currentKCC)
 		if err != nil {
 			return err
+		}
+		if currentKCC.Status.RunningConfig == nil {
+			return fmt.Errorf("status.runningConfig is nil")
+		}
+		if currentKCC.Status.RunningConfig.Controllers.Node == nil {
+			return fmt.Errorf("status.runningConfig.controllers.node is nil")
+		}
+		if currentKCC.Status.RunningConfig.Controllers.Node.HostEndpoint == nil {
+			return fmt.Errorf("status.runningConfig.controllers.node.hostEndpoint is nil")
 		}
 
 		// Check if the current configuration matches the desired configuration.

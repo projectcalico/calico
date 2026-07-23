@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeIPPools implements IPPoolInterface
 type fakeIPPools struct {
-	*gentype.FakeClientWithList[*v3.IPPool, *v3.IPPoolList]
+	*gentype.FakeClientWithListAndApply[*v3.IPPool, *v3.IPPoolList, *projectcalicov3.IPPoolApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeIPPools(fake *FakeProjectcalicoV3) projectcalicov3.IPPoolInterface {
+func newFakeIPPools(fake *FakeProjectcalicoV3) typedprojectcalicov3.IPPoolInterface {
 	return &fakeIPPools{
-		gentype.NewFakeClientWithList[*v3.IPPool, *v3.IPPoolList](
+		gentype.NewFakeClientWithListAndApply[*v3.IPPool, *v3.IPPoolList, *projectcalicov3.IPPoolApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("ippools"),

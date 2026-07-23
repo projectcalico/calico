@@ -30,7 +30,6 @@ consolidationLoop:
 		select {
 		case nextUpdate := <-channel:
 			batch = append(batch, nextUpdate)
-			i++
 		case <-wait:
 			break consolidationLoop
 		}

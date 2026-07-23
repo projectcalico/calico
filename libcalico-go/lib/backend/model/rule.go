@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -128,7 +128,11 @@ func (r Rule) AllNotDstNets() []*net.IPNet {
 func joinNets(nets []*net.IPNet) string {
 	parts := make([]string, len(nets))
 	for i, n := range nets {
-		parts[i] = n.String()
+		if n == nil {
+			parts[i] = "<nil>"
+		} else {
+			parts[i] = n.String()
+		}
 	}
 	return strings.Join(parts, ",")
 }

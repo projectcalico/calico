@@ -65,17 +65,7 @@ func Run(ctx context.Context, cfg config.Config, proxyTargets []server.Target) {
 		logrus.WithError(err).Fatal("Failed to create server")
 	}
 
-	health, err := server.NewHealth()
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create health server")
-	}
-
-	go func() {
-		// Health checks start, meaning everything before has worked.
-		if err = health.ListenAndServeHTTP(); err != nil {
-			logrus.WithError(err).Fatal("Health exited with error")
-		}
-	}()
+	server.NewHealthAggregator(cfg.HealthEnabled, cfg.HealthPort)
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

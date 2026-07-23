@@ -24,7 +24,7 @@ from oslo_config import cfg
 
 from oslo_log import log
 
-from networking_calico.plugins.calico.context import SGRUpdateContext
+from networking_calico.plugins.calico.context import SGUpdateContext
 
 
 LOG = log.getLogger(__name__)
@@ -65,6 +65,17 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
                 cfg.CONF.ml2.extension_drivers + ["qos"],
                 group="ml2",
             )
+
+        # Calico's QoS support requires Neutron's 'qos' service plugin to be loaded.
+        # Add to whatever the operator has configured rather than forcing the whole
+        # list, since deployments often need other service plugins (segments, trunk,
+        # log, etc.).  Neutron loads core_plugin first and then iterates
+        # cfg.CONF.service_plugins to load the rest, so an override here is honoured for
+        # the subsequent load.
+        LOG.info("Add 'qos' to service_plugins, if not already present")
+        existing_service_plugins = cfg.CONF.service_plugins or []
+        if "qos" not in existing_service_plugins:
+            cfg.CONF.set_override("service_plugins", existing_service_plugins + ["qos"])
 
         # This is a bit of a hack to get the models_v2.Port attributes setup in such
         # a way as to avoid tracebacks in the neutron-server log.
@@ -158,7 +169,7 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
     def create_security_group_rule(self, context, security_group_rule):
         rule = super().create_security_group_rule(context, security_group_rule)
         sgids = [rule["security_group_id"]]
-        self._notify_sg_rule_updated(context, sgids)
+        self._notify_sg_update(context, sgids)
         return rule
 
     def create_security_group_rule_bulk(self, context, security_group_rules):
@@ -166,15 +177,27 @@ class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
             context, security_group_rules
         )
         sgids = set([r["security_group_id"] for r in rules])
-        self._notify_sg_rule_updated(context, list(sgids))
+        self._notify_sg_update(context, list(sgids))
         return rules
 
     def delete_security_group_rule(self, context, sgrid):
         rule = self.get_security_group_rule(context, sgrid)
         super().delete_security_group_rule(context, sgrid)
-        self._notify_sg_rule_updated(context, [rule["security_group_id"]])
+        self._notify_sg_update(context, [rule["security_group_id"]])
 
-    def _notify_sg_rule_updated(self, context, sgids):
+    def delete_security_group(self, context, id):
+        # Neutron's ``delete_security_group`` drops the SG row directly and relies on
+        # the DB-level cascade to remove its rules, rather than iterating
+        # ``delete_security_group_rule`` per rule.  So the rule-level override above
+        # does NOT fire during an SG delete, and the driver would otherwise miss the
+        # signal.  Notify here, after ``super()`` has removed the SG from the DB:
+        # ``sync_sgs_to_etcd`` re-reads from the Neutron DB, sees no SG with this id,
+        # and takes its CAS-protected delete branch to drop the corresponding
+        # NetworkPolicy from etcd.
+        super().delete_security_group(context, id)
+        self._notify_sg_update(context, [id])
+
+    def _notify_sg_update(self, context, sgids):
         self.mechanism_manager._call_on_drivers(
-            "security_groups_rule_updated", SGRUpdateContext(context, sgids)
+            "security_groups_updated", SGUpdateContext(context, sgids)
         )

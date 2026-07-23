@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,35 @@ var features = map[string]bool{
 	"Pods":            true,
 	"QoS":             true,
 	"Datapath":        true,
+	"Istio":           true,
+	"KubeVirt":        true,
+}
+
+// RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
+// actual QEMU-backed VMs. Tests with this label require a guest OS that boots
+// and runs services (e.g., TCP servers via cloud-init) and cannot run against
+// MockVirt/simulated KubeVirt on KIND clusters.
+func RequiresRealKubeVirt() any {
+	return framework.WithLabel("RequiresRealKubeVirt")
+}
+
+// RequiresMockVirt marks tests that can only run on clusters with MockVirt
+// (simulated KubeVirt). These tests use MockVirt-specific infrastructure such
+// as local Docker containers for eBGP peering and only validate ICMP-level
+// connectivity (no guest OS). Exclude on real KubeVirt clusters via the
+// RequiresMockVirt label in the test config.
+func RequiresMockVirt() any {
+	return framework.WithLabel("RequiresMockVirt")
+}
+
+// RequiresCalicoAPIServer marks tests that depend on the aggregated Calico API
+// server (calico-apiserver) being deployed. In v3 CRD mode, Calico resources
+// are served directly by the K8s CRD controller, and GET/LIST/WATCH requests
+// bypass tier RBAC entirely because the admission webhook only covers mutating
+// operations. These tests verify read-path tier RBAC enforcement, which only
+// works when the aggregated API server is handling requests.
+func RequiresCalicoAPIServer() any {
+	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
@@ -84,6 +113,22 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed
+// in the cluster. These tests read flow logs via the Whisker API, which requires
+// the Goldmane flow aggregation backend. Skip on clusters without Goldmane
+// via --ginkgo.skip=RequiresGoldmane.
+func RequiresGoldmane() any {
+	return framework.WithLabel("RequiresGoldmane")
+}
+
+// RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
+// routing mechanism. These tests disable the mesh and expect connectivity to break, which
+// only works when there's no other routing path (e.g., VXLAN). Skip these on VXLAN clusters
+// via --ginkgo.skip=RequiresBGPMesh.
+func RequiresBGPMesh() any {
+	return framework.WithLabel("RequiresBGPMesh")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
@@ -92,25 +137,36 @@ func WithFeature(feature string) any {
 	return framework.WithLabel(fmt.Sprintf("Feature:%s", feature))
 }
 
+// WithNoTierPrefix marks tests that use bare policy names (without tier prefix).
+// This naming style is only supported in v3.32+. Older branches should skip
+// these tests via -skip=NoTierPrefix.
+func WithNoTierPrefix() any {
+	return framework.WithLabel("NoTierPrefix")
+}
+
 // WithWindows marks tests that can run on clusters with Windows nodes.
 func WithWindows() any {
 	return framework.WithLabel("RunsOnWindows")
 }
 
-// WithAzure marks tests that must run on Azure.
-func WithAzure() any {
-	return framework.WithLabel("RunsOnAzure")
+// RequiresAzure marks tests that can only run on Azure.
+func RequiresAzure() any {
+	return framework.WithLabel("RequiresAzure")
 }
 
-// WithAWS marks tests that must run on AWS.
-func WithAWS() any {
-	return framework.WithLabel("RunsOnAWS")
+// RequiresAWS marks tests that can only run on AWS.
+func RequiresAWS() any {
+	return framework.WithLabel("RequiresAWS")
 }
 
 // WithExternalNode marks tests that require an external node outside of the base cluster,
 // and additional configuration passed to the e2e code in order to run commands on that node.
 func WithExternalNode() any {
 	return framework.WithLabel("ExternalNode")
+}
+
+func RequiresExternalNode() any {
+	return framework.WithLabel("RequiresExternalNode")
 }
 
 // RequiresAzureIPAM marks tests that require a cluster with Azure IPAM.
@@ -126,6 +182,14 @@ func RequiresRKE2() any {
 // RequiresRKE marks tests that require RHEL nodes.
 func RequiresRHEL() any {
 	return framework.WithLabel("RunsOnRHEL")
+}
+
+// RequiresXtables marks tests that only work on xtables-based dataplanes
+// (iptables or nftables). These tests exercise behavior that doesn't exist
+// on BPF or VPP dataplanes. Exclude on BPF clusters via the RequiresXtables
+// label in the test config.
+func RequiresXtables() any {
+	return framework.WithLabel("RequiresXtables")
 }
 
 // WithSmokeTest marks tests that are considered smoke tests.

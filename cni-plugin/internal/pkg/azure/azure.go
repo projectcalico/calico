@@ -30,7 +30,8 @@ func MutateConfigAdd(args *skel.CmdArgs, network AzureNetwork) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Updated CNI network configuration for Azure Add: %#v", stdinData)
+	// Don't log the entire stdinData here because it may contain sensitive information
+	logrus.WithField("subnet", network.Subnets[0]).Info("Updated CNI network configuration for Azure Add")
 	return nil
 }
 
@@ -67,6 +68,10 @@ func MutateConfigDel(args *skel.CmdArgs, network AzureNetwork, endpoint AzureEnd
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Updated CNI network configuration for Azure Del: %#v", stdinData)
+	// Don't log the entire stdinData here because it may contain sensitive information
+	logrus.WithFields(logrus.Fields{
+		"subnet":    network.Subnets[0],
+		"ipAddress": splits[0],
+	}).Info("Updated CNI network configuration for Azure Del")
 	return nil
 }

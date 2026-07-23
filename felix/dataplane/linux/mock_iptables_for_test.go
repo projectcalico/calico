@@ -91,7 +91,7 @@ func (t *mockTable) checkChainsSameAsBefore() {
 	msg.WriteString("Unexpected chain:\n\n %+v\n\n Expected chains:\n\n")
 	for _, chain := range t.expectedChains {
 		log.WithField("chain", *chain).Debug("")
-		msg.WriteString(fmt.Sprintf(" %+v\n", *chain))
+		fmt.Fprintf(&msg, " %+v\n", *chain)
 	}
 
 	// Check each current chain is as expected.

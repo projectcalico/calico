@@ -30,7 +30,7 @@ const (
 // HostEndpointList is a list of HostEndpoint objects.
 type HostEndpointList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []HostEndpoint `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -50,8 +50,11 @@ type HostEndpoint struct {
 }
 
 // HostEndpointSpec contains the specification for a HostEndpoint resource.
+// +kubebuilder:validation:XValidation:rule="(has(self.interfaceName) && size(self.interfaceName) > 0) || (has(self.expectedIPs) && size(self.expectedIPs) > 0)",message="at least one of interfaceName or expectedIPs must be specified",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="has(self.node) && size(self.node) > 0",message="node must be specified",reason=FieldValueInvalid
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
+	// +kubebuilder:validation:MaxLength=253
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
 
 	// Either "*", or the name of a specific Linux interface to apply policy to; or empty.  "*"
@@ -68,6 +71,7 @@ type HostEndpointSpec struct {
 	//
 	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
 	// pre-DNAT policy.  Please check Calico documentation for the latest position.
+	// +kubebuilder:validation:MaxLength=15
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
 
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
@@ -89,6 +93,7 @@ type HostEndpointSpec struct {
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
+	// +listType=atomic
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
 }
 
@@ -96,7 +101,7 @@ type EndpointPort struct {
 	Name     string               `json:"name" validate:"portName"`
 	Protocol numorstring.Protocol `json:"protocol"`
 
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Port uint16 `json:"port" validate:"gt=0"`
 }

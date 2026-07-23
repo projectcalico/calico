@@ -26,12 +26,23 @@ echo "Detected parent branch: $parent_branch"
 file_list=$(mktemp)
 trap "rm -f $file_list" EXIT
 
-git diff -z --name-only --diff-filter=d --merge-base "$parent_branch" -- . | \
+# Collect files changed vs the parent branch...
+git diff -z --name-only --diff-filter=d --merge-base "$parent_branch" -- . > $file_list || true
+# ...and also any files that are dirty in the working tree (e.g. regenerated
+# by a previous build step like "make protobuf").
+git diff -z --name-only --diff-filter=d -- . >> $file_list || true
+
+# De-duplicate (sort -uz works with NUL-delimited input), filter to .go files,
+# and exclude vendored code.
+sorted_list=$(mktemp)
+trap "rm -f $file_list $sorted_list" EXIT
+sort -uz < $file_list | \
   grep -z -v -e '^vendor/' -e '^third_party/' | \
-  grep -z '\.go$' > $file_list || {
+  grep -z '\.go$' > $sorted_list || {
     echo "No files to format.";
     exit 0;
 }
+mv $sorted_list $file_list
 
 # Print the files we plan to change.
 echo "Formatting changed files:"
@@ -41,9 +52,9 @@ pushd "$repo_dir" > /dev/null
 
 # Run extra copy of goimports first to coalesce multiple single-line imports
 # into blocks.
-xargs -0 goimports -w -local github.com/projectcalico/calico/ < $file_list
+xargs -0 go tool goimports -w -local github.com/projectcalico/calico/ < $file_list
 # Coalesce imports then removes whitespace within blocks.
 xargs -0 go run ./hack/cmd/coalesce-imports -w < $file_list
 # Finally run goimports again to insert only the desired whitespace.
-xargs -0 goimports -w -local github.com/projectcalico/calico/ < $file_list
+xargs -0 go tool goimports -w -local github.com/projectcalico/calico/ < $file_list
 popd > /dev/null

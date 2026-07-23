@@ -40,6 +40,10 @@ blocks:
   - name: Openshift OCP
     dependencies: []
     task:
+      agent:
+        machine:
+          type: f1-standard-2
+          os_image: ubuntu2204
       jobs:
         - name: hashrelease
           execution_time_limit:
@@ -205,6 +209,10 @@ blocks:
           matrix:
             - env_var: MANIFEST_FILE
               values: ["calico.yaml", "calico-typha.yaml"]
+          env_vars:
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
         - name: etcd
           execution_time_limit:
             hours: 7
@@ -216,7 +224,7 @@ blocks:
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
       env_vars:
         - name: K8S_VERSION
           value: "stable-1" # Normally this would be stable, but kind doesn't always support stable immediately
@@ -332,6 +340,9 @@ blocks:
               value: "true"
             - name: PROVISIONER
               value: "gcp-kubeadm"
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
 
   - name: k8s distros
     dependencies: []
@@ -626,7 +637,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: CNI_PLUGIN
-              value: aws
+              value: AmazonVPC
 
         - name: kdd (Calico CNI)
           execution_time_limit:
@@ -635,7 +646,7 @@ blocks:
             - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
           env_vars:
             - name: CNI_PLUGIN
-              value: calico
+              value: Calico
             # Skipping these upstream k8s tests since they are failing because of limitations of Calico CNI on EKS:
             # - [IT] "Proxy version v1 A set of valid responses are returned for both pod and service Proxy"
             # - [IT] "Proxy version v1 should proxy through a service and a pod"
@@ -680,15 +691,18 @@ blocks:
             - env_var: CLUSTER_IMAGE
               values:
                 [
-                  "ubuntu-2404-lts",
+                  "ubuntu-2404-lts-amd64",
                   "ubuntu-2204-lts",
                   "rhel-10",
-                  "centos-stream-8",
+                  "centos-stream-9",
                   "rhel-9",
                   "rocky-linux-8",
                 ]
             - env_var: PROVISIONER
               values: ["gcp-kubeadm"]
+          env_vars:
+            - name: CLUSTER_ROUTING_MODE
+              value: Felix
 
   # This is the old every-other-day tests
   - name: datastore k8s-e2e
@@ -705,6 +719,10 @@ blocks:
               values: ["stable-3"]
             - env_var: MANIFEST_FILE
               values: ["calico.yaml", "calico-typha.yaml", "canal.yaml"]
+          env_vars:
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
         - name: kdd - new
           execution_time_limit:
             hours: 7
@@ -718,6 +736,9 @@ blocks:
           env_vars:
             - name: K8S_E2E_FLAGS
               value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+            # Install the Calico API server via manifest (needed for tiered RBAC tests).
+            - name: ENABLE_CALICOCTL_APISERVER
+              value: "true"
 
         - name: etcd
           execution_time_limit:
@@ -732,6 +753,9 @@ blocks:
               value: "true"
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
+            # No API server in etcd mode; skip tiered RBAC tests.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.skip=(Tiered RBAC)
       env_vars:
         - name: PROVISIONER
           value: gcp-kubeadm
@@ -748,7 +772,7 @@ blocks:
           execution_time_limit:
             hours: 7
           commands:
-            - ./scripts/body_flannel-migration.sh
+            - ~/calico/.semaphore/end-to-end/scripts/body_flannel-migration.sh
           matrix:
             - env_var: DOWNLEVEL_MANIFEST
               values:
@@ -769,6 +793,28 @@ blocks:
               value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
             - name: USE_HASH_RELEASE
               value: "true"
+
+  - name: KubeVirt e2e tests
+    dependencies: []
+    task:
+      jobs:
+        - name: KubeVirt IP persistence and live migration
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable-1.35"
+      env_vars:
+        - name: PROVISIONER
+          value: "gcp-kubeadm"
+        - name: INSTALLER
+          value: "operator"
+        - name: NUM_KUBEVIRT_VMS
+          value: "2"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/gcp-kubevirt.yaml"
 
 promotions:
   - name: Cleanup jobs

@@ -29,6 +29,7 @@ import (
 	windataplane "github.com/projectcalico/calico/felix/dataplane/windows"
 	"github.com/projectcalico/calico/felix/dataplane/windows/hns"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
+	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 )
 
 func StartDataplaneDriver(configParams *config.Config,
@@ -36,8 +37,9 @@ func StartDataplaneDriver(configParams *config.Config,
 	collector collector.Collector,
 	configChangedRestartCallback func(),
 	fatalErrorCallback func(error),
-	k8sClientSet *kubernetes.Clientset,
+	k8sClientSet kubernetes.Interface,
 	_ *calc.LookupsCache,
+	_ ipam.Interface,
 ) (DataplaneDriver, *exec.Cmd) {
 	log.Info("Using Windows dataplane driver.")
 

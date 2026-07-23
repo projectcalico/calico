@@ -22,8 +22,12 @@ import (
 	"testing"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
@@ -36,8 +40,10 @@ func newTestClient(cache, peeringCache map[string]string) *client {
 	c := &client{
 		cache:        cache,
 		peeringCache: peeringCache,
+		configCache:  make(map[int]*bgpConfigCache),
 	}
-	// Ensure waitForSync doesn't block - it's a zero-value WaitGroup which is already "done"
+	c.globalBGPConfig = v3.NewBGPConfiguration()
+	c.globalBGPConfig.Name = "default"
 	return c
 }
 
@@ -45,16 +51,15 @@ func TestBuildImportFilter_DefaultAccept(t *testing.T) {
 	c := &client{}
 
 	// Test with no filter - should return default accept
-	result := c.buildImportFilter(nil, 4)
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
-	assert.Contains(t, result, "# Prior to introduction of BGP Filters")
 }
 
 func TestBuildImportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array - should return default accept
-	result := c.buildImportFilter([]string{}, 4)
+	result := c.buildImportFilter([]string{}, "64512", "64512", 4, 1024)
 	assert.Contains(t, result, "accept;")
 }
 
@@ -62,8 +67,8 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that IPv4 and IPv6 return appropriate default
-	resultV4 := c.buildImportFilter(nil, 4)
-	resultV6 := c.buildImportFilter(nil, 6)
+	resultV4 := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	resultV6 := c.buildImportFilter(nil, "64512", "64512", 6, 1024)
 
 	// Both should have accept by default
 	assert.Contains(t, resultV4, "accept;")
@@ -73,17 +78,27 @@ func TestBuildImportFilter_IPv4vsIPv6(t *testing.T) {
 func TestBuildExportFilter_SameAS(t *testing.T) {
 	c := &client{}
 
-	// Same AS should result in reject (via calico_export_to_bgp_peers(true))
-	result := c.buildExportFilter(nil, "64512", "64512", 4)
+	// Same AS = iBGP — should include LOCAL_PREF conversion and calico_export_to_bgp_peers(true)
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
 	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 	assert.Contains(t, result, "reject;")
+}
+
+func TestBuildExportFilter_DifferentAS_StillLocalPref(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — still includes LOCAL_PREF conversion
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
 func TestBuildExportFilter_DifferentAS_NoFilter(t *testing.T) {
 	c := &client{}
 
 	// Different AS with no filter should use default export filter
-	result := c.buildExportFilter(nil, "65000", "64512", 4)
+	result := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers(false)")
 }
 
@@ -91,8 +106,8 @@ func TestBuildExportFilter_IPv4vsIPv6(t *testing.T) {
 	c := &client{}
 
 	// Test that both IPv4 and IPv6 work
-	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4)
-	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6)
+	resultV4 := c.buildExportFilter(nil, "65000", "64512", 4, 1024)
+	resultV6 := c.buildExportFilter(nil, "65000", "64512", 6, 1024)
 
 	// Both should have export filter
 	assert.Contains(t, resultV4, "calico_export_to_bgp_peers")
@@ -103,7 +118,7 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 	c := &client{}
 
 	// Test with empty filters array
-	result := c.buildExportFilter([]string{}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{}, "65000", "64512", 4, 1024)
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
@@ -117,7 +132,7 @@ func TestRouterIDGeneration_Hash(t *testing.T) {
 		NodeIP:   "10.0.0.2",
 	}
 
-	// Test IPv4 - no comment
+	// Test IPv4
 	routerID := os.Getenv("CALICO_ROUTER_ID")
 	if routerID == "hash" {
 		hashedID, err := template.HashToIPv4(config.NodeName)
@@ -209,7 +224,7 @@ func TestPopulateNodeConfig_BasicIPv4(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "10.0.0.1", config.NodeIP)
@@ -235,14 +250,13 @@ func TestPopulateNodeConfig_BasicIPv6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 6)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	assert.Equal(t, "10.0.0.1", config.NodeIP)
 	assert.Equal(t, "fd00::1", config.NodeIPv6)
 	assert.Equal(t, "10.0.0.1", config.RouterID) // Router ID is still IPv4
 	assert.Equal(t, "64512", config.ASNumber)
-	// IPv6 should have a comment explaining router ID is IPv4
 }
 
 func TestPopulateNodeConfig_NodeSpecificAS(t *testing.T) {
@@ -263,7 +277,7 @@ func TestPopulateNodeConfig_NodeSpecificAS(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Node-specific AS should take precedence
@@ -288,7 +302,7 @@ func TestPopulateNodeConfig_RouterIDHash(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Router ID should be hash-generated, not the node IP
@@ -315,7 +329,7 @@ func TestPopulateNodeConfig_RouterIDHashIPv6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 6)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	// Router ID should be hash-generated
@@ -340,7 +354,7 @@ func TestPopulateNodeConfig_ExplicitRouterID(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Router ID should be the explicit value
@@ -365,7 +379,7 @@ func TestPopulateNodeConfig_LogLevelDebug(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "debug", config.LogLevel)
@@ -390,7 +404,7 @@ func TestPopulateNodeConfig_LogLevelInfo(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "info", config.LogLevel)
@@ -415,7 +429,7 @@ func TestPopulateNodeConfig_LogLevelNone(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "none", config.LogLevel)
@@ -441,7 +455,7 @@ func TestPopulateNodeConfig_NodeSpecificLogLevel(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "debug", config.LogLevel)
@@ -458,15 +472,15 @@ func TestPopulateNodeConfig_BindModeNodeIP_IPv4(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.BindMode = ptr.To(v3.BindModeNodeIP)
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "10.0.0.1", config.ListenAddress)
@@ -483,15 +497,15 @@ func TestPopulateNodeConfig_BindModeNodeIP_IPv6(t *testing.T) {
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/host/test-node/ip_addr_v6": "fd00::1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/bind_mode":          "NodeIP",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.BindMode = ptr.To(v3.BindModeNodeIP)
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 6)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	// IPv6 should use IPv6 address for listen
@@ -516,7 +530,7 @@ func TestPopulateNodeConfig_ListenPort(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "1790", config.ListenPort)
@@ -541,7 +555,7 @@ func TestPopulateNodeConfig_NodeSpecificListenPort(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	assert.Equal(t, "1791", config.ListenPort)
@@ -564,7 +578,7 @@ func TestPopulateNodeConfig_IgnoredInterfaces_Default(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Default pattern
@@ -581,15 +595,15 @@ func TestPopulateNodeConfig_IgnoredInterfaces_Custom(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/global/ignored_interfaces": "eth0,docker*",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.IgnoredInterfaces = []string{"eth0", "docker*"}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Custom interfaces plus standard exclusions
@@ -598,58 +612,6 @@ func TestPopulateNodeConfig_IgnoredInterfaces_Custom(t *testing.T) {
 	assert.Contains(t, config.DirectInterfaces, `-"cali*"`)
 	assert.Contains(t, config.DirectInterfaces, `-"kube-ipvs*"`)
 	assert.Contains(t, config.DirectInterfaces, `"*"`)
-}
-
-func TestPopulateNodeConfig_NodeSpecificIgnoredInterfaces(t *testing.T) {
-	originalNodeName := NodeName
-	NodeName = "test-node"
-	defer func() { NodeName = originalNodeName }()
-
-	_ = os.Unsetenv("CALICO_ROUTER_ID")
-
-	cache := map[string]string{
-		"/calico/bgp/v1/host/test-node/ip_addr_v4":         "10.0.0.1",
-		"/calico/bgp/v1/global/as_num":                     "64512",
-		"/calico/bgp/v1/global/ignored_interfaces":         "global-if", // Global
-		"/calico/bgp/v1/host/test-node/ignored_interfaces": "node-if",   // Node-specific (should win)
-	}
-
-	c := newTestClient(cache, nil)
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.populateNodeConfig(config, 4)
-	require.NoError(t, err)
-
-	// Node-specific interface should be present
-	assert.Contains(t, config.DirectInterfaces, `-"node-if"`)
-	// Global interface should NOT be present
-	assert.NotContains(t, config.DirectInterfaces, `-"global-if"`)
-}
-
-func TestPopulateNodeConfig_NodeSpecificBindMode(t *testing.T) {
-	originalNodeName := NodeName
-	NodeName = "test-node"
-	defer func() { NodeName = originalNodeName }()
-
-	_ = os.Unsetenv("CALICO_ROUTER_ID")
-
-	cache := map[string]string{
-		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
-		"/calico/bgp/v1/global/as_num":             "64512",
-		"/calico/bgp/v1/host/test-node/bind_mode":  "NodeIP", // Node-specific
-	}
-
-	c := newTestClient(cache, nil)
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.populateNodeConfig(config, 4)
-	require.NoError(t, err)
-
-	assert.Equal(t, "10.0.0.1", config.ListenAddress)
 }
 
 func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
@@ -662,7 +624,6 @@ func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
 	cache := map[string]string{
 		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
 		"/calico/bgp/v1/global/as_num":             "64512",
-		// No bind_mode set
 	}
 
 	c := newTestClient(cache, nil)
@@ -670,7 +631,7 @@ func TestPopulateNodeConfig_NoBindMode(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// ListenAddress should be empty when bind_mode is not NodeIP
@@ -695,11 +656,89 @@ func TestPopulateNodeConfig_DefaultLogLevel(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.populateNodeConfig(config, 4)
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Default debug mode when no log level is set
 	assert.Equal(t, "{ states }", config.DebugMode)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_Default(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
+	require.NoError(t, err)
+
+	// Default should be 1024
+	assert.Equal(t, 1024, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_FromBGPConfig(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio := 500
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
+	require.NoError(t, err)
+	assert.Equal(t, 500, config.NormalRoutePriority)
+}
+
+func TestPopulateNodeConfig_NormalRoutePriority_IPv6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	_ = os.Unsetenv("CALICO_ROUTER_ID")
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+		// No loglevel set
+	}
+	c := newTestClient(cache, nil)
+
+	prio4 := 500
+	prio6 := 800
+	c.globalBGPConfig = &v3.BGPConfiguration{
+		Spec: v3.BGPConfigurationSpec{
+			IPv4NormalRoutePriority: &prio4,
+			IPv6NormalRoutePriority: &prio6,
+		},
+	}
+
+	config := &types.BirdBGPConfig{}
+	err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 6)
+	require.NoError(t, err)
+	assert.Equal(t, 800, config.NormalRoutePriority)
 }
 
 // =============================================================================
@@ -1092,7 +1131,7 @@ func TestProcessMeshPeers_BasicMesh(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// Should have 2 mesh peers (node-2 and node-3, excluding ourselves)
@@ -1134,7 +1173,7 @@ func TestProcessMeshPeers_IPv6(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 6)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 6)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 1)
@@ -1166,7 +1205,7 @@ func TestProcessMeshPeers_MeshDisabled(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// No peers should be added when mesh is disabled
@@ -1197,7 +1236,7 @@ func TestProcessMeshPeers_RouteReflector(t *testing.T) {
 	}
 
 	// Node is a route reflector - should skip mesh
-	err := c.processMeshPeers(config, "rr-cluster-1", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "rr-cluster-1", 4)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 0)
@@ -1228,7 +1267,7 @@ func TestProcessMeshPeers_SkipRouteReflectorPeers(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	// Should only have node-3, node-2 is a route reflector
@@ -1262,7 +1301,7 @@ func TestProcessMeshPeers_PassiveMode(t *testing.T) {
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	assert.Len(t, config.Peers, 2)
@@ -1290,27 +1329,47 @@ func TestProcessMeshPeers_WithPasswordAndRestartTime(t *testing.T) {
 	meshConfigJSON, _ := json.Marshal(meshConfig)
 
 	cache := map[string]string{
-		"/calico/bgp/v1/global/node_mesh":              string(meshConfigJSON),
-		"/calico/bgp/v1/global/node_mesh_password":     "secret123",
-		"/calico/bgp/v1/global/node_mesh_restart_time": "120",
-		"/calico/bgp/v1/host/node-1/ip_addr_v4":        "10.0.0.1",
-		"/calico/bgp/v1/host/node-2/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/global/node_mesh":       string(meshConfigJSON),
+		"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/node-2/ip_addr_v4": "10.0.0.2",
 	}
 
 	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.NodeMeshMaxRestartTime = ptr.To(metav1.Duration{Duration: 120 * time.Second})
+	c.globalBGPConfig.Spec.NodeMeshPassword = &v3.BGPPassword{
+		SecretKeyRef: &v1.SecretKeySelector{
+			LocalObjectReference: v1.LocalObjectReference{
+				Name: "",
+			},
+			Key: "",
+		},
+	}
+	c.secretWatcher = &fakeSecret{secret: "secret123"}
 
 	config := &types.BirdBGPConfig{
 		NodeIP:   "10.0.0.1",
 		ASNumber: "64512",
 	}
 
-	err := c.processMeshPeers(config, "", 4)
+	err := c.processMeshPeers(c.getBGPProcessorContext(), config, "", 4)
 	require.NoError(t, err)
 
 	require.Len(t, config.Peers, 1)
 	assert.Equal(t, "secret123", config.Peers[0].Password)
 	assert.Equal(t, "120", config.Peers[0].GracefulRestart)
 }
+
+type fakeSecret struct {
+	secret string
+}
+
+func (s *fakeSecret) GetSecret(name, key string) (string, error) {
+	return s.secret, nil
+}
+
+func (s *fakeSecret) MarkStale() {}
+
+func (s *fakeSecret) SweepStale() {}
 
 func TestProcessGlobalPeers_BasicPeer(t *testing.T) {
 	originalNodeName := NodeName
@@ -1440,8 +1499,7 @@ func TestProcessGlobalPeers_WithTTLSecurity(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, config.Peers, 1)
-	assert.Contains(t, config.Peers[0].TTLSecurity, "on")
-	assert.Contains(t, config.Peers[0].TTLSecurity, "multihop 64")
+	assert.Equal(t, "64", config.Peers[0].TTLSecurity)
 }
 
 func TestProcessNodePeers_BasicPeer(t *testing.T) {
@@ -1581,7 +1639,7 @@ func TestProcessPeers_CombinedMeshGlobalNode(t *testing.T) {
 	}
 
 	// Process all peer types
-	err := c.processPeers(config, 4)
+	err := c.processPeers(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	// Should have: 1 mesh peer (node-2), 1 global peer, 1 node peer
@@ -1771,7 +1829,7 @@ func TestBuildImportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"my-filter"}, 4)
+	result := c.buildImportFilter([]string{"my-filter"}, "64512", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-filter_importFilterV4'();")
@@ -1805,7 +1863,7 @@ func TestBuildImportFilter_WithMultipleBGPFilters(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"filter1", "filter2"}, 4)
+	result := c.buildImportFilter([]string{"filter1", "filter2"}, "64512", "64512", 4, 1024)
 
 	// Should include both filter function calls
 	assert.Contains(t, result, "'bgp_filter1_importFilterV4'();")
@@ -1831,7 +1889,7 @@ func TestBuildImportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"ipv6-filter"}, 6)
+	result := c.buildImportFilter([]string{"ipv6-filter"}, "64512", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-filter_importFilterV6'();")
@@ -1854,7 +1912,7 @@ func TestBuildImportFilter_FilterWithNoImportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"export-only"}, 4)
+	result := c.buildImportFilter([]string{"export-only"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no import rules
 	assert.NotContains(t, result, "'bgp_export-only_importFilterV4'();")
@@ -1869,7 +1927,7 @@ func TestBuildImportFilter_FilterNotFound(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildImportFilter([]string{"nonexistent-filter"}, 4)
+	result := c.buildImportFilter([]string{"nonexistent-filter"}, "64512", "64512", 4, 1024)
 
 	// Should NOT include the filter call since filter doesn't exist
 	assert.NotContains(t, result, "'bgp_nonexistent-filter_importFilterV4'();")
@@ -1896,7 +1954,7 @@ func TestBuildExportFilter_WithBGPFilter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"my-export-filter"}, "65000", "64512", 4, 1024)
 
 	// Should include the filter function call
 	assert.Contains(t, result, "'bgp_my-export-filter_exportFilterV4'();")
@@ -1923,7 +1981,7 @@ func TestBuildExportFilter_IPv6Filter(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6)
+	result := c.buildExportFilter([]string{"ipv6-export"}, "65000", "64512", 6, 1024)
 
 	// Should use V6 suffix
 	assert.Contains(t, result, "'bgp_ipv6-export_exportFilterV6'();")
@@ -1946,12 +2004,203 @@ func TestBuildExportFilter_FilterWithNoExportRules(t *testing.T) {
 
 	c := newTestClient(cache, nil)
 
-	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4)
+	result := c.buildExportFilter([]string{"import-only"}, "65000", "64512", 4, 1024)
 
 	// Should NOT include the filter call since there are no export rules
 	assert.NotContains(t, result, "'bgp_import-only_exportFilterV4'();")
 	// Should still have calico_export_to_bgp_peers
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
+}
+
+func TestBuildImportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_same_as=true
+	result := c.buildImportFilter([]string{"pt-filter"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_same_as=false
+	result := c.buildImportFilter([]string{"pt-filter"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-filter_importFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-filter_importFilterV4'();")
+}
+
+func TestBuildImportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-filter": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildImportFilter([]string{"no-pt-filter"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_no-pt-filter_importFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-filter_importFilterV4'(false);")
+}
+
+func TestBuildExportFilter_WithPeerType_SameAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "iBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Same AS → sameAS=true → is_same_as=true
+	result := c.buildExportFilter([]string{"pt-export"}, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithPeerType_DifferentAS(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// Different AS → sameAS=false → is_same_as=false
+	result := c.buildExportFilter([]string{"pt-export"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_pt-export_exportFilterV4'(false);")
+	assert.NotContains(t, result, "'bgp_pt-export_exportFilterV4'();")
+}
+
+func TestBuildExportFilter_WithoutPeerType_NoParam(t *testing.T) {
+	bgpFilter := map[string]any{
+		"spec": map[string]any{
+			"exportV4": []any{
+				map[string]any{
+					"action": "Accept",
+					"cidr":   "10.0.0.0/8",
+				},
+			},
+		},
+	}
+	bgpFilterJSON, _ := json.Marshal(bgpFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/no-pt-export": string(bgpFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	// No PeerType rules → function called without parameter
+	result := c.buildExportFilter([]string{"no-pt-export"}, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "'bgp_no-pt-export_exportFilterV4'();")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(true);")
+	assert.NotContains(t, result, "'bgp_no-pt-export_exportFilterV4'(false);")
+}
+
+func TestBuildImportFilter_MixedPeerTypeAndNonPeerType(t *testing.T) {
+	// Filter with PeerType rule
+	ptFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{
+					"action":   "Accept",
+					"peerType": "eBGP",
+				},
+			},
+		},
+	}
+	ptFilterJSON, _ := json.Marshal(ptFilter)
+
+	// Filter without PeerType
+	noPtFilter := map[string]any{
+		"spec": map[string]any{
+			"importV4": []any{
+				map[string]any{"action": "Accept"},
+			},
+		},
+	}
+	noPtFilterJSON, _ := json.Marshal(noPtFilter)
+
+	cache := map[string]string{
+		"/calico/resources/v3/projectcalico.org/bgpfilters/with-pt":    string(ptFilterJSON),
+		"/calico/resources/v3/projectcalico.org/bgpfilters/without-pt": string(noPtFilterJSON),
+	}
+
+	c := newTestClient(cache, nil)
+
+	result := c.buildImportFilter([]string{"with-pt", "without-pt"}, "65000", "64512", 4, 1024)
+
+	// PeerType filter gets the bool parameter
+	assert.Contains(t, result, "'bgp_with-pt_importFilterV4'(false);")
+	// Non-PeerType filter does not
+	assert.Contains(t, result, "'bgp_without-pt_importFilterV4'();")
 }
 
 func TestProcessGlobalPeers_WithBGPFilter(t *testing.T) {
@@ -2219,6 +2468,73 @@ func TestTruncateBGPFilterName(t *testing.T) {
 }
 
 // =============================================================================
+// Private Feature Tests
+// =============================================================================
+
+func TestPopulateNodeConfig_PeerDebugMode(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "node-1"
+	defer func() { NodeName = originalNodeName }()
+
+	tests := []struct {
+		name              string
+		logLevel          string
+		logLevelExists    bool
+		expectedDebugMode string
+		expectedPeerLog   string
+	}{
+		{
+			name:              "Log level debug",
+			logLevel:          "debug",
+			logLevelExists:    true,
+			expectedDebugMode: "all",
+			expectedPeerLog:   "debug all;",
+		},
+		{
+			name:              "Log level none",
+			logLevel:          "none",
+			logLevelExists:    true,
+			expectedDebugMode: "",
+			expectedPeerLog:   "",
+		},
+		{
+			name:              "Log level info (default behavior)",
+			logLevel:          "info",
+			logLevelExists:    true,
+			expectedDebugMode: "{ states }",
+			expectedPeerLog:   "debug { states, routes, filters, events };",
+		},
+		{
+			name:              "No log level set (default behavior)",
+			logLevelExists:    false,
+			expectedDebugMode: "{ states }",
+			expectedPeerLog:   "debug { states, routes, filters, events };",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cache := map[string]string{
+				"/calico/bgp/v1/host/node-1/ip_addr_v4": "10.0.0.1",
+				"/calico/bgp/v1/global/as_num":          "64512",
+			}
+			if tt.logLevelExists {
+				cache["/calico/bgp/v1/global/loglevel"] = tt.logLevel
+			}
+
+			c := newTestClient(cache, nil)
+
+			config := &types.BirdBGPConfig{}
+			err := c.populateNodeConfig(c.getBGPProcessorContext(), config, 4)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expectedDebugMode, config.DebugMode)
+			assert.Equal(t, tt.expectedPeerLog, config.PeerDebugMode)
+		})
+	}
+}
+
+// =============================================================================
 // Race Condition Tests
 // =============================================================================
 
@@ -2238,11 +2554,6 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	defer func() { NodeName = originalNodeName }()
 
 	_ = os.Unsetenv("CALICO_ROUTER_ID")
-
-	// Clear the global configCache to start fresh
-	configCacheMutex.Lock()
-	configCache = make(map[int]*bgpConfigCache)
-	configCacheMutex.Unlock()
 
 	// Enable mesh for more realistic scenario
 	meshConfig := map[string]any{
@@ -2305,9 +2616,9 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 					// Periodically clear the cache to force re-computation and increase
 					// the likelihood of hitting the race condition
 					if iterationCount%5 == 0 {
-						configCacheMutex.Lock()
-						delete(configCache, ipVersion)
-						configCacheMutex.Unlock()
+						c.configCacheMutex.Lock()
+						delete(c.configCache, ipVersion)
+						c.configCacheMutex.Unlock()
 					}
 
 					iterationCount++
@@ -2317,4 +2628,41 @@ func TestConfigCache_ConcurrentReadWrite(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestBuildImportFilter_iBGP(t *testing.T) {
+	c := &client{}
+
+	// Same AS = iBGP — should set preference for a higher priority route
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 1024)
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_eBGP(t *testing.T) {
+	c := &client{}
+
+	// Different AS = eBGP — should set preference for a higher priority route
+	result := c.buildImportFilter(nil, "65000", "64512", 4, 1024)
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147482623)) then")
+	assert.Contains(t, result, "preference = 200;")
+	assert.Contains(t, result, "accept;")
+}
+
+func TestBuildImportFilter_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// Custom priority should appear in both the default and the preference check
+	result := c.buildImportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "if (defined(bgp_local_pref)&&(bgp_local_pref > 2147481647)) then")
+}
+
+func TestBuildExportFilter_iBGP_CustomPriority(t *testing.T) {
+	c := &client{}
+
+	// iBGP with custom priority — LOCAL_PREF conversion should still appear
+	result := c.buildExportFilter(nil, "64512", "64512", 4, 2000)
+	assert.Contains(t, result, "bgp_local_pref = 2147483647 - krt_metric;")
+	assert.Contains(t, result, "calico_export_to_bgp_peers(true)")
 }

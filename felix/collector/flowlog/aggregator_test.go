@@ -608,19 +608,21 @@ var _ = Describe("Flow log aggregator tests", func() {
 		It("GetAndCalibrate does not cause a data race contention on the flowEntry after FeedUpdate adds it to the flowStore", func() {
 			muNoConn1Rule1AllowUpdateWithEndpointMetaCopy := muNoConn1Rule1AllowUpdateWithEndpointMeta
 
-			var messages []*FlowLog
+			messagesC := make(chan []*FlowLog, 1)
 
 			time.AfterFunc(2*time.Second, func() {
+				defer GinkgoRecover()
 				Expect(ca.FeedUpdate(&muNoConn1Rule1AllowUpdateWithEndpointMetaCopy)).NotTo(HaveOccurred())
 			})
 
 			// ok GetAndCalibrate is a little after feedupdate because feedupdate has some preprocesssing
-			// before ti accesses flowstore
+			// before it accesses flowstore
 			time.AfterFunc(2*time.Second+10*time.Millisecond, func() {
-				messages = ca.GetAndCalibrate()
+				messagesC <- ca.GetAndCalibrate()
 			})
 
-			time.Sleep(3 * time.Second)
+			var messages []*FlowLog
+			Eventually(messagesC, "5s").Should(Receive(&messages))
 			Expect(len(messages)).Should(Equal(1))
 
 			message := messages[0]

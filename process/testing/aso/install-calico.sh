@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2024 Tigera, Inc. All rights reserved.
+# Copyright (c) 2022-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,13 +20,18 @@ set -o pipefail
 . ../util/utils.sh
 . ./export-env.sh
 
-# Trap to show pod status on failure for debugging
-trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Showing pod status for debugging:"; echo "========================================"; ./bin/kubectl get pod -A -o wide --kubeconfig=./kubeconfig 2>/dev/null || true; fi; exit $exit_code' EXIT
+# On failure, capture describe + logs for every non-Ready pod so CI has something
+# actionable to look at. Under Semaphore we drop straight into /home/semaphore/fv.log/
+# (the job's artifact staging dir); otherwise fall back to /tmp for hand runs.
+diag_dir="${DIAG_DIR:-/home/semaphore/fv.log/diagnostics}"
+[[ -d /home/semaphore ]] || diag_dir="/tmp/pod-diagnostics"
+trap 'exit_code=$?; if [ $exit_code -ne 0 ]; then echo ""; echo "========================================"; echo "Script failed! Collecting pod diagnostics..."; echo "========================================"; KUBECTL=./bin/kubectl KUBECONFIG=./kubeconfig collect_pod_diagnostics "'"${diag_dir}"'"; fi; exit $exit_code' EXIT
 
 # Use kubectl with kubeconfig from install-kubeadm.sh
 : "${KUBECTL:=./bin/kubectl}"
 : "${GOMPLATE:=./bin/gomplate}"
 : "${CRANE:=./bin/crane}"
+: "${HELM:=./bin/helm}"
 
 # Use the kubeconfig that was copied from master node
 KUBECONFIG_FILE="./kubeconfig"
@@ -71,13 +76,19 @@ fi
 SCRIPT_CURRENT_DIR="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 && pwd -P )"
 LOCAL_MANIFESTS_DIR="${SCRIPT_CURRENT_DIR}/../../../manifests"
 
+# For RELEASE_STREAM=local-build: GIT_VERSION is normally inherited from the
+# Makefile; recompute it the same way as a fallback so the chart filename matches
+# bin/tigera-operator-${GIT_VERSION}.tgz (built at the repo root by 'make chart').
+: "${REPO_ROOT:=$( cd "${SCRIPT_CURRENT_DIR}/../../.." >/dev/null 2>&1 && pwd -P )}"
+: "${GIT_VERSION:=$(git -C "${REPO_ROOT}" describe --tags --dirty --long --always --abbrev=12)}"
+
 if [ ${PRODUCT} == 'calient' ]; then
     RELEASE_BASE_URL="https://downloads.tigera.io/ee/${RELEASE_STREAM}"
 else
     RELEASE_BASE_URL="https://raw.githubusercontent.com/projectcalico/calico/${RELEASE_STREAM}"
 fi
 
-if [ ${HASH_RELEASE} == 'true' ]; then
+if [[ ${HASH_RELEASE} == 'true' && ${RELEASE_STREAM} != 'local' && ${RELEASE_STREAM} != 'local-build' ]]; then
     if [ -z ${RELEASE_STREAM} ]; then
 	    echo "RELEASE_STREAM not set for HASH release"
 	    exit 1
@@ -90,7 +101,7 @@ if [ ${HASH_RELEASE} == 'true' ]; then
     RELEASE_BASE_URL=$(curl -sS ${URL_HASH})
 fi
 
-if [[ ${RELEASE_STREAM} != 'local' ]]; then
+if [[ ${RELEASE_STREAM} != 'local' && ${RELEASE_STREAM} != 'local-build' ]]; then
     # Check release url
     echo '  RELEASE_BASE_URL='${RELEASE_BASE_URL}
 fi
@@ -102,7 +113,27 @@ if [ ${PRODUCT} == 'calient' ]; then
 fi
 
 # Install Calico on Linux nodes
-if [[ ${RELEASE_STREAM} == 'local' ]]; then
+if [[ ${RELEASE_STREAM} == 'local-build' ]]; then
+    # Install the operator from the locally-built helm chart. The chart installs
+    # the operator only; the Installation/APIServer CRs come from
+    # OSS/custom-resources.yaml below, matching the other install paths.
+    # Component + operator images are ctr-imported onto the nodes at
+    # docker.io/calico/<name>:test-build and the Installation sets
+    # imagePullPolicy: IfNotPresent, so kubelet uses them without a registry pull.
+    CHART="${REPO_ROOT}/bin/tigera-operator-${GIT_VERSION}.tgz"
+    if [ ! -f "${CHART}" ]; then
+        echo "ERROR: operator chart not found at ${CHART}; run 'make chart' first"
+        exit 1
+    fi
+    # Pin the operator image tag to the one import-images.sh used (test-build by
+    # default), so the chart and the imported images stay in sync.
+    : "${DEV_IMAGE_TAG:=test-build}"
+    ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
+    ${HELM} install calico "${CHART}" \
+        -f "${SCRIPT_CURRENT_DIR}/local-build-values.yaml" \
+        --set tigeraOperator.version="${DEV_IMAGE_TAG}" \
+        -n tigera-operator --create-namespace
+elif [[ ${RELEASE_STREAM} == 'local' ]]; then
     # Use local manifests
     ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/operator-crds.yaml
     ${KUBECTL} create -f ${LOCAL_MANIFESTS_DIR}/tigera-operator.yaml
@@ -192,19 +223,27 @@ echo "Wait for Calico to be ready on Windows nodes..."
 timeout --foreground 600 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=calico-node-windows --for=condition=Ready -n calico-system --timeout=30s; do sleep 5; done"
 echo "Calico is ready on Windows nodes"
 
-# Create the kube-proxy-windows daemonset. Use 'crane ls' to use the latest patch release on the same minor version as KUBE_VERSION, in
-# case the kube-proxy-windows for the exact patch version hasn't been published yet
-KUBE_PROXY_WIN_TAG="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION%.*}.*-calico.*" | sort -Vr | head -1 || true)"
-if [[ -n "${KUBE_PROXY_WIN_TAG}" ]]; then
-    KUBE_PROXY_WIN_VERSION="${KUBE_PROXY_WIN_TAG%%-calico*}"
-else
-    echo "WARNING: Unable to determine kube-proxy-windows tag for ${KUBE_VERSION}; falling back to ${KUBE_VERSION}" >&2
+# Create the kube-proxy-windows daemonset. First check if an exact match for KUBE_VERSION exists
+# in the kube-proxy image tags. If not, fall back to the latest patch release on the same minor
+# version, in case the kube-proxy-windows for the exact patch version hasn't been published yet.
+KUBE_PROXY_WIN_EXACT="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION}-calico" | head -1 || true)"
+if [[ -n "${KUBE_PROXY_WIN_EXACT}" ]]; then
     KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    echo "Found exact kube-proxy-windows tag for ${KUBE_VERSION}"
+else
+    echo "No exact kube-proxy-windows tag for ${KUBE_VERSION}; searching for latest patch on same minor version..."
+    KUBE_PROXY_WIN_TAG="$(${CRANE} ls sigwindowstools/kube-proxy | grep "^${KUBE_VERSION%.*}.*-calico.*" | sort -Vr | head -1 || true)"
+    if [[ -n "${KUBE_PROXY_WIN_TAG}" ]]; then
+        KUBE_PROXY_WIN_VERSION="${KUBE_PROXY_WIN_TAG%%-calico*}"
+    else
+        echo "WARNING: Unable to determine kube-proxy-windows tag for ${KUBE_VERSION}; falling back to ${KUBE_VERSION}" >&2
+        KUBE_PROXY_WIN_VERSION="${KUBE_VERSION}"
+    fi
 fi
 echo "Install kube-proxy-windows ${KUBE_PROXY_WIN_VERSION} (requested Kubernetes version ${KUBE_VERSION}) from sig-windows-tools"
-for iter in {1..5};do
-    curl -sSf -L  https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml | sed "s/KUBE_PROXY_VERSION/${KUBE_PROXY_WIN_VERSION}/g" | ${KUBECTL} apply -f - && break || echo "download error: retry $iter in 5s" && sleep 5;
-done;
+curl -sSf -L --retry 5 https://raw.githubusercontent.com/kubernetes-sigs/sig-windows-tools/master/hostprocess/calico/kube-proxy/kube-proxy.yml -o kube-proxy-windows.yaml
+sed -i "s/KUBE_PROXY_VERSION/${KUBE_PROXY_WIN_VERSION}/g" kube-proxy-windows.yaml
+${KUBECTL} apply -f ./kube-proxy-windows.yaml
 
 echo "Wait for kube-proxy to be ready on Windows nodes..."
 timeout --foreground 1200 bash -c "while ! ${KUBECTL} wait pod -l k8s-app=kube-proxy-windows --for=condition=Ready -n kube-system --timeout=30s; do sleep 5; done"

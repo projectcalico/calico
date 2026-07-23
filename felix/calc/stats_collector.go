@@ -20,6 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
@@ -69,8 +70,8 @@ type StatsCollector struct {
 	numProfiles          int
 	numALPPolicies       int
 
-	lastUpdate StatsUpdate
-	inSync     bool
+	lastUpdate           StatsUpdate
+	initialSyncCompleted bool
 
 	Callback func(StatsUpdate) error
 }
@@ -98,7 +99,7 @@ func NewStatsCollector(callback func(StatsUpdate) error) *StatsCollector {
 }
 
 func (s *StatsCollector) RegisterWith(calcGraph *CalcGraph) {
-	calcGraph.AllUpdDispatcher.Register(model.HostIPKey{}, s.OnUpdate)
+	calcGraph.AllUpdDispatcher.Register(model.ResourceKey{}, s.OnUpdate)
 	calcGraph.AllUpdDispatcher.Register(model.WorkloadEndpointKey{}, s.OnUpdate)
 	calcGraph.AllUpdDispatcher.Register(model.HostEndpointKey{}, s.OnUpdate)
 	calcGraph.AllUpdDispatcher.Register(model.HostConfigKey{}, s.OnUpdate)
@@ -108,8 +109,8 @@ func (s *StatsCollector) RegisterWith(calcGraph *CalcGraph) {
 
 func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
 	log.WithField("status", status).Debug("Datastore status updated")
-	if status == api.InSync {
-		s.inSync = true
+	if status == api.InSync && !s.initialSyncCompleted {
+		s.initialSyncCompleted = true
 		s.sendUpdate()
 	}
 }
@@ -118,8 +119,12 @@ func (s *StatsCollector) OnUpdate(update api.Update) (filterOut bool) {
 	hostname := ""
 	var counter *int
 	switch key := update.Key.(type) {
-	case model.HostIPKey:
-		hostname = key.Hostname
+	case model.ResourceKey:
+		// Only count v3 Node resources towards host counts; ignore other v3 kinds.
+		if key.Kind != internalapi.KindNode {
+			return
+		}
+		hostname = key.Name
 	case model.WorkloadEndpointKey:
 		hostname = key.Hostname
 		counter = &s.numWorkloadEndpoints
@@ -207,7 +212,7 @@ func (s *StatsCollector) sendUpdate() {
 	gaugeClusNumTiers.Set(float64(s.numTiers))
 	gaugeClusNumPolicies.Set(float64(s.numPolicies))
 	gaugeClusNumProfiles.Set(float64(s.numProfiles))
-	if s.inSync && s.lastUpdate != update {
+	if s.initialSyncCompleted && s.lastUpdate != update {
 		if err := s.Callback(update); err != nil {
 			log.WithError(err).Warn("Failed to report stats")
 		} else {

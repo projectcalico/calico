@@ -11,6 +11,7 @@
 #include "icmp.h"
 #include "types.h"
 #include "rpf.h"
+#include "qos.h"
 
 #ifdef IPVER6
 #define IPPROTO_ICMP_46	IPPROTO_ICMPV6
@@ -105,6 +106,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 		struct calico_ct_value *ct_value = cali_ct_lookup_elem(k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!");
+			if (WORKLOAD_SRC_SPOOFING_CONFIGURED && cali_allowsource_lookup(&ctx->state->ip_src, skb_ingress_ifindex(ctx->skb))) {
+				CALI_DEBUG("CT-ALL src IP " IP_FMT " is allowed, skipping CT creation", debug_ip(ctx->state->ip_src));
+				return 0;
+			}
 			goto create;
 		}
 		if (srcLTDest) {
@@ -191,7 +196,13 @@ create:
 	src_to_dst->packets = 1;
 	src_to_dst->bytes = ctx->skb->len;
 	if (CALI_F_TO_HOST) {
-		src_to_dst->ifindex = skb_ingress_ifindex(ctx->skb);
+		/* Store the host-side primary ifindex. For netkit, skb->ifindex
+		 * is the peer (pod-side) ifindex; use host_ifindex from globals
+		 * so downstream consumers (connlimit decrement, redirect_peer)
+		 * see the primary that maps are keyed by.
+		 */
+		src_to_dst->ifindex = ctx->globals->data.host_ifindex ?
+			ctx->globals->data.host_ifindex : ctx->skb->ifindex;
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -570,6 +581,69 @@ static CALI_BPF_INLINE bool tcp_recycled(bool syn, struct calico_ct_value *v)
 	return syn && (a->fin_seen || a->rst_seen) && (b->fin_seen || b->rst_seen);
 }
 
+/* qos_connlimit_decrement_for_ct decrements the per-pod connlimit counter(s)
+ * for a CT entry that is closing or being purged. Reads the entry's
+ * CONNLIMIT_* flags and the per-leg ifindex fields to pick the right
+ * (ifindex, direction) pair(s). Decrements exactly once: atomically claims the
+ * CONNLIMIT_DEC flag and only the caller that wins the claim decrements, so
+ * concurrent callers on other CPUs (the CT entry is in a shared, non-per-CPU
+ * map) bail.
+ *
+ * Called from the packet path on FIN-FIN / RST close, and from
+ * conntrack_cleanup when an idle entry is purged with no close packet.
+ */
+static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_value *v)
+{
+	__u32 cl_flags = ct_value_get_flags(v);
+	if (!(cl_flags & (CALI_CT_FLAG_CONNLIMIT_INGRESS | CALI_CT_FLAG_CONNLIMIT_EGRESS))) {
+		return;
+	}
+	/* Atomically set CONNLIMIT_DEC and bail if it was already set: this is the
+	 * exactly-once claim, replacing a non-atomic read/test/set that let two
+	 * CPUs both pass the check and both decrement. The bit lives in flags3,
+	 * but BPF atomics require a 4-byte-aligned target, so we OR into
+	 * type_flags_word, the __u32 overlaying type|flags|flags3|flags4. On the
+	 * little-endian BPF dataplane arches (amd64/arm64) the mask's single bit
+	 * lands in flags3, leaving type/flags/flags4 untouched -- same bit the old
+	 * ct_value_set_flags(v, CONNLIMIT_DEC) set. (s390x builds bpfeb where the
+	 * bit lands elsewhere, but the BPF dataplane does not run there.) */
+	if (__sync_fetch_and_or(&v->type_flags_word, CALI_CT_FLAG_CONNLIMIT_DEC) & CALI_CT_FLAG_CONNLIMIT_DEC) {
+		return;
+	}
+
+	/* Skip the ingress decrement if the entry was rejected by the
+	 * ingress limit check.
+	 */
+	/* CT entries are family-typed (v4 BPF programs only see v4 CT entries,
+	 * v6 only sees v6), so the family is known at compile time via IPVER6.
+	 */
+#ifdef IPVER6
+	const __u16 family = 6;
+#else
+	const __u16 family = 4;
+#endif
+
+	if ((cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS) &&
+			!(cl_flags & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED)) {
+		/* Ingress: pod is the responder (non-opener). */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->b_to_a.ifindex
+			: v->a_to_b.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 1, family);
+		}
+	}
+	if (cl_flags & CALI_CT_FLAG_CONNLIMIT_EGRESS) {
+		/* Egress: pod is the opener. */
+		__u32 pod_ifindex = v->a_to_b.opener
+			? v->a_to_b.ifindex
+			: v->b_to_a.ifindex;
+		if (pod_ifindex != CT_INVALID_IFINDEX) {
+			qos_connlimit_decrement(pod_ifindex, 0, family);
+		}
+	}
+}
+
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
 {
 	struct ct_lookup_ctx ct_lookup_ctx = {
@@ -727,6 +801,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		if (tcp_recycled(syn, tracking_v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(tracking_v);
 			cali_ct_delete_elem(&k);
 			cali_ct_delete_elem(&v->nat_rev_key);
 			goto out_lookup_fail;
@@ -872,6 +952,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		CALI_CT_DEBUG("Hit! NORMAL entry.");
 		if (tcp_recycled(syn, v)) {
 			CALI_CT_DEBUG("TCP SYN recycles entry, NEW flow.");
+			/* Decrement the connlimit counter before deleting so the
+			 * upcoming check_and_increment in new_flow_entrypoint
+			 * stays net-neutral. The helper is idempotent — bails if
+			 * CONNLIMIT_DEC is already set by the close-time path.
+			 */
+			qos_connlimit_decrement_for_ct(v);
 			cali_ct_delete_elem(&k);
 			goto out_lookup_fail;
 		}
@@ -993,9 +1079,23 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
+
+		/* Decrement connlimit counter when a TCP connection closes
+		 * (both FINs seen or RST). The helper sets CONNLIMIT_DEC
+		 * before decrementing so concurrent paths bail.
+		 */
+		if ((src_to_dst->fin_seen && dst_to_src->fin_seen) || tcp_header->rst) {
+			qos_connlimit_decrement_for_ct(v);
+		}
 	}
 
-	__u32 ifindex = skb_ingress_ifindex(ctx->skb);
+	/* host_ifindex fallback for netkit: skb->ifindex is the peer there;
+	 * we want to compare against the host-side primary that src_to_dst
+	 * stores.
+	 */
+	__u32 ifindex = CALI_F_TO_HOST
+		? (ctx->globals->data.host_ifindex ? ctx->globals->data.host_ifindex : ctx->skb->ifindex)
+		: skb_ingress_ifindex(ctx->skb);
 
 	if (src_to_dst->ifindex != ifindex) {
 		// Conntrack entry records a different ingress interface than the one the
@@ -1052,13 +1152,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				}
 				break;
 			}
-		} else if (src_to_dst->ifindex != CT_INVALID_IFINDEX) {
-			/* if the devices do not match, we got here without bypassing the
-			 * host IP stack and RPF check allowed it, so update our records.
-			 */
-			CALI_CT_DEBUG("Updating ifindex from %d to %d",
-					src_to_dst->ifindex, ifindex);
-			src_to_dst->ifindex = ifindex;
 		}
 	}
 
@@ -1073,7 +1166,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 	}
 
-	if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb)) {
+	if ((CALI_F_INGRESS && CALI_F_TUNNEL) || !skb_seen(ctx->skb) ||
+			(result.flags & CALI_CT_FLAG_NAT_OUT)) {
 		/* Account for the src->dst leg if we haven't seen the packet yet.
 		 * Since when the traffic is tunneled, BPF program on the host
 		 * iface sees it first and marks it as seen before another
@@ -1084,6 +1178,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 *
 		 * Needs to be done for tunnels that preserve the packet, like
 		 * IPIP and unlike wireguard.
+		 *
+		 * For NAT-outgoing flows, the workload-side entry (NORMAL with
+		 * NAT_OUT flag) and the host-side entry are different conntrack
+		 * entries. The packet is marked as seen after the host-side
+		 * entry is updated, but the workload-side entry still needs its
+		 * counters updated. Since each entry is only looked up once per
+		 * packet direction, there is no double-counting risk.
 		 */
 		src_to_dst->packets++;
 		src_to_dst->bytes += ctx->skb->len;
@@ -1092,8 +1193,24 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	if (syn) {
 		CALI_CT_DEBUG("packet is SYN");
 		ct_result_set_flag(result.rc, CT_RES_SYN);
-	}
 
+		/* For ingress connection limit, propagate the CT entry's
+		 * CONNLIMIT_INGRESS / CONNLIMIT_INGRESS_REJECTED flags to the result
+		 * so accepted_entrypoint can decide what to do without an
+		 * extra CT lookup. The flags themselves are written by
+		 * accepted_entrypoint after the limit check resolves —
+		 * INGRESS on success, REJECTED on failure, never both
+		 */
+		if (CALI_F_TO_WEP && INGRESS_CONN_LIMIT_CONFIGURED) {
+			__u32 cl = ct_value_get_flags(v);
+			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS;
+			}
+			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED) {
+				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS_REJECTED;
+			}
+		}
+	}
 
 	CALI_CT_DEBUG("result: 0x%x", result.rc);
 

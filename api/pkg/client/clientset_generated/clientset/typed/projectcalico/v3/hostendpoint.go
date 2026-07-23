@@ -8,6 +8,7 @@ import (
 	context "context"
 
 	projectcalicov3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	applyconfigurationgeneratedprojectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
 	scheme "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -31,18 +32,19 @@ type HostEndpointInterface interface {
 	List(ctx context.Context, opts v1.ListOptions) (*projectcalicov3.HostEndpointList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.HostEndpoint, err error)
+	Apply(ctx context.Context, hostEndpoint *applyconfigurationgeneratedprojectcalicov3.HostEndpointApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.HostEndpoint, err error)
 	HostEndpointExpansion
 }
 
 // hostEndpoints implements HostEndpointInterface
 type hostEndpoints struct {
-	*gentype.ClientWithList[*projectcalicov3.HostEndpoint, *projectcalicov3.HostEndpointList]
+	*gentype.ClientWithListAndApply[*projectcalicov3.HostEndpoint, *projectcalicov3.HostEndpointList, *applyconfigurationgeneratedprojectcalicov3.HostEndpointApplyConfiguration]
 }
 
 // newHostEndpoints returns a HostEndpoints
 func newHostEndpoints(c *ProjectcalicoV3Client) *hostEndpoints {
 	return &hostEndpoints{
-		gentype.NewClientWithList[*projectcalicov3.HostEndpoint, *projectcalicov3.HostEndpointList](
+		gentype.NewClientWithListAndApply[*projectcalicov3.HostEndpoint, *projectcalicov3.HostEndpointList, *applyconfigurationgeneratedprojectcalicov3.HostEndpointApplyConfiguration](
 			"hostendpoints",
 			c.RESTClient(),
 			scheme.ParameterCodec,

@@ -17,6 +17,7 @@ package commands
 import (
 	"bytes"
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"net"
 	"slices"
@@ -37,6 +38,7 @@ func init() {
 		"group frontends that share the same service ID and print their backends once per group")
 	natCmd.AddCommand(natDumpCmd)
 	natCmd.AddCommand(natAffDumpCmd)
+	natCmd.AddCommand(natMaglevDumpCmd)
 
 	natSetCmd.AddCommand(newNatSetFrontend())
 	natSetCmd.AddCommand(newNatSetBackend())
@@ -83,6 +85,16 @@ var natAffDumpCmd = &cobra.Command{
 	},
 }
 
+var natMaglevDumpCmd = &cobra.Command{
+	Use:   "maglev",
+	Short: "dumps the maglev consistent-hash backend table",
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := dumpMaglev(cmd); err != nil {
+			log.WithError(err).Error("Failed to dump maglev map")
+		}
+	},
+}
+
 var natSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "sets an entry in the NAT tables",
@@ -93,17 +105,66 @@ var natDelCmd = &cobra.Command{
 	Short: "deletes an entry from the NAT tables",
 }
 
-func dumpAff(cmd *cobra.Command) (err error) {
+func dumpAff(cmd *cobra.Command) error {
+	if ipv6 != nil && *ipv6 {
+		affMap, err := nat.LoadAffinityMapV6(nat.AffinityMapV6())
+		if err != nil {
+			return err
+		}
+		return writeAff(cmd, makeAffinityJSON(affMap))
+	}
+
 	affMap, err := nat.LoadAffinityMap(nat.AffinityMap())
 	if err != nil {
 		return err
 	}
+	return writeAff(cmd, makeAffinityJSON(affMap))
+}
 
-	for k, v := range affMap {
-		cmd.Printf("%-40s %s\n", k, v)
+func writeAff(cmd *cobra.Command, entries []affinityEntryJSON) error {
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
 	}
 
+	for _, e := range entries {
+		cmd.Printf("client %s svc proto %d %s -> %s ts %s\n",
+			e.ClientIP, e.Proto, net.JoinHostPort(e.Addr, fmt.Sprint(e.Port)),
+			net.JoinHostPort(e.Backend.Addr, fmt.Sprint(e.Backend.Port)), e.Timestamp)
+	}
 	cmd.Printf("\n")
+
+	return nil
+}
+
+func dumpMaglev(cmd *cobra.Command) error {
+	if ipv6 != nil && *ipv6 {
+		mglvMap, err := nat.LoadMaglevMapV6(nat.MaglevMapV6())
+		if err != nil {
+			return err
+		}
+		return writeMaglev(cmd, makeMaglevJSON(mglvMap))
+	}
+
+	mglvMap, err := nat.LoadMaglevMap(nat.MaglevMap())
+	if err != nil {
+		return err
+	}
+	return writeMaglev(cmd, makeMaglevJSON(mglvMap))
+}
+
+func writeMaglev(cmd *cobra.Command, entries []maglevEntryJSON) error {
+	if *jsonOutput {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(entries)
+	}
+
+	for _, e := range entries {
+		cmd.Printf("svc %d ordinal %d -> %s\n",
+			e.SvcID, e.Ordinal, net.JoinHostPort(e.Addr, fmt.Sprint(e.Port)))
+	}
 
 	return nil
 }
@@ -132,6 +193,9 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		if *jsonOutput {
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
+		}
 		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	} else {
 		natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
@@ -156,6 +220,9 @@ func dump(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		if *jsonOutput {
+			return dumpNATJSON(cmd, filtered, back, natDumpGroupByService)
+		}
 		dumpNice(cmd.Printf, filtered, back, natDumpGroupByService)
 	}
 	return nil
@@ -327,6 +394,243 @@ func dumpNiceGrouped[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface]
 			}
 		}
 	}
+}
+
+// JSON types for nat dump output.
+
+type natBackendJSON struct {
+	Addr string `json:"addr"`
+	Port uint16 `json:"port"`
+}
+
+type natFrontendJSON struct {
+	Addr    string `json:"addr"`
+	Port    uint16 `json:"port"`
+	Proto   uint8  `json:"proto"`
+	SrcCIDR string `json:"src_cidr,omitempty"`
+	ID      uint32 `json:"id"`
+	Count   int    `json:"count"`
+	Local   uint32 `json:"local"`
+	Flags   string `json:"flags,omitempty"`
+}
+
+// natServiceJSON is used in flat mode: one frontend with its backends.
+type natServiceJSON struct {
+	Frontend natFrontendJSON  `json:"frontend"`
+	Backends []natBackendJSON `json:"backends"`
+}
+
+// natServiceGroupJSON is used in --group-by-service mode.
+type natServiceGroupJSON struct {
+	ID        uint32            `json:"id"`
+	Frontends []natFrontendJSON `json:"frontends"`
+	Backends  []natBackendJSON  `json:"backends"`
+}
+
+// maglevEntryJSON is one (service, ordinal) -> backend slot of the maglev
+// consistent-hash table.
+type maglevEntryJSON struct {
+	SvcID   uint32 `json:"svc_id"`
+	Ordinal uint32 `json:"ordinal"`
+	Addr    string `json:"addr"`
+	Port    uint16 `json:"port"`
+}
+
+// maglevKey is the constraint for a maglev map key: comparable (so it can be a
+// Go map key) and exposing the maglev key accessors.
+type maglevKey interface {
+	comparable
+	nat.MaglevBackendKeyInterface
+}
+
+func makeMaglevJSON[K maglevKey, V nat.BackendValueInterface](m map[K]V) []maglevEntryJSON {
+	entries := make([]maglevEntryJSON, 0, len(m))
+	for k, v := range m {
+		entries = append(entries, maglevEntryJSON{
+			SvcID:   k.SvcID(),
+			Ordinal: k.Ordinal(),
+			Addr:    v.Addr().String(),
+			Port:    v.Port(),
+		})
+	}
+	// Sort by (service, ordinal) for deterministic output.
+	slices.SortFunc(entries, func(a, b maglevEntryJSON) int {
+		if a.SvcID != b.SvcID {
+			return cmp.Compare(a.SvcID, b.SvcID)
+		}
+		return cmp.Compare(a.Ordinal, b.Ordinal)
+	})
+	return entries
+}
+
+// affinityEntryJSON is one client -> backend affinity entry, keyed by the
+// client IP and the frontend service it is sticky to.
+type affinityEntryJSON struct {
+	ClientIP  string         `json:"client_ip"`
+	Proto     uint8          `json:"proto"`
+	Addr      string         `json:"addr"`
+	Port      uint16         `json:"port"`
+	Backend   natBackendJSON `json:"backend"`
+	Timestamp string         `json:"timestamp"`
+}
+
+// affinityKey is the constraint for an affinity map key: comparable and
+// exposing the affinity key accessors.
+type affinityKey interface {
+	comparable
+	nat.AffinityKeyInterface
+}
+
+func makeAffinityJSON[K affinityKey, V nat.AffinityValueInterface](m map[K]V) []affinityEntryJSON {
+	entries := make([]affinityEntryJSON, 0, len(m))
+	for k, v := range m {
+		fe := k.FrontendAffinityKey()
+		be := v.Backend()
+		entries = append(entries, affinityEntryJSON{
+			ClientIP:  k.ClientIP().String(),
+			Proto:     fe.Proto(),
+			Addr:      fe.Addr().String(),
+			Port:      fe.Port(),
+			Backend:   natBackendJSON{Addr: be.Addr().String(), Port: be.Port()},
+			Timestamp: v.Timestamp().String(),
+		})
+	}
+	// Sort by (service addr, port, proto, client) for deterministic output.
+	// Proto is part of the sort key because a service can be sticky on the same
+	// addr+port for more than one protocol; without it those entries would
+	// compare equal and order non-deterministically.
+	slices.SortFunc(entries, func(a, b affinityEntryJSON) int {
+		if c := cmp.Compare(a.Addr, b.Addr); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Port, b.Port); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(a.Proto, b.Proto); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.ClientIP, b.ClientIP)
+	})
+	return entries
+}
+
+func dumpNATJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+	groupByService bool,
+) error {
+	if groupByService {
+		return dumpNATGroupedJSON(cmd, natMap, back)
+	}
+	return dumpNATFlatJSON(cmd, natMap, back)
+}
+
+func makeFrontendJSON[FK nat.FrontendKeyComparable](nk FK, nv nat.FrontendValue) natFrontendJSON {
+	count := int(nv.Count())
+	if nv.Count() == nat.BlackHoleCount {
+		count = -1
+	}
+	fe := natFrontendJSON{
+		Addr:  nk.Addr().String(),
+		Port:  nk.Port(),
+		Proto: nk.Proto(),
+		ID:    nv.ID(),
+		Count: count,
+		Local: nv.LocalCount(),
+		Flags: nv.FlagsAsString(),
+	}
+	if srcCIDR := nk.SrcCIDR(); srcCIDR.Prefix() != 0 {
+		fe.SrcCIDR = srcCIDR.String()
+	}
+	return fe
+}
+
+func makeBackendsJSON[BV nat.BackendValueInterface](id uint32, count int, back map[nat.BackendKey]BV) []natBackendJSON {
+	var backends []natBackendJSON
+	for i := 0; i < count; i++ {
+		bk := nat.NewNATBackendKey(id, uint32(i))
+		bv, ok := back[bk]
+		if !ok {
+			backends = append(backends, natBackendJSON{Addr: "missing"})
+		} else {
+			backends = append(backends, natBackendJSON{
+				Addr: bv.Addr().String(),
+				Port: bv.Port(),
+			})
+		}
+	}
+	return backends
+}
+
+func dumpNATFlatJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+) error {
+	var services []natServiceJSON
+	for nk, nv := range natMap {
+		fe := makeFrontendJSON(nk, nv)
+		count := fe.Count
+		if count < 0 {
+			count = 0
+		}
+		services = append(services, natServiceJSON{
+			Frontend: fe,
+			Backends: makeBackendsJSON(nv.ID(), count, back),
+		})
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(services)
+}
+
+func dumpNATGroupedJSON[FK nat.FrontendKeyComparable, BV nat.BackendValueInterface](
+	cmd *cobra.Command,
+	natMap map[FK]nat.FrontendValue,
+	back map[nat.BackendKey]BV,
+) error {
+	byID := make(map[uint32][]FK)
+	for nk := range natMap {
+		id := natMap[nk].ID()
+		byID[id] = append(byID[id], nk)
+	}
+
+	ids := make([]uint32, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	slices.SortFunc(ids, func(a, b uint32) int { return cmp.Compare(a, b) })
+
+	var groups []natServiceGroupJSON
+	for _, id := range ids {
+		keys := byID[id]
+		slices.SortFunc(keys, func(a, b FK) int {
+			return bytes.Compare(a.AsBytes(), b.AsBytes())
+		})
+
+		firstVal := natMap[keys[0]]
+		count := int(firstVal.Count())
+		if firstVal.Count() == nat.BlackHoleCount {
+			count = 0
+		}
+
+		var frontends []natFrontendJSON
+		for _, nk := range keys {
+			frontends = append(frontends, makeFrontendJSON(nk, natMap[nk]))
+		}
+
+		groups = append(groups, natServiceGroupJSON{
+			ID:        id,
+			Frontends: frontends,
+			Backends:  makeBackendsJSON(id, count, back),
+		})
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(groups)
 }
 
 type natFrontend struct {

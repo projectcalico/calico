@@ -1,0 +1,31 @@
+PACKAGE_NAME = github.com/projectcalico/calico
+
+include ../metadata.mk
+include ../lib.Makefile
+
+###############################################################################
+# API validation tests (envtest-based, CEL XValidation rules)
+###############################################################################
+.PHONY: ut-validation
+## Run CRD validation tests against the default K8s version.
+ut-validation: setup-envtest
+	mkdir -p report
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		gotestsum --junitfile test/report/ut-validation.xml -- -count=1 -v ./test/validation/...
+
+.PHONY: ut-validation-min-k8s
+## Run CRD validation tests against the minimum supported K8s version (1.31).
+ut-validation-min-k8s: setup-envtest-min
+	mkdir -p report
+	$(DOCKER_RUN) \
+		-v $$(ls -d $(ENVTEST_DIR)/k8s/$(ENVTEST_MIN_K8S_MINOR)*-$(BUILDOS)-$(BUILDARCH) | tail -1):/envtest:ro \
+		-e KUBEBUILDER_ASSETS=/envtest \
+		$(CALICO_BUILD) \
+		gotestsum --junitfile test/report/ut-validation-min-k8s.xml -- -count=1 -v ./test/validation/...
+
+.PHONY: ci
+## Run all test/ CI jobs.
+ci: ut-validation ut-validation-min-k8s

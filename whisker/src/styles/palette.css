@@ -1,0 +1,180 @@
+/**
+ * Raw colour palette. Created using TailwindCSS Colour Generator: https://uicolors.app/generate/f47828
+ * Inspired by https://atlassian.design/foundations/color-new
+ */
+
+@theme {
+    --color-tigera-color-neutral-0: #ffffff;
+    --color-tigera-color-neutral-50: #f5f5f6;
+    --color-tigera-color-neutral-100: #e6e6e7;
+    --color-tigera-color-neutral-200: #cfd0d2;
+    --color-tigera-color-neutral-300: #adafb3;
+    --color-tigera-color-neutral-400: #84878c;
+    --color-tigera-color-neutral-500: #696c71;
+    --color-tigera-color-neutral-600: #595b61;
+    --color-tigera-color-neutral-700: #4c4e52;
+    --color-tigera-color-neutral-800: #424346;
+    --color-tigera-color-neutral-900: #3b3b3e;
+    --color-tigera-color-neutral-1000: #252627;
+    --color-tigera-color-neutral-1100: #1b1c1d;
+    --color-tigera-color-neutral-1200: #141414;
+
+    --color-tigera-color-dark-alpha-100: rgba(245, 245, 246, 0.05);
+    --color-tigera-color-dark-alpha-200: rgba(245, 245, 246, 0.1);
+    --color-tigera-color-dark-alpha-300: rgba(245, 245, 246, 0.15);
+    --color-tigera-color-dark-alpha-400: rgba(245, 245, 246, 0.2);
+    --color-tigera-color-dark-alpha-500: rgba(245, 245, 246, 0.25);
+
+    --color-tigera-color-light-alpha-100: rgba(20, 20, 20, 0.05);
+    --color-tigera-color-light-alpha-200: rgba(20, 20, 20, 0.1);
+    --color-tigera-color-light-alpha-300: rgba(20, 20, 20, 0.15);
+    --color-tigera-color-light-alpha-400: rgba(20, 20, 20, 0.2);
+    --color-tigera-color-light-alpha-500: rgba(20, 20, 20, 0.25);
+
+    --color-tigera-color-blue-50: #f0f5fe;
+    --color-tigera-color-blue-100: #dee8fb;
+    --color-tigera-color-blue-200: #c4d9f9;
+    --color-tigera-color-blue-300: #9cc0f4;
+    --color-tigera-color-blue-400: #6d9eed;
+    --color-tigera-color-blue-500: #4b7de6;
+    --color-tigera-color-blue-600: #365fdb;
+    --color-tigera-color-blue-700: #2d4cc8;
+    --color-tigera-color-blue-800: #2a3fa3;
+    --color-tigera-color-blue-900: #273981;
+    --color-tigera-color-blue-1000: #1c254f;
+
+    --color-tigera-color-medium-gold-50: #fff9ed;
+    --color-tigera-color-medium-gold-100: #fef2d6;
+    --color-tigera-color-medium-gold-200: #fde1ab;
+    --color-tigera-color-medium-gold-300: #fbcb76;
+    --color-tigera-color-medium-gold-400: #f8aa3f;
+    --color-tigera-color-medium-gold-500: #f69320;
+    --color-tigera-color-medium-gold-600: #e7750f;
+    --color-tigera-color-medium-gold-700: #bf580f;
+    --color-tigera-color-medium-gold-800: #984614;
+    --color-tigera-color-medium-gold-900: #7a3b14;
+    --color-tigera-color-medium-gold-1000: #421b08;
+    --color-tigera-color-medium-gold-1100: #2d1306;
+
+    --color-tigera-color-dark-gold-50: #fef7ee;
+    --color-tigera-color-dark-gold-100: #feecd6;
+    --color-tigera-color-dark-gold-200: #fcd6ac;
+    --color-tigera-color-dark-gold-300: #f9b878;
+    --color-tigera-color-dark-gold-400: #f59042;
+    --color-tigera-color-dark-gold-500: #f37828;
+    --color-tigera-color-dark-gold-600: #e45712;
+    --color-tigera-color-dark-gold-700: #bd4011;
+    --color-tigera-color-dark-gold-800: #963416;
+    --color-tigera-color-dark-gold-900: #792d15;
+    --color-tigera-color-dark-gold-1000: #411409;
+
+    --color-tigera-color-medium-blue-50: #f1f9fe;
+    --color-tigera-color-medium-blue-100: #e1f2fd;
+    --color-tigera-color-medium-blue-200: #bde6fa;
+    --color-tigera-color-medium-blue-300: #82d2f7;
+    --color-tigera-color-medium-blue-400: #3fbcf1;
+    --color-tigera-color-medium-blue-500: #16a4e1;
+    --color-tigera-color-medium-blue-600: #097db6;
+    --color-tigera-color-medium-blue-700: #09699b;
+    --color-tigera-color-medium-blue-800: #0c5980;
+    --color-tigera-color-medium-blue-900: #104a6a;
+    --color-tigera-color-medium-blue-1000: #0a3047;
+
+    --color-tigera-color-green-50: #eefff6;
+    --color-tigera-color-green-100: #d7ffed;
+    --color-tigera-color-green-200: #b2ffdc;
+    --color-tigera-color-green-300: #76ffc2;
+    --color-tigera-color-green-400: #33f5a1;
+    --color-tigera-color-green-500: #09de81;
+    --color-tigera-color-green-600: #00c771;
+    --color-tigera-color-green-700: #049a5a;
+    --color-tigera-color-green-800: #0a7146;
+    --color-tigera-color-green-900: #0a5d3c;
+    --color-tigera-color-green-1000: #00341f;
+    --color-tigera-color-green-1100: #002415;
+
+    --color-tigera-color-red-50: #fef2f2;
+    --color-tigera-color-red-100: #ffe1e1;
+    --color-tigera-color-red-200: #ffcac9;
+    --color-tigera-color-red-300: #fea4a3;
+    --color-tigera-color-red-400: #fa716f;
+    --color-tigera-color-red-500: #f24341;
+    --color-tigera-color-red-600: #e1302e;
+    --color-tigera-color-red-700: #bc1b19;
+    --color-tigera-color-red-800: #9b1a19;
+    --color-tigera-color-red-900: #811c1b;
+    --color-tigera-color-red-1000: #460a09;
+    --color-tigera-color-red-1100: #2d0606;
+
+    --color-tigera-color-lilac-50: #edeeff;
+    --color-tigera-color-lilac-100: #dee0ff;
+    --color-tigera-color-lilac-200: #c4c5ff;
+    --color-tigera-color-lilac-300: #a1a0ff;
+    --color-tigera-color-lilac-400: #7e70ff;
+    --color-tigera-color-lilac-500: #765bf9;
+    --color-tigera-color-lilac-600: #693dee;
+    --color-tigera-color-lilac-700: #5b2fd3;
+    --color-tigera-color-lilac-800: #4a29aa;
+    --color-tigera-color-lilac-900: #3e2986;
+    --color-tigera-color-lilac-1000: #26184e;
+
+    --color-tigera-color-rose-50: #fef1f7;
+    --color-tigera-color-rose-100: #fee5f2;
+    --color-tigera-color-rose-200: #ffcbe7;
+    --color-tigera-color-rose-300: #ffa1d1;
+    --color-tigera-color-rose-400: #ff5eab;
+    --color-tigera-color-rose-500: #fa3a90;
+    --color-tigera-color-rose-600: #ea186c;
+    --color-tigera-color-rose-700: #cc0a52;
+    --color-tigera-color-rose-800: #a80c44;
+    --color-tigera-color-rose-900: #8c0f3b;
+    --color-tigera-color-rose-1000: #56011f;
+
+    --color-tigera-color-peach-50: #fff4f1;
+    --color-tigera-color-peach-100: #ffe6e1;
+    --color-tigera-color-peach-200: #ffd1c7;
+    --color-tigera-color-peach-300: #ffb1a0;
+    --color-tigera-color-peach-400: #ff7455;
+    --color-tigera-color-peach-500: #f85d3b;
+    --color-tigera-color-peach-600: #e5411d;
+    --color-tigera-color-peach-700: #c13414;
+    --color-tigera-color-peach-800: #a02e14;
+    --color-tigera-color-peach-900: #842c18;
+    --color-tigera-color-peach-1000: #481307;
+
+    --color-tigera-color-sky-50: #f0f9ff;
+    --color-tigera-color-sky-100: #dff3ff;
+    --color-tigera-color-sky-200: #b8e8ff;
+    --color-tigera-color-sky-300: #58cdff;
+    --color-tigera-color-sky-400: #33c4fd;
+    --color-tigera-color-sky-500: #09acee;
+    --color-tigera-color-sky-600: #008acc;
+    --color-tigera-color-sky-700: #006ea5;
+    --color-tigera-color-sky-800: #045d88;
+    --color-tigera-color-sky-900: #0a4d70;
+    --color-tigera-color-sky-1000: #06314b;
+
+    --color-tigera-color-zest-50: #fafee7;
+    --color-tigera-color-zest-100: #f2fccb;
+    --color-tigera-color-zest-200: #e4f99d;
+    --color-tigera-color-zest-300: #cff264;
+    --color-tigera-color-zest-400: #bee846;
+    --color-tigera-color-zest-500: #9acc16;
+    --color-tigera-color-zest-600: #77a30d;
+    --color-tigera-color-zest-700: #5a7c0f;
+    --color-tigera-color-zest-800: #496212;
+    --color-tigera-color-zest-900: #3e5314;
+    --color-tigera-color-zest-1000: #1f2e05;
+
+    --color-tigera-color-coast-50: #effefb;
+    --color-tigera-color-coast-100: #cafdf5;
+    --color-tigera-color-coast-200: #94fbec;
+    --color-tigera-color-coast-300: #57f1e1;
+    --color-tigera-color-coast-400: #21cfc2;
+    --color-tigera-color-coast-500: #0cc0b5;
+    --color-tigera-color-coast-600: #069b95;
+    --color-tigera-color-coast-700: #0a7b78;
+    --color-tigera-color-coast-800: #0d6260;
+    --color-tigera-color-coast-900: #105150;
+    --color-tigera-color-coast-1000: #023031;
+}

@@ -61,7 +61,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		return nil, err
 	}
 	v1key := model.IPPoolKey{
-		CIDR: *cidr,
+		CIDR: model.PrefixFromIPNet(*cidr),
 	}
 	var ipipInterface string
 	var ipipMode encap.Mode
@@ -104,6 +104,7 @@ func IPPoolV3ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 			Disabled:         v3res.Spec.Disabled,
 			DisableBGPExport: v3res.Spec.DisableBGPExport,
 			AssignmentMode:   *v3res.Spec.AssignmentMode,
+			AllowedUses:      v3res.Spec.AllowedUses,
 		},
 		Revision: kvp.Revision,
 	}, nil

@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -129,28 +130,42 @@ func (r *REST) Create(ctx context.Context, obj runtime.Object, val rest.Validate
 }
 
 func (r *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc,
-	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+	updateValidation rest.ValidateObjectUpdateFunc, forceAllowCreate bool, options *metav1.UpdateOptions,
+) (runtime.Object, bool, error) {
 	oldObj, err := r.Store.Get(ctx, name, &metav1.GetOptions{})
-	if err != nil {
-		return nil, false, err
-	}
-	oldTier := names.TierOrDefault(oldObj.(*calico.GlobalNetworkPolicy).Spec.Tier)
-	err = r.authorizer.AuthorizeTierOperation(ctx, name, oldTier)
-	if err != nil {
-		return nil, false, err
-	}
+	switch {
+	case err == nil:
+		oldTier := names.TierOrDefault(oldObj.(*calico.GlobalNetworkPolicy).Spec.Tier)
+		if err := r.authorizer.AuthorizeTierOperation(ctx, name, oldTier); err != nil {
+			return nil, false, err
+		}
 
-	// Also authorize the new tier, in case the update changes the policy's tier.
-	newObj, err := objInfo.UpdatedObject(ctx, oldObj)
-	if err != nil {
-		return nil, false, err
-	}
-	newTier := names.TierOrDefault(newObj.(*calico.GlobalNetworkPolicy).Spec.Tier)
-	if newTier != oldTier {
-		err = r.authorizer.AuthorizeTierOperation(ctx, name, newTier)
+		// Also authorize the new tier, in case the update changes the policy's tier.
+		newObj, err := objInfo.UpdatedObject(ctx, oldObj)
 		if err != nil {
 			return nil, false, err
 		}
+		newTier := names.TierOrDefault(newObj.(*calico.GlobalNetworkPolicy).Spec.Tier)
+		if newTier != oldTier {
+			if err := r.authorizer.AuthorizeTierOperation(ctx, name, newTier); err != nil {
+				return nil, false, err
+			}
+		}
+	case k8serrors.IsNotFound(err) && forceAllowCreate:
+		// A server-side apply of a policy that doesn't exist yet reaches Update
+		// with forceAllowCreate set rather than going through Create. There's no
+		// existing object to authorize against, so authorize the incoming object's
+		// tier and let the store create it.
+		newObj, err := objInfo.UpdatedObject(ctx, &calico.GlobalNetworkPolicy{})
+		if err != nil {
+			return nil, false, err
+		}
+		newTier := names.TierOrDefault(newObj.(*calico.GlobalNetworkPolicy).Spec.Tier)
+		if err := r.authorizer.AuthorizeTierOperation(ctx, name, newTier); err != nil {
+			return nil, false, err
+		}
+	default:
+		return nil, false, err
 	}
 
 	return r.Store.Update(ctx, name, objInfo, createValidation, updateValidation, forceAllowCreate, options)
@@ -183,6 +198,24 @@ func (r *REST) Delete(ctx context.Context, name string, deleteValidation rest.Va
 	}
 
 	return r.Store.Delete(ctx, name, deleteValidation, options)
+}
+
+// Apply tiered RBAC to deletecollection requests.
+func (r *REST) DeleteCollection(
+	ctx context.Context,
+	deleteValidation rest.ValidateObjectFunc,
+	options *metav1.DeleteOptions,
+	listOptions *metainternalversion.ListOptions,
+) (runtime.Object, error) {
+	if listOptions == nil {
+		listOptions = &metainternalversion.ListOptions{}
+	} else {
+		listOptions = listOptions.DeepCopy()
+	}
+	if err := util.EnsureTierSelector(ctx, listOptions, r.authorizer, r.CalicoResourceLister); err != nil {
+		return nil, err
+	}
+	return r.Store.DeleteCollection(ctx, deleteValidation, options, listOptions)
 }
 
 func (r *REST) Watch(ctx context.Context, options *metainternalversion.ListOptions) (watch.Interface, error) {

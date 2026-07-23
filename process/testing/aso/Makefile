@@ -135,7 +135,7 @@ clean: delete-vmss uninstall-aso
 	-rm -f .sshkey .sshkey.pub
 	-rm -f $(HELPERS)
 	-rm -f kubeadm-config.yaml
-	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml
+	-rm -f operator-crds.yaml tigera-operator.yaml tigera-prometheus-operator.yaml cert-manager.yaml kube-proxy-windows.yaml
 	-rm -rf infra/manifests/
 	-rm -rf EE/manifests/
 	-rm -rf OSS/manifests/

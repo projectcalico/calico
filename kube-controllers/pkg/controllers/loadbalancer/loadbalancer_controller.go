@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -43,7 +44,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
@@ -77,6 +77,9 @@ func (t *allocationTracker) assignAddressToBlock(key string, ip string, svcKey s
 
 func (t *allocationTracker) releaseAddressFromBlock(key string, ip string) {
 	delete(t.ipsByBlock[key], ip)
+	if len(t.ipsByBlock[key]) == 0 {
+		delete(t.ipsByBlock, key)
+	}
 	t.releaseAddressFromService(t.servicesByIP[ip], ip)
 }
 
@@ -99,11 +102,20 @@ func (t *allocationTracker) assignAddressToService(svcKey serviceKey, ip string)
 func (t *allocationTracker) releaseAddressFromService(svcKey serviceKey, ip string) {
 	delete(t.servicesByIP, ip)
 	delete(t.ipsByService[svcKey], ip)
+	for block, ips := range t.ipsByBlock {
+		if ips[ip] {
+			delete(ips, ip)
+			if len(ips) == 0 {
+				delete(t.ipsByBlock, block)
+			}
+			break
+		}
+	}
 }
 
 func (t *allocationTracker) deleteService(svcKey serviceKey) {
 	for ip := range t.ipsByService[svcKey] {
-		delete(t.servicesByIP, ip)
+		t.releaseAddressFromService(svcKey, ip)
 	}
 	delete(t.ipsByService, svcKey)
 }
@@ -201,14 +213,25 @@ func (c *loadBalancerController) onServiceUpdate(objNew any, objOld any) {
 	}
 }
 
-func (c *loadBalancerController) onServiceDelete(objNew any) {
-	if svc, ok := objNew.(*v1.Service); ok {
-		svcKey, err := serviceKeyFromService(svc)
-		if err != nil {
+func (c *loadBalancerController) onServiceDelete(obj any) {
+	svc, ok := obj.(*v1.Service)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			log.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in Service delete event")
 			return
 		}
-		c.serviceUpdates <- *svcKey
+		svc, ok = tombstone.Obj.(*v1.Service)
+		if !ok {
+			log.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-Service object")
+			return
+		}
 	}
+	svcKey, err := serviceKeyFromService(svc)
+	if err != nil {
+		return
+	}
+	c.serviceUpdates <- *svcKey
 }
 
 func (c *loadBalancerController) RegisterWith(f *utils.DataFeed) {
@@ -368,7 +391,7 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 // creating Service LoadBalancer before any valid pools were created
 func (c *loadBalancerController) syncIPAM() {
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping IPAM sync.")
 		return
 	}
 
@@ -417,6 +440,24 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Updates the controllers internal state tracking of which IP addresses are allocated.
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) {
+	if c.syncStatus != bapi.InSync {
+		// Defer service sync until we are InSync, so we know that all existing IPAM blocks are
+		// tracked by the allocationTracker. Otherwise a service event observed during the cold-start
+		// window would see an empty tracker and allocate a fresh IP alongside the historical one
+		// that arrives later, leaving the service with more IPs than its IPFamilyPolicy permits.
+		// Outside of the cold-start window, deferring until we are InSync provides us confidence
+		// that we are programming in response to a coherent state.
+		//
+		// Events received while not InSync are picked up by syncIPAM, which is kicked once the
+		// syncer reaches InSync.
+		log.WithFields(log.Fields{
+			"status":    c.syncStatus,
+			"namespace": svcKey.namespace,
+			"name":      svcKey.name,
+		}).Debug("Syncer not currently InSync; deferring service sync")
+		return
+	}
+
 	if len(c.ipPools) == 0 {
 		if _, ok := c.allocationTracker.ipsByService[svcKey]; ok {
 			// Last LoadBalancer IPPool was deleted, and we have previously assigned IPs to this service. We need to release the IPs now and update the service status

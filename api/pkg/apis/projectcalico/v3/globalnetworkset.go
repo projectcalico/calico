@@ -29,7 +29,7 @@ const (
 // GlobalNetworkSetList is a list of NetworkSet objects.
 type GlobalNetworkSetList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	Items []GlobalNetworkSet `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
@@ -49,7 +49,8 @@ type GlobalNetworkSet struct {
 
 // GlobalNetworkSetSpec contains the specification for a NetworkSet resource.
 type GlobalNetworkSetSpec struct {
-	// The list of IP networks that belong to this set.
+	// The list of IP networks that belong to this set. Each entry must be in CIDR notation,
+	// e.g. "192.168.1.0/24". To include a single IP address, use a /32 (IPv4) or /128 (IPv6) mask.
 	// +listType=set
 	Nets []string `json:"nets,omitempty" validate:"omitempty,dive,cidr"`
 }

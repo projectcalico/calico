@@ -920,14 +920,19 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 
 	var tunnelIfaces []string
 
-	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
-	}
-	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
-	}
-	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
+		// In BPF mode (without BPFOverlayIPOnDevice), encap/decap and source IP
+		// selection are handled by BPF programs directly, so these masquerade
+		// rules for IPIP/VXLAN tunnels are not needed.
+		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
+		}
+		if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
+		}
+		if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+		}
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have
@@ -1088,14 +1093,14 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 
 	if !r.BPFEnabled {
 		ipConf := r.ipSetConfig(ipVersion)
-		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+		networkIPsSetName := ipConf.NameForMainIPSet(IPSetIDNetworkPools)
 		localHostSetName := ipConf.NameForMainIPSet(IPSetIDThisHostIPs)
 		dscpSetName := ipConf.NameForMainIPSet(IPSetIDDSCPEndpoints)
 		rules = append(
 			rules, generictables.Rule{
 				Match: r.NewMatch().
 					SourceIPSet(dscpSetName).
-					NotDestIPSet(allIPsSetName).
+					NotDestIPSet(networkIPsSetName).
 					NotDestIPSet(localHostSetName),
 				Action:  r.Jump(ChainEgressDSCP),
 				Comment: []string{"set dscp for traffic leaving cluster."},

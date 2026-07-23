@@ -83,6 +83,31 @@ spec:
                     - name
                     - namespace
                   type: object
+                extensions:
+                  description: |-
+                    Extensions enables and configures Tigera-built add-ons that sit on top of the
+                    Gateway API data plane.  Each add-on is opt-in: an unset Extensions, an unset
+                    add-on field, and an empty add-on object all leave the add-on disabled.
+                  properties:
+                    waf:
+                      description: |-
+                        WAF enables and configures the Tigera Web Application Firewall (Coraza WASM
+                        when WAF.State is nil, and when WAF.State is "Disabled", the operator does
+                        not render the WAF env vars or RBAC on calico-kube-controllers.  Set
+                        WAF.State = "Enabled" to turn the feature on.  See design
+                        `tigera/designs#25` (PMREQ-384) for the full surface.
+                      properties:
+                        state:
+                          description: |-
+                            State turns the WAF Gateway API add-on on or off.  Default (nil or
+                            "Disabled") means the operator does not render the WAF surface on
+                            calico-kube-controllers.  Set to "Enabled" to opt in.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
+                  type: object
                 gatewayCertgenJob:
                   description: Allows customization of the gateway certgen job.
                   properties:
@@ -1125,10 +1150,72 @@ spec:
                                       GatewayCertgenJobContainer allows customization of the gateway certgen job's resource
                                       requirements.
                                     properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
                                       name:
                                         enum:
                                           - envoy-gateway-certgen
                                         type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
                                       resources:
                                         description: |-
                                           If non-nil, Resources sets the ResourceRequirements of the job's "envoy-gateway-certgen"
@@ -1223,9 +1310,10 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists and Equal. Defaults to Equal.
+                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
+                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-
@@ -2332,14 +2420,76 @@ spec:
                                             GatewayDaemonSetContainer allows customization of the resource requirements of gateway
                                             daemonsets.
                                           properties:
+                                            livenessProbe:
+                                              description: |-
+                                                LivenessProbe allows customization of the liveness probe timing parameters.
+                                                The probe handler is set by the operator and cannot be overridden.
+                                              properties:
+                                                failureThreshold:
+                                                  description: |-
+                                                    FailureThreshold is the minimum consecutive failures for the probe
+                                                    to be considered failed after having succeeded.
+                                                  format: int32
+                                                  type: integer
+                                                initialDelaySeconds:
+                                                  description: |-
+                                                    InitialDelaySeconds is the number of seconds after the container
+                                                    starts before the probe is initiated.
+                                                  format: int32
+                                                  type: integer
+                                                periodSeconds:
+                                                  description:
+                                                    PeriodSeconds is how
+                                                    often (in seconds) to perform the
+                                                    probe.
+                                                  format: int32
+                                                  type: integer
+                                                timeoutSeconds:
+                                                  description:
+                                                    TimeoutSeconds is the
+                                                    number of seconds after which the
+                                                    probe times out.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
                                             name:
                                               enum:
                                                 - envoy
                                               type: string
-                                            resources:
+                                            readinessProbe:
                                               description: |-
-                                                If non-nil, Resources sets the ResourceRequirements of the daemonset's "envoy"
-                                                container.
+                                                ReadinessProbe allows customization of the readiness probe timing parameters.
+                                                The probe handler is set by the operator and cannot be overridden.
+                                              properties:
+                                                failureThreshold:
+                                                  description: |-
+                                                    FailureThreshold is the minimum consecutive failures for the probe
+                                                    to be considered failed after having succeeded.
+                                                  format: int32
+                                                  type: integer
+                                                initialDelaySeconds:
+                                                  description: |-
+                                                    InitialDelaySeconds is the number of seconds after the container
+                                                    starts before the probe is initiated.
+                                                  format: int32
+                                                  type: integer
+                                                periodSeconds:
+                                                  description:
+                                                    PeriodSeconds is how
+                                                    often (in seconds) to perform the
+                                                    probe.
+                                                  format: int32
+                                                  type: integer
+                                                timeoutSeconds:
+                                                  description:
+                                                    TimeoutSeconds is the
+                                                    number of seconds after which the
+                                                    probe times out.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
+                                            resources:
+                                              description: container.
                                               properties:
                                                 claims:
                                                   description: |-
@@ -2430,9 +2580,10 @@ spec:
                                             operator:
                                               description: |-
                                                 Operator represents a key's relationship to the value.
-                                                Valid operators are Exists and Equal. Defaults to Equal.
+                                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                                 Exists is equivalent to wildcard for value, so that a pod can
                                                 tolerate all taints of a particular category.
+                                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                               type: string
                                             tolerationSeconds:
                                               description: |-
@@ -3736,10 +3887,74 @@ spec:
                                             GatewayDeploymentContainer allows customization of the resource requirements of gateway
                                             deployments.
                                           properties:
+                                            livenessProbe:
+                                              description: |-
+                                                LivenessProbe allows customization of the liveness probe timing parameters.
+                                                The probe handler is set by the operator and cannot be overridden.
+                                              properties:
+                                                failureThreshold:
+                                                  description: |-
+                                                    FailureThreshold is the minimum consecutive failures for the probe
+                                                    to be considered failed after having succeeded.
+                                                  format: int32
+                                                  type: integer
+                                                initialDelaySeconds:
+                                                  description: |-
+                                                    InitialDelaySeconds is the number of seconds after the container
+                                                    starts before the probe is initiated.
+                                                  format: int32
+                                                  type: integer
+                                                periodSeconds:
+                                                  description:
+                                                    PeriodSeconds is how
+                                                    often (in seconds) to perform the
+                                                    probe.
+                                                  format: int32
+                                                  type: integer
+                                                timeoutSeconds:
+                                                  description:
+                                                    TimeoutSeconds is the
+                                                    number of seconds after which the
+                                                    probe times out.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
                                             name:
                                               enum:
                                                 - envoy
                                               type: string
+                                            readinessProbe:
+                                              description: |-
+                                                ReadinessProbe allows customization of the readiness probe timing parameters.
+                                                The probe handler is set by the operator and cannot be overridden.
+                                              properties:
+                                                failureThreshold:
+                                                  description: |-
+                                                    FailureThreshold is the minimum consecutive failures for the probe
+                                                    to be considered failed after having succeeded.
+                                                  format: int32
+                                                  type: integer
+                                                initialDelaySeconds:
+                                                  description: |-
+                                                    InitialDelaySeconds is the number of seconds after the container
+                                                    starts before the probe is initiated.
+                                                  format: int32
+                                                  type: integer
+                                                periodSeconds:
+                                                  description:
+                                                    PeriodSeconds is how
+                                                    often (in seconds) to perform the
+                                                    probe.
+                                                  format: int32
+                                                  type: integer
+                                                timeoutSeconds:
+                                                  description:
+                                                    TimeoutSeconds is the
+                                                    number of seconds after which the
+                                                    probe times out.
+                                                  format: int32
+                                                  type: integer
+                                              type: object
                                             resources:
                                               description: |-
                                                 If non-nil, Resources sets the ResourceRequirements of the deployment's "envoy"
@@ -3835,9 +4050,10 @@ spec:
                                             operator:
                                               description: |-
                                                 Operator represents a key's relationship to the value.
-                                                Valid operators are Exists and Equal. Defaults to Equal.
+                                                Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                                 Exists is equivalent to wildcard for value, so that a pod can
                                                 tolerate all taints of a particular category.
+                                                Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                               type: string
                                             tolerationSeconds:
                                               description: |-
@@ -4092,6 +4308,30 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              patch:
+                                description: |-
+                                  Patch allows the Service for a gateway to be patched in ways that aren't more explicitly
+                                  supported by the fields above.  For example, the following YAML could be used to set the
+                                  Service's healthCheckNodePort:
+                                    patch:
+                                      type: StrategicMerge
+                                      value:
+                                        spec:
+                                          healthCheckNodePort: 12345
+                                properties:
+                                  type:
+                                    description: |-
+                                      Type is the type of merge operation to perform
+                                      By default, StrategicMerge is used as the patch type.
+                                    type: string
+                                  value:
+                                    description:
+                                      Object contains the raw configuration
+                                      for merged object
+                                    x-kubernetes-preserve-unknown-fields: true
+                                required:
+                                  - value
+                                type: object
                             type: object
                         type: object
                       name:
@@ -5157,10 +5397,72 @@ spec:
                                       GatewayControllerDeploymentContainer allows customization of the gateway controller's resource
                                       requirements.
                                     properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
                                       name:
                                         enum:
                                           - envoy-gateway
                                         type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
                                       resources:
                                         description: |-
                                           If non-nil, Resources sets the ResourceRequirements of the controller's "envoy-gateway"
@@ -5255,9 +5557,10 @@ spec:
                                       operator:
                                         description: |-
                                           Operator represents a key's relationship to the value.
-                                          Valid operators are Exists and Equal. Defaults to Equal.
+                                          Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
                                           Exists is equivalent to wildcard for value, so that a pod can
                                           tolerate all taints of a particular category.
+                                          Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
                                         type: string
                                       tolerationSeconds:
                                         description: |-

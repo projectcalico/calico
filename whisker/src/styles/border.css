@@ -1,0 +1,61 @@
+@theme {
+    /**
+   * Border colours
+   *
+   * Reference: https://designsystem.backbase.com/latest/design-tokens/semantic-colors/border-colors-ycZQpqDi
+   */
+
+    --color-tigera-token-border-default: var(--color-tigera-color-neutral-100);
+    --color-tigera-token-border-default-hovered: var(
+        --color-tigera-color-neutral-200
+    );
+
+    --color-tigera-token-border-bold: var(--color-tigera-color-neutral-300);
+
+    --color-tigera-token-border-selected: var(--color-tigera-color-blue-900);
+
+    --color-tigera-token-border-brand: var(--color-tigera-color-blue-900);
+    --color-tigera-token-border-brand-hovered: var(
+        --color-tigera-color-blue-900
+    );
+    --color-tigera-token-border-brand-pressed: var(
+        --color-tigera-color-blue-700
+    );
+
+    --color-tigera-token-border-warning: var(
+        --color-tigera-color-medium-gold-500
+    );
+    --color-tigera-token-border-info: var(--color-tigera-color-medium-blue-600);
+    --color-tigera-token-border-danger: var(--color-tigera-color-red-600);
+    --color-tigera-token-border-success: var(--color-tigera-color-green-600);
+}
+
+.dark {
+    --color-tigera-token-border-default: var(--color-tigera-color-neutral-800);
+    --color-tigera-token-border-default-hovered: var(
+        --color-tigera-color-neutral-700
+    );
+
+    --color-tigera-token-border-bold: var(--color-tigera-color-neutral-500);
+
+    --color-tigera-token-border-selected: var(
+        --color-tigera-color-medium-gold-300
+    );
+
+    --color-tigera-token-border-brand: var(
+        --color-tigera-color-medium-gold-400
+    );
+    --color-tigera-token-border-brand-hovered: var(
+        --color-tigera-color-medium-gold-400
+    );
+    --color-tigera-token-border-brand-pressed: var(
+        --color-tigera-color-medium-gold-200
+    );
+
+    --color-tigera-token-border-warning: var(
+        --color-tigera-color-medium-gold-400
+    );
+    --color-tigera-token-border-info: var(--color-tigera-color-medium-blue-300);
+    --color-tigera-token-border-danger: var(--color-tigera-color-red-600);
+    --color-tigera-token-border-success: var(--color-tigera-color-green-400);
+}

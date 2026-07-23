@@ -1,5 +1,5 @@
-# This MutatingAdmissionPolicy sets the projectcalico.org/tier label on policy resources
-# to match the spec.tier field, defaulting to "default" if not specified.
+# This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
+# and sets the projectcalico.org/tier label to match.
 apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingAdmissionPolicy
 metadata:
@@ -22,6 +22,13 @@ spec:
       expression: |
         has(object.spec.tier) && object.spec.tier != "" ? object.spec.tier : "default"
   mutations:
+    # Default spec.tier to "default" if empty or unset.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          !has(object.spec.tier) || object.spec.tier == "" ?
+            [JSONPatch{op: "add", path: "/spec/tier", value: variables.tierValue}] :
+            []
     # Set the projectcalico.org/tier label to match spec.tier.
     # Uses ~1 encoding for the / in the label key per RFC 6901 (JSON Pointer).
     - patchType: "JSONPatch"

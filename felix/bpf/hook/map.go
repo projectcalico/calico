@@ -15,19 +15,42 @@
 package hook
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"path"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/jump"
 	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	bpfmaps "github.com/projectcalico/calico/felix/bpf/maps"
+	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
+
+// ErrPermanentLoadFailure indicates a BPF program load failure that will not
+// resolve on retry (e.g. kernel verifier rejection due to missing features).
+var ErrPermanentLoadFailure = errors.New("BPF program load failed permanently")
+
+// IsPermanentLoadFailure returns true if the error from obj.Load() indicates
+// a non-transient condition. Only ENOMEM, EAGAIN, and EBUSY are considered
+// transient; everything else (EINVAL, ENOTSUP, EPERM, etc.) is permanent.
+func IsPermanentLoadFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ENOMEM) ||
+		errors.Is(err, syscall.EAGAIN) ||
+		errors.Is(err, syscall.EBUSY) {
+		return false
+	}
+	return true
+}
 
 const maxPrograms = 400
 
@@ -99,9 +122,10 @@ type SubProgInfo struct {
 // GetApplicableSubProgs returns the list of sub-programs that should be loaded
 // for the given AttachType. It filters out empty entries and conditionally
 // excludes programs based on the AttachType's characteristics.
-// The skipIPDefrag parameter allows skipping IP defrag even if the AttachType
-// normally supports it (used when loading fails and retrying without IP defrag).
-func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
+// The skipOptional set allows skipping optional programs even if the AttachType
+// normally supports them (used when loading fails and retrying without them,
+// or when they are disabled by configuration).
+func GetApplicableSubProgs(at AttachType, skipOptional set.Set[SubProg]) []SubProgInfo {
 	var result []SubProgInfo
 
 	subs := GetSubProgNames(at.Hook)
@@ -115,8 +139,10 @@ func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
 			continue
 		}
 
-		if SubProg(idx) == SubProgIPFrag && (!at.hasIPDefrag() || skipIPDefrag) {
-			continue
+		if isOpt, notApplicable := isOptionalAndNotApplicable(SubProg(idx), at); isOpt {
+			if notApplicable || (skipOptional != nil && skipOptional.Contains(SubProg(idx))) {
+				continue
+			}
 		}
 
 		if SubProg(idx) == SubProgMaglev && !at.hasMaglev() {
@@ -136,6 +162,13 @@ func GetApplicableSubProgs(at AttachType, skipIPDefrag bool) []SubProgInfo {
 // Layout maps sub-programs of an object to their location in the ProgramsMap
 type Layout map[SubProg]int
 
+// LoadResult is the result of loading a BPF object. It contains the layout
+// and any optional programs that were skipped because they failed to load.
+type LoadResult struct {
+	Layout          Layout
+	SkippedOptional []OptionalSubProgInfo
+}
+
 func MergeLayouts(layouts ...Layout) Layout {
 	ret := make(Layout)
 
@@ -146,19 +179,35 @@ func MergeLayouts(layouts ...Layout) Layout {
 	return ret
 }
 
+// programCacheKey combines AttachType with the BPF program attach type string
+// ("TC", "TCX", or "Netkit") to differentiate cache entries for programs that
+// share the same object file but require different expected_attach_type values.
+type programCacheKey struct {
+	AttachType
+	ProgAttachType string
+}
+
 type ProgramsMap struct {
 	*bpfmaps.PinnedMap
 
 	programsLock sync.Mutex
-	programs     map[AttachType]*program
+	programs     map[programCacheKey]*program
 
 	expectedAttachType string
 	nextIdx            atomic.Int64
+
+	// mapPinOverrides maps C object map names (e.g. "cali_progs_ing2") to
+	// alternate pin paths. Used by netkit ProgramsMaps to redirect prog_array
+	// maps to a netkit-specific directory, so that netkit programs (which have
+	// a different expected_attach_type) get their own prog_array instances.
+	mapPinOverrides map[string]string
 }
 
 type program struct {
-	lock   sync.Mutex
-	layout Layout
+	lock            sync.Mutex
+	layout          Layout
+	permanentErr    error                 // non-nil if loading failed permanently; prevents retries
+	skippedOptional []OptionalSubProgInfo // optional programs that were skipped on load
 }
 
 var IngressProgramsMapParameters = bpfmaps.MapParameters{
@@ -186,6 +235,93 @@ func NewProgramsMaps() []bpfmaps.Map {
 	}
 }
 
+var NetkitIngressProgramsMapParameters = bpfmaps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: maxPrograms,
+	Name:       "cali_p_nk_ing",
+	Version:    2,
+}
+
+var NetkitEgressProgramsMapParameters = bpfmaps.MapParameters{
+	Type:       "prog_array",
+	KeySize:    4,
+	ValueSize:  4,
+	MaxEntries: maxPrograms,
+	Name:       "cali_p_nk_egr",
+	Version:    2,
+}
+
+func NewNetkitProgramsMaps() []bpfmaps.Map {
+	return []bpfmaps.Map{
+		NewNetkitIngressProgramsMap(),
+		NewNetkitEgressProgramsMap(),
+	}
+}
+
+func NewNetkitIngressProgramsMap() bpfmaps.Map {
+	pm := newProgramsMap(NetkitIngressProgramsMapParameters, "ingress")
+	pmTyped := pm.(*ProgramsMap)
+	pmTyped.mapPinOverrides = netkitPinOverrides(
+		IngressProgramsMapParameters, NetkitIngressProgramsMapParameters,
+		jump.IngressMapParameters, jump.NetkitIngressMapParameters,
+	)
+	return pm
+}
+
+func NewNetkitEgressProgramsMap() bpfmaps.Map {
+	pm := newProgramsMap(NetkitEgressProgramsMapParameters, "egress")
+	pmTyped := pm.(*ProgramsMap)
+	pmTyped.mapPinOverrides = netkitPinOverrides(
+		EgressProgramsMapParameters, NetkitEgressProgramsMapParameters,
+		jump.EgressMapParameters, jump.NetkitEgressMapParameters,
+	)
+	return pm
+}
+
+// netkitPinOverrides builds a map from the C object's prog_array map names
+// to netkit-specific pin paths. The kernel requires all programs in a prog_array
+// to have the same expected_attach_type; netkit programs (BPF_NETKIT_PEER/PRIMARY)
+// are incompatible with TC/TCX programs, so they need separate prog_array instances.
+// TC and TCX can share prog_arrays because the kernel treats their attach types as
+// compatible within BPF_PROG_TYPE_SCHED_CLS.
+func netkitPinOverrides(
+	tcProgs, nkProgs bpfmaps.MapParameters,
+	tcJump, nkJump bpfmaps.MapParameters,
+) map[string]string {
+	return map[string]string{
+		tcProgs.VersionedName(): nkProgs.VersionedFilename(),
+		tcJump.VersionedName():  nkJump.VersionedFilename(),
+	}
+}
+
+// NetkitPinOverridesIngress returns pin path overrides for ingress prog_array maps.
+func NetkitPinOverridesIngress() map[string]string {
+	return netkitPinOverrides(
+		IngressProgramsMapParameters, NetkitIngressProgramsMapParameters,
+		jump.IngressMapParameters, jump.NetkitIngressMapParameters,
+	)
+}
+
+// NetkitPinOverridesEgress returns pin path overrides for egress prog_array maps.
+func NetkitPinOverridesEgress() map[string]string {
+	return netkitPinOverrides(
+		EgressProgramsMapParameters, NetkitEgressProgramsMapParameters,
+		jump.EgressMapParameters, jump.NetkitEgressMapParameters,
+	)
+}
+
+// NetkitPinOverridesBoth returns pin path overrides for both ingress and egress
+// prog_array maps. Used when the attach point is copied for both directions.
+func NetkitPinOverridesBoth() map[string]string {
+	m := NetkitPinOverridesIngress()
+	for k, v := range NetkitPinOverridesEgress() {
+		m[k] = v
+	}
+	return m
+}
+
 func NewIngressProgramsMap() bpfmaps.Map {
 	return newProgramsMap(IngressProgramsMapParameters, "ingress")
 }
@@ -197,7 +333,7 @@ func NewEgressProgramsMap() bpfmaps.Map {
 func newProgramsMap(ProgramsMapParameters bpfmaps.MapParameters, expectedAttachType string) bpfmaps.Map {
 	return &ProgramsMap{
 		PinnedMap:          bpfmaps.NewPinnedMap(ProgramsMapParameters),
-		programs:           make(map[AttachType]*program),
+		programs:           make(map[programCacheKey]*program),
 		expectedAttachType: expectedAttachType,
 	}
 }
@@ -212,18 +348,19 @@ func NewXDPProgramsMap() bpfmaps.Map {
 			Name:       "xdp_cali_progs",
 			Version:    3,
 		}),
-		programs: make(map[AttachType]*program),
+		programs: make(map[programCacheKey]*program),
 	}
 }
 
-func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
+func (pm *ProgramsMap) LoadObj(at AttachType, progType string, disabledOptional set.Set[SubProg]) (*LoadResult, error) {
 	file := ObjectFile(at)
 	if file == "" {
 		return nil, fmt.Errorf("no object for attach type %+v", at)
 	}
 	log.WithField("AttachType", at).Debugf("Looked up file for attach type: %s", file)
 
-	pi := pm.getOrCreateProgramInfo(at)
+	cacheKey := programCacheKey{AttachType: at, ProgAttachType: progType}
+	pi := pm.getOrCreateProgramInfo(cacheKey)
 
 	// Loading is protected by the program lock to ensure that we do not
 	// load the same object multiple times in parallel.  Two goroutines may
@@ -232,40 +369,62 @@ func (pm *ProgramsMap) LoadObj(at AttachType, progType string) (Layout, error) {
 	pi.lock.Lock()
 	defer pi.lock.Unlock()
 
-	var err error
+	if pi.permanentErr != nil {
+		return nil, pi.permanentErr
+	}
+
 	if pi.layout == nil {
-		la, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		if err != nil && strings.Contains(file, "_co-re") {
-			log.WithError(err).Warn("Failed to load CO-RE object, kernel too old? Falling back to non-CO-RE.")
-			file := strings.ReplaceAll(file, "_co-re", "")
-			// Skip trying the same file again, as it will fail with the same error.
-			SetObjectFile(at, file)
-			la, err = pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType)
-		}
+		result, err := pm.loadObj(at, path.Join(bpfdefs.ObjectDir, file), progType, disabledOptional)
 		if err == nil {
-			log.WithField("layout", la).Debugf("Loaded generic object file %s", file)
-			pi.layout = la
+			log.WithField("layout", result.Layout).Debugf("Loaded generic object file %s", file)
+			pi.layout = result.Layout
+			pi.skippedOptional = result.SkippedOptional
+		} else if IsPermanentLoadFailure(err) {
+			err = fmt.Errorf("%w: %w", ErrPermanentLoadFailure, err)
+			pi.permanentErr = err
+			return nil, err
+		} else {
+			return nil, err
 		}
 	} else {
 		log.WithField("layout", pi.layout).Debugf("Using cached layout for %s", file)
 	}
 
 	// Return a clone of the layout to avoid accidental modifications.
-	return maps.Clone(pi.layout), err
+	return &LoadResult{
+		Layout:          maps.Clone(pi.layout),
+		SkippedOptional: pi.skippedOptional,
+	}, nil
 }
 
-func (pm *ProgramsMap) getOrCreateProgramInfo(at AttachType) *program {
+func (pm *ProgramsMap) getOrCreateProgramInfo(key programCacheKey) *program {
 	pm.programsLock.Lock()
 	defer pm.programsLock.Unlock()
-	pi, ok := pm.programs[at]
+	pi, ok := pm.programs[key]
 	if !ok {
 		pi = &program{}
-		pm.programs[at] = pi
+		pm.programs[key] = pi
 	}
 	return pi
 }
 
-func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layout, error) {
+// applicableOptionalProgs returns the list of optional sub-programs that are
+// applicable to the given AttachType AND enabled (not in disabledOptional).
+func applicableOptionalProgs(at AttachType, disabledOptional set.Set[SubProg]) []SubProg {
+	var result []SubProg
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
+		if disabledOptional != nil && disabledOptional.Contains(sp) {
+			return
+		}
+		if !info.IsApplicable(at) {
+			return
+		}
+		result = append(result, sp)
+	})
+	return result
+}
+
+func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string, disabledOptional set.Set[SubProg]) (*LoadResult, error) {
 	obj, err := libbpf.OpenObject(file)
 	if err != nil {
 		return nil, fmt.Errorf("file %s: %w", file, err)
@@ -275,46 +434,83 @@ func (pm *ProgramsMap) loadObj(at AttachType, file, progAttachType string) (Layo
 		return nil, err
 	}
 
-	if !at.hasIPDefrag() {
-		// Disable autoload for the IP defrag program
-		obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
+	// Build the full set of optional programs to skip: those disabled by
+	// config plus those not structurally applicable.
+	skipOptional := set.New[SubProg]()
+	if disabledOptional != nil {
+		disabledOptional.Iter(func(sp SubProg) error {
+			skipOptional.Add(sp)
+			return nil
+		})
 	}
-	skipIPDefrag := false
+	forEachOptionalSubProg(func(sp SubProg, info OptionalSubProgInfo) {
+		if skipOptional.Contains(sp) {
+			obj.SetProgramAutoload(info.ProgName, false)
+			return
+		}
+		if !info.IsApplicable(at) {
+			obj.SetProgramAutoload(info.ProgName, false)
+			skipOptional.Add(sp)
+		}
+	})
+
+	var skippedOptional []OptionalSubProgInfo
 	if err := obj.Load(); err != nil {
-		// If load fails and this attach type has IP defrag, try loading without the IP defrag program
-		if at.hasIPDefrag() {
-			log.WithError(err).Warn("Failed to load object with IP defrag program, retrying without it")
-			// Close the failed object and reopen
+		// Try disabling optional programs one at a time and retrying, so
+		// we preserve as many optional features as possible.
+		enabledOptional := applicableOptionalProgs(at, skipOptional)
+		if len(enabledOptional) == 0 {
+			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		log.WithError(err).Warn("Failed to load BPF object, retrying without optional programs")
+		for _, sp := range enabledOptional {
+			skipOptional.Add(sp)
 			obj.Close()
 			obj, err = libbpf.OpenObject(file)
 			if err != nil {
 				return nil, fmt.Errorf("file %s: %w", file, err)
 			}
-
-			// Re-configure maps
 			if err := pm.configureMapsAndPrograms(obj, file, progAttachType); err != nil {
 				return nil, err
 			}
-
-			// Disable autoload for the IP defrag program
-			obj.SetProgramAutoload("calico_tc_skb_ipv4_frag", false)
-			skipIPDefrag = true
-
-			// Try loading again
-			if err := obj.Load(); err != nil {
-				return nil, fmt.Errorf("error loading program: %w", err)
+			// Disable all programs we've decided to skip so far.
+			forEachOptionalSubProg(func(osp SubProg, oinfo OptionalSubProgInfo) {
+				if skipOptional.Contains(osp) || !oinfo.IsApplicable(at) {
+					obj.SetProgramAutoload(oinfo.ProgName, false)
+				}
+			})
+			if err = obj.Load(); err == nil {
+				break
 			}
-			log.WithField("attach type", at).
-				Warn("Object loaded without IP defrag - processing of fragmented packets will not be supported")
-		} else {
-			return nil, fmt.Errorf("error loading program: %w", err)
+			log.WithError(err).WithField("skipped", sp).Warn("Still failed after disabling optional program")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error loading program %s: %w", file, err)
+		}
+
+		for _, sp := range enabledOptional {
+			if !skipOptional.Contains(sp) {
+				continue
+			}
+			if info := GetOptionalSubProgInfo(sp); info != nil {
+				log.WithField("feature", info.FeatureName).
+					Warn("BPF object loaded without optional program. " + info.DisableMsg)
+				skippedOptional = append(skippedOptional, *info)
+			}
 		}
 	}
 
-	layout, err := pm.allocateLayout(at, obj, skipIPDefrag)
+	layout, err := pm.allocateLayout(at, obj, skipOptional)
 	log.WithError(err).WithField("layout", layout).Debugf("load generic object file %s", file)
+	if err != nil {
+		return nil, err
+	}
 
-	return layout, err
+	return &LoadResult{
+		Layout:          layout,
+		SkippedOptional: skippedOptional,
+	}, nil
 }
 
 func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttachType string) error {
@@ -327,26 +523,48 @@ func (pm *ProgramsMap) configureMapsAndPrograms(obj *libbpf.Obj, file, progAttac
 		if err := pm.setMapSize(m); err != nil {
 			return fmt.Errorf("error setting map size %s : %w", mapName, err)
 		}
-		if err := m.SetPinPath(path.Join(bpfdefs.GlobalPinDir, mapName)); err != nil {
+		pinPath := path.Join(bpfdefs.GlobalPinDir, mapName)
+		if override, ok := pm.mapPinOverrides[mapName]; ok {
+			pinPath = override
+		}
+		if err := m.SetPinPath(pinPath); err != nil {
 			return fmt.Errorf("error pinning map %s: %w", mapName, err)
 		}
 		log.Debugf("map %s k %d v %d pinned to %s for generic object file %s",
-			mapName, m.KeySize(), m.ValueSize(), path.Join(bpfdefs.GlobalPinDir, mapName), file)
+			mapName, m.KeySize(), m.ValueSize(), pinPath, file)
 	}
 
-	if progAttachType == "TCX" {
+	if attachType, ok := linkAttachType(progAttachType, pm.expectedAttachType == "ingress"); ok {
 		for prog, err := obj.FirstProgram(); prog != nil && err == nil; prog, err = prog.NextProgram() {
-			attachType := libbpf.AttachTypeTcxEgress
-			if pm.expectedAttachType == "ingress" {
-				attachType = libbpf.AttachTypeTcxIngress
-			}
 			if err := obj.SetAttachType(prog.Name(), attachType); err != nil {
-				return fmt.Errorf("error setting attach type for program %s: %w", prog.Name(), err)
+				return fmt.Errorf("error setting %s attach type for program %s: %w", progAttachType, prog.Name(), err)
 			}
 		}
 	}
 
 	return nil
+}
+
+// linkAttachType returns the libbpf attach type for the given link-based
+// attachment mode and direction. The bool is false for modes that don't
+// use libbpf-link attachment.
+func linkAttachType(progAttachType string, ingress bool) (uint32, bool) {
+	switch progAttachType {
+	case "TCX":
+		if ingress {
+			return libbpf.AttachTypeTcxIngress, true
+		}
+		return libbpf.AttachTypeTcxEgress, true
+	case "Netkit":
+		// Map direction to netkit attach type:
+		// ingress ProgramsMap (traffic from pod) -> BPF_NETKIT_PEER
+		// egress ProgramsMap (traffic to pod) -> BPF_NETKIT_PRIMARY
+		if ingress {
+			return libbpf.AttachTypeNetkitPeer, true
+		}
+		return libbpf.AttachTypeNetkitPrimary, true
+	}
+	return 0, false
 }
 
 func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
@@ -356,7 +574,7 @@ func (pm *ProgramsMap) setMapSize(m *libbpf.Map) error {
 	return nil
 }
 
-func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefrag bool) (Layout, error) {
+func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipOptional set.Set[SubProg]) (Layout, error) {
 	mapName := pm.GetName()
 
 	l := make(Layout)
@@ -367,7 +585,7 @@ func (pm *ProgramsMap) allocateLayout(at AttachType, obj *libbpf.Obj, skipIPDefr
 		offset = int(SubProgTCMainDebug)
 	}
 
-	applicableProgs := GetApplicableSubProgs(at, skipIPDefrag)
+	applicableProgs := GetApplicableSubProgs(at, skipOptional)
 
 	for _, progInfo := range applicableProgs {
 		pmIdx := pm.allocIdx()
@@ -413,7 +631,7 @@ func (pm *ProgramsMap) ResetForTesting() {
 	// We keep the same pinned map but reset the accounting as the map is
 	// replaced by repinning by the user.
 	pm.nextIdx.Store(0)
-	pm.programs = make(map[AttachType]*program)
+	pm.programs = make(map[programCacheKey]*program)
 }
 
 func (pm *ProgramsMap) Programs() map[AttachType]Layout {
@@ -421,8 +639,8 @@ func (pm *ProgramsMap) Programs() map[AttachType]Layout {
 	defer pm.programsLock.Unlock()
 
 	progs := make(map[AttachType]Layout, len(pm.programs))
-	for at, prog := range pm.programs {
-		progs[at] = prog.layout
+	for key, prog := range pm.programs {
+		progs[key.AttachType] = prog.layout
 	}
 
 	return progs
