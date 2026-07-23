@@ -28,6 +28,18 @@ if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
+
+  # Per-test diags, where the suite collects them (openstack-e2e does, into
+  # ${REPORT_DIR}/diags/) — distinct from the bz cluster diags above.
+  if [[ -d "${REPORT_DIR}/diags" ]]; then
+    artifact push job "${REPORT_DIR}/diags" -f || true
+  fi
+fi
+
+# Lens reads each top-level .xml in REPORT_DIR, so subdir reports go into
+# junit.xml and top-level ones stay out of it.
+if [[ -d "${REPORT_DIR}" && ! -f "${REPORT_DIR}/junit.xml" ]]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/merge_junit.py" --scope=subdirs "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
 fi
 
 # Publish JUnit + logs.
