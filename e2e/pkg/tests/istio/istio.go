@@ -327,6 +327,12 @@ func createIstioIfAbsent(ctx context.Context, cli ctrlclient.Client) bool {
 	createCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	err = cli.Create(createCtx, istioObj)
+	if apierrors.IsAlreadyExists(err) {
+		// Raced with another creator, or the Get above missed it. It already exists, so
+		// we didn't create it and don't own teardown.
+		logrus.Info("Istio CR already exists, skipping creation")
+		return false
+	}
 	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create Istio CR")
 	return true
 }
@@ -340,13 +346,7 @@ func disableIstioAmbientMode(ctx context.Context, cli ctrlclient.Client) {
 	deleteCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	err := cli.Delete(deleteCtx, istioObj)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		logrus.WithError(err).Warn("Istio CR deletion failed")
-		return
-	}
+	gomega.Expect(ctrlclient.IgnoreNotFound(err)).NotTo(gomega.HaveOccurred(), "Failed to delete Istio CR")
 
 	// Wait for the Istio CR to be fully removed.
 	gomega.Eventually(func() bool {
