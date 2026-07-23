@@ -1073,17 +1073,21 @@ var _ = infrastructure.DatastoreDescribe(
 								By("Verifying the counter does not under-count as the rejected entry ages out and is purged")
 								// The rejected SYN's CT entry ages out at TCPSynSent
 								// (3s) and is purged by the conntrack_cleanup BPF
-								// program, which runs qos_connlimit_decrement_for_ct
-								// over it. That entry was never counted (it carries
+								// program on the next cleanup pass (ScanPeriod ~10s,
+								// later under CI CPU contention). That purge is where
+								// qos_connlimit_decrement_for_ct runs over the entry;
+								// it was never counted (it carries
 								// CONNLIMIT_INGRESS_REJECTED, never CONNLIMIT_INGRESS),
-								// so the cleanup must not decrement. A spurious
-								// decrement would drop the counter below the live count
-								// until the next ConnLimitScanner recount masks it, so
-								// we sample throughout a window that spans the aging
-								// (3s) plus at least one cleanup scan cycle (ScanPeriod
-								// ~10s), with margin for CI CPU contention. The live
+								// so it must not decrement. A spurious decrement would
+								// drop the counter below the live count and stay there
+								// until the ConnLimitScanner recount -- downsampled to
+								// ~30s (connLimitScannerRunEveryN * ScanPeriod) --
+								// re-derives the true count and masks it. So the 45s
+								// window is sized to contain the purge under
+								// contention, and the 1s sampling catches any dip in
+								// the gap before that ~30s recount hides it. The live
 								// connections keep their CT entries (no flush), so every
-								// recount re-derives the true count of 3.
+								// recount re-derives 3.
 								Consistently(getBPFCurrentCount(0, 0, "ingress"), "45s", "1s").Should(Equal(uint32(numConnections)))
 
 								By("Re-attempting connection -- still expect rejection (counter still at limit)")
