@@ -45,7 +45,7 @@ const (
 // cannot detect. It only sets NetworkUnavailable=True; recovery (setting False) is left
 // to calico-node's own startup logic to avoid races.
 type nodeConditionController struct {
-	k8sClientset *kubernetes.Clientset
+	k8sClientset kubernetes.Interface
 	nodeLister   v1lister.NodeLister
 	podLister    v1lister.PodLister
 
@@ -69,7 +69,7 @@ type nodeConditionController struct {
 }
 
 func newNodeConditionController(
-	k8sClientset *kubernetes.Clientset,
+	k8sClientset kubernetes.Interface,
 	nodeInformer cache.SharedIndexInformer,
 	podInformer cache.SharedIndexInformer,
 ) *nodeConditionController {
