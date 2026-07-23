@@ -61,27 +61,57 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Istio"),
 	describe.WithCategory(describe.Networking),
+	// Ordered so the Istio ambient install is created once for the whole container
+	// instead of per spec. Enabling Istio creates the operator Istio CR and waits for
+	// it to report Available, which is slow. Both specs run against the same install,
+	// and a final spec disables it and verifies baseline connectivity returns.
+	ginkgo.Ordered,
 	"Istio Ambient Mode",
 	func() {
 		f := utils.NewDefaultFramework("istio-ambient")
 
 		var cli ctrlclient.Client
+		var (
+			// istioSetupDone guards the one-time, container-scoped Istio enable below.
+			istioSetupDone bool
+			// istioCreated records whether this container created the Istio CR, so
+			// teardown only removes an install we own and doesn't run twice.
+			istioCreated bool
+		)
 
-		ginkgo.BeforeEach(func() {
+		ginkgo.BeforeEach(func(ctx ginkgo.SpecContext) {
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create controller-runtime client")
+
+			// Enable Istio once for the whole container. Guarded rather than done in a
+			// BeforeAll because the framework client isn't populated until the framework's
+			// own BeforeEach, which runs after BeforeAll in an Ordered container.
+			if istioSetupDone {
+				return
+			}
+			istioSetupDone = true
+			// Record ownership before waiting for readiness so the AfterAll safety net can
+			// tear down a CR we created even if the readiness wait fails.
+			istioCreated = createIstioIfAbsent(ctx, cli)
+			waitForIstioAvailable(ctx, cli)
 		})
 
-		// Test: Full Istio Ambient Mode lifecycle with traffic encryption and Calico policy enforcement.
+		ginkgo.AfterAll(func(ctx ginkgo.SpecContext) {
+			// Safety net: the disable spec normally tears the install down, but if an
+			// earlier spec failed it gets skipped. Only disable an install we created.
+			if istioCreated {
+				disableIstioAmbientMode(ctx, cli)
+			}
+		})
+
+		// Test: Traffic encryption and Calico policy enforcement under Istio ambient mode.
 		//
 		// Validates:
-		// 1. Baseline connectivity before Istio
-		// 2. Enable Istio ambient mode and verify infrastructure
-		// 3. Traffic encryption when ambient label is applied
-		// 4. Traffic unencrypted when ambient label is not applied
-		// 5. Calico NetworkPolicy enforcement with Istio active
-		// 6. Full disable lifecycle restores baseline
+		// 1. Baseline connectivity before the namespace is enrolled in ambient mode
+		// 2. Traffic encryption when the ambient label is applied
+		// 3. Traffic unencrypted when the ambient label is removed
+		// 4. Calico NetworkPolicy enforcement with Istio active
 		ginkgo.It("should encrypt traffic with ambient mode and enforce Calico NetworkPolicy", func(ctx context.Context) {
 			ginkgo.By("Setting up connection tester with a client and two servers")
 			checker := conncheck.NewConnectionTester(f)
@@ -107,36 +137,34 @@ var _ = describe.CalicoDescribe(
 			checker.AddClient(testClient)
 			checker.Deploy()
 
-			// Phase 1: Baseline — verify connectivity before Istio is enabled.
-			ginkgo.By("Verifying baseline connectivity to both servers before Istio")
+			// Phase 1: Baseline — verify connectivity before the namespace is enrolled in
+			// ambient mode. Istio is installed cluster-wide by the container setup, but an
+			// unlabeled namespace is unaffected until the ambient label is applied.
+			ginkgo.By("Verifying baseline connectivity to both servers before enrolling the namespace")
 			checker.ExpectSuccess(testClient, allowedServer.ClusterIPs()...)
 			checker.ExpectSuccess(testClient, deniedServer.ClusterIPs()...)
 			checker.Execute()
 
-			// Phase 2: Enable Istio Ambient Mode.
-			ginkgo.By("Creating the Istio CR to enable ambient mode")
-			enableIstioAmbientMode(ctx, cli)
-
-			// Phase 3: Apply ambient mode label to test namespace.
+			// Phase 2: Apply ambient mode label to test namespace.
 			ginkgo.By(fmt.Sprintf("Labeling namespace %s with istio ambient mode", f.Namespace.Name))
 			applyAmbientLabel(ctx, f, f.Namespace.Name)
 			ginkgo.DeferCleanup(func() {
 				removeAmbientLabel(context.Background(), f, f.Namespace.Name)
 			})
 
-			// Phase 4: Verify connectivity with Istio ambient mode active.
+			// Phase 3: Verify connectivity with Istio ambient mode active.
 			ginkgo.By("Verifying connectivity to both servers with Istio ambient mode active")
 			checker.ResetExpectations()
 			checker.ExpectSuccess(testClient, allowedServer.ClusterIPs()...)
 			checker.ExpectSuccess(testClient, deniedServer.ClusterIPs()...)
 			checker.Execute()
 
-			// Phase 5: Verify traffic encryption via tcpdump.
+			// Phase 4: Verify traffic encryption via tcpdump.
 			// With ambient mode active, TCP traffic should be encrypted by ztunnel.
 			ginkgo.By("Verifying traffic is encrypted (tcpdump should not show plaintext HTTP)")
 			checker.ExpectEncrypted(testClient, allowedServer.ClusterIP())
 
-			// Phase 6: Apply Calico NetworkPolicy — allow only the allowed-svc.
+			// Phase 5: Apply Calico NetworkPolicy — allow only the allowed-svc.
 			ginkgo.By("Applying Calico NetworkPolicy to allow only the allowed server")
 			policy := newEgressPolicy(f.Namespace.Name, "curl-client", "allowed-svc")
 			policyCtx, policyCancel := context.WithTimeout(ctx, 30*time.Second)
@@ -147,14 +175,14 @@ var _ = describe.CalicoDescribe(
 				_ = ctrlclient.IgnoreNotFound(cli.Delete(context.Background(), policy))
 			})
 
-			// Phase 7: Verify policy enforcement — allowed server reachable, denied server blocked.
+			// Phase 6: Verify policy enforcement — allowed server reachable, denied server blocked.
 			ginkgo.By("Verifying policy enforcement: allowed-svc reachable, denied-svc blocked")
 			checker.ResetExpectations()
 			checker.ExpectSuccess(testClient, allowedServer.ClusterIPs()...)
 			checker.ExpectFailure(testClient, deniedServer.ClusterIPs()...)
 			checker.Execute()
 
-			// Phase 8: Delete policy and verify connectivity restored.
+			// Phase 7: Delete policy and verify connectivity restored.
 			ginkgo.By("Deleting NetworkPolicy and verifying connectivity is restored")
 			delCtx, delCancel := context.WithTimeout(ctx, 30*time.Second)
 			defer delCancel()
@@ -166,32 +194,22 @@ var _ = describe.CalicoDescribe(
 			checker.ExpectSuccess(testClient, deniedServer.ClusterIPs()...)
 			checker.Execute()
 
-			// Phase 9: Verify traffic still encrypted after policy deletion.
+			// Phase 8: Verify traffic still encrypted after policy deletion.
 			ginkgo.By("Verifying traffic is still encrypted after policy deletion")
 			checker.ExpectEncrypted(testClient, allowedServer.ClusterIP())
 
-			// Phase 10: Remove ambient label, verify traffic is no longer encrypted.
+			// Phase 9: Remove ambient label, verify traffic is no longer encrypted.
 			ginkgo.By("Removing ambient label from namespace")
 			removeAmbientLabel(ctx, f, f.Namespace.Name)
 
 			ginkgo.By("Verifying traffic is no longer encrypted after label removal")
 			checker.ExpectPlaintext(testClient, allowedServer.ClusterIP())
-
-			// Phase 11: Disable Istio and verify baseline restored.
-			ginkgo.By("Disabling Istio ambient mode")
-			disableIstioAmbientMode(ctx, cli)
-
-			ginkgo.By("Verifying connectivity after disabling Istio")
-			checker.ResetExpectations()
-			checker.ExpectSuccess(testClient, allowedServer.ClusterIPs()...)
-			checker.ExpectSuccess(testClient, deniedServer.ClusterIPs()...)
-			checker.Execute()
 		}, ginkgo.SpecTimeout(15*time.Minute))
 
 		// Test: UDP traffic bypasses ztunnel and Calico policy still enforces UDP rules.
 		//
 		// Validates:
-		// 1. UDP echo works before Istio
+		// 1. UDP echo works before enrolling the namespace in ambient mode
 		// 2. UDP still works with Istio ambient mode (bypasses ztunnel)
 		// 3. Calico NetworkPolicy blocks UDP when applied
 		ginkgo.It("should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy", func(ctx context.Context) {
@@ -211,10 +229,7 @@ var _ = describe.CalicoDescribe(
 			ginkgo.By("Verifying baseline UDP echo works")
 			expectUDPEchoWorks(udpClientPod, udpServerPod)
 
-			// Phase 2: Enable Istio and label namespace.
-			ginkgo.By("Enabling Istio ambient mode")
-			enableIstioAmbientMode(ctx, cli)
-
+			// Phase 2: Enroll the namespace in ambient mode.
 			ginkgo.By(fmt.Sprintf("Labeling namespace %s with istio ambient mode", f.Namespace.Name))
 			applyAmbientLabel(ctx, f, f.Namespace.Name)
 			ginkgo.DeferCleanup(func() {
@@ -244,40 +259,82 @@ var _ = describe.CalicoDescribe(
 			ginkgo.By("Verifying UDP echo is blocked by Calico policy")
 			expectUDPEchoBlocked(udpClientPod, udpServerPod)
 		}, ginkgo.SpecTimeout(10*time.Minute))
+
+		// Test: Disabling Istio ambient mode tears the install down cleanly and leaves the
+		// dataplane working. Runs last so the specs above share the single install created by
+		// the container setup; the disable helper asserts the Istio CR is fully removed.
+		ginkgo.It("should restore baseline connectivity after Istio ambient mode is disabled", func(ctx context.Context) {
+			if !istioCreated {
+				ginkgo.Skip("Istio pre-existed this suite; not disabling an install we did not create")
+			}
+
+			ginkgo.By("Setting up a connection tester with a client and a server")
+			checker := conncheck.NewConnectionTester(f)
+			ginkgo.DeferCleanup(checker.Stop)
+
+			server := conncheck.NewServer("svc", f.Namespace)
+			testClient := conncheck.NewClient("curl-client", f.Namespace)
+			checker.AddServer(server)
+			checker.AddClient(testClient)
+			checker.Deploy()
+
+			ginkgo.By("Disabling Istio ambient mode")
+			disableIstioAmbientMode(ctx, cli)
+			// The install is gone, so clear the flag to keep the AfterAll safety net from repeating it.
+			istioCreated = false
+
+			ginkgo.By("Verifying connectivity is intact after disabling Istio")
+			checker.ExpectSuccess(testClient, server.ClusterIPs()...)
+			checker.Execute()
+		}, ginkgo.SpecTimeout(10*time.Minute))
 	},
 )
 
-// enableIstioAmbientMode creates the Istio CR (if it doesn't already exist) and waits for
-// the "istio" TigeraStatus to report Available. If the CR is created by this call, a
-// DeferCleanup is registered to delete it after the test, preserving pre-existing Istio
-// installations.
+// enableIstioAmbientMode ensures Istio ambient mode is enabled and, if this call created
+// the Istio CR, registers a DeferCleanup to delete it after the spec, preserving
+// pre-existing Istio installations. Use this for specs that own Istio's whole lifecycle;
+// container-scoped setup should call createIstioIfAbsent and manage teardown itself.
 func enableIstioAmbientMode(ctx context.Context, cli ctrlclient.Client) {
-	// Check if the Istio CR already exists.
+	// Register cleanup before waiting for Available, so a create followed by a failed
+	// readiness wait still tears the CR back down.
+	if createIstioIfAbsent(ctx, cli) {
+		ginkgo.DeferCleanup(func(ctx context.Context) {
+			disableIstioAmbientMode(ctx, cli)
+		})
+	}
+	waitForIstioAvailable(ctx, cli)
+}
+
+// createIstioIfAbsent creates the Istio CR if it doesn't already exist. It returns true if
+// this call created the CR, so the caller owns teardown. It does not wait for readiness or
+// register any cleanup; callers pair it with waitForIstioAvailable.
+func createIstioIfAbsent(ctx context.Context, cli ctrlclient.Client) bool {
 	existing := &operatorv1.Istio{}
 	getCtx, getCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer getCancel()
 	err := cli.Get(getCtx, types.NamespacedName{Name: "default"}, existing)
 	if err == nil {
-		logrus.Info("Istio CR already exists, skipping creation and cleanup registration")
-	} else if apierrors.IsNotFound(err) {
-		istioObj := &operatorv1.Istio{
-			ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		}
-		createCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		err = cli.Create(createCtx, istioObj)
-		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create Istio CR")
-
-		// Only clean up what the test created.
-		ginkgo.DeferCleanup(func(ctx context.Context) {
-			disableIstioAmbientMode(ctx, cli)
-		})
-	} else {
+		logrus.Info("Istio CR already exists, skipping creation")
+		return false
+	}
+	if !apierrors.IsNotFound(err) {
 		gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to check for existing Istio CR")
 	}
 
-	// Wait for the "istio" TigeraStatus to report Available.
-	waitForIstioAvailable(ctx, cli)
+	istioObj := &operatorv1.Istio{
+		ObjectMeta: metav1.ObjectMeta{Name: "default"},
+	}
+	createCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err = cli.Create(createCtx, istioObj)
+	if apierrors.IsAlreadyExists(err) {
+		// Raced with another creator, or the Get above missed it. It already exists, so
+		// we didn't create it and don't own teardown.
+		logrus.Info("Istio CR already exists, skipping creation")
+		return false
+	}
+	gomega.Expect(err).NotTo(gomega.HaveOccurred(), "Failed to create Istio CR")
+	return true
 }
 
 // disableIstioAmbientMode deletes the Istio CR and waits for cleanup.
@@ -289,13 +346,7 @@ func disableIstioAmbientMode(ctx context.Context, cli ctrlclient.Client) {
 	deleteCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	err := cli.Delete(deleteCtx, istioObj)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return
-		}
-		logrus.WithError(err).Warn("Istio CR deletion failed")
-		return
-	}
+	gomega.Expect(ctrlclient.IgnoreNotFound(err)).NotTo(gomega.HaveOccurred(), "Failed to delete Istio CR")
 
 	// Wait for the Istio CR to be fully removed.
 	gomega.Eventually(func() bool {
