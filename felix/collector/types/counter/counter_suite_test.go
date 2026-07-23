@@ -32,6 +32,6 @@ func init() {
 func TestCounter(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/felix_collector_counter_suite.xml"
+	testutils.RegisterJUnitReporter("felix_collector_counter_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/collector/counter", suiteConfig, reporterConfig)
 }
