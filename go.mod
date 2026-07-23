@@ -97,7 +97,7 @@ require (
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
 	google.golang.org/grpc v1.79.3
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/go-playground/validator.v9 v9.30.2
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.20.2
@@ -110,7 +110,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.35.6
 	k8s.io/kube-openapi v0.31.0
-	k8s.io/kubernetes v1.35.6
+	k8s.io/kubernetes v1.35.7
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	modernc.org/memory v1.11.0
 	sigs.k8s.io/controller-runtime v0.23.3
