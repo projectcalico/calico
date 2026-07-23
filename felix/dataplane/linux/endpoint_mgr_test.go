@@ -4089,8 +4089,10 @@ func (f *fakeFlowtableHandler) SetWorkloadInterfaces(ifces []string) {
 	sort.Strings(f.lastIfaces)
 }
 
-// SetExternalDevices is a no-op here; the endpoint manager under test only drives workload
-// interfaces, not external devices. This method exists solely to satisfy nftables.FlowTableHandler.
+// SetOverlayDevices and SetExternalDevices are no-ops here; the endpoint manager under test only
+// drives workload interfaces. They exist solely to satisfy nftables.FlowTableHandler.
+func (f *fakeFlowtableHandler) SetOverlayDevices(devices []string) {}
+
 func (f *fakeFlowtableHandler) SetExternalDevices(ifces []string) {}
 
 var _ = Describe("EndpointManager flowtable", func() {

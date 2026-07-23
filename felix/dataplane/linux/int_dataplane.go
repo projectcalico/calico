@@ -1157,15 +1157,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var filterMaps nftables.MapsDataplane
 	var flowtableHandlerV4 nftables.FlowTableHandler
-	var flowtableHandlers []nftables.FlowTableHandler
+	var flowtableTargets []flowtableTarget
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
 
 		if config.RulesConfig.NFTablesFlowTableOffload {
 			flowtableHandlerV4 = nftablesV4RootTable
 
-			// Tell the nftables table about overlay/tunnel devices so they can be
-			// included in the flowtable for connection offload.
+			// The overlay/tunnel devices are created asynchronously after Felix starts, so the
+			// flowtable manager gates them on interface-monitor events rather than programming
+			// them up front.
 			var overlayDevicesV4 []string
 			if config.RulesConfig.VXLANEnabled {
 				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
@@ -1176,8 +1177,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
 				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
 			}
-			nftablesV4RootTable.SetOverlayDevices(overlayDevicesV4)
-			flowtableHandlers = append(flowtableHandlers, nftablesV4RootTable)
+			flowtableTargets = append(flowtableTargets, flowtableTarget{
+				handler:        nftablesV4RootTable,
+				overlayDevices: overlayDevicesV4,
+			})
 		}
 	}
 
@@ -1441,8 +1444,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
 					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
 				}
-				nftablesV6RootTable.SetOverlayDevices(overlayDevicesV6)
-				flowtableHandlers = append(flowtableHandlers, nftablesV6RootTable)
+				flowtableTargets = append(flowtableTargets, flowtableTarget{
+					handler:        nftablesV6RootTable,
+					overlayDevices: overlayDevicesV6,
+				})
 			}
 		}
 
@@ -1531,8 +1536,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.rawTables...)
 	}
 
-	if config.RulesConfig.NFTablesFlowTableOffload && config.NFTablesFlowTableDataIfacePattern != nil && len(flowtableHandlers) > 0 {
-		dp.RegisterManager(newFlowtableManager(flowtableHandlers, config.NFTablesFlowTableDataIfacePattern))
+	if config.RulesConfig.NFTablesFlowTableOffload && len(flowtableTargets) > 0 {
+		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	// Include cleanup tables in allTables so that they are cleaned up.

@@ -56,6 +56,11 @@ type FlowTableHandler interface {
 	// with any overlay device names to form the flowtable device list.
 	SetWorkloadInterfaces(ifces []string)
 
+	// SetOverlayDevices updates the set of overlay/tunnel devices (e.g. vxlan.calico, tunl0) to
+	// include in the flowtable. Only devices that currently exist in the kernel may be passed, or
+	// nft rejects the whole transaction.
+	SetOverlayDevices(devices []string)
+
 	// SetExternalDevices updates the set of host/external interfaces to include in the
 	// flowtable, so traffic forwarded between them and local workloads is offloaded.
 	SetExternalDevices(ifces []string)
@@ -527,7 +532,8 @@ func (n *NftablesTable) IPVersion() uint8 {
 }
 
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
-// flowtable device list. Called during initialization from int_dataplane.go.
+// flowtable device list. Called by the flowtable manager as tunnel devices come up and go
+// down, so only devices that currently exist are passed through.
 func (t *NftablesTable) SetOverlayDevices(devices []string) {
 	t.overlayDevices = slices.Clone(devices)
 	t.enableFlowtable()
