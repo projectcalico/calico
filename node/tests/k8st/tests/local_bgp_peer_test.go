@@ -532,26 +532,48 @@ func (e *localBGPPeerEnv) setupWorkloadPod(t *testing.T, p *workloadPod) {
 	// local IPv4 peering IP.
 	v4conf := fmt.Sprintf(birdConfWorkloadTmpl,
 		p.ipv4, p.block.v4, p.block.v4, p.ipv4, fmt.Sprint(childASNumber), localPeeringIPV4, fmt.Sprint(parentASNumber))
-	e.writePodFile(t, p, "/etc/bird.conf", v4conf)
-	e.mustExecInPod(t, p, "birdcl configure")
+	e.applyPodBirdConfig(t, p, "/etc/bird.conf", "birdcl", v4conf)
 
 	// IPv6: router id is still the pod's IPv4 address, next hop is its IPv6
 	// address; peer with the local IPv6 peering IP.
 	v6conf := fmt.Sprintf(birdConfWorkloadTmpl,
 		p.ipv4, p.block.v6, p.block.v6, p.ipv6, fmt.Sprint(childASNumber), localPeeringIPV6, fmt.Sprint(parentASNumber))
-	e.writePodFile(t, p, "/etc/bird6.conf", v6conf)
-	e.mustExecInPod(t, p, "birdcl6 configure")
+	e.applyPodBirdConfig(t, p, "/etc/bird6.conf", "birdcl6", v6conf)
 }
 
-// writePodFile writes content to destPath inside the pod's container via a
-// stdin-fed `sh -c 'cat > destPath'` — the client-go equivalent of the Python
-// `kubectl cp`.
-func (e *localBGPPeerEnv) writePodFile(t *testing.T, p *workloadPod, destPath, content string) {
+// applyPodBirdConfig writes the BIRD config to destPath inside the pod and runs
+// `<birdcl> configure`, retrying the whole write+reconfigure until BIRD accepts
+// the new config.
+//
+// The write is fed over an exec stdin stream (the client-go equivalent of the
+// Python `kubectl cp`), which occasionally delivers a truncated — empty — file
+// without surfacing an error. When that happens `birdcl configure` still exits
+// 0 but rejects the config ("No protocol is specified in the config file") and
+// BIRD silently keeps its previous config, so the local peering session never
+// comes up. Verifying that the reconfigure actually took effect, and re-writing
+// when it did not, makes the setup robust against that flake.
+func (e *localBGPPeerEnv) applyPodBirdConfig(t *testing.T, p *workloadPod, destPath, birdcl, content string) {
 	t.Helper()
 	g := NewWithT(t)
-	_, err := utils.ExecInPodStdin(t, p.ns, p.name, content,
-		[]string{"sh", "-c", "cat > " + destPath})
-	g.Expect(err).NotTo(HaveOccurred(), "writing %s in pod %s", destPath, p.name)
+	g.Eventually(func() error {
+		if _, err := utils.ExecInPodStdin(t, p.ns, p.name, content,
+			[]string{"sh", "-c", "cat > " + destPath},
+			utils.RunOptions{AllowFail: true, SuppressErrLog: true}); err != nil {
+			return err
+		}
+		out, err := utils.ExecInPod(t, p.ns, p.name, birdcl+" configure",
+			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
+		if err != nil {
+			return err
+		}
+		// BIRD echoes "Reconfiguration in progress" (or "Reconfigured") when it
+		// accepts the new config, and a "<file>:<line>:<col> ..." parse error
+		// when it rejects it — the latter exits 0 too, so match on the output.
+		if !strings.Contains(out, "Reconfigur") {
+			return fmt.Errorf("%s configure did not accept %s:\n%s", birdcl, destPath, out)
+		}
+		return nil
+	}, 30*time.Second, time.Second).Should(Succeed(), "configuring BIRD (%s) in pod %s", destPath, p.name)
 }
 
 func (e *localBGPPeerEnv) mustExecInPod(t *testing.T, p *workloadPod, command string) string {
