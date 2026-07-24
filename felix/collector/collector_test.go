@@ -26,6 +26,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -3746,6 +3748,215 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			validateRuleID(t, currentFlowData2.EgressPendingRuleIDs[0], defTierPolicy1AllowEgressRuleID, "Flow2 Egress After Endpoint Deletion")
 		}
 	})
+}
+
+// setupPolicyEvalCollector builds a collector with two flows and a populated policy store,
+// mirroring the fixture used by TestRunPendingRuleTraceEvaluation. It returns the collector and
+// the two flow tuples.
+func setupPolicyEvalCollector(t *testing.T) (*collector, tuple.Tuple, tuple.Tuple) {
+	t.Helper()
+
+	convertWorkloadId := func(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
+		return types.WorkloadEndpointID{
+			OrchestratorId: key.OrchestratorID,
+			WorkloadId:     key.WorkloadID,
+			EndpointId:     key.EndpointID,
+		}
+	}
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1:  localEd1,
+		localIp2:  localEd2,
+		remoteIp1: remoteEd1,
+	}
+	lm := newMockLookupsCache(epMap, nil, nil, nil)
+	policyStoreManager := policystore.NewPolicyStoreManager()
+
+	c := newCollector(lm, &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		FlowLogsFlushInterval: 100 * time.Second,
+		PolicyStoreManager:    policyStoreManager,
+	}).(*collector)
+
+	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
+	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
+
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
+
+	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+		ps.Endpoints[convertWorkloadId(localWlEPKey1)] = localWlEp1Proto
+		ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
+		ps.Endpoints[convertWorkloadId(remoteWlEpKey1)] = remoteWlEp1Proto
+		ps.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "allow"}},
+			OutboundRules: []*proto.Rule{{Action: "allow"}},
+		}
+		ps.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "deny"}},
+			OutboundRules: []*proto.Rule{{Action: "deny"}},
+		}
+	})
+	policyStoreManager.OnInSync()
+
+	// Simulate packet processing to create flow data in epStats.
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirIngress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple2,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny), Hits: 1, Bytes: 100}},
+	})
+
+	return c, *flowTuple1, *flowTuple2
+}
+
+// pendingRuleIDs is a snapshot of both directions' pending rule IDs for the two test flows,
+// used to compare the batched sweep against the eager sweep.
+type pendingRuleIDs struct {
+	flow1Ingress, flow1Egress, flow2Ingress, flow2Egress []*calc.RuleID
+}
+
+func capturePendingRuleIDs(c *collector, ft1, ft2 tuple.Tuple) pendingRuleIDs {
+	return pendingRuleIDs{
+		flow1Ingress: c.epStats[ft1].IngressPendingRuleIDs,
+		flow1Egress:  c.epStats[ft1].EgressPendingRuleIDs,
+		flow2Ingress: c.epStats[ft2].IngressPendingRuleIDs,
+		flow2Egress:  c.epStats[ft2].EgressPendingRuleIDs,
+	}
+}
+
+func clearPendingRuleIDs(c *collector) {
+	for _, data := range c.epStats {
+		data.IngressPendingRuleIDs = nil
+		data.EgressPendingRuleIDs = nil
+	}
+}
+
+// TestBatchedPolicyEvalMatchesEagerSweep verifies that draining the snapshot in time-boxed batches
+// produces the same pending rule traces as the eager, single-shot sweep.
+func TestBatchedPolicyEvalMatchesEagerSweep(t *testing.T) {
+	RegisterTestingT(t)
+	c, ft1, ft2 := setupPolicyEvalCollector(t)
+
+	clearPendingRuleIDs(c)
+	c.updatePendingRuleTraces()
+	eager := capturePendingRuleIDs(c, ft1, ft2)
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	for !c.processRecalcBatch(time.Hour) { //nolint:revive // drain in one (large-budget) batch
+	}
+	batched := capturePendingRuleIDs(c, ft1, ft2)
+
+	Expect(batched).To(Equal(eager), "batched sweep should match eager sweep")
+	// Sanity: the fixture actually produced some pending rule IDs.
+	Expect(eager.flow1Ingress).ToNot(BeEmpty())
+}
+
+// TestProcessRecalcBatchTimeBoxes verifies that a small budget bounds each batch and that repeated
+// batches eventually drain the snapshot.
+func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	c.snapshotFlowsForRecalc()
+	total := len(c.recalcSnapshot)
+	Expect(total).To(BeNumerically(">", 1), "fixture should have more than one flow")
+
+	// A zero budget still makes forward progress: exactly one flow per batch, so it takes
+	// as many batches as there are flows to drain the snapshot.
+	batches := 0
+	remainingAfterFirst := -1
+	for {
+		drained := c.processRecalcBatch(0)
+		batches++
+		if remainingAfterFirst < 0 {
+			remainingAfterFirst = len(c.recalcSnapshot)
+		}
+		if drained {
+			break
+		}
+	}
+	Expect(remainingAfterFirst).To(Equal(total-1), "a zero-budget batch should process exactly one flow")
+	Expect(len(c.recalcSnapshot)).To(Equal(0), "snapshot should be fully drained")
+	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
+}
+
+// TestProcessRecalcBatchSkipsStaleFlows verifies that flows deleted from epStats after the snapshot
+// was taken are skipped rather than evaluated (no panic, not counted).
+func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, ft1, ft2 := setupPolicyEvalCollector(t)
+
+	c.snapshotFlowsForRecalc()
+	snapshotLen := len(c.recalcSnapshot)
+
+	// Delete one flow after the snapshot was taken, as another work source would.
+	c.deleteDataFromEpStats(c.epStats[ft1])
+
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows)
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	flowsDelta := testutil.ToFloat64(counterPolicyEvalFlows) - flowsBefore
+
+	Expect(int(flowsDelta)).To(Equal(snapshotLen-1), "the deleted flow should be skipped, not evaluated")
+	// The surviving flow was still evaluated.
+	Expect(c.epStats[ft2].EgressPendingRuleIDs).ToNot(BeEmpty())
+}
+
+// TestPolicyEvalMetrics verifies the batch/flow counters and the sweep-duration histogram move as
+// expected across a full drain.
+func TestPolicyEvalMetrics(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	sweepSampleCount := func() uint64 {
+		var m dto.Metric
+		Expect(histogramPolicyEvalSweepDuration.Write(&m)).To(Succeed())
+		return m.GetHistogram().GetSampleCount()
+	}
+
+	batchesBefore := testutil.ToFloat64(counterPolicyEvalBatches)
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows)
+	sweepsBefore := sweepSampleCount()
+
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+
+	batches := 0
+	for {
+		batches++
+		if c.processRecalcBatch(0) { // one flow per batch
+			break
+		}
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalBatches) - batchesBefore)).To(Equal(batches))
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows) - flowsBefore)).To(Equal(flows))
+	// One completed sweep records exactly one histogram observation.
+	Expect(sweepSampleCount()).To(Equal(sweepsBefore + 1))
 }
 
 // Helper function to validate rule ID fields
