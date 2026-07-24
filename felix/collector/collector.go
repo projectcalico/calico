@@ -202,7 +202,6 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	c := &collector{
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
-		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
@@ -217,11 +216,8 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		c.policyStoreManager = policystore.NewPolicyStoreManager()
 	}
 
-	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
-	// masks the sweep out of the main loop entirely.
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
-		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
-		c.tickerPolicyEval = jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval/10)
+		log.Infof("Pending policies enabled")
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -248,6 +244,15 @@ func (c *collector) Start() error {
 		return fmt.Errorf("ConntrackInfoReader failed to start: %w", err)
 	}
 
+	// Create the tickers here rather than in newCollector so their goroutines
+	// share the stats-collection loop's lifecycle: a collector that is never
+	// Started spawns no ticker goroutines, and the loop stops them on exit.
+	c.ticker = jitter.NewTicker(c.config.ExportingInterval, c.config.ExportingInterval/10)
+	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
+	// masks the sweep out of the main loop entirely.
+	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
+		c.tickerPolicyEval = jitter.NewTicker(c.config.FlowLogsFlushInterval*8/10, c.config.FlowLogsFlushInterval/10)
+	}
 	go c.startStatsCollectionAndReporting()
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
@@ -302,6 +307,16 @@ func (c *collector) SetConntrackInfoReader(cir types.ConntrackInfoReader) {
 }
 
 func (c *collector) startStatsCollectionAndReporting() {
+	// The tickers are created in Start just before this goroutine is launched.
+	// Stop them on any loop exit so their goroutines don't outlive us. Doing it
+	// here (as the loop returns) rather than in Stop() means we never close a
+	// ticker channel while still selecting on it, which would busy-spin.
+	defer c.ticker.Stop()
+	if c.tickerPolicyEval != nil {
+		// Nil unless pending policies are enabled; see Start.
+		defer c.tickerPolicyEval.Stop()
+	}
+
 	var (
 		pktInfoC <-chan types.PacketInfo
 		ctInfoC  <-chan []types.ConntrackInfo

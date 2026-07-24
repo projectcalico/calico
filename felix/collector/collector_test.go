@@ -4037,10 +4037,11 @@ func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
 		PolicyEvaluationMode:  string(v3.FlowLogsPolicyEvaluationModeContinuous),
 	}).(*collector)
 
-	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
-
 	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	Expect(c.Start()).To(Succeed())
+	t.Cleanup(c.Stop)
+
+	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
 
 	// Hand the flow to the collector over its reporting channel so that it is created on the
 	// collector's own goroutine.
@@ -4063,6 +4064,11 @@ func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
 func TestNonContinuousModeLeavesSweepIdle(t *testing.T) {
 	RegisterTestingT(t)
 	c, _, _ := setupPolicyEvalCollector(t) // no PolicyEvaluationMode set
+
+	// The ticker is armed by Start (so its goroutine shares the stats loop's lifecycle), so
+	// start the collector before checking that this mode leaves it unarmed.
+	Expect(c.Start()).To(Succeed())
+	t.Cleanup(c.Stop)
 
 	Expect(c.tickerPolicyEval).To(BeNil())
 	Expect(c.policyEvalTickChan()).To(BeNil(), "a nil channel masks the sweep out of the select")
