@@ -116,6 +116,7 @@ local:hack/cmd/coalesce-imports
 local:hack/cmd/deps
 local:hack/cmd/gomodder
 local:hack/cmd/ipam-hammer
+local:hack/perf/cmd/send-perf-results
 local:hack/test/spider
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
