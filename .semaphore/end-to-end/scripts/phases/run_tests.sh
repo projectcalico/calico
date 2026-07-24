@@ -90,9 +90,14 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # --net=host the container reaches the host's proxy port. No-op (TUNNEL_CMD
   # empty) for public clusters. `|| true` keeps the read safe under `set -e`.
   TUNNEL_CMD="$(grep -E '^MASTER_TUNNEL_COMMAND:' "$(dirname "${BZ_LOCAL_DIR}")/Taskvars.yml" 2>/dev/null | sed -E 's/^MASTER_TUNNEL_COMMAND:[[:space:]]*//' || true)"
+  # Only teardown a tunnel this script started; a pre-existing one is someone
+  # else's to manage. The command is a foreground `ssh -qN` (no -f), so the
+  # backgrounded job is the ssh process itself and $! is the PID to kill.
+  TUNNEL_PID=""
   if [[ -n "${TUNNEL_CMD}" ]] && ! pgrep -fx "${TUNNEL_CMD}" >/dev/null 2>&1; then
     echo "[INFO] opening SOCKS tunnel for private-cluster API access"
     ${TUNNEL_CMD} &
+    TUNNEL_PID=$!
   fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
@@ -121,8 +126,8 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
         E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
 
-  # Close the SOCKS tunnel if we opened one (no-op otherwise).
-  [[ -n "${TUNNEL_CMD}" ]] && pkill -fx "${TUNNEL_CMD}" >/dev/null 2>&1 || true
+  # Close the SOCKS tunnel only if we opened it (no-op otherwise).
+  [[ -n "${TUNNEL_PID}" ]] && kill "${TUNNEL_PID}" >/dev/null 2>&1 || true
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"
