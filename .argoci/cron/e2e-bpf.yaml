@@ -23,6 +23,7 @@ steps:
   - name: arm64-smoke-tests-kubeadm-arm64
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -54,6 +55,7 @@ steps:
   - name: arm64-smoke-tests-aks-arm64
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_VM_SIZE
         value: Standard_D4plds_v5
@@ -85,6 +87,7 @@ steps:
   - name: bpf-run-matrix-aws-encap
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -112,6 +115,7 @@ steps:
   - name: bpf-run-matrix-aws-single-subnet
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Enabled
@@ -149,6 +153,7 @@ steps:
   - name: bpf-run-matrix-aws-no-encap-dsr
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Enabled
@@ -175,6 +180,7 @@ steps:
   - name: bpf-run-matrix-gcp-bpf-dp-dsr
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BPF_NETWORK_BOOTSTRAP
         value: Enabled
@@ -199,6 +205,7 @@ steps:
   - name: bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ubuntu-2204-lts
@@ -228,6 +235,7 @@ steps:
   - name: bpf-run-matrix-aks-w-aks-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -249,6 +257,7 @@ steps:
   - name: bpf-run-matrix-aks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -273,6 +282,7 @@ steps:
   - name: bpf-run-matrix-bpf-aks-w-aks-cni-overlay
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -299,6 +309,7 @@ steps:
   - name: bpf-run-matrix-aws-kops-rhel8-2
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ami-02f147dfb8be58a10
@@ -321,6 +332,7 @@ steps:
   - name: bpf-run-matrix-aws-lb-bpf
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Enabled
@@ -354,6 +366,7 @@ steps:
   - name: bpf-run-matrix-aws-lb-iptables
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Enabled
@@ -389,6 +402,7 @@ steps:
   - name: bpf-run-matrix-eks-w-aws-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_K8S_CNI_VERSION
         value: NA
@@ -416,6 +430,7 @@ steps:
   - name: bpf-run-matrix-eks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -445,6 +460,7 @@ steps:
   - name: bpf-run-matrix-bpf-eks-aws-cni-lb
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -470,6 +486,7 @@ steps:
   - name: bpf-run-matrix-aws-kubeadm-dual-stack
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -513,6 +530,7 @@ steps:
   - name: bpf-run-matrix-kops-w-calico-cni-ipv6
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Disabled
@@ -560,6 +578,7 @@ steps:
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: BGP_STATUS
         value: Disabled
@@ -601,6 +620,7 @@ steps:
   - name: bpf-mini-scale-runs
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: NUM_INFRA_NODES
         value: "3"
@@ -617,6 +637,7 @@ steps:
   - name: 9k-mtu-runs-aws-bpf-9k-mtu
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -644,6 +665,7 @@ steps:
   - name: 9k-mtu-runs-aws-iptables-9k-mtu
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "3"
@@ -673,6 +695,7 @@ steps:
   - name: bpf-mode-switch
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoIptables
@@ -689,6 +712,7 @@ steps:
   - name: wireguard
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -711,6 +735,7 @@ steps:
   - name: usage-reporting-with-bpf
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_NODES
         value: "1"

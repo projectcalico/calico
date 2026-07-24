@@ -22,6 +22,7 @@ steps:
   - name: calico-windows-aws-kubeadm-1809-stable-3-iptables-none
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoIptables
@@ -40,6 +41,7 @@ steps:
   - name: calico-windows-gcp-kubeadm-2022-stable-bpf-vxlan
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoBPF
@@ -56,6 +58,7 @@ steps:
   - name: calico-windows-gcp-rancher-2022-stable-1-nftables-vxlan
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoNftables

@@ -23,6 +23,7 @@ steps:
   - name: openshift-ocp
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: operator
@@ -46,6 +47,7 @@ steps:
   - name: arm64-smoke-tests-aks-arm64
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_VM_SIZE
         value: Standard_D4plds_v5
@@ -77,6 +79,7 @@ steps:
   - name: arm64-smoke-tests-eks-arm64-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_NODE_INSTANCE_TYPE
         value: t4g.large
@@ -102,6 +105,7 @@ steps:
   - name: aks-aks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -127,6 +131,7 @@ steps:
   - name: aks-aks-w-aks-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -149,6 +154,7 @@ steps:
   - name: aks-aks-private-w-aks-cni-overlay
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -173,6 +179,7 @@ steps:
   - name: aks-aks-migrate-from-vendored-calico-cni-to-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -196,6 +203,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
@@ -236,6 +244,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
@@ -271,6 +280,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_AUTOHEP
         value: "true"
@@ -281,6 +291,7 @@ steps:
   - name: ipvs
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: KUBE_PROXY_MODE
         value: ipvs
@@ -297,6 +308,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_USAGE
         value: "true"
@@ -316,6 +328,7 @@ steps:
   - name: k8s-beta-runs
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: PROVISIONER
         value: gcp-kubeadm
@@ -335,6 +348,7 @@ steps:
   - name: k8s-distros
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_VERSION
         value: v1.31.3
@@ -350,6 +364,7 @@ steps:
   - name: wireguard-vxlan-k8s-e2e
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
@@ -377,6 +392,7 @@ steps:
   - name: wireguard-k8s-e2e
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
@@ -411,6 +427,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: manual
@@ -437,6 +454,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: manual
@@ -464,6 +482,7 @@ steps:
   - name: wireguard-regression-k8s-e2e-kdd-new
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DISABLE_IPIP
         value: "true"
@@ -489,6 +508,7 @@ steps:
   - name: wireguard-regression-k8s-e2e-kdd-old
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DISABLE_IPIP
         value: "true"
@@ -514,6 +534,7 @@ steps:
   - name: wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -540,6 +561,7 @@ steps:
   - name: focused-wireguard-e2e-aks-w-azure-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -573,6 +595,7 @@ steps:
   - name: focused-wireguard-e2e-aks-with-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AKS_CNI
         value: calico
@@ -608,6 +631,7 @@ steps:
   - name: focused-wireguard-e2e-eks-kdd-aws-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_K8S_CNI_VERSION
         value: NA
@@ -630,6 +654,7 @@ steps:
   - name: focused-wireguard-e2e-eks-kdd-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_K8S_CNI_VERSION
         value: NA
@@ -652,6 +677,7 @@ steps:
   - name: distro-support
     services:
       - docker
+      - http-cache-proxy
     matrix:
       - name: ubuntu-2404-lts-amd64-gcp-kubeadm
         env:
@@ -694,6 +720,7 @@ steps:
   - name: datastore-k8s-e2e-kdd-old
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: PROVISIONER
         value: gcp-kubeadm
@@ -721,6 +748,7 @@ steps:
   - name: datastore-k8s-e2e-kdd-new
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|NoTierPrefix)
@@ -750,6 +778,7 @@ steps:
   - name: datastore-k8s-e2e-etcd
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALL_ETCD_POD
         value: "true"
@@ -768,6 +797,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CALICO_MANIFEST
         value: manifests/flannel-migration/calico.yaml
