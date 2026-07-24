@@ -112,14 +112,38 @@ func Main(version string) {
 	}
 
 	funcs := skel.CNIFuncs{
-		Add:   cmdAdd,
-		Check: nil,
-		Del:   cmdDel,
+		Add:    cmdAdd,
+		Check:  nil,
+		Del:    cmdDel,
+		Status: cmdStatus,
 	}
 
 	skel.PluginMainFuncs(funcs,
-		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"),
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0", "1.1.0"),
 		"Calico CNI IPAM "+version)
+}
+
+// errPluginNotAvailable is the CNI spec 1.1 STATUS error code meaning the
+// plugin cannot service ADD requests right now. libcni defines no constant
+// for it (it only defines ErrTryAgainLater=11).
+const errPluginNotAvailable uint = 50
+
+const statusTimeout = 2 * time.Second
+
+// cmdStatus implements the CNI spec 1.1.0 STATUS verb for the IPAM plugin:
+// succeed (exit 0, no output) if IP allocation could plausibly succeed, i.e.
+// the Calico datastore is reachable and ready.
+func cmdStatus(args *skel.CmdArgs) error {
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return cnitypes.NewError(cnitypes.ErrDecodingFailure, "failed to load netconf", err.Error())
+	}
+	utils.ConfigureLogging(conf)
+
+	if err := utils.CheckDatastoreReady(conf, statusTimeout); err != nil {
+		return cnitypes.NewError(errPluginNotAvailable, "Calico datastore is not ready", err.Error())
+	}
+	return nil
 }
 
 type ipamArgs struct {

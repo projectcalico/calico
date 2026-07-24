@@ -141,6 +141,37 @@ func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*cniv1.Resul
 	return result, e, exitCode
 }
 
+// RunCNIVerb executes the named plugin binary (from $BIN) with the given
+// CNI_COMMAND and netconf on stdin. For verbs that don't target a specific
+// container (STATUS, GC). Returns the process exit code and stdout.
+func RunCNIVerb(pluginBinary, command, netconf string, extraEnv []string) (int, []byte) {
+	cmd := &exec.Cmd{
+		Env: append([]string{
+			"CNI_NETNS=b",
+			"CNI_IFNAME=c",
+			"CNI_PATH=d",
+			fmt.Sprintf("CNI_COMMAND=%s", command),
+		}, extraEnv...),
+		Path: fmt.Sprintf("%s/%s", os.Getenv("BIN"), pluginBinary),
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		panic(err)
+	}
+	if _, err := io.WriteString(stdin, netconf+"\n"); err != nil {
+		panic(err)
+	}
+	if err := stdin.Close(); err != nil {
+		panic(err)
+	}
+	session, err := gexec.Start(cmd, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
+	if err != nil {
+		panic(err)
+	}
+	session.Wait(10)
+	return session.ExitCode(), session.Out.Contents()
+}
+
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {
 	containerNs, err = testutils.NewNS()
 	if err != nil {

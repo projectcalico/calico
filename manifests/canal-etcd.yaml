@@ -92,7 +92,7 @@ data:
   cni_network_config: |-
     {
         "name": "canal",
-        "cniVersion": "0.3.1",
+        "cniVersion": "1.0.0",
         "plugins": [
             {
                 "type": "flannel",
