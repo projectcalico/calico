@@ -24,6 +24,7 @@ steps:
   - name: calico-windows-azr-aso-2022-stable-bpf-vxlan
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoBPF
@@ -40,6 +41,7 @@ steps:
   - name: calico-windows-azr-aso-2022-stable-1-nftables-vxlan
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoNftables
@@ -56,6 +58,7 @@ steps:
   - name: calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoIptables
