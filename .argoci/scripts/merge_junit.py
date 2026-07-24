@@ -50,8 +50,11 @@ def main():
     src_dir, out_path = sys.argv[1], sys.argv[2]
     out_abs = os.path.abspath(out_path)
 
+    # Sort both walk axes so the merged suite order is deterministic (and
+    # alphabetical) — the ArgoCI viewer renders suites in file order.
     suites = []
-    for dirpath, _, filenames in os.walk(src_dir):
+    for dirpath, dirnames, filenames in os.walk(src_dir):
+        dirnames.sort()
         for fn in sorted(filenames):
             path = os.path.join(dirpath, fn)
             if not fn.lower().endswith(".xml") or os.path.abspath(path) == out_abs:
