@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
@@ -2035,6 +2037,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveKey(affKey))
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
+		expectRecentKTime(affEntry.Timestamp())
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
@@ -2115,6 +2118,78 @@ func TestNATAffinity(t *testing.T) {
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
+}
+
+// expectRecentKTime checks that a timestamp written by the BPF dataplane with
+// bpf_ktime_get_ns parses as a monotonic time in the recent past. It guards
+// against the Go parsing disagreeing with the C struct layout.
+func expectRecentKTime(ts time.Duration) {
+	now := time.Duration(bpf.KTimeNanos())
+	ExpectWithOffset(1, ts).To(BeNumerically(">", 0))
+	ExpectWithOffset(1, ts).To(BeNumerically("<=", now))
+	ExpectWithOffset(1, now-ts).To(BeNumerically("<", time.Minute))
+}
+
+func TestNATAffinityV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	cleanUpMaps()
+	defer cleanUpMaps()
+
+	bpfIfaceName = "AFF6"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv6, l4, _, pktBytes, err := testPacketUDPDefaultNPV6(node1ipV6)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	hostIP = node1ipV6
+
+	natKey := nat.NewNATKeyV6(ipv6.DstIP, uint16(udp.DstPort), uint8(ipv6.NextHeader))
+	err = natMapV6.Update(
+		natKey.AsBytes(),
+		nat.NewNATValueV6(0, 1, 0, 60 /* seconds */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.ParseIP("abcd::ffff:0808:0808")
+	natPort := uint16(666)
+
+	err = natBEMapV6.Update(
+		nat.NewNATBackendKeyV6(0, 0).AsBytes(),
+		nat.NewNATBackendValueV6(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMapV6.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMapV6(ctMapV6)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		aff, err := nat.LoadAffinityMapV6(affinityMapV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+
+		affKey := nat.NewAffinityKeyV6(ipv6.SrcIP, natKey)
+		Expect(aff).To(HaveKey(affKey))
+
+		affEntry := aff[affKey]
+		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValueV6(natIP, natPort)))
+		// The entry was written by the BPF program; this verifies that the
+		// Go representation matches the C struct layout, including the
+		// padding that aligns the 64-bit timestamp.
+		expectRecentKTime(affEntry.Timestamp())
+	}, withIPv6())
+	expectMark(tcdefs.MarkSeen)
 }
 
 func TestNATNodePortIngressDSR(t *testing.T) {
