@@ -194,6 +194,15 @@ skip_redir_ifindex:
 			goto skip_fib;
 		}
 
+		/* The conntrack entry records the interface used by the original
+		 * ingress direction. For an asymmetric flow that entered natively but
+		 * must return through a tunnel, that interface is not a valid egress
+		 * choice. Force a FIB lookup so the reply uses the tunnel device and
+		 * receives the normal tunnel encapsulation. */
+		if (cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt)) {
+			state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+		}
+
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
 			__u32 __fib_ifindex = ctx->skb->ifindex;
