@@ -485,9 +485,9 @@ func matchSrcIPSets(r *proto.Rule, req *requestCache) bool {
 	if len(r.SrcIpSetIds) == 0 && len(r.NotSrcIpSetIds) == 0 {
 		return true
 	}
-	srcIP := req.getSrcIPStr()
-	return matchIPSetsAll(r.SrcIpSetIds, req.getIPSet, srcIP) &&
-		matchIPSetsNotAny(r.NotSrcIpSetIds, req.getIPSet, srcIP)
+	srcIP, srcIPStr := req.getSrcIP(), req.getSrcIPStr()
+	return matchIPSetsAll(r.SrcIpSetIds, req.getIPSet, srcIP, srcIPStr) &&
+		matchIPSetsNotAny(r.NotSrcIpSetIds, req.getIPSet, srcIP, srcIPStr)
 }
 
 // matchDstIPPortSetIds checks if the destination IP, protocol and port is within the IP sets. It
@@ -501,8 +501,9 @@ func matchDstIPPortSetIds(r *proto.Rule, req *requestCache) bool {
 	if len(r.GetDstIpPortSetIds()) == 0 {
 		return true
 	}
-	// The values compared against are of the form "ip,protocol:port".
-	return matchIPSetsAll(r.GetDstIpPortSetIds(), req.getIPSet, req.getDstIPProtoPortStr())
+	// The values compared against are of the form "ip,protocol:port", not a plain
+	// address, so there is no parsed-IP fast path.
+	return matchIPSetsAll(r.GetDstIpPortSetIds(), req.getIPSet, nil, req.getDstIPProtoPortStr())
 }
 
 // matchDstIPSets checks if the destination IP is within the IP sets and not in the not IP sets. It
@@ -517,16 +518,16 @@ func matchDstIPSets(r *proto.Rule, req *requestCache) bool {
 	if len(r.GetDstIpSetIds()) == 0 && len(r.GetNotDstIpSetIds()) == 0 {
 		return true
 	}
-	destIP := req.getDstIPStr()
-	return matchIPSetsAll(r.GetDstIpSetIds(), req.getIPSet, destIP) &&
-		matchIPSetsNotAny(r.GetNotDstIpSetIds(), req.getIPSet, destIP)
+	dstIP, dstIPStr := req.getDstIP(), req.getDstIPStr()
+	return matchIPSetsAll(r.GetDstIpSetIds(), req.getIPSet, dstIP, dstIPStr) &&
+		matchIPSetsNotAny(r.GetNotDstIpSetIds(), req.getIPSet, dstIP, dstIPStr)
 }
 
 // matchIPSetsAll returns true if the address matches all of the IP set ids, false otherwise.
 // The value is either an IP address or an IP address protocol and port.
-func matchIPSetsAll(ids []string, ipsSetFunc func(string) policystore.IPSet, value string) bool {
+func matchIPSetsAll(ids []string, ipsSetFunc func(string) policystore.IPSet, ip net.IP, value string) bool {
 	for _, id := range ids {
-		if s := ipsSetFunc(id); s != nil && !s.Contains(value) {
+		if s := ipsSetFunc(id); s != nil && !ipSetContains(s, ip, value) {
 			return false
 		}
 	}
@@ -536,13 +537,25 @@ func matchIPSetsAll(ids []string, ipsSetFunc func(string) policystore.IPSet, val
 // matchIPSetsNotAny returns true if the address does not match any of the ipset ids, false
 // otherwise. The value is either an IP address or an IP address protocol and port.
 
-func matchIPSetsNotAny(ids []string, ipsSetFunc func(string) policystore.IPSet, value string) bool {
+func matchIPSetsNotAny(ids []string, ipsSetFunc func(string) policystore.IPSet, ip net.IP, value string) bool {
 	for _, id := range ids {
-		if s := ipsSetFunc(id); s != nil && s.Contains(value) {
+		if s := ipsSetFunc(id); s != nil && ipSetContains(s, ip, value) {
 			return false
 		}
 	}
 	return true
+}
+
+// ipSetContains tests set membership using the parsed-IP fast path when the value is an
+// IP address and the set supports it (NET sets re-parse a string value on every call).
+// Callers matching a non-address value (e.g. an "ip,protocol:port" key) pass a nil ip.
+func ipSetContains(s policystore.IPSet, ip net.IP, value string) bool {
+	if ip != nil {
+		if as, ok := s.(policystore.IPAddrSet); ok {
+			return as.ContainsIP(ip)
+		}
+	}
+	return s.Contains(value)
 }
 
 // matchDstPort checks if the destination port is within the port ranges and named port sets. It
