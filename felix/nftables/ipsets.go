@@ -395,9 +395,7 @@ func (s *IPSets) tryResync() error {
 	if err != nil {
 		if knftables.IsNotFound(err) {
 			// Table doesn't exist: treat as no sets programmed so the cleanup
-			// pass below resets every member tracker. Returning early here would
-			// leave stale members in the trackers and they'd never be reprogrammed
-			// once the table is recreated.
+			// pass below resets every member tracker.
 			sets = nil
 		} else {
 			return fmt.Errorf("error listing nftables sets: %w", err)
@@ -456,8 +454,7 @@ func (s *IPSets) tryResync() error {
 		// Build the set of members currently in the dataplane, converting each element back to
 		// Felix's internal representation. Members this Felix can't parse - an unexpected arity, or
 		// an element the kernel returned in a form we don't recognise (e.g. a range rather than a
-		// CIDR for a hash:net set) - are recorded as unknown so they get reconciled, rather than
-		// panicking and crash-looping Felix on every resync.
+		// CIDR for a hash:net set) - are recorded as unknown so they get reconciled away below.
 		wantIPV6 := s.IPVersionConfig.Family == ipsets.IPFamilyV6
 		elemsSet := set.New[SetMember]()
 		for _, e := range setData.elems {
@@ -833,10 +830,7 @@ func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
 }
 
 // parseMember converts the string representation of an nftables set member to a canonical SetMember,
-// returning ok=false instead of panicking when it can't parse the member. The dataplane-readback path
-// calls it directly so an element the kernel returns in an unexpected form (or one programmed by a
-// different Felix) is treated as unknown and reconciled, rather than crashing Felix. CanonicaliseMember
-// wraps it and panics for the desired-state path, where a parse failure is a bug.
+// returning ok=false when it can't parse the member.
 func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
 	switch t {
 	case ipsets.IPSetTypeHashIP:
