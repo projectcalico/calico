@@ -298,7 +298,7 @@ type Context_Value_Call struct {
 
 // Value is a helper method to define mock.On call
 //   - key any
-func (_e *Context_Expecter) Value(key interface{}) *Context_Value_Call {
+func (_e *Context_Expecter) Value(key any) *Context_Value_Call {
 	return &Context_Value_Call{Call: _e.mock.On("Value", key)}
 }
 
