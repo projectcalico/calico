@@ -1,0 +1,6 @@
+kind: FelixConfiguration
+apiVersion: crd.projectcalico.org/v1
+metadata:
+  name: default
+spec:
+  {}

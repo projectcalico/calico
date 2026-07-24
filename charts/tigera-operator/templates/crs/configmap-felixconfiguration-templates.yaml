@@ -1,13 +1,18 @@
-{{ if .Values.defaultFelixConfiguration.enabled }}
+{{- $apiVersion := "crd.projectcalico.org/v1" -}}
+{{- if lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "felixconfigurations.projectcalico.org" -}}
+{{- $apiVersion = "projectcalico.org/v3" -}}
+{{- end -}}
+{{- $existing := lookup $apiVersion "FelixConfiguration" "" "default" | default dict -}}
+{{- $managedBy := dig "metadata" "labels" "app.kubernetes.io/managed-by" "" $existing | toString -}}
+{{- $releaseName := dig "metadata" "annotations" "meta.helm.sh/release-name" "" $existing | toString -}}
+{{- $releaseNamespace := dig "metadata" "annotations" "meta.helm.sh/release-namespace" "" $existing | toString -}}
+{{- $ownedByRelease := and (eq $managedBy "Helm") (eq $releaseName .Release.Name) (eq $releaseNamespace .Release.Namespace) -}}
+{{- if or (not .Release.IsUpgrade) .Values.defaultFelixConfiguration.enabled $ownedByRelease }}
 {{ $spec := omit .Values.defaultFelixConfiguration "enabled" }}
 kind: FelixConfiguration
-{{- if lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "felixconfigurations.projectcalico.org" }}
-apiVersion: projectcalico.org/v3
-{{- else }}
-apiVersion: crd.projectcalico.org/v1
-{{- end }}
+apiVersion: {{ $apiVersion }}
 metadata:
   name: default
 spec:
 {{ $spec | toYaml | indent 2 }}
-{{ end }}
+{{- end }}
