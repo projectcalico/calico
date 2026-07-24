@@ -136,6 +136,31 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
         LOG.info("LiveMigration resync done")
 
+    def get_protected_names(self, neutron_map):
+        """Return the destination WEP names for in-flight live migrations.
+
+        While a live migration is in flight, the Neutron port still has
+        binding:host_id set to the source host, so the Neutron map only
+        contains the source WEP name.  The destination WEP - created by the
+        pre-migration update and needed until the migration completes - would
+        therefore look orphaned to the generic deletion sweep, and deleting it
+        would cause Felix on the destination host to tear the endpoint down
+        mid-migration.  Protect those names from deletion;
+        _resync_live_migrations keeps the corresponding data in the correct
+        state.
+        """
+        protected = set()
+        for port in neutron_map.values():
+
+            # Note: binding:profile may carry migrating_to=None, so require a
+            # truthy value here.
+            dest_host = port.get("binding:profile", {}).get("migrating_to")
+            if dest_host:
+                dest_port = port.copy()
+                dest_port["binding:host_id"] = dest_host
+                protected.add(endpoint_name(dest_port))
+        return protected
+
     def delete_legacy_etcd_data(self):
         if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
             datamodel_v3.delete_legacy(self.resource_kind, "")
