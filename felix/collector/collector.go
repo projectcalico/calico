@@ -292,6 +292,12 @@ func (c *collector) startStatsCollectionAndReporting() {
 			// race-free access to collector-owned state. See thunkC.
 			fn()
 		case <-c.stopC:
+			// Stop the tickers here, as the loop exits, rather than from
+			// Stop() itself: stopping a ticker closes its channel, and doing
+			// that while the loop is still selecting on it would busy-spin.
+			// Returning immediately afterwards avoids that.
+			c.ticker.Stop()
+			c.tickerPolicyEval.Stop()
 			return
 		}
 	}
