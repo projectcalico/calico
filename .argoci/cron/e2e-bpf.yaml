@@ -461,7 +461,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+        value: --ginkgo.focus=(Dataplane:LB)
       - name: NUM_ADDON_PODS
         value: "45"
       - name: PROVISIONER
