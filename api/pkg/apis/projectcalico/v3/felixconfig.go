@@ -431,6 +431,23 @@ type FelixConfigurationSpec struct {
 	// VXLANPort is the UDP port number to use for VXLAN traffic. [Default: 4789]
 	VXLANPort *int `json:"vxlanPort,omitempty"`
 
+	// VXLANSrcPortMin is the lower bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. If both VXLANSrcPortMin and VXLANSrcPortMax are set, the kernel VXLAN tunnel
+	// device and the eBPF dataplane's VXLAN encap will pick source ports within [VXLANSrcPortMin, VXLANSrcPortMax].
+	// VXLANSrcPortMin must be strictly less than VXLANSrcPortMax.
+	// If unset (or zero), the kernel/dataplane default is used. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMin *int `json:"vxlanSrcPortMin,omitempty"`
+
+	// VXLANSrcPortMax is the upper bound (inclusive) of the UDP source port range used by Felix for outgoing
+	// VXLAN-encapsulated traffic. See VXLANSrcPortMin. [Default: 0 (unset)]
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	VXLANSrcPortMax *int `json:"vxlanSrcPortMax,omitempty"`
+
 	// VXLANVNI is the VXLAN VNI to use for VXLAN traffic.  You may need to change this if the default value is
 	// in use on your system. [Default: 4096]
 	VXLANVNI *int `json:"vxlanVNI,omitempty"`

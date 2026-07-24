@@ -887,16 +887,18 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 			} else {
 				ifaceLog := topts.progLog + "-" + bpfIfaceName
 				globals := libbpf.TcGlobalData{
-					Tmtu:          natTunnelMTU,
-					VxlanPort:     testVxlanPort,
-					PSNatStart:    uint16(topts.psnaStart),
-					PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
-					Flags:         libbpf.GlobalsNoDSRCidrs,
-					LogFilterJmp:  0xffffffff,
-					IfaceName:     setLogPrefix(ifaceLog),
-					MaglevLUTSize: testMaglevLUTSize,
-					IPFragTimeout: topts.ipfragTimeout,
-					WgPort:        topts.wgPort,
+					Tmtu:            natTunnelMTU,
+					VxlanPort:       testVxlanPort,
+					VxlanSrcPortMin: topts.vxlanSrcPortMin,
+					VxlanSrcPortMax: topts.vxlanSrcPortMax,
+					PSNatStart:      uint16(topts.psnaStart),
+					PSNatLen:        uint16(topts.psnatEnd-topts.psnaStart) + 1,
+					Flags:           libbpf.GlobalsNoDSRCidrs,
+					LogFilterJmp:    0xffffffff,
+					IfaceName:       setLogPrefix(ifaceLog),
+					MaglevLUTSize:   testMaglevLUTSize,
+					IPFragTimeout:   topts.ipfragTimeout,
+					WgPort:          topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -1056,13 +1058,15 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				continue
 			}
 			globals := libbpf.TcGlobalData{
-				Tmtu:          natTunnelMTU,
-				VxlanPort:     testVxlanPort,
-				PSNatStart:    uint16(topts.psnaStart),
-				PSNatLen:      uint16(topts.psnatEnd-topts.psnaStart) + 1,
-				Flags:         libbpf.GlobalsNoDSRCidrs,
-				IfaceName:     setLogPrefix(topts.progLog + "-" + bpfIfaceName),
-				MaglevLUTSize: testMaglevLUTSize,
+				Tmtu:            natTunnelMTU,
+				VxlanPort:       testVxlanPort,
+				VxlanSrcPortMin: topts.vxlanSrcPortMin,
+				VxlanSrcPortMax: topts.vxlanSrcPortMax,
+				PSNatStart:      uint16(topts.psnaStart),
+				PSNatLen:        uint16(topts.psnatEnd-topts.psnaStart) + 1,
+				Flags:           libbpf.GlobalsNoDSRCidrs,
+				IfaceName:       setLogPrefix(topts.progLog + "-" + bpfIfaceName),
+				MaglevLUTSize:   testMaglevLUTSize,
 			}
 			if topts.ipv6 {
 				copy(globals.HostIPv6[:], hostIP.To16())
@@ -1308,6 +1312,8 @@ type testOpts struct {
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	vxlanSrcPortMin               uint16
+	vxlanSrcPortMax               uint16
 	wgPort                        uint16
 }
 
@@ -1415,6 +1421,13 @@ func withDescription(desc string) testOption {
 func withWorkloadSrcSpoofingConfigured() testOption {
 	return func(o *testOpts) {
 		o.workloadSrcSpoofingConfigured = true
+	}
+}
+
+func withVXLANSrcPortRange(min, max uint16) testOption {
+	return func(o *testOpts) {
+		o.vxlanSrcPortMin = min
+		o.vxlanSrcPortMax = max
 	}
 }
 
