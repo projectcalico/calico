@@ -70,6 +70,18 @@ const (
 	NFTablesModeAuto     NFTablesMode = "Auto"
 )
 
+// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for. When
+// set to "All", established connections that have been accepted by Calico policy are offloaded to
+// the kernel's flowtable fast path, bypassing most of the networking stack for improved throughput.
+// +enum
+// +kubebuilder:validation:Enum=All;Disabled
+type NFTablesFlowTableOffload string
+
+const (
+	NFTablesFlowTableOffloadAll      NFTablesFlowTableOffload = "All"
+	NFTablesFlowTableOffloadDisabled NFTablesFlowTableOffload = "Disabled"
+)
+
 // +kubebuilder:validation:Enum=DoNothing;Enable;Disable
 type AWSSrcDstCheckOption string
 
@@ -118,6 +130,14 @@ const (
 	BPFConnectTimeLBTCP      BPFConnectTimeLBType = "TCP"
 	BPFConnectTimeLBEnabled  BPFConnectTimeLBType = "Enabled"
 	BPFConnectTimeLBDisabled BPFConnectTimeLBType = "Disabled"
+)
+
+// +kubebuilder:validation:Enum=TunnelAddress;HostAddress
+type BPFOverlayHostSourceIPType string
+
+const (
+	BPFOverlayHostSourceIPTunnelAddress BPFOverlayHostSourceIPType = "TunnelAddress"
+	BPFOverlayHostSourceIPHostAddress   BPFOverlayHostSourceIPType = "HostAddress"
 )
 
 // +kubebuilder:validation:Enum=Auto;Userspace;BPFProgram
@@ -525,7 +545,7 @@ type FelixConfigurationSpec struct {
 	PrometheusMetricsKeyFile *string `json:"prometheusMetricsKeyFile,omitempty"`
 
 	// PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-	// This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+	// This determines how the server validates client certificates. Default is "NoClientCert".
 	PrometheusMetricsClientAuth *PrometheusMetricsClientAuthType `json:"prometheusMetricsClientAuth,omitempty" validate:"omitempty,oneof=RequireAndVerifyClientCert RequireAnyClientCert VerifyClientCertIfGiven NoClientCert"`
 
 	// FailsafeInboundHostPorts is a list of ProtoPort struct objects including UDP/TCP/SCTP ports and CIDRs that Felix will
@@ -674,9 +694,25 @@ type FelixConfigurationSpec struct {
 	// iptables. [Default: false]
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
-	// NFTablesMode configures nftables support in Felix. [Default: Auto]
+	// NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+	// nftables dataplane if kube-proxy is detected to be running in nftables mode.
+	// [Default: Auto]
 	// +kubebuilder:default=Auto
 	NFTablesMode *NFTablesMode `json:"nftablesMode,omitempty"`
+
+	// NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+	// for improved forwarding performance. When set to "All", established connections accepted by
+	// Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+	// nftables mode is active. [Default: Disabled]
+	// +kubebuilder:default=Disabled
+	NFTablesFlowTableOffload *NFTablesFlowTableOffload `json:"nftablesFlowTableOffload,omitempty"`
+
+	// NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+	// interfaces are added to the nftables flowtable, so that traffic forwarded between those
+	// interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+	// offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+	// is not Disabled. [Default: ""]
+	NFTablesFlowTableDataIfacePattern string `json:"nftablesFlowTableDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 90s]
 	NftablesRefreshInterval *metav1.Duration `json:"nftablesRefreshInterval,omitempty" configv1timescale:"seconds"`
@@ -707,6 +743,14 @@ type FelixConfigurationSpec struct {
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
+
+	// BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+	// (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+	// assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+	// of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+	// assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+	// device IP.  [Default: TunnelAddress]
+	BPFOverlayHostSourceIP *BPFOverlayHostSourceIPType `json:"bpfOverlayHostSourceIP,omitempty" validate:"omitempty,oneof=TunnelAddress HostAddress"`
 
 	// BPFDisableUnprivileged, if enabled, Felix sets the kernel.unprivileged_bpf_disabled sysctl to disable
 	// unprivileged use of BPF.  This ensures that unprivileged users cannot access Calico's BPF maps and

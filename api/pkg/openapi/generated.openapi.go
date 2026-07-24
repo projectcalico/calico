@@ -526,9 +526,17 @@ func schema_pkg_apis_projectcalico_v3_AllocationAttribute(ref common.ReferenceCa
 							},
 						},
 					},
+					"releasedAt": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ReleasedAt is the time this allocation was released, and is set during the allocation's \"cooldown\" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved from `Allocated` to `Unallocated`).",
+							Ref:         ref(metav1.Time{}.OpenAPIModelName()),
+						},
+					},
 				},
 			},
 		},
+		Dependencies: []string{
+			metav1.Time{}.OpenAPIModelName()},
 	}
 }
 
@@ -3461,7 +3469,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"prometheusMetricsClientAuth": {
 						SchemaProps: spec.SchemaProps{
-							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"RequireAndVerifyClientCert\".",
+							Description: "PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint. This determines how the server validates client certificates. Default is \"NoClientCert\".",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3686,10 +3694,25 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"nftablesMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "NFTablesMode configures nftables support in Felix. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
+							Description: "NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the nftables dataplane if kube-proxy is detected to be running in nftables mode. [Default: Auto]\n\nPossible enum values:\n - `\"Auto\"`\n - `\"Disabled\"`\n - `\"Enabled\"`",
 							Type:        []string{"string"},
 							Format:      "",
 							Enum:        []interface{}{"Auto", "Disabled", "Enabled"},
+						},
+					},
+					"nftablesFlowTableOffload": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for, for improved forwarding performance. When set to \"All\", established connections accepted by Calico policy are offloaded to the kernel's flowtable fast path. Only applies when nftables mode is active. [Default: Disabled]\n\nPossible enum values:\n - `\"All\"`\n - `\"Disabled\"`",
+							Type:        []string{"string"},
+							Format:      "",
+							Enum:        []interface{}{"All", "Disabled"},
+						},
+					},
+					"nftablesFlowTableDataIfacePattern": {
+						SchemaProps: spec.SchemaProps{
+							Description: "NFTablesFlowTableDataIfacePattern is a regular expression that controls which host interfaces are added to the nftables flowtable, so that traffic forwarded between those interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload is not Disabled. [Default: \"\"]",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"nftablesRefreshInterval": {
@@ -3730,6 +3753,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]",
 							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"bpfOverlayHostSourceIP": {
+						SchemaProps: spec.SchemaProps{
+							Description: "BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  \"TunnelAddress\" (the default) assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour of clusters upgraded from earlier releases.  \"HostAddress\" uses the node's own IP directly and does not assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel device IP.  [Default: TunnelAddress]",
+							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
@@ -5390,6 +5420,13 @@ func schema_pkg_apis_projectcalico_v3_IPAMConfigurationSpec(ref common.Reference
 							Description: "KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads maintain persistent IP addresses across VM lifecycle events (reboot, migration, pod eviction). When Enabled, Calico automatically ensures that KubeVirt VMs retain their IP addresses when their underlying pods are recreated during VM operations. When Disabled, VMs receive new IP addresses whenever their pods are recreated, and creating a live migration target pod is not supported because the migration target pod requires the same IP as the source pod, which is only possible with address persistence. Defaults to Enabled if not specified.",
 							Type:        []string{"string"},
 							Format:      "",
+						},
+					},
+					"ipCooldownSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used. If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to minimize immediate reuse).",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
@@ -7805,6 +7842,22 @@ func schema_pkg_apis_projectcalico_v3_Template(ref common.ReferenceCallback) com
 					"labels": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"annotations": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Annotations adds the specified annotations to the generated AutoHostEndpoint.",
 							Type:        []string{"object"},
 							AdditionalProperties: &spec.SchemaOrBool{
 								Allows: true,

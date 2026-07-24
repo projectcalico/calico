@@ -126,8 +126,14 @@ bin/xdp_map_stub.o: bin/%.o: %.c %.d | bin
 OBJS:=$(shell ./list-objs)
 OBJS+=bin/tc_preamble_ingress.o
 OBJS+=bin/tc_preamble_egress.o
+# Trace-printk-free preamble variants, loaded on nodes running with kernel
+# lockdown=confidentiality (where ftrace is disabled and any program
+# referencing bpf_trace_printk spams the kernel log on every load).
+OBJS+=bin/tc_preamble_ingress_notrace.o
+OBJS+=bin/tc_preamble_egress_notrace.o
 OBJS+=bin/tcx_test.o
 OBJS+=bin/xdp_preamble.o
+OBJS+=bin/xdp_preamble_notrace.o
 OBJS+=bin/policy_default_ingress.o
 OBJS+=bin/policy_default_egress.o
 OBJS+=$(MAP_OBJS)
@@ -177,11 +183,19 @@ tc_preamble_ingress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
 tc_preamble_egress.ll: tc_preamble.c tc_preamble.d
 	$(COMPILE)
+tc_preamble_ingress_notrace.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_ingress_notrace.ll: CFLAGS += -DCALI_NO_TRACE_PRINTK
+tc_preamble_egress_notrace.ll: tc_preamble.c tc_preamble.d
+	$(COMPILE)
+tc_preamble_egress_notrace.ll: CFLAGS += -DCALI_NO_TRACE_PRINTK
 tcx_test.ll: tcx_test.c tcx_test.d
 	$(CC) $(CFLAGS) -c $< -o $@
 
 xdp_preamble.ll: xdp_preamble.c xdp_preamble.d
 	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -c $< -o $@
+xdp_preamble_notrace.ll: xdp_preamble.c xdp_preamble.d
+	$(CC) $(CFLAGS) -DCALI_COMPILE_FLAGS=64 -DCALI_NO_TRACE_PRINTK -c $< -o $@
 
 policy_default_ingress.ll: policy_default.c policy_default.d
 	$(COMPILE)
@@ -255,9 +269,15 @@ bin/tc_preamble_ingress.o: tc_preamble_ingress.ll | bin
 	$(LINK)
 bin/tc_preamble_egress.o: tc_preamble_egress.ll | bin
 	$(LINK)
+bin/tc_preamble_ingress_notrace.o: tc_preamble_ingress_notrace.ll | bin
+	$(LINK)
+bin/tc_preamble_egress_notrace.o: tc_preamble_egress_notrace.ll | bin
+	$(LINK)
 bin/tcx_test.o: tcx_test.ll | bin
 	$(LINK)
 bin/xdp_preamble.o: xdp_preamble.ll | bin
+	$(LINK)
+bin/xdp_preamble_notrace.o: xdp_preamble_notrace.ll | bin
 	$(LINK)
 bin/policy_default_ingress.o: policy_default_ingress.ll | bin
 	$(LINK)
@@ -349,10 +369,21 @@ COMPILE_DEPS=set -e; rm -f $@; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
+# The *.d auto-dependency files bake absolute system-header paths (e.g.
+# /usr/include/asm/types.h) from the environment that generated them — the
+# containerized go-build image.  Those paths do not exist on a typical
+# multiarch host (where asm/ lives under /usr/include/<triple>/), so a make
+# running on the host that includes a container-generated *.d sees a missing
+# prerequisite, tries to regenerate the *.d with host clang, and fails with
+# "asm/types.h file not found".  SKIP_DEP_INCLUDES lets a host-side caller that
+# only needs to generate source (e.g. the *_map_stub.c rule in felix/Makefile)
+# opt out of the includes it never needs.
+ifndef SKIP_DEP_INCLUDES
 ifneq ($(MAKECMDGOALS),clean)
   ifneq ($(MAKECMDGOALS), libbpf)
     include $(wildcard *.d)
   endif
+endif
 endif
 
 clean:

@@ -461,11 +461,13 @@ type Config struct {
 	NATOutgoingAddress             net.IP
 	NATOutgoingExclusions          string
 	BPFEnabled                     bool
+	BPFOverlayIPOnDevice           bool
 	BPFForceTrackPacketsFromIfaces []string
 	ServiceLoopPrevention          string
 
-	NFTablesMode    string
-	FlowLogsEnabled bool
+	NFTablesMode             string
+	NFTablesFlowTableOffload bool
+	FlowLogsEnabled          bool
 
 	IstioAmbientModeEnabled bool
 	IstioDSCPMark           uint8

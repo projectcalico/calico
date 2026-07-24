@@ -20,6 +20,7 @@ Calico election code.
 """
 import os
 import random
+import re
 import socket
 import sys
 import time
@@ -164,6 +165,14 @@ class Elector(object):
             return
 
         LOG.debug("ID of elected master is : %s", value)
+        if value:
+            # If the previous master was on this host, check whether its process is
+            # still alive.  This recovers from the case where the previous master
+            # was killed without running its step-down cleanup (e.g. SIGKILL, or
+            # the worker greenlet dying without unwinding) so the stale election
+            # key would otherwise have to wait out the lease TTL before any node
+            # could win.
+            self._check_master_process(value)
 
         while not self._stopped:
             # We know another instance is the master. Wait until something
@@ -210,6 +219,44 @@ class Elector(object):
                     "Leader etcd key went away, attempting to become the elected master"
                 )
                 self._become_master()
+
+    def _check_master_process(self, master_id):
+        """If the previous master was on this host, check whether the process is
+        still alive; if not, delete the stale election key (with CAS against the
+        observed value) and restart the election.
+
+        :param master_id: Value read from the election key.
+        """
+        # Defensive: only parse the key if it looks like what _become_master
+        # writes.  An unparseable value means someone else's election scheme is
+        # writing here, or the format has changed -- leave it alone.
+        match = re.match(r"^(?P<host>[^:]+):(?P<pid>\d+)$", master_id)
+        if not match:
+            LOG.warning("Unable to parse master ID: %r.", master_id)
+            return
+        host = match.group("host")
+        pid = int(match.group("pid"))
+        LOG.debug("Parsed key as host = %s, PID = %s", host, pid)
+        if host != self._server_id:
+            return
+        LOG.debug("Previous master was on this server %s", host)
+        if os.path.exists("/proc/%s" % pid):
+            LOG.debug("Master still running")
+            return
+        LOG.warning(
+            "Master was on this server but cannot find its PID in /proc.  "
+            "Removing stale election key."
+        )
+        try:
+            deleted = etcdv3.delete(self._key, existing_value=master_id)
+        except Etcd3Exception as e:
+            self._log_exception("remove stale key from dead master", e)
+            deleted = False
+        if not deleted:
+            # Either the CAS-delete found a value that no longer matches (so
+            # somebody else has already moved the election on), or the etcd
+            # call failed.  Either way, restart the election to re-read state.
+            raise RestartElection()
 
     def _become_master(self):
         """_become_master

@@ -55,7 +55,9 @@ type AssignIPArgs struct {
 	// If specified, the attributes of reserved IPv4 addresses in the block.
 	HostReservedAttr *HostReservedAttr
 
-	// The intended use for the IP address.  Used to determine the affinityType of the host.
+	// The intended use for the IP address.  Determines the affinityType of the
+	// host and, when non-empty, is enforced against the containing pool's
+	// AllowedUses (the assignment fails if the pool does not allow this use).
 	IntendedUse v3.IPPoolAllowedUse
 
 	// MaxAllocToHandlePerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)
@@ -145,6 +147,11 @@ type IPAMConfig struct {
 	// when this is set to VMAddressPersistenceDisabled and will result in an error.
 	// If nil, defaults to VMAddressPersistenceEnabled (IP persistence enabled if not specified).
 	KubeVirtVMAddressPersistence *VMAddressPersistence
+
+	// IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+	// If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+	// minimize immediate reuse).
+	IPCooldownSeconds int `json:"ipCooldownSeconds,omitempty"`
 }
 
 // GetUtilizationArgs defines the set of arguments for requesting IP utilization.

@@ -37,6 +37,10 @@ func (in *AllocationAttribute) DeepCopyInto(out *AllocationAttribute) {
 			(*out)[key] = val
 		}
 	}
+	if in.ReleasedAt != nil {
+		in, out := &in.ReleasedAt, &out.ReleasedAt
+		*out = (*in).DeepCopy()
+	}
 	return
 }
 
@@ -1724,6 +1728,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(NFTablesMode)
 		**out = **in
 	}
+	if in.NFTablesFlowTableOffload != nil {
+		in, out := &in.NFTablesFlowTableOffload, &out.NFTablesFlowTableOffload
+		*out = new(NFTablesFlowTableOffload)
+		**out = **in
+	}
 	if in.NftablesRefreshInterval != nil {
 		in, out := &in.NftablesRefreshInterval, &out.NftablesRefreshInterval
 		*out = new(v1.Duration)
@@ -1737,6 +1746,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.BPFEnabled != nil {
 		in, out := &in.BPFEnabled, &out.BPFEnabled
 		*out = new(bool)
+		**out = **in
+	}
+	if in.BPFOverlayHostSourceIP != nil {
+		in, out := &in.BPFOverlayHostSourceIP, &out.BPFOverlayHostSourceIP
+		*out = new(BPFOverlayHostSourceIPType)
 		**out = **in
 	}
 	if in.BPFDisableUnprivileged != nil {
@@ -4057,6 +4071,13 @@ func (in *Template) DeepCopyInto(out *Template) {
 	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val

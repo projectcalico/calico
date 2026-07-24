@@ -348,10 +348,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			By("Adding an IPPool with empty string for IPIPMode and VXLANMode and expecting it to be defaulted to 'Never'")
 
 			// Get the Calico backend client.
-			type accessor interface {
-				Backend() backendapi.Client
-			}
-			bc := c.(accessor).Backend()
+			bc := c.(backendapi.BackendAccessor).Backend()
 
 			// Add the IPPool through the backend so it skips setting default values
 			kvp := &model.KVPair{

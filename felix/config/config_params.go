@@ -187,10 +187,13 @@ type Config struct {
 	WireguardThreadingEnabled      bool          `config:"bool;false"`
 
 	// nftables configuration.
-	NFTablesMode string `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesMode                      string         `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesFlowTableOffload          string         `config:"oneof(All,Disabled);Disabled"`
+	NFTablesFlowTableDataIfacePattern *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
+	BPFOverlayHostSourceIP             string            `config:"oneof(TunnelAddress,HostAddress);TunnelAddress;non-zero"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
 	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`
@@ -434,7 +437,7 @@ type Config struct {
 	PrometheusMetricsCAFile     string `config:"string;"`
 	PrometheusMetricsCertFile   string `config:"string;"`
 	PrometheusMetricsKeyFile    string `config:"string;"`
-	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);RequireAndVerifyClientCert"`
+	PrometheusMetricsClientAuth string `config:"oneof(RequireAndVerifyClientCert,RequireAnyClientCert,VerifyClientCertIfGiven,NoClientCert);NoClientCert"`
 
 	FailsafeInboundHostPorts  []ProtoPort `config:"port-list;tcp:22,udp:68,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`
 	FailsafeOutboundHostPorts []ProtoPort `config:"port-list;udp:53,udp:67,tcp:179,tcp:2379,tcp:2380,tcp:5473,tcp:6443,tcp:6666,tcp:6667;die-on-fail"`

@@ -689,7 +689,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 
 func cleanupIPAM(clientset *kubernetes.Clientset, calicoClient client.Interface) {
 	log.Info("Cleaning up IPAM")
-	c := calicoClient.(interface{ Backend() bapi.Client }).Backend()
+	c := calicoClient.(bapi.BackendAccessor).Backend()
 	for _, li := range []model.ListInterface{
 		model.BlockListOptions{},
 		model.BlockAffinityListOptions{},
@@ -1304,7 +1304,7 @@ func cleanupAllTiers(clientset *kubernetes.Clientset, client client.Interface) {
 	}
 	log.WithField("count", len(tiers.Items)).Info("Tiers present")
 	for _, tier := range tiers.Items {
-		if names.TierIsStatic(tier.Name) {
+		if names.TierIsProtected(tier.Name) {
 			continue
 		}
 

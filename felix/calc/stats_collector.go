@@ -70,8 +70,8 @@ type StatsCollector struct {
 	numProfiles          int
 	numALPPolicies       int
 
-	lastUpdate StatsUpdate
-	inSync     bool
+	lastUpdate           StatsUpdate
+	initialSyncCompleted bool
 
 	Callback func(StatsUpdate) error
 }
@@ -109,8 +109,8 @@ func (s *StatsCollector) RegisterWith(calcGraph *CalcGraph) {
 
 func (s *StatsCollector) OnStatusUpdate(status api.SyncStatus) {
 	log.WithField("status", status).Debug("Datastore status updated")
-	if status == api.InSync {
-		s.inSync = true
+	if status == api.InSync && !s.initialSyncCompleted {
+		s.initialSyncCompleted = true
 		s.sendUpdate()
 	}
 }
@@ -212,7 +212,7 @@ func (s *StatsCollector) sendUpdate() {
 	gaugeClusNumTiers.Set(float64(s.numTiers))
 	gaugeClusNumPolicies.Set(float64(s.numPolicies))
 	gaugeClusNumProfiles.Set(float64(s.numProfiles))
-	if s.inSync && s.lastUpdate != update {
+	if s.initialSyncCompleted && s.lastUpdate != update {
 		if err := s.Callback(update); err != nil {
 			log.WithError(err).Warn("Failed to report stats")
 		} else {

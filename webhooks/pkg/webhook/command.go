@@ -108,6 +108,13 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create in-cluster config")
 	}
+
+	// The client-go defaults (QPS 5 / burst 10) throttle the webhook under bursts of policy writes,
+	// since every admission review issues a SubjectAccessReview. Match kube-controllers' higher
+	// limits so a large batch of concurrent writes doesn't queue behind client-side rate limiting.
+	rc.QPS = 100
+	rc.Burst = 200
+
 	cs, err := kubernetes.NewForConfig(rc)
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create Kubernetes clientset")

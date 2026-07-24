@@ -24,6 +24,9 @@ func newNodeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "node",
 		Short: "Calico node management",
+		Long: `Manage a Calico node instance. These commands run directly on the compute host
+where the node is running, and cover starting the node, checking its status,
+and gathering diagnostics.`,
 	}
 	cmd.AddCommand(
 		newNodeStatusCommand(),
@@ -38,8 +41,11 @@ func newNodeStatusCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "View the current status of a Calico node",
+		Long: `Show the current status of the Calico node on this host, including uptime and
+BGP peering states. Must be run on the node whose status you want.`,
+		Example: `  calicoctl node status`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Status([]string{"node", "status"})
+			return node.Status()
 		},
 	}
 }
@@ -48,8 +54,13 @@ func newNodeDiagsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diags",
 		Short: "Gather a diagnostics bundle for a Calico node",
+		Long: `Gather a diagnostics bundle from the Calico node on this host. Run it on the
+affected node when troubleshooting a networking problem; it collects logs and
+system information useful for diagnosis.`,
+		Example: `  calicoctl node diags`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Diags([]string{"node", "diags"})
+			logDir, _ := cmd.Flags().GetString("log-dir")
+			return node.Diags(logDir)
 		},
 	}
 	cmd.Flags().String("log-dir", "/var/log/calico", "The directory containing Calico logs.")
@@ -58,10 +69,13 @@ func newNodeDiagsCommand() *cobra.Command {
 
 func newNodeChecksystemCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "checksystem",
-		Short: "Verify the compute host is able to run a Calico node instance",
+		Use:     "checksystem",
+		Short:   "Verify the compute host is able to run a Calico node instance",
+		Long:    `Verify that this host meets the system requirements to run a Calico node instance.`,
+		Example: `  calicoctl node checksystem`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Checksystem([]string{"node", "checksystem"})
+			kernelConfig, _ := cmd.Flags().GetString("kernel-config")
+			return node.Checksystem(kernelConfig)
 		},
 	}
 	cmd.Flags().StringP("kernel-config", "f", "", "Override the Kernel config file location.")
@@ -72,8 +86,28 @@ func newNodeRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the Calico node container image",
+		Long: `Start the Calico node container on this host. Runs the calico/node image with
+the supplied networking options; most options mirror fields on the node
+resource and are autodetected when omitted.`,
+		Example: `  # Start calico/node, autodetecting the IPv4 address.
+  calicoctl node run --ip autodetect --ip-autodetection-method can-reach=8.8.8.8`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return node.Run([]string{"node", "run"})
+			c := node.RunConfig{}
+			c.IP, _ = cmd.Flags().GetString("ip")
+			c.IP6, _ = cmd.Flags().GetString("ip6")
+			c.AS, _ = cmd.Flags().GetString("as")
+			c.Name, _ = cmd.Flags().GetString("name")
+			c.IPAutodetectionMethod, _ = cmd.Flags().GetString("ip-autodetection-method")
+			c.IP6AutodetectionMethod, _ = cmd.Flags().GetString("ip6-autodetection-method")
+			c.LogDir, _ = cmd.Flags().GetString("log-dir")
+			c.NodeImage, _ = cmd.Flags().GetString("node-image")
+			c.Backend, _ = cmd.Flags().GetString("backend")
+			c.Config, _ = cmd.Flags().GetString("config")
+			c.FelixConfig, _ = cmd.Flags().GetString("felix-config")
+			c.DryRun, _ = cmd.Flags().GetBool("dryrun")
+			c.InitSystem, _ = cmd.Flags().GetBool("init-system")
+			c.NoDefaultIPPools, _ = cmd.Flags().GetBool("no-default-ippools")
+			return node.Run(c)
 		},
 	}
 	cmd.Flags().String("ip", "", "Set the local IPv4 routing address for this node.")

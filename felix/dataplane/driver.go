@@ -228,9 +228,10 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
-				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
-				NFTablesMode:          configParams.NFTablesMode,
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
+				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
+				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload != string(apiv3.NFTablesFlowTableOffloadDisabled),
+				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
 					ipsets.IPFamilyV4,
@@ -303,6 +304,7 @@ func StartDataplaneDriver(
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
+				BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
 				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
@@ -376,6 +378,7 @@ func StartDataplaneDriver(
 			ExternalNodesCidrs:                 configParams.ExternalNodesCIDRList,
 			SidecarAccelerationEnabled:         configParams.SidecarAccelerationEnabled,
 			BPFEnabled:                         configParams.BPFEnabled,
+			BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
 			BPFPolicyDebugEnabled:              configParams.BPFPolicyDebugEnabled,
 			BPFDisableUnprivileged:             configParams.BPFDisableUnprivileged,
 			BPFJITHardening:                    configParams.BPFJITHardening,
@@ -389,6 +392,7 @@ func StartDataplaneDriver(
 			BPFCTLBLogFilter:                   configParams.BPFCTLBLogFilter,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			NFTablesFlowTableDataIfacePattern:  configParams.NFTablesFlowTableDataIfacePattern,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,

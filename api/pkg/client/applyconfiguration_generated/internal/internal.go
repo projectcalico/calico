@@ -36,6 +36,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: handle_id
       type:
         scalar: string
+    - name: releasedAt
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.Time
     - name: secondary
       type:
         map:
@@ -960,6 +963,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bpfMapSizeRoute
       type:
         scalar: numeric
+    - name: bpfOverlayHostSourceIP
+      type:
+        scalar: string
     - name: bpfPSNATPorts
       type:
         namedType: com.github.projectcalico.api.pkg.lib.numorstring.Port
@@ -1234,6 +1240,12 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     - name: nftablesFilterDenyAction
+      type:
+        scalar: string
+    - name: nftablesFlowTableDataIfacePattern
+      type:
+        scalar: string
+    - name: nftablesFlowTableOffload
       type:
         scalar: string
     - name: nftablesMangleAllowAction
@@ -1671,6 +1683,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: boolean
       default: false
+    - name: ipCooldownSeconds
+      type:
+        scalar: numeric
     - name: kubeVirtVMAddressPersistence
       type:
         scalar: string
@@ -2341,6 +2356,11 @@ var schemaYAML = typed.YAMLObject(`types:
 - name: com.github.projectcalico.api.pkg.apis.projectcalico.v3.Template
   map:
     fields:
+    - name: annotations
+      type:
+        map:
+          elementType:
+            scalar: string
     - name: generateName
       type:
         scalar: string
