@@ -135,6 +135,16 @@ type collector struct {
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
 	displayDebugTraceLogs bool
+
+	// stopC signals the stats collection goroutine to return; closed by Stop().
+	stopC chan struct{}
+
+	// thunkC lets a caller run a closure on the collector's own goroutine. The
+	// collector goroutine owns epStats (and the Data values within it) with no
+	// locking, so this is the only race-free way to read or mutate that state
+	// from another goroutine. Only tests currently use it, via the runOnLoop
+	// helper; in production nothing sends to it and the select case is dormant.
+	thunkC chan func()
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -143,13 +153,13 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	c := &collector{
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
-		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
-		tickerPolicyEval:      jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
+		stopC:                 make(chan struct{}),
+		thunkC:                make(chan func()),
 	}
 
 	if c.policyStoreManager == nil {
@@ -157,8 +167,7 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	}
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
-		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
-		c.tickerPolicyEval = jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10)
+		log.Infof("Pending policies enabled")
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -185,6 +194,11 @@ func (c *collector) Start() error {
 		return fmt.Errorf("ConntrackInfoReader failed to start: %w", err)
 	}
 
+	// Create the tickers here rather than in newCollector so their goroutines
+	// share the stats-collection loop's lifecycle: a collector that is never
+	// Started spawns no ticker goroutines, and the loop stops them on exit.
+	c.ticker = jitter.NewTicker(c.config.ExportingInterval, c.config.ExportingInterval/10)
+	c.tickerPolicyEval = jitter.NewTicker(c.config.FlowLogsFlushInterval*8/10, c.config.FlowLogsFlushInterval*1/10)
 	go c.startStatsCollectionAndReporting()
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(c.config.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
@@ -239,6 +253,13 @@ func (c *collector) SetConntrackInfoReader(cir types.ConntrackInfoReader) {
 }
 
 func (c *collector) startStatsCollectionAndReporting() {
+	// The tickers are created in Start just before this goroutine is launched.
+	// Stop them on any loop exit so their goroutines don't outlive us. Doing it
+	// here (as the loop returns) rather than in Stop() means we never close a
+	// ticker channel while still selecting on it, which would busy-spin.
+	defer c.ticker.Stop()
+	defer c.tickerPolicyEval.Stop()
+
 	var (
 		pktInfoC <-chan types.PacketInfo
 		ctInfoC  <-chan []types.ConntrackInfo
@@ -275,8 +296,21 @@ func (c *collector) startStatsCollectionAndReporting() {
 			histogramDataplaneStatsUpdate.Observe(float64(time.Since(dataplaneStatsUpdateStart).Seconds()))
 		case <-c.tickerPolicyEval.Channel():
 			c.updatePendingRuleTraces()
+		case fn := <-c.thunkC:
+			// Run a caller-supplied closure on this goroutine, giving it
+			// race-free access to collector-owned state. See thunkC.
+			fn()
+		case <-c.stopC:
+			return
 		}
 	}
+}
+
+// Stop signals the stats collection goroutine started by Start to return. It
+// must be called at most once. It does not stop the info readers or metric
+// reporters; those have their own lifecycles.
+func (c *collector) Stop() {
+	close(c.stopC)
 }
 
 // loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
