@@ -137,9 +137,12 @@ type Wireguard struct {
 
 	// Local route information. This contains the complete set of local routes: workloads, tunnels, hosts (for host
 	// encryption). This is always updated directly from the various update methods.
-	localIPs          set.Set[ip.Addr]
-	localCIDRs        set.Set[ip.CIDR]
-	localCIDRsUpdated bool
+	localIPs                   set.Set[ip.Addr]
+	localCIDRs                 set.Set[ip.CIDR]
+	localCIDRsUpdated          bool
+	routingRulesNeedUpdate     bool
+	programmedRoutingRuleCIDRs set.Set[ip.CIDR]
+	programmedUnscopedRule     bool
 
 	// CIDR to node mappings. This is always updated directly from the various update methods.
 	cidrToNodeName map[ip.CIDR]string
@@ -280,26 +283,27 @@ func NewWithShims(
 	}
 
 	return &Wireguard{
-		hostname:             hostname,
-		config:               config,
-		ipVersion:            ipVersion,
-		interfaceName:        interfaceName,
-		newNetlinkClient:     newWireguardNetlink,
-		newWireguardClient:   newWireguardDevice,
-		time:                 timeShim,
-		nodes:                map[string]*nodeData{},
-		cidrToNodeName:       map[ip.CIDR]string{},
-		publicKeyToNodeNames: map[wgtypes.Key]set.Set[string]{},
-		nodeUpdates:          map[string]*nodeUpdateData{},
-		routetable:           routetable.NewClassView(routetable.RouteClassWireguard, rt),
-		routerule:            rr,
-		statusCallback:       statusCallback,
-		localIPs:             set.New[ip.Addr](),
-		localCIDRs:           set.New[ip.CIDR](),
-		writeProcSys:         writeProcSys,
-		opRecorder:           opRecorder,
-		logCtx:               logCtx,
-		rateLimitedLogger:    lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
+		hostname:                   hostname,
+		config:                     config,
+		ipVersion:                  ipVersion,
+		interfaceName:              interfaceName,
+		newNetlinkClient:           newWireguardNetlink,
+		newWireguardClient:         newWireguardDevice,
+		time:                       timeShim,
+		nodes:                      map[string]*nodeData{},
+		cidrToNodeName:             map[ip.CIDR]string{},
+		publicKeyToNodeNames:       map[wgtypes.Key]set.Set[string]{},
+		nodeUpdates:                map[string]*nodeUpdateData{},
+		routetable:                 routetable.NewClassView(routetable.RouteClassWireguard, rt),
+		routerule:                  rr,
+		statusCallback:             statusCallback,
+		localIPs:                   set.New[ip.Addr](),
+		localCIDRs:                 set.New[ip.CIDR](),
+		programmedRoutingRuleCIDRs: set.New[ip.CIDR](),
+		writeProcSys:               writeProcSys,
+		opRecorder:                 opRecorder,
+		logCtx:                     logCtx,
+		rateLimitedLogger:          lclogutils.NewRateLimitedLogger(lclogutils.OptInterval(4 * time.Hour)).WithFields(logCtx.Data),
 	}
 }
 
@@ -474,6 +478,9 @@ func (w *Wireguard) localWorkloadCIDRAdd(cidr ip.CIDR) {
 		}
 		if !contained {
 			w.localCIDRsUpdated = true
+			if !w.config.EncryptHostTraffic {
+				w.routingRulesNeedUpdate = true
+			}
 		}
 	}
 }
@@ -495,6 +502,9 @@ func (w *Wireguard) localWorkloadCIDRRemove(cidr ip.CIDR) {
 	if !w.localCIDRsUpdated {
 		if node, ok := w.nodes[w.hostname]; ok {
 			w.localCIDRsUpdated = node.cidrs.Contains(cidr)
+			if w.localCIDRsUpdated && !w.config.EncryptHostTraffic {
+				w.routingRulesNeedUpdate = true
+			}
 		}
 	}
 }
@@ -1624,14 +1634,82 @@ func (w *Wireguard) ensureLinkAddress(netlinkClient netlinkshim.Interface) error
 	return nil
 }
 
-// addRouteRule adds a routing rule to use the wireguard table.
+// addRouteRule adds routing rules to use the wireguard table.
+//
+// Prior to this fix, the routing rule incorrectly matched ALL traffic destined for pods,
+// including host-originated traffic. This caused host→pod traffic to be incorrectly routed
+// to the WireGuard interface where it was dropped (source IP not in allowed-IPs).
+//
+// The fix: when EncryptHostTraffic=false, scope the rule to pod-originated traffic only
+// by matching on source IP from pod CIDRs. This restores the correct overlay/underlay
+// separation semantics.
+//
+// Behavior:
+// - EncryptHostTraffic=true: Single unscoped routing rule (all traffic → WireGuard)
+// - EncryptHostTraffic=false: Source-scoped rules (pod traffic only → WireGuard)
 func (w *Wireguard) addRouteRule() {
-	// The netlink library has a bug where it returns -1 for the mark on a rule instead of 0.
-	// To work around this issue, the rule below was re-written to no longer use a mark of 0x0,
-	// instead matching the NOT of the actual wireguard mark.
-	w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
-		GoToTable(w.config.RoutingTableIndex).
-		Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)))
+	if w.routingRulesNeedUpdate && !w.config.EncryptHostTraffic {
+		for cidr := range w.programmedRoutingRuleCIDRs.All() {
+			w.routerule.RemoveRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+				MatchSrcAddress(cidr.ToIPNet()).
+				Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+				GoToTable(w.config.RoutingTableIndex))
+		}
+		w.programmedRoutingRuleCIDRs.Clear()
+		w.routingRulesNeedUpdate = false
+	}
+
+	if w.config.EncryptHostTraffic {
+		// When switching from per-CIDR rules to unscoped rule, remove old per-CIDR rules
+		if w.programmedRoutingRuleCIDRs.Len() > 0 {
+			for cidr := range w.programmedRoutingRuleCIDRs.All() {
+				w.routerule.RemoveRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+					MatchSrcAddress(cidr.ToIPNet()).
+					Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+					GoToTable(w.config.RoutingTableIndex))
+			}
+			w.programmedRoutingRuleCIDRs.Clear()
+		}
+		// Use "not the WireGuard mark" rather than "mark is zero": the netlink library reads a
+		// zero mark back as -1, so a plain zero-mark rule never settles and keeps churning.
+		w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+			GoToTable(w.config.RoutingTableIndex).
+			Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)))
+		w.programmedUnscopedRule = true
+	} else {
+		// When switching from unscoped rule to per-CIDR rules, remove old unscoped rule
+		if w.programmedUnscopedRule {
+			w.routerule.RemoveRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+				GoToTable(w.config.RoutingTableIndex).
+				Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)))
+			w.programmedUnscopedRule = false
+		}
+		// Source-scoped routing rules: only pod-originated traffic should use WireGuard table
+		if node, ok := w.nodes[w.hostname]; ok {
+			desiredCIDRs := node.cidrs.Copy()
+			for cidr := range w.programmedRoutingRuleCIDRs.All() {
+				if !desiredCIDRs.Contains(cidr) {
+					w.routerule.RemoveRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+						MatchSrcAddress(cidr.ToIPNet()).
+						Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+						GoToTable(w.config.RoutingTableIndex))
+					w.programmedRoutingRuleCIDRs.Discard(cidr)
+				}
+			}
+			for cidr := range desiredCIDRs.All() {
+				if w.programmedRoutingRuleCIDRs.Contains(cidr) {
+					continue
+				}
+				// Use "not the WireGuard mark" rather than "mark is zero": the netlink library reads a
+				// zero mark back as -1, so a plain zero-mark rule never settles and keeps churning.
+				w.routerule.SetRule(routerule.NewRule(int(w.ipVersion), w.config.RoutingRulePriority).
+					MatchSrcAddress(cidr.ToIPNet()).
+					Not().MatchFWMarkWithMask(uint32(w.config.FirewallMark), uint32(w.config.FirewallMark)).
+					GoToTable(w.config.RoutingTableIndex))
+				w.programmedRoutingRuleCIDRs.Add(cidr)
+			}
+		}
+	}
 }
 
 // ensureDisabled ensures all calico-installed wireguard configuration is removed.
@@ -1775,14 +1853,11 @@ func (w *Wireguard) getNodeFromKey(key wgtypes.Key) *nodeData {
 
 // applyWireguardConfig applies the wireguard configuration.
 func (w *Wireguard) applyWireguardConfig(wireguardClient netlinkshim.Wireguard, c *wgtypes.Config) error {
+	w.logCtx.Debugf("Apply wireguard config update: %#v", c)
 	if c == nil {
 		// No config to apply.
 		return nil
 	}
-	// Log a sanitized copy — nil out PrivateKey which contains key material.
-	sanitized := *c
-	sanitized.PrivateKey = nil
-	w.logCtx.Debugf("Apply wireguard config update: %#v", &sanitized)
 	return wireguardClient.ConfigureDevice(w.interfaceName, *c)
 }
 
