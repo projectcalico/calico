@@ -64,6 +64,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -331,6 +332,10 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 				},
 			},
 		},
+
+		// Cached objects are only read by the operator's own controllers, which
+		// never consult managedFields; stripping them substantially shrinks the cache.
+		Cache: cache.Options{DefaultTransform: cache.TransformStripManagedFields()},
 
 		// Explicitly set the MapperProvider to the NewDynamicRESTMapper, as we had previously had issues with the default
 		// not being this mapper (which has since been rectified). It was a tough issue to figure out when the default
