@@ -47,9 +47,12 @@ type requestCache struct {
 
 	// Memoized per-flow values. The match functions need these for every rule that
 	// carries an IP set reference; recomputing them per rule dominates allocation
-	// when many policies apply to an endpoint.
+	// when many policies apply to an endpoint. The IPs need explicit "fetched"
+	// flags because nil is a valid value (non-IP connections, e.g. pipes).
 	srcIP          net.IP
 	dstIP          net.IP
+	srcIPFetched   bool
+	dstIPFetched   bool
 	srcIPStr       string
 	dstIPStr       string
 	dstIPProtoPort string
@@ -113,16 +116,18 @@ func (r *requestCache) getDstNamespace() *namespace {
 // getSrcIP returns the source IP, memoized across the request (the Flow
 // implementations construct a fresh net.IP per call).
 func (r *requestCache) getSrcIP() net.IP {
-	if r.srcIP == nil {
+	if !r.srcIPFetched {
 		r.srcIP = r.GetSourceIP()
+		r.srcIPFetched = true
 	}
 	return r.srcIP
 }
 
 // getDstIP returns the destination IP, memoized across the request.
 func (r *requestCache) getDstIP() net.IP {
-	if r.dstIP == nil {
+	if !r.dstIPFetched {
 		r.dstIP = r.GetDestIP()
+		r.dstIPFetched = true
 	}
 	return r.dstIP
 }
