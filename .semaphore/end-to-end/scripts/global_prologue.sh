@@ -161,7 +161,10 @@ if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-t
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
 export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE} | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-wget -q --header="Authorization: token ${GITHUB_ACCESS_TOKEN}" --header='Accept:application/octet-stream' https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O "${BZ_GLOBAL_BIN}/bz"
+# curl (not wget) for the asset download: the assets endpoint 302-redirects to a
+# signed host, and curl drops the Authorization header on cross-host redirect (wget
+# forwards it — leaking the token onward and tripping S3's "one auth mechanism" 400).
+curl -fsSL --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/octet-stream" -o "${BZ_GLOBAL_BIN}/bz" https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}
 chmod +x "${BZ_GLOBAL_BIN}/bz"
 
 mkdir -p "$HOME/.docker"
