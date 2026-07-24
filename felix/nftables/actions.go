@@ -156,8 +156,7 @@ type Referrer interface {
 }
 
 type GotoAction struct {
-	Target   string
-	TypeGoto struct{}
+	Target string
 }
 
 func (g GotoAction) ToFragment(features *environment.Features) string {
@@ -188,8 +187,7 @@ var (
 )
 
 type JumpAction struct {
-	Target   string
-	TypeJump struct{}
+	Target string
 }
 
 func (g JumpAction) ToFragment(features *environment.Features) string {
@@ -221,9 +219,7 @@ var (
 	_ generictables.ReturnActionMarker = ReturnAction{}
 )
 
-type ReturnAction struct {
-	TypeReturn struct{}
-}
+type ReturnAction struct{}
 
 func (r ReturnAction) IsReturnAction() {
 }
@@ -236,9 +232,7 @@ func (r ReturnAction) String() string {
 	return "Return"
 }
 
-type DropAction struct {
-	TypeDrop struct{}
-}
+type DropAction struct{}
 
 func (g DropAction) ToFragment(features *environment.Features) string {
 	return "drop"
@@ -249,8 +243,7 @@ func (g DropAction) String() string {
 }
 
 type RejectAction struct {
-	TypeReject struct{}
-	With       string
+	With string
 }
 
 func (g RejectAction) ToFragment(features *environment.Features) string {
@@ -265,8 +258,7 @@ func (g RejectAction) String() string {
 }
 
 type LogAction struct {
-	Prefix  string
-	TypeLog struct{}
+	Prefix string
 }
 
 func (g LogAction) ToFragment(features *environment.Features) string {
@@ -277,9 +269,7 @@ func (g LogAction) String() string {
 	return "Log"
 }
 
-type AcceptAction struct {
-	TypeAccept struct{}
-}
+type AcceptAction struct{}
 
 func (g AcceptAction) ToFragment(features *environment.Features) string {
 	return "accept"
@@ -292,7 +282,6 @@ func (g AcceptAction) String() string {
 type DNATAction struct {
 	DestAddr string
 	DestPort uint16
-	TypeDNAT struct{}
 }
 
 func (g DNATAction) ToFragment(features *environment.Features) string {
@@ -308,8 +297,7 @@ func (g DNATAction) String() string {
 }
 
 type SNATAction struct {
-	ToAddr   string
-	TypeSNAT struct{}
+	ToAddr string
 }
 
 func (g SNATAction) ToFragment(features *environment.Features) string {
@@ -325,8 +313,7 @@ func (g SNATAction) String() string {
 }
 
 type MasqAction struct {
-	ToPorts  string
-	TypeMasq struct{}
+	ToPorts string
 }
 
 func (g MasqAction) ToFragment(features *environment.Features) string {
@@ -346,8 +333,7 @@ func (g MasqAction) String() string {
 }
 
 type ClearMarkAction struct {
-	Mark          uint32
-	TypeClearMark struct{}
+	Mark uint32
 }
 
 func (c ClearMarkAction) ToFragment(features *environment.Features) string {
@@ -359,8 +345,7 @@ func (c ClearMarkAction) String() string {
 }
 
 type SetMarkAction struct {
-	Mark        uint32
-	TypeSetMark struct{}
+	Mark uint32
 }
 
 func (c SetMarkAction) ToFragment(features *environment.Features) string {
@@ -372,9 +357,8 @@ func (c SetMarkAction) String() string {
 }
 
 type SetMaskedMarkAction struct {
-	Mark              uint32
-	Mask              uint32
-	TypeSetMaskedMark struct{}
+	Mark uint32
+	Mask uint32
 }
 
 func (c SetMaskedMarkAction) ToFragment(features *environment.Features) string {
@@ -385,9 +369,7 @@ func (c SetMaskedMarkAction) String() string {
 	return fmt.Sprintf("Set:%#x", c.Mark)
 }
 
-type NoTrackAction struct {
-	TypeNoTrack struct{}
-}
+type NoTrackAction struct{}
 
 func (g NoTrackAction) ToFragment(features *environment.Features) string {
 	return "notrack"
@@ -398,8 +380,7 @@ func (g NoTrackAction) String() string {
 }
 
 type SaveConnMarkAction struct {
-	SaveMask     uint32
-	TypeConnMark struct{}
+	SaveMask uint32
 }
 
 func (c SaveConnMarkAction) ToFragment(features *environment.Features) string {
@@ -414,8 +395,7 @@ func (c SaveConnMarkAction) String() string {
 }
 
 type RestoreConnMarkAction struct {
-	RestoreMask  uint32
-	TypeConnMark struct{}
+	RestoreMask uint32
 }
 
 func (c RestoreConnMarkAction) ToFragment(features *environment.Features) string {
@@ -431,9 +411,8 @@ func (c RestoreConnMarkAction) String() string {
 }
 
 type SetConnMarkAction struct {
-	Mark         uint32
-	Mask         uint32
-	TypeConnMark struct{}
+	Mark uint32
+	Mask uint32
 }
 
 func (c SetConnMarkAction) ToFragment(features *environment.Features) string {
@@ -474,7 +453,6 @@ type LimitPacketRateAction struct {
 	Rate  int64
 	Burst int64
 	// Mark is not used on nftables mode
-	TypeLimitPacketRate struct{}
 }
 
 func (a LimitPacketRateAction) ToFragment(features *environment.Features) string {
@@ -494,9 +472,8 @@ func (a LimitPacketRateAction) String() string {
 }
 
 type LimitNumConnectionsAction struct {
-	Num                     int64
-	RejectWith              generictables.RejectWith
-	TypeLimitNumConnections struct{}
+	Num        int64
+	RejectWith generictables.RejectWith
 }
 
 func (a LimitNumConnectionsAction) ToFragment(features *environment.Features) string {
@@ -531,9 +508,7 @@ func (a DSCPAction) String() string {
 	return fmt.Sprintf("DSCP %d", a.Value)
 }
 
-type FlowOffloadAction struct {
-	TypeFlowOffload struct{}
-}
+type FlowOffloadAction struct{}
 
 func (c FlowOffloadAction) ToFragment(features *environment.Features) string {
 	return fmt.Sprintf("flow offload @%s", dataplanedefs.FlowtableName)
