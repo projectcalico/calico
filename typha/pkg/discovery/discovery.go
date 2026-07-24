@@ -18,10 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -29,10 +29,19 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/lib/datastructures/rendezvous"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
 
 var ErrServiceNotReady = errors.New("missing Kubernetes service IP or port")
+
+// ErrEmptyNodeName is returned when Typha endpoints must be discovered from the
+// Kubernetes service but no node name was supplied. The node name is required:
+// it is the key that gives each node a stable, evenly distributed connection
+// preference, and an empty key would make every client prefer the same Typha.
+// See NodeName for how to obtain it.
+var ErrEmptyNodeName = errors.New("node name is required for Typha discovery but was empty")
 
 type Typha struct {
 	Addr     string
@@ -48,6 +57,13 @@ func (t Typha) dedupeKey() addrDedupeKey {
 		node = *t.NodeName
 	}
 	return addrDedupeKey(fmt.Sprintf("%s/%s/%s", t.Addr, t.IP, node))
+}
+
+// Equal reports whether t and other refer to the same Typha instance. It is
+// used to compare the Typha we are currently connected to against the
+// most-preferred Typha when deciding whether to rebalance.
+func (t Typha) Equal(other Typha) bool {
+	return t.dedupeKey() == other.dedupeKey()
 }
 
 func (t Typha) String() string {
@@ -72,6 +88,11 @@ type Discoverer struct {
 	inCluster          bool
 	filters            []func(typhaAddresses []Typha) ([]Typha, error)
 
+	// cacheLock guards allKnownAddrs.  Discovery can be re-run from a background
+	// goroutine (the client's rebalance timer calls PreferredTypha) concurrently
+	// with the connection-attempt path reading the cache, so the cache needs a
+	// lock even though discovery used to be single-threaded.
+	cacheLock     sync.RWMutex
 	allKnownAddrs []Typha
 }
 
@@ -119,21 +140,23 @@ func WithKubeServicePortNameOverride(portName string) Option {
 	}
 }
 
-// WithNodeAffinity help discovery preference by supplying nodeName to determine which endpoints are local to node
-func WithNodeAffinity(nodeName string) Option {
-	return func(d *Discoverer) {
-		d.nodeName = nodeName
-	}
-}
-
 func WithPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Typha, error)) Option {
 	return func(d *Discoverer) {
 		d.AddPostDiscoveryFilter(f)
 	}
 }
 
-func New(opts ...Option) *Discoverer {
+// New creates a Discoverer for the given node.
+//
+// nodeName identifies the node we're running on. It is used both to detect
+// which Typha endpoints are local to this node and as the key for the
+// rendezvous hash that orders the connection preference, so that every node
+// gets a stable preferred Typha while load stays balanced across the fleet.
+// Use NodeName to obtain the value; it must match the node names Kubernetes
+// records on the Typha service's endpoints (see NodeName for why).
+func New(nodeName string, opts ...Option) *Discoverer {
 	d := &Discoverer{
+		nodeName:           nodeName,
 		k8sServicePortName: "calico-typha",
 	}
 
@@ -142,6 +165,25 @@ func New(opts ...Option) *Discoverer {
 	}
 
 	return d
+}
+
+// NodeName returns the node name to use for Typha discovery. It prefers the
+// NODENAME environment variable, which Calico sets from the Kubernetes
+// downward API (spec.nodeName) — see the operator's pkg/render/node.go and the
+// calico-node manifest, both of which pin NODENAME to a fieldRef on
+// spec.nodeName. Because it comes from the downward API, NODENAME is identical
+// across every process in the calico-node pod and is guaranteed to match the
+// node names Kubernetes records on the Typha service's EndpointSlice
+// endpoints. That makes it the correct key both for identifying the local
+// Typha and for computing a stable, evenly distributed per-node connection
+// preference. When NODENAME is unset (e.g. outside a managed calico-node pod)
+// it falls back to the OS hostname.
+func NodeName() string {
+	if n := strings.TrimSpace(os.Getenv("NODENAME")); n != "" {
+		return n
+	}
+	h, _ := names.Hostname() // lowercased; "" on the rare error.
+	return h
 }
 
 func (d *Discoverer) AddPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Typha, error)) {
@@ -158,7 +200,9 @@ func (d *Discoverer) AddPostDiscoveryFilter(f func(typhaAddresses []Typha) ([]Ty
 // or an error.
 func (d *Discoverer) LoadTyphaAddrs() (ts []Typha, err error) {
 	defer func() {
+		d.cacheLock.Lock()
 		d.allKnownAddrs = ts
+		d.cacheLock.Unlock()
 	}()
 	ts, err = d.discoverTyphaAddrs()
 	if err != nil {
@@ -174,7 +218,26 @@ func (d *Discoverer) LoadTyphaAddrs() (ts []Typha, err error) {
 }
 
 func (d *Discoverer) CachedTyphaAddrs() []Typha {
+	d.cacheLock.RLock()
+	defer d.cacheLock.RUnlock()
 	return d.allKnownAddrs
+}
+
+// PreferredTypha re-runs discovery and returns the most-preferred Typha to
+// connect to: the first entry in discovery order, which is the local Typha if
+// there is one, otherwise the rank-0 entry of the node's rendezvous ordering.
+// ok is false (with a nil error) if Typha is enabled but discovery currently
+// returns no usable endpoints.  Callers use this to spot when they are
+// connected to a non-preferred Typha and should rebalance.
+func (d *Discoverer) PreferredTypha() (t Typha, ok bool, err error) {
+	addrs, err := d.LoadTyphaAddrs()
+	if err != nil {
+		return Typha{}, false, err
+	}
+	if len(addrs) == 0 {
+		return Typha{}, false, nil
+	}
+	return addrs[0], true, nil
 }
 
 func (d *Discoverer) TyphaEnabled() bool {
@@ -195,7 +258,14 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return typhas, nil
 	}
 
-	// If we get here, we need to look up the Typha service using the k8s API.
+	// If we get here, we need to look up the Typha service using the k8s API
+	// and rank the endpoints by rendezvous hash, which requires a node name as
+	// the key.
+	if d.nodeName == "" {
+		logrus.Error("Cannot discover Typha endpoints without a node name.")
+		return nil, ErrEmptyNodeName
+	}
+
 	if d.k8sClient == nil && d.inCluster {
 		// Client didn't provide a kube client but we're allowed to create one.
 		logrus.Info("Creating Kubernetes client for Typha discovery...")
@@ -268,8 +338,12 @@ func (d *Discoverer) discoverTyphaAddrs() ([]Typha, error) {
 		return nil, ErrServiceNotReady
 	}
 
-	shuffleInPlace(local)
-	shuffleInPlace(remote)
+	// Order each group by rendezvous hash so that this node has a stable,
+	// evenly distributed connection preference (see orderByRendezvous). Local
+	// endpoints stay first on the list; trying a co-located Typha first is
+	// important for cluster bootstrap.
+	local = orderByRendezvous(local, d.nodeName)
+	remote = orderByRendezvous(remote, d.nodeName)
 
 	addresses = append(local, remote...)
 
@@ -321,6 +395,17 @@ func (d *ConnectionAttemptTracker) NextAddr() (Typha, error) {
 	}
 
 	return d.pickNextTypha(allKnownAddrs), nil
+}
+
+// Reset forgets which addresses have already been tried, so the next call to
+// NextAddr starts again from the head of the preference order.  Call it when
+// deliberately disconnecting (for example, to rebalance onto the preferred
+// Typha); without a reset, NextAddr would skip any address tried earlier —
+// including the preferred Typha itself, if it happened to be unreachable when
+// the previous connection was made — and reconnect to another non-preferred
+// instance instead.
+func (d *ConnectionAttemptTracker) Reset() {
+	clear(d.triedAddrsLastSeen)
 }
 
 func (d *ConnectionAttemptTracker) refreshAddrs() ([]Typha, error) {
@@ -399,6 +484,19 @@ func (d *ConnectionAttemptTracker) refreshAndGCLastSeen(addrs []Typha) {
 	}
 }
 
-func shuffleInPlace(s []Typha) {
-	rand.Shuffle(len(s), func(i, j int) { s[i], s[j] = s[j], s[i] })
+// orderByRendezvous returns typhas in rendezvous (HRW) preference order for
+// key: deterministic for a given key, evenly spread across keys, and stable
+// when the typha set changes (removing one drops it without reordering the
+// survivors). Used with the node name as the key, it gives each node a stable
+// preferred Typha and ordered, load-balanced fallbacks. Each typha is
+// identified by its dedupeKey.
+func orderByRendezvous(typhas []Typha, key string) []Typha {
+	if len(typhas) <= 1 {
+		return typhas
+	}
+	r := rendezvous.New[Typha]()
+	for _, t := range typhas {
+		r.Insert(string(t.dedupeKey()), t)
+	}
+	return r.Rank(key)
 }

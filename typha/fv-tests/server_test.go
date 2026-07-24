@@ -1395,7 +1395,7 @@ var _ = Describe("with server requiring TLS", func() {
 		recorder := NewRecorder()
 		serverAddr := fmt.Sprintf("127.0.0.1:%d", server.Port())
 		client := syncclient.New(
-			discovery.New(discovery.WithAddrOverride(serverAddr)),
+			discovery.New("test-node", discovery.WithAddrOverride(serverAddr)),
 			"test-version",
 			"test-host-1",
 			"test-info",

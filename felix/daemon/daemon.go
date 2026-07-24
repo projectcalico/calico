@@ -1640,10 +1640,10 @@ func applyBPFOverrides(configParams *config.Config, supportsBPF func() error) {
 
 func createTyphaDiscoverer(configParams *config.Config, k8sClientSet kubernetes.Interface) *discovery.Discoverer {
 	typhaDiscoverer := discovery.New(
+		discovery.NodeName(),
 		discovery.WithAddrOverride(configParams.TyphaAddr),
 		discovery.WithKubeService(configParams.TyphaK8sNamespace, configParams.TyphaK8sServiceName),
 		discovery.WithKubeClient(k8sClientSet),
-		discovery.WithNodeAffinity(configParams.FelixHostname),
 	)
 	return typhaDiscoverer
 }
