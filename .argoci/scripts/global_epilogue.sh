@@ -42,8 +42,26 @@ if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
     chmod +x /tmp/run-lens.sh && /tmp/run-lens.sh || true
 fi
 
-# Tear the cluster down.
-echo "[INFO] destroying cluster ${CLUSTER_NAME}"
-bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+# Tear the cluster down. HCP setup-hosting must keep its hosting cluster alive
+# for the hosted stage, so instead of destroying it, push its state to GCS for
+# the hosted/destroy-hosting stages: the whole BZ_HOME (for destroy-hosting's
+# terraform state) plus just the kubeconfig (for hosted). See design/hcp.md.
+HCP_BLOB="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-bzhome.tgz"
+HCP_KUBECONFIG="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME}/hcp/${HOSTING_CLUSTER}/hosting-kubeconfig"
+if [[ "${HCP_STAGE:-}" == "setup-hosting" ]]; then
+  echo "[INFO] hcp: pushing hosting state to ${HCP_BLOB}"
+  ( set -o pipefail; tar czf - -C "${BZ_HOME}" . | gsutil cp - "${HCP_BLOB}" ) \
+    || echo "[WARN] hcp: hosting-state push failed"
+  gsutil cp "${BZ_LOCAL_DIR}/kubeconfig" "${HCP_KUBECONFIG}" \
+    || echo "[WARN] hcp: hosting-kubeconfig push failed"
+else
+  echo "[INFO] destroying cluster ${CLUSTER_NAME}"
+  destroy_rc=0
+  bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || destroy_rc=$?
+  # destroy-hosting: drop the hosting-state objects once the cluster is gone.
+  if [[ "${HCP_STAGE:-}" == "destroy-hosting" && "${destroy_rc}" == "0" ]]; then
+    gsutil rm "${HCP_BLOB}" "${HCP_KUBECONFIG}" || true
+  fi
+fi
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"
