@@ -23,6 +23,7 @@ steps:
   - name: standalone-cluster-tests
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_OCP_VIRT
         value: "true"
@@ -48,6 +49,7 @@ steps:
   - name: hcp-setup-hosting
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: HCP_STAGE
         value: setup-hosting
@@ -62,6 +64,7 @@ steps:
   - name: hcp-hosted-setup-and-tests
     services:
       - docker
+      - http-cache-proxy
     depends:
       - hcp-setup-hosting
     env:
@@ -97,6 +100,7 @@ onExit:
   - name: hcp-destroy-hosting
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: HCP_STAGE
         value: destroy-hosting

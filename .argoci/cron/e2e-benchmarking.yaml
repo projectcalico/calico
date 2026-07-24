@@ -30,6 +30,7 @@ steps:
   - name: benchmarks
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_NODE_INSTANCE_TYPE
         value: m5.large
@@ -66,6 +67,7 @@ steps:
   - name: tiger-bench
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: operator
