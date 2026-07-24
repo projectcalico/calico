@@ -180,35 +180,42 @@ func WriteNodeConfig(nodeName string) {
 	}
 }
 
-// Set Kubernetes NodeNetworkUnavailable to false when starting
+// Reason/message pairs for the NetworkUnavailable condition. The condition surfaces in
+// `kubectl describe node`, so the message needs to reflect why Calico set it — startup,
+// shutdown, and runtime health failures are all distinct situations.
+const (
+	NetworkReadyReason   = "CalicoIsUp"
+	NetworkReadyMessage  = "Calico is running on this node"
+	NetworkDownReason    = "CalicoIsDown"
+	NetworkDownShutdown  = "Calico is shutting down on this node"
+	NetworkDownUnhealthy = "Calico node health checks are failing on this node"
+)
+
+// SetNodeNetworkUnavailableCondition sets the Kubernetes NetworkUnavailable node condition to
+// value, using the caller-supplied reason and message so the condition describes the actual
+// situation (startup, shutdown, or a runtime health failure).
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
 func SetNodeNetworkUnavailableCondition(
 	clientset kubernetes.Clientset,
 	nodeName string,
 	value bool,
+	reason string,
+	message string,
 	timeout time.Duration,
 ) error {
 	log.Infof("Setting NetworkUnavailable to %t", value)
 
-	var condition kapiv1.NodeCondition
+	status := kapiv1.ConditionFalse
 	if value {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionTrue,
-			Reason:             "CalicoIsDown",
-			Message:            "Calico is shutting down on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
-	} else {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionFalse,
-			Reason:             "CalicoIsUp",
-			Message:            "Calico is running on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
+		status = kapiv1.ConditionTrue
+	}
+	condition := kapiv1.NodeCondition{
+		Type:               kapiv1.NodeNetworkUnavailable,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+		LastHeartbeatTime:  metav1.Now(),
 	}
 
 	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})

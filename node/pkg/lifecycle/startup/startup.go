@@ -340,7 +340,14 @@ func markNetworkAvailable() (*kubernetes.Clientset, string, error) {
 		// All done. Set NetworkUnavailable to false if using Calico for networking.
 		// We do it late in the process to avoid node resource update conflict because setting
 		// node condition will trigger node-controller updating node taints.
-		err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
+		err = utils.SetNodeNetworkUnavailableCondition(
+			*clientset,
+			k8sNodeName,
+			false,
+			utils.NetworkReadyReason,
+			utils.NetworkReadyMessage,
+			30*time.Second,
+		)
 		if err != nil {
 			log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 			return nil, "", err
@@ -429,7 +436,12 @@ func monitorNodeHealth(done context.Context, clientset *kubernetes.Clientset, k8
 				if consecutiveFailures >= healthFailureThreshold && !markedUnavailable {
 					log.Error("Health check failure threshold exceeded, setting NetworkUnavailable=True")
 					if patchErr := utils.SetNodeNetworkUnavailableCondition(
-						*clientset, k8sNodeName, true, 30*time.Second,
+						*clientset,
+						k8sNodeName,
+						true,
+						utils.NetworkDownReason,
+						utils.NetworkDownUnhealthy,
+						30*time.Second,
 					); patchErr != nil {
 						log.WithError(patchErr).Error("Failed to set NetworkUnavailable to True")
 					} else {
@@ -450,7 +462,12 @@ func monitorNodeHealth(done context.Context, clientset *kubernetes.Clientset, k8
 				if markedUnavailable {
 					log.Info("Health recovered, setting NetworkUnavailable=False")
 					if patchErr := utils.SetNodeNetworkUnavailableCondition(
-						*clientset, k8sNodeName, false, 30*time.Second,
+						*clientset,
+						k8sNodeName,
+						false,
+						utils.NetworkReadyReason,
+						utils.NetworkReadyMessage,
+						30*time.Second,
 					); patchErr != nil {
 						log.WithError(patchErr).Error("Failed to set NetworkUnavailable to False")
 					} else {
