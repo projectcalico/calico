@@ -144,3 +144,26 @@ func AssertRouteOwnership(t testing.TB, nodeName, dstSubstring, expectedDev stri
 			nodeName, expectedDev, expectedProto, routes)
 	}, 60*time.Second, time.Second).Should(Succeed(), "route ownership assertion failed")
 }
+
+// AssertNoRouteWithProto verifies that, over a short window, the main routing
+// table on nodeName never contains a route matching dstSubstring owned by
+// proto. Used to confirm a component has been suppressed from programming a
+// route (e.g. BIRD when a WireGuard peer filter is in effect). Consistently
+// rather than Eventually because the absence has to hold, not just occur once.
+func AssertNoRouteWithProto(t testing.TB, nodeName, dstSubstring string, proto RouteProto) {
+	t.Helper()
+	t.Logf("Asserting no %s-owned routes for %q on node %s", proto, dstSubstring, nodeName)
+	NewWithT(t).Consistently(func() error {
+		routes, err := GetNodeRoutes(t, nodeName, dstSubstring)
+		if err != nil {
+			return err
+		}
+		for _, r := range routes {
+			if r.Proto == proto {
+				return fmt.Errorf("unexpected %s-owned route on node %s: %s", proto, nodeName, r.Raw)
+			}
+		}
+		return nil
+	}, 15*time.Second, 3*time.Second).Should(Succeed(),
+		"expected no %s-owned route to %q on node %s", proto, dstSubstring, nodeName)
+}
