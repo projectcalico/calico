@@ -65,11 +65,11 @@ export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 export AZ_LOCATION=${AZ_LOCATION:-eastus2}
 export AZ_PROJECT=${AZ_PROJECT:-tigera-dev-ci}
 export K8S_VERSION=${K8S_VERSION:-stable-3}
-export KOPS_VERSION=${KOPS_VERSION:-$(curl --retry 9 --retry-all-errors -fsSL https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/kubernetes/kops/releases/latest | jq -r '.tag_name')}
+export KOPS_VERSION=${KOPS_VERSION:-$(curl --retry 9 --retry-all-errors -fsSL -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" https://api.github.com/repos/kubernetes/kops/releases/latest | jq -r '.tag_name')}
 export KOPS_STATE_STORE_NAME=${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}
 export KOPS_AWS_DNS_ZONE=${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}
 export OPENSHIFT_BASE_DOMAIN=${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}
-export RKE_VERSION=${RKE_VERSION:-$(curl --retry 9 --retry-all-errors -fsSL https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/rancher/rke/releases | jq -r '.[].tag_name' | grep -v "rc" | sort -V | tail -1)}
+export RKE_VERSION=${RKE_VERSION:-$(curl --retry 9 --retry-all-errors -fsSL -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" https://api.github.com/repos/rancher/rke/releases | jq -r '.[].tag_name' | grep -v "rc" | sort -V | tail -1)}
 export DOCKER_EE_VERSION=${DOCKER_EE_VERSION:-"19.03"}
 export DOCKER_EE_RELEASE=${DOCKER_EE_RELEASE:-"5:19.03.8~3-0~ubuntu-xenial"}
 export DOCKER_UCP_VERSION=${DOCKER_UCP_VERSION:-"3.3.0"}
@@ -161,7 +161,7 @@ if [[ "$CREATE_WINDOWS_NODES" == "true" ]]; then echo "[INFO] Installing putty-t
 echo "[INFO] Installing Banzai CLI..."
 [[ -n "${BZ_VERSION}" ]] && export BZ_RELEASE=tags/${BZ_VERSION} || export BZ_RELEASE=latest
 export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" -H "Accept: application/vnd.github.v3.raw" -s https://api.github.com/repos/${BZ_REPO}/releases/${BZ_RELEASE} | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-wget -q --auth-no-challenge --header='Accept:application/octet-stream' https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O "${BZ_GLOBAL_BIN}/bz"
+wget -q --header="Authorization: token ${GITHUB_ACCESS_TOKEN}" --header='Accept:application/octet-stream' https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O "${BZ_GLOBAL_BIN}/bz"
 chmod +x "${BZ_GLOBAL_BIN}/bz"
 
 mkdir -p "$HOME/.docker"
