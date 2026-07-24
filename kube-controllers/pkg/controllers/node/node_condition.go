@@ -118,6 +118,16 @@ func (c *nodeConditionController) checkNodes() {
 		return
 	}
 
+	// List pods once per tick and index the nodes that have a Ready calico-node pod, rather
+	// than listing all pods once per node (which is O(nodes*pods) on large clusters).
+	readyNodes, err := c.nodesWithReadyCalicoNodePod()
+	if err != nil {
+		// Err on the side of caution: skip this tick rather than risk marking nodes
+		// unavailable when we can't see the pods. Grace-period tracking is left intact.
+		log.WithError(err).Warn("Failed to list pods for condition check")
+		return
+	}
+
 	now := c.nowFn()
 	activeNodes := make(map[string]bool)
 
@@ -125,7 +135,7 @@ func (c *nodeConditionController) checkNodes() {
 		nodeName := node.Name
 		activeNodes[nodeName] = true
 
-		if c.hasReadyCalicoNodePod(nodeName) {
+		if readyNodes[nodeName] {
 			// Node has a Ready calico-node pod. Clear any not-ready tracking and
 			// allow calico-node to handle setting the condition back to False.
 			delete(c.notReadySince, nodeName)
@@ -172,26 +182,27 @@ func (c *nodeConditionController) checkNodes() {
 	}
 }
 
-// hasReadyCalicoNodePod checks if there's at least one Ready calico-node pod on the given node.
-func (c *nodeConditionController) hasReadyCalicoNodePod(nodeName string) bool {
+// nodesWithReadyCalicoNodePod lists pods once and returns the set of node names that have at
+// least one Ready calico-node pod.
+func (c *nodeConditionController) nodesWithReadyCalicoNodePod() (map[string]bool, error) {
 	pods, err := c.podLister.List(labels.Everything())
 	if err != nil {
-		log.WithError(err).Warn("Failed to list pods for condition check")
-		return true // err on the side of caution
+		return nil, err
 	}
 
+	ready := make(map[string]bool)
 	for _, pod := range pods {
-		if pod.Spec.NodeName != nodeName {
+		if pod.Spec.NodeName == "" {
 			continue
 		}
 		if pod.Labels[calicoNodeLabel] != calicoNodeLabelValue {
 			continue
 		}
 		if isPodReady(pod) {
-			return true
+			ready[pod.Spec.NodeName] = true
 		}
 	}
-	return false
+	return ready, nil
 }
 
 // isPodReady returns true if the pod has a Ready condition set to True.
