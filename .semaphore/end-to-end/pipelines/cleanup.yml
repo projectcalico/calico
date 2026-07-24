@@ -61,8 +61,8 @@ blocks:
             export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
               -H "Accept: application/vnd.github.v3.raw" \
               -s https://api.github.com/repos/${BZ_REPO}/releases/latest | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-            wget -q --auth-no-challenge --header='Accept:application/octet-stream' \
-              https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O $HOME/.local/bin/bz
+            wget -q --header="Authorization: token ${GITHUB_ACCESS_TOKEN}" --header='Accept:application/octet-stream' \
+              https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O $HOME/.local/bin/bz
             chmod +x $HOME/.local/bin/bz
       jobs:
         - name: cleanup job VMs
