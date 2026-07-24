@@ -39,32 +39,34 @@ const (
 )
 
 const (
-	FlgWEP        = uint32(0x1)
-	FlgIPv4Ready  = uint32(0x2)
-	FlgIPv6Ready  = uint32(0x4)
-	FlgHEP        = uint32(0x8)
-	FlgBond       = uint32(0x10)
-	FlgBondSlave  = uint32(0x20)
-	FlgVxlan      = uint32(0x40)
-	FlgIPIP       = uint32(0x80)
-	FlgWireguard  = uint32(0x100)
-	FlgL3         = uint32(0x200)
-	FlgNotManaged = uint32(0x400)
-	FlgMax        = uint32(0x7ff)
+	FlgWEP         = uint32(0x1)
+	FlgIPv4Ready   = uint32(0x2)
+	FlgIPv6Ready   = uint32(0x4)
+	FlgHEP         = uint32(0x8)
+	FlgBond        = uint32(0x10)
+	FlgBondSlave   = uint32(0x20)
+	FlgVxlan       = uint32(0x40)
+	FlgIPIP        = uint32(0x80)
+	FlgWireguard   = uint32(0x100)
+	FlgL3          = uint32(0x200)
+	FlgNotManaged  = uint32(0x400)
+	FlgBridgeSlave = uint32(0x800)
+	FlgMax         = uint32(0xfff)
 )
 
 var flagsToStr = map[uint32]string{
-	FlgWEP:        "workload",
-	FlgIPv4Ready:  "v4Ready",
-	FlgIPv6Ready:  "v6Ready",
-	FlgHEP:        "host",
-	FlgBond:       "bond",
-	FlgBondSlave:  "bondslave",
-	FlgVxlan:      "vxlan",
-	FlgIPIP:       "ipip",
-	FlgWireguard:  "wg",
-	FlgL3:         "l3",
-	FlgNotManaged: "notmanaged",
+	FlgWEP:         "workload",
+	FlgIPv4Ready:   "v4Ready",
+	FlgIPv6Ready:   "v6Ready",
+	FlgHEP:         "host",
+	FlgBond:        "bond",
+	FlgBondSlave:   "bondslave",
+	FlgVxlan:       "vxlan",
+	FlgIPIP:        "ipip",
+	FlgWireguard:   "wg",
+	FlgL3:          "l3",
+	FlgNotManaged:  "notmanaged",
+	FlgBridgeSlave: "bridgeslave",
 }
 
 // FlagNames returns the human-readable names for the set bits in flags.
