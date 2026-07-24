@@ -23,8 +23,10 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -254,11 +256,22 @@ func (c *ipamHandleClient) List(ctx context.Context, list model.ListInterface, r
 }
 
 func (c *ipamHandleClient) Watch(ctx context.Context, list model.ListInterface, options api.WatchOptions) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on IPAMHandle type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "Watch",
+	resl := model.ResourceListOptions{Kind: internalapi.KindIPAMHandle}
+	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
+	k8sOpts := watchOptionsToK8sListOptions(options)
+	k8sWatch, err := k8sWatchClient.WatchFunc(k8sOpts)
+	if err != nil {
+		return nil, K8sErrorToCalico(err, list)
 	}
+	toKVPair := func(r Resource) (*model.KVPair, error) {
+		v3kvp, err := c.rc.convertResourceToKVPair(r)
+		if err != nil {
+			return nil, err
+		}
+		return c.toV1(v3kvp), nil
+	}
+
+	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
 func (c *ipamHandleClient) EnsureInitialized() error {
