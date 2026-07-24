@@ -61,8 +61,11 @@ blocks:
             export BZ_ASSET_ID=$(curl --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
               -H "Accept: application/vnd.github.v3.raw" \
               -s https://api.github.com/repos/${BZ_REPO}/releases/latest | jq '.assets[] | select(.name|test("^bz.*linux-amd64"))| .id')
-            wget -q --auth-no-challenge --header='Accept:application/octet-stream' \
-              https://${GITHUB_ACCESS_TOKEN}:@api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID} -O $HOME/.local/bin/bz
+            # curl (not wget): assets endpoint 302-redirects to a signed host; curl drops
+            # the Authorization header cross-host, wget forwards it (token leak + S3 400).
+            curl -fsSL --retry 9 --retry-all-errors -H "Authorization: token ${GITHUB_ACCESS_TOKEN}" \
+              -H "Accept: application/octet-stream" \
+              -o $HOME/.local/bin/bz https://api.github.com/repos/${BZ_REPO}/releases/assets/${BZ_ASSET_ID}
             chmod +x $HOME/.local/bin/bz
       jobs:
         - name: cleanup job VMs
