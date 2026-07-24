@@ -135,6 +135,16 @@ type collector struct {
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
 	displayDebugTraceLogs bool
+
+	// stopC signals the stats collection goroutine to return; closed by Stop().
+	stopC chan struct{}
+
+	// thunkC lets a caller run a closure on the collector's own goroutine. The
+	// collector goroutine owns epStats (and the Data values within it) with no
+	// locking, so this is the only race-free way to read or mutate that state
+	// from another goroutine. Only tests currently use it, via the runOnLoop
+	// helper; in production nothing sends to it and the select case is dormant.
+	thunkC chan func()
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -150,6 +160,8 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
+		stopC:                 make(chan struct{}),
+		thunkC:                make(chan func()),
 	}
 
 	if c.policyStoreManager == nil {
@@ -275,8 +287,21 @@ func (c *collector) startStatsCollectionAndReporting() {
 			histogramDataplaneStatsUpdate.Observe(float64(time.Since(dataplaneStatsUpdateStart).Seconds()))
 		case <-c.tickerPolicyEval.Channel():
 			c.updatePendingRuleTraces()
+		case fn := <-c.thunkC:
+			// Run a caller-supplied closure on this goroutine, giving it
+			// race-free access to collector-owned state. See thunkC.
+			fn()
+		case <-c.stopC:
+			return
 		}
 	}
+}
+
+// Stop signals the stats collection goroutine started by Start to return. It
+// must be called at most once. It does not stop the info readers or metric
+// reporters; those have their own lifecycles.
+func (c *collector) Stop() {
+	close(c.stopC)
 }
 
 // loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
