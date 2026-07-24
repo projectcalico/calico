@@ -718,6 +718,59 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 	})
 
+	Describe("AssignIP AllowedUses enforcement", func() {
+		var hostname string
+
+		BeforeEach(func() {
+			Expect(bc.Clean()).To(Succeed())
+			ipPools.Pools = map[string]ipamtestutils.Pool{
+				// Workload-only pool: does not permit Tunnel.
+				"10.0.0.0/24": {Enabled: true, AllowedUses: []v3.IPPoolAllowedUse{v3.IPPoolAllowedUseWorkload}},
+				// Default pool: empty AllowedUses defaults to [Workload, Tunnel].
+				"20.0.0.0/24": {Enabled: true},
+			}
+			hostname = "assignip-alloweduses"
+			applyNode(bc, kc, hostname, nil)
+		})
+
+		AfterEach(func() {
+			deleteNode(bc, kc, hostname)
+			ipPools.Pools = map[string]ipamtestutils.Pool{}
+			Expect(bc.Clean()).To(Succeed())
+		})
+
+		assign := func(ip string, use v3.IPPoolAllowedUse) error {
+			return ic.AssignIP(context.Background(), AssignIPArgs{
+				IP:          cnet.IP{IP: net.ParseIP(ip)},
+				Hostname:    hostname,
+				IntendedUse: use,
+			})
+		}
+
+		It("should reject an IP whose pool does not allow the intended use", func() {
+			// Pool permits only Workload, so a Tunnel request must fail rather than
+			// silently drawing from a pool not sanctioned for that use.
+			err := assign("10.0.0.1", v3.IPPoolAllowedUseTunnel)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not allowed for use"))
+		})
+
+		It("should allow an IP whose pool permits the intended use", func() {
+			Expect(assign("10.0.0.2", v3.IPPoolAllowedUseWorkload)).To(Succeed())
+		})
+
+		It("should allow any use when IntendedUse is unset (back-compat)", func() {
+			// Historical callers leave IntendedUse empty; they must be unaffected.
+			Expect(assign("10.0.0.3", "")).To(Succeed())
+		})
+
+		It("should allow Tunnel from a default pool (empty AllowedUses defaults to Workload+Tunnel)", func() {
+			// Guards node tunnel-IP assignment, which draws from the default pool
+			// with IntendedUse: Tunnel, against regression.
+			Expect(assign("20.0.0.1", v3.IPPoolAllowedUseTunnel)).To(Succeed())
+		})
+	})
+
 	Describe("Reservation tests", func() {
 		var hostname string
 		BeforeEach(func() {

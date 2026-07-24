@@ -19,6 +19,7 @@ The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
+- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, mirroring the `filterPoolsByUse` filter `AutoAssign` applies. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
