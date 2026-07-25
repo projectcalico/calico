@@ -563,6 +563,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride:      config.LookPathOverride,
 		OnStillAlive:          dp.reportHealth,
 		OpRecorder:            dp.loopSummarizer,
+		// In nftables mode every iptables table below is only used to clean up rules left
+		// behind by an earlier, iptables-mode Felix.
+		CleanupOnly: nftablesEnabled,
 	}
 	nftablesOptions := nftables.TableOptions{
 		RefreshInterval:  config.TableRefreshInterval,

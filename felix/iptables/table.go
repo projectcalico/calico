@@ -59,6 +59,12 @@ var (
 	// uses nft features that iptables-nft doesn't understand.
 	nftErrorRegexp = regexp.MustCompile(`^# Table .* is incompatible, use 'nft' tool.`)
 
+	// ErrIncompatibleNFTRules is returned when iptables-save reports that the table contains nft
+	// rules that it cannot render.  Retrying doesn't help: the rules belong to another program, so
+	// they only go away if that program removes them.
+	ErrIncompatibleNFTRules = errors.New(
+		"iptables-save failed because there are incompatible nft rules in the table")
+
 	// Prometheus metrics.
 	countNumRestoreCalls = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_iptables_restore_calls",
@@ -245,6 +251,11 @@ type Table struct {
 	// to top-level chains.
 	insertMode string
 
+	// cleanupOnly is set if this table only exists so that we can remove rules left behind by a
+	// previous Felix that used a different dataplane.  Felix never programs such a table, so a
+	// persistent failure to read it is not a reason to fail closed.
+	cleanupOnly bool
+
 	// Record when we did our most recent reads and writes of the table.  We use these to
 	// calculate the next time we should force a refresh.
 	lastReadTime             time.Time
@@ -267,6 +278,9 @@ type Table struct {
 
 	logCxt               *log.Entry
 	updateRateLimitedLog *logrusr.RateLimitedLogger
+	// nftIncompatibleLog is used for the "another program wrote nft rules to this table" warning,
+	// which would otherwise repeat on every resync for as long as those rules exist.
+	nftIncompatibleLog *logrusr.RateLimitedLogger
 
 	gaugeNumChains        prometheus.Gauge
 	gaugeNumRules         prometheus.Gauge
@@ -296,6 +310,10 @@ type TableOptions struct {
 	InsertMode               string
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
+
+	// CleanupOnly indicates that Felix doesn't program this table and only tracks it in order to
+	// remove rules left behind by a previous Felix that used a different dataplane.
+	CleanupOnly bool
 
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
@@ -412,11 +430,15 @@ func NewTable(
 			logrusr.OptInterval(30*time.Second),
 			logrusr.OptBurst(100),
 		).WithFields(logFields),
+		nftIncompatibleLog: logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(5 * time.Minute),
+		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		hashCommentRegexp: hashCommentRegexp,
 		ourChainsRegexp:   ourChainsRegexp,
 		oldInsertRegexp:   oldInsertRegexp,
 		insertMode:        insertMode,
+		cleanupOnly:       options.CleanupOnly,
 
 		// Initialise the write tracking as if we'd just done a write, this will trigger
 		// us to recheck the dataplane at exponentially increasing intervals at startup.
@@ -664,7 +686,10 @@ func (t *Table) decrefChain(chainName string) {
 	t.chainRefCounts[chainName] -= 1
 }
 
-func (t *Table) loadDataplaneState() {
+// loadDataplaneState reads back the table and marks any chains that are out of sync as dirty.  It
+// only returns an error for a cleanup-only table that we can't read; for a table that we program it
+// panics rather than returning, since it isn't safe to carry on without knowing the table's state.
+func (t *Table) loadDataplaneState() error {
 	// Refresh the cache of feature data.
 	t.featureDetector.RefreshFeatures()
 
@@ -673,7 +698,10 @@ func (t *Table) loadDataplaneState() {
 	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.name, t.ipVersion))
 
 	t.lastReadTime = t.timeNow()
-	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
+	dataplaneHashes, dataplaneRules, err := t.getHashesAndRulesFromDataplane()
+	if err != nil {
+		return err
+	}
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -773,6 +801,7 @@ func (t *Table) loadDataplaneState() {
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
+	return nil
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
@@ -820,7 +849,7 @@ func (t *Table) expectedHashesForInsertAppendChain(
 // represented by an empty string. The 'rules' map contains an entry for each non-Calico chain in the table that
 // contains inserts. It is used to generate deletes using the full rule, rather than deletes by line number, to avoid
 // race conditions on chains we don't fully control.
-func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string) {
+func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, err error) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
@@ -831,6 +860,22 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
 			countNumSaveErrors.Inc()
+			if t.cleanupOnly && errors.Is(err, ErrIncompatibleNFTRules) {
+				// We don't program this table, we only read it so that we can remove
+				// rules left behind by a previous Felix.  Another program has written
+				// nft rules that iptables-save can't render, so we can't see the
+				// table's contents; retrying won't help and neither would panicking,
+				// since there's nothing here that we need to keep in sync.  Skip the
+				// table; if the rules are ever removed we'll pick it up again on the
+				// next refresh.
+				t.nftIncompatibleLog.WithError(err).Warnf(
+					"%s cannot render this table because another program has written "+
+						"nft rules to it.  Felix doesn't program this table, so this is "+
+						"only a problem if it still holds rules from an older Felix; "+
+						"remove the nft rules if you need those cleaned up.",
+					t.iptablesSaveCmd)
+				return nil, nil, err
+			}
 			var stderr string
 			if ee, ok := err.(*exec.ExitError); ok {
 				stderr = string(ee.Stderr)
@@ -846,7 +891,7 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 			continue
 		}
 
-		return hashes, rules
+		return hashes, rules, nil
 	}
 }
 
@@ -942,10 +987,11 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		// Special-case, if iptables-nft can't handle a ruleset then it writes an error
 		// but then returns an RC of 0.  Detect this case.
 		if nftErrorRegexp.Match(line) {
-			logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
-				"Remove the nft rules to continue.")
-			return nil, nil, errors.New(
-				"iptables-save failed because there are incompatible nft rules in the table")
+			if !t.cleanupOnly {
+				logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
+					"Remove the nft rules to continue.")
+			}
+			return nil, nil, ErrIncompatibleNFTRules
 		}
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations
@@ -1086,7 +1132,14 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
 			// sync.  Refresh it.  This may mark more chains as dirty.
-			t.loadDataplaneState()
+			if err := t.loadDataplaneState(); err != nil {
+				// Can only happen for a cleanup-only table; loadDataplaneState()
+				// panics rather than returning an error for a table that we program.
+				// We can't see the table's contents, so we've no way to tell what (if
+				// anything) needs cleaning up, and writing to it blind would be
+				// worse than leaving it alone.  Skip it for now.
+				break
+			}
 		}
 		t.onStillAlive()
 
@@ -1472,7 +1525,9 @@ func (t *Table) CheckRulesPresent(chain string, rules []generictables.Rule) []ge
 
 	hashes := CalculateRuleHashes(chain, rules, features)
 
-	dpHashes, _ := t.getHashesAndRulesFromDataplane()
+	// An error is only possible for a cleanup-only table, which we never insert rules into; the
+	// nil hashes below then correctly report that none of the rules are present.
+	dpHashes, _, _ := t.getHashesAndRulesFromDataplane()
 	dpHashesSet := set.New[string]()
 	for _, h := range dpHashes[chain] {
 		dpHashesSet.Add(h)
