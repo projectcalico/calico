@@ -2,4 +2,3 @@
 Run 'make gen-deps-files' to regenerate.
 
 go 1.25.12
-github.com/projectcalico/calico
