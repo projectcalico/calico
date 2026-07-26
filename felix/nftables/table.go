@@ -17,6 +17,7 @@ package nftables
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -307,6 +308,10 @@ type NftablesTable struct {
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
 
+	// listInterfaces returns the names of interfaces that currently exist in the kernel.
+	// Defaults to net.Interfaces(); overridable in tests.
+	listInterfaces func() ([]string, error)
+
 	onStillAlive func()
 	opReporter   logutils.OpRecorder
 	reason       string
@@ -333,6 +338,10 @@ type TableOptions struct {
 
 	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
 	LookPathOverride func(file string) (string, error)
+
+	// ListInterfacesOverride for tests, if non-nil, replaces the net.Interfaces()-based
+	// lister used to prune the flowtable device list against kernel truth.
+	ListInterfacesOverride func() ([]string, error)
 
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
@@ -451,6 +460,10 @@ func newTable(
 	if options.NowOverride != nil {
 		now = options.NowOverride
 	}
+	listInterfaces := realInterfaceNames
+	if options.ListInterfacesOverride != nil {
+		listInterfaces = options.ListInterfacesOverride
+	}
 
 	if options.NewDataplane == nil {
 		options.NewDataplane = knftables.New
@@ -496,6 +509,8 @@ func newTable(
 		newCmd:    newCmd,
 		timeSleep: sleep,
 		timeNow:   now,
+
+		listInterfaces: listInterfaces,
 
 		gaugeNumChains:           gaugeNumChains.WithLabelValues(gaugeLabel),
 		gaugeNumRules:            gaugeNumRules.WithLabelValues(gaugeLabel),
@@ -583,6 +598,44 @@ func (t *NftablesTable) recalcFlowtableDevices() {
 		t.flowtableDevices = combined
 		t.flowtableDirty = true
 	}
+}
+
+// realInterfaceNames returns the names of every network interface currently present in the
+// kernel, via a single netlink dump.
+func realInterfaceNames() ([]string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(ifaces))
+	for _, iface := range ifaces {
+		names = append(names, iface.Name)
+	}
+	return names, nil
+}
+
+// pruneToExistingDevices drops any device that the kernel no longer has. The workload and
+// overlay lists are fed asynchronously (endpoint manager, ifacemonitor), so they can still
+// name a veth that CNI already deleted; a flowtable that references a missing device fails the
+// whole nft transaction. On a listing error we fall open and return the list unchanged - a
+// transient failure to read interfaces shouldn't wipe offload from every device.
+func (t *NftablesTable) pruneToExistingDevices(devices []string) []string {
+	if len(devices) == 0 {
+		return devices
+	}
+	names, err := t.listInterfaces()
+	if err != nil {
+		t.logCxt.WithError(err).Warn("Failed to list interfaces while pruning flowtable devices; keeping cached list")
+		return devices
+	}
+	existing := set.FromArray(names)
+	pruned := make([]string, 0, len(devices))
+	for _, d := range devices {
+		if existing.Contains(d) {
+			pruned = append(pruned, d)
+		}
+	}
+	return pruned
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -1037,6 +1090,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	retries := 10
 	backoffTime := 1 * time.Millisecond
 	failedAtLeastOnce := false
+	isolateFlowtable := false
 	for {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
@@ -1045,7 +1099,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		}
 		t.onStillAlive()
 
-		if err := t.applyUpdates(); err != nil {
+		if err := t.applyUpdates(isolateFlowtable); err != nil {
 			if retries > 0 {
 				if retries < 6 {
 					// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
@@ -1062,6 +1116,10 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 				// Reload the data plane state in case we're out of sync.
 				t.loadDataplaneState()
+
+				// From here on, isolate the flowtable into its own transaction so a device that raced
+				// away fails only the flowtable, not the whole table, and can't drive us to a panic.
+				isolateFlowtable = true
 
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
@@ -1098,12 +1156,16 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	return
 }
 
-func (t *NftablesTable) applyUpdates() error {
+func (t *NftablesTable) applyUpdates(isolateFlowtable bool) error {
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
 
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
+
+	// Set once an isolated flowtable sub-transaction fails, so the dirty-clear at the end of
+	// this function leaves flowtableDirty set for the next Apply to retry.
+	keepFlowtableDirty := false
 
 	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
 	// in the correct order. Namely:
@@ -1141,17 +1203,28 @@ func (t *NftablesTable) applyUpdates() error {
 	}
 
 	// The FORWARD chain references "flow offload @calico" whenever offload is enabled, so the
-	// flowtable must exist before we write those rules (Add acts as create-or-update, and works
-	// even with no devices). The delete for the disabled case is deferred to the end of the
-	// transaction, after the referencing rule has been flushed away.
+	// flowtable must exist before we write those rules (Add is create-or-update and works with
+	// no devices). On a retry we isolate the flowtable into its own transaction so a device that
+	// raced away only fails the flowtable, not the whole table; that sub-transaction runs here,
+	// before the main one, because the FORWARD rule depends on it.
 	if t.flowtableDirty && t.flowtableEnabled {
-		prio := knftables.FilterIngressPriority
-		tx.Add(&knftables.Flowtable{
-			Name:     dataplanedefs.FlowtableName,
-			Priority: &prio,
-			Devices:  t.flowtableDevices,
-		})
-		t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
+		devices := t.pruneToExistingDevices(t.flowtableDevices)
+		if isolateFlowtable {
+			if err := t.programFlowtable(devices); err != nil {
+				t.logCxt.WithError(err).Warn("Flowtable transaction failed; leaving it dirty, main table unaffected")
+				keepFlowtableDirty = true
+			} else {
+				t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
+			}
+		} else {
+			prio := knftables.FilterIngressPriority
+			tx.Add(&knftables.Flowtable{
+				Name:     dataplanedefs.FlowtableName,
+				Priority: &prio,
+				Devices:  devices,
+			})
+			t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
+		}
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
@@ -1287,8 +1360,9 @@ func (t *NftablesTable) applyUpdates() error {
 	// Delete any flowtable left over from a previous run now that offload is disabled. This has
 	// to happen after the chain updates above: nft refuses to delete a flowtable while the
 	// FORWARD rule that references it ("flow offload @calico") still exists, so the delete only
-	// succeeds once that rule has been flushed.
-	if t.flowtableDirty && !t.flowtableEnabled {
+	// succeeds once that rule has been flushed. When isolating, this instead happens in its own
+	// transaction after the main one runs, below.
+	if t.flowtableDirty && !t.flowtableEnabled && !isolateFlowtable {
 		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
 		t.gaugeNumFlowtableDevices.Set(0)
 	}
@@ -1319,12 +1393,26 @@ func (t *NftablesTable) applyUpdates() error {
 		t.FinishMapUpdates(mapUpdates)
 	}
 
+	// Isolated delete: the main transaction has flushed the FORWARD rule that referenced the
+	// flowtable, so it's now safe to remove the flowtable in its own transaction. This runs
+	// regardless of wroteToDataplane, since a leftover flowtable may be the only thing to clean.
+	if t.flowtableDirty && !t.flowtableEnabled && isolateFlowtable {
+		if err := t.deleteFlowtable(); err != nil {
+			t.logCxt.WithError(err).Warn("Flowtable delete transaction failed; leaving it dirty")
+			keepFlowtableDirty = true
+		} else {
+			t.gaugeNumFlowtableDevices.Set(0)
+		}
+	}
+
 	// Now we've successfully updated nftables, clear the dirty sets.  We do this even if we
 	// found there was nothing to do above, since we may have found out that a dirty chain
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
-	t.flowtableDirty = false
+	if !keepFlowtableDirty {
+		t.flowtableDirty = false
+	}
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {
@@ -1364,6 +1452,30 @@ func (t *NftablesTable) dumpTableState() {
 		return
 	}
 	t.logCxt.WithField("tableState", string(output)).Error("Current nftables table state")
+}
+
+// programFlowtable creates-or-updates the Calico flowtable with the given devices in its own
+// nft transaction. It re-asserts the table so it stays self-contained: on a retry it may run
+// before the main transaction, which could itself be creating the table for the first time.
+func (t *NftablesTable) programFlowtable(devices []string) error {
+	prio := knftables.FilterIngressPriority
+	tx := t.nft.NewTransaction()
+	tx.Add(&knftables.Table{})
+	tx.Add(&knftables.Flowtable{
+		Name:     dataplanedefs.FlowtableName,
+		Priority: &prio,
+		Devices:  devices,
+	})
+	return t.runTransaction(tx)
+}
+
+// deleteFlowtable removes the Calico flowtable in its own nft transaction. It runs after the
+// main transaction, which flushes the FORWARD rule that references the flowtable - nft refuses
+// to delete a flowtable while a rule still references it.
+func (t *NftablesTable) deleteFlowtable() error {
+	tx := t.nft.NewTransaction()
+	tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+	return t.runTransaction(tx)
 }
 
 func (t *NftablesTable) runTransaction(tx *knftables.Transaction) error {
