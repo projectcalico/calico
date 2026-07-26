@@ -638,13 +638,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Cleanup iptables.
-		cleanupTables = append(cleanupTables,
-			mangleTableV4IPT,
-			natTableV4IPT,
-			rawTableV4IPT,
-			filterTableV4IPT,
-		)
+		// Sweep out any rules left behind by a previous iptables-mode Felix. We go through the
+		// nft view rather than adding iptables Tables to cleanupTables: iptables-nft-save aborts
+		// on tables shared with native nft rules (Tailscale, kube-proxy, a host firewall), which
+		// made cleanup loop forever (#13263).
+		nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
@@ -1366,13 +1364,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
 
-			// Cleanup iptables.
-			cleanupTables = append(cleanupTables,
-				mangleTableV6IPT,
-				natTableV6IPT,
-				rawTableV6IPT,
-				filterTableV6IPT,
-			)
+			// Sweep out any leftover iptables-mode rules via the nft view (see the IPv4 path
+			// and #13263 for why we don't reconcile the iptables Tables here).
+			nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 6, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.
