@@ -17,6 +17,8 @@ package nftables_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1301,5 +1303,111 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		// caliDEAD is dropped; only the surviving devices are programmed.
 		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
 		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+	})
+
+	It("should isolate the flowtable on retry so a stale device can't wedge the whole table", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				SleepOverride:    func(time.Duration) {},
+				ListInterfacesOverride: func() ([]string, error) {
+					// The kernel still lists caliRACE, so the prune keeps it, but nft rejects it below.
+					return []string{"caliRACE", "lo"}, nil
+				},
+			},
+			true,
+		)
+
+		// Any transaction that programs the flowtable with caliRACE is rejected.
+		f.RunErrorHook = func(tx *knftables.Transaction) error {
+			if strings.Contains(tx.String(), "flowtable") && strings.Contains(tx.String(), "caliRACE") {
+				return fmt.Errorf("Could not process rule: No such file or directory")
+			}
+			return nil
+		}
+
+		table.SetWorkloadInterfaces([]string{"caliRACE"})
+
+		// Apply must not panic, and must return (the main table programs even though the flowtable
+		// device is bad).
+		Expect(table.Apply()).To(BeNumerically("<", time.Second))
+
+		// The main Calico table exists (base chains programmed) despite the flowtable failure.
+		Expect(f.List(context.TODO(), "chain")).NotTo(BeEmpty())
+
+		// A flowtable-only transaction was attempted (isolation kicked in on retry): at least one
+		// recorded transaction programs the flowtable without any cali chain rules.
+		sawIsolatedFlowtable := false
+		for _, tx := range f.Transactions() {
+			s := tx.String()
+			if strings.Contains(s, "flowtable") && !strings.Contains(s, "chain cali") {
+				sawIsolatedFlowtable = true
+			}
+		}
+		Expect(sawIsolatedFlowtable).To(BeTrue(), "expected the flowtable to be programmed in its own transaction on retry")
+	})
+
+	It("should keep the flowtable in the main transaction when programming succeeds", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// No isolated (flowtable-only) transaction was needed.
+		for _, tx := range f.Transactions() {
+			s := tx.String()
+			if strings.Contains(s, "flowtable") {
+				Expect(s).To(ContainSubstring("chain"), "flowtable should ride along in the main transaction, not its own")
+			}
+		}
+	})
+
+	It("should recover when a raced device is gone by the retry", func() {
+		calls := 0
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		present := []string{"cali1234", "lo"}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				SleepOverride:    func(time.Duration) {},
+				ListInterfacesOverride: func() ([]string, error) {
+					return present, nil
+				},
+			},
+			true,
+		)
+		// First combined attempt fails; then the device is gone from the kernel, so the prune drops
+		// it and the retry succeeds.
+		f.RunErrorHook = func(tx *knftables.Transaction) error {
+			calls++
+			if calls == 1 {
+				present = []string{"lo"}
+				return fmt.Errorf("Could not process rule: No such file or directory")
+			}
+			return nil
+		}
+
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", time.Second))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(0)))
 	})
 })

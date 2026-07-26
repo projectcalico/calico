@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,6 +55,11 @@ type fakeNFT struct {
 	PreWrite func()
 	PreList  func()
 
+	// RunErrorHook, if non-nil, is consulted on every Run. A non-nil return makes that
+	// transaction fail, so tests can simulate nft rejecting a specific transaction (e.g. a
+	// flowtable naming a device that just raced away).
+	RunErrorHook func(tx *knftables.Transaction) error
+
 	// Allow overriding the next ListElements response for one or more sets to be an error.
 	ListElementsErrors map[string]error
 
@@ -108,7 +113,20 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
+	if f.RunErrorHook != nil {
+		if err := f.RunErrorHook(tx); err != nil {
+			return err
+		}
+	}
 	return f.fake.Run(ctx, tx)
+}
+
+// Transactions returns a copy of the transactions Run has seen, for test assertions.
+func (f *fakeNFT) Transactions() []knftables.Transaction {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return append([]knftables.Transaction(nil), f.transactions...)
 }
 
 func (f *fakeNFT) preRun(tx *knftables.Transaction) {
