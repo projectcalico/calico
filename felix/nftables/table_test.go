@@ -17,6 +17,7 @@ package nftables_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -1357,6 +1358,126 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 			Expect(table.Apply()).To(Equal(5*time.Second), "expected a retry on attempt %d", i+1)
 		}
 		Expect(table.Apply()).To(BeZero())
+	})
+
+	It("should isolate the flowtable on retry so a stale device can't wedge the whole table", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				SleepOverride:    func(time.Duration) {},
+				ListInterfacesOverride: func() ([]string, error) {
+					// The kernel still lists caliRACE, so the prune keeps it, but nft rejects it below.
+					return []string{"caliRACE", "lo"}, nil
+				},
+			},
+			true,
+		)
+
+		// Any transaction that programs the flowtable with caliRACE is rejected.
+		f.RunErrorHook = func(tx *knftables.Transaction) error {
+			if strings.Contains(tx.String(), "flowtable") && strings.Contains(tx.String(), "caliRACE") {
+				return fmt.Errorf("Could not process rule: No such file or directory")
+			}
+			return nil
+		}
+
+		// The real FORWARD chain always carries this rule when offload is on, and nft refuses a
+		// rule that references a flowtable which doesn't exist. Without the empty-flowtable
+		// fallback the main transaction fails here too, which is the case isolation is meant to
+		// rule out.
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{{
+			Match:  nftables.Match(),
+			Action: nftables.FlowOffloadAction{},
+		}})
+		table.SetWorkloadInterfaces([]string{"caliRACE"})
+
+		// Apply must not panic, and the flowtable stays dirty so we come back for caliRACE.
+		Expect(table.Apply()).To(Equal(5 * time.Second))
+
+		// The main table programmed: the FORWARD rule is in the dataplane and the flowtable it
+		// references exists, just with no devices attached.
+		Expect(f.List(context.TODO(), "chain")).To(ContainElement("filter-FORWARD"))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(0)))
+
+		// The flowtable was programmed on its own, and the bad device was attempted there rather
+		// than in the transaction carrying the chains.
+		var isolated []string
+		for _, tx := range f.Transactions() {
+			s := tx.String()
+			if strings.Contains(s, "add flowtable") && !strings.Contains(s, "add chain") {
+				isolated = append(isolated, s)
+			}
+		}
+		Expect(isolated).To(ContainElement(ContainSubstring("caliRACE")))
+		Expect(isolated).To(ContainElement(Not(ContainSubstring("caliRACE"))))
+	})
+
+	It("should keep the flowtable in the main transaction when programming succeeds", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// No isolated (flowtable-only) transaction was needed.
+		for _, tx := range f.Transactions() {
+			s := tx.String()
+			if strings.Contains(s, "flowtable") {
+				Expect(s).To(ContainSubstring("chain"), "flowtable should ride along in the main transaction, not its own")
+			}
+		}
+	})
+
+	It("should recover when a raced device is gone by the retry", func() {
+		calls := 0
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		present := []string{"cali1234", "lo"}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				SleepOverride:    func(time.Duration) {},
+				ListInterfacesOverride: func() ([]string, error) {
+					return present, nil
+				},
+			},
+			true,
+		)
+
+		// First combined attempt fails; then the device is gone from the kernel, so the prune drops
+		// it and the retry succeeds.
+		f.RunErrorHook = func(tx *knftables.Transaction) error {
+			calls++
+			if calls == 1 {
+				present = []string{"lo"}
+				return fmt.Errorf("Could not process rule: No such file or directory")
+			}
+			return nil
+		}
+
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+
+		// The prune drops cali1234 on the retry, so we stay dirty and come back for it shortly.
+		Expect(table.Apply()).To(Equal(5 * time.Second))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(0)))
 	})
 })
 
