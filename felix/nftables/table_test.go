@@ -1187,6 +1187,11 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logutils.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					// Everything the flowtable specs program is treated as present by default;
+					// the prune spec overrides this with its own narrower lister.
+					return []string{"cali1234", "vxlan.calico", "eth0", "lo"}, nil
+				},
 			},
 			true,
 		)
@@ -1265,5 +1270,36 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table.InvalidateDataplaneCache("test")
 		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
 		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+	})
+
+	It("should prune flowtable devices that no longer exist in the kernel", func() {
+		// net.Interfaces() reports cali1234 and vxlan.calico exist, but not the dead veth.
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return []string{"cali1234", "vxlan.calico", "lo"}, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234", "caliDEAD"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// caliDEAD is dropped; only the surviving devices are programmed.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
 	})
 })
