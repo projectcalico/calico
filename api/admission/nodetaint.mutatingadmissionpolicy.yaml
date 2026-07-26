@@ -1,0 +1,33 @@
+# This MutatingAdmissionPolicy taints new nodes with node.projectcalico.org/network-not-ready:NoSchedule
+# so that workloads don't schedule onto a node before Calico networking is ready. calico-node removes
+# the taint once Felix and BIRD are ready.
+#
+# This policy is only installed when the network-ready taint feature is enabled in the Installation
+# resource. The operator gates installation on that flag and wires the matching tolerations, so this
+# must never be applied on its own - without something to remove the taint, nodes would stay tainted.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "networkreadytaint.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["nodes"]
+  matchConditions:
+    # Don't add the taint if it's already there (e.g. the node was registered with it).
+    - name: taint-absent
+      expression: "!has(object.spec.taints) || !object.spec.taints.exists(t, t.key == 'node.projectcalico.org/network-not-ready')"
+  # Never block node registration if the policy fails to evaluate - a node that can't register is
+  # worse than one that schedules a little early.
+  failurePolicy: Ignore
+  reinvocationPolicy: Never
+  mutations:
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          has(object.spec.taints) ?
+            [JSONPatch{op: "add", path: "/spec/taints/-", value: {"key": "node.projectcalico.org/network-not-ready", "effect": "NoSchedule"}}] :
+            [JSONPatch{op: "add", path: "/spec/taints", value: [{"key": "node.projectcalico.org/network-not-ready", "effect": "NoSchedule"}]}]
