@@ -2136,6 +2136,29 @@ class TestLiveMigration(TestPluginEtcdBase):
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
 
+    def test_resync_does_not_delete_dest_wep_mid_migration(self):
+        """Resync must not delete the dest WEP of an in-flight migration.
+
+        While a migration is in flight the Neutron port is still bound to the
+        source host, so the destination WEP has no direct counterpart in the
+        Neutron port map and used to be reaped - then recreated - by the
+        periodic resync.  That transient deletion made Felix on the
+        destination host tear down the endpoint mid-migration.
+        """
+        self._do_initial_resync()
+
+        # Start a live migration; this creates the destination WEP and
+        # LiveMigration resource in etcd.
+        self._pre_migrate()
+
+        self._trigger_resync()
+
+        # The destination WEP must not have been deleted, even transiently.
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
+
+        # Neither should anything else have been deleted.
+        self.assertEtcdDeletes(set())
+
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""
         self._do_initial_resync()
