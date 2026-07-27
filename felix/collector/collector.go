@@ -43,6 +43,12 @@ import (
 const (
 	// perHostPolicySubscription is the subscription type for per-host-policy.
 	perHostPolicySubscription = "per-host-policies"
+
+	// policyEvalBatchDuration bounds how long a single policy re-evaluation batch
+	// runs before yielding back to the collector's main select loop, so the other
+	// work sources (conntrack, NFLOG, export ticker, dataplane stats) are not
+	// starved by a large sweep.
+	policyEvalBatchDuration = 100 * time.Millisecond
 )
 
 var (
@@ -83,6 +89,22 @@ var (
 		Name: "felix_collector_epstats",
 		Help: "Total number of entries currently residing in the epStats cache.",
 	})
+
+	// policy re-evaluation (pending rule trace) prometheus metrics
+	counterPolicyEvalBatches = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_batches_total",
+		Help: "Number of time-boxed policy re-evaluation batches processed.",
+	})
+
+	counterPolicyEvalFlows = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_collector_policy_eval_flows_total",
+		Help: "Number of flows evaluated during policy re-evaluation.",
+	})
+
+	histogramPolicyEvalSweepDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name: "felix_collector_policy_eval_sweep_duration_seconds",
+		Help: "Wall-clock time to drain one policy re-evaluation snapshot across all its batches.",
+	})
 )
 
 func init() {
@@ -91,6 +113,9 @@ func init() {
 	prometheus.MustRegister(gaugeEpStatsCacheSizeLength)
 	prometheus.MustRegister(histogramDataplaneStatsUpdate)
 	prometheus.MustRegister(gaugeDataplaneStatsUpdateErrorsPerMinute)
+	prometheus.MustRegister(counterPolicyEvalBatches)
+	prometheus.MustRegister(counterPolicyEvalFlows)
+	prometheus.MustRegister(histogramPolicyEvalSweepDuration)
 }
 
 type Config struct {
@@ -135,21 +160,36 @@ type collector struct {
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
 	displayDebugTraceLogs bool
+
+	// recalcSnapshot holds pointers to the flows still awaiting policy re-evaluation
+	// in the current sweep. It is taken from epStats when the policy-eval ticker fires
+	// and drained in time-boxed batches. The backing array is reused across sweeps.
+	recalcSnapshot []*Data
+	// recalcSweepStart marks when the current snapshot was taken, for the sweep-duration
+	// histogram.
+	recalcSweepStart time.Time
+	// policyEvalMinInterval is the minimum time between re-evaluations of a single flow. Flows
+	// evaluated more recently than this are skipped when a sweep's snapshot is taken, so that
+	// back-to-back sweeps (when a sweep takes ~a full ticker interval) do not reprocess the
+	// same flow repeatedly. Set to half the ticker interval.
+	policyEvalMinInterval time.Duration
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
 // function for collector instantiation.
 func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
+	recalcInterval := cfg.FlowLogsFlushInterval * 8 / 10
 	c := &collector{
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
 		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
-		tickerPolicyEval:      jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10),
+		tickerPolicyEval:      jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval*1/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
 		displayDebugTraceLogs: cfg.DisplayDebugTraceLogs,
 		policyStoreManager:    cfg.PolicyStoreManager,
+		policyEvalMinInterval: recalcInterval / 2,
 	}
 
 	if c.policyStoreManager == nil {
@@ -158,7 +198,7 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
 		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
-		c.tickerPolicyEval = jitter.NewTicker(cfg.FlowLogsFlushInterval*8/10, cfg.FlowLogsFlushInterval*1/10)
+		c.tickerPolicyEval = jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval*1/10)
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -251,6 +291,19 @@ func (c *collector) startStatsCollectionAndReporting() {
 		ctInfoC = c.conntrackInfoReader.ConntrackInfoChan()
 	}
 
+	// batchReady is a pre-closed channel: a receive on it is always ready. We use it
+	// as the batch trigger so that, while a policy re-evaluation sweep is in flight, the
+	// select keeps firing batches — but each batch competes fairly with the other cases,
+	// so conntrack, NFLOG, export, and dataplane-stats work is still serviced promptly.
+	batchReady := make(chan struct{})
+	close(batchReady)
+
+	// policyEvalTickC is masked (set to nil, which blocks forever) while a sweep is in
+	// flight, so no new snapshot is taken until the current one drains. batchTriggerC is
+	// the mirror image: nil until a snapshot is pending, then batchReady while draining.
+	policyEvalTickC := c.tickerPolicyEval.Channel()
+	var batchTriggerC <-chan struct{}
+
 	// When a collector is started, we respond to the following events:
 	// 1. StatUpdates for incoming datasources (chan c.mux).
 	// 2. A signal handler that will dump logs on receiving SIGUSR2.
@@ -273,8 +326,20 @@ func (c *collector) startStatsCollectionAndReporting() {
 			dataplaneStatsUpdateStart := time.Now()
 			c.convertDataplaneStatsAndApplyUpdate(ds)
 			histogramDataplaneStatsUpdate.Observe(float64(time.Since(dataplaneStatsUpdateStart).Seconds()))
-		case <-c.tickerPolicyEval.Channel():
-			c.updatePendingRuleTraces()
+		case <-policyEvalTickC:
+			// Take a snapshot of the flows to re-evaluate. If any need work, hand off to the
+			// batch path: mask the ticker so no new snapshot starts until this one drains.
+			// If the snapshot is empty (all flows re-evaluated recently), stay armed.
+			if c.snapshotFlowsForRecalc() > 0 {
+				policyEvalTickC = nil
+				batchTriggerC = batchReady
+			}
+		case <-batchTriggerC:
+			if c.processRecalcBatch(policyEvalBatchDuration) {
+				// Snapshot drained: stop batching and re-arm the ticker.
+				batchTriggerC = nil
+				policyEvalTickC = c.tickerPolicyEval.Channel()
+			}
 		}
 	}
 }
@@ -867,9 +932,11 @@ func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats)
 
 // updatePendingRuleTraces evaluates each flow of epStats against the policies in the PolicyStore
 // to get the latest pending rule trace. It replaces the Data's copy if they are different.
+//
+// This is the eager, single-shot sweep. The main select loop instead drives the sweep in
+// time-boxed batches via snapshotFlowsForRecalc and processRecalcBatch; this method is retained
+// for tests that need the whole sweep to complete synchronously.
 func (c *collector) updatePendingRuleTraces() {
-	// The epStats map may be quite large, so we chose to lock each entry individually to avoid
-	// locking the entire map.
 	for _, data := range c.epStats {
 		if data == nil {
 			continue
@@ -878,16 +945,78 @@ func (c *collector) updatePendingRuleTraces() {
 	}
 }
 
+// snapshotFlowsForRecalc takes a snapshot of the flows to re-evaluate at the start of a policy
+// re-evaluation sweep and returns the number of flows captured. It runs on the select goroutine
+// that owns epStats, so the snapshot is a cheap pointer copy; the expensive per-flow evaluation is
+// then spread across time-boxed batches in processRecalcBatch. The backing array is reused across
+// sweeps to avoid re-allocating.
+//
+// Flows re-evaluated within the last policyEvalMinInterval are skipped, so that back-to-back sweeps
+// (when a sweep takes ~a full ticker interval) do not reprocess the same flow repeatedly.
+func (c *collector) snapshotFlowsForRecalc() int {
+	c.recalcSnapshot = c.recalcSnapshot[:0]
+	now := monotime.Now()
+	for _, data := range c.epStats {
+		if data == nil {
+			continue
+		}
+		if data.lastPolicyEvalAt != 0 && now-data.lastPolicyEvalAt < c.policyEvalMinInterval {
+			continue
+		}
+		c.recalcSnapshot = append(c.recalcSnapshot, data)
+	}
+	c.recalcSweepStart = time.Now()
+	return len(c.recalcSnapshot)
+}
+
+// processRecalcBatch evaluates flows from the current snapshot until either the snapshot is empty
+// or the time budget is spent, then returns control to the caller. It returns true when the
+// snapshot has been fully drained.
+func (c *collector) processRecalcBatch(budget time.Duration) bool {
+	counterPolicyEvalBatches.Inc()
+
+	// Check the deadline after each flow rather than before, so we always make forward
+	// progress (at least one flow per batch) even with a very small budget.
+	deadline := time.Now().Add(budget)
+	for len(c.recalcSnapshot) > 0 {
+		// Pop from the tail, niling the slot first so the reused backing array does not
+		// pin an already-processed (and possibly map-deleted) Data until the next sweep.
+		i := len(c.recalcSnapshot) - 1
+		data := c.recalcSnapshot[i]
+		c.recalcSnapshot[i] = nil
+		c.recalcSnapshot = c.recalcSnapshot[:i]
+
+		// Skip flows that other work sources have expired/deleted (or whose tuple has been
+		// reused) since the snapshot was taken.
+		if cur, ok := c.epStats[data.Tuple]; ok && cur == data {
+			c.evaluatePendingRuleTraceForLocalEp(data)
+			counterPolicyEvalFlows.Inc()
+		}
+
+		if !time.Now().Before(deadline) {
+			break
+		}
+	}
+
+	if len(c.recalcSnapshot) == 0 {
+		histogramPolicyEvalSweepDuration.Observe(time.Since(c.recalcSweepStart).Seconds())
+		return true
+	}
+	return false
+}
+
 func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 	flow := TupleAsFlow(data.Tuple)
 
 	srcEp, dstEp := c.findEndpointBestMatch(data.Tuple)
 
-	// If endpoints have changed compared to what Data currently holds, skip evaluation.
+	// If endpoints have changed compared to what Data currently holds, skip evaluation. Leave
+	// lastPolicyEvalAt unchanged so the flow is retried on the next sweep once endpoints settle.
 	if endpointChanged(data.SrcEp, srcEp) || endpointChanged(data.DstEp, dstEp) {
 		return
 	}
 
+	data.lastPolicyEvalAt = monotime.Now()
 	c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
 		// Evaluate ingress if destination is local workload endpoint
 		if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {

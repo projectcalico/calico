@@ -353,6 +353,10 @@ type Data struct {
 
 	updatedAt     time.Duration
 	ruleUpdatedAt time.Duration
+	// lastPolicyEvalAt is the monotime of the last pending-rule-trace evaluation for this
+	// flow. The batched sweep uses it to skip flows evaluated too recently, so back-to-back
+	// sweeps do not reprocess the same flow. Zero means never evaluated.
+	lastPolicyEvalAt time.Duration
 
 	Reported             bool
 	UnreportedPacketInfo bool
