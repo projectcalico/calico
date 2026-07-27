@@ -517,7 +517,7 @@ func (s *IPSets) tryResync() error {
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("failed to read set memebers: %w", err)
+			return fmt.Errorf("failed to read set members: %w", err)
 		}
 
 		// Mark us as having seen the programmed IP set.
