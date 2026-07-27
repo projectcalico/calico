@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# s3-cmd: thin wrapper around s3cmd for Calico CI object storage. It replaces
+# the `gcloud storage` / `gsutil` calls that previously cached build artifacts
+# to, and restored them from, Google Cloud Storage.
+#
+# The S3 destination and credentials are configurable entirely through
+# environment variables:
+#
+#   CALICO_S3_ACCESS_KEY   - S3 access key id              (required)
+#   CALICO_S3_SECRET_KEY   - S3 secret access key          (required)
+#   CALICO_S3_BUCKET       - destination bucket name       (required by callers
+#                            that build s3:// URLs from it; not used directly
+#                            here)
+#   CALICO_S3_KEY_PREFIX   - key prefix within the bucket  (optional, used by
+#                            callers when building s3:// URLs)
+#   CALICO_S3_HOST         - S3 endpoint host base         (optional; default is
+#                            s3cmd's built-in AWS endpoint)
+#   CALICO_S3_HOST_BUCKET  - host-bucket template          (optional; defaults to
+#                            "%(bucket)s.${CALICO_S3_HOST}" when a host is set)
+#   CALICO_S3_EXPIRY_DAYS  - default object expiry in days  (optional). When set,
+#                            uploads carry an "Expires: <now + N days>" header.
+#                            NOTE: the Expires header is object metadata; it does
+#                            not by itself delete the object on most S3 backends.
+#                            Configure a matching bucket lifecycle rule (e.g.
+#                            `s3cmd expire s3://bucket --expiry-days=N`) for the
+#                            objects to actually be reclaimed.
+#
+# Callers refer to objects with s3:// URLs, typically via $S3_WORKFLOW_DIR or
+# $S3_CACHE_DIR, which the Semaphore global job config builds from
+# CALICO_S3_BUCKET / CALICO_S3_KEY_PREFIX.
+#
+# Usage mirrors the subset of `gcloud storage` that CI used:
+#
+#   s3-cmd cp [-r] <src>... <dst>   Upload (dst is an s3:// URL), download (the
+#                                   single src is an s3:// URL) or server-side
+#                                   copy (both are s3:// URLs). A trailing "/*"
+#                                   on an s3:// source is treated as a recursive
+#                                   fetch of that prefix (s3cmd has no glob).
+#   s3-cmd ls <s3url>               List; exits non-zero when nothing matches, so
+#                                   `if s3-cmd ls ...` behaves like `gcloud
+#                                   storage ls`.
+#   s3-cmd write-config <path>      Write an s3cmd config file built from the
+#                                   environment, for shipping the credentials to
+#                                   a remote test VM that runs s3cmd directly.
+
+set -euo pipefail
+
+# Assemble the common s3cmd flags (credentials and, optionally, a non-AWS
+# endpoint) into the S3CMD_ARGS array.
+build_s3cmd_args() {
+  S3CMD_ARGS=(
+    --no-progress
+    "--access_key=${CALICO_S3_ACCESS_KEY:?CALICO_S3_ACCESS_KEY must be set}"
+    "--secret_key=${CALICO_S3_SECRET_KEY:?CALICO_S3_SECRET_KEY must be set}"
+  )
+  if [[ -n "${CALICO_S3_HOST:-}" ]]; then
+    S3CMD_ARGS+=(
+      "--host=${CALICO_S3_HOST}"
+      "--host-bucket=${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}"
+    )
+  fi
+}
+
+# Populate EXPIRY_ARGS with the --add-header flag for the configured default
+# object expiry, or leave it empty when CALICO_S3_EXPIRY_DAYS is unset.
+build_expiry_args() {
+  EXPIRY_ARGS=()
+  if [[ -n "${CALICO_S3_EXPIRY_DAYS:-}" ]]; then
+    local expires
+    if ! expires="$(date -u -d "+${CALICO_S3_EXPIRY_DAYS} days" '+%a, %d %b %Y %H:%M:%S GMT' 2>/dev/null)"; then
+      echo "s3-cmd: invalid CALICO_S3_EXPIRY_DAYS='${CALICO_S3_EXPIRY_DAYS}' (want an integer number of days)" >&2
+      exit 2
+    fi
+    EXPIRY_ARGS=("--add-header=Expires:${expires}")
+  fi
+}
+
+is_s3() { [[ "$1" == s3://* ]]; }
+
+cmd_cp() {
+  local recursive=()
+  while [[ "${1:-}" == -* ]]; do
+    case "$1" in
+      -r | -R | --recursive)
+        recursive=(--recursive)
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        echo "s3-cmd cp: unknown flag $1" >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  if [[ $# -lt 2 ]]; then
+    echo "s3-cmd cp: expected <src>... <dst>" >&2
+    exit 2
+  fi
+
+  # The last argument is the destination; everything before it is a source.
+  local dst="${*: -1}"
+  local srcs=("${@:1:$#-1}")
+
+  build_s3cmd_args
+
+  if is_s3 "$dst"; then
+    if is_s3 "${srcs[0]}"; then
+      # Server-side copy (single source).
+      s3cmd "${S3CMD_ARGS[@]}" cp "${recursive[@]}" "${srcs[0]}" "$dst"
+    else
+      # Upload one or more local sources, applying the default expiry (if any).
+      build_expiry_args
+      s3cmd "${S3CMD_ARGS[@]}" put "${recursive[@]}" "${EXPIRY_ARGS[@]}" "${srcs[@]}" "$dst"
+    fi
+  else
+    # Download. s3cmd get has no wildcard support, so a trailing "/*" on the
+    # source becomes a recursive fetch of the prefix.
+    local src="${srcs[0]}"
+    if [[ "$src" == */\* ]]; then
+      src="${src%\*}"
+      recursive=(--recursive)
+    fi
+    s3cmd "${S3CMD_ARGS[@]}" get --force "${recursive[@]}" "$src" "$dst"
+  fi
+}
+
+cmd_ls() {
+  build_s3cmd_args
+  local out
+  out="$(s3cmd "${S3CMD_ARGS[@]}" ls "$1")" || return 1
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+
+cmd_write_config() {
+  local path="$1"
+  local old_umask
+  old_umask="$(umask)"
+  umask 077
+  {
+    echo "[default]"
+    echo "access_key = ${CALICO_S3_ACCESS_KEY:?CALICO_S3_ACCESS_KEY must be set}"
+    echo "secret_key = ${CALICO_S3_SECRET_KEY:?CALICO_S3_SECRET_KEY must be set}"
+    if [[ -n "${CALICO_S3_HOST:-}" ]]; then
+      echo "host_base = ${CALICO_S3_HOST}"
+      echo "host_bucket = ${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}"
+    fi
+  } >"$path"
+  umask "$old_umask"
+}
+
+case "${1:-}" in
+  cp)
+    shift
+    cmd_cp "$@"
+    ;;
+  ls)
+    shift
+    cmd_ls "$@"
+    ;;
+  write-config)
+    shift
+    cmd_write_config "$@"
+    ;;
+  *)
+    echo "usage: s3-cmd {cp [-r] <src>... <dst> | ls <s3url> | write-config <path>}" >&2
+    exit 2
+    ;;
+esac

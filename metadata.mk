@@ -92,3 +92,4 @@ OPERATOR_GIT_REPO     ?= operator
 
 # quay.io expiry time for hashrelease/dev images
 QUAY_EXPIRE_DAYS=90
+
