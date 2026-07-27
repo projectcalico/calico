@@ -147,6 +147,10 @@ func (t *tableLayer) Apply() time.Duration {
 	return t.impl.Apply()
 }
 
+func (t *tableLayer) CleanUp() time.Duration {
+	return t.impl.CleanUp()
+}
+
 func (t *tableLayer) InsertRulesNow(chainName string, rules []generictables.Rule) error {
 	chainName = t.namespaceName(chainName)
 	rules = t.namespaceRules(rules)
