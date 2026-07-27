@@ -247,7 +247,13 @@ skip_redir_ifindex:
 			if ((rc = try_redirect_to_peer(ctx)) == TC_ACT_REDIRECT) {
 				goto skip_fib;
 			}
-		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt))) {
+		} else if ((cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt)) ||
+				((state->ct_result.flags & CALI_CT_FLAG_OVERLAY_REPLY) &&
+					cali_rt_flags_remote_host(dest_rt->flags))) {
+			/* Either a remote tunneled workload, or the reply of a host-originated
+			 * overlay flow whose destination is a bare remote node IP
+			 * (BPFOverlayHostSourceIP=HostAddress).  A remote-host route carries the
+			 * node IP as its next_hop, so the same encap below reaches it. */
 			struct bpf_tunnel_key key = {
 				.tunnel_id = OVERLAY_TUNNEL_ID,
 			};
