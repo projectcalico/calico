@@ -1877,22 +1877,25 @@ ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
 ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
 # Derive the envtest Kubernetes version, and how to obtain its binaries, from
 # K8S_VERSION. setup-envtest (controller-runtime kubebuilder-tools) only publishes
-# assets for RELEASED minors, so we branch on whether K8S_VERSION is a pre-release
-# (stable tags like v1.36.2 have no '-'; pre-releases like v1.37.0-beta.0 do):
+# assets for RELEASED minors, so we branch on whether K8S_VERSION is a -beta/-rc
+# pre-release (e.g. v1.37.0-beta.0):
 #   - stable: use setup-envtest with a major.minor.x wildcard (e.g. v1.34.3 ->
 #     1.34.x), letting it resolve the latest published patch.
 #   - pre-release: its kubebuilder-tools assets don't exist upstream yet, so
 #     assemble the bundle by hand from the upstream release binaries
 #     (kube-apiserver + kubectl from dl.k8s.io, etcd from the pinned ETCD_VERSION).
 # This self-reverts to the setup-envtest path once the target minor GAs and
-# K8S_VERSION no longer carries a pre-release suffix.
+# K8S_VERSION no longer carries a -beta/-rc suffix.
+# We intentionally match only -beta/-rc and not -alpha: alpha builds are too
+# unstable to ever belong in K8S_VERSION, so an -alpha value is treated as an
+# unexpected pin and left to fail loudly rather than silently fetched.
 # Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
 ifneq ($(OS),Windows_NT)
-ifeq ($(findstring -,$(K8S_VERSION)),)
-ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
-else
+ifneq ($(or $(findstring -beta,$(K8S_VERSION)),$(findstring -rc,$(K8S_VERSION))),)
 ENVTEST_K8S_VERSION ?= $(K8S_VERSION:v%=%)
 ENVTEST_K8S_PRERELEASE := true
+else
+ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 endif
 endif
 ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
