@@ -458,7 +458,16 @@ func (f *fakeIPAMClient) RemoveIPAMHost(ctx context.Context, affinityCfg ipam.Af
 func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtilizationArgs) ([]*ipam.PoolUtilization, error) {
 	f.Lock()
 	defer f.Unlock()
-	return f.utilization, nil
+	if len(args.Pools) == 0 {
+		return f.utilization, nil
+	}
+	var wanted []*ipam.PoolUtilization
+	for _, poolUse := range f.utilization {
+		if slices.Contains(args.Pools, poolUse.Name) {
+			wanted = append(wanted, poolUse)
+		}
+	}
+	return wanted, nil
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.

@@ -246,8 +246,9 @@ var _ = Describe("IPAM controller UTs", func() {
 
 		cli.IPAM().(*fakeIPAMClient).utilization = []*ipam.PoolUtilization{
 			{Name: poolName, Reserved: 6},
-			// GetUtilization also reports a pseudo-pool for blocks whose pool has
-			// been deleted; that must not turn into a gauge.
+			// Not tracked by the controller, so it should never be asked for -
+			// GetUtilization reports one of these for orphaned blocks.  The fake
+			// honours args.Pools, so a gauge here means we asked too broadly.
 			{Name: "orphaned allocation blocks", Reserved: 99},
 		}
 		c.onPoolUpdated(&apiv3.IPPool{

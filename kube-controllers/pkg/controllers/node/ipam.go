@@ -17,8 +17,10 @@ package node
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -786,20 +788,24 @@ func (c *IPAMController) updateMetrics() {
 // cover pool space that no block has been carved from yet.  So ask IPAM, which
 // reads the IPReservations and does the arithmetic over the whole pool CIDR.
 func (c *IPAMController) updateReservedMetrics() {
+	// Ask only for the pools we report on.  Left empty, GetUtilization would also
+	// work out the totals for the pseudo-pool it reports orphaned blocks under,
+	// which has no gauge.
+	pools := slices.Collect(maps.Keys(c.poolManager.allPools))
+	if len(pools) == 0 {
+		// An empty list means "every pool", which is not what we want here.
+		return
+	}
+
 	ctx, cancelCtx := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancelCtx()
 
-	usage, err := c.client.IPAM().GetUtilization(ctx, ipam.GetUtilizationArgs{})
+	usage, err := c.client.IPAM().GetUtilization(ctx, ipam.GetUtilizationArgs{Pools: pools})
 	if err != nil {
 		log.WithError(err).Warn("Failed to get IP pool utilization; reserved-IP metrics may be stale")
 		return
 	}
 	for _, poolUse := range usage {
-		if _, ok := c.poolManager.allPools[poolUse.Name]; !ok {
-			// Not a pool we track; GetUtilization also reports a pseudo-pool for
-			// blocks whose pool has been deleted.
-			continue
-		}
 		poolReservedGauge.With(prometheus.Labels{"ippool": poolUse.Name}).Set(float64(poolUse.Reserved))
 	}
 }
