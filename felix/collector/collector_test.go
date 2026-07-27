@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gavv/monotime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -3772,6 +3773,29 @@ func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
 		batches++
 	}
 	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
+}
+
+// TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows covers the early-uptime case: monotime counts
+// from boot, so when the freshness window exceeds the current uptime the "too recent" threshold is
+// negative. Flows that have never been evaluated must still be evaluated, not skipped.
+func TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	// A window longer than the machine has been up drives the threshold negative.
+	c.policyEvalMinInterval = 1000 * time.Hour
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", monotime.Now()),
+		"window must exceed uptime for this test to cover the negative-threshold case")
+	clearPendingRuleIDs(c)
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows)
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+	for !c.processRecalcBatch(time.Hour) {
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows)-before)).To(Equal(flows),
+		"never-evaluated flows must not be skipped as too-recent")
 }
 
 // TestSnapshotRightSizesBuffer verifies the snapshot buffer stays proportional to the flow count,

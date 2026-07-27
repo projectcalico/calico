@@ -947,7 +947,9 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 	for len(c.recalcSnapshot) > 0 {
 		data := c.popFlowForRecalc()
 
-		// Not due yet.
+		// Not due yet. Zero means never evaluated, which needs the explicit check: monotime
+		// counts from boot, so within the first policyEvalMinInterval of uptime minLastEvalAt
+		// is negative and every unevaluated flow would look recent.
 		if data.lastPolicyEvalAt != 0 && data.lastPolicyEvalAt > minLastEvalAt {
 			continue
 		}
