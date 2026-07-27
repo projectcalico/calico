@@ -564,6 +564,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride:      config.LookPathOverride,
 		OnStillAlive:          dp.reportHealth,
 		OpRecorder:            dp.loopSummarizer,
+
+		// In nftables mode these tables are only used to clean up after a previous
+		// iptables-mode Felix, so a table we can't read is a table we skip rather than a
+		// reason to give up and restart (#13263). In iptables mode we're programming them and
+		// carrying on regardless would mean silently not writing policy.
+		SkipIfIncompatible: nftablesEnabled,
 	}
 	nftablesOptions := nftables.TableOptions{
 		RefreshInterval:  config.TableRefreshInterval,
