@@ -2145,7 +2145,9 @@ func TestNATAffinityV6(t *testing.T) {
 
 	hostIP = node1ipV6
 
-	natKey := nat.NewNATKeyV6(ipv6.DstIP, uint16(udp.DstPort), uint8(ipv6.NextHeader))
+	// The test packet carries a hop-by-hop extension header, so
+	// ipv6.NextHeader is not the L4 protocol.
+	natKey := nat.NewNATKeyV6(ipv6.DstIP, uint16(udp.DstPort), uint8(layers.IPProtocolUDP))
 	err = natMapV6.Update(
 		natKey.AsBytes(),
 		nat.NewNATValueV6(0, 1, 0, 60 /* seconds */).AsBytes(),
