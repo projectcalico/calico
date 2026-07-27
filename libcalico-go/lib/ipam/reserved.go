@@ -36,8 +36,7 @@ import (
 //     the block's allocations and so can tell free from in-use.
 //
 // Reservations may overlap and nest arbitrarily — one IPReservation can cover a
-// /24 while another names a single IP inside it, and an L2 subnet contributes
-// its network and broadcast addresses on top — so the counting is a set
+// /24 while another names a single address inside it — so the counting is a set
 // operation rather than a sum over the CIDRs.
 func countPoolSpace(poolCIDR net.IPNet, reserved cidrSliceFilter, blocks []BlockUtilization) (capacity, reservedCount, availableOutsideBlocks int, err error) {
 	poolPrefix, ok := netipx.FromStdIPNet(&poolCIDR)
@@ -96,10 +95,10 @@ func numIPsInPrefix(p netip.Prefix) *big.Int {
 	return new(big.Int).Lsh(big.NewInt(1), uint(p.Addr().BitLen()-p.Bits()))
 }
 
-// clampToInt saturates rather than wrapping, so an IPv6 pool larger than an int
-// can hold reports the largest number we can represent instead of a negative
-// one.  The counts in BlockUtilization and PoolUtilization have always been
-// ints; only pools bigger than 2^63 addresses are affected.
+// clampToInt saturates rather than wrapping.  Real pools are far smaller than
+// this — IPv6 pools are /96 or longer — so it is purely defensive: it keeps the
+// conversion to the int fields of BlockUtilization and PoolUtilization total,
+// instead of turning an oversized count negative.
 func clampToInt(n *big.Int) int {
 	if !n.IsInt64() || n.Int64() > math.MaxInt {
 		return math.MaxInt

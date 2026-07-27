@@ -104,8 +104,9 @@ func TestCountPoolSpace(t *testing.T) {
 			wantAvailableOutsideBlock: 252,
 		},
 		{
-			// Too big for an int, so the counts saturate rather than wrap.
-			name:                      "IPv6 pool larger than an int",
+			// Bigger than validation allows, but the counts must saturate rather
+			// than wrap if one ever gets this far.
+			name:                      "pool too big for an int",
 			pool:                      "fd00::/8",
 			wantCapacity:              math.MaxInt,
 			wantAvailableOutsideBlock: math.MaxInt,
