@@ -29,6 +29,10 @@ globalPrologue: |
   export INSTALLER="${INSTALLER:-packaged}"
   export PROVISIONER="${PROVISIONER:-gcp-openstack}"
 
+  # TEMPORARY (this PR is for cron-ci testing only, not for merging):
+  # install Calico packages from the pr-11008 PPA instead of master.
+  export INSTALL_SOURCE="${INSTALL_SOURCE:-ppa:project-calico/pr-11008}"
+
   # Run the whole pytest suite (banzai's default selects only the smoke
   # subset).  The multi-region tests within it self-activate on the jobs
   # whose cluster has a second region — see MULTI_REGION below.
