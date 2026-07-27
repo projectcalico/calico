@@ -62,6 +62,7 @@ var (
 	// Single dimension metrics. Legacy metrics are replaced by multidimensional equivalents above. Retain for
 	// backwards compatibility.
 	poolSizeGauge          *prometheus.GaugeVec
+	poolReservedGauge      *prometheus.GaugeVec
 	legacyAllocationsGauge *prometheus.GaugeVec
 	legacyBlocksGauge      *prometheus.GaugeVec
 	legacyBorrowedGauge    *prometheus.GaugeVec
@@ -97,6 +98,13 @@ func init() {
 		Help: "Total number of addresses in the IP Pool",
 	}, []string{"ippool"})
 	prometheus.MustRegister(poolSizeGauge)
+
+	poolReservedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_ippool_reserved",
+		Help: "Number of addresses in the IP Pool that an IPReservation covers, and so cannot be assigned. " +
+			"May overlap ipam_allocations_in_use if an address was allocated before it was reserved.",
+	}, []string{"ippool"})
+	prometheus.MustRegister(poolReservedGauge)
 
 	// Total IP allocations.
 	legacyAllocationsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -679,7 +687,7 @@ func (c *IPAMController) onPoolUpdated(pool *apiv3.IPPool) {
 
 func (c *IPAMController) onPoolDeleted(poolName string) {
 	unregisterMetricVectorsForPool(poolName)
-	clearPoolSizeMetric(poolName)
+	clearPoolMetrics(poolName)
 
 	c.poolManager.onPoolDeleted(poolName)
 }
@@ -766,7 +774,34 @@ func (c *IPAMController) updateMetrics() {
 	for node, num := range legacyBorrowedIPsByNode {
 		legacyBorrowedGauge.WithLabelValues(node).Set(float64(num))
 	}
+
+	c.updateReservedMetrics()
+
 	log.Debug("IPAM metrics updated")
+}
+
+// updateReservedMetrics publishes how much of each pool an IPReservation covers.
+// Unlike the counts above, this cannot be derived from the blocks we track: a
+// reservation makes addresses unassignable without allocating them, and it can
+// cover pool space that no block has been carved from yet.  So ask IPAM, which
+// reads the IPReservations and does the arithmetic over the whole pool CIDR.
+func (c *IPAMController) updateReservedMetrics() {
+	ctx, cancelCtx := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancelCtx()
+
+	usage, err := c.client.IPAM().GetUtilization(ctx, ipam.GetUtilizationArgs{})
+	if err != nil {
+		log.WithError(err).Warn("Failed to get IP pool utilization; reserved-IP metrics may be stale")
+		return
+	}
+	for _, poolUse := range usage {
+		if _, ok := c.poolManager.allPools[poolUse.Name]; !ok {
+			// Not a pool we track; GetUtilization also reports a pseudo-pool for
+			// blocks whose pool has been deleted.
+			continue
+		}
+		poolReservedGauge.With(prometheus.Labels{"ippool": poolUse.Name}).Set(float64(poolUse.Reserved))
+	}
 }
 
 // releaseUnusedBlocks looks at known empty blocks, and releases their affinity
@@ -1615,8 +1650,9 @@ func publishPoolSizeMetric(pool *apiv3.IPPool) {
 	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)
 }
 
-func clearPoolSizeMetric(poolName string) {
+func clearPoolMetrics(poolName string) {
 	poolSizeGauge.Delete(prometheus.Labels{"ippool": poolName})
+	poolReservedGauge.Delete(prometheus.Labels{"ippool": poolName})
 }
 
 // When we stop tracking a node, clear counters to prevent accumulation of stale metrics.

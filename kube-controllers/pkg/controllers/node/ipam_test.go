@@ -23,6 +23,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -232,6 +234,35 @@ var _ = Describe("IPAM controller UTs", func() {
 		Expect(c.handleTracker.allocationsByHandle).NotTo(HaveKey(a.handle))
 		Expect(c.confirmedLeaks).NotTo(HaveKey(a.id()))
 		done()
+	})
+
+	It("should publish the reserved-IP gauge for the pools it tracks", func() {
+		c.Start(stopChan)
+		resume := c.pause()
+		defer resume()
+
+		poolReservedGauge.Reset()
+		poolName := "reserved-gauge-test-pool"
+
+		cli.IPAM().(*fakeIPAMClient).utilization = []*ipam.PoolUtilization{
+			{Name: poolName, Reserved: 6},
+			// GetUtilization also reports a pseudo-pool for blocks whose pool has
+			// been deleted; that must not turn into a gauge.
+			{Name: "orphaned allocation blocks", Reserved: 99},
+		}
+		c.onPoolUpdated(&apiv3.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: poolName},
+			Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
+		})
+
+		c.updateReservedMetrics()
+
+		Expect(testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))).To(Equal(6.0))
+		Expect(testutil.CollectAndCount(poolReservedGauge)).To(Equal(1), "only tracked pools should be reported")
+
+		// Deleting the pool should take its gauge with it.
+		c.onPoolDeleted(poolName)
+		Expect(testutil.CollectAndCount(poolReservedGauge)).To(BeZero())
 	})
 
 	Describe("VMI allocation validation", func() {

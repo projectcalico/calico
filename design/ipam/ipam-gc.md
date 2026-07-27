@@ -214,6 +214,12 @@ variants exist for backward compatibility.
 `updateMetrics` recomputes from scratch every sync - one walk over all blocks, no incremental state. The full-recompute *is* the consistency check; switching to incremental updates
 without a separate consistency check loses the protection.
 
+`ipam_ippool_reserved` is the exception to that walk: reservations make addresses unassignable without allocating them, and can cover pool space no block has been carved from, so the
+number isn't in the block state the controller tracks. `updateReservedMetrics` asks the library instead (`GetUtilization`, see
+[ipam-core-library](./ipam-core-library.md#public-api-surface)) and publishes only pools the controller knows about, skipping the pseudo-pool that `GetUtilization` reports for
+orphaned blocks. Being per-pool rather than per-node, it is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is
+`ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
+
 **Review notes**
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.
