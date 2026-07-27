@@ -117,6 +117,23 @@ attach points Felix forces `bpf_redirect_peer` off and the FIB path
 uses plain `bpf_redirect`. See
 [bpf-tc-programs.md → Attach mechanisms](./bpf-tc-programs.md).
 
+`bpf_redirect_peer` also leaves the L2 header untouched, so the packet
+reaches the destination addressed to the host side of the veth. A pod
+does not care — the kernel already classified the packet as
+`PACKET_HOST` — but a workload that bridges the veth on to something
+else does. A KubeVirt VM behind a bridge sees a destination MAC that is
+not the guest's and drops the frame as `PACKET_OTHERHOST`. Such
+destinations therefore opt out: the calc graph sets `SkipRedir.Ingress`
+on the workload (VM workloads, and workloads with ingress bandwidth QoS,
+which needs the host qdisc), Felix turns that into the
+`CALI_RT_SKIP_INGRESS_REDIRECT` flag on the workload's route, and a
+program that resolves a route with the flag records
+`CALI_CT_FLAG_SKIP_REDIR_PEER` on the conntrack entry. Every packet of
+the flow then takes the FIB path, which rewrites the destination MAC.
+The opt-out belongs to the *destination*, so it must be applied whether
+the client is off-host (`from-HEP`) or a workload on the same node
+(`from-WEP`).
+
 ### When BPF defers to the host stack
 
 BPF does not try to handle every case. It hands packets to the host
