@@ -299,6 +299,11 @@ type Table struct {
 	// refresh.
 	skipIfIncompatible bool
 	loggedIncompatible bool
+
+	// readDataplane and sawOurState back Done(), which lets a cleanup-only table drop out of
+	// the cleanup list once it's confirmed empty of our rules.
+	readDataplane bool
+	sawOurState   bool
 }
 
 type TableOptions struct {
@@ -489,6 +494,14 @@ func (t *Table) IPVersion() uint8 {
 
 func (t *Table) Name() string {
 	return t.name
+}
+
+// CleanUp implements generictables.CleanupTable. iptables tables are always shared with other
+// components, so an ordinary apply already limits itself to our own chains and to the rules we
+// inserted into chains belonging to others. The first apply reads the dataplane, and the refresh
+// interval brings us back after that, so a table with nothing of ours in it costs one read.
+func (t *Table) CleanUp() time.Duration {
+	return t.Apply()
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -793,6 +806,31 @@ func (t *Table) loadDataplaneState() {
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
+	t.sawOurState = anyOfOurState(dataplaneHashes, t.ourChainsRegexp)
+	t.readDataplane = true
+}
+
+// anyOfOurState reports whether the given dataplane read turned up any of our chains, or any
+// rule of ours inserted into a chain belonging to someone else (those carry our hash).
+func anyOfOurState(dataplaneHashes map[string][]string, ourChains *regexp.Regexp) bool {
+	for chainName, hashes := range dataplaneHashes {
+		if ourChains.MatchString(chainName) {
+			return true
+		}
+		for _, hash := range hashes {
+			if hash != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Done implements generictables.CleanupTable: we've confirmed there's nothing of ours in this
+// table. Only meaningful for a table we're using purely for cleanup, since a table we program
+// has state of ours in it by design.
+func (t *Table) Done() bool {
+	return t.readDataplane && !t.sawOurState
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
