@@ -50,6 +50,12 @@ func newMockDataplane() *mockDataplane {
 		IPSetMembers:     make(map[string]set.Set[string]),
 		IPSetMetadata:    make(map[string]setMetadata),
 		FailDestroyNames: set.New[string](),
+		now:              time.Now(),
+		// By default, make each background resync consume the whole budget, so
+		// the background drain does exactly one set per apply.  This exercises
+		// the incremental machinery in the existing tests; budget-specific
+		// tests override autoAdvance.
+		autoAdvance: BackgroundResyncTimeBudget,
 	}
 }
 
@@ -72,8 +78,31 @@ type mockDataplane struct {
 	LinesExecuted     []string
 	AttemptedDestroys []string
 
+	// ListedNames records the set name passed to each 'ipset list <name>' call
+	// (not the 'ipset list -name' enumeration).  NumListNamesCalls counts the
+	// 'ipset list -name' enumerations.
+	ListedNames       []string
+	NumListNamesCalls int
+
+	// PostListNamesHooks are invoked (and then cleared) after an
+	// 'ipset list -name' emits its names, letting a test simulate a set being
+	// deleted in the window between listing the names and re-listing a set.
+	PostListNamesHooks []func(*mockDataplane)
+
 	CumulativeSleep time.Duration
 	numRestoreCalls int
+
+	// now and autoAdvance drive the mockable clock.  Each call to timeNow()
+	// returns the current time and advances it by autoAdvance, so a test can
+	// make each background resync "cost" a fixed, deterministic duration.
+	now         time.Time
+	autoAdvance time.Duration
+}
+
+func (d *mockDataplane) timeNow() time.Time {
+	t := d.now
+	d.now = d.now.Add(d.autoAdvance)
+	return t
 }
 
 func (d *mockDataplane) ExpectMembers(expected map[string][]string) {
@@ -533,6 +562,7 @@ type listCmd struct {
 	SetName   string
 	allIpSets bool
 	Stdout    *io.PipeWriter
+	Stderr    io.Writer
 	resultC   chan error
 }
 
@@ -540,8 +570,8 @@ func (c *listCmd) SetStdin(_ io.Reader) {
 	Fail("listNamesCmd expects no input")
 }
 
-func (c *listCmd) SetStderr(r io.Writer) {
-
+func (c *listCmd) SetStderr(w io.Writer) {
+	c.Stderr = w
 }
 
 func (c *listCmd) SetStdout(r io.Writer) {
@@ -720,15 +750,27 @@ func (c *listCmd) main() {
 	}
 
 	if c.allIpSets {
+		c.Dataplane.NumListNamesCalls++
 		for setName := range c.Dataplane.IPSetMembers {
 			fmt.Fprintf(c.Stdout, "%s\n", setName)
+		}
+		hooks := c.Dataplane.PostListNamesHooks
+		c.Dataplane.PostListNamesHooks = nil
+		for _, hook := range hooks {
+			hook(c.Dataplane)
 		}
 		return
 	}
 
+	c.Dataplane.ListedNames = append(c.Dataplane.ListedNames, c.SetName)
 	members, exists := c.Dataplane.IPSetMembers[c.SetName]
 	if !exists {
-		result = fmt.Errorf("ipset %v does not exists", c.SetName)
+		// Emit the real message the kernel produces so the production code
+		// exercises its ErrIPSetNotFound detection path.
+		if c.Stderr != nil {
+			_, _ = c.Stderr.Write([]byte("ipset v7.11: The set with the given name does not exist"))
+		}
+		result = errors.New("exit status 1")
 		return
 	}
 	meta, ok := c.Dataplane.IPSetMetadata[c.SetName]

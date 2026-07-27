@@ -20,7 +20,6 @@ package utils
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	//nolint:staticcheck // Ignore ST1001: should not use dot imports
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -160,59 +161,6 @@ func mergeRunOptions(opts []RunOptions) RunOptions {
 		return RunOptions{}
 	}
 	return opts[0]
-}
-
-// ----------------------------------------------------------------------------
-// Retry.
-
-// RetryUntilSuccess invokes fn until it returns nil or the timeout
-// elapses. It uses exponential backoff starting at 0.5s and capped at 10s.
-// The time taken by fn counts toward the wall-clock deadline
-// so the overall budget is predictable.
-//
-// Returns the last error from fn on timeout, or nil on success.
-func RetryUntilSuccess(t testing.TB, timeout time.Duration, fn func() error) error {
-	t.Helper()
-	if timeout <= 0 {
-		timeout = 90 * time.Second
-	}
-	start := time.Now()
-	deadline := start.Add(timeout)
-	backoff := 500 * time.Millisecond
-	const maxBackoff = 10 * time.Second
-	attempts := 0
-
-	var lastErr error
-	for {
-		attempts++
-		err := fn()
-		if err == nil {
-			elapsed := time.Since(start)
-			if elapsed > timeout/2 {
-				t.Logf("retry succeeded but used %s of %s budget (%d attempts)", elapsed, timeout, attempts)
-			}
-			return nil
-		}
-		lastErr = err
-		now := time.Now()
-		if !now.Before(deadline) {
-			return fmt.Errorf("retry did not succeed within %s (%d attempts): %w", timeout, attempts, lastErr)
-		}
-		remaining := deadline.Sub(now)
-		sleep := backoff
-		if sleep > remaining {
-			sleep = remaining
-		}
-		if sleep > maxBackoff {
-			sleep = maxBackoff
-		}
-		t.Logf("retry attempt %d hit error, sleeping %s (%s remaining): %v", attempts, sleep, remaining, err)
-		time.Sleep(sleep)
-		backoff = time.Duration(float64(backoff) * 1.5)
-		if backoff > maxBackoff {
-			backoff = maxBackoff
-		}
-	}
 }
 
 // ----------------------------------------------------------------------------
@@ -706,7 +654,7 @@ func PodNames(t testing.TB, namespace, labelSelector, fieldSelector string) ([]s
 func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout time.Duration) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
@@ -725,10 +673,7 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("pods in %s did not become ready within %s: %v", namespace, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pods in %s did not become ready within %s", namespace, timeout)
 }
 
 // WaitForPodReady blocks until the named pod has a Ready condition of
@@ -736,7 +681,7 @@ func WaitForPodsReady(t testing.TB, namespace, labelSelector string, timeout tim
 func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration) {
 	t.Helper()
 	cs := K8sClient(t)
-	err := RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		pod, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return err
@@ -745,10 +690,7 @@ func WaitForPodReady(t testing.TB, namespace, name string, timeout time.Duration
 			return fmt.Errorf("pod %s/%s is not ready", namespace, name)
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("pod %s/%s did not become ready within %s: %v", namespace, name, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pod %s/%s did not become ready within %s", namespace, name, timeout)
 }
 
 func podIsReady(pod *corev1.Pod) bool {
@@ -772,7 +714,7 @@ func DeletePodAndWait(t testing.TB, namespace, name string, timeout time.Duratio
 	if err != nil && !apierrors.IsNotFound(err) {
 		t.Fatalf("deleting pod %s/%s: %v", namespace, name, err)
 	}
-	err = RetryUntilSuccess(t, timeout, func() error {
+	NewWithT(t).Eventually(func() error {
 		_, err := cs.CoreV1().Pods(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return nil
@@ -781,16 +723,5 @@ func DeletePodAndWait(t testing.TB, namespace, name string, timeout time.Duratio
 			return err
 		}
 		return fmt.Errorf("pod %s/%s still exists", namespace, name)
-	})
-	if err != nil {
-		t.Fatalf("pod %s/%s was not deleted within %s: %v", namespace, name, timeout, err)
-	}
+	}, timeout, time.Second).Should(Succeed(), "pod %s/%s was not deleted within %s", namespace, name, timeout)
 }
-
-// ----------------------------------------------------------------------------
-// Errors.
-
-// ErrTimeout is returned by RetryUntilSuccess on deadline expiry. It's a
-// convenience for callers that want to distinguish timeouts from other
-// errors; RetryUntilSuccess wraps it via fmt.Errorf.
-var ErrTimeout = errors.New("retry timeout")

@@ -33,18 +33,18 @@ import (
 // non-encapsulated (noencap) IP pool exists. The new Encapsulation is sent to the dataplane,
 // which restarts Felix if it changed.
 type EncapsulationResolver struct {
-	config    *config.Config
-	callbacks encapCallbacks
-	encapCalc *EncapsulationCalculator
-	inSync    bool
+	config               *config.Config
+	callbacks            encapCallbacks
+	encapCalc            *EncapsulationCalculator
+	initialSyncCompleted bool
 }
 
 func NewEncapsulationResolver(config *config.Config, callbacks encapCallbacks) *EncapsulationResolver {
 	return &EncapsulationResolver{
-		config:    config,
-		callbacks: callbacks,
-		encapCalc: NewEncapsulationCalculator(config, nil),
-		inSync:    false,
+		config:               config,
+		callbacks:            callbacks,
+		encapCalc:            NewEncapsulationCalculator(config, nil),
+		initialSyncCompleted: false,
 	}
 }
 
@@ -70,16 +70,16 @@ func (r *EncapsulationResolver) OnPoolUpdate(update api.Update) (filterOut bool)
 func (r *EncapsulationResolver) OnStatusUpdate(status api.SyncStatus) {
 	logrus.WithField("status", status).Debug("EncapsulationResolver: SyncStatus update")
 
-	if !r.inSync && status == api.InSync {
-		r.inSync = true
+	if !r.initialSyncCompleted && status == api.InSync {
+		r.initialSyncCompleted = true
 		r.triggerCalculation()
 	}
 }
 
 func (r *EncapsulationResolver) triggerCalculation() {
-	if !r.inSync {
-		// Do nothing if EncapsulationResolver hasn't sync'ed all updates yet
-		logrus.Debug("EncapsulationResolver: skip calculation because inSync is false")
+	if !r.initialSyncCompleted {
+		// Do nothing if EncapsulationResolver hasn't completed its initial sync yet
+		logrus.Debug("EncapsulationResolver: skip calculation because initial sync not yet complete")
 		return
 	}
 

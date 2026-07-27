@@ -14,10 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Collect diagnostics from a kind-based e2e cluster into artifacts/ so that
-# .semaphore/publish-artifacts uploads them for inspection. Drives
-# `calico ctl cluster diags`, which packages logs, descriptions, TLS state,
-# and Calico resources into a single tarball.
+# Collect diagnostics from a kind-based e2e cluster and upload them as a job
+# artifact for inspection. Drives `calico ctl cluster diags`, which packages
+# logs, descriptions, TLS state, and Calico resources into a single tarball.
 #
 # Intended to be called from the e2e job epilogue. Best-effort: missing
 # kubeconfig, missing image, or a torn-down cluster is not an error.
@@ -77,11 +76,11 @@ chmod +x "$calico_bin"
 mkdir -p "$artifacts_dir"
 
 # `calico ctl cluster diags` writes a calico-diagnostics-<timestamp>.tar.gz
-# into the working directory. Run it in artifacts/ so publish-artifacts picks
-# it up. The default --config points at /etc/calico/calicoctl.cfg, which
-# doesn't exist on the CI host — calicoctl tolerates that and falls back to
-# DATASTORE_TYPE / KUBECONFIG. Up max-logs from the default 5 so we don't
-# miss restarted pods on busier kind runs.
+# into the working directory, so run it from artifacts/. The default --config
+# points at /etc/calico/calicoctl.cfg, which doesn't exist on the CI host —
+# calicoctl tolerates that and falls back to DATASTORE_TYPE / KUBECONFIG. Up
+# max-logs from the default 5 so we don't miss restarted pods on busier kind
+# runs.
 cd "$artifacts_dir"
 PATH="$(dirname "$kubectl_bin"):$PATH" \
 DATASTORE_TYPE=kubernetes \
@@ -90,5 +89,19 @@ KUBECONFIG="$kubeconfig" \
     --max-logs=100 \
     --allow-version-mismatch \
   || echo "collect-kind-diags: cluster diags exited non-zero (continuing)"
+
+# Upload the bundle here rather than leaving it for .semaphore/publish-artifacts.
+# publish-artifacts runs in the global job epilogue, which executes *before* this
+# on_fail step, so by the time it runs the bundle doesn't exist yet and is never
+# uploaded. Pushing it directly makes the diags actually retrievable.
+if command -v artifact >/dev/null 2>&1; then
+  for bundle in calico-diagnostics-*.tar.gz; do
+    [ -e "$bundle" ] || continue
+    artifact push job "$bundle" -d "diags/$bundle" \
+      || echo "collect-kind-diags: failed to push $bundle (continuing)"
+  done
+else
+  echo "collect-kind-diags: 'artifact' CLI not found; bundle left in $artifacts_dir"
+fi
 
 exit 0

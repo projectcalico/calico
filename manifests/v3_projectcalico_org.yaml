@@ -1,5 +1,179 @@
 # projectcalico.org/v3 and operator.tigera.io/v1 APIs
 ---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the types/policyTypes field on Calico policy resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "policytypes.policy.projectcalico.org"
+spec:
+  paramKind:
+    kind: NetworkPolicy
+    apiVersion: projectcalico.org/v3
+  matchConditions:
+    # Apply this mutation only if the 'types' field is missing (or policyTypes for stagednetworkpolicies).
+    - name: missing-types
+      expression: "!has(object.spec.types) && !has(object.spec.policyTypes)"
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    # Determine the policy types based on the presence of ingress and egress rules.
+    # If both are present, set types to ["Ingress", "Egress"].
+    # If only ingress is present, set types to ["Ingress"].
+    # If only egress is present, set types to ["Egress"].
+    # If neither is present, default to ["Ingress"] for backward compatibility with policies from before types were required.
+    - name: defaultTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Egress"] : ["Ingress"]
+
+    # The logic for StagedKubernetesNetworkPolicy is slightly different from the above:
+    # - If both ingress and egress are present, set types to ["Ingress", "Egress"].
+    # - If only ingress is present, set types to ["Ingress"].
+    # - If only egress is present, set types to ["Ingress", "Egress"].
+    # - If neither is present, default to ["Ingress"] for backward compatibility.
+    - name: defaultKubeTypes
+      expression: |
+        (has(object.spec.ingress) && has(object.spec.egress)) ? ["Ingress", "Egress"] :
+        has(object.spec.egress) ? ["Ingress", "Egress"] : ["Ingress"]
+
+  mutations:
+    # Add the calculated 'types' field to the spec.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          [
+            JSONPatch{
+              op: "add",
+              path: object.kind == "StagedKubernetesNetworkPolicy" ? "/spec/policyTypes" : "/spec/types",
+              value: object.kind == "StagedKubernetesNetworkPolicy" ? variables.defaultKubeTypes : variables.defaultTypes
+            }
+          ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicy defaults the spec.tier field to "default" if not specified,
+# and sets the projectcalico.org/tier label to match.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "tierlabel.policy.projectcalico.org"
+spec:
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  variables:
+    - name: tierValue
+      expression: |
+        has(object.spec.tier) && object.spec.tier != "" ? object.spec.tier : "default"
+  mutations:
+    # Default spec.tier to "default" if empty or unset.
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          !has(object.spec.tier) || object.spec.tier == "" ?
+            [JSONPatch{op: "add", path: "/spec/tier", value: variables.tierValue}] :
+            []
+    # Set the projectcalico.org/tier label to match spec.tier.
+    # Uses ~1 encoding for the / in the label key per RFC 6901 (JSON Pointer).
+    - patchType: "JSONPatch"
+      jsonPatch:
+        expression: |
+          has(object.metadata.labels) ?
+            [JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}] :
+            [
+              JSONPatch{op: "add", path: "/metadata/labels", value: {}},
+              JSONPatch{op: "add", path: "/metadata/labels/projectcalico.org~1tier", value: variables.tierValue}
+            ]
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the policy types defaulting mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-policytypes-binding
+spec:
+  policyName: policytypes.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+          - stagedkubernetesnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# This MutatingAdmissionPolicyBinding binds the tier label mutation to the relevant resources.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: set-tier-label-binding
+spec:
+  policyName: tierlabel.policy.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        operations: ["CREATE", "UPDATE"]
+        resources:
+          - networkpolicies
+          - globalnetworkpolicies
+          - stagednetworkpolicies
+          - stagedglobalnetworkpolicies
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+# ValidatingAdmissionPolicy that prevents deletion of the built-in Calico tiers
+# (default, kube-admin, kube-baseline). These tiers are required for correct
+# operation and should never be deleted.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["v3"]
+        resources: ["tiers"]
+        operations: ["DELETE"]
+  validations:
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
+---
+# Source: projectcalico.org.v3/templates/admission-policies.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: protect-builtin-tiers.projectcalico.org
+spec:
+  policyName: protect-builtin-tiers.projectcalico.org
+  validationActions:
+    - Deny
+---
 # Source: projectcalico.org.v3/templates/operator.tigera.io_apiservers.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -37414,6 +37588,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -38082,6 +38268,25 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -38100,9 +38305,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -40837,6 +41043,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -41066,6 +41279,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the

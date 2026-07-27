@@ -1,6 +1,10 @@
 - name: "Felix: Build"
+  # Producer: uploads the felix binaries that "Felix: FV" downloads from GCS, so
+  # it must run whenever that consumer runs. CHANGE_IN_WITH_DEPENDENTS() derives
+  # that superset from the `dependencies:` graph; the arg is this block's
+  # intrinsic trigger (felix's own Go closure).
   run:
-    when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(felix)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
@@ -128,8 +132,14 @@
           - ./.semaphore/analyze-test-failures --ut || true
           - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
 - name: "Felix: Build Windows binaries"
+  # Producer for the Windows felix binaries consumed by "Felix: Windows FV".
+  # Its old trigger CHANGE_IN(felix) was NARROWER than that consumer (which also
+  # triggers on process/testing/{aso,util,winfv-felix}), so a PR touching only
+  # those paths could run the FV while skipping this build. CHANGE_IN_WITH_DEPENDENTS()
+  # closes that gap by merging in the consumer's trigger automatically; the arg
+  # is this block's intrinsic trigger (felix's own Go closure).
   run:
-    when: "${CHANGE_IN(felix)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(felix)}"
   dependencies:
     - Prerequisites
   task:
@@ -262,12 +272,12 @@
           - export FV_FOCUS='_BPF_.*ct=true'
           - export NUM_FV_BATCHES=10
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      - name: "Felix: BPF tests on Ubuntu 25.10 with netkit (nftables)"
+      - name: "Felix: BPF tests on Ubuntu 26.04 with netkit (nftables)"
         execution_time_limit:
           minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.10-nft-no-fv-with-ut"
+            value: "bpf-26.04-nft-no-fv-with-ut"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
           - name: JOB_TIMEOUT_MINUTES
@@ -278,14 +288,14 @@
           - source felix/.semaphore/fv-prologue
           - export NUM_FV_BATCHES=60
           - .semaphore/vms/run-tests-on-vms ${VM_PREFIX}
-      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
+      - name: "Felix: BPF tests on Ubuntu 26.04 with jitharden=2 (nftables)"
         execution_time_limit:
           minutes: 60
         env_vars:
           - name: JOB_TIMEOUT_MINUTES
             value: "60"
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.10-nft-with-ut-jitharden"
+            value: "bpf-26.04-nft-with-ut-jitharden"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
         commands:

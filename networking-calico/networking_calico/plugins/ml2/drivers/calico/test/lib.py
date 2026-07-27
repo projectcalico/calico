@@ -203,11 +203,17 @@ class PortNotFound(Exception):
 m_neutron_lib.exceptions.PortNotFound = PortNotFound
 
 
-# Define a stub class, that we will use as the base class for
-# CalicoMechanismDriver.
+# Define a stub class, that we will use as the base class for CalicoMechanismDriver.
+# The real ``neutron.plugins.ml2.drivers.mech_agent.SimpleAgentMechanismDriverBase``
+# stashes ``vif_details`` on the instance and exposes a ``get_vif_details`` accessor;
+# mirror both so overrides that call up to ``super().get_vif_details(...)`` behave the
+# same in tests as they do in production.
 class DriverBase(object):
     def __init__(self, agent_type, vif_type, vif_details):
-        pass
+        self.vif_details = dict(vif_details)
+
+    def get_vif_details(self, context, agent, segment):
+        return self.vif_details
 
 
 # Define another stub class that mocks out leader election: assume we're always

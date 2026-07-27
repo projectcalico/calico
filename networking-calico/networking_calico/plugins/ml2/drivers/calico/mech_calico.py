@@ -364,6 +364,42 @@ class TrackTask(oslo_context.context.RequestContext):
         return d
 
 
+# Fallback tap-side MAC used when we can't parse the port's own MAC.  In normal
+# operation ``get_vif_details`` overrides this per-port with a value derived from the
+# port MAC -- see ``_tap_mac_for_port_mac``.
+DEFAULT_TAP_MAC = "00:61:fe:ed:ca:fe"
+
+
+def _tap_mac_for_port_mac(port_mac):
+    """Derive the host-side tap MAC that older libvirt would have set.
+
+    Older libvirt (before 9.5.0) did not have an explicit ``managed`` parameter for a
+    domain interface: it always accepted a tap device that had already been created
+    externally (as OpenStack does via Nova), and it always went on to set the MAC
+    address on that tap by replacing the leading octet with ``0xfe`` and keeping the
+    remaining five.  With OpenStack's default ``base_mac`` of ``fa:16:3e:xx:xx:xx`` this
+    maps VM MAC ``fa:16:3e:aa:bb:cc`` to tap MAC ``fe:16:3e:aa:bb:cc``.
+
+    libvirt 9.5.0 split those behaviours behind ``managed``: ``managed=yes`` (the new
+    default) creates the tap and errors out if one already exists, while ``managed=no``
+    accepts an externally-created tap but no longer sets its MAC.  OpenStack must use
+    ``managed=no`` because Nova creates the tap, and that side-effect leaves the tap MAC
+    at whatever Nova put in ``VIF_DETAILS_TAP_MAC_ADDRESS`` -- historically the static
+    value in ``DEFAULT_TAP_MAC``.  Across a live migration between a pre-9.5.0 source
+    and a post-9.5.0 destination that flips the on-wire tap MAC and the VM's ARP cache
+    goes stale until it re-ARPs, causing tens of seconds of packet loss.
+
+    Returns ``None`` on any parse failure so the caller can fall back to
+    ``DEFAULT_TAP_MAC``.
+    """
+    if not port_mac:
+        return None
+    parts = port_mac.split(":")
+    if len(parts) != 6 or any(len(p) != 2 for p in parts):
+        return None
+    return ":".join(["fe"] + parts[1:])
+
+
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     """Neutron/ML2 mechanism driver for Project Calico.
 
@@ -376,7 +412,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         super(CalicoMechanismDriver, self).__init__(
             AGENT_TYPE_FELIX,
             "tap",
-            {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
+            {"port_filter": True, "mac_address": DEFAULT_TAP_MAC},
         )
         qos_driver.register(self)
         # Generally initialize attributes to nil values.  They get initialized
@@ -947,6 +983,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 segment[api.ID],
             )
             return False
+
+    def get_vif_details(self, context, agent, segment):
+        # Nova reads ``vif_details['mac_address']`` at ``plug_tap`` time and sets that
+        # on the host-side tap interface.  Derive the value from the port's own MAC so
+        # it matches what older libvirt used to set implicitly; see
+        # ``_tap_mac_for_port_mac`` for the background.  Fall back to the base-class
+        # value (which is ``DEFAULT_TAP_MAC``) if we can't parse a port MAC.
+        details = dict(
+            super(CalicoMechanismDriver, self).get_vif_details(context, agent, segment)
+        )
+        port_mac = context.current.get("mac_address") if context.current else None
+        derived = _tap_mac_for_port_mac(port_mac)
+        if derived is not None:
+            details["mac_address"] = derived
+        return details
 
     def get_allowed_network_types(self, agent=None):
         return ("local", "flat")

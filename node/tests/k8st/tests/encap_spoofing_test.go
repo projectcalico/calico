@@ -154,7 +154,7 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 		sendScapy(t, nsName, fmt.Sprintf(
 			"send(IP(dst='%s')/UDP(dport=5000, sport=5000)/Raw(load='%s'))", remotePodIP, normalMsg))
 		return grepSnoop(t, nsName, normalMsg)
-	}, "60s", "2s").Should(Succeed(), "normal %s packet was never delivered", encap)
+	}, "60s", "1s").Should(Succeed(), "normal %s packet was never delivered", encap)
 
 	// A spoofed (encapsulated) packet must NOT be delivered: we keep forging it
 	// and require that the grep for its payload keeps failing.
@@ -166,7 +166,7 @@ func runSpoofScenario(t *testing.T, cli ctrlclient.Client, ctx context.Context, 
 			return fmt.Errorf("ERROR - succeeded in sending spoofed %s packet", encap)
 		}
 		return nil
-	}, "60s", "2s").Should(Succeed(), "spoofed %s packet was delivered — anti-spoofing failed", encap)
+	}, "60s", "1s").Should(Succeed(), "spoofed %s packet was delivered — anti-spoofing failed", encap)
 }
 
 // sendScapy feeds a single scapy send() statement to the scapy pod on stdin.
@@ -191,13 +191,12 @@ func grepSnoop(t *testing.T, nsName, message string) error {
 // previous delivery can't mask the next test via an established flow.
 func clearConntrack(t *testing.T, ctx context.Context) {
 	t.Helper()
+	g := NewWithT(t)
 	cs := utils.K8sClient(t)
 	pods, err := cs.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
 		LabelSelector: "k8s-app=calico-node",
 	})
-	if err != nil {
-		t.Fatalf("listing calico-node pods: %v", err)
-	}
+	g.Expect(err).NotTo(HaveOccurred(), "listing calico-node pods")
 	for _, p := range pods.Items {
 		utils.MustExecInCalicoNode(t, p.Spec.NodeName, "conntrack -F")
 	}
@@ -257,7 +256,7 @@ func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context
 				p.Spec.IPIPMode, p.Spec.VXLANMode)
 		}
 		return nil
-	}, "60s", "2s").Should(Succeed(), "operator did not reconcile %s to %s", defaultV4Pool, encap)
+	}, "60s", "1s").Should(Succeed(), "operator did not reconcile %s to %s", defaultV4Pool, encap)
 
 	// Restart calico-node to cleanly apply the new encapsulation.
 	cs := utils.K8sClient(t)
@@ -273,9 +272,10 @@ func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context
 // Ready, so we additionally require no pod carries a deletion timestamp.
 func waitForCalicoNodeRestart(t *testing.T, ctx context.Context) {
 	t.Helper()
+	g := NewWithT(t)
 
 	cs := utils.K8sClient(t)
-	err := utils.RetryUntilSuccess(t, 2*time.Minute, func() error {
+	g.Eventually(func() error {
 		pods, err := cs.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
 			LabelSelector: "k8s-app=calico-node",
 		})
@@ -300,8 +300,5 @@ func waitForCalicoNodeRestart(t *testing.T, ctx context.Context) {
 			}
 		}
 		return nil
-	})
-	if err != nil {
-		t.Fatalf("calico-node pods did not restart cleanly: %v", err)
-	}
+	}, 2*time.Minute, time.Second).Should(Succeed(), "calico-node pods did not restart cleanly")
 }

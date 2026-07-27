@@ -415,25 +415,32 @@ var _ = describe.CalicoDescribe(
 				// We need to enable generic XDP to test XDP in Iptables mode, otherwise the raw table
 				// is used to implement doNotTrack GNP with deny action (because the interfaces used in e2e testing
 				// may not support XDP offload or driver modes)
-				felixConfig := v3.NewFelixConfiguration()
-				err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
-				Expect(err).NotTo(HaveOccurred())
-
-				genericXDP := felixConfig.Spec.GenericXDPEnabled
-				if genericXDP == nil || !*genericXDP {
-					By("enabling generic XDP")
-					felixConfig.Spec.GenericXDPEnabled = ptr.To(true)
-					err = cli.Update(context.Background(), felixConfig)
+				//
+				// The BPF dataplane does NOT use this mechanism: it enforces the doNotTrack
+				// policy with its own XDP program regardless of GenericXDPEnabled. So skip the
+				// toggle under BPF - it is a no-op there, and flipping GenericXDPEnabled
+				// restarts Felix, which would race with the connectivity assertion below.
+				if utils.DetectCalicoDataplane(cli) != utils.DataplaneBPF {
+					felixConfig := v3.NewFelixConfiguration()
+					err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
 					Expect(err).NotTo(HaveOccurred())
 
-					defer func() {
-						By("restoring generic XDP setting")
-						err = cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
-						Expect(err).NotTo(HaveOccurred())
-						felixConfig.Spec.GenericXDPEnabled = genericXDP
+					genericXDP := felixConfig.Spec.GenericXDPEnabled
+					if genericXDP == nil || !*genericXDP {
+						By("enabling generic XDP")
+						felixConfig.Spec.GenericXDPEnabled = ptr.To(true)
 						err = cli.Update(context.Background(), felixConfig)
 						Expect(err).NotTo(HaveOccurred())
-					}()
+
+						defer func() {
+							By("restoring generic XDP setting")
+							err = cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
+							Expect(err).NotTo(HaveOccurred())
+							felixConfig.Spec.GenericXDPEnabled = genericXDP
+							err = cli.Update(context.Background(), felixConfig)
+							Expect(err).NotTo(HaveOccurred())
+						}()
+					}
 				}
 
 				// The GlobalNetworkSet needed to list the source addresses needed by the following GNP

@@ -55,7 +55,9 @@ type AssignIPArgs struct {
 	// If specified, the attributes of reserved IPv4 addresses in the block.
 	HostReservedAttr *HostReservedAttr
 
-	// The intended use for the IP address.  Used to determine the affinityType of the host.
+	// The intended use for the IP address.  Determines the affinityType of the
+	// host and, when non-empty, is enforced against the containing pool's
+	// AllowedUses (the assignment fails if the pool does not allow this use).
 	IntendedUse v3.IPPoolAllowedUse
 
 	// MaxAllocToHandlePerIPVersion specifies the maximum number of IPs per IP version (IPv4/IPv6)

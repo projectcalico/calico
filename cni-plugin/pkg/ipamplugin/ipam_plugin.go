@@ -244,6 +244,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			HandleID: &handleID,
 			Hostname: nodename,
 			Attrs:    attrs,
+			// A specific-IP request (the ipAddrs annotation) is a workload
+			// allocation, same as the auto-assign path below; declare it so
+			// IPAM enforces the pool's AllowedUses.
+			IntendedUse: v3.IPPoolAllowedUseWorkload,
 		}
 
 		// For VMI pods with persistence enabled, limit the IPs per handle so that parallel calls for the same VM don't over-allocate (instead one will fail and then the retry will go through the IP persistence path).

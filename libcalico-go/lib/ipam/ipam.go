@@ -982,6 +982,17 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
 
+	// Enforce the pool's AllowedUses against the caller's intended use, mirroring
+	// what the auto-assign path already does via filterPoolsByUse.  AutoAssign
+	// filters candidate pools by use, but AssignIP historically skipped the check,
+	// so a specific-IP request (e.g. the CNI ipAddrs annotation) could draw from a
+	// pool not sanctioned for that use.  Only enforce when the caller declares a
+	// use; callers that leave IntendedUse empty are unaffected.
+	if args.IntendedUse != "" && !slices.Contains(pool.Spec.AllowedUses, args.IntendedUse) {
+		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)",
+			args.IP, pool.Name, args.IntendedUse, pool.Spec.AllowedUses)
+	}
+
 	cfg, err := c.GetIPAMConfig(ctx)
 	if err != nil {
 		log.Errorf("Error getting IPAM Config: %v", err)
@@ -2465,7 +2476,7 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, affinityCfg)
+		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv6Pools, 6, affinityCfg)
 		if err != nil {
 			log.Errorf("Error ensure IPv6 block: %v", err)
 			return nil, nil, err
