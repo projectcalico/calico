@@ -97,8 +97,7 @@ jobs:
       # Empty on a review or a manual run, which is what disables dedup and
       # marker pruning on those paths.
       SHA: ${{ github.event.sha }}
-      # Review path: who approved. A GitHub login, and passed as an env value
-      # rather than interpolated into a script, so it can't inject.
+      # Review path: who approved. A GitHub login passed via env (not via `${{ }}` interpolation inside the `run:` script), so it can't affect shell parsing.
       REVIEWER: ${{ github.event.review.user.login }}
     steps:
       - name: Skip if not configured
