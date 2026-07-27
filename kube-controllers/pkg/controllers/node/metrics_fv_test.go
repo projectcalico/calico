@@ -187,6 +187,10 @@ var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure
 				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
 				`ipam_ippool_size{ippool="test-ippool-2"} 65536`,
 				`ipam_ippool_size{ippool="test-ippool-3"} 256`,
+				// No IPReservations yet, so nothing is reserved.
+				`ipam_ippool_reserved{ippool="test-ippool-1"} 0`,
+				`ipam_ippool_reserved{ippool="test-ippool-2"} 0`,
+				`ipam_ippool_reserved{ippool="test-ippool-3"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 0`,
@@ -637,6 +641,25 @@ var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure
 			return nil
 		}, time.Second*10, 500*time.Millisecond).Should(BeNil())
 	})
+
+	It("should export the reserved-IP metric for an IPReservation", func() {
+		// The reservation goes in first because the controller does not watch
+		// IPReservations; creating the pool is what wakes it up.  The reservation
+		// covers pool space that no block has been carved from, which is the case
+		// the metric has to get right.
+		createIPReservation("test-reservation", []string{"10.17.0.0/28"}, calicoClient)
+		createIPPool("test-ippool-reserved", "10.17.0.0/24", calicoClient)
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{
+				`ipam_ippool_size{ippool="test-ippool-reserved"} 256`,
+				`ipam_ippool_reserved{ippool="test-ippool-reserved"} 16`,
+			},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+	})
 })
 
 // getMetrics hits the provided prometheus metrics URL and returns the response body
@@ -673,6 +696,14 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	p.Spec.NodeSelector = "all()"
 	p.Spec.Disabled = false
 	_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+}
+
+func createIPReservation(name string, cidrs []string, calicoClient client.Interface) {
+	r := api.NewIPReservation()
+	r.Name = name
+	r.Spec.ReservedCIDRs = cidrs
+	_, err := calicoClient.IPReservations().Create(context.Background(), r, options.SetOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 
