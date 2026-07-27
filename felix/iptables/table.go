@@ -857,9 +857,10 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 				// as empty: we make no changes and pick it up again on a later pass, once
 				// whatever wrote those rules has gone.
 				if !t.loggedIncompatible {
-					t.logCxt.Warn("Cannot read table via iptables-save: another tool has " +
-						"written nft rules that iptables doesn't understand. Skipping cleanup " +
-						"of any rules left in this table by a previous version of Felix.")
+					t.logCxt.Warn("Cannot read this table with iptables-save because another " +
+						"tool has written nft rules that iptables doesn't understand. We only " +
+						"read it to remove rules left behind by a previous iptables-mode Felix, " +
+						"so this is harmless unless this node used to run in iptables mode.")
 					t.loggedIncompatible = true
 				}
 				// Empty rather than nil: callers index into these.
@@ -939,7 +940,11 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 	}
 	waitErr := cmd.Wait()
 	if waitErr != nil {
-		if log.IsLevelEnabled(log.DebugLevel) {
+		if t.skipIfIncompatible && errors.Is(err, ErrIncompatibleNFTRules) {
+			// We killed the process ourselves because we can't read this table; the caller
+			// logs about that once rather than on every pass.
+			log.WithError(waitErr).Debug("iptables save failed after we killed it")
+		} else if log.IsLevelEnabled(log.DebugLevel) {
 			t.logCxt.WithFields(log.Fields{"cmd": t.iptablesSaveCmd}).Warn("iptables save failed")
 		} else {
 			log.WithError(waitErr).Warn("iptables save failed")
