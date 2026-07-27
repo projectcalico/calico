@@ -3,6 +3,8 @@
 version: condensed
 generateName: e2e-nftables-
 schedule: 10 19 * * 1
+# v3.30 is EOL: e2e stays suspended until a patch release needs it.
+suspend: true
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"

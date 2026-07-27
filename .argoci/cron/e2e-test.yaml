@@ -3,6 +3,8 @@
 version: condensed
 generateName: e2e-test-
 schedule: 0 0 31 2 *
+# v3.30 is EOL: e2e stays suspended until a patch release needs it.
+suspend: true
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
