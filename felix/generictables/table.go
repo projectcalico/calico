@@ -23,11 +23,10 @@ type TableSet interface {
 	WithTable(name string) Table
 }
 
-// Table is a logical table of chains and rules. Every Table can also be driven purely for
-// cleanup, which is what a table we've stopped programming gets used for.
+// Table is a logical table of chains and rules.
 type Table interface {
-	CleanupTable
-
+	Name() string
+	IPVersion() uint8
 	InsertOrAppendRules(chainName string, rules []Rule)
 	AppendRules(chainName string, rules []Rule)
 	UpdateChain(chain *Chain)
@@ -38,23 +37,6 @@ type Table interface {
 	Apply() time.Duration
 	InsertRulesNow(chainName string, rules []Rule) error
 	CheckRulesPresent(chain string, rules []Rule) []Rule
-}
-
-// CleanupTable removes state that Calico left in a table it is no longer programming: a
-// dataplane we have switched away from, or a component (such as kube-proxy) whose rules we
-// have taken over. Cleanup is best effort - whatever is left behind gets another attempt on
-// the next pass.
-//
-// A full Table satisfies this through its normal reconciliation, since a table it isn't
-// programming has "none of our chains" as its desired state. Tables we share with other
-// components can't be reconciled that way and implement this directly.
-type CleanupTable interface {
-	Name() string
-	IPVersion() uint8
-
-	// CleanUp makes one pass at removing our state, returning the minimum time to wait
-	// before another pass is worth making.
-	CleanUp() time.Duration
 }
 
 var _ Table = &NoopTable{}
@@ -76,6 +58,5 @@ func (t *NoopTable) RemoveChains([]*Chain)                               {}
 func (t *NoopTable) RemoveChainByName(name string)                       {}
 func (t *NoopTable) InvalidateDataplaneCache(reason string)              {}
 func (t *NoopTable) Apply() time.Duration                                { return 0 }
-func (t *NoopTable) CleanUp() time.Duration                              { return 0 }
 func (n *NoopTable) InsertRulesNow(chainName string, rules []Rule) error { return nil }
 func (n *NoopTable) CheckRulesPresent(chain string, rules []Rule) []Rule { return nil }
