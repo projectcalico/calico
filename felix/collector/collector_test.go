@@ -3847,10 +3847,13 @@ func capturePendingRuleIDs(c *collector, ft1, ft2 tuple.Tuple) pendingRuleIDs {
 	}
 }
 
+// clearPendingRuleIDs resets the pending rule traces and the last-evaluated stamp for every flow,
+// so a test can drive a sweep from a clean state (the fixture stamps flows when it creates them).
 func clearPendingRuleIDs(c *collector) {
 	for _, data := range c.epStats {
 		data.IngressPendingRuleIDs = nil
 		data.EgressPendingRuleIDs = nil
+		data.lastPolicyEvalAt = 0
 	}
 }
 
@@ -3881,6 +3884,7 @@ func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
 	RegisterTestingT(t)
 	c, _, _ := setupPolicyEvalCollector(t)
 
+	clearPendingRuleIDs(c) // reset the eval stamps the fixture set at flow creation.
 	c.snapshotFlowsForRecalc()
 	total := len(c.recalcSnapshot)
 	Expect(total).To(BeNumerically(">", 1), "fixture should have more than one flow")
@@ -3910,6 +3914,7 @@ func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
 	RegisterTestingT(t)
 	c, ft1, ft2 := setupPolicyEvalCollector(t)
 
+	clearPendingRuleIDs(c) // reset the eval stamps the fixture set at flow creation.
 	c.snapshotFlowsForRecalc()
 	snapshotLen := len(c.recalcSnapshot)
 
@@ -3942,6 +3947,7 @@ func TestPolicyEvalMetrics(t *testing.T) {
 	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows)
 	sweepsBefore := sweepSampleCount()
 
+	clearPendingRuleIDs(c) // reset the eval stamps the fixture set at flow creation.
 	c.snapshotFlowsForRecalc()
 	flows := len(c.recalcSnapshot)
 
@@ -3957,6 +3963,24 @@ func TestPolicyEvalMetrics(t *testing.T) {
 	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows) - flowsBefore)).To(Equal(flows))
 	// One completed sweep records exactly one histogram observation.
 	Expect(sweepSampleCount()).To(Equal(sweepsBefore + 1))
+}
+
+// TestSnapshotSkipsRecentlyEvaluatedFlows verifies that a snapshot excludes flows re-evaluated
+// within policyEvalMinInterval (so back-to-back sweeps don't reprocess the same flows), and that
+// clearing the stamps re-includes them.
+func TestSnapshotSkipsRecentlyEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	// The fixture evaluated (and stamped) every flow when it created them, and the skip window
+	// is half the ticker interval (FlowLogsFlushInterval=100s => ~40s), so a snapshot taken now
+	// should skip them all.
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", 0))
+	Expect(c.snapshotFlowsForRecalc()).To(Equal(0), "recently-evaluated flows should be skipped")
+
+	// Once the stamps are cleared, every flow is eligible again.
+	clearPendingRuleIDs(c)
+	Expect(c.snapshotFlowsForRecalc()).To(BeNumerically(">", 1), "cleared flows should be re-included")
 }
 
 // Helper function to validate rule ID fields
