@@ -134,7 +134,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 ignoredInterfaces:
                   items:
                     type: string
@@ -193,7 +193,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   enum:
                     - Enabled
@@ -208,7 +208,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceExternalIPs:
                   items:
                     properties:
@@ -218,7 +218,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceLoadBalancerAggregation:
                   default: Enabled
                   enum:
@@ -234,7 +234,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
               type: object
               x-kubernetes-validations:
                 - message:
@@ -2346,6 +2346,22 @@ spec:
                     "NftablesRefreshInterval controls the interval at which
                     Felix periodically refreshes the nftables rules. [Default: 90s]"
                   type: string
+                nodeSelector:
+                  description: |-
+                    NodeSelector is an optional label selector that restricts this FelixConfiguration
+                    to apply only to nodes that match the given selector. This field is only valid
+                    on FelixConfiguration resources whose name is not "default" and does not start
+                    with "node.". For resources named "default", the configuration applies globally
+                    to all nodes. For resources named "node.<nodename>", the configuration applies to
+                    the named node only.
+
+                    At most one selector-scoped FelixConfiguration should match any given node.
+                    If multiple selector-scoped resources match, the oldest (by creation
+                    timestamp) is used and a warning is logged. This prevents an accidentally
+                    created conflicting resource from disrupting an existing, working
+                    configuration.
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   description: |-
                     OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
@@ -2650,6 +2666,14 @@ spec:
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true
 ---
@@ -5712,8 +5736,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/300
-    policy.networking.k8s.io/bundle-version: v0.1.7
+    api-approved.kubernetes.io: https://github.com/kubernetes-sigs/network-policy-api/pull/347
+    policy.networking.k8s.io/bundle-version: v0.2.0
     policy.networking.k8s.io/channel: standard
   name: clusternetworkpolicies.policy.networking.k8s.io
 spec:
@@ -7077,6 +7101,15 @@ rules:
       - get
       - list
       - watch
+  # KubeVirt VM/VMI informers for IPAM garbage collection of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: calico/templates/calico-node-rbac.yaml
 # Include a clusterrole for the calico-node DaemonSet,
@@ -7308,6 +7341,13 @@ rules:
       - create
       - update
       - delete
+  # The CNI plugin reads KubeVirt resources for IPAM of KubeVirt workloads.
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachineinstances
+      - virtualmachines
+    verbs:
+      - get
 ---
 # Source: calico/templates/tier-getter.yaml
 # Implements the necessary permissions for the kube-controller-manager to interact with
@@ -7433,7 +7473,7 @@ spec:
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
-          image: quay.io/calico/cni:release-v3.32
+          image: quay.io/calico/cni:v3.32.1
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           envFrom:
@@ -7461,7 +7501,7 @@ spec:
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: quay.io/calico/cni:release-v3.32
+          image: quay.io/calico/cni:v3.32.1
           imagePullPolicy: IfNotPresent
           command: ["/opt/cni/bin/install"]
           envFrom:
@@ -7505,7 +7545,7 @@ spec:
         # networking to allow communication with the API Server. Calico-node initialization is executed
         # in best effort fashion, i.e. no failure for errors, to not disrupt pod creation in iptables mode.
         - name: "ebpf-bootstrap"
-          image: quay.io/calico/node:release-v3.32
+          image: quay.io/calico/node:v3.32.1
           imagePullPolicy: IfNotPresent
           command: ["calico-node", "-init", "-best-effort"]
           volumeMounts:
@@ -7531,7 +7571,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: quay.io/calico/node:release-v3.32
+          image: quay.io/calico/node:v3.32.1
           imagePullPolicy: IfNotPresent
           envFrom:
             - configMapRef:
@@ -7655,6 +7695,13 @@ spec:
             # parent directory.
             - name: bpffs
               mountPath: /sys/fs/bpf
+            # Felix reads /sys/kernel/security/lockdown to detect kernel
+            # lockdown=confidentiality; under it, ftrace is disabled and Felix
+            # loads trace-printk-free BPF program variants. securityfs is a
+            # separate filesystem from /sys/fs, so it needs its own mount.
+            - name: sys-kernel-security
+              mountPath: /sys/kernel/security
+              readOnly: true
             - name: cni-log-dir
               mountPath: /var/log/calico/cni
               readOnly: true
@@ -7683,6 +7730,12 @@ spec:
           hostPath:
             path: /sys/fs/bpf
             type: Directory
+        # securityfs, read by Felix to detect kernel lockdown=confidentiality.
+        # No type set (like nodeproc below) so nodes without securityfs still
+        # start; Felix treats an unreadable lockdown file as "not locked down".
+        - name: sys-kernel-security
+          hostPath:
+            path: /sys/kernel/security
         # mount /proc at /nodeproc to be used by ebpf-bootstrap initContainer to mount root cgroup2 fs.
         - name: nodeproc
           hostPath:
@@ -7752,7 +7805,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: quay.io/calico/kube-controllers:release-v3.32
+          image: quay.io/calico/kube-controllers:v3.32.1
           imagePullPolicy: IfNotPresent
           env:
             # Choose which controllers to run.

@@ -30,6 +30,7 @@ import (
 // #cgo CFLAGS: -I${SRCDIR}/../../bpf-gpl/libbpf/src -I${SRCDIR}/../../bpf-gpl/libbpf/include/uapi -I${SRCDIR}/../../bpf-gpl -Werror
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
+// #cgo ppc64le LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/ppc64le -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -679,6 +680,19 @@ func (c *CTCleanupGlobalData) Set(m *Map) error {
 func (c *CTLBGlobalData) Set(m *Map) error {
 	udpNotSeen := c.UDPNotSeen / time.Second // Convert to seconds
 	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(c.ExcludeUDP))
+
+	return err
+}
+
+// SetProgFlags writes the per-object load-time feature flags into the
+// program's .rodata.prog_flags section before load (see struct
+// prog_flags in globals.h).
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
+	var noTrace C.uint8_t
+	if noTracePrintk {
+		noTrace = 1
+	}
+	_, err := C.bpf_set_prog_flags(m.bpfMap, noTrace)
 
 	return err
 }

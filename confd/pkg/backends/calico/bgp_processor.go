@@ -732,18 +732,40 @@ func (c *client) buildExportFilter(
 ) string {
 	var filterLines []string
 
-	// Default krt_metric to our normal route priority, if not already set.
+	// Ensure both krt_metric and bgp_local_pref are set for the rest of
+	// the export filter. BGPFilter Priority matching needs bgp_local_pref,
+	// and calico_aggr() needs krt_metric (it checks "krt_metric < 1024"
+	// to let elevated-priority /32s escape aggregation into /26 blocks).
+	//
+	// There are two cases depending on where the route came from:
+	//
+	// Re-exported route (learned via iBGP): this happens when a node acts
+	// as a route reflector (RR) re-advertising iBGP routes to its clients,
+	// or when a node peers with an external eBGP TOR and re-exports iBGP
+	// routes to it. In both cases, bgp_local_pref is already set by the
+	// BGP protocol from the originating node's export. It is the
+	// authoritative source of priority — just use it. We still derive
+	// krt_metric from it so calico_aggr() can check the route's priority.
+	//
+	// Locally-originated route (learned from kernel): krt_metric is set by
+	// Felix (e.g. 512 for elevated, 1024 for normal). For routes without
+	// krt_metric (e.g. static routes for service IP advertisement),
+	// default to the normal route priority. Convert krt_metric →
+	// bgp_local_pref so BGPFilter Priority matching and iBGP transmission
+	// work correctly.
+	// Note: we cannot use `defined(bgp_local_pref)` to distinguish these
+	// cases because BIRD 1.x initializes bgp_local_pref to 100 (the BGP
+	// default) for all routes during BGP export preparation, so it is
+	// always "defined". Instead, use `source = RTS_BGP` which is only
+	// true for routes learned from a BGP peer (iBGP/eBGP), not for
+	// kernel-imported routes (which have source = RTS_INHERIT).
 	filterLines = append(filterLines,
-		fmt.Sprintf("if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
-	)
-
-	// Convert from krt_metric to BGP LOCAL_PREF.  Higher LOCAL_PREF = higher priority, but
-	// lower krt_metric = higher priority, so we invert: bgp_local_pref = INT_MAX - krt_metric.
-	// BGP LOCAL_PREF will only be propagated to iBGP peers; however it's helpful for us to set
-	// the bgp_local_pref attribute for both eBGP and iBGP peers, because then we can implement
-	// the Priority field as a match against bgp_local_pref.
-	filterLines = append(filterLines,
-		fmt.Sprintf("bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+		"if (defined(source) && source = RTS_BGP && defined(bgp_local_pref)) then {",
+		fmt.Sprintf("  krt_metric = %d - bgp_local_pref;", template.BirdIntMaxValue),
+		"} else {",
+		fmt.Sprintf("  if (!defined(krt_metric)) then { krt_metric = %d; }", normalRoutePriority),
+		fmt.Sprintf("  bgp_local_pref = %d - krt_metric;", template.BirdIntMaxValue),
+		"}",
 	)
 
 	// Determine filter suffix based on IP version

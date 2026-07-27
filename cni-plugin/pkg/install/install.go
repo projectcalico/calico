@@ -381,7 +381,8 @@ func writeCNIConfig(c config) {
 
 	err = isValidJSON(netconf)
 	if err != nil {
-		logrus.Fatalf("%s is not a valid json object\nerror: %s", netconf, err)
+		// Don't log the entire config/netconf here because it may contain sensitive information
+		logrus.Fatalf("CNI config is not valid JSON: %v", err)
 	}
 
 	// Write out the file.
@@ -406,13 +407,8 @@ func writeCNIConfig(c config) {
 		logrus.Fatal(err)
 	}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		logrus.Fatal(err)
-	}
+	// Do not log the config file (path) contents here — it may contain sensitive credentials.
 	logrus.Infof("Created %s", winutils.GetHostPath(fmt.Sprintf("/host/etc/cni/net.d/%s", name)))
-	text := string(content)
-	fmt.Println(text)
 
 	// Remove any old config file, if one exists.
 	oldName := getEnv("CNI_OLD_CONF_NAME", "10-calico.conflist")

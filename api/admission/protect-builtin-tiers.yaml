@@ -15,8 +15,8 @@ spec:
         resources: ["tiers"]
         operations: ["DELETE"]
   validations:
-    - expression: "!(object.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
-      messageExpression: "'The built-in tier ' + object.metadata.name + ' cannot be deleted'"
+    - expression: "!(oldObject.metadata.name in ['default', 'kube-admin', 'kube-baseline'])"
+      messageExpression: "'The built-in tier ' + oldObject.metadata.name + ' cannot be deleted'"
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

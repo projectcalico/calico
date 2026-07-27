@@ -119,7 +119,11 @@ func (kp *KubeProxy) Stop() {
 		close(kp.exiting)
 		close(kp.hostMetadataUpdates)
 		close(kp.hostIPUpdates)
-		kp.proxy.Stop()
+		if kp.proxy != nil {
+			// kp.proxy is nil if Stop is called before start() has
+			// received its initial host IPs and host-metadata updates.
+			kp.proxy.Stop()
+		}
 		kp.wg.Wait()
 	})
 }
@@ -161,10 +165,29 @@ func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMe
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	kp.proxy.SetHostIPs(hostIPs)
-	// Don't bother invoking a resync within SetHostMetadata; we will be syncing a fresh syncer right after.
-	kp.proxy.SetHostMetadata(hostMetadata, false)
-	kp.proxy.SetSyncer(syncer)
+	if kp.proxy == nil {
+		// First call from start(): construct the proxy with a syncer
+		// that already knows the real host IPs. proxy.New() spins up
+		// the k8s informer goroutines synchronously, so by the time
+		// they sync and trigger an Apply, the syncer's desired state
+		// will include all (realHostIP, nodePort) FE entries.
+		// Constructing the proxy any earlier risks an Apply against a
+		// syncer that lacks real host IPs, which would gut pre-existing
+		// (realHostIP, nodePort) NAT FE entries left by the previous
+		// Felix run and break external NodePort traffic. See #12192.
+		proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
+		if err != nil {
+			return errors.WithMessage(err, "new proxy")
+		}
+		proxy.SetHostIPs(hostIPs)
+		proxy.SetHostMetadata(hostMetadata, false)
+		kp.proxy = proxy
+	} else {
+		kp.proxy.SetHostIPs(hostIPs)
+		// Don't bother invoking a resync within SetHostMetadata; we will be syncing a fresh syncer right after.
+		kp.proxy.SetHostMetadata(hostMetadata, false)
+		kp.proxy.SetSyncer(syncer)
+	}
 
 	log.Infof("kube-proxy v%d node info updated, hostname=%q hostIPs=%+v", kp.ipFamily, kp.hostname, hostIPs)
 
@@ -174,58 +197,56 @@ func (kp *KubeProxy) run(hostIPs []net.IP, hostMetadata map[string]*proto.HostMe
 }
 
 func (kp *KubeProxy) start() error {
-	var withLocalNP []net.IP
-	if kp.ipFamily == 4 {
-		withLocalNP = append(withLocalNP, podNPIP)
-	} else {
-		withLocalNP = append(withLocalNP, podNPIPV6)
+	// Block until we have the first batch of host IPs AND the
+	// host-metadata in-sync signal (sent by CompleteDeferredWork after
+	// the int_dataplane has finished its first datastore-in-sync
+	// apply). Only then construct the proxy, via run(). proxy.New()
+	// kicks off the k8s informer goroutines synchronously; once those
+	// sync, they trigger Apply on the syncer. Constructing the proxy
+	// before we have real host IPs lets that Apply run against a
+	// syncer whose desired state lacks every (realHostIP, nodePort)
+	// FE entry, which then erases pre-existing entries left by the
+	// previous Felix run and breaks external NodePort traffic during
+	// the kube-proxy bootstrap window. See projectcalico/calico#12192.
+	var hostIPs []net.IP
+	select {
+	case ips, ok := <-kp.hostIPUpdates:
+		if !ok {
+			return nil
+		}
+		hostIPs = ips
+	case <-kp.exiting:
+		return nil
 	}
-
-	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.MaglevMap, kp.affinityMap, kp.rt, kp.excludedCIDRs, kp.maglevLUTSize)
-	if err != nil {
-		return errors.WithMessage(err, "new bpf syncer")
-	}
-
-	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
-	if err != nil {
-		return errors.WithMessage(err, "new proxy")
-	}
-
-	kp.lock.Lock()
-	kp.proxy = proxy
-	kp.syncer = syncer
-	kp.lock.Unlock()
-
-	// Wait for the initial update.
-	hostIPs := <-kp.hostIPUpdates
 
 	hostMetadata := make(map[string]*proto.HostMetadataV4V6Update)
-	// Block until we go in-sync and get the first batch of hostmetadata
-	// updates, to avoid a flap after a Felix restart. In practice, this
-	// recv should happen very soon after receiving the host IPs above.
-	hostMetadataUpdates := <-kp.hostMetadataUpdates
-	mergeHostMetadataV4V6Updates(hostMetadata, hostMetadataUpdates)
+	select {
+	case updates, ok := <-kp.hostMetadataUpdates:
+		if !ok {
+			return nil
+		}
+		mergeHostMetadataV4V6Updates(hostMetadata, updates)
+	case <-kp.exiting:
+		return nil
+	}
 
-	err = kp.run(hostIPs, hostMetadata)
-	if err != nil {
+	if err := kp.run(hostIPs, hostMetadata); err != nil {
 		return err
 	}
 
 	kp.wg.Go(func() {
 		for {
-			var ok bool
 			select {
-			case hostIPs, ok = <-kp.hostIPUpdates:
+			case hostIPs, ok := <-kp.hostIPUpdates:
 				if !ok {
 					log.Error("kube-proxy: hostIPUpdates closed")
 					return
 				}
-				err = kp.run(hostIPs, hostMetadata)
-				if err != nil {
+				if err := kp.run(hostIPs, hostMetadata); err != nil {
 					log.Panic("kube-proxy failed to resync after host IPs update")
 				}
 
-			case hostMetadataUpdates, ok = <-kp.hostMetadataUpdates:
+			case hostMetadataUpdates, ok := <-kp.hostMetadataUpdates:
 				if !ok {
 					log.Error("kube-proxy: hostMetadataUpdates closed")
 					return

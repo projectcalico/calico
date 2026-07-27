@@ -16,6 +16,7 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
+      - name: fv-guru-db
     jobs:
       - name: "Felix: Build and cache FV prerequisites"
         priority:
@@ -179,6 +180,7 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
+      - name: fv-guru-db
 - name: "Felix: nftables tests on Ubuntu 22.04"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -204,6 +206,7 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
+      - name: fv-guru-db
 - name: "Felix: BPF tests on Ubuntu 24.04 (iptables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -229,6 +232,7 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
+      - name: fv-guru-db
 - name: "Felix: BPF tests on Ubuntu 22.04 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
@@ -258,19 +262,20 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
-- name: "Felix: BPF program-loading check on 25.10 (nftables)"
+      - name: fv-guru-db
+- name: "Felix: BPF program-loading check on 26.04 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
     jobs:
-      - name: "Felix: BPF program-loading check on 25.10"
+      - name: "Felix: BPF program-loading check on 26.04"
         execution_time_limit:
           minutes: 30
         env_vars:
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.10-nft-no-fv-with-ut"
+            value: "bpf-26.04-nft-no-fv-with-ut"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
         commands:
@@ -286,19 +291,20 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
-- name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2 (nftables)"
+      - name: fv-guru-db
+- name: "Felix: BPF tests on Ubuntu 26.04 with jitharden=2 (nftables)"
   run:
     when: "${CHANGE_IN(felix,typha,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Felix: Build"
   task:
     jobs:
-      - name: "Felix: BPF tests on Ubuntu 25.10 with jitharden=2"
+      - name: "Felix: BPF tests on Ubuntu 26.04 with jitharden=2"
         execution_time_limit:
           minutes: 60
         env_vars:
           - name: FELIX_TEST_GROUP
-            value: "bpf-25.10-nft-with-ut-jitharden"
+            value: "bpf-26.04-nft-with-ut-jitharden"
           - name: FELIX_FV_BPFATTACHTYPE
             value: "tc"
         commands:
@@ -315,3 +321,4 @@
       - name: google-service-account-for-gce
       - name: gemini-api-key
       - name: fv-tests-guru-github-token
+      - name: fv-guru-db

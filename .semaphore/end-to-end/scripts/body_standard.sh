@@ -91,9 +91,35 @@ else
 
     if [[ -n "$RUN_LOCAL_TESTS" ]]; then
       echo "[INFO] starting e2e testing from local binary..."
-      pushd ${HOME}/calico
-      make -C e2e build |& tee >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
-      KUBECONFIG=${BZ_LOCAL_DIR}/kubeconfig PRODUCT=calico go run github.com/onsi/ginkgo/v2/ginkgo -procs=${E2E_PROCS:-4} ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz)
+      pushd "${HOME}/calico"
+      make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
+      _go_ver=$(grep '^GO_VERSION=' ./metadata.mk | cut -d= -f2)
+      _llvm_ver=$(grep '^LLVM_VERSION=' ./metadata.mk | cut -d= -f2)
+      _k8s_ver=$(grep '^K8S_VERSION=' ./metadata.mk | cut -d= -f2)
+      GO_BUILD_VER="${_go_ver}-llvm${_llvm_ver}-k8s${_k8s_ver#v}"
+      # Disable shellcheck double quote validation for ${K8S_E2E_FLAGS} as this var can contain multiple args and should be word split
+      #shellcheck disable=SC2086
+      docker run --rm --init --net=host \
+        -e LOCAL_USER_ID="$(id -u)" \
+        -e GOCACHE=/go-cache \
+        -e GOPATH=/go \
+        -e KUBECONFIG=/kubeconfig \
+        -e PRODUCT=calico \
+        -e CREATE_WINDOWS_NODES \
+        -e FUNCTIONAL_AREA \
+        -e INSTALLER \
+        -e PROVISIONER \
+        -e K8S_VERSION \
+        -e DATAPLANE \
+        -e ENCAPSULATION_TYPE \
+        -e WINDOWS_OS \
+        -e USE_VENDORED_CNI \
+        -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
+        -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
+        -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
+        -w /go/src/github.com/projectcalico/calico \
+        "calico/go-build:${GO_BUILD_VER}" \
+        go run github.com/onsi/ginkgo/v2/ginkgo -procs="${E2E_PROCS:-4}" ./e2e/bin/k8s/e2e.test -- ${K8S_E2E_FLAGS} |& tee -a >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log.gz")
       popd
     else
       echo "[INFO] starting bz testing..."

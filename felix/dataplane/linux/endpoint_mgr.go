@@ -229,7 +229,7 @@ type endpointManager struct {
 	newLocalBGPPeerIP         string
 	needToCheckLocalBGPPeerIP bool
 
-	linkAddrsMgr *linkaddrs.LinkAddrsManager
+	linkAddrsMgr linkaddrs.Interface
 
 	needToCheckDispatchChains     bool
 	needToCheckEndpointMarkChains bool
@@ -258,7 +258,7 @@ func newEndpointManager(
 	filterMaps nftables.MapsDataplane,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	linkAddrsMgr linkaddrs.Interface,
 	arpTable Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {
@@ -300,7 +300,7 @@ func newEndpointManagerWithShims(
 	filterMaps nftables.MapsDataplane,
 	bpfEndpointManager hepListener,
 	callbacks *common.Callbacks,
-	linkAddrsMgr *linkaddrs.LinkAddrsManager,
+	linkAddrsMgr linkaddrs.Interface,
 	arpTable Table,
 	arpMaps nftables.MapsDataplane,
 ) *endpointManager {

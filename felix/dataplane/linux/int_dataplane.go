@@ -361,7 +361,7 @@ type InternalDataplane struct {
 	vxlanManagerV6      *vxlanManager
 	vxlanFDBs           []*vxlanfdb.VXLANFDB
 
-	linkAddrsManagers []*linkaddrs.LinkAddrsManager
+	linkAddrsManagers []linkaddrs.Interface
 
 	wireguardManager   *wireguardManager
 	wireguardManagerV6 *wireguardManager
@@ -964,15 +964,32 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetIDAllocatorV4.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
 		}
 
+		// Under kernel lockdown=confidentiality ftrace is disabled at boot, so
+		// loading any BPF program that references bpf_trace_printk makes the
+		// kernel log "could not enable bpf_trace_printk events" on every load.
+		// The conntrack cleanup program carries the helper in its debug build,
+		// so downgrade it to the no-log build on such nodes (mirrors the
+		// endpoint manager forcing BPFLogLevel off).
+		kernelLockdownConfidentiality := bpf.KernelLockdownConfidentiality()
+		if kernelLockdownConfidentiality && strings.EqualFold(config.BPFConntrackLogLevel, "debug") {
+			log.Warn("Kernel lockdown=confidentiality detected: forcing BPF conntrack cleanup " +
+				"log level to off (ftrace is disabled, debug logging cannot work).")
+		}
+		// Make every BPF program loaded from here on drop its trace-printk code
+		// paths at load time (via the .rodata.prog_flags no_trace_printk flag),
+		// so their load does not spam the kernel log under confidentiality
+		// lockdown. Must be set before any program is loaded.
+		bpf.SetNoTracePrintk(kernelLockdownConfidentiality)
+
 		// Start IPv4 BPF dataplane components
-		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp)
+		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp, kernelLockdownConfidentiality)
 		if config.BPFIpv6Enabled {
 			// Start IPv6 BPF dataplane components
 			ipSetIDAllocatorV6 = idalloc.New()
 			if config.RulesConfig.IstioAmbientModeEnabled {
 				ipSetIDAllocatorV6.ReserveWellKnownID(rules.IPSetIDAllIstioWEPs, bpfipsets.AllIstioWEPsID)
 			}
-			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp)
+			conntrackScannerV6, workloadRemoveChanV6 = startBPFDataplaneComponents(proto.IPVersion_IPV6, bpfMaps.V6, ipSetIDAllocatorV6, &config, ipsetsManagerV6, dp, kernelLockdownConfidentiality)
 		}
 
 		workloadIfaceRegex := regexp.MustCompile(strings.Join(interfaceRegexes, "|"))
@@ -1139,7 +1156,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.arpTables = append(dp.arpTables, arpFilterTable)
 	}
 
-	linkAddrsManagerV4 := linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	var linkAddrsManagerV4 linkaddrs.Interface
+	if !config.RouteSyncDisabled {
+		log.Debug("Route management is enabled. Using default LinkAddrsManager")
+
+		linkAddrsManagerV4 = linkaddrs.New(4, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+	} else {
+		log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+		linkAddrsManagerV4 = &linkaddrs.DummyLinkAddrsManager{}
+	}
+
 	dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV4)
 
 	epManager := newEndpointManager(
@@ -1352,7 +1378,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
 		}
 
-		linkAddrsManagerV6 := linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		var linkAddrsManagerV6 linkaddrs.Interface
+		if !config.RouteSyncDisabled {
+			log.Debug("Route management is enabled. Using default LinkAddrsManager")
+			linkAddrsManagerV6 = linkaddrs.New(6, config.RulesConfig.WorkloadIfacePrefixes, featureDetector, config.NetlinkTimeout)
+		} else {
+			log.Info("Route management is disabled, using DummyLinkAddrsManager.")
+			linkAddrsManagerV6 = &linkaddrs.DummyLinkAddrsManager{}
+		}
 		dp.linkAddrsManagers = append(dp.linkAddrsManagers, linkAddrsManagerV6)
 
 		dp.RegisterManager(newEndpointManager(
@@ -2963,6 +2996,7 @@ func startBPFDataplaneComponents(
 	config *Config,
 	ipSetsMgr *dpsets.IPSetsManager,
 	dp *InternalDataplane,
+	kernelLockdownConfidentiality bool,
 ) (*bpfconntrack.Scanner, chan string) {
 	ipSetConfig := config.RulesConfig.IPSetConfigV4
 	ipSetEntry := bpfipsets.IPSetEntryFromBytes
@@ -3051,7 +3085,9 @@ func startBPFDataplaneComponents(
 
 	livenessScanner := bpfconntrack.NewLivenessScanner(config.BPFConntrackTimeouts, config.BPFNodePortDSREnabled)
 	ctLogLevel := bpfconntrack.BPFLogLevelNone
-	if config.BPFConntrackLogLevel == "debug" {
+	// The debug cleanup program references bpf_trace_printk; skip it under
+	// lockdown=confidentiality where that would spam the kernel log on load.
+	if strings.EqualFold(config.BPFConntrackLogLevel, "debug") && !kernelLockdownConfidentiality {
 		ctLogLevel = bpfconntrack.BPFLogLevelDebug
 	}
 

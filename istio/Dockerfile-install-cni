@@ -5,16 +5,32 @@
 
 ARG CALICO_BASE
 
+# nft-rpms is supplied as a named build context
+# (--build-context nft-rpms=docker-image://<NFT_RPMS_IMAGE>) by istio/Makefile.
+# Using a build context rather than FROM ${NFT_RPMS_IMAGE} avoids buildkit's
+# `--pull=always` trying to fetch our locally-built/loaded producer image
+# from a registry. The image is built by hack/rpms/nftables/ and carries the
+# patched nftables + libnftnl RPMs (referenced via COPY --from=nft-rpms
+# below). The tag is content-addressed; see hack/rpms/nftables/Makefile.
+
 # FIXME(jiawei): iptables-legacy is only available in EPEL 9. We can move to
 # AlmaLinux 10 once we have confirmed that iptables-legacy is no longer required.
 FROM almalinux:9 AS almalinux
 
 RUN dnf upgrade -y && dnf install -y epel-release
 
+# iptables-nft pulls in BaseOS libnftnl and nftables-libs as transitive deps;
+# our patched RPMs (installed below via Provides/Obsoletes) cleanly upgrade
+# both, leaving the rpm db as the owner of /usr/sbin/nft, libnftables.so.*,
+# and libnftnl.so.*.
 RUN dnf install -y \
   iptables-legacy \
   iptables-nft \
-  nftables
+  gmp jansson
+
+COPY --from=nft-rpms /rpms/ /tmp/rpms/
+RUN rpm -Uvh /tmp/rpms/libnftnl-*.rpm /tmp/rpms/nftables-*.rpm && \
+    rm -rf /tmp/rpms
 
 # Create symlinks to xtables-legacy-multi
 RUN set -eux; \
@@ -98,6 +114,11 @@ COPY --from=almalinux /usr/lib64/xtables/ /usr/lib64/xtables/
 COPY bin/install-cni-${TARGETARCH} /usr/bin/install-cni
 COPY bin/istio-cni-${TARGETARCH} /opt/cni/bin/istio-cni
 COPY bin/LICENSE /LICENSE
+
+# Corresponding source for the patched nftables (GPL-2.0-only) and libnftnl
+# (GPL-2.0-or-later) whose .so and nft binary we ship above (upstream tarballs,
+# our patches, and the spec files).
+COPY --from=nft-rpms /src/ /included-source/
 
 FROM ${CALICO_BASE}
 

@@ -1385,6 +1385,33 @@ class TestPluginEtcd(TestPluginEtcdBase):
             )
         )
 
+    def test_get_vif_details_derives_tap_mac_from_port_mac(self):
+        """tap MAC must match what the VM's ARP cache expects.
+
+        We reproduce older libvirt's implicit derivation (first octet -> 0xfe) so that
+        the tap MAC seen after a live migration to a libvirt >= 9.5.0 destination
+        matches the one the source's libvirt set.
+        """
+        context = mock.MagicMock()
+        context.current = {"mac_address": "fa:16:3e:aa:bb:cc"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], "fe:16:3e:aa:bb:cc")
+        # port_filter (and any other keys the base class populated) still
+        # flow through.
+        self.assertTrue(details["port_filter"])
+
+    def test_get_vif_details_falls_back_when_port_mac_missing(self):
+        context = mock.MagicMock()
+        context.current = {}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
+    def test_get_vif_details_falls_back_on_malformed_port_mac(self):
+        context = mock.MagicMock()
+        context.current = {"mac_address": "not-a-mac"}
+        details = self.driver.get_vif_details(context, agent=None, segment=None)
+        self.assertEqual(details["mac_address"], mech_calico.DEFAULT_TAP_MAC)
+
     def test_neutron_rule_to_etcd_rule_icmp(self):
         # No type/code specified
         self.assertNeutronToEtcd(
@@ -2108,6 +2135,29 @@ class TestLiveMigration(TestPluginEtcdBase):
         # The resync should have created the LiveMigration and dest WEP.
         self.assertIn(self._lm_key(self.DEST_HOST), self.recent_writes)
         self.assertIn(self._ep_key(self.DEST_HOST), self.recent_writes)
+
+    def test_resync_does_not_delete_dest_wep_mid_migration(self):
+        """Resync must not delete the dest WEP of an in-flight migration.
+
+        While a migration is in flight the Neutron port is still bound to the
+        source host, so the destination WEP has no direct counterpart in the
+        Neutron port map and used to be reaped - then recreated - by the
+        periodic resync.  That transient deletion made Felix on the
+        destination host tear down the endpoint mid-migration.
+        """
+        self._do_initial_resync()
+
+        # Start a live migration; this creates the destination WEP and
+        # LiveMigration resource in etcd.
+        self._pre_migrate()
+
+        self._trigger_resync()
+
+        # The destination WEP must not have been deleted, even transiently.
+        self.assertNotIn(self._ep_key(self.DEST_HOST), self.recent_deletes)
+
+        # Neither should anything else have been deleted.
+        self.assertEtcdDeletes(set())
 
     def test_resync_deletes_stale_live_migration(self):
         """Resync deletes orphaned LiveMigration with no migrating port."""

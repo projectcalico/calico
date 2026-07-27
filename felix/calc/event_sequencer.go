@@ -84,6 +84,7 @@ type EventSequencer struct {
 	pendingIPPoolDeletes         set.Set[ip.CIDR]
 	pendingNotReady              bool
 	pendingGlobalConfig          map[string]string
+	pendingSelectorConfig        map[string]string
 	pendingHostConfig            map[string]string
 	pendingServiceAccountUpdates map[types.ServiceAccountID]*proto.ServiceAccountUpdate
 	pendingServiceAccountDeletes set.Set[types.ServiceAccountID]
@@ -271,8 +272,9 @@ func (buf *EventSequencer) flushReadyFlag() {
 
 type DatastoreNotReady struct{}
 
-func (buf *EventSequencer) OnConfigUpdate(globalConfig, hostConfig map[string]string) {
+func (buf *EventSequencer) OnConfigUpdate(globalConfig, selectorConfig, hostConfig map[string]string) {
 	buf.pendingGlobalConfig = globalConfig
+	buf.pendingSelectorConfig = selectorConfig
 	buf.pendingHostConfig = hostConfig
 }
 
@@ -281,11 +283,16 @@ func (buf *EventSequencer) flushConfigUpdate() {
 		return
 	}
 	logCxt := log.WithFields(log.Fields{
-		"global": buf.pendingGlobalConfig,
-		"host":   buf.pendingHostConfig,
+		"global":   buf.pendingGlobalConfig,
+		"selector": buf.pendingSelectorConfig,
+		"host":     buf.pendingHostConfig,
 	})
 	logCxt.Info("Possible config update.")
 	globalChanged, err := buf.config.UpdateFrom(buf.pendingGlobalConfig, config.DatastoreGlobal)
+	if err != nil {
+		logCxt.WithError(err).Panic("Failed to parse config update")
+	}
+	selectorChanged, err := buf.config.UpdateFrom(buf.pendingSelectorConfig, config.DatastorePerSelector)
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to parse config update")
 	}
@@ -293,12 +300,13 @@ func (buf *EventSequencer) flushConfigUpdate() {
 	if err != nil {
 		logCxt.WithError(err).Panic("Failed to parse config update")
 	}
-	if globalChanged || hostChanged {
+	if globalChanged || selectorChanged || hostChanged {
 		rawConfig := buf.config.RawValues()
 		log.WithField("merged", rawConfig).Info("Config changed. Sending ConfigUpdate message.")
 		buf.Callback(buf.config.ToConfigUpdate())
 	}
 	buf.pendingGlobalConfig = nil
+	buf.pendingSelectorConfig = nil
 	buf.pendingHostConfig = nil
 }
 
@@ -760,13 +768,18 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 
 func (buf *EventSequencer) flushIPPoolUpdates() {
 	for key, pool := range buf.pendingIPPoolUpdates {
+		allowedUses := make([]string, len(pool.AllowedUses))
+		for i, u := range pool.AllowedUses {
+			allowedUses[i] = string(u)
+		}
 		buf.Callback(&proto.IPAMPoolUpdate{
 			Id: cidrToIPPoolID(key),
 			Pool: &proto.IPAMPool{
-				Cidr:       pool.CIDR.String(),
-				Masquerade: pool.Masquerade,
-				IpipMode:   string(pool.IPIPMode),
-				VxlanMode:  string(pool.VXLANMode),
+				Cidr:        pool.CIDR.String(),
+				Masquerade:  pool.Masquerade,
+				IpipMode:    string(pool.IPIPMode),
+				VxlanMode:   string(pool.VXLANMode),
+				AllowedUses: allowedUses,
 			},
 		})
 		buf.sentIPPools.Add(key)

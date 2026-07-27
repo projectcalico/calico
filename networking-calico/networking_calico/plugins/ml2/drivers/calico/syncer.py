@@ -113,6 +113,11 @@ class ResourceSyncer(object):
         # already compared the existing etcd data against Neutron.
         names_compared = set()
 
+        # Names that exist in etcd without a direct counterpart in the Neutron
+        # map, but that must not be deleted; e.g. the destination
+        # WorkloadEndpoint of an in-flight live migration.
+        protected_names = self.get_protected_names(neutron_map)
+
         LOG.info(
             "Resync for %s; got neutron data (%s items), look for incorrect data...",
             self.resource_kind,
@@ -148,6 +153,11 @@ class ResourceSyncer(object):
                             self.resource_kind,
                             name,
                         )
+            elif name in protected_names:
+                # This name has nothing directly corresponding in the Neutron
+                # map, but the subclass has told us that it is still expected,
+                # so it must not be deleted.
+                LOG.info("etcd data protected for %s %s", self.resource_kind, name)
             else:
                 # This name is in etcd but now has nothing corresponding in
                 # Neutron, so remember it for deletion from etcd.
@@ -197,6 +207,18 @@ class ResourceSyncer(object):
         self.delete_legacy_etcd_data()
 
         LOG.info("Resync for %s; done.", self.resource_kind)
+
+    def get_protected_names(self, neutron_map):
+        """Return names that must not be deleted from etcd during this resync.
+
+        These are names that do not appear in the Neutron map - which is keyed
+        by the names that the generic resync computation expects - but that are
+        nevertheless still wanted.  By default there are none, but subclasses
+        may override; see WorkloadEndpointSyncer, which uses this to stop the
+        deletion sweep from reaping the destination WEP of an in-flight live
+        migration.
+        """
+        return set()
 
     def delete_legacy_etcd_data(self):
         # By default this is a no-op, but subclasses may override.

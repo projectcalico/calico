@@ -43,6 +43,13 @@ goldmane:
 whisker:
   enabled: true
 
+# Exercise the defaultFelixConfiguration helm template in CI. The value here
+# matches Felix's default, so it's a no-op - we just want to verify the
+# template renders with the correct API group.
+defaultFelixConfiguration:
+  enabled: true
+  logSeverityScreen: Info
+
 # CRDs are installed by `make kind-cluster-create` in lib.Makefile ($(KUBECTL) create -f $(REPO_ROOT)/libcalico-go/config/crd;)
 manageCRDs: false
 

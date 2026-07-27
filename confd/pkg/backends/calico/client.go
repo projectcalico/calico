@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1234,6 +1234,7 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
+		c.getProgramClusterRoutesKVPair(v3res, model.GlobalBGPConfigKey{})
 
 		// Update service load balancer aggregation setting
 		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != nil {
@@ -1531,6 +1532,15 @@ func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key a
 	}
 }
 
+func (c *client) getProgramClusterRoutesKVPair(v3res *apiv3.BGPConfiguration, key any) {
+	programClusterRoutesKey := getBGPConfigKey("program_cluster_routes", key)
+	if v3res != nil && v3res.Spec.ProgramClusterRoutes != nil {
+		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(programClusterRoutesKey, *v3res.Spec.ProgramClusterRoutes))
+	} else {
+		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(programClusterRoutesKey))
+	}
+}
+
 func getNodeName(nodeName string) string {
 	return strings.TrimPrefix(nodeName, perNodeConfigNamePrefix)
 }
@@ -1814,7 +1824,10 @@ func isValidCommunity(communityValue string) bool {
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
 // We use this purely for logging.
 func (c *client) ParseFailed(rawKey string, rawValue string) {
-	log.Errorf("Unable to parse datastore entry Key=%s; Value=%s", rawKey, rawValue)
+	// Do not log the raw value — future keys may carry credentials.
+	// The key and length are sufficient to alert; the actual value can be
+	// retrieved directly from the datastore when debugging.
+	log.Errorf("Unable to parse datastore entry Key=%s; ValueLen=%d", rawKey, len(rawValue))
 }
 
 // GetValue gets a single value from the cache

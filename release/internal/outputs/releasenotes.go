@@ -33,8 +33,11 @@ import (
 	"github.com/projectcalico/calico/release/internal/version"
 )
 
+const ReleaseNotesDir = "release-notes"
+
 const (
 	releaseNoteRequiredLabel = "release-note-required"
+	bugFixLabel              = "kind/bug"
 	closedState              = issueState("closed")
 	openState                = issueState("open")
 	allState                 = issueState("all")
@@ -44,6 +47,8 @@ var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
 	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
+	newlinePattern      = regexp.MustCompile(`\r\n|[\r\n\v\f\x{0085}\x{2028}\x{2029}]`)
+	releaseNotePattern  = regexp.MustCompile("(?s)```release-note\\s(.*?)\\s```")
 )
 
 type issueState string
@@ -107,19 +112,21 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 
 // extractReleaseNoteFromIssue extracts release notes from an issue.
 // It looks for the release note block in the issue body and returns the content
-// between the start and end markers.
+// between the start and end markers. To make RNs more readable, replace newlines
+// with spaces rather than breaking it into multiple RNs (in case someone word-wraps
+// their RNs).
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
-	pattern := "\\`\\`\\`release-note\\r?\\n(.*)\\r?\\n\\`\\`\\`"
-	re := regexp.MustCompile(pattern)
-	matches := re.FindAllStringSubmatch(body, -1)
+	matches := releaseNotePattern.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
 		return []string{issue.GetTitle()}, fmt.Errorf("no release notes found")
 	}
 	var notes []string
 	for _, match := range matches {
 		if len(match) > 1 {
-			notes = append(notes, match[1])
+			releaseNoteText := strings.TrimSpace(match[1])
+			releaseNoteText = newlinePattern.ReplaceAllString(releaseNoteText, " ")
+			notes = append(notes, releaseNoteText)
 		}
 	}
 	return notes, nil
@@ -156,8 +163,28 @@ func extractReleaseNote(repo string, issues []*github.Issue) ([]*ReleaseNoteIssu
 	return issueDataList, nil
 }
 
+// appendReleaseNotes extracts release notes from the given issues and appends
+// them to the provided list.
+func appendReleaseNotes(dataList []*ReleaseNoteIssueData, repo string, issues []*github.Issue) ([]*ReleaseNoteIssueData, error) {
+	relNoteDataList, err := extractReleaseNote(repo, issues)
+	if err != nil {
+		return dataList, err
+	}
+	return append(dataList, relNoteDataList...), nil
+}
+
+// issueHasLabel reports whether the issue carries the given label.
+func issueHasLabel(issue *github.Issue, name string) bool {
+	for _, label := range issue.Labels {
+		if label.GetName() == name {
+			return true
+		}
+	}
+	return false
+}
+
 // outputReleaseNotes outputs the release notes to a file
-func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath string) error {
+func outputReleaseNotes(bugFixes, otherChanges []*ReleaseNoteIssueData, outputFilePath string) error {
 	dir := filepath.Dir(outputFilePath)
 	if err := os.MkdirAll(dir, utils.DirPerms); err != nil {
 		logrus.WithError(err).Errorf("Failed to create release notes folder %s", dir)
@@ -173,7 +200,8 @@ func outputReleaseNotes(issueDataList []*ReleaseNoteIssueData, outputFilePath st
 	date := time.Now().Format("02 Jan 2006")
 	data := &ReleaseNoteData{
 		Date:         date,
-		OtherChanges: issueDataList,
+		BugFixes:     bugFixes,
+		OtherChanges: otherChanges,
 	}
 	releaseNotedFile, err := os.Create(outputFilePath)
 	if err != nil {
@@ -194,14 +222,22 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 	if githubToken == "" {
 		return "", fmt.Errorf("github token not set, set GITHUB_TOKEN environment variable")
 	}
-	if outputDir == "" {
-		logrus.Warn("No directory is set, using current directory")
-		outputDir = "."
+	if outputDir == "" && repoRootDir == "" {
+		return "", fmt.Errorf("either outputDir or repoRootDir must be set")
 	}
+	if outputDir == "" {
+		outputDir = releaseNoteDirPath(repoRootDir)
+	}
+	if owner != utils.ProjectCalicoOrg {
+		logrus.WithField("org", owner).Warnf("generating release notes outside of %s GitHub organization is not supported, switching back to %s", utils.ProjectCalicoOrg, utils.ProjectCalicoOrg)
+		owner = utils.ProjectCalicoOrg
+	}
+
 	logrus.Infof("Generating release notes for %s", ver.FormattedString())
 	milestone := ver.Milestone(utils.ProductName)
 	githubClient := github.NewTokenClient(context.Background(), githubToken)
-	releaseNoteDataList := []*ReleaseNoteIssueData{}
+	bugFixDataList := []*ReleaseNoteIssueData{}
+	otherChangesDataList := []*ReleaseNoteIssueData{}
 	opts := &github.MilestoneListOptions{
 		State: string(openState),
 	}
@@ -224,35 +260,53 @@ func ReleaseNotes(owner, githubToken, repoRootDir, outputDir string, ver version
 		}
 		logrus.WithField("repo", repo).Debugf("Found %d PRs", len(prIssuesByRepo))
 		prIssues = append(prIssues, prIssuesByRepo...)
-		closedReleaseNoteIssues := []*github.Issue{}
+		closedBugFixIssues := []*github.Issue{}
+		closedOtherIssues := []*github.Issue{}
 		for _, issue := range prIssuesByRepo {
-			if issue.GetState() == string(closedState) {
-				for _, label := range issue.Labels {
-					if label.GetName() == releaseNoteRequiredLabel {
-						closedReleaseNoteIssues = append(closedReleaseNoteIssues, issue)
-					}
-				}
+			if issue.GetState() != string(closedState) || !issueHasLabel(issue, releaseNoteRequiredLabel) {
+				continue
+			}
+			if issueHasLabel(issue, bugFixLabel) {
+				closedBugFixIssues = append(closedBugFixIssues, issue)
+			} else {
+				closedOtherIssues = append(closedOtherIssues, issue)
 			}
 		}
-		relNoteDataList, err := extractReleaseNote(repo, closedReleaseNoteIssues)
+		bugFixDataList, err = appendReleaseNotes(bugFixDataList, repo, closedBugFixIssues)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to extract bug fix release notes")
+			return "", err
+		}
+		otherChangesDataList, err = appendReleaseNotes(otherChangesDataList, repo, closedOtherIssues)
 		if err != nil {
 			logrus.WithError(err).Error("Failed to extract release notes")
 			return "", err
 		}
-		releaseNoteDataList = append(releaseNoteDataList, relNoteDataList...)
 	}
 	if len(prIssues) == 0 {
 		logrus.WithField("milestone", milestone).Error("No PRs found for milestone")
 		return "", fmt.Errorf("no PRs found for milestone %s", milestone)
 	}
 
-	if len(releaseNoteDataList) == 0 {
+	if len(bugFixDataList) == 0 && len(otherChangesDataList) == 0 {
 		logrus.WithField("milestone", milestone).Warn("No closed issues requiring release notes found in milestone")
 	}
-	releaseNoteFilePath := filepath.Join(outputDir, fmt.Sprintf("%s-release-notes.md", ver.FormattedString()))
-	if err := outputReleaseNotes(releaseNoteDataList, releaseNoteFilePath); err != nil {
+	releaseNoteFilePath := releaseNoteFilePathFromDir(outputDir, ver.FormattedString())
+	if err := outputReleaseNotes(bugFixDataList, otherChangesDataList, releaseNoteFilePath); err != nil {
 		logrus.WithError(err).Error("Failed to output release notes")
 		return "", err
 	}
 	return releaseNoteFilePath, nil
+}
+
+func releaseNoteDirPath(rootDir string) string {
+	return filepath.Join(rootDir, ReleaseNotesDir)
+}
+
+func releaseNoteFilePathFromDir(dir, version string) string {
+	return filepath.Join(dir, fmt.Sprintf("%s-release-notes.md", version))
+}
+
+func ReleaseNoteFilePath(repoRootDir, version string) string {
+	return releaseNoteFilePathFromDir(releaseNoteDirPath(repoRootDir), version)
 }

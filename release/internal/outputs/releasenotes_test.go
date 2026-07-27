@@ -25,7 +25,15 @@ import (
 
 func TestOutputReleaseNotes(t *testing.T) {
 	outputFilePath := filepath.Join(t.TempDir(), "release-notes.md")
-	if err := outputReleaseNotes([]*ReleaseNoteIssueData{
+	bugFixes := []*ReleaseNoteIssueData{
+		{
+			ID:   789,
+			Note: "This is a test bug fix.",
+			Repo: "calico",
+			URL:  "https://github.com/projectcalico/calico/pull/789",
+		},
+	}
+	otherChanges := []*ReleaseNoteIssueData{
 		{
 			ID:   123,
 			Note: "This is a test release note.",
@@ -38,7 +46,8 @@ func TestOutputReleaseNotes(t *testing.T) {
 			Repo: "calico",
 			URL:  "https://github.com/projectcalico/calico/pull/456",
 		},
-	}, outputFilePath); err != nil {
+	}
+	if err := outputReleaseNotes(bugFixes, otherChanges, outputFilePath); err != nil {
 		t.Fatalf("Failed to output release notes: %v", err)
 	}
 	relNotes, err := os.ReadFile(outputFilePath)

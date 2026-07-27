@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	calicoErrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
@@ -247,6 +248,25 @@ func checkCalicoResourcesNotExist(args map[string]any, c client.Interface) error
 
 						// Make sure that the network policy is a K8s network policy
 						if !strings.HasPrefix(metaObj.GetObjectMeta().GetName(), converter.KubernetesNetworkPolicyEtcdPrefix) {
+							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
+						}
+					}
+				case "tiers":
+					// The protected built-in tiers (default, kube-admin, kube-baseline) are
+					// created automatically and can't be deleted, so they'll be present in any
+					// KDD target and shouldn't block an import.
+					objs, err := meta.ExtractList(resource)
+					if err != nil {
+						return fmt.Errorf("error extracting tiers for inspection: %w", err)
+					}
+
+					for _, obj := range objs {
+						metaObj, ok := obj.(v1.ObjectMetaAccessor)
+						if !ok {
+							return fmt.Errorf("unable to convert Calico tier for inspection")
+						}
+
+						if !names.TierIsProtected(metaObj.GetObjectMeta().GetName()) {
 							return fmt.Errorf("found existing Calico %s resource", results.SingleKind)
 						}
 					}

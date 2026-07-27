@@ -112,7 +112,16 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		}
 	})
 	It("Config should contain all FelixConfigurationSpec fields", func() {
+		fcFieldsToIgnore := set.From(
+			// NodeSelector is used by the config batcher to scope
+			// FelixConfiguration to specific nodes; it's not a Felix
+			// config parameter.
+			"NodeSelector",
+		)
 		for n := range fcFields {
+			if fcFieldsToIgnore.Contains(n) {
+				continue
+			}
 			mappedName := fcFieldNameToCP[n]
 			if mappedName != "" {
 				n = mappedName

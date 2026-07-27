@@ -54,8 +54,12 @@ router id @MY_IPV4_ADDRESS@;
 #   live-migrated to a different node.
 
 filter export_bgp {
-  if (!defined(krt_metric)) then { krt_metric = 1024; }
-  bgp_local_pref = 2147483647 - krt_metric;
+  if (defined(source) && source = RTS_BGP && defined(bgp_local_pref)) then {
+    krt_metric = 2147483647 - bgp_local_pref;
+  } else {
+    if (!defined(krt_metric)) then { krt_metric = 1024; }
+    bgp_local_pref = 2147483647 - krt_metric;
+  }
   if ( (ifname ~ "tap*") || (ifname ~ "cali*") || (ifname ~ "dummy1") ) then {
     if  net != ::/0 then accept;
   }

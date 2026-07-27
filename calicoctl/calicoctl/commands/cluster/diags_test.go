@@ -30,6 +30,24 @@ func init() {
 	logutils.ConfigureFormatter("test")
 }
 
+func TestBpfJSONCmd_CollectsJSONWithTextFallback(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Each calico-bpf dump must request JSON output and land in a .json file,
+	// with a plain-text fallback (--json dropped, .txt file) for older
+	// calico-node versions that don't support --json or the subcommand.
+	cmd := bpfJSONCmd("/node-dir", "nodeA", "calico-system", "calico-node-xyz", "nat maglev table", "nat maglev", "bpf-nat-maglev")
+
+	Expect(cmd.CmdStr).To(ContainSubstring("calico-node -bpf nat maglev"))
+	Expect(cmd.CmdStr).To(HaveSuffix("--json"))
+	Expect(cmd.FilePath).To(Equal("/node-dir/bpf-nat-maglev.json"))
+
+	Expect(cmd.FallbackCmdStr).To(ContainSubstring("calico-node -bpf nat maglev"))
+	Expect(cmd.FallbackCmdStr).NotTo(ContainSubstring("--json"),
+		"fallback command must not pass --json")
+	Expect(cmd.FallbackFilePath).To(Equal("/node-dir/bpf-nat-maglev.txt"))
+}
+
 func TestDiags(t *testing.T) {
 	RegisterTestingT(t)
 	test := func(invocation string, expectedErr error, expectedOutput string, expectedOpts *diagOpts) {

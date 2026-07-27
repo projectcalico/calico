@@ -142,12 +142,7 @@ var _ = describe.CalicoDescribe(
 			err = cli.Update(context.Background(), pool)
 			Expect(err).NotTo(HaveOccurred(), "Error updating IP pool to disable IPIP")
 
-			// Verify connectivity still works.
-			checker.ResetExpectations()
-			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
-			checker.Execute()
-
-			// Eventually, the routes for the test's IP pool should no longer use tunl0.
+			// Wait for routes to converge before checking connectivity.
 			ginkgo.By("Verifying that node routes no longer use tunl0")
 			Eventually(func() error {
 				routes := getNodeRoutes(cli, "203.0.113")
@@ -160,7 +155,12 @@ var _ = describe.CalicoDescribe(
 					}
 				}
 				return nil
-			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are still using tunl0")
+			}, 30*time.Second, 1*time.Second).Should(Succeed(), "Routes for the test IP pool are still using tunl0")
+
+			// Verify connectivity still works.
+			checker.ResetExpectations()
+			checker.ExpectSuccess(client1, server1.ClusterIPs()...)
+			checker.Execute()
 
 			// CrossSubnet.
 			ginkgo.By("Setting IPIP mode to CrossSubnet on the IP pool")

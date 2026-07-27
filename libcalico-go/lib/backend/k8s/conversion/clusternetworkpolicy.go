@@ -36,9 +36,12 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 	// Pull out important fields.
 	tier, err := clusterNetworkPolicyTier(kcnp)
 	if err != nil {
+		// Log and return a nil-Value KVPair rather than an error. Returning an error here
+		// would surface as a WatchError in the KDD watch converter, terminating and resyncing
+		// the watch — which loops indefinitely if the same malformed policy keeps reappearing.
 		logrus.WithError(err).WithField("policy", kcnp.Name).
-			Error("Failed to parse cluster network policy tier.")
-		return nil, err
+			Warn("Skipping malformed cluster network policy: failed to parse tier.")
+		return clusterNetworkPolicyTombstone(kcnp), nil
 	}
 
 	order := float64(kcnp.Spec.Priority)
@@ -54,7 +57,9 @@ func (c converter) K8sClusterNetworkPolicyToCalico(kcnp *clusternetpol.ClusterNe
 		nsSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.NamespaceSelector, SelectorNamespace)
 		podSelector = k8sSelectorToCalico(&kcnp.Spec.Subject.Pods.PodSelector, SelectorPod)
 	} else {
-		return nil, fmt.Errorf("no subject selector specified in cluster network policy %s", kcnp.Name)
+		logrus.WithField("policy", kcnp.Name).
+			Warn("Skipping malformed cluster network policy: no subject selector specified.")
+		return clusterNetworkPolicyTombstone(kcnp), nil
 	}
 
 	// Generate the ingress rules list.
@@ -151,6 +156,19 @@ func clusterNetworkPolicyTier(kcnp *clusternetpol.ClusterNetworkPolicy) (string,
 		return names.KubeBaselineTierName, nil
 	default:
 		return "", fmt.Errorf("invalid cluster network policy tier %s", kcnp.Spec.Tier)
+	}
+}
+
+// clusterNetworkPolicyTombstone returns a KVPair with the correct Key and Revision
+// but a nil Value, which signals downstream consumers to remove any previously-cached
+// version of this policy.
+func clusterNetworkPolicyTombstone(kcnp *clusternetpol.ClusterNetworkPolicy) *model.KVPair {
+	return &model.KVPair{
+		Key: model.ResourceKey{
+			Name: kcnp.Name,
+			Kind: model.KindKubernetesClusterNetworkPolicy,
+		},
+		Revision: kcnp.ResourceVersion,
 	}
 }
 

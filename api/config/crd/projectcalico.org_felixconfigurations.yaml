@@ -470,6 +470,9 @@ spec:
                   type: string
                 nftablesRefreshInterval:
                   type: string
+                nodeSelector:
+                  maxLength: 1024
+                  type: string
                 openstackRegion:
                   type: string
                 policySyncPathPrefix:
@@ -611,5 +614,13 @@ spec:
             - metadata
             - spec
           type: object
+          x-kubernetes-validations:
+            - message:
+                nodeSelector must not be set on the 'default' or per-node ('node.*')
+                FelixConfiguration
+              reason: FieldValueForbidden
+              rule:
+                "self.metadata.name == 'default' || self.metadata.name.startsWith('node.')
+                ? !has(self.spec.nodeSelector) : true"
       served: true
       storage: true

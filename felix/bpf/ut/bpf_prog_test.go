@@ -82,6 +82,7 @@ func init() {
 const (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
+	testWGPort        = uint16(5666)
 	testMaglevLUTSize = uint32(31)
 )
 
@@ -839,6 +840,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					LogFilterJmp:  0xffffffff,
 					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
+					WgPort:        topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -1243,6 +1245,7 @@ type testOpts struct {
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
+	wgPort                        uint16
 }
 
 type testOption func(opts *testOpts)
@@ -1343,6 +1346,12 @@ func withWorkloadSrcSpoofingConfigured() testOption {
 func withIstioDSCP(value uint8) testOption {
 	return func(o *testOpts) {
 		o.istioDSCP = int8(value)
+	}
+}
+
+func withWgPort(port uint16) testOption {
+	return func(o *testOpts) {
+		o.wgPort = port
 	}
 }
 

@@ -55,9 +55,9 @@ NODE_CONTAINER_MARKER=$(NODE_CONTAINER_CREATED)
 endif
 
 # Set the platform correctly for building docker images.
-ifeq ($(ARCH),arm64)
-# Required for eBPF support in ARM64.
-# We need to force ARM64 build image to be used in a crosscompilation run.
+ifeq ($(ARCH),$(filter $(ARCH),arm64 ppc64le))
+# Required for eBPF support.
+# We need to force target arch build image to be used in a cross-compilation run.
 CALICO_BUILD:=$(CALICO_BUILD)-$(ARCH)
 endif
 
@@ -70,6 +70,11 @@ THIRD_PARTY_DEPS_MIRROR=https://storage.googleapis.com/public-calico-third-party
 # Versions and location of dependencies used in the build.
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VERSION).tar.gz
+
+# Producer image carrying the patched nftables + libnftnl RPMs we install in
+# the runtime stage. The tag is content-addressed so any change to specs,
+# patches, or version pins yields a new tag (see hack/rpms/nftables/Makefile).
+include ../hack/rpms/nftables/image.mk
 FELIX_GPL_SOURCE=filesystem/included-source/felix-ebpf-gpl.tar.xz
 INCLUDED_SOURCE=$(BIRD_SOURCE) $(FELIX_GPL_SOURCE)
 
@@ -206,11 +211,16 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-apache/bin/* $@
 
 # We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 and AMD64 builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
+# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
+ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
 CGO_ENABLED=1
+# Normalize userspace types to ensure consistency across architectures.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+    ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
+endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) -lbpf -lelf -lz"
-CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 else
 CGO_ENABLED=0
 CGO_LDFLAGS=""
@@ -221,7 +231,7 @@ $(NODE_CONTAINER_BINARY): filesystem/usr/lib/calico/bpf $(LIBBPF_A) $(SRC_FILES)
 ifeq ($(FIPS),true)
 	$(call build_cgo_boring_binary, ./cmd/calico-node/main.go, $@)
 else
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
+ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64 ppc64le))
 	$(call build_cgo_binary, ./cmd/calico-node/main.go, $@)
 else
 	$(call build_binary, ./cmd/calico-node/main.go, $@)
@@ -264,21 +274,40 @@ dist/LICENSE: ../LICENSE.md
 
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
 image $(NODE_IMAGE): $(NODE_CONTAINER_MARKER) | register
-$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+
+# nft-rpms-image builds (or no-ops on cache hit) the per-arch producer image
+# carrying our patched nftables + libnftnl RPMs. It's an order-only prereq;
+# the consumer build wires it in via --build-context nft-rpms=docker-image://...
+# so buildkit sources it from the local daemon (avoiding `--pull=always`
+# trying to fetch it from a registry where it may not have been pushed yet).
+.PHONY: nft-rpms-image
+nft-rpms-image:
+	$(MAKE) -C ../hack/rpms/nftables image ARCH=$(ARCH)
+
+# Drop --pull from DOCKER_BUILD: with --pull=always, buildkit treats the
+# nft-rpms build context (docker-image://calico/nftables-rpms:<sha>-<arch>)
+# as a registry pull and fails when that tag hasn't been pushed yet (PR
+# builds, fresh local builds). Other base images (UBI_IMAGE, BIRD_IMAGE,
+# BPFTOOL_IMAGE) are pinned by tag so cache freshness is fine without --pull.
+$(NODE_CONTAINER_CREATED) $(NODE_CONTAINER_FIPS_CREATED): DOCKER_PULL :=
+
+$(NODE_CONTAINER_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE
+$(NODE_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(NODE_CONTAINER_BINARY) $(INCLUDED_SOURCE) $(NODE_CONTAINER_FILES) $(TOOLS_MOUNTNS_BINARY) dist/LICENSE | register nft-rpms-image
 	$(DOCKER_BUILD) \
 		--build-arg BIN_DIR=$(NODE_CONTAINER_BIN_DIR) \
 		--build-arg BIRD_IMAGE=$(BIRD_IMAGE) \
 		--build-arg BPFTOOL_IMAGE=$(BPFTOOL_IMAGE) \
+		--build-context nft-rpms=docker-image://$(NFT_RPMS_IMAGE) \
 		--build-arg GIT_VERSION=$(GIT_VERSION) \
 		-t $(NODE_IMAGE):latest-fips-$(ARCH) -f ./Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest-fips LATEST_IMAGE_TAG=latest-fips
@@ -289,7 +318,7 @@ $(BIRD_SOURCE): .bird-source.created
 .bird-source.created:
 	rm -rf filesystem/included-source/bird*
 	mkdir -p filesystem/included-source/
-	curl -sSf -L --retry 5 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $(BIRD_SOURCE) https://github.com/projectcalico/bird/tarball/$(BIRD_VERSION)
 	touch $@
 
 # include GPL felix code in the image.
@@ -323,7 +352,7 @@ ut fv: $(LIBBPF_A) run-k8s-apiserver
 	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/certs/kubeconfig \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e CALICO_API_GROUP=$(CALICO_API_GROUP) \
-	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
+	$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -r --junit-report=node_ut.xml --output-dir=report/ $(GINKGO_ARGS) .'
 
 ###############################################################################
 # System tests
@@ -464,14 +493,14 @@ $(WINDOWS_ARCHIVE_ROOT)/confd/templates/%: windows-packaging/templates/%
         chmod +w $@
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1:
-	curl -sSf -L --retry 5 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@ $(MICROSOFT_SDN_GITHUB_RAW_URL)/Kubernetes/windows/hns.psm1
 
 $(WINDOWS_ARCHIVE_ROOT)/libs/hns/License.txt:
-	curl -sSf -L --retry 5 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@  $(MICROSOFT_SDN_GITHUB_RAW_URL)/License.txt
 
 ## Download NSSM.
 windows-packaging/nssm.zip:
-	curl -sSf -L --retry 5 -o $@ $(WINDOWS_NSSM_URL)
+	curl -sSf -L --retry 5 --retry-all-errors --http1.1 -o $@ $(WINDOWS_NSSM_URL)
 
 windows-packaging/nssm.exe: windows-packaging/nssm.zip
 	cd windows-packaging && \

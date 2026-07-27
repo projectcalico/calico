@@ -102,8 +102,9 @@ func CleanUpProgramsAndPins() {
 		}
 		link, err := netlink.LinkByIndex(qdisc.Attrs().LinkIndex)
 		if err != nil {
-			log.WithError(err).WithField("iface", link.Attrs().Name).Info(
-				"Failed to remove BPF qdisc from interface, maybe interface is gone?")
+			log.WithError(err).WithField("linkIndex", qdisc.Attrs().LinkIndex).Info(
+				"Failed to look up link for BPF qdisc cleanup; skipping")
+			continue
 		}
 		for _, parent := range []uint32{netlink.HANDLE_MIN_INGRESS, netlink.HANDLE_MIN_EGRESS} {
 			filters, err := netlink.FilterList(link, parent)

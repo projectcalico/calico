@@ -136,6 +136,13 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
+# bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
+# Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
+# that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
+# can run it without the go-build container.
+bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ ./hack/perf/cmd/send-perf-results"
+
 CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
@@ -229,8 +236,12 @@ e2e-run-cnp-test:
 ###############################################################################
 .PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
-release/bin/release: $(shell find ./release -type f -name '*.go')
+release/bin/release: $(shell find ./release -type f -name '*.go') metadata.mk
 	$(MAKE) -C release
+
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@release/bin/release release prep
 
 # Install ghr for publishing to github.
 bin/ghr:
@@ -260,7 +271,7 @@ create-release-branch: release/bin/release
 
 # Test the release code
 release-test:
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -cover -r hack/release/pkg
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo2 -cover -r hack/release/pkg
 
 # Currently our openstack builds either build *or* build and publish,
 # hence why we have two separate jobs here that do almost the same thing.
@@ -317,5 +328,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

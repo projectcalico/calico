@@ -11,7 +11,7 @@ import SearchInput from '@/libs/tigera/ui-components/components/common/SearchInp
 import {
     DataListOmniFilterParam,
     FilterHintKey,
-    FilterKey,
+    SelectedOmniFilterValues,
     transformToFlowsFilterQuery,
 } from '@/utils/omniFilter';
 import { Box, Button, Flex } from '@chakra-ui/react';
@@ -58,7 +58,7 @@ const FilterChecklist: React.FC<FilterChecklistProps> = ({
 
     const getData = (searchOption?: string) => {
         const query = transformToFlowsFilterQuery(
-            filterQuery as Record<FilterKey, string[]>,
+            filterQuery as unknown as SelectedOmniFilterValues,
             filterId as DataListOmniFilterParam,
             searchOption,
         );

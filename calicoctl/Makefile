@@ -101,7 +101,7 @@ $(CALICO_VERSION_HELPER_BIN): $(CALICO_VERSION_HELPER_SRC)
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-$(ARCH)
 	mkdir -p report
-	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --junit-report=calicoctl_ut.xml --output-dir=report/ $(GINKGO_ARGS) calicoctl/*'
+	$(DOCKER_RUN) -e CALICO_API_GROUP=$(CALICO_API_GROUP) $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo2 -cover -r --junit-report=calicoctl_ut.xml --output-dir=report/ $(GINKGO_ARGS) calicoctl/*'
 
 ###############################################################################
 # FVs
