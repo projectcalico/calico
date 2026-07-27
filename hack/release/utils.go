@@ -41,7 +41,6 @@ const (
 
 	mainRepo = "tigera/operator"
 
-	releaseFormat           = `^v\d+\.\d+\.\d+$`
 	enterpriseReleaseFormat = `^v\d+\.\d+\.\d+(-\d+\.\d+)?$`
 	hashreleaseFormat       = `^v\d+\.\d+\.\d+-%s-\d+-g[a-f0-9]{12}-[a-z0-9-]+$`
 	baseVersionFormat       = `^v\d+\.\d+\.\d+(-%s-\d+-g[a-f0-9]{12}-[a-z0-9-]+)?$`

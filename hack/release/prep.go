@@ -86,7 +86,7 @@ var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Contex
 		return ctx, fmt.Errorf("error retrieving Calico version: %w", err)
 	}
 	calicoVersion = versions.Title
-	if valid, err := setup.IsValidReleaseVersion(calicoVersion); err != nil {
+	if valid, err := setup.IsValidCalicoReleaseVersion(calicoVersion); err != nil {
 		return ctx, fmt.Errorf("error validating Calico version format: %w", err)
 	} else if !valid {
 		return ctx, fmt.Errorf("every release must contain a released Calico version, but found %s", calicoVersion)

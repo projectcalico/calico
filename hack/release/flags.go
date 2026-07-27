@@ -271,7 +271,7 @@ var (
 				// No need to validate Calico version for hashrelease
 				return nil
 			}
-			if valid, err := setup.IsValidReleaseVersion(s); err != nil {
+			if valid, err := setup.IsValidCalicoReleaseVersion(s); err != nil {
 				return fmt.Errorf("error validating Calico version format: %w", err)
 			} else if !valid {
 				return fmt.Errorf("version %q is not a valid Calico release version", s)

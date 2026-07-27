@@ -38,10 +38,9 @@ const (
 	gcrRegistry = "gcr.io"
 	cloudImage  = "tigera-tesla/operator-cloud"
 
-	// releaseVersionFormat is the regular operator release format (vX.Y.Z). Cloud releases use the
-	// same scheme with a -cloud suffix (e.g. v1.44.0-cloud). The enterprise format is duplicated
-	// from hack/release/utils.go's releaseFormat because package main cannot be imported; keep them
-	// in sync.
+	// releaseVersionFormat is the plain operator/Calico release format (vX.Y.Z). The cloud operator
+	// release uses the same scheme with a -cloud suffix (e.g. v1.44.0-cloud); the Calico version
+	// always uses the plain form regardless of variant (see IsValidCalicoReleaseVersion).
 	releaseVersionFormat      = `^v\d+\.\d+\.\d+$`
 	cloudReleaseVersionFormat = `^v\d+\.\d+\.\d+-cloud$`
 )
@@ -57,8 +56,14 @@ var (
 	DefaultRegistry = quayRegistry
 	DefaultImage    = enterpriseImage
 
-	// IsValidReleaseVersion validates a release version string for the active variant.
+	// IsValidReleaseVersion validates an operator release version string for the active variant
+	// (plain vX.Y.Z for enterprise, vX.Y.Z-cloud for cloud).
 	IsValidReleaseVersion = matchesFormat(releaseVersionFormat)
+
+	// IsValidCalicoReleaseVersion validates a Calico release version (vX.Y.Z). It is
+	// variant-independent: the Calico version never carries the -cloud suffix, even when releasing
+	// the Calico Cloud operator variant, so it always uses the plain format.
+	IsValidCalicoReleaseVersion = matchesFormat(releaseVersionFormat)
 
 	// CreateGitHubReleaseDefault is the default for the --create-github-release flag. Cloud releases
 	// are not published on GitHub, so cloud defaults it off.
