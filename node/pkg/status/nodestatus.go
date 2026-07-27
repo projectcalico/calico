@@ -59,7 +59,7 @@ func RunWithContext(ctx context.Context) error {
 		log.Debug("Using typha syncclient")
 	} else {
 		log.Debug("Using local syncer")
-		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r)
+		syncer := nodestatussyncer.New(c.(bapi.BackendAccessor).Backend(), r)
 		syncer.Start()
 	}
 
@@ -292,9 +292,4 @@ func (r *NodeStatusReporter) processPendingUpdates() {
 		}
 		delete(r.pendingUpdates, name)
 	}
-}
-
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() bapi.Client
 }

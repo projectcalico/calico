@@ -30,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -67,11 +66,7 @@ var _ = describe.CalicoDescribe(
 
 			// Require at least 2 schedulable worker nodes so the deployment can
 			// spread replicas across nodes.
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 3)
-			Expect(err).NotTo(HaveOccurred(), "failed to list schedulable nodes")
-			Expect(len(nodes.Items)).To(BeNumerically(">=", 2), "need at least 2 schedulable nodes for StrictAffinity test")
+			utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 		})
 
 		// Verifies that toggling IPAMConfiguration.StrictAffinity affects real pod

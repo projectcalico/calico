@@ -229,11 +229,17 @@ These are distinct mechanisms with overlapping effect:
   the iptables `Table.Apply()` loop. This recovers from transient
   failures.
 - **Periodic refresh** (`forceRouteRefresh`, `forceIPSetsRefresh`,
-  XDP): on a timer, queue a *full* resync on the drivers even when
+  XDP): on a timer, queue a resync on the drivers even when
   nothing is known to be wrong. This is the belt-and-braces defence
   against **drift Felix didn't cause and wasn't told about** — the
   drift-detection job noted in
   [`DESIGN.md` §1](../DESIGN.md#dataplane-managers-and-drivers).
+  Most drivers resync everything in one pass. The **legacy ipsets
+  driver is the exception**: a periodic refresh there is satisfied
+  *incrementally* over several apply loops (see
+  [IP sets](#ip-sets)), because re-listing every set at once is too
+  slow. Start-of-day and error-triggered ipset resyncs stay full and
+  synchronous.
 
 ### Review notes for this section
 
@@ -497,6 +503,26 @@ kernel constraints behind them:
   caps deletions per iteration (`MaxIPSetDeletionsPerIteration = 1`,
   rescheduling with a ~100ms floor), so a big policy teardown of
   thousands of sets doesn't stall the whole dataplane on cleanup.
+- **Periodic resyncs are incremental**, for the same reason. Felix
+  reads back each set with its own `ipset list <name>` (needed for an
+  ipset compatibility issue), so re-listing every set on each refresh
+  is far too slow. A refresh instead lists only the *names* cheaply,
+  repairs any set that vanished or appeared unexpectedly right away,
+  and re-checks the surviving sets' contents from a two-tier queue
+  (`resyncQueue`) drained a time-boxed batch per apply
+  (`BackgroundResyncTimeBudget`), paced by the same ≤100ms reschedule
+  as deletions. The **must** tier (start-of-day and error-forced
+  resyncs) is drained fully before Felix trusts the dataplane; the
+  **background** tier (periodic refresh) is spread over apply loops. A
+  desired set found missing from the name listing is repaired in the
+  *same* apply — its dataplane view is cleared so the normal
+  create-path recreates it — rather than being queued for a wasted
+  per-set list. On nodes with many sets the queue may never fully
+  drain between refreshes; re-adds keep an entry's queue position, so
+  the sweep degrades into a continuous rolling scan and a given set's
+  contents are re-checked roughly once per *sweep* time, which can
+  exceed `IpsetsRefreshInterval`. That is the intended trade-off, not
+  a pacing bug.
 
 **The cross-layer invariant: never reference an IP set before it is
 programmed.** This is enforced jointly by the calc graph and the
@@ -516,6 +542,12 @@ dataplane, and a change to *either* alone breaks it:
 - A change that deletes IP sets eagerly (not deferred / not
   rate-limited) can hit in-use errors or stall the dataplane on a
   big teardown.
+- A change to the incremental resync must preserve three invariants:
+  (a) the start-of-day full resync completes before the first writes;
+  (b) a desired set found missing from the name listing is repaired in
+  the same apply as the sweep that finds it; (c) a set whose write
+  failed is re-checked at **must** priority before Felix writes to it
+  again.
 
 ## Routing drivers
 

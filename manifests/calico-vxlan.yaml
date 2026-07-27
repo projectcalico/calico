@@ -2449,6 +2449,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -3116,6 +3128,25 @@ spec:
                     NftablesFilterDenyAction controls what happens to traffic that is denied by network policy. By default, Calico
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
+                  type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
                   type: string
                 nftablesMangleAllowAction:
                   description: |-

@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.4
+go 1.26.5
 cel.dev/expr v0.25.1
 charm.land/bubbles/v2 v2.0.0
 charm.land/bubbletea/v2 v2.0.2
@@ -313,13 +313,11 @@ local:calicoctl/calicoctl/commands/clientmgr
 local:calicoctl/calicoctl/commands/cluster
 local:calicoctl/calicoctl/commands/common
 local:calicoctl/calicoctl/commands/constants
-local:calicoctl/calicoctl/commands/datastore
 local:calicoctl/calicoctl/commands/datastore/migrate
 local:calicoctl/calicoctl/commands/file
 local:calicoctl/calicoctl/commands/ipam
 local:calicoctl/calicoctl/commands/node
 local:calicoctl/calicoctl/resourcemgr
-local:calicoctl/calicoctl/util
 local:calicoctl/calicoctl/util/yaml
 local:cmd/calico
 local:cmd/calico-windows

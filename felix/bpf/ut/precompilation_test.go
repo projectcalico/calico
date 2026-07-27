@@ -20,7 +20,11 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"os"
+	"os/exec"
 	"path"
+	"regexp"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -158,6 +162,76 @@ func helperCallIDs(file string) (map[int32]int, error) {
 		}
 	}
 	return calls, nil
+}
+
+// TestNoTracePrintkFlagStripsTraceHelper verifies the load-time dead-code
+// elimination: a main program carries skb_log's bpf_trace_printk/bpf_trace_vprintk
+// calls (the policy Log action) in its no_log build, but when Felix sets the
+// .rodata.prog_flags no_trace_printk flag before load, the verifier folds the
+// frozen constant and eliminates those code paths, so the loaded program
+// references no trace helper at all. That is what stops the "could not enable
+// bpf_trace_printk events" kernel-log spew under lockdown=confidentiality. With
+// the flag clear, the helper is still present.
+func TestNoTracePrintkFlagStripsTraceHelper(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpffs, err := utils.MaybeMountBPFfs()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(bpffs).To(Equal("/sys/fs/bpf"))
+
+	// from_wep_no_log.o is a main program built at the "off" log level; it still
+	// carries skb_log's trace calls (gated at runtime, not by log level).
+	const obj = "from_wep_no_log.o"
+
+	// traceRe matches a trace-printk helper *call instruction*, whether bpftool
+	// renders the target by name (kallsyms/BTF available) or numerically by
+	// helper id (6 / 177). The leading "(85) call" (BPF_JMP|BPF_CALL opcode)
+	// distinguishes a real instruction from bpftool's interleaved source-line
+	// annotations (which start with ";" and mention the helper by name).
+	traceRe := regexp.MustCompile(`\(85\) call ((bpf_)?trace_v?printk|6\b|177\b)`)
+
+	loadedTraceHelperRefs := func(noTrace bool) int {
+		o, err := libbpf.OpenObject(path.Join(bpfdefs.ObjectDir, obj))
+		Expect(err).NotTo(HaveOccurred())
+		defer o.Close()
+
+		// Set the per-object flag before load so libbpf freezes it read-only and
+		// the verifier can fold it.
+		flagSet := false
+		for m, err := o.FirstMap(); m != nil && err == nil; m, err = m.NextMap() {
+			if strings.HasSuffix(m.Name(), ".rodata.prog_flags") {
+				Expect(m.SetProgFlags(noTrace)).NotTo(HaveOccurred())
+				flagSet = true
+			}
+		}
+		Expect(flagSet).To(BeTrue(), "object should carry a .rodata.prog_flags map")
+
+		Expect(o.Load()).NotTo(HaveOccurred())
+
+		pinDir := path.Join(bpffs, fmt.Sprintf("notrace-test-%x", rand.Uint32()))
+		Expect(os.MkdirAll(pinDir, 0o755)).NotTo(HaveOccurred())
+		defer os.RemoveAll(pinDir)
+		Expect(o.PinPrograms(pinDir)).NotTo(HaveOccurred())
+		defer func() { _ = o.UnpinPrograms(pinDir) }()
+
+		entries, err := os.ReadDir(pinDir)
+		Expect(err).NotTo(HaveOccurred())
+		refs := 0
+		for _, e := range entries {
+			out, err := exec.Command("bpftool", "prog", "dump", "xlated", "pinned",
+				path.Join(pinDir, e.Name())).CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), string(out))
+			refs += len(traceRe.FindAllString(string(out), -1))
+		}
+		return refs
+	}
+
+	// Baseline: without the flag the loaded program references the helper.
+	Expect(loadedTraceHelperRefs(false)).To(BeNumerically(">", 0),
+		"baseline: main program should reference a trace helper when no_trace_printk is clear")
+	// With the flag set, the verifier must have eliminated every trace helper.
+	Expect(loadedTraceHelperRefs(true)).To(BeZero(),
+		"with no_trace_printk set, the loaded program must reference no trace helper")
 }
 
 func createVeth() (string, netlink.Link) {

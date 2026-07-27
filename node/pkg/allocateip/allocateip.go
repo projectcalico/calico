@@ -107,7 +107,7 @@ func run(
 		log.Debug("Using typha syncclient")
 	} else {
 		log.Debug("Using local syncer")
-		syncer := tunnelipsyncer.New(c.(backendClientAccessor).Backend(), r, nodename)
+		syncer := tunnelipsyncer.New(c.(bapi.BackendAccessor).Backend(), r, nodename)
 		syncer.Start()
 	}
 
@@ -783,11 +783,6 @@ func getLogger(attrType string) *log.Entry {
 		return log.WithField("type", "wireguardV6TunnelAddress")
 	}
 	return nil
-}
-
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() bapi.Client
 }
 
 // loadFelixEnvConfig loads the felix configuration from environment. It does not perform a hierarchical load across

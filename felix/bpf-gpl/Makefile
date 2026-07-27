@@ -369,10 +369,21 @@ COMPILE_DEPS=set -e; rm -f $@; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
+# The *.d auto-dependency files bake absolute system-header paths (e.g.
+# /usr/include/asm/types.h) from the environment that generated them — the
+# containerized go-build image.  Those paths do not exist on a typical
+# multiarch host (where asm/ lives under /usr/include/<triple>/), so a make
+# running on the host that includes a container-generated *.d sees a missing
+# prerequisite, tries to regenerate the *.d with host clang, and fails with
+# "asm/types.h file not found".  SKIP_DEP_INCLUDES lets a host-side caller that
+# only needs to generate source (e.g. the *_map_stub.c rule in felix/Makefile)
+# opt out of the includes it never needs.
+ifndef SKIP_DEP_INCLUDES
 ifneq ($(MAKECMDGOALS),clean)
   ifneq ($(MAKECMDGOALS), libbpf)
     include $(wildcard *.d)
   endif
+endif
 endif
 
 clean:

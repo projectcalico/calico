@@ -473,10 +473,10 @@ type DatastoreClient interface {
 	NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
-// RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.
+// RealClientV3 is the real API of the V3 client, plus the BackendAccessor we use to get the backend.
 type RealClientV3 interface {
 	clientv3.Interface
-	Backend() bapi.Client
+	bapi.BackendAccessor
 }
 
 // TODO Typha: Share with Felix.

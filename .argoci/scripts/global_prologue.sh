@@ -91,15 +91,31 @@ export USER="${USER:-argoci}"
 export PROVISIONER=${PROVISIONER:-gcp-kubeadm}
 export INSTALLER=${INSTALLER:-"manual"}
 export DATAPLANE=${DATAPLANE:-CalicoIptables}
-export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
+
+# Mirror banzai-core's TEST_TYPE defaulting: gcp-openstack profiles run the
+# OpenStack e2e tests via `bz tests`; everything else runs k8s-e2e.
+# run_tests.sh and REPORT_DIR below both key off this.
+if [[ "${PROVISIONER}" == "gcp-openstack" ]]; then
+  export TEST_TYPE=${TEST_TYPE:-openstack-e2e}
+else
+  export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
+fi
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
-export GOOGLE_REGIONS=("us-central1" "us-west1")
-export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
-# --project is required: without it gcloud uses the runner's default project
-# (tigera-cc-dev on ArgoCI, where the SA can't list zones) instead of the e2e
-# project, and GOOGLE_ZONE fails to resolve for every unpinned gcp job.
-export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGLE_PROJECT}" --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
-export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
+
+# GCP placement: gcp-openstack has its own defaults in banzai-core
+# (europe-west3-c in the openstack-calico-test VPC, which carries the
+# firewall rules the OpenStack nodes need), so leave the variables unset
+# there and let those defaults apply.  Everything else spreads across the
+# US regions on the semaphore-autotest network, as on Semaphore.
+if [[ "${PROVISIONER}" != "gcp-openstack" ]]; then
+  export GOOGLE_REGIONS=("us-central1" "us-west1")
+  export GOOGLE_REGION=${GOOGLE_REGION:-${GOOGLE_REGIONS[RANDOM%${#GOOGLE_REGIONS[@]}]}}
+  # --project is required: without it gcloud uses the runner's default project
+  # (tigera-cc-dev on ArgoCI, where the SA can't list zones) instead of the e2e
+  # project, and GOOGLE_ZONE fails to resolve for every unpinned gcp job.
+  export GOOGLE_ZONE=${GOOGLE_ZONE:-$(gcloud compute zones list --project "${GOOGLE_PROJECT}" --filter="region~'$GOOGLE_REGION'" --format="value(name)" | awk 'BEGIN {srand()} {a[NR]=$0} rand() * NR < 1 {zone=$0} END {print zone}')}
+  export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
+fi
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
 
 # RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the

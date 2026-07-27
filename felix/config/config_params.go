@@ -187,10 +187,13 @@ type Config struct {
 	WireguardThreadingEnabled      bool          `config:"bool;false"`
 
 	// nftables configuration.
-	NFTablesMode string `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesMode                      string         `config:"oneof(Enabled,Disabled,Auto);Auto"`
+	NFTablesFlowTableOffload          string         `config:"oneof(All,Disabled);Disabled"`
+	NFTablesFlowTableDataIfacePattern *regexp.Regexp `config:"regexp(nil-on-empty);"`
 
 	// BPF configuration.
 	BPFEnabled                         bool              `config:"bool;false"`
+	BPFOverlayHostSourceIP             string            `config:"oneof(TunnelAddress,HostAddress);TunnelAddress;non-zero"`
 	BPFDisableUnprivileged             bool              `config:"bool;true"`
 	BPFJITHardening                    string            `config:"oneof(Auto,Strict);Auto;non-zero"`
 	BPFLogLevel                        string            `config:"oneof(off,info,debug);off;non-zero"`

@@ -15,7 +15,6 @@
 package networking
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -123,15 +121,11 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("packet-size")
 
 		runPacketTest := func(clientType, targetType int, sameNode bool) {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-			Expect(err).NotTo(HaveOccurred())
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			nodeNames := nodesInfo.GetNames()
 			nodeIPs := nodesInfo.GetIPv4s()
-			Expect(len(nodeNames)).To(BeNumerically(">=", 2),
-				"packet size tests require at least 2 schedulable worker nodes")
+			Expect(nodeIPs).NotTo(BeEmpty(),
+				"packet size tests require a node with an IPv4 address")
 
 			// Sample packet sizes densely around the cluster's effective pod MTU.
 			// The MTU is derived from the Installation status so the test tracks

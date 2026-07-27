@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -609,6 +609,20 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
 	rules := []generictables.Rule{}
 
+	if r.nft && r.NFTablesFlowTableOffload {
+		// Offload established flows here, ahead of the dispatch jumps below. Two things pin the
+		// spot: the per-workload dispatch chains terminally accept established traffic (so a rule
+		// after them never runs), and the kernel only allows flow offload in chains reached from
+		// the forward hook, which rules out those shared per-workload chains.
+		rules = append(rules,
+			generictables.Rule{
+				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
+				Action:  r.FlowOffload(),
+				Comment: []string{"Offload established Calico flows."},
+			},
+		)
+	}
+
 	// Rules for filter forward chains dispatches the packet to our dispatch chains if it is going
 	// to/from an interface that we're responsible for.  Note: the dispatch chains represent "allow"
 	// by returning to this chain for further processing; this is required to handle traffic that
@@ -673,8 +687,10 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 // StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
-	return []generictables.Rule{
-		{
+	var rules []generictables.Rule
+
+	rules = append(rules,
+		generictables.Rule{
 			Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: []string{"Policy explicitly accepted packet."},
@@ -682,10 +698,12 @@ func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.R
 
 		// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
 		// forwarded traffic and should not be subject to normal host endpoint policy.
-		{
+		generictables.Rule{
 			Action: r.SetMark(r.MarkAccept),
 		},
-	}
+	)
+
+	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*generictables.Chain {
@@ -920,14 +938,19 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 
 	var tunnelIfaces []string
 
-	if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
-	}
-	if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
-	}
-	if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
-		tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
+		// In BPF mode (without BPFOverlayIPOnDevice), encap/decap and source IP
+		// selection are handled by BPF programs directly, so these masquerade
+		// rules for IPIP/VXLAN tunnels are not needed.
+		if ipVersion == 4 && r.IPIPEnabled && len(r.IPIPTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.IPIPIfaceName)
+		}
+		if ipVersion == 4 && r.VXLANEnabled && len(r.VXLANTunnelAddress) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV4)
+		}
+		if ipVersion == 6 && r.VXLANEnabledV6 && len(r.VXLANTunnelAddressV6) > 0 {
+			tunnelIfaces = append(tunnelIfaces, dataplanedefs.VXLANIfaceNameV6)
+		}
 	}
 	if ipVersion == 4 && r.WireguardEnabled && len(r.WireguardInterfaceName) > 0 {
 		// Wireguard is assigned an IP dynamically and without restarting Felix. Just add the interface if we have

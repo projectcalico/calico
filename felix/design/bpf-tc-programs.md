@@ -134,6 +134,16 @@ trace-printk-free preamble variants (`*_notrace.o`,
 `AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
 nodes.
 
+The main programs avoid `_notrace` duplicates (which would double the
+program matrix): each carries a `struct prog_flags` in its own frozen
+`.rodata.prog_flags` section. Felix sets `no_trace_printk` there before
+load (`bpf.SetNoTracePrintk` → `Map.SetProgFlags`); the frozen constant
+lets the verifier fold the flag and dead-code-eliminate `skb_log` (the
+policy `Log` action, which references the trace helper regardless of
+`BPFLogLevel`). **Per-program, load-time flags belong in `struct
+prog_flags`** — it is the vehicle for them, distinct from the node-wide
+globals.
+
 ### Two-tier jump maps
 
 Packet-processing programs are organised into two jump maps per

@@ -26,7 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	apiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,130 +36,50 @@ import (
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/argutils"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
+// Options is the flag surface of `calicoctl cluster diags`, filled in by the
+// cobra command.
+type Options struct {
+	Config         string
+	MaxLogs        int
+	MaxParallelism int
+	CommandTimeout string
+	OverallTimeout string
+
+	// FocusNodes are preferred when spending the MaxLogs budget but stay subject
+	// to it. ProblemNodes, ProblemPods and ComparisonNodes are collected in full,
+	// exempt from the cap.
+	FocusNodes      string
+	ProblemNodes    string
+	ProblemPods     string
+	ComparisonNodes string
+
+	SkipTempDirCleanup bool
+}
+
+// diagOpts is what the collection actually runs with: the operator's flags, plus
+// the answers the interactive wizard gathers, which have no flag equivalent.
 type diagOpts struct {
-	// Even though we already know, in this file, that we are doing the "calicoctl cluster
-	// diags" command, these two fields must be present or else Bind returns an error and fails
-	// to fill in the fields that we really do need.
-	Cluster bool // Only needed for Bind to work.
-	Diags   bool // Only needed for Bind to work.
+	Options
 
-	// Fields that we really want Bind to fill in.
-	Help                 bool
-	Config               string
-	MaxLogs              int
-	MaxParallelism       int
-	CommandTimeout       string
-	OverallTimeout       string
-	FocusNodes           string
-	ProblemNodes         string
-	ProblemPods          string
-	ComparisonNodes      string
-	AllowVersionMismatch bool
-	SkipTempDirCleanup   bool
-
-	// Set from the interactive wizard, not bound to a docopt flag: when the
-	// problem started, the operator's per-resource description, and the time they
-	// finished answering the wizard's questions.
+	// StartedAt is the operator's answer to "when did the problem start?",
+	// Description is their per-resource account of the roles involved, and
+	// AnsweredAt is when they finished the wizard. All three are empty on the
+	// flag-driven path.
 	StartedAt   string
 	Description string
 	AnsweredAt  string
 }
 
-var usage = `Usage:
-  calicoctl cluster diags [options]
-
-Options:
-  -h --help                    Show this screen.
-     --max-logs=<MAXLOGS>      Only collect up to this number of logs, for each
-                               kind of Calico component. [default: 5]
-     --max-parallelism=<MAXPARALLELISM> Maximum number of parallel threads to use for
-                               collecting logs. [default: 10]
-     --command-timeout=<DURATION> Kill an individual collection command if it
-                               produces no output for this long (e.g. 30s, 5m).
-                               [default: 5m]
-     --overall-timeout=<DURATION> Abort the whole collection after this long,
-                               writing a bundle of whatever was collected so far
-                               (e.g. 10m, 1h). [default: 10m]
-     --focus-nodes=<NODES>     Comma-separated list of nodes from which we should
-                               try first to collect logs.
-     --problem-nodes=<NODES>   Comma-separated list of nodes where the problem is
-                               occurring. These are collected in full, exempt
-                               from the --max-logs cap.
-     --problem-pods=<PODS>     Comma-separated list of pods (namespace/pod) that
-                               are having trouble. Their nodes are collected in
-                               full, exempt from the --max-logs cap.
-     --comparison-nodes=<NODES> Comma-separated list of healthy nodes to also
-                               collect in full, for comparison.
-  -c --config=<CONFIG>         Path to connection configuration file.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-     --skip-temp-dir-cleanup   Don't clean up the temporary directory (useful
-                               for development).
-`
-
-var doc = constants.DatastoreIntro + usage + `
-Description:
-  The cluster diags command collects a snapshot of Calico's diagnostic info and
-  logs from the cluster and bundles it into a .tar.gz file.
-
-  Run in an interactive terminal with no targeting options, it starts a wizard:
-  it asks whether the problem affects particular pods or nodes, lets you pick
-  them from a list, suggests healthy nodes to collect alongside for comparison,
-  and asks when the problem started and the role of each affected pod/node.  A
-  confirmation screen shows exactly what will be collected before anything runs.
-  Those answers and targeting choices — and the time they were made — are saved
-  in bundle-info.yaml at the top of the bundle.
-
-  The problem and comparison nodes are collected in full.  Every other node is
-  swept for logs up to the --max-logs cap (5 per kind of Calico pod, e.g.
-  calico-node or Typha) to keep the bundle a reasonable size.
-
-  For scripts and pipelines (or any non-interactive run), give the targeting
-  directly: --problem-nodes / --problem-pods for the affected nodes (collected
-  in full, exempt from --max-logs), --comparison-nodes for healthy nodes to
-  contrast against, and --focus-nodes to prefer particular nodes when spending
-  the --max-logs budget.  With no targeting options at all, it falls back to
-  collecting from every node.
-
-  Collection is resilient to a stuck cluster: a command that produces no output
-  for --command-timeout is killed (and noted in the bundle), the whole run is
-  abandoned after --overall-timeout, and Ctrl-C stops it early.  In every case a
-  bundle of whatever was collected so far is still written.
-`
-
-// Diags executes a series of kubectl exec commands to retrieve logs and resource information
-// for the configured cluster.
-func Diags(args []string) error {
-	return diagsTestable(args, fmt.Print, collectDiags)
-}
-
-func diagsTestable(args []string, print func(a ...any) (int, error), continuation func(*diagOpts) error) error {
-	// Make our own Parser so we can print out options when bad options are given.
-	parser := &docopt.Parser{HelpHandler: docopt.NoHelpHandler, SkipHelpFlags: true}
-	parsedArgs, err := parser.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'.\n\n%v", strings.Join(args, " "), usage)
-	}
-
-	var opts diagOpts
-	err = parsedArgs.Bind(&opts)
-	if err != nil {
-		return fmt.Errorf("error understanding options: %w", err)
-	}
-
-	if opts.Help {
-		_, _ = print(doc)
-		return nil
-	}
-
-	return continuation(&opts)
+// Diags collects a snapshot of diagnostic info and logs related to Calico for
+// the cluster and writes it to a .tar.gz file.
+func Diags(o Options) error {
+	return collectDiags(&diagOpts{Options: o})
 }
 
 // Collection outcomes recorded in the bundle so whoever analyses it knows
@@ -565,8 +484,10 @@ func collectCalicoResource(coll *common.Collector, dir string) {
 	// and version is the storage version. We use these to construct fully qualified resource identifiers
 	// (<plural>.<version>.<group>) to avoid ambiguity when multiple API groups define the same resource
 	// name (e.g., apiservers.operator.tigera.io vs apiservers.config.openshift.io).
-	buf, err := coll.Exec([]string{"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
-		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}"})
+	buf, err := coll.Exec([]string{
+		"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
+		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}",
+	})
 	if err != nil {
 		fmt.Printf("Couldn't list CRDs: %s\n", err)
 		if buf != nil {
@@ -946,30 +867,38 @@ func diagsCmdsForPod(dir, linkDir, nodeName, namespace string, pod *apiv1.Pod) [
 			SymLink:  fmt.Sprintf("%s/%s/%s.txt", linkDir, namespace, pod.Name),
 		},
 	}
-	// If any container has restarted, also grab the previous incarnation's
-	// logs — those are usually the ones that explain the restart.
-	if hasPreviousLogs(pod) {
+	// For each container that has restarted, also grab the previous
+	// incarnation's logs — those are usually the ones that explain the
+	// restart. We collect them per-container rather than with a single
+	// --all-containers invocation: `kubectl logs --previous --all-containers`
+	// fails outright if any one container in the pod has no previous
+	// incarnation, which would lose the crashed container's logs — exactly
+	// the ones we came for. Requesting only the containers that actually have
+	// a prior incarnation, one command each, sidesteps that.
+	for _, container := range containersWithPreviousLogs(pod) {
 		cmds = append(cmds, common.Cmd{
-			Info:     fmt.Sprintf("Collect previous logs for pod %s", pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --previous -n %s %s --all-containers", namespace, pod.Name),
-			FilePath: fmt.Sprintf("%s/%s.previous.log", namespaceDir, pod.Name),
-			SymLink:  fmt.Sprintf("%s/%s/%s.previous.log", linkDir, namespace, pod.Name),
+			Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs --previous -n %s %s -c %s", namespace, pod.Name, container),
+			FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
+			SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
 		})
 	}
 	return cmds
 }
 
-// hasPreviousLogs reports whether any container in the pod has a prior
-// incarnation worth fetching logs from.
-func hasPreviousLogs(pod *apiv1.Pod) bool {
+// containersWithPreviousLogs returns the names of the pod's containers (both
+// regular and init) that have a prior incarnation worth fetching logs from,
+// i.e. the container has restarted or has a previously terminated state.
+func containersWithPreviousLogs(pod *apiv1.Pod) []string {
 	statuses := append([]apiv1.ContainerStatus{}, pod.Status.ContainerStatuses...)
 	statuses = append(statuses, pod.Status.InitContainerStatuses...)
+	var names []string
 	for _, cs := range statuses {
 		if cs.RestartCount > 0 || cs.LastTerminationState.Terminated != nil {
-			return true
+			names = append(names, cs.Name)
 		}
 	}
-	return false
+	return names
 }
 
 // bpfJSONCmd builds a diagnostic command that dumps calico-bpf state as JSON,
@@ -1184,7 +1113,7 @@ func collectUnsupportedAnnotations(tempDir string, directoryName string) {
 		fmt.Println("\n==== WARNING: Unsupported annotation usage detected in the cluster ====")
 		content := strings.Join(filesWithString, "\n")
 		filePath := fmt.Sprintf("%s/%s/files_with_unsupported_annotation.txt", tempDir, directoryName)
-		err = os.WriteFile(filePath, []byte(content), 0644)
+		err = os.WriteFile(filePath, []byte(content), 0o644)
 		if err != nil {
 			fmt.Printf("Error writing list of files with unsupported annotation: %s\n", err)
 		}

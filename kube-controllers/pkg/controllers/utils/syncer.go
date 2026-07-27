@@ -69,16 +69,12 @@ func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindStagedGlobalNetworkPolicy},
 		},
 	}
-	type accessor interface {
-		Backend() bapi.Client
-	}
-
 	d := &DataFeed{
 		registrations:       map[any][]UpdateHandler{},
 		statusRegistrations: []StatusHandler{},
 		dataStore:           dataStore,
 	}
-	d.syncer = watchersyncer.New(c.(accessor).Backend(), resourceTypes, d)
+	d.syncer = watchersyncer.New(c.(bapi.BackendAccessor).Backend(), resourceTypes, d)
 	return d
 }
 

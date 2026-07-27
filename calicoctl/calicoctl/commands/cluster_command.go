@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -31,6 +30,7 @@ func newClusterCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cluster",
 		Short: "Access cluster information",
+		Long:  `Access cluster-wide Calico information.`,
 	}
 	cmd.AddCommand(newClusterDiagsCommand())
 	return cmd
@@ -40,43 +40,53 @@ func newClusterDiagsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "diags",
 		Short: "Collect snapshot of diagnostic info and logs related to Calico at the cluster-level",
+		Long: `Collect a snapshot of cluster-wide Calico diagnostics and logs. Unlike node
+diags, which runs on a single host, this gathers information across the
+cluster, and bundles it into a .tar.gz file.
+
+Run in an interactive terminal with no targeting flags, it starts a wizard: it
+asks whether the problem affects particular pods or nodes, lets you pick them
+from a list, suggests healthy nodes or pods to collect alongside for comparison,
+and asks when the problem started and how each affected pod/node is involved. A
+confirmation screen shows exactly what will be collected before anything runs.
+Those answers and targeting choices - and the time they were made - are saved in
+bundle-info.yaml at the top of the bundle.
+
+The problem and comparison nodes are collected in full. Every other node is
+swept for logs up to the --max-logs cap (5 per kind of Calico pod, e.g.
+calico-node or Typha) to keep the bundle a reasonable size.
+
+For scripts and pipelines (or any non-interactive run), give the targeting
+directly: --problem-nodes / --problem-pods for the affected nodes (collected in
+full, exempt from --max-logs), --comparison-nodes for healthy nodes to contrast
+against, and --focus-nodes to prefer particular nodes when spending the
+--max-logs budget. With no targeting flags at all, it collects from every node.
+
+Collection is resilient to a stuck cluster: a command that produces no output
+for --command-timeout is killed (and noted in the bundle), the whole run is
+abandoned after --overall-timeout, and Ctrl-C stops it early. In every case a
+bundle of whatever was collected so far is still written.`,
+		Example: `  # Ask where the problem is, then collect (interactive terminals only).
+  calicoctl cluster diags
+
+  # Target the affected nodes directly, with two healthy nodes for contrast.
+  calicoctl cluster diags --problem-nodes=worker-1,worker-2 --comparison-nodes=worker-7,worker-8
+
+  # Target by pod; the nodes hosting them are collected in full.
+  calicoctl cluster diags --problem-pods=calico-system/calico-node-abcde`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Build the args array for the existing docopt-based implementation.
-			synthArgs := []string{"cluster", "diags"}
-			if maxLogs, _ := cmd.Flags().GetInt("max-logs"); maxLogs != 5 {
-				synthArgs = append(synthArgs, fmt.Sprintf("--max-logs=%d", maxLogs))
-			}
-			if maxP, _ := cmd.Flags().GetInt("max-parallelism"); maxP != 10 {
-				synthArgs = append(synthArgs, fmt.Sprintf("--max-parallelism=%d", maxP))
-			}
-			if t, _ := cmd.Flags().GetString("command-timeout"); t != "5m" {
-				synthArgs = append(synthArgs, "--command-timeout="+t)
-			}
-			if t, _ := cmd.Flags().GetString("overall-timeout"); t != "10m" {
-				synthArgs = append(synthArgs, "--overall-timeout="+t)
-			}
-			if nodes, _ := cmd.Flags().GetString("focus-nodes"); nodes != "" {
-				synthArgs = append(synthArgs, "--focus-nodes="+nodes)
-			}
-			if nodes, _ := cmd.Flags().GetString("problem-nodes"); nodes != "" {
-				synthArgs = append(synthArgs, "--problem-nodes="+nodes)
-			}
-			if pods, _ := cmd.Flags().GetString("problem-pods"); pods != "" {
-				synthArgs = append(synthArgs, "--problem-pods="+pods)
-			}
-			if nodes, _ := cmd.Flags().GetString("comparison-nodes"); nodes != "" {
-				synthArgs = append(synthArgs, "--comparison-nodes="+nodes)
-			}
-			if config, _ := cmd.Flags().GetString("config"); config != "" {
-				synthArgs = append(synthArgs, "--config="+config)
-			}
-			if skip, _ := cmd.Flags().GetBool("skip-temp-dir-cleanup"); skip {
-				synthArgs = append(synthArgs, "--skip-temp-dir-cleanup")
-			}
-			if allowMismatch, _ := cmd.Flags().GetBool("allow-version-mismatch"); allowMismatch {
-				synthArgs = append(synthArgs, "--allow-version-mismatch")
-			}
-			return cluster.Diags(synthArgs)
+			opts := cluster.Options{}
+			opts.Config, _ = cmd.Flags().GetString("config")
+			opts.MaxLogs, _ = cmd.Flags().GetInt("max-logs")
+			opts.MaxParallelism, _ = cmd.Flags().GetInt("max-parallelism")
+			opts.CommandTimeout, _ = cmd.Flags().GetString("command-timeout")
+			opts.OverallTimeout, _ = cmd.Flags().GetString("overall-timeout")
+			opts.FocusNodes, _ = cmd.Flags().GetString("focus-nodes")
+			opts.ProblemNodes, _ = cmd.Flags().GetString("problem-nodes")
+			opts.ProblemPods, _ = cmd.Flags().GetString("problem-pods")
+			opts.ComparisonNodes, _ = cmd.Flags().GetString("comparison-nodes")
+			opts.SkipTempDirCleanup, _ = cmd.Flags().GetBool("skip-temp-dir-cleanup")
+			return cluster.Diags(opts)
 		},
 	}
 	addConfigFlag(cmd)

@@ -194,9 +194,9 @@ func TestGetGPGPubKey(t *testing.T) {
 	})
 }
 
-// TestSignRPMFilesNoFiles verifies SignRPMFiles is a no-op for an empty or nil
-// file list: it must return nil without shelling out to rpmsign (which would
-// otherwise fail with a usage error). This needs no signing tooling, so it runs
+// TestSignRPMFilesNoFiles verifies SignRPMFiles reports an error for an empty or
+// nil file list rather than shelling out to rpmsign (which would otherwise fail
+// with a confusing usage error). This needs no signing tooling, so it runs
 // unconditionally, unlike the tests built on newSigningEnv.
 func TestSignRPMFilesNoFiles(t *testing.T) {
 	for name, files := range map[string][]string{
@@ -204,8 +204,8 @@ func TestSignRPMFilesNoFiles(t *testing.T) {
 		"empty slice": {},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := SignRPMFiles("SOMEKEYID", files); err != nil {
-				t.Errorf("SignRPMFiles(%s): expected no-op nil, got: %v", name, err)
+			if err := SignRPMFiles("SOMEKEYID", files); err == nil {
+				t.Errorf("SignRPMFiles(%s): expected an error for an empty file list, got nil", name)
 			}
 		})
 	}
@@ -316,6 +316,11 @@ func TestCheckRPMSigOutput(t *testing.T) {
 		"nokey verbose":         {out: "pkg.rpm:\n    Header V4 RSA/SHA256 Signature, key ID abcd1234: NOKEY", wantErr: true},
 		"empty output":          {out: "", wantErr: true},
 		"whitespace only":       {out: "   \n\t ", wantErr: true},
+		// The file name mentions "signature"/"NOKEY"/"NOT OK" but the actual
+		// result does not — the token-based parse must not be fooled by it.
+		"unsigned file named signature": {out: "my-signature.rpm: digests OK", wantErr: true},
+		"signed file named signature":   {out: "my-signature.rpm: digests signatures OK", wantErr: false},
+		"nokey in file name only":       {out: "nokey-not-ok.rpm: digests signatures OK", wantErr: false},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -341,9 +346,9 @@ func TestCheckRPMSigs(t *testing.T) {
 		return rpm
 	}
 
-	t.Run("nil for no files", func(t *testing.T) {
-		if err := CheckRPMSigs(nil); err != nil {
-			t.Errorf("CheckRPMSigs(nil): unexpected error: %v", err)
+	t.Run("error for no files", func(t *testing.T) {
+		if err := CheckRPMSigs(nil); err == nil {
+			t.Error("CheckRPMSigs(nil): expected an error for an empty file list, got nil")
 		}
 	})
 

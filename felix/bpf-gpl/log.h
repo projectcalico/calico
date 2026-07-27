@@ -24,9 +24,16 @@
 #define IPVER_PFX	""
 #endif
 
+/* The no_trace_printk guard lets Felix strip every bpf_trace_printk reference
+ * from a program at load time (see struct prog_flags): the flag lives in
+ * frozen .rodata, so the verifier folds it and dead-code-eliminates the call.
+ * When the flag is clear (the normal case) the condition folds to always-true,
+ * so there is no runtime cost. */
 #define bpf_log(__fmt, ...) do { \
-		__attribute__((section(".rodata.cali_debug"))) static const char fmt[] = IPVER_PFX __fmt; \
-		bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
+		if (!PROG_FLAGS.no_trace_printk) { \
+			__attribute__((section(".rodata.cali_debug"))) static const char fmt[] = IPVER_PFX __fmt; \
+			bpf_trace_printk(fmt, sizeof(fmt), ## __VA_ARGS__); \
+		} \
 } while (0)
 
 #ifndef CALI_LOG

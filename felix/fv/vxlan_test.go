@@ -546,10 +546,13 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 				BeforeEach(func() {
 					for _, f := range felixes {
 						if BPFMode() {
+							// Each remote node contributes 2 "host" routes (remote host + remote host tunneled).
+							// The local node contributes 1 "host" route (its node IP; no tunnel device IP in BPF mode).
+							expectedRoutes := 1 + (len(felixes)-1)*2
 							Eventually(func() int {
 								return strings.Count(f.BPFRoutes(), "host")
-							}).Should(Equal(len(felixes)*2),
-								"Expected one host and one host tunneled route per node")
+							}).Should(Equal(expectedRoutes),
+								"Expected one local host route + two host routes per remote node")
 						} else if NFTMode() {
 							Eventually(f.NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllVXLANSourceNets, 4)), "10s", "200ms").Should(Equal(len(felixes) - 1))
 						} else {
@@ -575,10 +578,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 
 				It("should have no connectivity from third felix and expected number of IPs in allow list", func() {
 					if BPFMode() {
+						// After removing the third node: 1 local host route + 2 routes per remaining remote node.
+						expectedRoutes := 1 + (len(felixes)-2)*2
 						Eventually(func() int {
 							return strings.Count(felixes[0].BPFRoutes(), "host")
-						}).Should(Equal((len(felixes)-1)*2),
-							"Expected one host and one host tunneled route per node, not: "+felixes[0].BPFRoutes())
+						}).Should(Equal(expectedRoutes),
+							"Expected one local host route + two host routes per remaining remote node, not: "+felixes[0].BPFRoutes())
 					} else if NFTMode() {
 						Eventually(felixes[0].NFTSetSizeFn(utils.IPSetName(rules.IPSetIDAllVXLANSourceNets, 4)), "5s", "200ms").Should(Equal(len(felixes) - 2))
 					} else {
@@ -1044,6 +1049,9 @@ func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, ro
 	topologyOptions.ExtraEnvVars["FELIX_FeatureDetectOverride"] = fmt.Sprintf("ChecksumOffloadBroken=%t", brokenXSum)
 	topologyOptions.FelixDebugFilenameRegex = "vxlan|route_table|l3_route_resolver|int_dataplane"
 	topologyOptions.ExtraEnvVars["FELIX_BPFLogLevel"] = "off"
+	// Exercise the no-tunnel-IP path in BPF mode; the route-count assertions in this
+	// file are written for that mode.  Has no effect outside BPF mode.
+	topologyOptions.ExtraEnvVars["FELIX_BPFOverlayHostSourceIP"] = "HostAddress"
 	return topologyOptions
 }
 

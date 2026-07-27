@@ -20,7 +20,7 @@ RUN dnf upgrade -y
 
 COPY docker-image/nginx.repo /etc/yum.repos.d/nginx.repo
 
-RUN dnf --enablerepo=nginx-stable install -y \
+RUN dnf --enablerepo=nginx-mainline install -y \
   nginx
 
 FROM scratch AS source

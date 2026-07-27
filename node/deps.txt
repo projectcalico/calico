@@ -1,7 +1,7 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.4
+go 1.26.5
 cel.dev/expr v0.25.1
 github.com/BurntSushi/toml v1.6.0
 github.com/DeRuina/timberjack v1.4.5

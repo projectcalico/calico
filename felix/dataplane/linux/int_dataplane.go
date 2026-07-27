@@ -216,6 +216,7 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled                         bool
+	BPFOverlayIPOnDevice               bool
 	BPFPolicyDebugEnabled              bool
 	BPFDisableUnprivileged             bool
 	BPFJITHardening                    string
@@ -226,6 +227,7 @@ type Config struct {
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
@@ -474,6 +476,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
 	}
 	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled, nil)
+
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
+		// module but isn't autoloaded, this lets detection succeed. Kernels that have it built in
+		// or genuinely lack it are unaffected and fall through to the probe result.
+		mp := newModProbe(moduleFlowTable, newRealCmd)
+		out, err := mp.Exec()
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleFlowTable)
+
+		if !nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane) {
+			log.Warn("NFTables flowtable offload is enabled but the kernel does not support it (nf_flow_table unavailable); disabling offload.")
+			config.RulesConfig.NFTablesFlowTableOffload = false
+		}
+	}
 
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
@@ -994,6 +1010,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Warn("Kernel lockdown=confidentiality detected: forcing BPF conntrack cleanup " +
 				"log level to off (ftrace is disabled, debug logging cannot work).")
 		}
+		// Make every BPF program loaded from here on drop its trace-printk code
+		// paths at load time (via the .rodata.prog_flags no_trace_printk flag),
+		// so their load does not spam the kernel log under confidentiality
+		// lockdown. Must be set before any program is loaded.
+		bpf.SetNoTracePrintk(kernelLockdownConfidentiality)
 
 		// Start IPv4 BPF dataplane components
 		conntrackScannerV4, workloadRemoveChanV4 = startBPFDataplaneComponents(proto.IPVersion_IPV4, bpfMaps.V4, ipSetIDAllocatorV4, &config, ipsetsManager, dp, kernelLockdownConfidentiality)
@@ -1162,8 +1183,32 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
+	var flowtableHandlerV4 nftables.FlowTableHandler
+	var flowtableTargets []flowtableTarget
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
+
+		if config.RulesConfig.NFTablesFlowTableOffload {
+			flowtableHandlerV4 = nftablesV4RootTable
+
+			// The overlay/tunnel devices are created asynchronously after Felix starts, so the
+			// flowtable manager gates them on interface-monitor events rather than programming
+			// them up front.
+			var overlayDevicesV4 []string
+			if config.RulesConfig.VXLANEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+			}
+			if config.RulesConfig.IPIPEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+			}
+			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
+				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
+			}
+			flowtableTargets = append(flowtableTargets, flowtableTarget{
+				handler:        nftablesV4RootTable,
+				overlayDevices: overlayDevicesV4,
+			})
+		}
 	}
 
 	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
@@ -1223,6 +1268,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
+		flowtableHandlerV4,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsManagerV4,
@@ -1411,8 +1457,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
+		var flowtableHandlerV6 nftables.FlowTableHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+
+			if config.RulesConfig.NFTablesFlowTableOffload {
+				flowtableHandlerV6 = nftablesV6RootTable
+
+				var overlayDevicesV6 []string
+				if config.RulesConfig.VXLANEnabledV6 {
+					overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+				}
+				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
+					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
+				}
+				flowtableTargets = append(flowtableTargets, flowtableTarget{
+					handler:        nftablesV6RootTable,
+					overlayDevices: overlayDevicesV6,
+				})
+			}
 		}
 
 		var linkAddrsManagerV6 linkaddrs.Interface
@@ -1446,6 +1509,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
+			flowtableHandlerV6,
 			nil,
 			callbacks,
 			linkAddrsManagerV6,
@@ -1497,6 +1561,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.natTables...)
 		dp.allTables = append(dp.allTables, dp.filterTables...)
 		dp.allTables = append(dp.allTables, dp.rawTables...)
+	}
+
+	if config.RulesConfig.NFTablesFlowTableOffload && len(flowtableTargets) > 0 {
+		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	// Include cleanup tables in allTables so that they are cleaned up.
@@ -1726,94 +1794,6 @@ func ConfigureDefaultMTUs(hostMTU int, c *Config) {
 			log.Debug("Defaulting IPv6 Wireguard MTU based on host")
 			c.Wireguard.MTUV6 = hostMTU - wireguardV6MTUOverhead
 		}
-	}
-}
-
-func cleanUpIPIPAddrs() {
-	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
-	log.Debug("Checking if we need to clean up the IPIP device")
-
-	var errFound bool
-
-cleanupRetry:
-	for i := 0; i <= maxCleanupRetries; i++ {
-		errFound = false
-		if i > 0 {
-			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
-		}
-		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
-		if err != nil {
-			if _, ok := err.(netlink.LinkNotFoundError); ok {
-				log.Debug("IPIP disabled and no IPIP device found")
-				return
-			}
-			log.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
-			errFound = true
-
-			// Sleep for 1 second before retrying
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
-		if err != nil {
-			log.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
-			errFound = true
-
-			// Sleep for 1 second before retrying
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		for _, oldAddr := range addrs {
-			if err := netlink.AddrDel(link, &oldAddr); err != nil {
-				log.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
-				errFound = true
-
-				// Sleep for 1 second before retrying
-				time.Sleep(1 * time.Second)
-				continue cleanupRetry
-			}
-		}
-	}
-	if errFound {
-		log.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
-	}
-}
-
-func cleanUpVXLANDevice(deviceName string) {
-	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
-	log.Debug("Checking if we need to clean up the VXLAN device")
-
-	var errFound bool
-	for i := 0; i <= maxCleanupRetries; i++ {
-		errFound = false
-		if i > 0 {
-			log.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
-		}
-		link, err := netlink.LinkByName(deviceName)
-		if err != nil {
-			if _, ok := err.(netlink.LinkNotFoundError); ok {
-				log.Debug("VXLAN disabled and no VXLAN device found")
-				return
-			}
-			log.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
-			errFound = true
-
-			// Sleep for 1 second before retrying
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		if err = netlink.LinkDel(link); err != nil {
-			log.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
-			errFound = true
-
-			// Sleep for 1 second before retrying
-			time.Sleep(1 * time.Second)
-			continue
-		}
-	}
-	if errFound {
-		log.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
 

@@ -38,22 +38,24 @@ on:
         type: choice
         options: [success, failure, error]
 
-# Keyed by (commit, state) — Semaphore re-posts the same terminal status
-# several times, so the duplicate events land in one group. cancel-in-progress
-# is false so they SERIALIZE: the first run sends + records a cache marker, and
-# the queued duplicates then see the marker and skip (see the dedup gate below).
-concurrency:
-  group: ci-notify-${{ github.event.sha || inputs.pr_number || github.run_id }}-${{ github.event.state || inputs.state }}
-  cancel-in-progress: false
+# Semaphore re-posts the same terminal status several times per commit.
+# Dedup claims a git ref named after (commit, state) atomically — see "Claim
+# dedup marker" below — so concurrent duplicate events race to create the
+# same ref and exactly one wins. No concurrency group is needed: the claim
+# is atomic on GitHub's side, so runs don't need to be serialized to avoid
+# a double-send race. Markers only matter for the duplicate-event burst
+# (minutes), so each run opportunistically prunes markers older than 2 days
+# — see "Prune stale dedup markers" — keeping refs/ci-notify/* bounded.
 
 permissions:
   pull-requests: read
-  contents: read
-  # actions/cache/save needs write scope on the cache store, or it silently
-  # fails ("cache write denied: token has no writable scopes") and the dedup
-  # marker below is never persisted, letting every duplicate status event send
-  # its own DM.
-  actions: write
+  # git ref create/delete (the dedup marker) lives under contents. This
+  # replaced an actions/cache-based marker: GitHub's Jun 2026 change to
+  # issue read-only cache tokens for "untrusted trigger" events (a `status`
+  # event from Semaphore's GitHub App qualifies) made actions/cache/save
+  # silently no-op forever here, so the old marker never persisted and every
+  # duplicate status event kept sending its own DM.
+  contents: write
 
 jobs:
   notify:
@@ -78,29 +80,11 @@ jobs:
       STATE: ${{ github.event.state || inputs.state }}
       SHA: ${{ github.event.sha }}
     steps:
-      # Dedup: a marker cached under (commit, state) means a previous run for
-      # this same terminal status already DM'd. lookup-only — we only need the
-      # hit/miss, not the file. Status events only; manual runs (no SHA) always
-      # proceed so the workflow_dispatch test path is never suppressed.
-      - name: Check if already notified
-        id: dedup
-        if: env.SHA != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: .ci-notify-marker
-          key: ci-notify-sent-${{ github.event.sha }}-${{ github.event.state }}
-          lookup-only: true
-
-      - name: Skip if not configured or already notified
+      - name: Skip if not configured
         id: gate
-        env:
-          DEDUP_HIT: ${{ steps.dedup.outputs.cache-hit }}
         run: |
           if [[ -z "${CI_NOTIFY_MAP}" || -z "${SLACK_BOT_TOKEN}" ]]; then
             echo "::notice::CI_NOTIFY_MAP variable or GH_PR_MONITOR_BOT_TOKEN secret missing — skipping"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$DEDUP_HIT" == "true" ]]; then
-            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -165,6 +149,32 @@ jobs:
             echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
           fi
 
+      # Dedup: claim a git ref named after (commit, state) before sending.
+      # Ref creation is atomic on GitHub's side, so concurrent duplicate
+      # status events race to create the same ref and exactly one wins —
+      # no concurrency group or serialization required. A non-"already
+      # exists" failure fails OPEN (proceeds to send) rather than silently
+      # swallowing a real notification on an API hiccup. Status events only
+      # (SHA non-empty); manual workflow_dispatch runs always proceed.
+      - name: Claim dedup marker (atomic)
+        id: claim
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && env.SHA != ''
+        run: |
+          set +e
+          ERR=$(gh api "repos/$REPO/git/refs" --method POST \
+            -f ref="refs/ci-notify/${SHA}-${STATE}" -f sha="$SHA" 2>&1 >/dev/null)
+          RC=$?
+          set -e
+          if [[ $RC -eq 0 ]]; then
+            echo "claimed=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$ERR" == *"Reference already exists"* ]]; then
+            echo "::notice::already notified for $SHA ($STATE) — skipping duplicate status event"
+            echo "claimed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::dedup ref-claim failed unexpectedly ($ERR) — proceeding without dedup for this run"
+            echo "claimed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # On failure/error, sem-ai-ci-triage posts a failure-analysis comment
       # — but it runs concurrently on the same status event and only after
       # its LLM backend responds, so the comment usually isn't there yet.
@@ -176,6 +186,7 @@ jobs:
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
+          steps.claim.outputs.claimed != 'false' &&
           env.STATE != 'success'
         env:
           PR: ${{ steps.resolve.outputs.pr }}
@@ -224,7 +235,8 @@ jobs:
         if: >-
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
-          steps.lookup.outputs.skip != 'true'
+          steps.lookup.outputs.skip != 'true' &&
+          steps.claim.outputs.claimed != 'false'
         env:
           SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
           PR: ${{ steps.resolve.outputs.pr }}
@@ -286,28 +298,46 @@ jobs:
             echo "::warning::Slack DM failed: $(err "$RESP")"
           else
             echo "DM sent to $SLACK_ID for PR #$PR ($STATE)"
-            # Only a confirmed send arms the dedup marker below. A transient
-            # Slack failure leaves it unset, so the next serialized duplicate
-            # status event retries instead of being suppressed forever.
             echo "sent=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Record that this (commit, state) was notified, so the serialized
-      # duplicate status events for the same outcome skip at the dedup gate.
-      # Gated on a confirmed Slack send (steps.send.outputs.sent) — a failed
-      # DM must NOT arm the marker, or a transient Slack outage on the first
-      # event would suppress the notification for this (sha, state) forever.
-      # Status events only (SHA non-empty); never on the manual test path.
-      - name: Record notification marker
-        if: env.SHA != '' && steps.send.outputs.sent == 'true'
-        run: echo notified > .ci-notify-marker
-
-      - name: Save notification marker
-        if: env.SHA != '' && steps.send.outputs.sent == 'true'
-        # A cache hiccup (e.g. key already saved in a rare race) must never
-        # fail the notifier — the DM has already gone out.
+      # A failed send must release the claim, or a transient Slack outage on
+      # the run that won the race would permanently suppress the
+      # notification for this (sha, state) — no other duplicate event would
+      # retry, since the ref would already exist. Best-effort: a delete
+      # hiccup must never fail the notifier — the DM attempt is already done.
+      - name: Release dedup marker if send failed
+        if: steps.claim.outputs.claimed == 'true' && steps.send.outputs.sent != 'true'
         continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: .ci-notify-marker
-          key: ci-notify-sent-${{ github.event.sha }}-${{ github.event.state }}
+        run: gh api "repos/$REPO/git/refs/ci-notify/${SHA}-${STATE}" --method DELETE
+
+      # Housekeeping: markers are dead weight once the duplicate-event burst
+      # (minutes) has passed, so prune any older than 2 days here rather than
+      # in a separate scheduled workflow — keeps the whole mechanism in this
+      # file and refs/ci-notify/* from growing without bound. Age proxy is
+      # the committer date of the ref's target commit (the marker is created
+      # moments after that commit's CI finishes). Best-effort throughout: a
+      # failed prune must never fail the notifier, and a missed one just
+      # waits for the next run. Duplicate runs may race to delete the same
+      # ref — the loser's 422 is swallowed.
+      - name: Prune stale dedup markers
+        if: steps.claim.outcome == 'success'
+        continue-on-error: true
+        run: |
+          CUTOFF=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api "repos/$REPO/git/matching-refs/ci-notify/" --paginate \
+            --jq '.[] | "\(.ref) \(.object.sha)"' \
+          | while read -r REF OBJ; do
+              # Never prune this run's own marker: a push can carry an old
+              # committer date (e.g. an untouched branch pushed late), and
+              # deleting our own marker would re-open the dedup window while
+              # duplicate events are still arriving.
+              [[ "$REF" == "refs/ci-notify/${SHA}-${STATE}" ]] && continue
+              DATE=$(gh api "repos/$REPO/commits/$OBJ" --jq .commit.committer.date) || continue
+              # ISO-8601 UTC sorts lexicographically, so '<' compares times.
+              if [[ "$DATE" < "$CUTOFF" ]]; then
+                gh api "repos/$REPO/git/$REF" --method DELETE \
+                  && echo "pruned $REF (target committed $DATE)" \
+                  || echo "::notice::could not prune $REF"
+              fi
+            done
