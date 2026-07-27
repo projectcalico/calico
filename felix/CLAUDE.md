@@ -24,7 +24,9 @@ Felix's "brain" is the calculation graph in `calc/`. Changes there require calc 
 make fv GINKGO_FOCUS="TestName"
 ```
 
-Runs functional tests from `fv/`, using **Ginkgo v2**. Requires container images to be built first. `GINKGO_FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`; the race detector is on by default on amd64/arm64 (`FV_RACE_DETECTOR_ENABLED`).
+Runs functional tests from `fv/`, using **Ginkgo v2**. `make fv` builds everything it needs first, and detects which images are already fresh so it does not rebuild them. `GINKGO_FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`; the race detector is on by default on amd64/arm64 (`FV_RACE_DETECTOR_ENABLED`).
+
+`fv-no-prereqs` skips that build step. It exists for CI, which builds separately and wants no accidental rebuilds — don't use it locally.
 
 A test's ID is the concatenation of all its nested `Context`/`Describe` headings, so `GINKGO_FOCUS` can match on any enclosing heading. Other useful flags: `-ginkgo.dryRun` (list tests without running them), `-ginkgo.v` (verbose), and `FV_FELIX_LOG_LEVEL=debug`.
 
@@ -32,7 +34,7 @@ A test's ID is the concatenation of all its nested `Context`/`Describe` headings
 
 #### Where the BPF code lives
 
-- `bpf-gpl/` — eBPF programs, GPL v2.0 licensed for Linux kernel compatibility.
+- `bpf-gpl/` — eBPF programs, GPL v2.0/Apache dual licensed for Linux kernel compatibility.
 - `bpf-apache/` — Apache-licensed BPF code.
 - `make clone-libbpf` — run before your first BPF build; fetches libbpf.
 - BPF tooling versions (`LIBBPF_VERSION`, `BPFTOOL_IMAGE`) are pinned in [`metadata.mk`](../metadata.mk).
