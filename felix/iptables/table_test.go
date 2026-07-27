@@ -15,11 +15,13 @@
 package iptables_test
 
 import (
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
@@ -108,6 +110,70 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			Expect(func() {
 				table.Apply()
 			}).To(Panic())
+		})
+
+		Describe("with SkipIfIncompatible set", func() {
+			BeforeEach(func() {
+				table = NewTable(
+					"filter",
+					4,
+					rules.RuleHashPrefix,
+					featureDetector,
+					TableOptions{
+						HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+						NewCmdOverride:        dataplane.NewCmd,
+						SleepOverride:         dataplane.Sleep,
+						NowOverride:           dataplane.Now,
+						BackendMode:           dataplaneMode,
+						LookPathOverride:      testutils.LookPathNoLegacy,
+						OpRecorder:            logutils.NewSummarizer("test loop"),
+						SkipIfIncompatible:    true,
+					},
+				)
+			})
+
+			It("should carry on without touching the table", func() {
+				Expect(func() {
+					table.Apply()
+				}).NotTo(Panic())
+
+				// We couldn't read the table, so we mustn't have tried to write it either.
+				Expect(dataplane.CmdNames).NotTo(ContainElement(ContainSubstring("restore")))
+			})
+
+			It("should only warn about the unreadable table once", func() {
+				// Most nodes in this state have no leftover rules to clean up at all, so this
+				// mustn't turn into a warning on every refresh.
+				hook := logtest.NewGlobal()
+				defer hook.Reset()
+
+				for range 3 {
+					table.InvalidateDataplaneCache("test")
+					table.Apply()
+				}
+
+				var warnings int
+				for _, entry := range hook.AllEntries() {
+					if strings.Contains(entry.Message, "Cannot read this table") {
+						warnings++
+					}
+				}
+				Expect(warnings).To(Equal(1), "expected one warning, got %d", warnings)
+			})
+
+			It("should keep trying on later applies", func() {
+				table.Apply()
+				numCmds := len(dataplane.CmdNames)
+
+				// Once the other tool's rules are gone, the table becomes readable again and we
+				// pick up where we left off.
+				dataplane.Prologue = ""
+				table.InvalidateDataplaneCache("test")
+				Expect(func() {
+					table.Apply()
+				}).NotTo(Panic())
+				Expect(len(dataplane.CmdNames)).To(BeNumerically(">", numCmds))
+			})
 		})
 	})
 
