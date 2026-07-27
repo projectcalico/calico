@@ -14,15 +14,28 @@ make ut
 
 Runs all Go unit tests (via Ginkgo with coverage). Skips `fv/`, `k8sfv/`, and `bpf/ut/` packages. Pass `GINKGO_ARGS` for extra flags (e.g., `GINKGO_ARGS="-focus=TestName"`).
 
+**Prefer vanilla `go test` for new packages.** Only reach for Ginkgo where an established pattern already exists.
+
+Felix's "brain" is the calculation graph in `calc/`. Changes there require calc graph "FV" tests in [`calc/calc_graph_fv_test.go`](./calc/calc_graph_fv_test.go).
+
 ### Functional Tests
 
 ```bash
 make fv GINKGO_FOCUS="TestName"
 ```
 
-Runs functional tests from `fv/`. Requires container images to be built first. `GINKGO_FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`.
+Runs functional tests from `fv/`, using **Ginkgo v2**. Requires container images to be built first. `GINKGO_FOCUS` filters by test name (supports regex). Can be parallelized with `FV_NUM_BATCHES` and `FV_BATCHES_TO_RUN`; the race detector is on by default on amd64/arm64 (`FV_RACE_DETECTOR_ENABLED`).
+
+A test's ID is the concatenation of all its nested `Context`/`Describe` headings, so `GINKGO_FOCUS` can match on any enclosing heading. Other useful flags: `-ginkgo.dryRun` (list tests without running them), `-ginkgo.v` (verbose), and `FV_FELIX_LOG_LEVEL=debug`.
 
 ### BPF-Specific Tests
+
+#### Where the BPF code lives
+
+- `bpf-gpl/` — eBPF programs, GPL v2.0 licensed for Linux kernel compatibility.
+- `bpf-apache/` — Apache-licensed BPF code.
+- `make clone-libbpf` — run before your first BPF build; fetches libbpf.
+- BPF tooling versions (`LIBBPF_VERSION`, `BPFTOOL_IMAGE`) are pinned in [`metadata.mk`](../metadata.mk).
 
 #### Building BPF Programs
 
