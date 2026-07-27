@@ -423,7 +423,7 @@ blocks:
             - name: INSTALLER
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+              value: --ginkgo.focus=(Dataplane:LB)
             - name: NUM_ADDON_PODS
               value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
 
