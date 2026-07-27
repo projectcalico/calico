@@ -1,4 +1,5 @@
-# DMs a PR author on Slack when their PR's Semaphore CI finishes.
+# DMs a PR author on Slack when their PR's Semaphore CI finishes, and when
+# someone approves their PR.
 #
 # Opt-in is a repo *variable* (not a secret — Slack member IDs aren't
 # sensitive): CI_NOTIFY_MAP, a comma-separated list of
@@ -16,15 +17,21 @@
 # The workflow is a no-op (never fails noisily) if the variable/secret
 # are unset, the author hasn't opted in, or Slack is unreachable.
 
-name: CI finished Slack notify
+name: PR Slack notify
 
 on:
   status: {}
-  # Manual test path: simulate a finished-CI status for a given PR, so the
-  # full chain (resolve -> opt-in lookup -> DM) can be exercised on demand
-  # without waiting for real CI. Dispatchable only once this file is on the
-  # default branch (a GitHub limitation), so it's for post-merge sanity
-  # checks, not pre-merge testing.
+  # Approval path. Like `status`, this event runs the workflow file from the
+  # base branch, so a fork PR cannot alter it and the Slack secret is
+  # available. Each submitted review is a single event — no duplicate burst
+  # — so the approval path needs no dedup marker.
+  pull_request_review:
+    types: [submitted]
+  # Manual test path: simulate a finished-CI status (or an approval) for a
+  # given PR, so the full chain (resolve -> opt-in lookup -> DM) can be
+  # exercised on demand without waiting for real CI. Dispatchable only once
+  # this file is on the default branch (a GitHub limitation), so it's for
+  # post-merge sanity checks, not pre-merge testing.
   workflow_dispatch:
     inputs:
       pr_number:
@@ -32,11 +39,11 @@ on:
         required: true
         type: string
       state:
-        description: "Simulated CI outcome"
+        description: "Simulated CI outcome, or 'approved' for the review path"
         required: false
         default: success
         type: choice
-        options: [success, failure, error]
+        options: [success, failure, error, approved]
 
 # Semaphore re-posts the same terminal status several times per commit.
 # Dedup claims a git ref named after (commit, state) atomically — see "Claim
@@ -46,6 +53,7 @@ on:
 # a double-send race. Markers only matter for the duplicate-event burst
 # (minutes), so each run opportunistically prunes markers older than 2 days
 # — see "Prune stale dedup markers" — keeping refs/ci-notify/* bounded.
+# This applies to the `status` path only; see the trigger comments above.
 
 permissions:
   pull-requests: read
@@ -61,13 +69,18 @@ jobs:
   notify:
     # Fire once when the aggregate Semaphore status reaches a terminal
     # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # Reviews fire only on an approval: 'commented' and 'changes_requested'
+    # already reach the author by GitHub's own notifications, and a comment
+    # review would be a firehose.
     # Manual workflow_dispatch runs always proceed (state comes from input).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.context == 'ci/semaphoreci/pr: Calico' &&
        (github.event.state == 'success' ||
         github.event.state == 'failure' ||
-        github.event.state == 'error'))
+        github.event.state == 'error')) ||
+      (github.event_name == 'pull_request_review' &&
+       github.event.review.state == 'approved')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -75,10 +88,18 @@ jobs:
       REPO: ${{ github.repository }}
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
-      # On a status event these come from the event; on workflow_dispatch
-      # STATE falls through to the input and SHA is empty.
-      STATE: ${{ github.event.state || inputs.state }}
+      # STATE drives everything downstream: 'success'/'failure'/'error' mean
+      # the CI path, 'approved' the review path. It comes from the status
+      # event, the review, or the dispatch input, in that order (a missing
+      # property evaluates to empty, so the fallbacks pick the live one).
+      STATE: ${{ github.event.state || github.event.review.state || inputs.state }}
+      # Status events only — it names the commit the dedup marker claims.
+      # Empty on a review or a manual run, which is what disables dedup and
+      # marker pruning on those paths.
       SHA: ${{ github.event.sha }}
+      # Review path: who approved. A GitHub login, and passed as an env value
+      # rather than interpolated into a script, so it can't inject.
+      REVIEWER: ${{ github.event.review.user.login }}
     steps:
       - name: Skip if not configured
         id: gate
@@ -95,6 +116,8 @@ jobs:
         if: steps.gate.outputs.skip != 'true'
         env:
           INPUT_PR: ${{ inputs.pr_number }}
+          # Review event: the PR number is right there in the payload.
+          EVENT_PR: ${{ github.event.pull_request.number }}
         run: |
           if [[ -n "$INPUT_PR" ]]; then
             # Manual run: trust only a numeric PR number (guards against
@@ -104,6 +127,8 @@ jobs:
               exit 1
             fi
             PR="$INPUT_PR"
+          elif [[ -n "$EVENT_PR" ]]; then
+            PR="$EVENT_PR"
           else
             # Status event: resolve PR from SHA. Use the search API rather
             # than repos/$REPO/commits/$SHA/pulls — the latter does not
@@ -154,11 +179,13 @@ jobs:
       # status events race to create the same ref and exactly one wins —
       # no concurrency group or serialization required. A non-"already
       # exists" failure fails OPEN (proceeds to send) rather than silently
-      # swallowing a real notification on an API hiccup. Status events only
-      # (SHA non-empty); manual workflow_dispatch runs always proceed.
+      # swallowing a real notification on an API hiccup. Status events only:
+      # a review is a single event, and keying a marker on (sha, 'approved')
+      # would wrongly swallow a second reviewer's approval of the same
+      # commit. Manual workflow_dispatch runs always proceed too.
       - name: Claim dedup marker (atomic)
         id: claim
-        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && env.SHA != ''
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && github.event_name == 'status'
         run: |
           set +e
           ERR=$(gh api "repos/$REPO/git/refs" --method POST \
@@ -178,8 +205,9 @@ jobs:
       # On failure/error, sem-ai-ci-triage posts a failure-analysis comment
       # — but it runs concurrently on the same status event and only after
       # its LLM backend responds, so the comment usually isn't there yet.
-      # Poll briefly for it so the DM can deep-link to the analysis. Success
-      # never gets a triage comment, so we skip the poll entirely there.
+      # Poll briefly for it so the DM can deep-link to the analysis. A pass
+      # and an approval never get a triage comment, so the poll is skipped
+      # on every state but failure/error.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
@@ -187,7 +215,7 @@ jobs:
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
-          env.STATE != 'success'
+          (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
           # When CI finished, per GitHub (status events only; empty on a
@@ -246,21 +274,26 @@ jobs:
           TITLE=$(jq -r .title pr.json)
           URL=$(jq -r .url pr.json)
 
-          case "$STATE" in
-            success) EMOJI=":white_check_mark:" WORD="passed" ;;
-            failure) EMOJI=":x:"                WORD="failed" ;;
-            error)   EMOJI=":warning:"          WORD="errored" ;;
-            *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
-          esac
-
           # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
-          TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
-          # On failure/error, point at the sem-ai triage analysis on the PR
-          # (which itself links the run), when triage actually posted one (it
-          # skips on PASS or backend hiccups). No raw CI-run link on any
-          # outcome — the PR link above is the lead.
-          if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
-            TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+          if [[ "$STATE" == "approved" ]]; then
+            # REVIEWER is empty on a manual run (no review payload), so name
+            # the reviewer only when the event supplied one.
+            TEXT=":+1: Your <$URL|PR #$PR> was approved${REVIEWER:+ by $REVIEWER}: $TITLE"
+          else
+            case "$STATE" in
+              success) EMOJI=":white_check_mark:" WORD="passed" ;;
+              failure) EMOJI=":x:"                WORD="failed" ;;
+              error)   EMOJI=":warning:"          WORD="errored" ;;
+              *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
+            esac
+            TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
+            # On failure/error, point at the sem-ai triage analysis on the PR
+            # (which itself links the run), when triage actually posted one (it
+            # skips on PASS or backend hiccups). No raw CI-run link on any
+            # outcome — the PR link above is the lead.
+            if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
+              TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+            fi
           fi
 
           # Resolve the member ID to a DM channel with conversations.open
