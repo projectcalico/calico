@@ -40,6 +40,7 @@ func MustStartSyncerClientIfTyphaConfigured(
 	cbs api.SyncerCallbacks,
 ) bool {
 	discoverer := discovery.New(
+		discovery.NodeName(),
 		discovery.WithAddrOverride(typhaConfig.Addr),
 		discovery.WithInClusterKubeClient(), /* defer creation of a client until its needed. */
 		discovery.WithKubeService(typhaConfig.K8sNamespace, typhaConfig.K8sServiceName),

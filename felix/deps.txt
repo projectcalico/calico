@@ -312,6 +312,7 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/datastructures/hashring
+local:lib/datastructures/rendezvous
 local:lib/std/chanutil
 local:lib/std/log
 local:lib/std/time
@@ -370,6 +371,7 @@ local:node/pkg/lifecycle/utils
 local:pkg/buildinfo
 local:pod2daemon/binder
 local:typha/pkg/discovery
+local:typha/pkg/jitter
 local:typha/pkg/syncclient
 local:typha/pkg/syncproto
 local:typha/pkg/tlsutils

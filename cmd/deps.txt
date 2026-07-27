@@ -470,6 +470,7 @@ local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
 local:lib/datastructures/hashring
+local:lib/datastructures/rendezvous
 local:lib/httpmachinery/pkg/apiutil
 local:lib/httpmachinery/pkg/codec
 local:lib/httpmachinery/pkg/context

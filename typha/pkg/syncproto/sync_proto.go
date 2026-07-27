@@ -304,6 +304,19 @@ type MsgPong struct {
 	PongTimestamp time.Time
 }
 
+// MsgClientGoodbye is sent by the client just before it deliberately closes the
+// connection, so the server can log why rather than treating the disconnection
+// as an error or unexpected drop.  It is purely informational: the server does
+// not reply, and the client closes the connection immediately afterwards, so
+// delivery is best-effort.  Added in v3.31; older servers ignore it (and log
+// the usual "unknown message" line) but the connection still tears down
+// cleanly.
+type MsgClientGoodbye struct {
+	// Reason is a human-readable explanation, e.g. "rebalancing to preferred
+	// Typha instance".
+	Reason string
+}
+
 type MsgKVs struct {
 	KVs []SerializedUpdate
 }
@@ -339,6 +352,7 @@ func init() {
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPing", MsgPing{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgPong", MsgPong{})
 	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgKVs", MsgKVs{})
+	gob.RegisterName("github.com/projectcalico/typha/pkg/syncproto.MsgClientGoodbye", MsgClientGoodbye{})
 }
 
 func SerializeUpdate(u api.Update) (su SerializedUpdate, err error) {
