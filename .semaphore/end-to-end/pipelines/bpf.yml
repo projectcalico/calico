@@ -110,6 +110,7 @@ blocks:
               value: "stable-3"
 
         - name: AWS single subnet, dual IP-family
+          # This block is compatible with Maglev tests: same-subnet, external node, BPF.
           execution_time_limit:
             hours: 7
           commands:
@@ -124,6 +125,8 @@ blocks:
               value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
             - name: IP_FAMILY
               value: dual
+            - name: ENABLE_BPF_DSR
+              value: "true"
             - name: VPC_SUBNETS
               value: '["172.16.101.0/24"]'
             - name: IPAM_TEST_POOL_SUBNET
@@ -337,7 +340,7 @@ blocks:
             - name: IPAM_TEST_POOL_SUBNET
               value: "10.0.0.0/29"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB)
+              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: BGP_STATUS
