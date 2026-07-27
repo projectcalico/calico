@@ -220,6 +220,11 @@ number isn't in the block state the controller tracks. `updateReservedMetrics` a
 orphaned blocks. Being per-pool rather than per-node, it is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is
 `ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
 
+The controller does **not** watch `IPReservation` - kube-controllers has `list` on it but not `watch`, and adding one is an operator RBAC change - so creating or deleting a
+reservation does not by itself wake the sync loop. The gauge refreshes on the next IPAM sync from any other cause (pool, node or block change) or on the periodic sync, so it can
+lag a reservation change by up to that period. Acceptable for a capacity number; if it ever needs to be prompt, the fix is to watch the resource and update the ClusterRole in both
+the chart and tigera/operator.
+
 **Review notes**
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.

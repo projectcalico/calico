@@ -103,8 +103,10 @@ func init() {
 
 	poolReservedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "ipam_ippool_reserved",
+		// Careful: the metrics FV asserts on substrings of this output, so naming
+		// another metric here would make its absence checks match this help text.
 		Help: "Number of addresses in the IP Pool that an IPReservation covers, and so cannot be assigned. " +
-			"May overlap ipam_allocations_in_use if an address was allocated before it was reserved.",
+			"Refreshed on each IPAM sync, so a reservation change may take until the next one to appear.",
 	}, []string{"ippool"})
 	prometheus.MustRegister(poolReservedGauge)
 

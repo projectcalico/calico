@@ -643,17 +643,21 @@ var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure
 	})
 
 	It("should export the reserved-IP metric for an IPReservation", func() {
-		// test-ippool-3 (10.16.0.0/24) was left alone by the tests above, so the
-		// only thing withholding addresses from it is this reservation.  Note it
-		// covers pool space that no block has been carved from, which the metric
-		// still has to account for.
-		createIPReservation("test-reservation", []string{"10.16.0.0/28"}, calicoClient)
+		// The reservation goes in first because the controller does not watch
+		// IPReservations; creating the pool is what wakes it up.  The reservation
+		// covers pool space that no block has been carved from, which is the case
+		// the metric has to get right.
+		createIPReservation("test-reservation", []string{"10.17.0.0/28"}, calicoClient)
+		createIPPool("test-ippool-reserved", "10.17.0.0/24", calicoClient)
 
 		validateExpectedAndUnexpectedMetrics(
-			[]string{`ipam_ippool_reserved{ippool="test-ippool-3"} 16`},
+			[]string{
+				`ipam_ippool_size{ippool="test-ippool-reserved"} 256`,
+				`ipam_ippool_reserved{ippool="test-ippool-reserved"} 16`,
+			},
 			nil,
 			kubeControllers.IP,
-			10*time.Second, 1*time.Second,
+			30*time.Second, 1*time.Second,
 		)
 	})
 })
