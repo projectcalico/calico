@@ -499,8 +499,9 @@ func (s *IPSets) tryResync() error {
 			}
 
 			// Unlike the desired-state path, a member we can't parse here is treated as unknown, not fatal.
-			member, ok := parseMember(metadata.Type, strElem)
-			if !ok {
+			member, err := parseMember(metadata.Type, strElem)
+			if err != nil {
+				log.WithField("member", strElem).WithError(err).Debug("Treating unparseable IP set member as unknown")
 				elemsSet.Add(UnknownMember(e.Key))
 				continue
 			}
@@ -819,42 +820,48 @@ func (s *IPSets) ipSetNeeded(name string) bool {
 // It panics on a member it can't parse: desired-state members are Felix-generated, so a parse failure
 // is a bug. The dataplane-readback path uses parseMember directly to tolerate bad input instead.
 func CanonicaliseMember(t ipsets.IPSetType, member string) SetMember {
-	m, ok := parseMember(t, member)
-	if !ok {
+	m, err := parseMember(t, member)
+	if err != nil {
 		log.WithFields(log.Fields{
 			"type":   string(t),
 			"member": member,
-		}).Panic("Failed to canonicalise IP set member")
+		}).WithError(err).Panic("Failed to canonicalise IP set member")
 	}
 	return m
 }
 
 // parseMember converts the string representation of an nftables set member to a canonical SetMember,
-// returning ok=false when it can't parse the member.
-func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
+// returning an error instead of panicking when it can't parse the member. The error describes what
+// couldn't be parsed so CanonicaliseMember can surface it in its panic.
+func parseMember(t ipsets.IPSetType, member string) (SetMember, error) {
 	switch t {
 	case ipsets.IPSetTypeHashIP:
+		// Convert the string into our ip.Addr type, which is backed by an array.
 		ipAddr := ip.FromIPOrCIDRString(member)
 		if ipAddr == nil {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse IP %q", member)
 		}
-		return simpleMember(ipAddr.String()), true
+		return simpleMember(ipAddr.String()), nil
 	case ipsets.IPSetTypeHashIPPort:
+		// The member should be of the format "IP,protocol:port".
 		parts := strings.Split(member, ",")
 		if len(parts) != 2 {
-			return nil, false
+			return nil, fmt.Errorf("expected IP,proto:port, got %q", member)
 		}
 		ipAddr := ip.FromIPOrCIDRString(parts[0])
 		if ipAddr == nil {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse IP part of %q", member)
 		}
 		portParts := strings.Split(parts[1], ":")
 		if len(portParts) != 2 {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse proto:port part of %q", member)
 		}
 		port, err := strconv.Atoi(portParts[1])
-		if err != nil || port < 0 || port > math.MaxUint16 {
-			return nil, false
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse port of %q: %w", member, err)
+		}
+		if port < 0 || port > math.MaxUint16 {
+			return nil, fmt.Errorf("port %d out of range in %q", port, member)
 		}
 		proto := portParts[0]
 
@@ -864,50 +871,56 @@ func parseMember(t ipsets.IPSetType, member string) (SetMember, bool) {
 		if ipAddr.Version() == 4 {
 			v4, ok := ipAddr.(ip.V4Addr)
 			if !ok {
-				return nil, false
+				return nil, fmt.Errorf("IP %q is not a v4 address", parts[0])
 			}
-			return v4IPPortMember{IP: v4, Port: uint16(port), Protocol: proto}, true
+			return v4IPPortMember{IP: v4, Port: uint16(port), Protocol: proto}, nil
 		}
 		v6, ok := ipAddr.(ip.V6Addr)
 		if !ok {
-			return nil, false
+			return nil, fmt.Errorf("IP %q is not a v6 address", parts[0])
 		}
-		return v6IPPortMember{IP: v6, Port: uint16(port), Protocol: proto}, true
+		return v6IPPortMember{IP: v6, Port: uint16(port), Protocol: proto}, nil
 	case ipsets.IPSetTypeHashNet:
+		// The hash:net type pretty-prints IPs with no "/32" or "/128" suffix, so canonicalise
+		// through ip.CIDR to match that form.
 		cidr, err := ip.ParseCIDROrIP(member)
 		if err != nil {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse CIDR %q: %w", member, err)
 		}
-		return simpleMember(cidr.String()), true
+		return simpleMember(cidr.String()), nil
 	case ipsets.IPSetTypeHashNetNet:
+		// The member should be a pair of CIDRs, "cidr1,cidr2".
 		cidrs := strings.Split(member, ",")
 		if len(cidrs) != 2 {
-			return nil, false
+			return nil, fmt.Errorf("expected two CIDRs, got %q", member)
 		}
 		net1, err := ip.ParseCIDROrIP(cidrs[0])
 		if err != nil {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse first CIDR of %q: %w", member, err)
 		}
 		net2, err := ip.ParseCIDROrIP(cidrs[1])
 		if err != nil {
-			return nil, false
+			return nil, fmt.Errorf("failed to parse second CIDR of %q: %w", member, err)
 		}
-		return netNet{net1: net1, net2: net2}, true
+		return netNet{net1: net1, net2: net2}, nil
 	case ipsets.IPSetTypeBitmapPort:
 		// Trim the family prefix (e.g. "v4,") if present.
 		if len(member) > 0 && member[0] == 'v' {
 			if len(member) < 3 {
-				return nil, false
+				return nil, fmt.Errorf("truncated family prefix in %q", member)
 			}
 			member = member[3:]
 		}
 		port, err := strconv.Atoi(member)
-		if err != nil || port < 0 || port > 0xffff {
-			return nil, false
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse port %q: %w", member, err)
 		}
-		return simpleMember(member), true
+		if port < 0 || port > 0xffff {
+			return nil, fmt.Errorf("port %d out of range in %q", port, member)
+		}
+		return simpleMember(member), nil
 	}
-	return nil, false
+	return nil, fmt.Errorf("unknown IP set type %q", string(t))
 }
 
 // setType returns the nftables type to use for the given IPSetType and IP version.
