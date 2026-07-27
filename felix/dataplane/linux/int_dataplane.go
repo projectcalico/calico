@@ -639,13 +639,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Cleanup iptables.
-		cleanupTables = append(cleanupTables,
-			mangleTableV4IPT,
-			natTableV4IPT,
-			rawTableV4IPT,
-			filterTableV4IPT,
-		)
+		// Sweep out the rules that a previous iptables-mode Felix using the nft backend left in
+		// the standard filter/nat/mangle/raw tables. We go through the nft view rather than
+		// adding the iptables Tables to cleanupTables: iptables-nft-save aborts on any of those
+		// tables that also holds native nft rules (Tailscale, kube-proxy, a host firewall),
+		// which made cleanup loop forever (#13263).
+		nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+
+		if backendMode == "legacy" {
+			// A previous Felix on the legacy backend left its rules in xtables instead, where
+			// the nft view can't see them. iptables-legacy-save has no problem with native nft
+			// rules, so reconcile those tables the normal way.
+			cleanupTables = append(cleanupTables,
+				mangleTableV4IPT,
+				natTableV4IPT,
+				rawTableV4IPT,
+				filterTableV4IPT,
+			)
+		}
+
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
@@ -1367,13 +1379,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
 
-			// Cleanup iptables.
-			cleanupTables = append(cleanupTables,
-				mangleTableV6IPT,
-				natTableV6IPT,
-				rawTableV6IPT,
-				filterTableV6IPT,
-			)
+			// Sweep out leftover nft-backend iptables rules via the nft view, and leftover
+			// legacy-backend ones through the iptables Tables (see the IPv4 path and #13263).
+			nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 6, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+
+			if backendMode == "legacy" {
+				cleanupTables = append(cleanupTables,
+					mangleTableV6IPT,
+					natTableV6IPT,
+					rawTableV6IPT,
+					filterTableV6IPT,
+				)
+			}
+
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.
