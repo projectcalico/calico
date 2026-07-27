@@ -110,6 +110,7 @@ steps:
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
+    # This block is compatible with Maglev tests: same-subnet, external node, BPF.
     services:
       - docker
     env:
@@ -129,6 +130,8 @@ steps:
         value: 10.0.0.0/29
       - name: IP_FAMILY
         value: dual
+      - name: ENABLE_BPF_DSR
+        value: "true"
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
