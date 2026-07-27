@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package fv_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1028,6 +1029,115 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ VXLAN topology before addin
 			})
 		})
 	}
+})
+
+// The masquerade that Felix applies to host traffic leaving the tunnel must not pick the VXLAN
+// port as its source port.  If it does, the reply arrives with the VXLAN port as its destination
+// and gets caught by the "drop VXLAN packets from non-allowed hosts" rule.
+// See https://github.com/projectcalico/calico/issues/12244.
+var _ = infrastructure.DatastoreDescribe("VXLAN topology with masqueraded host traffic", []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	// Sit the VXLAN port near the middle of the masquerade range.  Felix takes the wider side
+	// of the port, so the range it programs is 33001-65535, roughly half of the 1024-65535 that
+	// an unconstrained masquerade would use.  That gives the sampling below decent odds of
+	// spotting a masquerade with no range on it.
+	const (
+		vxlanPort     = 33000
+		masqPortRange = "33001-65535"
+		minMasqPort   = 33001
+		workloadPort  = "8055"
+	)
+
+	var (
+		infra infrastructure.DatastoreInfra
+		tc    infrastructure.TopologyContainers
+		w     *workload.Workload
+	)
+
+	BeforeEach(func() {
+		infra = getInfra()
+
+		if BPFMode() {
+			Skip("BPF mode doesn't use the masquerade rules under test.")
+		}
+
+		topologyOptions := createVXLANBaseTopologyOptions(api.VXLANModeAlways, false, "CalicoIPAM", false)
+		topologyOptions.ExtraEnvVars["FELIX_VXLANPort"] = fmt.Sprint(vxlanPort)
+
+		var cli client.Interface
+		tc, cli = infrastructure.StartNNodeTopology(2, topologyOptions, infra)
+		assignTunnelAddresses(infra, tc, cli)
+
+		infra.AddDefaultAllow()
+		waitForVXLANDevice(tc, false)
+
+		// The first node sends to this workload over the tunnel.
+		wIP := "10.65.1.2"
+		infrastructure.AssignIP("w1", wIP, tc.Felixes[1].Hostname, cli)
+		w = workload.Run(tc.Felixes[1], "w1", "default", wIP, workloadPort, "udp")
+		w.ConfigureInInfra(infra)
+
+		ensureRoutesProgrammed(tc.Felixes)
+	})
+
+	AfterEach(func() {
+		if CurrentSpecReport().Failed() {
+			for _, felix := range tc.Felixes {
+				if NFTMode() {
+					logNFTDiags(felix)
+				} else {
+					felix.Exec("iptables-save", "-c", "-t", "nat")
+				}
+				felix.Exec("ip", "r")
+				felix.Exec("ip", "a")
+			}
+		}
+	})
+
+	It("should masquerade to a source port that can't be the VXLAN port", func() {
+		expectedRule := "--to-ports " + masqPortRange
+		if NFTMode() {
+			expectedRule = "masquerade to :" + masqPortRange
+		}
+		for _, felix := range tc.Felixes {
+			Eventually(func() string {
+				if NFTMode() {
+					out, _ := felix.ExecOutput("nft", "list", "table", "calico")
+					return out
+				}
+				out, _ := felix.ExecOutput("iptables-save", "-t", "nat")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring(expectedRule))
+		}
+
+		// The masquerade only kicks in for host traffic that isn't already sourced from the
+		// tunnel address, so send from the node's own address.  The workload reports the
+		// source it sees, which is the masqueraded one.
+		masqueradedPort := func() (int, error) {
+			res := tc.Felixes[0].CanConnectTo(w.IP, workloadPort, "udp", connectivity.WithSourceIP(tc.Felixes[0].IP))
+			if !res.HasConnectivity() {
+				return 0, fmt.Errorf("no connectivity from %s to %s", tc.Felixes[0].IP, w.IP)
+			}
+			addr := res.LastResponse.SourceAddr
+			i := strings.LastIndex(addr, ":")
+			if i < 0 {
+				return 0, fmt.Errorf("no port in source address %q", addr)
+			}
+			return strconv.Atoi(addr[i+1:])
+		}
+
+		Eventually(func() error {
+			_, err := masqueradedPort()
+			return err
+		}, "30s", "1s").ShouldNot(HaveOccurred())
+
+		// Port selection is fully random, so one sample proves little.  Twenty of them put the
+		// odds of an unconstrained masquerade staying inside the range at about one in a million.
+		for range 20 {
+			port, err := masqueradedPort()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(port).To(BeNumerically(">=", minMasqPort), "masqueraded source port should be within %s", masqPortRange)
+		}
+	})
 })
 
 func createVXLANBaseTopologyOptions(vxlanMode api.VXLANMode, enableIPv6 bool, routeSource string, brokenXSum bool) infrastructure.TopologyOptions {
