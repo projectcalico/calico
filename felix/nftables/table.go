@@ -531,14 +531,6 @@ func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
 }
 
-// CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
-// an ordinary apply deletes the whole thing. That is only safe because the tables we build
-// NftablesTables for belong to a single component - see LegacyIPTablesCleanup for the tables we
-// share with others.
-func (n *NftablesTable) CleanUp() time.Duration {
-	return n.Apply()
-}
-
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
 // flowtable device list. Called by the flowtable manager as tunnel devices come up and go
 // down, so only devices that currently exist are passed through.
