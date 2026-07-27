@@ -182,7 +182,7 @@ func (o *OperatorManager) PreBuildValidation(outputDir string) error {
 		match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
 		re := regexp.MustCompile(match)
 		if !re.MatchString(branch) {
-			errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+			errStack = errors.Join(errStack, fmt.Errorf("operator checkout is not on a release branch"))
 		}
 		dirty, err := utils.GitIsDirty(o.dir)
 		if err != nil {
