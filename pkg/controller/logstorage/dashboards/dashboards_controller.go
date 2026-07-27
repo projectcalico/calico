@@ -278,6 +278,12 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 		//   - multi-tenant (incl. enterprise) and non-cloud single-tenant: the Tenant CR must carry it.
 		//     This is the pre-existing enterprise behavior, preserved by the `!d.cloud` clause.
 		//   - Calico Cloud single-tenant: there is no Tenant CR, so it's derived from the cloud config map.
+		//
+		// The `!d.cloud` clause is load-bearing, not a no-op for EE: for any non-cloud install (d.cloud
+		// is false) this reduces to the original pre-cloud check `if tenant == nil || ...`, so EE
+		// behavior here is unchanged. An EE cluster only reaches this whole else branch when it is
+		// configured for external ES (d.elasticExternal), and in that case it has always required the
+		// Tenant CR to carry the Kibana URL, whether multi-tenant or single-tenant.
 		if d.multiTenant || !d.cloud {
 			// The Tenant resource must specify the Kibana endpoint.
 			if tenant == nil || tenant.Spec.Elastic == nil || tenant.Spec.Elastic.KibanaURL == "" {

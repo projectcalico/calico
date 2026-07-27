@@ -66,11 +66,6 @@ const (
 
 var EntityRule = networkpolicy.CreateEntityRule(Namespace, CRName, Port)
 
-// CloudKibanaConfigOverrides holds Calico Cloud Kibana config overrides. It is populated only by the
-// cloud-gated controller path; for regular Calico/Calico Enterprise it stays empty and is a no-op.
-// TODO: This shouldn't be done with a global variable set by the controller; thread it through Configuration instead.
-var CloudKibanaConfigOverrides = map[string]interface{}{}
-
 // Kibana renders the components necessary for kibana and elasticsearch
 func Kibana(cfg *Configuration) render.Component {
 	return &kibana{
@@ -92,6 +87,11 @@ type Configuration struct {
 	TrustedBundle   certificatemanagement.TrustedBundleRO
 	UnusedTLSSecret *corev1.Secret
 	Enabled         bool
+
+	// CloudConfigOverrides holds Calico Cloud Kibana config overrides parsed from the
+	// cloud-kibana-config ConfigMap by the cloud-gated controller path. It is merged over the default
+	// Kibana configuration. For regular Calico/Calico Enterprise it is nil and is a no-op.
+	CloudConfigOverrides map[string]interface{}
 }
 
 type kibana struct {
@@ -261,11 +261,9 @@ func (k *kibana) kibanaCR() *kbv1.Kibana {
 		"xpack.productDocBase.artifactRepositoryUrl": "http://localhost:5601",
 	}
 
-	// TODO: This shouldn't be done with a global variable set by the controller.
-	if len(CloudKibanaConfigOverrides) != 0 {
-		for k, v := range CloudKibanaConfigOverrides {
-			config[k] = v
-		}
+	// Merge any Calico Cloud Kibana config overrides over the defaults. Nil (a no-op) for non-cloud.
+	for k, v := range k.cfg.CloudConfigOverrides {
+		config[k] = v
 	}
 
 	var initContainers []corev1.Container

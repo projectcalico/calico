@@ -476,6 +476,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	var kbService *corev1.Service
+	var kibanaConfigOverrides map[string]interface{}
 	if kibanaEnabled {
 		// For now, Kibana is only supported in single tenant configurations.
 		kbService, err = r.getKibanaService(ctx)
@@ -485,17 +486,17 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		}
 
 		if r.cloud {
-			// Read the cloud-kibana-config ConfigMap and parse it into a global map in the render package. The render code will read this map
-			// and use it to override the default Kibana configuration.
-			// TODO: We should instead be passing this via arguments to the render code.
+			// Read the cloud-kibana-config ConfigMap and parse it into overrides that we pass to the
+			// render code, which merges them over the default Kibana configuration. This is a fresh
+			// local per reconcile, so a deleted ConfigMap leaves no stale overrides behind.
 			kbCm := &corev1.ConfigMap{}
 			if err = r.client.Get(ctx, types.NamespacedName{Name: "cloud-kibana-config", Namespace: common.OperatorNamespace()}, kbCm); err != nil {
 				if !errors.IsNotFound(err) {
-					return reconcile.Result{}, fmt.Errorf("failed to read cloud-kibana-config ConfigMap: %s", err.Error())
+					return reconcile.Result{}, fmt.Errorf("failed to read cloud-kibana-config ConfigMap: %w", err)
 				}
 			} else {
-				kibana.CloudKibanaConfigOverrides = map[string]interface{}{}
-				if err = json.Unmarshal([]byte(kbCm.Data["config"]), &kibana.CloudKibanaConfigOverrides); err != nil {
+				kibanaConfigOverrides = map[string]interface{}{}
+				if err = json.Unmarshal([]byte(kbCm.Data["config"]), &kibanaConfigOverrides); err != nil {
 					r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Failed to unmarshal config in cloud-kibana-config ConfigMap", err, reqLogger)
 					return reconcile.Result{}, err
 				}
@@ -538,18 +539,19 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 			UnusedTLSSecret:         unusedTLSSecret,
 		}),
 		kibana.Kibana(&kibana.Configuration{
-			LogStorage:      ls,
-			Installation:    installationSpec,
-			Kibana:          kibanaCR,
-			KibanaKeyPair:   kibanaKeyPair,
-			PullSecrets:     pullSecrets,
-			Provider:        r.provider,
-			KbService:       kbService,
-			ClusterDomain:   r.clusterDomain,
-			BaseURL:         baseURL,
-			TrustedBundle:   trustedBundle,
-			UnusedTLSSecret: unusedTLSSecret,
-			Enabled:         kibanaEnabled,
+			LogStorage:           ls,
+			Installation:         installationSpec,
+			Kibana:               kibanaCR,
+			KibanaKeyPair:        kibanaKeyPair,
+			PullSecrets:          pullSecrets,
+			Provider:             r.provider,
+			KbService:            kbService,
+			ClusterDomain:        r.clusterDomain,
+			BaseURL:              baseURL,
+			TrustedBundle:        trustedBundle,
+			UnusedTLSSecret:      unusedTLSSecret,
+			Enabled:              kibanaEnabled,
+			CloudConfigOverrides: kibanaConfigOverrides,
 		}),
 	}
 

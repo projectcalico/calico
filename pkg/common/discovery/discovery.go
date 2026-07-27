@@ -294,3 +294,17 @@ func UseExternalElastic(config *corev1.ConfigMap) bool {
 	}
 	return false
 }
+
+func ElasticIsMigrating(config *corev1.ConfigMap) bool {
+	if config == nil {
+		return false
+	}
+
+	// Load the operator bootstrap configuration from its configmap.
+	if val, ok := config.Data["ELASTIC_MIGRATION"]; ok && val != "" {
+		if strings.ToLower(val) == "true" {
+			return true
+		}
+	}
+	return false
+}

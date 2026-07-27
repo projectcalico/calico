@@ -194,8 +194,10 @@ IMAGE_REGISTRY:=gcr.io
 PUSH_IMAGE_PREFIXES:=gcr.io/
 EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
 VALIDARCHES:=amd64
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see pkg/cloud.IsCloudBuild).
-CLOUD_LDFLAGS=-X $(PACKAGE_NAME)/pkg/cloud.buildVariant=cloud
+# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see isCloudBuild in
+# cmd/cloud.go). buildVariant lives in package main, which the linker addresses as "main" (not by its
+# import path), so this -X target is "main.buildVariant" rather than a $(PACKAGE_NAME)-prefixed path.
+CLOUD_LDFLAGS=-X main.buildVariant=cloud
 endif
 
 

@@ -35,12 +35,6 @@ import (
 )
 
 var _ = Describe("Kibana cloud rendering tests", func() {
-	// CloudKibanaConfigOverrides is a package-global populated only by the cloud-gated controller.
-	// Reset it after each test so a leaked value cannot affect the non-cloud kibana specs.
-	AfterEach(func() {
-		kibana.CloudKibanaConfigOverrides = map[string]interface{}{}
-	})
-
 	Context("single-tenant rendering with internal elastic", func() {
 		var installation *operatorv1.InstallationSpec
 		var replicas int32
@@ -104,7 +98,7 @@ var _ = Describe("Kibana cloud rendering tests", func() {
 				"enabled":        true,
 				"licenseEdition": "cloudEdition",
 			}
-			kibana.CloudKibanaConfigOverrides = map[string]interface{}{
+			cfg.CloudConfigOverrides = map[string]interface{}{
 				"googletagmanager": googleTagManagerConfig,
 				"tigera":           tigeraConfig,
 			}
