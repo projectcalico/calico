@@ -1226,3 +1226,192 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 		})
 	}
 }
+
+// Named ports resolve, in the calc graph, to IP sets of type IP_AND_PORT whose members are
+// "<IP>,<protocol>:<port>". The checker must test membership using the whole tuple for the
+// direction the rule applies to; using the bare port number never matches.
+func TestMatchNamedPorts(t *testing.T) {
+	// "http" named port on two endpoints, resolving to 8080/tcp.
+	httpSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	httpSet.AddString("10.0.0.1,tcp:8080")
+	httpSet.AddString("10.0.0.2,tcp:8080")
+	// "dns" named port, resolving to 53/udp.
+	dnsSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	dnsSet.AddString("10.0.0.1,udp:53")
+	// "sig" named port, resolving to 2905/sctp.
+	sctpSet := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	sctpSet.AddString("10.0.0.1,sctp:2905")
+	// IPv6 endpoint with the "http" named port.
+	v6Set := policystore.NewIPSet(proto.IPSetUpdate_IP_AND_PORT)
+	v6Set.AddString("fc00:fe11::1,tcp:8080")
+
+	store := policystore.NewPolicyStore()
+	store.IPSetByID["http"] = httpSet
+	store.IPSetByID["dns"] = dnsSet
+	store.IPSetByID["sig"] = sctpSet
+	store.IPSetByID["httpv6"] = v6Set
+
+	const (
+		protoTCP  = 6
+		protoUDP  = 17
+		protoSCTP = 132
+	)
+
+	testCases := []struct {
+		title     string
+		rule      *proto.Rule
+		srcIP     string
+		srcPort   int
+		dstIP     string
+		dstPort   int
+		protocol  int
+		srcResult bool
+		dstResult bool
+	}{
+		{
+			title:     "named port matches the endpoint's resolved port",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"http"}, SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.2",
+			srcPort:   8080,
+			dstIP:     "10.0.0.1",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: true,
+			dstResult: true,
+		},
+		{
+			title:     "named port does not match a different port on a member IP",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"http"}, SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.2",
+			srcPort:   9090,
+			dstIP:     "10.0.0.1",
+			dstPort:   9090,
+			protocol:  protoTCP,
+			srcResult: false,
+			dstResult: false,
+		},
+		{
+			title:     "named port does not match an IP outside the set",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"http"}, SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.9",
+			srcPort:   8080,
+			dstIP:     "10.0.0.9",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: false,
+			dstResult: false,
+		},
+		{
+			title:     "named port does not match a different protocol",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"http"}, SrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.2",
+			srcPort:   8080,
+			dstIP:     "10.0.0.1",
+			dstPort:   8080,
+			protocol:  protoUDP,
+			srcResult: false,
+			dstResult: false,
+		},
+		{
+			title:     "UDP named port matches",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"dns"}, SrcNamedPortIpSetIds: []string{"dns"}},
+			srcIP:     "10.0.0.1",
+			srcPort:   53,
+			dstIP:     "10.0.0.1",
+			dstPort:   53,
+			protocol:  protoUDP,
+			srcResult: true,
+			dstResult: true,
+		},
+		{
+			title:     "SCTP named port matches",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"sig"}, SrcNamedPortIpSetIds: []string{"sig"}},
+			srcIP:     "10.0.0.1",
+			srcPort:   2905,
+			dstIP:     "10.0.0.1",
+			dstPort:   2905,
+			protocol:  protoSCTP,
+			srcResult: true,
+			dstResult: true,
+		},
+		{
+			title:     "IPv6 named port matches",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"httpv6"}, SrcNamedPortIpSetIds: []string{"httpv6"}},
+			srcIP:     "fc00:fe11::1",
+			srcPort:   8080,
+			dstIP:     "fc00:fe11::1",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: true,
+			dstResult: true,
+		},
+		{
+			title: "numeric range matches even when the named port set does not",
+			rule: &proto.Rule{
+				DstNamedPortIpSetIds: []string{"http"},
+				DstPorts:             []*proto.PortRange{{First: 9090, Last: 9090}},
+				SrcNamedPortIpSetIds: []string{"http"},
+				SrcPorts:             []*proto.PortRange{{First: 9090, Last: 9090}},
+			},
+			srcIP:     "10.0.0.1",
+			srcPort:   9090,
+			dstIP:     "10.0.0.1",
+			dstPort:   9090,
+			protocol:  protoTCP,
+			srcResult: true,
+			dstResult: true,
+		},
+		{
+			title:     "unknown named port set does not match",
+			rule:      &proto.Rule{DstNamedPortIpSetIds: []string{"missing"}, SrcNamedPortIpSetIds: []string{"missing"}},
+			srcIP:     "10.0.0.1",
+			srcPort:   8080,
+			dstIP:     "10.0.0.1",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: false,
+			dstResult: false,
+		},
+		{
+			title:     "negated named port excludes a member",
+			rule:      &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}, NotSrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.2",
+			srcPort:   8080,
+			dstIP:     "10.0.0.1",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: false,
+			dstResult: false,
+		},
+		{
+			title:     "negated named port permits a non-member",
+			rule:      &proto.Rule{NotDstNamedPortIpSetIds: []string{"http"}, NotSrcNamedPortIpSetIds: []string{"http"}},
+			srcIP:     "10.0.0.9",
+			srcPort:   8080,
+			dstIP:     "10.0.0.9",
+			dstPort:   8080,
+			protocol:  protoTCP,
+			srcResult: true,
+			dstResult: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			g := NewWithT(t)
+			fl := &mocks.Flow{}
+			fl.On("GetSourceIP").Return(libnet.ParseIP(tc.srcIP).IP)
+			fl.On("GetSourcePort").Return(tc.srcPort)
+			fl.On("GetDestIP").Return(libnet.ParseIP(tc.dstIP).IP)
+			fl.On("GetDestPort").Return(tc.dstPort)
+			fl.On("GetProtocol").Return(tc.protocol)
+
+			// A fresh cache per direction: the IP/protocol/port string is memoized.
+			srcReq := &requestCache{Flow: fl, store: store}
+			dstReq := &requestCache{Flow: fl, store: store}
+
+			g.Expect(matchSrcPort(tc.rule, srcReq)).To(Equal(tc.srcResult), "src")
+			g.Expect(matchDstPort(tc.rule, dstReq)).To(Equal(tc.dstResult), "dst")
+		})
+	}
+}
