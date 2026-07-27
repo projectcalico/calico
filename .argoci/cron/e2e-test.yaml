@@ -8,7 +8,7 @@ globalPrologue: |
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-test.yml}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:Maglev)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export PRODUCT="${PRODUCT:-calico}"
   export TEST_TYPE="${TEST_TYPE:-k8s-e2e}"

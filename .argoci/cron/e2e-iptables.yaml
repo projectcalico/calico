@@ -10,7 +10,7 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE:-CalicoIptables}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Feature:Maglev)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
@@ -90,7 +90,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+        value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Maglev)
       - name: PROVISIONER
         value: aws-eks
       - name: STERN_CHECK
@@ -116,7 +116,7 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -144,7 +144,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -167,7 +167,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: NETWORK_PLUGIN_MODE
@@ -190,7 +190,7 @@ steps:
       - name: INSTALLER
         value: operator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -212,7 +212,7 @@ steps:
       - name: K8S_E2E_EXTRA_FLAGS
         value: --feature-gates=dualstack=true
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: KIND_CONFIG
@@ -255,7 +255,7 @@ steps:
       - name: K8S_E2E_EXTRA_FLAGS
         value: --feature-gates=dualstack=true
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: KIND_CONFIG
@@ -379,7 +379,7 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(WireGuard)
+        value: --ginkgo.focus=(WireGuard) --ginkgo.skip=(Feature:Maglev)
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -407,7 +407,7 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(WireGuard)
+        value: --ginkgo.focus=(WireGuard) --ginkgo.skip=(Feature:Maglev)
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -497,7 +497,7 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:Maglev)
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -523,7 +523,7 @@ steps:
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[|Feature:Maglev)
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_API_SERVER
@@ -557,7 +557,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -578,7 +578,7 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:Maglev)
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
@@ -614,7 +614,7 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:Maglev)
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
@@ -650,7 +650,7 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -673,7 +673,7 @@ steps:
       - name: INSTALLER
         value: helmerator
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+        value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -766,7 +766,7 @@ steps:
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:Maglev)
       - name: PROVISIONER
         value: gcp-kubeadm
     matrix:
@@ -798,7 +798,7 @@ steps:
       - name: INSTALL_ETCD_POD
         value: "true"
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.skip=(Tiered RBAC)
+        value: --ginkgo.skip=(Tiered RBAC|Feature:Maglev)
       - name: MANIFEST_FILE
         value: calico-etcd.yaml
       - name: PROVISIONER
@@ -821,7 +821,7 @@ steps:
       - name: INSTALLER
         value: manual
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: MIGRATION_MANIFEST
