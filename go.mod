@@ -131,6 +131,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
+require go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
+
 require (
 	al.essio.dev/pkg/shellescape v1.5.1 // indirect
 	cel.dev/expr v0.25.1 // indirect
