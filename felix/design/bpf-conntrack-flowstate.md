@@ -129,6 +129,44 @@ Creating a NAT'd flow means creating both. Destroying a NAT'd flow
 means destroying both — atomically enough that BPF never sees only
 one side. The cleanup pipeline is built around this requirement.
 
+#### Tunnel return address and overlay-reply re-encap
+
+Two mechanisms let a node send a reply back through the overlay,
+and it is important not to conflate them:
+
+- **`tun_ip` (NAT-reverse entries only).** The reverse entry of a
+  service/NodePort flow that crossed nodes stores the peer node's
+  address in `tun_ip`. On the forwarding node it is the backend
+  node to tunnel *to* (`CALI_CT_FLAG_NP_FWD`); on the backend node
+  it is the node the request came *from*, so the reply is tunneled
+  back the way it arrived. It is written only for
+  `CALI_CT_TYPE_NAT_REV` (`conntrack.h`) and consumed only by the
+  service/NodePort return-encap paths
+  (`dnat_return_should_encap()`). Normal (non-NAT) entries never
+  populate it.
+
+- **`CALI_CT_FLAG_OVERLAY_REPLY` (normal entries).** With
+  `BPFOverlayHostSourceIP=HostAddress` the tunnel device has no IP,
+  so a host-networked client's request arrives over the overlay
+  with the node IP as its inner source. The workload's reply then
+  targets a bare remote node IP — a `CALI_RT_HOST` route, which is
+  *not* tunneled — and would leave the node un-encapsulated with a
+  pod-CIDR source, which a source-checking fabric (e.g. GCP) drops.
+  The pod overlay is decapped by the kernel collect-metadata device,
+  so the flag is set on the resulting tunnel-ingress program —
+  `from_vxlan` (`CALI_F_VXLAN`) or `from_ipip`
+  (`CALI_F_IPIP_ENCAPPED`) — scoped to a remote-host inner source so
+  it only tags host-originated flows. It is read on the reply's
+  workload-egress path, where it forces the overlay encap even though
+  the destination route is a bare host. It carries no address: a
+  remote-host route already holds the node IP as its `next_hop`, which
+  is the tunnel endpoint (equivalently, the reply re-encaps to its own
+  destination). This is deliberately *not* `tun_ip` — that field's
+  meaning is NodePort/service-specific and must stay so. Note
+  `state->tun_ip` is *not* available here: only the BPF-to-BPF
+  NodePort tunnel (`CALI_VXLAN_VNI`) is decapped in BPF and sets it;
+  the regular overlay (`OVERLAY_TUNNEL_ID`) is kernel-decapped.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
