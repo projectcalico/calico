@@ -25,6 +25,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -279,6 +280,17 @@ func (s *SyncerClient) calculateConnectionAttemptLimit(numDiscoveredTyphas int) 
 	return maxTries
 }
 
+// dialTarget maps a discovered Typha address to a (network, address) pair for
+// net.Dial.  A "unix://" prefix selects a unix domain socket (used by the
+// in-pod "calico typha client dump" diagnostic); anything else is a TCP
+// host:port.
+func dialTarget(addr string) (network, address string) {
+	if path, ok := strings.CutPrefix(addr, "unix://"); ok {
+		return "unix", path
+	}
+	return "tcp", addr
+}
+
 func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) error {
 	log.Info("Starting Typha client")
 	var err error
@@ -332,7 +344,8 @@ func (s *SyncerClient) connect(cxt context.Context, typhaAddr discovery.Typha) e
 		}
 	} else {
 		connFunc = func(addr string) (net.Conn, error) {
-			return net.DialTimeout("tcp", addr, 10*time.Second)
+			network, address := dialTarget(addr)
+			return net.DialTimeout(network, address, 10*time.Second)
 		}
 	}
 	if cxt.Err() == nil {
