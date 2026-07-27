@@ -918,11 +918,18 @@ func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats)
 // snapshotFlowsForRecalc starts a policy re-evaluation sweep. It runs on the goroutine that owns
 // epStats, so it only copies pointers; processRecalcBatch does the expensive per-flow work.
 func (c *collector) snapshotFlowsForRecalc() {
+	c.recalcSweepStart = time.Now()
+
+	// Right-size the buffer: too small and the sweep re-allocates as it fills it, too large and
+	// we hold onto a big array long after the flow count drops.
+	if cap(c.recalcSnapshot) < len(c.epStats) || cap(c.recalcSnapshot) > 2*len(c.epStats) {
+		c.recalcSnapshot = make([]*Data, 0, len(c.epStats)*3/2)
+	}
+
 	c.recalcSnapshot = c.recalcSnapshot[:0]
 	for _, data := range c.epStats {
 		c.recalcSnapshot = append(c.recalcSnapshot, data)
 	}
-	c.recalcSweepStart = time.Now()
 }
 
 // processRecalcBatch evaluates flows from the current snapshot until the snapshot is empty or the
@@ -938,11 +945,7 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 	minLastEvalAt := now - c.policyEvalMinInterval
 
 	for len(c.recalcSnapshot) > 0 {
-		// Pop from the tail; nil the slot so the reused array doesn't pin processed Data.
-		i := len(c.recalcSnapshot) - 1
-		data := c.recalcSnapshot[i]
-		c.recalcSnapshot[i] = nil
-		c.recalcSnapshot = c.recalcSnapshot[:i]
+		data := c.popFlowForRecalc()
 
 		// Not due yet.
 		if data.lastPolicyEvalAt != 0 && data.lastPolicyEvalAt > minLastEvalAt {
@@ -967,6 +970,16 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 		histogramPolicyEvalSweepDuration.Observe(time.Since(c.recalcSweepStart).Seconds())
 	}
 	return drained
+}
+
+// popFlowForRecalc takes the next flow off the sweep snapshot.
+func (c *collector) popFlowForRecalc() *Data {
+	i := len(c.recalcSnapshot) - 1
+	data := c.recalcSnapshot[i]
+	// Nil the slot so the reused array doesn't pin the Data once it has been processed.
+	c.recalcSnapshot[i] = nil
+	c.recalcSnapshot = c.recalcSnapshot[:i]
+	return data
 }
 
 func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {

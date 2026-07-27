@@ -3774,6 +3774,34 @@ func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
 	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
 }
 
+// TestSnapshotRightSizesBuffer verifies the snapshot buffer stays proportional to the flow count,
+// rather than re-allocating as it fills or holding a peak-sized array forever.
+func TestSnapshotRightSizesBuffer(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	inBand := func() {
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically(">=", len(c.epStats)),
+			"buffer must hold every flow without growing mid-sweep")
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically("<=", 2*len(c.epStats)),
+			"buffer must not hold on to much more than the current flow count")
+	}
+
+	c.snapshotFlowsForRecalc()
+	Expect(c.recalcSnapshot).To(HaveLen(len(c.epStats)))
+	inBand()
+
+	// Shrinking the flow count must release the larger array.
+	grown := cap(c.recalcSnapshot)
+	for tpl := range c.epStats {
+		c.deleteDataFromEpStats(c.epStats[tpl])
+		break
+	}
+	c.snapshotFlowsForRecalc()
+	inBand()
+	Expect(cap(c.recalcSnapshot)).To(BeNumerically("<", grown))
+}
+
 // TestProcessRecalcBatchSkipsStaleFlows verifies that flows deleted from epStats after the snapshot
 // was taken are skipped rather than evaluated (no panic, not counted).
 func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
