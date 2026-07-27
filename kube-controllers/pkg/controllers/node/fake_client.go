@@ -299,6 +299,10 @@ type fakeIPAMClient struct {
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
 	releaseHostAffinityErrors map[string]error
+
+	// utilization is what GetUtilization returns; the metrics sync calls it to
+	// find out how much of each pool is reserved.  Empty unless a test sets it.
+	utilization []*ipam.PoolUtilization
 }
 
 // gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
@@ -452,7 +456,18 @@ func (f *fakeIPAMClient) RemoveIPAMHost(ctx context.Context, affinityCfg ipam.Af
 
 // GetUtilization returns IP utilization info for the specified pools, or for all pools.
 func (f *fakeIPAMClient) GetUtilization(ctx context.Context, args ipam.GetUtilizationArgs) ([]*ipam.PoolUtilization, error) {
-	panic("not implemented") // TODO: Implement
+	f.Lock()
+	defer f.Unlock()
+	if len(args.Pools) == 0 {
+		return f.utilization, nil
+	}
+	var wanted []*ipam.PoolUtilization
+	for _, poolUse := range f.utilization {
+		if slices.Contains(args.Pools, poolUse.Name) {
+			wanted = append(wanted, poolUse)
+		}
+	}
+	return wanted, nil
 }
 
 // EnsureBlock returns single IPv4/IPv6 IPAM block for a host as specified by the provided BlockArgs.

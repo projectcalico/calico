@@ -83,7 +83,8 @@ the block syncer plus a handle-side scan rather than a watch. See https://github
 
 Both stored as CRDs alongside the other IPAM resources. [`ipam_config.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_config.go) wraps the singleton `IPAMConfig`. Storage
 shape only - field semantics, defaults, and `StrictAffinity` / `MaxBlocksPerHost` / `AutoAllocateBlocks` interactions live in
-[`ipam-core-library.md`](./ipam-core-library.md#ipamconfig). `IPReservation` is read at allocation time and converted into an ordinal filter; never participates in CAS.
+[`ipam-core-library.md`](./ipam-core-library.md#ipamconfig). `IPReservation` is read at allocation time and converted into an ordinal filter, and again by `GetUtilization` so that
+the reporting surfaces don't count reserved addresses as free; never participates in CAS.
 
 **Review notes**
 

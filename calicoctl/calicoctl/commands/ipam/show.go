@@ -17,7 +17,6 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"math"
 	"os"
 	"reflect"
 	"sort"
@@ -209,37 +208,41 @@ func ShowBlockUtilization(ctx context.Context, ipamClient ipam.Interface, showBl
 	}
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS FREE"})
+	t.AppendHeader(table.Row{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS RESERVED", "IPS FREE"})
 	t.SetColumnConfigs([]table.ColumnConfig{
 		{Name: "IPS TOTAL", Align: text.AlignRight},
 		{Name: "IPS IN USE", Align: text.AlignRight},
+		{Name: "IPS RESERVED", Align: text.AlignRight},
 		{Name: "IPS FREE", Align: text.AlignRight},
 	})
-	genRow := func(kind, cidr string, inUse, capacity float64) table.Row {
+	// IN USE counts allocated IPs and RESERVED counts IPs that an IPReservation
+	// covers; an IP allocated before it was reserved falls into both, so the
+	// percentages need not add up to 100.  FREE counts the IPs that are neither,
+	// which is why it comes from the library rather than being derived here.
+	genRow := func(kind, cidr string, capacity, inUse, reserved, free int) table.Row {
+		withPercentage := func(n int) string {
+			return fmt.Sprintf("%.5g (%.f%%)", float64(n), 100*float64(n)/float64(capacity))
+		}
 		return table.Row{
 			kind,
 			cidr,
-			fmt.Sprintf("%.5g", capacity),
-			// Note: the '+capacity/2' bits here give us rounding to the nearest
-			// integer, instead of rounding down, and so ensure that the two percentages
-			// add up to 100.
-			fmt.Sprintf("%.5g (%.f%%)", inUse, 100*inUse/capacity),
-			fmt.Sprintf("%.5g (%.f%%)", capacity-inUse, 100*(capacity-inUse)/capacity),
+			fmt.Sprintf("%.5g", float64(capacity)),
+			withPercentage(inUse),
+			withPercentage(reserved),
+			withPercentage(free),
 		}
 	}
 	for _, poolUse := range usage {
 		var blockRows []table.Row
-		var poolInUse float64
 		for _, blockUse := range poolUse.Blocks {
-			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), float64(blockUse.Capacity-blockUse.Available), float64(blockUse.Capacity)))
-			poolInUse += float64(blockUse.Capacity - blockUse.Available)
+			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(),
+				blockUse.Capacity, blockUse.InUse, blockUse.Reserved, blockUse.Available))
 		}
-		ones, bits := poolUse.CIDR.Mask.Size()
-		poolCapacity := math.Pow(2, float64(bits-ones))
-		if ones > 0 {
+		if ones, _ := poolUse.CIDR.Mask.Size(); ones > 0 {
 			// Only show the IP Pool row for a real IP Pool and not for the orphaned
 			// block case.
-			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(), poolInUse, poolCapacity))
+			t.AppendRow(genRow("IP Pool", poolUse.CIDR.String(),
+				poolUse.Capacity, poolUse.InUse, poolUse.Reserved, poolUse.Available))
 		}
 		if showBlocks {
 			t.AppendRows(blockRows)
