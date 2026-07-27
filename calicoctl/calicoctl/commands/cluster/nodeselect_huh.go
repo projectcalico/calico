@@ -58,8 +58,8 @@ const (
 // form: how to identify the problem, which nodes (or pods), whether to include
 // comparison nodes, and a final confirmation. shift+tab steps back through the
 // groups. Groups that don't apply to the chosen path are hidden. It returns the
-// selection with proceed=true only if the operator confirmed; aborting
-// (Ctrl-C / Esc) returns proceed=false with a nil error.
+// selection with proceed=true only if the operator confirmed; aborting (Ctrl-C)
+// or declining the final confirmation returns proceed=false with a nil error.
 //
 // The node list is gathered up front; pods (for the by-pod path) are listed
 // lazily so by-node users never pay for them, and the pod→node resolution
@@ -339,6 +339,12 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 	if aborted, err := runForm(form); err != nil || aborted {
 		return selection{}, false, err
 	}
+	// Declining the final confirmation completes the form rather than aborting it,
+	// so stop here: the resolution below would make a pointless API call and print
+	// a "Resolved N pod(s)" line after the operator has already said no.
+	if !confirm {
+		return selection{}, false, nil
+	}
 
 	// Authoritative pod→node resolution now the UI is done (its warnings print to
 	// the terminal).
@@ -371,7 +377,7 @@ func runInteractiveSelection(kubeClient kubernetes.Interface) (selection, bool, 
 		ProblemPods:     problemPodSel, // empty on the by-node path
 		StartedAt:       strings.TrimSpace(problemStarted),
 		Description:     strings.TrimSpace(problemDetails),
-	}, confirm, nil
+	}, true, nil
 }
 
 // roleScaffold builds the pre-populated body of the "how is each pod/node

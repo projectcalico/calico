@@ -137,11 +137,6 @@ func nodeReady(node *apiv1.Node) bool {
 	return false
 }
 
-// isNotFound reports whether err is a Kubernetes "not found" API error.
-func isNotFound(err error) bool {
-	return apierrors.IsNotFound(err)
-}
-
 // nodeInfoFromLabels builds a nodeInfo from a node's name, labels and readiness.
 // Split out from gatherNodeInfo so it can be unit-tested without a fake client.
 func nodeInfoFromLabels(name string, labels map[string]string, ready bool) nodeInfo {
@@ -207,7 +202,7 @@ func nodeForPod(ctx context.Context, kubeClient kubernetes.Interface, ref podRef
 	if ref.Namespace != "" {
 		pod, err := kubeClient.CoreV1().Pods(ref.Namespace).Get(ctx, ref.Name, v1.GetOptions{})
 		if err != nil {
-			if isNotFound(err) {
+			if apierrors.IsNotFound(err) {
 				return "", false, nil
 			}
 			return "", false, err

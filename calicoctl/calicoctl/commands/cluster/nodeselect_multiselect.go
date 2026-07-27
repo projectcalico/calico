@@ -37,7 +37,6 @@ import (
 // It plugs into the same huh.Form as the other steps, so back-navigation
 // (shift+tab), theming and the confirmation step all still work.
 type nodeMultiSelect struct {
-	id    int
 	key   string
 	title string
 
@@ -173,13 +172,18 @@ func (m *nodeMultiSelect) Key(k string) *nodeMultiSelect { m.key = k; return m }
 // --- selection helpers ---
 
 // selectedValues returns the selected node names in option (display) order.
+//
+// Disabled rows are excluded even if they are ticked: a row can become disabled
+// after it was selected — a comparison node promoted to a problem node on a
+// back-navigation — and a locked row must not contribute to this field's value or
+// to the counts derived from it.
 func (m *nodeMultiSelect) selectedValues() []string {
 	if len(m.selected) == 0 {
 		return nil
 	}
 	out := make([]string, 0, len(m.selected))
 	for _, o := range m.options {
-		if m.selected[o.Value] {
+		if m.selected[o.Value] && !m.isDisabled(o.Value) {
 			out = append(out, o.Value)
 		}
 	}
@@ -208,11 +212,31 @@ func (m *nodeMultiSelect) toggleCurrent() {
 	m.writeValue()
 }
 
-func (m *nodeMultiSelect) move(d int) {
+// move shifts the cursor by d rows; moveTo places it at an absolute index. Both
+// clamp to the filtered list.
+func (m *nodeMultiSelect) move(d int) { m.moveTo(m.cursor + d) }
+
+func (m *nodeMultiSelect) moveTo(i int) {
 	if len(m.filtered) == 0 {
 		return
 	}
-	m.cursor = clampInt(m.cursor+d, 0, len(m.filtered)-1)
+	m.cursor = clampInt(i, 0, len(m.filtered)-1)
+}
+
+// scrollToCursor slides the viewport so the cursor row is visible. It runs during
+// render rather than on each keypress because the number of visible rows is only
+// settled then: the height can be reset by the layout or the lazy option load,
+// and the footer grows by a line whenever the warning appears.
+func (m *nodeMultiSelect) scrollToCursor(rows int) {
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	}
+	if m.cursor >= m.offset+rows {
+		m.offset = m.cursor - rows + 1
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
 }
 
 // applyFilter recomputes the filtered index set against the current filter text
@@ -255,9 +279,9 @@ func (m *nodeMultiSelect) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 		case "pgdown":
 			m.move(m.visibleRows())
 		case "home":
-			m.cursor = 0
+			m.moveTo(0)
 		case "end":
-			m.cursor = len(m.filtered) - 1
+			m.moveTo(len(m.filtered) - 1)
 		case "space":
 			m.toggleCurrent()
 		case "enter", "tab":
@@ -300,17 +324,7 @@ func (m *nodeMultiSelect) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 func (m *nodeMultiSelect) View() string {
 	st := m.activeStyles()
 	rows := m.visibleRows()
-
-	// Keep the cursor within the visible window.
-	if m.cursor < m.offset {
-		m.offset = m.cursor
-	}
-	if m.cursor >= m.offset+rows {
-		m.offset = m.cursor - rows + 1
-	}
-	if m.offset < 0 {
-		m.offset = 0
-	}
+	m.scrollToCursor(rows)
 
 	var b strings.Builder
 	b.WriteString(st.Title.Render(m.title))
@@ -325,7 +339,7 @@ func (m *nodeMultiSelect) View() string {
 	b.WriteByte('\n')
 
 	// Virtualized option rows.
-	end := minInt(m.offset+rows, len(m.filtered))
+	end := min(m.offset+rows, len(m.filtered))
 	if len(m.filtered) == 0 {
 		empty := fmt.Sprintf("  (no %ss match the filter)", m.itemNoun())
 		if m.loadErr != nil {
@@ -389,10 +403,10 @@ func (m *nodeMultiSelect) statusText() string {
 	start, fin := 0, 0
 	if total > 0 {
 		start = m.offset + 1
-		fin = minInt(m.offset+m.visibleRows(), total)
+		fin = min(m.offset+m.visibleRows(), total)
 	}
 	return fmt.Sprintf("%d–%d of %d · %d selected · space select · enter confirm · shift+tab back · type to filter",
-		start, fin, total, len(m.selected))
+		start, fin, total, len(m.selectedValues()))
 }
 
 // warningText is the over-budget warning, or "" when within budget.
@@ -400,7 +414,7 @@ func (m *nodeMultiSelect) warningText() string {
 	if m.warning == nil {
 		return ""
 	}
-	return m.warning(len(m.selected))
+	return m.warning(len(m.selectedValues()))
 }
 
 // visibleRows is the number of option rows that fit, leaving room for the title,
@@ -416,7 +430,7 @@ func (m *nodeMultiSelect) visibleRows() int {
 		footer = 2
 	}
 	const titleAndFilter, cardBorder = 2, 2
-	return maxInt(1, h-titleAndFilter-cardBorder-footer)
+	return max(1, h-titleAndFilter-cardBorder-footer)
 }
 
 func (m *nodeMultiSelect) activeStyles() *huh.FieldStyles {
@@ -469,28 +483,7 @@ func (m *nodeMultiSelect) WithPosition(huh.FieldPosition) huh.Field { return m }
 func (m *nodeMultiSelect) GetKey() string { return m.key }
 func (m *nodeMultiSelect) GetValue() any  { return m.selectedValues() }
 
-// --- small numeric helpers (kept local to avoid name clashes) ---
-
+// clampInt confines v to [lo, hi].
 func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
+	return min(max(v, lo), hi)
 }

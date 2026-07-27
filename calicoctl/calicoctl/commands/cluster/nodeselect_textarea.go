@@ -34,7 +34,6 @@ import (
 // Editing keys go to the textarea (Enter inserts a newline); tab advances to the
 // next field and shift+tab steps back, mirroring the other custom field.
 type seededTextArea struct {
-	id    int
 	key   string
 	title string
 	desc  string

@@ -182,6 +182,11 @@ func (c *Collector) runCommandParts(parts []string) ([]byte, cmdOutcome, error) 
 	defer cancel()
 
 	cmd := exec.CommandContext(cmdCtx, parts[0], parts[1:]...)
+	// Killing the process is not enough on its own: Run also waits for the output
+	// pipe to close, so a descendant that inherited it could block us past both
+	// timeouts — the exact hang this collector exists to bound. WaitDelay gives up
+	// on the pipe shortly after the kill.
+	cmd.WaitDelay = 5 * time.Second
 	var buf bytes.Buffer
 	w := &activityWriter{w: &buf, reset: func() {}}
 	if c.noOutputTimeout > 0 {
