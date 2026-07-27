@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ func TypesWithStatuses(scheme *runtime.Scheme, groupVersions ...schema.GroupVers
 		if ok {
 			value := reflect.Indirect(reflect.New(typeInfo))
 			var obj any
-			if typeInfo.Kind() == reflect.Ptr {
+			if typeInfo.Kind() == reflect.Pointer {
 				obj = value.Interface()
 			} else {
 				if !value.CanAddr() {

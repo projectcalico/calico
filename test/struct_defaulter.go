@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2024,2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func (defaulter *nonZeroValueDefaulter) setDefaultValue(value reflect.Value) err
 	}
 
 	switch value.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		p := reflect.New(value.Type().Elem())
 		if err := defaulter.setDefaultValue(p.Elem()); err != nil {
 			return err

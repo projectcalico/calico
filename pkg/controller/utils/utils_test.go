@@ -315,16 +315,16 @@ var _ = Describe("Utils ElasticSearch test", func() {
 })
 
 type fakeClient struct {
-	discovery discovery.DiscoveryInterface
+	discovery discovery.DiscoveryInterfaces
 	kubernetes.Interface
 }
 
 type fakeDiscovery struct {
-	discovery.DiscoveryInterface
+	discovery.DiscoveryInterfaces
 	mock.Mock
 }
 
-func (m fakeClient) Discovery() discovery.DiscoveryInterface {
+func (m fakeClient) Discovery() discovery.DiscoveryInterfaces {
 	return m.discovery
 }
 
