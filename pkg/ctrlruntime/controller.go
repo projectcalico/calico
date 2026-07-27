@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,13 @@ type Controller interface {
 
 	// WatchObject creates a watch for the specific object, using the cache stored internal to the Controller.
 	WatchObject(object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
+
+	// WatchObjectInCache creates a watch for the specific object using the
+	// provided cache instead of the manager's shared cache. Use this when a
+	// controller needs a scoped (e.g. label-filtered) informer for a type so
+	// it does not force the manager's shared cache to list/watch every object
+	// of that type cluster-wide.
+	WatchObjectInCache(cch cache.Cache, object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error
 }
 
 // controler is an implementation of Controller. It stores the cache from the manager it was created from and uses it
@@ -65,4 +72,8 @@ func NewController(name string, mgr manager.Manager, options controller.Options)
 
 func (c *controler) WatchObject(object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
 	return c.Watch(source.Kind(c.cach, object, eventhandler, predicates...))
+}
+
+func (c *controler) WatchObjectInCache(cch cache.Cache, object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
+	return c.Watch(source.Kind(cch, object, eventhandler, predicates...))
 }

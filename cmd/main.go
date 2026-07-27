@@ -534,23 +534,6 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		os.Exit(1)
 	}
 
-	// Register a field-selector index on Pod spec.nodeName. The podiprecovery
-	// controller uses this to list operator-managed pods on a specific node
-	// in a single server-side query. Indexes must be registered before the
-	// manager starts (and before any controllers attempt server-side field
-	// lookups via the cached client).
-	if err := mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&corev1.Pod{},
-		"spec.nodeName",
-		func(obj client.Object) []string {
-			return []string{obj.(*corev1.Pod).Spec.NodeName}
-		},
-	); err != nil {
-		setupLog.Error(err, "unable to register field index for pod spec.nodeName")
-		os.Exit(1)
-	}
-
 	err = controller.AddToManager(mgr, options)
 	if err != nil {
 		setupLog.Error(err, "unable to create controllers")

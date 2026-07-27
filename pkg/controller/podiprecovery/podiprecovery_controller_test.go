@@ -86,7 +86,11 @@ var _ = Describe("PodIPRecovery controller", func() {
 				return []string{obj.(*corev1.Pod).Spec.NodeName}
 			}).
 			Build()
-		r = &Reconciler{client: c}
+		// In production the lister wraps a label-scoped cache; the fake client
+		// (which carries the same spec.nodeName index) stands in for it here.
+		// onNode keeps a redundant label selector, so unlabeled pods in this
+		// unscoped fake client are still filtered out.
+		r = &Reconciler{client: c, hostNetworkedPods: hostNetworkedPodLister{reader: c}}
 
 		// By default, create the Installation so Reconcile proceeds.
 		// The Installation-gate test overrides this expectation.
@@ -333,6 +337,102 @@ var _ = Describe("PodIPRecovery controller", func() {
 			new := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}
 			new.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeExternalIP, Address: "10.0.0.2"}}
 			Expect(pred.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})).To(BeTrue())
+		})
+	})
+
+	Context("hostNetPodSettledPredicate", func() {
+		pred := hostNetPodSettledPredicate()
+
+		// settledPod builds a managed host-networked pod on node1 with the
+		// given IPs and readiness. Tests override individual fields as needed.
+		settledPod := func(podIPs []string, ready bool) *corev1.Pod {
+			p := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "p1",
+					Namespace: ns,
+					Labels:    map[string]string{common.HostNetworkedPodLabel: "true"},
+				},
+				Spec: corev1.PodSpec{NodeName: "node1", HostNetwork: true},
+			}
+			for _, ip := range podIPs {
+				p.Status.PodIPs = append(p.Status.PodIPs, corev1.PodIP{IP: ip})
+			}
+			cond := corev1.ConditionFalse
+			if ready {
+				cond = corev1.ConditionTrue
+			}
+			p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: cond}}
+			return p
+		}
+
+		It("enqueues on Create when a managed host-net pod already reports IPs", func() {
+			Expect(pred.Create(event.CreateEvent{Object: settledPod([]string{"10.0.0.1"}, true)})).To(BeTrue())
+		})
+
+		It("does not enqueue on Create when the pod has no IPs yet", func() {
+			Expect(pred.Create(event.CreateEvent{Object: settledPod(nil, false)})).To(BeFalse())
+		})
+
+		It("does not enqueue on Create for a pod without the host-net marker label", func() {
+			p := settledPod([]string{"10.0.0.1"}, true)
+			p.Labels = nil
+			Expect(pred.Create(event.CreateEvent{Object: p})).To(BeFalse())
+		})
+
+		It("does not enqueue on Create for a non-hostNetwork pod", func() {
+			p := settledPod([]string{"10.0.0.1"}, true)
+			p.Spec.HostNetwork = false
+			Expect(pred.Create(event.CreateEvent{Object: p})).To(BeFalse())
+		})
+
+		It("enqueues on Update when the pod's IPs appear (empty -> set)", func() {
+			old := settledPod(nil, false)
+			new := settledPod([]string{"10.0.0.1"}, false)
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})).To(BeTrue())
+		})
+
+		It("enqueues on Update when the pod becomes Ready (this is the late-settling survivor case)", func() {
+			// The surviving pod comes back reporting its old, now-stale IP;
+			// its IPs don't change but it transitions to Ready. This is the
+			// exact edge the Node watch alone would miss.
+			old := settledPod([]string{"10.0.0.1"}, false)
+			new := settledPod([]string{"10.0.0.1"}, true)
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})).To(BeTrue())
+		})
+
+		It("does not enqueue on Update when nothing relevant changed (steady-state heartbeat)", func() {
+			old := settledPod([]string{"10.0.0.1"}, true)
+			new := settledPod([]string{"10.0.0.1"}, true)
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})).To(BeFalse())
+		})
+
+		It("does not enqueue on Update for a pod without the host-net marker label", func() {
+			old := settledPod(nil, false)
+			old.Labels = nil
+			new := settledPod([]string{"10.0.0.1"}, true)
+			new.Labels = nil
+			Expect(pred.Update(event.UpdateEvent{ObjectOld: old, ObjectNew: new})).To(BeFalse())
+		})
+
+		It("does not enqueue on Delete", func() {
+			Expect(pred.Delete(event.DeleteEvent{Object: settledPod([]string{"10.0.0.1"}, true)})).To(BeFalse())
+		})
+	})
+
+	Context("podToNode", func() {
+		It("maps a pod to a reconcile request for its node", func() {
+			pod := newPod("p1", "node7", "10.0.0.1", true)
+			reqs := podToNode(ctx, pod)
+			Expect(reqs).To(ConsistOf(reconcile.Request{NamespacedName: types.NamespacedName{Name: "node7"}}))
+		})
+
+		It("returns nothing for a pod not yet scheduled to a node", func() {
+			pod := newPod("p1", "", "10.0.0.1", true)
+			Expect(podToNode(ctx, pod)).To(BeEmpty())
+		})
+
+		It("returns nothing for a non-pod object", func() {
+			Expect(podToNode(ctx, newNode("node1", "10.0.0.1"))).To(BeEmpty())
 		})
 	})
 })

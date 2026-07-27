@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -1135,6 +1136,11 @@ type mockController struct {
 }
 
 func (m *mockController) WatchObject(object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
+	m.watchedObjects = append(m.watchedObjects, object)
+	return nil
+}
+
+func (m *mockController) WatchObjectInCache(_ cache.Cache, object client.Object, eventhandler handler.EventHandler, predicates ...predicate.Predicate) error {
 	m.watchedObjects = append(m.watchedObjects, object)
 	return nil
 }
