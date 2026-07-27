@@ -472,6 +472,13 @@ func (t *Table) Name() string {
 	return t.name
 }
 
+// CleanUp implements generictables.CleanupTable. iptables tables are always shared with other
+// components, so an ordinary apply already limits itself to our own chains and to the rules we
+// inserted into chains belonging to others.
+func (t *Table) CleanUp() time.Duration {
+	return t.Apply()
+}
+
 // InsertOrAppendRules sets the rules that should be inserted into or appended
 // to the given non-Calico chain (depending on the chain insert mode).  See
 // also AppendRules, which can be used to record additional rules that are

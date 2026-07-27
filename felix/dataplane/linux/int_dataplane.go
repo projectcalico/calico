@@ -351,6 +351,7 @@ type InternalDataplane struct {
 
 	mainRouteTables []routetable.SyncerInterface
 	allTables       []generictables.Table
+	cleanupTables   []generictables.CleanupTable
 	mangleTables    []generictables.Table
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
@@ -574,7 +575,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		NewDataplane:     config.NewNftablesDataplane,
 	}
 
-	var cleanupTables []generictables.Table
+	var cleanupTables []generictables.CleanupTable
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
@@ -639,17 +640,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Sweep out the rules that a previous iptables-mode Felix using the nft backend left in
-		// the standard filter/nat/mangle/raw tables. We go through the nft view rather than
-		// adding the iptables Tables to cleanupTables: iptables-nft-save aborts on any of those
-		// tables that also holds native nft rules (Tailscale, kube-proxy, a host firewall),
-		// which made cleanup loop forever (#13263).
-		nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+		// Sweep out the rules that a previous iptables-mode Felix left behind. Which dataplane
+		// holds them depends on the backend that Felix was using: the nft backend wrote into the
+		// standard nftables tables, the legacy backend into xtables.
+		cleanupTables = append(cleanupTables,
+			nftables.NewLegacyIPTablesCleanup(4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes, nftablesOptions),
+		)
 
 		if backendMode == "legacy" {
-			// A previous Felix on the legacy backend left its rules in xtables instead, where
-			// the nft view can't see them. iptables-legacy-save has no problem with native nft
-			// rules, so reconcile those tables the normal way.
 			cleanupTables = append(cleanupTables,
 				mangleTableV4IPT,
 				natTableV4IPT,
@@ -1379,9 +1377,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
 
-			// Sweep out leftover nft-backend iptables rules via the nft view, and leftover
-			// legacy-backend ones through the iptables Tables (see the IPv4 path and #13263).
-			nftables.CleanUpLegacyIPTables(config.NewNftablesDataplane, 6, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+			// Sweep out leftover iptables-mode rules for IPv6 (see the IPv4 path and #13263).
+			cleanupTables = append(cleanupTables,
+				nftables.NewLegacyIPTablesCleanup(6, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes, nftablesOptions),
+			)
 
 			if backendMode == "legacy" {
 				cleanupTables = append(cleanupTables,
@@ -1585,8 +1584,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
-	// Include cleanup tables in allTables so that they are cleaned up.
-	dp.allTables = append(dp.allTables, cleanupTables...)
+	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
 	dp.ipSets = append(dp.ipSets, cleanupIPSets...)
 
 	// Register that we will report liveness and readiness.
@@ -2909,10 +2907,11 @@ func (d *InternalDataplane) apply() {
 	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
 	var iptablesWG sync.WaitGroup
-	for _, t := range d.allTables {
+	runTable := func(f func() time.Duration) {
 		iptablesWG.Add(1)
-		go func(t generictables.Table) {
-			tableReschedAfter := t.Apply()
+		go func() {
+			defer iptablesWG.Done()
+			tableReschedAfter := f()
 
 			reschedDelayMutex.Lock()
 			defer reschedDelayMutex.Unlock()
@@ -2920,8 +2919,17 @@ func (d *InternalDataplane) apply() {
 				reschedDelay = tableReschedAfter
 			}
 			d.reportHealth()
-			iptablesWG.Done()
-		}(t)
+		}()
+	}
+	for _, t := range d.allTables {
+		runTable(t.Apply)
+	}
+
+	// Tables we're no longer programming get swept in the same pass, so that leftovers from a
+	// previous dataplane mode go away whether they're ours to delete wholesale or sitting in a
+	// table we share with someone else.
+	for _, t := range d.cleanupTables {
+		runTable(t.CleanUp)
 	}
 	iptablesWG.Wait()
 

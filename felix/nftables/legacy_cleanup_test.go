@@ -65,11 +65,16 @@ var _ = Describe("Legacy iptables cleanup via the nft view", func() {
 		fakes = map[string]*fakeNFT{}
 	})
 
+	newCleanup := func() *nftables.LegacyIPTablesCleanup {
+		return nftables.NewLegacyIPTablesCleanup(4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes,
+			nftables.TableOptions{NewDataplane: newDataplane})
+	}
+
 	It("removes our chains and jumps while leaving foreign rules untouched", func() {
 		seed("filter", "INPUT", knftables.InputHook)
 		seed("nat", "POSTROUTING", knftables.PostroutingHook)
 
-		nftables.CleanUpLegacyIPTables(newDataplane, 4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+		newCleanup().CleanUp()
 
 		for _, table := range []string{"filter", "nat"} {
 			dump := fakes["ip/"+table].Fake().Dump()
@@ -85,7 +90,21 @@ var _ = Describe("Legacy iptables cleanup via the nft view", func() {
 
 	It("is a no-op when a table was never written to", func() {
 		Expect(func() {
-			nftables.CleanUpLegacyIPTables(newDataplane, 4, rules.RuleHashPrefix, rules.AllHistoricChainNamePrefixes)
+			newCleanup().CleanUp()
 		}).NotTo(Panic())
+	})
+
+	It("stops reading the dataplane once a pass comes back clean", func() {
+		seed("filter", "INPUT", knftables.InputHook)
+		c := newCleanup()
+
+		// First pass deletes our state, the second confirms it stuck. With no refresh interval
+		// configured there's nothing to bring us back after that.
+		c.CleanUp()
+		Expect(c.CleanUp()).To(BeZero())
+
+		seed("mangle", "PREROUTING", knftables.PreroutingHook)
+		Expect(c.CleanUp()).To(BeZero())
+		Expect(fakes["ip/mangle"].Fake().Dump()).To(ContainSubstring("cali"))
 	})
 })
