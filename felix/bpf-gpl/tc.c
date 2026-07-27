@@ -1666,6 +1666,30 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 		}
 	}
 
+	/* When BPFOverlayHostSourceIP=HostAddress the tunnel device has no IP, so a
+	 * host-networked client's request to a local workload arrives over the overlay
+	 * with the client node's IP as its inner source.  The workload's reply then
+	 * targets a bare node IP, which resolves to a CALI_RT_HOST route (not tunneled)
+	 * and would otherwise leave the node un-encapsulated with a pod-CIDR source -
+	 * dropped by a source-checking fabric (e.g. GCP).  Mark such a flow so its reply
+	 * is re-encapsulated back to the node (honoured in fib_co_re.h); the reply
+	 * re-encaps to its own destination, so no outer address needs to be stored.
+	 *
+	 * Identify the flow by runtime state only: HostAddress mode (no tunnel IP), a
+	 * non-service flow (nat_dest unset), an inner source that is a remote host, and a
+	 * local-workload destination.  In overlay mode a remote host can only reach a
+	 * local workload over the tunnel, so this is exactly the host-originated overlay
+	 * flow whose reply needs re-encap.  We deliberately do not gate on the
+	 * CALI_F_IPIP/CALI_F_VXLAN compile flags here: this runs in the shared new-flow
+	 * entrypoint, where they do not reliably reflect the ingress device. */
+	if (ip_void(HOST_TUNNEL_IP) &&
+			ip_void(ctx->state->nat_dest.addr) &&
+			rt_addr_is_remote_host(&state->ip_src) &&
+			cali_rt_flags_local_workload(cali_rt_lookup_flags(&state->post_nat_ip_dst))) {
+		ct_ctx_nat->flags |= CALI_CT_FLAG_OVERLAY_REPLY;
+		CALI_DEBUG("CALI_CT_FLAG_OVERLAY_REPLY");
+	}
+
 	if (state->ip_proto == IPPROTO_TCP) {
 		if (skb_refresh_validate_ptrs(ctx, TCP_SIZE)) {
 			deny_reason(ctx, CALI_REASON_SHORT);

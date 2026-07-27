@@ -28,7 +28,7 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
 #define CALI_CT_FLAG_NP_FWD	0x04 /* marks entry into the tunnel on the fwd node */
 #define CALI_CT_FLAG_SKIP_FIB	0x08 /* marks traffic that should pass through host IP stack */
-#define CALI_CT_FLAG_RES_0x10	0x10 /* reserved */
+#define CALI_CT_FLAG_OVERLAY_REPLY	0x10 /* reply of a host-originated overlay flow must be re-encapsulated (BPFOverlayHostSourceIP=HostAddress) */
 #define CALI_CT_FLAG_RES_0x20	0x20 /* reserved */
 #define CALI_CT_FLAG_EXT_LOCAL	0x40 /* marks traffic from external client to a local service */
 #define CALI_CT_FLAG_VIA_NAT_IF	0x80 /* marks connection first seen on the service veth */
