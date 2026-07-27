@@ -220,7 +220,10 @@ Where it lives:
   `libcalico-go/lib/ipam/DESIGN.md`,
   `cni-plugin/pkg/ipamplugin/DESIGN.md`,
   `kube-controllers/pkg/controllers/node/DESIGN.md`) but the
-  canonical content lives under `design/<topic>/`.
+  canonical content lives under `design/<topic>/`. Other
+  examples: `design/syncer/` (the Syncer API, spanning
+  libcalico-go, Felix, and Typha; stub at
+  `libcalico-go/lib/backend/syncersv1/DESIGN.md`).
 - **[`.github/copilot-instructions.md`](../.github/copilot-instructions.md)**
   and
   **[`.github/instructions/*.instructions.md`](../.github/instructions/)**
