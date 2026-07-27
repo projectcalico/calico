@@ -681,15 +681,17 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		return err
 	}
 
-	// Remove any addresses which we don't want, but never strip the kernel-managed IPv6 link-local
-	// address.
+	// Remove any addresses which we don't want.
 	addrPresent := false
 	for _, existing := range existingAddrs {
 		if desired != nil && reflect.DeepEqual(existing.IPNet, desired.IPNet) {
 			addrPresent = true
 			continue
 		}
-		if existing.IP.IsLinkLocalUnicast() {
+		// Never strip the kernel-managed IPv6 link-local address. Guard on the address being IPv6
+		// (To4() == nil), since IsLinkLocalUnicast() also matches IPv4 169.254.0.0/16, which we do
+		// want to remove when reconciling to "no address".
+		if existing.IP.To4() == nil && existing.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		m.logCtx.WithFields(logrus.Fields{
