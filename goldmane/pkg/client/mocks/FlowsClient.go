@@ -83,7 +83,7 @@ type FlowsClient_FilterHints_Call struct {
 // FilterHints is a helper method to define mock.On call
 //   - ctx context.Context
 //   - req *proto.FilterHintsRequest
-func (_e *FlowsClient_Expecter) FilterHints(ctx interface{}, req interface{}) *FlowsClient_FilterHints_Call {
+func (_e *FlowsClient_Expecter) FilterHints(ctx any, req any) *FlowsClient_FilterHints_Call {
 	return &FlowsClient_FilterHints_Call{Call: _e.mock.On("FilterHints", ctx, req)}
 }
 
@@ -159,7 +159,7 @@ type FlowsClient_List_Call struct {
 // List is a helper method to define mock.On call
 //   - context1 context.Context
 //   - flowListRequest *proto.FlowListRequest
-func (_e *FlowsClient_Expecter) List(context1 interface{}, flowListRequest interface{}) *FlowsClient_List_Call {
+func (_e *FlowsClient_Expecter) List(context1 any, flowListRequest any) *FlowsClient_List_Call {
 	return &FlowsClient_List_Call{Call: _e.mock.On("List", context1, flowListRequest)}
 }
 
@@ -227,7 +227,7 @@ type FlowsClient_Stream_Call struct {
 // Stream is a helper method to define mock.On call
 //   - ctx context.Context
 //   - request *proto.FlowStreamRequest
-func (_e *FlowsClient_Expecter) Stream(ctx interface{}, request interface{}) *FlowsClient_Stream_Call {
+func (_e *FlowsClient_Expecter) Stream(ctx any, request any) *FlowsClient_Stream_Call {
 	return &FlowsClient_Stream_Call{Call: _e.mock.On("Stream", ctx, request)}
 }
 

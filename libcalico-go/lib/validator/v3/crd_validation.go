@@ -80,7 +80,7 @@ func resolveKind(obj runtime.Object) string {
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	if kind == "" {
 		t := reflect.TypeOf(obj)
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Pointer {
 			t = t.Elem()
 		}
 		kind = t.Name()
