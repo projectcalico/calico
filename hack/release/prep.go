@@ -22,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tigera/operator/hack/release/internal/command"
 	"github.com/tigera/operator/hack/release/internal/middleware"
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/tigera/operator/hack/release/internal/versions"
 	"github.com/urfave/cli/v3"
 )
@@ -85,7 +86,7 @@ var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Contex
 		return ctx, fmt.Errorf("error retrieving Calico version: %w", err)
 	}
 	calicoVersion = versions.Title
-	if valid, err := isReleaseVersionFormat(calicoVersion); err != nil {
+	if valid, err := setup.IsValidReleaseVersion(calicoVersion); err != nil {
 		return ctx, fmt.Errorf("error validating Calico version format: %w", err)
 	} else if !valid {
 		return ctx, fmt.Errorf("every release must contain a released Calico version, but found %s", calicoVersion)

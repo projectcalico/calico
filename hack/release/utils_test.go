@@ -16,6 +16,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/tigera/operator/hack/release/internal/setup"
 )
 
 func TestIsReleaseVersionFormat(t *testing.T) {
@@ -50,7 +52,7 @@ func TestIsReleaseVersionFormat(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.version, func(t *testing.T) {
 			t.Parallel()
-			got, err := isReleaseVersionFormat(tc.version)
+			got, err := setup.IsValidReleaseVersion(tc.version)
 			if err != nil {
 				t.Fatalf("isReleaseVersionFormat(%q) unexpected error: %v", tc.version, err)
 			}

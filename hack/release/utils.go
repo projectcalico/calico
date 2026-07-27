@@ -83,15 +83,6 @@ func addRepoInfoToCtx(ctx context.Context, repo string) (context.Context, error)
 	return ctx, nil
 }
 
-// isReleaseVersionFormat checks if the version in the format vX.Y.Z.
-func isReleaseVersionFormat(version string) (bool, error) {
-	releaseRegex, err := regexp.Compile(releaseFormat)
-	if err != nil {
-		return false, fmt.Errorf("compiling release regex: %s", err)
-	}
-	return releaseRegex.MatchString(version), nil
-}
-
 // isEnterpriseReleaseVersionFormat checks if the version is in the format vX.Y.Z or vX.Y.Z-A.B.
 func isEnterpriseReleaseVersionFormat(version string) (bool, error) {
 	releaseRegex, err := regexp.Compile(enterpriseReleaseFormat)
