@@ -117,6 +117,10 @@ gcloud_cmd_c1="echo \"deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https
 gcloud_cmd_c1="$gcloud_cmd_c1 && curl --retry 9 --retry-all-errors -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg"
 if [[ $SEMAPHORE_AGENT_MACHINE_TYPE =~ ^c1-.* ]]; then eval "$gcloud_cmd_c1"; fi
 sudo apt-get -o Acquire::Retries=5 update  -y || true; sudo apt-get install -o Acquire::Retries=5 google-cloud-cli google-cloud-cli-gke-gcloud-auth-plugin -y || true
+# s3cmd is used by .semaphore/s3-cmd to upload diags/logs/results to the S3
+# results bucket (GS_BUCKET) in global_epilogue.sh. Credentials come from the
+# CALICO_S3_ACCESS_KEY / CALICO_S3_SECRET_KEY env (provided via a pipeline secret).
+sudo apt-get install -o Acquire::Retries=5 s3cmd -y || true
 
 echo "[INFO] activating google service account..."
 export GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-$HOME/secrets/banzai-google-service-account.json}
