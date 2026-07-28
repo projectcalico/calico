@@ -22,52 +22,26 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 )
 
-// This test reproduces calico #13263: in nftables mode, a foreign tool (Tailscale,
-// kube-proxy, a host firewall) writing native nft rules into the standard filter/nat tables
-// used to wedge Felix. Felix keeps those tables around to clean up after a previous
-// iptables-mode Felix, and runs iptables-nft-save on them to do it. That save reports the
-// table incompatible once it contains anything iptables can't represent, and Felix retried,
-// panicked, and restart-looped.
+// Reproduction of #13263: native nft rules written into the shared filter/mangle/nat tables by
+// other tools made those tables unreadable to iptables-nft-save, which Felix was using to clean up
+// after a previous iptables-mode Felix, so Felix panic-looped.
 //
-// Felix now treats a table it can't read as one it can't clean up: it says so once and
-// carries on. It must stay healthy, keep programming its own `ip calico` table, and leave
-// the foreign rules alone.
+// foreign-nft-dump.txt is the ruleset from the issue; cali-iptables-dump.txt is the state a
+// previous iptables-mode Felix would have left underneath it.
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables legacy cleanup with foreign nft rules", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra infrastructure.DatastoreInfra
 		tc    infrastructure.TopologyContainers
 	)
 
-	// A Tailscale-like ruleset in the shared filter/nat tables.
-	//
-	// The `ct label` matches are what make iptables-nft report the table incompatible: iptables
-	// has no way to express them, so iptables-nft-save gives up on the whole table. Most of what
-	// a tool like Tailscale writes (named sets, jumps to its own chains, masquerade on a mark)
-	// iptables can represent fine and does not trigger this, so leaving them out of the ruleset
-	// would give us a test that passes whether or not the bug is fixed.
-	foreignRuleset := []byte(`
-add table ip filter
-add chain ip filter INPUT { type filter hook input priority 0; policy accept; }
-add chain ip filter FORWARD { type filter hook forward priority 0; policy accept; }
-add chain ip filter ts-input
-add chain ip filter ts-forward
-add set ip filter ts-hosts { type ipv4_addr; }
-add rule ip filter INPUT counter jump ts-input
-add rule ip filter FORWARD counter jump ts-forward
-add rule ip filter ts-input iifname "tailscale0" accept
-add rule ip filter ts-input ip saddr @ts-hosts accept
-add rule ip filter ts-input ct label 0 accept
-add rule ip filter ts-forward iifname "tailscale0" accept
-add table ip nat
-add chain ip nat POSTROUTING { type nat hook postrouting priority 100; policy accept; }
-add chain ip nat ts-postrouting
-add rule ip nat POSTROUTING counter jump ts-postrouting
-add rule ip nat ts-postrouting ct label 0 counter
-add rule ip nat ts-postrouting meta mark and 0x00040000 == 0x00040000 masquerade
-`)
-
 	felixReady := func() int {
 		return healthStatus(tc.Felixes[0].IP, "9099", "readiness")
+	}
+
+	nftTable := func(table string) string {
+		out, err := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", table)
+		Expect(err).NotTo(HaveOccurred())
+		return out
 	}
 
 	BeforeEach(func() {
@@ -77,14 +51,26 @@ add rule ip nat ts-postrouting meta mark and 0x00040000 == 0x00040000 masquerade
 
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		// The crash needs Felix to be reading these tables with iptables-nft; on the legacy
-		// backend it would read xtables and never see the foreign rules at all.
+		// On the legacy backend Felix reads xtables and never sees the foreign rules.
 		opts.ExtraEnvVars["FELIX_IptablesBackend"] = "nft"
 		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 		infra.AddDefaultAllow()
 
-		// Wait for the initial programming to settle before disturbing the shared tables.
 		Eventually(felixReady, "10s", "200ms").Should(BeGood())
+
+		for _, f := range []struct{ src, dst string }{
+			{"cali-iptables-dump.txt", "/iptables-dump.txt"},
+			{"foreign-nft-dump.txt", "/foreign-nft-dump.txt"},
+		} {
+			Expect(tc.Felixes[0].CopyFileIntoContainer(f.src, f.dst)).To(Succeed())
+		}
+
+		// Leftovers from a previous Felix first: iptables-nft-restore can't touch the tables once
+		// the foreign rules are in.
+		Eventually(func() error {
+			return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "--noflush", "/iptables-dump.txt")
+		}, "5s", "100ms").ShouldNot(HaveOccurred())
+		Expect(tc.Felixes[0].ExecMayFail("nft", "-f", "/foreign-nft-dump.txt")).To(Succeed())
 	})
 
 	AfterEach(func() {
@@ -96,38 +82,38 @@ add rule ip nat ts-postrouting meta mark and 0x00040000 == 0x00040000 masquerade
 		infra.Stop()
 	})
 
-	It("stays healthy and keeps programming its table", func() {
-		// Inject the foreign rules, then restart Felix so the cleanup pass reads the now
-		// "incompatible" tables during startup - the exact path that used to panic-loop.
-		tc.Felixes[0].ExecWithInput(foreignRuleset, "nft", "-f", "-")
-
-		// Check we've actually reproduced the conditions for the bug. iptables-nft reports an
-		// unreadable table by writing this line to stdout and then exiting 0, so without this
-		// the test would quietly pass on a ruleset that Felix can read perfectly well.
+	It("cleans up the legacy rules and leaves the foreign ones alone", func() {
+		// Confirm we've reproduced the conditions for the bug: iptables-nft reports the unreadable
+		// table on stdout and exits 0, so otherwise this would pass on a readable ruleset.
 		out, err := tc.Felixes[0].ExecOutput("iptables-nft-save", "-t", "filter")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(out).To(ContainSubstring("is incompatible, use 'nft' tool"),
-			"Foreign ruleset did not make the filter table unreadable to iptables-nft, so this "+
-				"test would pass with or without the fix")
+			"foreign ruleset did not make the filter table unreadable to iptables-nft")
 
+		// Restart so the cleanup pass runs at startup: the path that used to panic-loop.
 		tc.Felixes[0].Restart()
-
-		// Felix comes back and stays ready despite the foreign nft rules.
 		Eventually(felixReady, "20s", "200ms").Should(BeGood())
 		Consistently(felixReady, "10s", "500ms").Should(BeGood())
 
-		// It is still programming its own table.
-		Eventually(func() string {
-			out, _ := tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "calico")
-			return out
-		}, "10s", "500ms").Should(ContainSubstring("cali-"))
+		// Felix programs its own table, and the legacy rules go from the shared ones.
+		Eventually(func() string { return nftTable("calico") }, "10s", "500ms").Should(ContainSubstring("cali-"))
+		Eventually(func() string { return nftTable("filter") }, "20s", "500ms").ShouldNot(ContainSubstring("cali-"))
 
-		// The foreign chains are left untouched.
-		out, err = tc.Felixes[0].ExecOutput("nft", "list", "table", "ip", "filter")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(And(
+		// Everyone else's rules survive, including their own mark rules.
+		Expect(nftTable("filter")).To(And(
 			ContainSubstring("chain ts-input"),
 			ContainSubstring("chain ts-forward"),
+			ContainSubstring("chain nixos-fw"),
+			ContainSubstring("jump ts-input"),
+		))
+		Expect(nftTable("mangle")).To(And(
+			ContainSubstring("chain nixos-fw-rpfilter"),
+			ContainSubstring("ct mark set meta mark & 0x0000ff00"),
+		))
+		Expect(nftTable("nat")).To(And(
+			ContainSubstring("chain ts-postrouting"),
+			ContainSubstring("chain CNI-HOSTPORT-MASQ"),
+			ContainSubstring("masquerade"),
 		))
 	})
 })

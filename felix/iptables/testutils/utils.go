@@ -434,6 +434,9 @@ func (d *saveCmd) Start() error {
 		d.Dataplane.FailNextStart = false
 		return errors.New("dummy start failure")
 	}
+	if d.Dataplane.FailAllSaves {
+		return errors.New("simulated save failure")
+	}
 	if d.Dataplane.OnPreSave != nil {
 		log.Warn("OnPreSave set, calling it")
 		d.Dataplane.OnPreSave()

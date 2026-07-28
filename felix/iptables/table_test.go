@@ -112,7 +112,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			}).To(Panic())
 		})
 
-		Describe("with SkipIfIncompatible set", func() {
+		Describe("with CleanupOnly set", func() {
 			BeforeEach(func() {
 				table = NewTable(
 					"filter",
@@ -127,7 +127,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 						BackendMode:           dataplaneMode,
 						LookPathOverride:      testutils.LookPathNoLegacy,
 						OpRecorder:            logutils.NewSummarizer("test loop"),
-						SkipIfIncompatible:    true,
+						CleanupOnly:           true,
 					},
 				)
 			})
@@ -142,8 +142,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 
 			It("should only warn about the unreadable table once", func() {
-				// Most nodes in this state have no leftover rules to clean up at all, so this
-				// mustn't turn into a warning on every refresh.
+				// Most nodes in this state have nothing to clean up, so don't warn every refresh.
 				hook := logtest.NewGlobal()
 				defer hook.Reset()
 
@@ -161,6 +160,12 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				Expect(warnings).To(Equal(1), "expected one warning, got %d", warnings)
 			})
 
+			It("should not report itself done, having never read the table", func() {
+				table.Apply()
+				Expect(table.Done()).To(BeFalse(),
+					"an unreadable table must not be mistaken for an empty one")
+			})
+
 			It("should keep trying on later applies", func() {
 				table.Apply()
 				numCmds := len(dataplane.CmdNames)
@@ -174,6 +179,44 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				}).NotTo(Panic())
 				Expect(len(dataplane.CmdNames)).To(BeNumerically(">", numCmds))
 			})
+		})
+	})
+
+	Describe("with iptables-save failing outright", func() {
+		BeforeEach(func() {
+			dataplane.FailAllSaves = true
+		})
+
+		It("should panic on a table we program", func() {
+			Expect(func() {
+				table.Apply()
+			}).To(Panic())
+		})
+
+		It("should skip a CleanupOnly table instead of panicking", func() {
+			// The host may have no working iptables-save for this backend at all.
+			table = NewTable(
+				"filter",
+				4,
+				rules.RuleHashPrefix,
+				featureDetector,
+				TableOptions{
+					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+					NewCmdOverride:        dataplane.NewCmd,
+					SleepOverride:         dataplane.Sleep,
+					NowOverride:           dataplane.Now,
+					BackendMode:           dataplaneMode,
+					LookPathOverride:      testutils.LookPathNoLegacy,
+					OpRecorder:            logutils.NewSummarizer("test loop"),
+					CleanupOnly:           true,
+				},
+			)
+
+			Expect(func() {
+				table.CleanUp()
+			}).NotTo(Panic())
+			Expect(table.Done()).To(BeFalse())
+			Expect(dataplane.CmdNames).NotTo(ContainElement(ContainSubstring("restore")))
 		})
 	})
 
