@@ -100,13 +100,9 @@ spec:
                 type: string
               conditions:
                 description: |-
-                  Conditions report conflicts and errors encountered during migration.
-
-                  Deliberately atomic, with no MaxItems: the controller emits one
-                  Conflict-typed condition per conflicting resource, so a list-map would
-                  reject the write on duplicate keys and any bound could reject a
-                  legitimate one. Collapsing conflict reporting to a single condition, and
-                  then adding the list-map markers back, is follow-on work.
+                  Conditions report conflicts and errors encountered during migration. The
+                  controller reports one condition per conflicting resource, so entries are
+                  not unique by type and are not merged.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
