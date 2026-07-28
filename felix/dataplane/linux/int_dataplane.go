@@ -183,7 +183,7 @@ type Config struct {
 
 	// CleanupMarkMask is the widest mark mask Felix reserves, used to recognise rules a previous
 	// Felix left behind. Deliberately not the mask we program with: that Felix may have been
-	// configured differently.
+	// configured with another dataplane mode.
 	CleanupMarkMask uint32
 
 	TableRefreshInterval           time.Duration

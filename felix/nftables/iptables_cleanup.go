@@ -144,8 +144,7 @@ func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	// failure below.
 	present, err := c.listTables()
 	if err != nil {
-		logrus.WithError(err).WithField("family", c.family).Warn(
-			"Failed to list nftables tables; will retry iptables cleanup")
+		logrus.WithError(err).WithField("family", c.family).Warn("Failed to list nftables tables; will retry iptables cleanup")
 		return c.refreshInterval
 	}
 
@@ -177,7 +176,7 @@ func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	return c.refreshInterval
 }
 
-// sweepTable removes our state from one table, reporting whether the table came back without any.
+// sweepTable removes our state from one table, reporting whether the table held none of it.
 func (c *IPTablesCleanup) sweepTable(table string) (bool, error) {
 	raw, err := c.listTable(table)
 	if err != nil {
@@ -203,10 +202,10 @@ func (c *IPTablesCleanup) sweepTable(table string) (bool, error) {
 	// Delete our rules from other people's chains first, so our own chains stop being referenced.
 	for chain, handles := range ourRuleHandles {
 		for _, h := range handles {
-			handle := h
-			tx.Delete(&knftables.Rule{Chain: chain, Handle: &handle})
+			tx.Delete(&knftables.Rule{Chain: chain, Handle: &h})
 		}
 	}
+
 	// Flush all of our chains before deleting any: they jump to each other, and deleting as we go
 	// would hit a chain a later one still references, losing the whole transaction.
 	for _, name := range ourChains {
@@ -235,9 +234,10 @@ func (c *IPTablesCleanup) sweepTable(table string) (bool, error) {
 	return false, nil
 }
 
-// ourState picks out the chains and rules a previous iptables-mode Felix wrote. Chains are matched
-// by prefix; rules in other people's chains take one of three signals, since our rule hashes are
-// invisible here:
+// ourState picks out the chains and rules a previous iptables-mode Felix wrote. Ideally we'd just
+// match on rule hash, but nft can't see the hashes written by iptables-nft, so we need to use these
+// heuristics. Chains are matched by prefix; rules in other people's chains take one of three
+// signals:
 //
 //   - a jump or goto into one of our chains
 //   - a match on mark bits inside the mask Felix owns
@@ -300,13 +300,7 @@ func (c *IPTablesCleanup) listTables() (map[string]bool, error) {
 		return nil, err
 	}
 
-	var doc struct {
-		Nftables []struct {
-			Table *struct {
-				Name string `json:"name"`
-			} `json:"table"`
-		} `json:"nftables"`
-	}
+	var doc nftTableList
 	if err := json.Unmarshal(out, &doc); err != nil {
 		return nil, fmt.Errorf("parse nft table list: %w", err)
 	}
@@ -343,7 +337,26 @@ func (c *IPTablesCleanup) runNFT(args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// nftChain and nftRule are the parts of nft's JSON output we care about.
+// The types below are the parts of nft's JSON output we care about.
+
+// nftTableList is the shape of "nft --json list tables".
+type nftTableList struct {
+	Nftables []nftTableListEntry `json:"nftables"`
+}
+
+type nftTableListEntry struct {
+	Table *nftTableRef `json:"table"`
+}
+
+type nftTableRef struct {
+	Name string `json:"name"`
+}
+
+// nftTable is the shape of "nft --json list table": a flat list of objects keyed by type.
+type nftTable struct {
+	Nftables []map[string]json.RawMessage `json:"nftables"`
+}
+
 type nftChain struct {
 	Name string `json:"name"`
 }
@@ -354,10 +367,37 @@ type nftRule struct {
 	Expr   []map[string]json.RawMessage `json:"expr"`
 }
 
+// nftVerdict is a jump or goto expression.
+type nftVerdict struct {
+	Target string `json:"target"`
+}
+
+// nftMatchExpr is a match expression. We only look at its left operand, and only when that is the
+// bitwise-and nft renders a mark match as: {"&": [{"meta": {"key": "mark"}}, <mask>]}.
+type nftMatchExpr struct {
+	Left nftMatchOperand `json:"left"`
+}
+
+type nftMatchOperand struct {
+	And []json.RawMessage `json:"&"`
+}
+
+type nftMetaExpr struct {
+	Meta nftMetaKey `json:"meta"`
+}
+
+type nftMetaKey struct {
+	Key string `json:"key"`
+}
+
+// nftXT is an iptables extension. nft can't decode the payload, so type and name are all we get.
+type nftXT struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
 func parseNFTTable(raw []byte) ([]nftChain, []nftRule, error) {
-	var doc struct {
-		Nftables []map[string]json.RawMessage `json:"nftables"`
-	}
+	var doc nftTable
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, nil, err
 	}
@@ -391,9 +431,7 @@ func (r nftRule) jumpTarget() string {
 			if !ok {
 				continue
 			}
-			var verdict struct {
-				Target string `json:"target"`
-			}
+			var verdict nftVerdict
 			if err := json.Unmarshal(v, &verdict); err == nil {
 				return verdict.Target
 			}
@@ -410,19 +448,11 @@ func (r nftRule) matchesMarkWithin(mask uint32) bool {
 		if !ok {
 			continue
 		}
-		var m struct {
-			Left struct {
-				And []json.RawMessage `json:"&"`
-			} `json:"left"`
-		}
+		var m nftMatchExpr
 		if err := json.Unmarshal(v, &m); err != nil || len(m.Left.And) != 2 {
 			continue
 		}
-		var meta struct {
-			Meta struct {
-				Key string `json:"key"`
-			} `json:"meta"`
-		}
+		var meta nftMetaExpr
 		if err := json.Unmarshal(m.Left.And[0], &meta); err != nil || meta.Meta.Key != "mark" {
 			continue
 		}
@@ -437,18 +467,14 @@ func (r nftRule) matchesMarkWithin(mask uint32) bool {
 	return false
 }
 
-// hasXT reports whether the rule uses the named iptables extension, e.g. ("target", "MARK"). nft
-// can't decode the payload, so type and name are all we get.
+// hasXT reports whether the rule uses the named iptables extension, e.g. ("target", "MARK").
 func (r nftRule) hasXT(xtType, name string) bool {
 	for _, e := range r.Expr {
 		v, ok := e["xt"]
 		if !ok {
 			continue
 		}
-		var xt struct {
-			Type string `json:"type"`
-			Name string `json:"name"`
-		}
+		var xt nftXT
 		if err := json.Unmarshal(v, &xt); err == nil && xt.Type == xtType && xt.Name == name {
 			return true
 		}
