@@ -44,11 +44,17 @@ type PolicyStore struct {
 	NamespaceByID      map[types.NamespaceID]*proto.NamespaceUpdate
 
 	// Compiled forms of PolicyByID/ProfileByID, maintained as updates are
-	// applied when a PolicyCompiler is configured (see compiler.go). Absence
-	// of an entry means the policy must be evaluated by interpreting the
+	// applied when a PolicyCompiler is configured (see compiler.go). An empty
+	// or absent slot means the policy must be evaluated by interpreting the
 	// uncompiled policy.
-	CompiledPolicyByID  map[types.PolicyID]CompiledPolicy
-	CompiledProfileByID map[types.ProfileID]CompiledPolicy
+	CompiledPolicyByID  map[types.PolicyID]*PolicySlot
+	CompiledProfileByID map[types.ProfileID]*PolicySlot
+
+	// Compiled forms of the endpoints' tier/profile structure, keyed by the
+	// identity of the endpoint object they were built from — evaluation only
+	// ever has the endpoint pointer to hand, and a stale copy of a
+	// since-replaced endpoint must miss rather than match.
+	CompiledEndpoints map[*proto.WorkloadEndpoint]CompiledEndpoint
 
 	compiler PolicyCompiler
 	// Reverse index from IP set ID to the policies/profiles whose compiled
@@ -72,8 +78,9 @@ func NewPolicyStoreWithCompiler(compiler PolicyCompiler) *PolicyStore {
 		PolicyByID:          make(map[types.PolicyID]*proto.Policy),
 		ServiceAccountByID:  make(map[types.ServiceAccountID]*proto.ServiceAccountUpdate),
 		NamespaceByID:       make(map[types.NamespaceID]*proto.NamespaceUpdate),
-		CompiledPolicyByID:  make(map[types.PolicyID]CompiledPolicy),
-		CompiledProfileByID: make(map[types.ProfileID]CompiledPolicy),
+		CompiledPolicyByID:  make(map[types.PolicyID]*PolicySlot),
+		CompiledProfileByID: make(map[types.ProfileID]*PolicySlot),
+		CompiledEndpoints:   make(map[*proto.WorkloadEndpoint]CompiledEndpoint),
 		compiler:            compiler,
 	}
 }

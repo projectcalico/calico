@@ -75,6 +75,16 @@ func defaultBaselinePolicyScaleParams() baselinePolicyScaleParams {
 	}
 }
 
+// oneRulePerPolicyScaleParams is the same total rule count spread over many
+// single-rule policies, a common shape where per-policy work (resolving the
+// policy from the endpoint's tier) costs as much as evaluating its one rule.
+func oneRulePerPolicyScaleParams() baselinePolicyScaleParams {
+	p := defaultBaselinePolicyScaleParams()
+	p.numPolicies = 2000
+	p.rulesPerPolicy = 1
+	return p
+}
+
 // ipSetSizeHistogram is the per-node IP set size distribution measured in the same
 // deployment: 3,708 sets, ~256k members in total, dominated by tiny sets with a long
 // tail of large ones.
@@ -111,6 +121,11 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 	b.Run("MatchEarly", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
 	})
+	// Same rule count spread over single-rule policies, so per-policy work is
+	// not amortized over 68 rules.
+	b.Run("OneRulePerPolicy", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScale(b, oneRulePerPolicyScaleParams(), log.WarnLevel, false)
+	})
 }
 
 // BenchmarkEvaluateBaselinePolicyScaleCompiled is BenchmarkEvaluateBaselinePolicyScale
@@ -128,6 +143,9 @@ func BenchmarkEvaluateBaselinePolicyScaleCompiled(b *testing.B) {
 	})
 	b.Run("MatchEarly", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScaleCompiled(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
+	})
+	b.Run("OneRulePerPolicy", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, oneRulePerPolicyScaleParams(), log.WarnLevel, false)
 	})
 }
 
@@ -272,7 +290,10 @@ func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyS
 		expectedWarns += refCount[id]
 	}
 
+	// The endpoint goes into the store, as dikastes' per-pod store holds it:
+	// evaluation resolves an endpoint's compiled form by identity.
 	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{tier}}
+	store.Endpoint = ep
 	return store, ep, expectedWarns
 }
 

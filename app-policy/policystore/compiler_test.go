@@ -29,8 +29,9 @@ import (
 // compile, so tests can tell recompilations apart. Policies whose first
 // inbound rule has RuleId "fail" refuse to compile (return nil).
 type fakeCompiler struct {
-	policyCompiles  map[types.PolicyID]int
-	profileCompiles map[types.ProfileID]int
+	policyCompiles   map[types.PolicyID]int
+	profileCompiles  map[types.ProfileID]int
+	endpointCompiles int
 }
 
 func newFakeCompiler() *fakeCompiler {
@@ -41,6 +42,21 @@ func newFakeCompiler() *fakeCompiler {
 }
 
 type fakeCompiled struct{ generation int }
+
+// fakeCompiledEndpoint records the policy slots the endpoint resolved to, so
+// tests can check that a slot outlives recompilation of its policy.
+type fakeCompiledEndpoint struct{ slots []*PolicySlot }
+
+func (c *fakeCompiler) CompileEndpoint(store *PolicyStore, ep *proto.WorkloadEndpoint) CompiledEndpoint {
+	c.endpointCompiles++
+	ce := &fakeCompiledEndpoint{}
+	for _, tier := range ep.Tiers {
+		for _, id := range tier.IngressPolicies {
+			ce.slots = append(ce.slots, store.CompiledPolicyByID[types.ProtoToPolicyID(id)])
+		}
+	}
+	return ce
+}
 
 func (c *fakeCompiler) CompilePolicy(store *PolicyStore, policy *proto.Policy) CompiledPolicy {
 	id := findPolicyID(store, policy)
@@ -99,6 +115,23 @@ func profileRemove(name string) *proto.ToDataplane {
 	}}
 }
 
+func endpointUpdate(name string, ep *proto.WorkloadEndpoint) *proto.ToDataplane {
+	return &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
+		WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: name, EndpointId: "eth0"},
+			Endpoint: ep,
+		},
+	}}
+}
+
+func endpointRemove(name string) *proto.ToDataplane {
+	return &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{
+		WorkloadEndpointRemove: &proto.WorkloadEndpointRemove{
+			Id: &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: name, EndpointId: "eth0"},
+		},
+	}}
+}
+
 func ipSetUpdate(id string, members ...string) *proto.ToDataplane {
 	return &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetUpdate{
 		IpsetUpdate: &proto.IPSetUpdate{Id: id, Type: proto.IPSetUpdate_IP, Members: members},
@@ -138,14 +171,20 @@ func TestCompileOnUpdate(t *testing.T) {
 	Expect(store.CompiledPolicyByID).To(HaveKey(pID("policy1")))
 	Expect(compiler.policyCompiles[pID("policy1")]).To(Equal(1))
 
-	// Replacing the policy recompiles it.
-	first := store.CompiledPolicyByID[pID("policy1")]
+	// Replacing the policy recompiles it, publishing through the same slot so
+	// that compiled endpoints holding the slot see the new form.
+	slot := store.CompiledPolicyByID[pID("policy1")]
+	first := slot.Compiled()
 	store.ProcessUpdate("", policyUpdate("policy1", &proto.Policy{}), false)
 	Expect(compiler.policyCompiles[pID("policy1")]).To(Equal(2))
-	Expect(store.CompiledPolicyByID[pID("policy1")]).NotTo(BeIdenticalTo(first))
+	Expect(store.CompiledPolicyByID[pID("policy1")]).To(BeIdenticalTo(slot))
+	Expect(slot.Compiled()).NotTo(BeIdenticalTo(first))
 
+	// Removing the policy empties the slot as well as dropping it, so an
+	// endpoint that still holds it stops evaluating the removed policy.
 	store.ProcessUpdate("", policyRemove("policy1"), false)
 	Expect(store.CompiledPolicyByID).To(BeEmpty())
+	Expect(slot.Compiled()).To(BeNil())
 
 	store.ProcessUpdate("", profileUpdate("profile1", &proto.Profile{}), false)
 	Expect(store.CompiledProfileByID).To(HaveKey(prID("profile1")))
@@ -194,11 +233,79 @@ func TestNilPolicyUpdateCompilesNothing(t *testing.T) {
 	Expect(store.CompiledPolicyByID).To(HaveLen(1))
 	Expect(store.CompiledProfileByID).To(HaveLen(1))
 
+	// The slots stay (the IDs are still in the store, holding nil policies) but
+	// must be emptied, so evaluation interprets the stored nil as before.
 	store.ProcessUpdate("", policyUpdate("policy1", nil), false)
 	store.ProcessUpdate("", profileUpdate("profile1", nil), false)
-	Expect(store.CompiledPolicyByID).To(BeEmpty())
-	Expect(store.CompiledProfileByID).To(BeEmpty())
+	Expect(store.CompiledPolicyByID[pID("policy1")].Compiled()).To(BeNil())
+	Expect(store.CompiledProfileByID[prID("profile1")].Compiled()).To(BeNil())
 	Expect(store.ipSetPolicyRefs).To(BeEmpty())
+}
+
+// TestEndpointCompilation verifies that endpoints are compiled on update,
+// dropped on replacement and removal, and — the point of the PolicySlot
+// indirection — are NOT rebuilt when a policy they name is recompiled.
+func TestEndpointCompilation(t *testing.T) {
+	RegisterTestingT(t)
+
+	compiler := newFakeCompiler()
+	store := NewPolicyStoreWithCompiler(compiler)
+
+	store.ProcessUpdate("", ipSetUpdate("set-a", "10.0.0.1"), false)
+	store.ProcessUpdate("", policyUpdate("policy1", &proto.Policy{
+		InboundRules: []*proto.Rule{{SrcIpSetIds: []string{"set-a"}}},
+	}), false)
+	Expect(compiler.endpointCompiles).To(Equal(0))
+
+	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{
+		Name:            "tier1",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy1"}},
+	}}}
+	store.ProcessUpdate("", endpointUpdate("wep1", ep), false)
+	Expect(compiler.endpointCompiles).To(Equal(1))
+	ce, ok := store.CompiledEndpoints[ep].(*fakeCompiledEndpoint)
+	Expect(ok).To(BeTrue())
+	slot := store.CompiledPolicyByID[pID("policy1")]
+	Expect(ce.slots).To(Equal([]*PolicySlot{slot}))
+
+	// Recompiling the policy — directly, and via an IP set replacement —
+	// publishes through the slot the endpoint already holds. No endpoint
+	// rebuild: with an all-endpoints policy that would mean rebuilding every
+	// endpoint on the node.
+	store.ProcessUpdate("", policyUpdate("policy1", &proto.Policy{}), false)
+	store.ProcessUpdate("", ipSetUpdate("set-a", "10.0.0.2"), false)
+	Expect(compiler.endpointCompiles).To(Equal(1))
+	Expect(store.CompiledEndpoints[ep]).To(BeIdenticalTo(ce))
+
+	// Replacing the endpoint compiles the new object and drops the old one's
+	// entry, so a stale endpoint copy cannot resolve to a compiled form.
+	ep2 := &proto.WorkloadEndpoint{Tiers: ep.Tiers}
+	store.ProcessUpdate("", endpointUpdate("wep1", ep2), false)
+	Expect(compiler.endpointCompiles).To(Equal(2))
+	Expect(store.CompiledEndpoints).To(HaveLen(1))
+	Expect(store.CompiledEndpoints).To(HaveKey(ep2))
+
+	store.ProcessUpdate("", endpointRemove("wep1"), false)
+	Expect(store.CompiledEndpoints).To(BeEmpty())
+}
+
+// TestEndpointCompilationPerHost covers the felix collector's subscription
+// type, where the store holds many endpoints rather than one.
+func TestEndpointCompilationPerHost(t *testing.T) {
+	RegisterTestingT(t)
+
+	compiler := newFakeCompiler()
+	store := NewPolicyStoreWithCompiler(compiler)
+
+	ep1 := &proto.WorkloadEndpoint{Name: "ep1"}
+	ep2 := &proto.WorkloadEndpoint{Name: "ep2"}
+	store.ProcessUpdate("per-host-policies", endpointUpdate("wep1", ep1), false)
+	store.ProcessUpdate("per-host-policies", endpointUpdate("wep2", ep2), false)
+	Expect(store.CompiledEndpoints).To(HaveLen(2))
+
+	store.ProcessUpdate("per-host-policies", endpointRemove("wep1"), false)
+	Expect(store.CompiledEndpoints).To(HaveLen(1))
+	Expect(store.CompiledEndpoints).To(HaveKey(ep2))
 }
 
 // TestIPSetInvalidation verifies the reverse index: replacing or removing an

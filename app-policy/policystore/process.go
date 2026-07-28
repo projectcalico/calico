@@ -212,9 +212,14 @@ func (store *PolicyStore) processWorkloadEndpointUpdate(subscriptionType string,
 	}
 	switch subscriptionType {
 	case "per-pod-policies", "":
+		old := store.Endpoint
 		store.Endpoint = update.Endpoint
+		store.onEndpointUpdate(old, update.Endpoint)
 	case "per-host-policies":
-		store.Endpoints[types.ProtoToWorkloadEndpointID(update.Id)] = update.Endpoint
+		id := types.ProtoToWorkloadEndpointID(update.Id)
+		old := store.Endpoints[id]
+		store.Endpoints[id] = update.Endpoint
+		store.onEndpointUpdate(old, update.Endpoint)
 		log.Debugf("%d endpoints received so far", len(store.Endpoints))
 	}
 }
@@ -230,9 +235,12 @@ func (store *PolicyStore) processWorkloadEndpointRemove(subscriptionType string,
 
 	switch subscriptionType {
 	case "per-pod-policies", "":
+		store.onEndpointRemove(store.Endpoint)
 		store.Endpoint = nil
 	case "per-host-policies":
-		delete(store.Endpoints, types.ProtoToWorkloadEndpointID(update.Id))
+		id := types.ProtoToWorkloadEndpointID(update.Id)
+		store.onEndpointRemove(store.Endpoints[id])
+		delete(store.Endpoints, id)
 	}
 }
 

@@ -31,27 +31,20 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 )
 
-// compileStoreForTest compiles every policy and profile already present in
-// the store, as the store itself does when it applies updates with a
-// compiler configured. Tests build stores by direct map assignment, which
-// bypasses the store's compile-on-update hooks.
+// compileStoreForTest compiles every policy, profile and endpoint already
+// present in the store, as the store itself does when it applies updates with
+// a compiler configured. Tests build stores by direct map assignment, which
+// bypasses the store's compile-on-update hooks. Endpoints must be compiled
+// last, so their slot slices see the compiled policies.
 func compileStoreForTest(store *policystore.PolicyStore) {
-	c := policyCompiler{}
-	for id, p := range store.PolicyByID {
-		if cp := c.CompilePolicy(store, p); cp != nil {
-			store.CompiledPolicyByID[id] = cp
-		}
-	}
-	for id, p := range store.ProfileByID {
-		if cp := c.CompileProfile(store, p); cp != nil {
-			store.CompiledProfileByID[id] = cp
-		}
-	}
+	store.SetPolicyCompiler(policyCompiler{})
 }
 
 func clearCompiledForTest(store *policystore.PolicyStore) {
+	store.SetPolicyCompiler(nil)
 	clear(store.CompiledPolicyByID)
 	clear(store.CompiledProfileByID)
+	clear(store.CompiledEndpoints)
 }
 
 // checkStoreBothEngines runs checkStore with the store's policies
@@ -328,6 +321,66 @@ func TestCompiledIPSetReplacement(t *testing.T) {
 	store.ProcessUpdate("", ipSetUpdate("10.0.0.2/32"), false)
 	s = checkStore(store, ep, rules.RuleDirIngress, flow)
 	Expect(s.Code).To(Equal(OK))
+}
+
+// TestCompiledEndpointFollowsPolicyUpdates verifies end to end that an
+// endpoint's precomputed policy slice keeps up with later policy updates and
+// removals without the endpoint being re-sent — the slots it holds are
+// published through by the store.
+func TestCompiledEndpointFollowsPolicyUpdates(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStoreWithCompiler(policyCompiler{})
+	policyID := &proto.PolicyID{Name: "policy1"}
+	setPolicyAction := func(action string) {
+		store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
+			ActivePolicyUpdate: &proto.ActivePolicyUpdate{
+				Id:     policyID,
+				Policy: &proto.Policy{InboundRules: []*proto.Rule{{Action: action}}},
+			},
+		}}, false)
+	}
+	setPolicyAction("allow")
+
+	ep := &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{{
+			Name:            "tier1",
+			IngressPolicies: []*proto.PolicyID{policyID},
+			DefaultAction:   "Deny",
+		}},
+	}
+	store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
+		WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wep1", EndpointId: "eth0"},
+			Endpoint: ep,
+		},
+	}}, false)
+	Expect(store.CompiledEndpoints).To(HaveKey(ep))
+
+	flow := &MockFlow{
+		SourceIP: net.ParseIP("10.0.0.1"),
+		DestIP:   net.ParseIP("10.0.0.2"),
+		Protocol: 6,
+	}
+	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(OK))
+
+	// Update the policy in place: the endpoint is not re-sent, so it must see
+	// the new action through the slot it already holds.
+	setPolicyAction("deny")
+	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
+	setPolicyAction("allow")
+	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(OK))
+
+	// Removing the policy must stop the endpoint evaluating it: an absent
+	// policy is INTERNAL, which leaves the tier with no verdict and no
+	// default (as when interpreting an unknown policy).
+	store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
+		ActivePolicyRemove: &proto.ActivePolicyRemove{Id: policyID},
+	}}, false)
+	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
+	// ...and matches what the interpreted path does for the same store.
+	clearCompiledForTest(store)
+	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
 }
 
 // TestCompiledStaleEndpointReference covers the deleted-endpoint race: the

@@ -19,24 +19,84 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 )
 
-// CompiledPolicy is the compiled form of a policy or profile, produced by a
-// PolicyCompiler. It is opaque to the policy store: the checker package both
-// produces the values and consumes them at evaluate time (type-asserting back
-// to its concrete type). The type lives here rather than in checker so that
-// the store can own the compiled artifacts' lifecycle without importing
-// checker (checker imports policystore).
-type CompiledPolicy interface{}
+// CompiledPolicy is the compiled form of a policy or profile, and
+// CompiledEndpoint that of an endpoint's tier/profile structure, both produced
+// by a PolicyCompiler. They are opaque to the policy store: the checker
+// package both produces the values and consumes them at evaluate time
+// (type-asserting back to its concrete types). The types live here rather than
+// in checker so that the store can own the compiled artifacts' lifecycle
+// without importing checker (checker imports policystore).
+type (
+	CompiledPolicy   interface{}
+	CompiledEndpoint interface{}
+)
 
-// PolicyCompiler compiles policies and profiles into a form that is cheap to
-// evaluate per flow. The store invokes it eagerly as updates are applied (off
-// the flow evaluation hot path, under the store's write lock), and again for
-// affected policies when an IP set they reference is replaced or removed. A
-// nil return means the policy could not be compiled; the store keeps no
-// compiled entry for it and evaluation falls back to interpreting the
-// uncompiled policy.
+// PolicySlot holds a policy's (or profile's) compiled form behind a pointer
+// that is stable for as long as the policy exists. A compiled endpoint holds
+// the slots of the policies its tiers name, so recompiling a policy — on a
+// policy update, or when an IP set it references is replaced — publishes
+// through the slot and leaves every compiled endpoint referencing it
+// untouched. Without the indirection, a single policy update would have to
+// rebuild every endpoint that names the policy, which for an
+// all-endpoints policy is every endpoint on the node.
+type PolicySlot struct {
+	compiled CompiledPolicy
+}
+
+// Compiled returns the policy's compiled form, or nil if it has none (not
+// compiled yet, compilation failed, or the policy has been removed). It is
+// nil-receiver-safe so that callers can treat "no slot" and "empty slot"
+// alike.
+func (s *PolicySlot) Compiled() CompiledPolicy {
+	if s == nil {
+		return nil
+	}
+	return s.compiled
+}
+
+// PolicyCompiler compiles policies, profiles and endpoints into a form that is
+// cheap to evaluate per flow. The store invokes it eagerly as updates are
+// applied (off the flow evaluation hot path, under the store's write lock),
+// and again for affected policies when an IP set they reference is replaced or
+// removed. A nil return means the input could not be compiled; the store keeps
+// no compiled entry for it and evaluation falls back to interpreting the
+// uncompiled form.
 type PolicyCompiler interface {
 	CompilePolicy(store *PolicyStore, policy *proto.Policy) CompiledPolicy
 	CompileProfile(store *PolicyStore, profile *proto.Profile) CompiledPolicy
+	// CompileEndpoint resolves an endpoint's tier and profile references to
+	// the store's PolicySlots, so that evaluation walks a slice instead of
+	// hashing every policy ID per flow. Felix sends policies and profiles
+	// before the endpoints that name them, so the slots exist by now; one
+	// that does not (a staged policy the store drops, or an out-of-sync
+	// store) simply falls back to the by-ID lookup for that policy.
+	CompileEndpoint(store *PolicyStore, ep *proto.WorkloadEndpoint) CompiledEndpoint
+}
+
+// SetPolicyCompiler configures the store's compiler and compiles everything
+// already in it; updates applied afterwards are compiled as they arrive. It is
+// for callers that populate a store directly rather than through ProcessUpdate
+// — the store manager wires a compiler into the stores it creates with
+// WithPolicyCompiler instead.
+func (store *PolicyStore) SetPolicyCompiler(compiler PolicyCompiler) {
+	store.compiler = compiler
+	store.ipSetPolicyRefs = nil
+	store.ipSetProfileRefs = nil
+	if compiler == nil {
+		return
+	}
+	for id, p := range store.PolicyByID {
+		store.onPolicyUpdate(id, nil, p)
+	}
+	for id, p := range store.ProfileByID {
+		store.onProfileUpdate(id, nil, p)
+	}
+	// Endpoints last: their compiled form resolves the policy and profile
+	// slots compiled above.
+	store.onEndpointUpdate(nil, store.Endpoint)
+	for _, ep := range store.Endpoints {
+		store.onEndpointUpdate(nil, ep)
+	}
 }
 
 // onPolicyUpdate maintains the compiled form and the IP set reverse index for
@@ -70,7 +130,12 @@ func (store *PolicyStore) onPolicyRemove(id types.PolicyID, old *proto.Policy) {
 			deleteRef(store.ipSetPolicyRefs, setID, id)
 		})
 	}
-	delete(store.CompiledPolicyByID, id)
+	// Empty the slot as well as dropping it: a compiled endpoint that still
+	// names the removed policy holds the slot, and must stop evaluating it.
+	if slot, ok := store.CompiledPolicyByID[id]; ok {
+		slot.compiled = nil
+		delete(store.CompiledPolicyByID, id)
+	}
 }
 
 // onProfileUpdate is onPolicyUpdate for profiles.
@@ -101,7 +166,10 @@ func (store *PolicyStore) onProfileRemove(id types.ProfileID, old *proto.Profile
 			deleteRef(store.ipSetProfileRefs, setID, id)
 		})
 	}
-	delete(store.CompiledProfileByID, id)
+	if slot, ok := store.CompiledProfileByID[id]; ok {
+		slot.compiled = nil
+		delete(store.CompiledProfileByID, id)
+	}
 }
 
 // onIPSetReplaced recompiles the policies and profiles that reference an IP
@@ -123,18 +191,22 @@ func (store *PolicyStore) onIPSetReplaced(setID string) {
 	}
 }
 
-// compilePolicy and compileProfile treat a nil policy/profile (a malformed
-// update, or a stale reverse-index entry) as not compilable: the entry is
-// dropped and evaluation falls back to interpreting the stored value.
+// compilePolicy and compileProfile publish a policy's compiled form through
+// its slot, reusing the slot when there is one so that compiled endpoints
+// holding it see the new form. A nil policy/profile (a malformed update, or a
+// stale reverse-index entry) is treated as not compilable: the slot is
+// emptied and evaluation falls back to interpreting the stored value.
 func (store *PolicyStore) compilePolicy(id types.PolicyID, policy *proto.Policy) {
 	var cp CompiledPolicy
 	if policy != nil {
 		cp = store.compiler.CompilePolicy(store, policy)
 	}
+	if slot, ok := store.CompiledPolicyByID[id]; ok {
+		slot.compiled = cp
+		return
+	}
 	if cp != nil {
-		store.CompiledPolicyByID[id] = cp
-	} else {
-		delete(store.CompiledPolicyByID, id)
+		store.CompiledPolicyByID[id] = &PolicySlot{compiled: cp}
 	}
 }
 
@@ -143,11 +215,40 @@ func (store *PolicyStore) compileProfile(id types.ProfileID, profile *proto.Prof
 	if profile != nil {
 		cp = store.compiler.CompileProfile(store, profile)
 	}
-	if cp != nil {
-		store.CompiledProfileByID[id] = cp
-	} else {
-		delete(store.CompiledProfileByID, id)
+	if slot, ok := store.CompiledProfileByID[id]; ok {
+		slot.compiled = cp
+		return
 	}
+	if cp != nil {
+		store.CompiledProfileByID[id] = &PolicySlot{compiled: cp}
+	}
+}
+
+// onEndpointUpdate compiles a stored (or replaced) endpoint. old is the
+// endpoint previously stored under the same ID, or nil; its compiled form is
+// dropped, since compiled endpoints are keyed by the identity of the endpoint
+// object they were built from.
+func (store *PolicyStore) onEndpointUpdate(old, updated *proto.WorkloadEndpoint) {
+	if store.compiler == nil {
+		return
+	}
+	if old != nil {
+		delete(store.CompiledEndpoints, old)
+	}
+	if updated == nil {
+		return
+	}
+	if ce := store.compiler.CompileEndpoint(store, updated); ce != nil {
+		store.CompiledEndpoints[updated] = ce
+	}
+}
+
+// onEndpointRemove drops a removed endpoint's compiled form.
+func (store *PolicyStore) onEndpointRemove(old *proto.WorkloadEndpoint) {
+	if store.compiler == nil || old == nil {
+		return
+	}
+	delete(store.CompiledEndpoints, old)
 }
 
 // forEachIPSetRef calls f once per IP set ID referenced by the policy's

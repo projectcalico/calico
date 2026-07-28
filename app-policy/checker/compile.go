@@ -25,6 +25,7 @@ import (
 	"github.com/projectcalico/calico/app-policy/policystore"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
@@ -86,6 +87,85 @@ func (policyCompiler) CompileProfile(store *policystore.PolicyStore, profile *pr
 		return cp
 	}
 	return nil
+}
+
+func (policyCompiler) CompileEndpoint(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint) policystore.CompiledEndpoint {
+	if ce := compileEndpoint(store, ep); ce != nil {
+		return ce
+	}
+	return nil
+}
+
+// compiledEndpoint resolves an endpoint's policy and profile references to the
+// store's slots once, so that evaluating a flow walks compact slices instead
+// of hashing every policy ID. Each slice is index-parallel to the endpoint
+// field it was built from (ep.Tiers, TierInfo.IngressPolicies/EgressPolicies,
+// ep.ProfileIds), which is safe because the store treats the endpoint object
+// as immutable — a changed endpoint arrives as a new object and is compiled
+// afresh.
+type compiledEndpoint struct {
+	tiers    []compiledTier
+	profiles []*policystore.PolicySlot
+}
+
+type compiledTier struct {
+	ingress, egress []*policystore.PolicySlot
+}
+
+func compileEndpoint(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint) *compiledEndpoint {
+	if ep == nil {
+		return nil
+	}
+	ce := &compiledEndpoint{tiers: make([]compiledTier, len(ep.Tiers))}
+	for i, tier := range ep.Tiers {
+		ce.tiers[i] = compiledTier{
+			ingress: policySlots(store, tier.GetIngressPolicies()),
+			egress:  policySlots(store, tier.GetEgressPolicies()),
+		}
+	}
+	for _, name := range ep.ProfileIds {
+		id := proto.ProfileID{Name: name}
+		ce.profiles = append(ce.profiles, store.CompiledProfileByID[ftypes.ProtoToProfileID(&id)])
+	}
+	return ce
+}
+
+func policySlots(store *policystore.PolicyStore, ids []*proto.PolicyID) []*policystore.PolicySlot {
+	if len(ids) == 0 {
+		return nil
+	}
+	slots := make([]*policystore.PolicySlot, len(ids))
+	for i, id := range ids {
+		slots[i] = store.CompiledPolicyByID[ftypes.ProtoToPolicyID(id)]
+	}
+	return slots
+}
+
+// policySlotsFor returns the precomputed slots for one direction of the tier
+// at index ti, or nil if there are none to use — no compiled endpoint, or a
+// slice that does not line up with the endpoint being evaluated (which would
+// mean the compiled form was built from a different object). Callers then fall
+// back to looking each policy up by ID.
+func (ce *compiledEndpoint) policySlotsFor(ti int, dir rules.RuleDir, numPolicies int) []*policystore.PolicySlot {
+	if ce == nil || ti >= len(ce.tiers) {
+		return nil
+	}
+	slots := ce.tiers[ti].ingress
+	if dir == rules.RuleDirEgress {
+		slots = ce.tiers[ti].egress
+	}
+	if len(slots) != numPolicies {
+		return nil
+	}
+	return slots
+}
+
+// profileSlotsFor is policySlotsFor for the endpoint's profiles.
+func (ce *compiledEndpoint) profileSlotsFor(numProfiles int) []*policystore.PolicySlot {
+	if ce == nil || len(ce.profiles) != numProfiles {
+		return nil
+	}
+	return ce.profiles
 }
 
 // compiledPolicy is a policy (or profile) reduced to per-rule slices of
