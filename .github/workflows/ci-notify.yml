@@ -138,17 +138,23 @@ jobs:
             # skips, which is the right outcome.
             # Retry once: the search index can lag a few seconds behind a very
             # fresh commit, and an approval can arrive that soon after a push.
+            # A transient API error counts as a miss and retries the same way
+            # (`|| true` keeps it from killing the step under -e; gh already
+            # put the error on stderr).
             # The hit is not re-checked against the PR's current head sha on
             # purpose — the head legitimately moves on after the event (CI
             # finishing for a commit that has since been pushed over, or a push
             # landing between an approval and this run), and the PR is still
             # the one to notify about.
-            for _ in 1 2; do
-              PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
-                     --jq '.items[0].number // empty')
-              [[ -n "$PR" ]] && break
+            search_pr() {
+              gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                --jq '.items[0].number // empty' || true
+            }
+            PR=$(search_pr)
+            if [[ -z "$PR" ]]; then
               sleep 5
-            done
+              PR=$(search_pr)
+            fi
             if [[ -z "$PR" ]]; then
               echo "::notice::no open PR for sha=$SHA — skipping"
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -205,20 +211,23 @@ jobs:
           # --paginate applies --jq per page and concatenates the results, so
           # an index-into-array filter would emit one login *per page*. Filter
           # flat and take the last line: the most recent qualifying approval.
+          # stderr goes to its own file, not into the list — mixed in, a mere
+          # gh warning on an otherwise successful call would read as a login.
           set +e
-          OUT=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" --paginate \
+          LOGINS=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" --paginate \
             --jq '.[] | select(.state == "APPROVED" and (.author_association
-                    | IN("OWNER","MEMBER","COLLABORATOR"))) | .user.login' 2>&1)
+                    | IN("OWNER","MEMBER","COLLABORATOR"))) | .user.login' 2>reviews-err.txt)
           RC=$?
           set -e
           if [[ $RC -ne 0 ]]; then
             # Fail CLOSED: an approval we cannot verify sends nothing. Still
             # never fail the job — the notifier does not break other work.
-            echo "::warning::could not read reviews for PR #$PR ($OUT) — skipping rather than sending an unverified approval"
+            # Newlines flattened: a ::warning:: annotation ends at the first.
+            echo "::warning::could not read reviews for PR #$PR ($(tr '\n' ' ' <reviews-err.txt)) — skipping rather than sending an unverified approval"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          LOGIN=$(printf '%s\n' "$OUT" | tail -n1)
+          LOGIN=$(printf '%s\n' "$LOGINS" | tail -n1)
 
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # A dispatch simulates an approval that need not exist, and only
