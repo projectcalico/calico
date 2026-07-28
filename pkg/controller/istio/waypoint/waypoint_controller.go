@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,7 +58,11 @@ const (
 
 var log = logf.Log.WithName("controller_istio_waypoint")
 
-// Add creates the waypoint pull secrets controller and adds it to the Manager.
+// Add creates the waypoint controller and adds it to the Manager. The
+// controller reconciles the per-Gateway state the Istio feature needs beyond
+// istiod's own rendering: it copies Installation pull secrets into namespaces
+// that contain istio-waypoint Gateways, and deletes the resource sets istiod
+// strands when a Gateway's spec.gatewayClassName changes.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	if !opts.EnterpriseCRDExists {
 		return nil
@@ -65,15 +70,15 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 
 	gatewayWatchReady := &utils.ReadyFlag{}
 
-	r := &ReconcileWaypointSecrets{
+	r := &ReconcileWaypoint{
 		Client:            mgr.GetClient(),
 		scheme:            mgr.GetScheme(),
 		gatewayWatchReady: gatewayWatchReady,
 	}
 
-	c, err := ctrlruntime.NewController("istio-waypoint-secrets-controller", mgr, controller.Options{Reconciler: r})
+	c, err := ctrlruntime.NewController("istio-waypoint-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		return fmt.Errorf("failed to create istio-waypoint-secrets-controller: %w", err)
+		return fmt.Errorf("failed to create istio-waypoint-controller: %w", err)
 	}
 
 	// Defer the Gateway watch — the Gateway API CRD may not be installed yet.
@@ -83,14 +88,28 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		TypeMeta: metav1.TypeMeta{Kind: "Gateway", APIVersion: "gateway.networking.k8s.io/v1"},
 	}
 	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, log, gatewayWatchReady, []client.Object{gatewayObj}, predicate.Funcs{
-		CreateFunc: func(e event.CreateEvent) bool {
-			gw, ok := e.Object.(*gapi.Gateway)
-			return ok && string(gw.Spec.GatewayClassName) == IstioWaypointClassName
-		},
+		// Any create can matter: a waypoint-class Gateway needs pull secrets,
+		// and when the informer syncs at operator startup every Gateway is
+		// replayed as a create — the sweep uses those to catch class flips
+		// that happened while the operator was down.
+		CreateFunc: func(e event.CreateEvent) bool { return true },
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			gw, ok := e.ObjectNew.(*gapi.Gateway)
-			return ok && string(gw.Spec.GatewayClassName) == IstioWaypointClassName
+			old, okOld := e.ObjectOld.(*gapi.Gateway)
+			curr, okNew := e.ObjectNew.(*gapi.Gateway)
+			if !okOld || !okNew {
+				return false
+			}
+			// A class change strands the resource set istiod rendered for the
+			// previous class, and moves pull secrets in or out of scope.
+			if old.Spec.GatewayClassName != curr.Spec.GatewayClassName {
+				return true
+			}
+			// Other updates only matter for waypoint Gateways, which drive
+			// pull-secret placement.
+			return string(curr.Spec.GatewayClassName) == IstioWaypointClassName
 		},
+		// Deletes only affect pull secrets: the resource sets istiod rendered
+		// are removed by Kubernetes garbage collection via owner references.
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			gw, ok := e.Object.(*gapi.Gateway)
 			return ok && string(gw.Spec.GatewayClassName) == IstioWaypointClassName
@@ -101,74 +120,103 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		},
 	})
 
-	// Watch Istio CR for pull secret config changes.
+	// Watch the Istio CR for pull secret config changes and feature enablement.
 	err = c.WatchObject(&operatorv1.Istio{}, &handler.EnqueueRequestForObject{})
 	if err != nil {
-		return fmt.Errorf("istio-waypoint-secrets-controller failed to watch Istio resource: %w", err)
+		return fmt.Errorf("istio-waypoint-controller failed to watch Istio resource: %w", err)
 	}
 
 	// Watch Installation for pull secret changes.
 	if err = utils.AddInstallationWatch(c); err != nil {
-		return fmt.Errorf("istio-waypoint-secrets-controller failed to watch Installation resource: %w", err)
+		return fmt.Errorf("istio-waypoint-controller failed to watch Installation resource: %w", err)
 	}
 
 	// Periodic reconcile as a backstop.
 	if err = utils.AddPeriodicReconcile(c, utils.PeriodicReconcileTime, &handler.EnqueueRequestForObject{}); err != nil {
-		return fmt.Errorf("istio-waypoint-secrets-controller failed to create periodic reconcile watch: %w", err)
+		return fmt.Errorf("istio-waypoint-controller failed to create periodic reconcile watch: %w", err)
 	}
 
 	return nil
 }
 
-// ReconcileWaypointSecrets copies pull secrets to namespaces that contain
-// istio-waypoint Gateways so that waypoint pods can pull images from private registries.
-type ReconcileWaypointSecrets struct {
+// ReconcileWaypoint reconciles the per-Gateway state the Istio feature needs
+// beyond istiod's own rendering: it copies pull secrets to namespaces that
+// contain istio-waypoint Gateways so waypoint pods can pull images from
+// private registries, and deletes istiod-managed gateway resources that were
+// rendered for a GatewayClass their owning Gateway no longer uses.
+type ReconcileWaypoint struct {
 	client.Client
 	scheme *runtime.Scheme
 
 	gatewayWatchReady *utils.ReadyFlag
 }
 
-func (r *ReconcileWaypointSecrets) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+func (r *ReconcileWaypoint) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
-	reqLogger.V(1).Info("Reconciling waypoint pull secrets")
+	reqLogger.V(1).Info("Reconciling waypoint gateway resources")
 
-	// Determine which secrets need to exist (toCreate) based on current state,
-	// and which existing secrets are stale (toDelete).
-	var toCreate []client.Object
-	var toDelete []client.Object
-
-	// Get the Istio CR - if not found or being deleted, all existing secrets are stale.
+	// Get the Istio CR - if not found or being deleted, the feature is
+	// inactive: copied pull secrets are stale, and istiod's gateway resources
+	// belong to a mesh the operator does not manage and must not be touched.
 	instance := &operatorv1.Istio{}
 	err := r.Get(ctx, utils.DefaultInstanceKey, instance)
-	istioActive := err == nil && instance.DeletionTimestamp.IsZero()
 	if err != nil && !errors.IsNotFound(err) {
 		return reconcile.Result{}, err
 	}
+	istioActive := err == nil && instance.DeletionTimestamp.IsZero()
+	gatewaysVisible := istioActive && r.gatewayWatchReady.IsReady()
 
+	toCreate, toDelete, err := r.pullSecretChanges(ctx, gatewaysVisible, reqLogger)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	if gatewaysVisible {
+		stale, err := r.staleGatewaySets(ctx, reqLogger)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		toDelete = append(toDelete, stale...)
+	}
+
+	// Use a single passthrough component to handle both creation and deletion.
+	hdlr := utils.NewComponentHandler(log, r, r.scheme, nil)
+	component := render.NewPassthrough(toCreate, toDelete)
+	if err := hdlr.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to reconcile waypoint gateway resources: %w", err)
+	}
+
+	return reconcile.Result{}, nil
+}
+
+// pullSecretChanges determines which copied pull secrets need to exist
+// (toCreate) based on the namespaces that contain istio-waypoint Gateways, and
+// which existing copies are stale (toDelete). When active is false no copies
+// are desired, so every existing copy is returned as stale.
+func (r *ReconcileWaypoint) pullSecretChanges(ctx context.Context, active bool, reqLogger logr.Logger) (toCreate, toDelete []client.Object, err error) {
 	// Build the desired set of secrets if Istio is active and the Gateway watch is established.
-	targetNamespaces := map[string]bool{}
-	if istioActive && r.gatewayWatchReady.IsReady() {
+	if active {
 		_, installationSpec, err := utils.GetInstallationSpec(ctx, r)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				reqLogger.V(1).Info("Installation not found")
-				return reconcile.Result{}, nil
+				return nil, nil, nil
 			}
-			return reconcile.Result{}, err
+			return nil, nil, err
 		}
 
 		pullSecrets, err := utils.GetInstallationPullSecrets(installationSpec, r)
 		if err != nil {
-			return reconcile.Result{}, err
+			return nil, nil, err
 		}
 
 		// List all Gateway resources and filter for istio-waypoint class.
 		gatewayList := &gapi.GatewayList{}
 		if err := r.List(ctx, gatewayList); err != nil {
-			return reconcile.Result{}, fmt.Errorf("failed to list Gateways: %w", err)
+			return nil, nil, fmt.Errorf("failed to list Gateways: %w", err)
 		}
 
+		targetNamespaces := map[string]bool{}
 		for i := range gatewayList.Items {
 			gw := &gatewayList.Items[i]
 			if string(gw.Spec.GatewayClassName) == IstioWaypointClassName &&
@@ -200,7 +248,7 @@ func (r *ReconcileWaypointSecrets) Reconcile(ctx context.Context, request reconc
 	// List all existing secrets managed by this controller and mark stale ones for deletion.
 	existingSecrets := &corev1.SecretList{}
 	if err := r.List(ctx, existingSecrets, client.MatchingLabels{WaypointPullSecretLabel: "true"}); err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to list waypoint pull secrets: %w", err)
+		return nil, nil, fmt.Errorf("failed to list waypoint pull secrets: %w", err)
 	}
 	for i := range existingSecrets.Items {
 		s := &existingSecrets.Items[i]
@@ -210,12 +258,5 @@ func (r *ReconcileWaypointSecrets) Reconcile(ctx context.Context, request reconc
 		}
 	}
 
-	// Use a single passthrough component to handle both creation and deletion.
-	hdlr := utils.NewComponentHandler(log, r, r.scheme, nil)
-	component := render.NewPassthrough(toCreate, toDelete)
-	if err := hdlr.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to reconcile waypoint pull secrets: %w", err)
-	}
-
-	return reconcile.Result{}, nil
+	return toCreate, toDelete, nil
 }
