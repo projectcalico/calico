@@ -155,15 +155,18 @@ type DatastoreMigrationStatus struct {
 	// +optional
 	Progress DatastoreMigrationProgress `json:"progress"`
 
-	// Conditions report conflicts and errors encountered during migration.
-	//
-	// Deliberately atomic, with no MaxItems: the controller emits one
-	// Conflict-typed condition per conflicting resource, so a list-map would
-	// reject the write on duplicate keys and any bound could reject a
-	// legitimate one. Collapsing conflict reporting to a single condition, and
-	// then adding the list-map markers back, is follow-on work.
+	// Conditions report conflicts and errors encountered during migration. The
+	// controller reports one condition per conflicting resource, so entries are
+	// not unique by type and are not merged.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Conditions is deliberately atomic, with no listType=map and no MaxItems: a
+	// list-map would reject the write on duplicate Conflict keys, and any bound
+	// could reject a legitimate write. Collapsing conflict reporting to a single
+	// condition, and then adding the list-map markers back, is follow-on work.
+	// This note sits after the field so controller-gen keeps it out of the
+	// published API description.
 }
 
 // DatastoreMigrationProgress tracks aggregate and per-type migration counters.

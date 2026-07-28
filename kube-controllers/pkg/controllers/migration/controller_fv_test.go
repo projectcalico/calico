@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
@@ -540,6 +541,40 @@ func TestStatusWriteFailuresSurface(t *testing.T) {
 	t.Run("terminal error", func(t *testing.T) {
 		g := NewWithT(t)
 		g.Expect(m.handleTerminalError(fmt.Errorf("unsupported migration type"))).To(MatchError(rejected))
+	})
+
+	t.Run("terminal error requeues instead of forgetting", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Force reconcile down its terminal path by handing it a spec type it does
+		// not support. The CRD enum won't let one be written, so it gets injected on
+		// the way out of the Get instead.
+		terminalClient := interceptor.NewClient(failingClient, interceptor.Funcs{
+			Get: func(ctx context.Context, client rtclient.WithWatch, key rtclient.ObjectKey, obj rtclient.Object, opts ...rtclient.GetOption) error {
+				if err := client.Get(ctx, key, obj, opts...); err != nil {
+					return err
+				}
+				if dm, ok := obj.(*migrationv1.DatastoreMigration); ok {
+					dm.Spec.Type = migrationv1.DatastoreMigrationType("Unsupported")
+				}
+				return nil
+			},
+		})
+
+		tm := &migrationController{
+			ctx:      ctx,
+			rtClient: terminalClient,
+			queue:    workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		}
+		defer tm.queue.ShutDown()
+
+		tm.queue.Add(defaultMigrationName)
+		g.Expect(tm.processNextWorkItem()).To(BeTrue())
+
+		// A forgotten key never comes back. The rate limiter's first delay is a few
+		// milliseconds, so a requeue shows up almost immediately.
+		g.Eventually(tm.queue.Len, 5*time.Second, 10*time.Millisecond).Should(Equal(1),
+			"a terminal error whose status write failed must be requeued, not forgotten")
 	})
 
 	t.Run("conflicts still present", func(t *testing.T) {

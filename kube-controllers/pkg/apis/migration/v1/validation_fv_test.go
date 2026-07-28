@@ -204,6 +204,44 @@ func TestPhaseEnumIsEnforced(t *testing.T) {
 	}
 }
 
+// TestMultipleConflictConditionsAreAccepted guards the shape the controller
+// actually writes. handlePending, handleMigrating and handleWaiting each append one
+// Conflict-typed condition per conflicting resource, so a list-map on
+// status.conditions would reject the whole write on the second conflict, and the
+// worst site is handleMigrating: the APIService is already gone and the datastore
+// locked, so the reconcile would retry from the top forever.
+func TestMultipleConflictConditionsAreAccepted(t *testing.T) {
+	ctx := context.Background()
+	m := newMigration("duplicate-conflict-conditions")
+	if err := schemaClient.Create(ctx, m); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer func() { _ = schemaClient.Delete(ctx, m) }()
+
+	now := metav1.Now()
+	for _, resource := range []string{"Tier/custom", "GlobalNetworkPolicy/deny-all"} {
+		m.Status.Conditions = append(m.Status.Conditions, metav1.Condition{
+			Type:               "Conflict",
+			Status:             metav1.ConditionTrue,
+			Reason:             "ResourceMismatch",
+			Message:            resource + " differs between v1 and v3",
+			LastTransitionTime: now,
+		})
+	}
+
+	if err := schemaClient.Status().Update(ctx, m); err != nil {
+		t.Fatalf("two Conflict conditions should be accepted: %v", err)
+	}
+
+	got := &migrationv1.DatastoreMigration{}
+	if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if len(got.Status.Conditions) != 2 {
+		t.Fatalf("expected both Conflict conditions to persist, got %+v", got.Status.Conditions)
+	}
+}
+
 // hasCause reports whether err is an API status error carrying a validation cause
 // of causeType on field. Asserting on the cause rather than on "an error came
 // back" stops an unrelated rejection, a Conflict for instance, from satisfying the
