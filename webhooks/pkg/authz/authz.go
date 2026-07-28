@@ -1,4 +1,4 @@
-// Copyright 2026 Tigera, Inc.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package authz serves the Kubernetes authorization webhook. It decodes
+// SubjectAccessReviews, hands the request to tierauth, and encodes the verdict. It holds no
+// authorization logic of its own beyond deciding which requests it handles at all.
 package authz
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -26,17 +28,11 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
-	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
-	"k8s.io/apiserver/pkg/authorization/cel"
-	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
-	"k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
-	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
+	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 )
 
-// HandleAuthzFn is a function type that takes an AuthzHandler and returns an http.HandlerFunc.
+// HandleAuthzFn takes an AuthzHandler and returns an http.HandlerFunc.
 type HandleAuthzFn func(handler AuthzHandler) func(http.ResponseWriter, *http.Request)
 
 // AuthzHandler processes SubjectAccessReview requests and returns a response.
@@ -44,109 +40,88 @@ type AuthzHandler interface {
 	Authorize(authorizationv1.SubjectAccessReview) *authorizationv1.SubjectAccessReviewStatus
 }
 
-// tieredPolicyResources is the set of resources that are tiered policy resources.
-var tieredPolicyResources = map[string]bool{
-	"networkpolicies":                 true,
-	"globalnetworkpolicies":           true,
-	"stagednetworkpolicies":           true,
-	"stagedglobalnetworkpolicies":     true,
-	"stagedkubernetesnetworkpolicies": true,
+// Decider makes the tier authorization decision. Implemented by tierauth.Authorizer.
+type Decider interface {
+	Authorize(ctx context.Context, req tierauth.Request) tierauth.Result
 }
 
-// readVerbs is the set of verbs handled by this authorization webhook.
-// Mutating verbs (create, update, patch, delete, deletecollection) are left to the
-// admission webhook, which already enforces tier-based RBAC for those operations.
+// readVerbs are the verbs this webhook handles. Mutating verbs are the admission webhook's,
+// which unlike this one can see the object body.
 var readVerbs = map[string]bool{
 	"get":   true,
 	"list":  true,
 	"watch": true,
 }
 
-// RegisterHook creates a new authorization webhook handler and registers the /authz HTTP handler.
-func RegisterHook(cs kubernetes.Interface, handleFn HandleAuthzFn) {
-	logrus.WithFields(logrus.Fields{
-		"path": "/authz",
-	}).Info("Registering authorization webhook")
+// decisionTimeout bounds a single authorization decision, including any fallback GET. The
+// API server's own webhook timeout is shorter, so this is a backstop against goroutine leaks.
+const decisionTimeout = 10 * time.Second
 
-	// Create a new Kubernetes authorizer.
-	bo := webhook.DefaultRetryBackoff()
-	m := &metrics.NoopAuthorizerMetrics{}
-	compl := cel.NewDefaultCompiler()
-
-	authz, err := webhook.NewFromInterface(cs.AuthorizationV1(), 5*time.Second, 5*time.Second, *bo, kauth.DecisionDeny, m, compl)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
-	}
-	handler := &authzHook{authz: authorizer.NewTierAuthorizer(authz)}
-
-	http.HandleFunc("/authz", handleFn(handler))
+// RegisterHook registers the /authz HTTP handler.
+func RegisterHook(decider Decider, handleFn HandleAuthzFn) {
+	logrus.WithField("path", "/authz").Info("Registering authorization webhook")
+	http.HandleFunc("/authz", handleFn(NewHook(decider)))
 }
 
-// authzHook is an authorization webhook that enforces tier-based RBAC.
-type authzHook struct {
-	authz authorizer.TierAuthorizer
+// Hook adapts SubjectAccessReview traffic onto a Decider.
+type Hook struct {
+	decider Decider
 }
 
-// Authorize processes a SubjectAccessReview and returns a status indicating
-// whether the request is allowed, denied, or has no opinion.
-func (h *authzHook) Authorize(sar authorizationv1.SubjectAccessReview) *authorizationv1.SubjectAccessReviewStatus {
-	spec := sar.Spec
+// NewHook returns a Hook that decides via decider.
+func NewHook(decider Decider) *Hook {
+	return &Hook{decider: decider}
+}
 
-	// We only handle resource requests for tiered policy resources in the projectcalico.org API group.
-	if spec.ResourceAttributes == nil {
+// Authorize processes a SubjectAccessReview. It returns Denied or NoOpinion, never Allowed:
+// this authorizer runs ahead of RBAC, so an Allow would grant base permissions the user does
+// not have.
+func (h *Hook) Authorize(sar authorizationv1.SubjectAccessReview) *authorizationv1.SubjectAccessReviewStatus {
+	ra := sar.Spec.ResourceAttributes
+	if ra == nil {
 		return noOpinion("non-resource request")
 	}
-	ra := spec.ResourceAttributes
 	if ra.Group != v3.SchemeGroupVersion.Group {
-		return noOpinion("not projectcalico.org group")
+		return noOpinion("not the projectcalico.org group")
 	}
-	if !tieredPolicyResources[ra.Resource] {
+	if !tierauth.IsTieredPolicyResource(ra.Resource) {
 		return noOpinion("not a tiered policy resource")
 	}
 	if !readVerbs[strings.ToLower(ra.Verb)] {
-		// Mutating verbs (create, update, patch, delete) are handled by the admission webhook.
-		return noOpinion("mutating verb handled by admission webhook")
+		return noOpinion("mutating verb handled by the admission webhook")
 	}
 
-	logCtx := logrus.WithFields(logrus.Fields{
-		"user":      spec.User,
-		"verb":      ra.Verb,
-		"resource":  ra.Resource,
-		"name":      ra.Name,
-		"namespace": ra.Namespace,
-	})
-	logCtx.Debug("Handling authorization review for tiered policy")
-
-	// Extract the tier from the field selector on the request.
-	tier := extractTierFromFieldSelector(ra)
-	if tier == "" {
-		logCtx.Debug("Could not determine tier, returning NoOpinion")
-		return noOpinion("tier could not be determined")
-	}
-
-	logCtx = logCtx.WithField("tier", tier)
-
-	// Build context with user info and request info for the TierAuthorizer.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), decisionTimeout)
 	defer cancel()
-	ctx = augmentContext(ctx, spec, ra)
 
-	// Check if the user is authorized to access the tier.
-	if err := h.authz.AuthorizeTierOperation(ctx, ra.Name, tier); err != nil {
-		logCtx.WithError(err).Warn("User is not authorized for tier")
-		return deny(fmt.Sprintf("Authorization failed: %v", err))
+	result := h.decider.Authorize(ctx, tierauth.Request{
+		User:      userInfo(sar.Spec),
+		Verb:      strings.ToLower(ra.Verb),
+		Resource:  ra.Resource,
+		Namespace: ra.Namespace,
+		Name:      ra.Name,
+		Tier:      extractTierFromSelectors(ra),
+	})
+
+	if result.Decision == tierauth.DecisionDenied {
+		logrus.WithFields(logrus.Fields{
+			"user":      sar.Spec.User,
+			"verb":      ra.Verb,
+			"resource":  ra.Resource,
+			"namespace": ra.Namespace,
+			"name":      ra.Name,
+			"reason":    result.Reason,
+		}).Warn("Denying tiered policy read")
+		return deny(result.Reason)
 	}
 
-	// User is authorized for the tier — return NoOpinion so that RBAC can
-	// still check base resource permissions.
-	logCtx.Debug("User is authorized for tier, returning NoOpinion")
-	return noOpinion("tier access authorized, deferring to RBAC for base permission")
+	return noOpinion(result.Reason)
 }
 
-// extractTierFromFieldSelector extracts the tier from the field selector on the
-// resource attributes. Returns the tier name, or empty string if no spec.tier
-// field selector is present.
-func extractTierFromFieldSelector(ra *authorizationv1.ResourceAttributes) string {
+// extractTierFromSelectors returns the single tier the request is scoped to, or empty if the
+// request is not scoped to exactly one tier. Both the spec.tier field selector and the
+// projectcalico.org/tier label selector count, since the deny message points users at the latter.
+func extractTierFromSelectors(ra *authorizationv1.ResourceAttributes) string {
 	if ra.FieldSelector != nil {
 		for _, req := range ra.FieldSelector.Requirements {
 			if req.Key == "spec.tier" && req.Operator == metav1.FieldSelectorOpIn && len(req.Values) == 1 {
@@ -154,52 +129,33 @@ func extractTierFromFieldSelector(ra *authorizationv1.ResourceAttributes) string
 			}
 		}
 	}
+	if ra.LabelSelector != nil {
+		for _, req := range ra.LabelSelector.Requirements {
+			if req.Key != v3.LabelTier || len(req.Values) != 1 {
+				continue
+			}
+			if req.Operator == metav1.LabelSelectorOpIn {
+				return req.Values[0]
+			}
+		}
+	}
 	return ""
 }
 
-// augmentContext creates a context with user info and request info needed by the TierAuthorizer.
-func augmentContext(ctx context.Context, spec authorizationv1.SubjectAccessReviewSpec, ra *authorizationv1.ResourceAttributes) context.Context {
-	// Build user info.
-	extra := map[string][]string{}
+// userInfo converts the SubjectAccessReview's user fields into a user.Info.
+func userInfo(spec authorizationv1.SubjectAccessReviewSpec) user.Info {
+	extra := make(map[string][]string, len(spec.Extra))
 	for k, v := range spec.Extra {
 		extra[k] = []string(v)
 	}
-	info := &user.DefaultInfo{
+	return &user.DefaultInfo{
 		Name:   spec.User,
 		UID:    spec.UID,
 		Groups: spec.Groups,
 		Extra:  extra,
 	}
-
-	// Build request info.
-	path := fmt.Sprintf("/apis/projectcalico.org/v3/%s", ra.Resource)
-	if ra.Namespace != "" {
-		path = fmt.Sprintf("/apis/projectcalico.org/v3/namespaces/%s/%s", ra.Namespace, ra.Resource)
-	}
-	if ra.Name != "" {
-		path = path + "/" + ra.Name
-	}
-
-	ri := &genericapirequest.RequestInfo{
-		IsResourceRequest: true,
-		Path:              path,
-		Verb:              strings.ToLower(ra.Verb),
-		APIGroup:          v3.SchemeGroupVersion.Group,
-		APIVersion:        v3.SchemeGroupVersion.Version,
-		Resource:          ra.Resource,
-		Name:              ra.Name,
-		Namespace:         ra.Namespace,
-	}
-
-	if ra.Namespace != "" {
-		ctx = genericapirequest.WithNamespace(ctx, ra.Namespace)
-	}
-	ctx = genericapirequest.WithUser(ctx, info)
-	ctx = genericapirequest.WithRequestInfo(ctx, ri)
-	return ctx
 }
 
-// noOpinion returns a SubjectAccessReviewStatus indicating no opinion.
 func noOpinion(reason string) *authorizationv1.SubjectAccessReviewStatus {
 	return &authorizationv1.SubjectAccessReviewStatus{
 		Allowed: false,
@@ -208,7 +164,6 @@ func noOpinion(reason string) *authorizationv1.SubjectAccessReviewStatus {
 	}
 }
 
-// deny returns a SubjectAccessReviewStatus denying the request.
 func deny(reason string) *authorizationv1.SubjectAccessReviewStatus {
 	return &authorizationv1.SubjectAccessReviewStatus{
 		Allowed: false,
