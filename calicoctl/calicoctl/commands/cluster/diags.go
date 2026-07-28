@@ -16,11 +16,14 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -36,51 +39,125 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
+	"github.com/projectcalico/calico/pkg/buildinfo"
 )
 
-type diagOpts struct {
-	Config             string
-	Since              string
-	MaxLogs            int
-	MaxParallelism     int
-	FocusNodes         string
+// Options is the flag surface of `calicoctl cluster diags`, filled in by the
+// cobra command.
+type Options struct {
+	Config         string
+	MaxLogs        int
+	MaxParallelism int
+	CommandTimeout string
+	OverallTimeout string
+
+	// FocusNodes are preferred when spending the MaxLogs budget but stay subject
+	// to it. ProblemNodes, ProblemPods and ComparisonNodes are collected in full,
+	// exempt from the cap.
+	FocusNodes      string
+	ProblemNodes    string
+	ProblemPods     string
+	ComparisonNodes string
+
+	// SampleNodes asks us to choose this many nodes ourselves, spread across the
+	// axes in nodeSamplers, and collect them in full — for the operator who
+	// doesn't yet know where the problem is. Zero means "don't".
+	SampleNodes int
+
 	SkipTempDirCleanup bool
+}
+
+// diagOpts is what the collection actually runs with: the operator's flags, plus
+// the answers the interactive wizard gathers, which have no flag equivalent.
+type diagOpts struct {
+	Options
+
+	// StartedAt is the operator's answer to "when did the problem start?",
+	// Description is their per-resource account of the roles involved, and
+	// AnsweredAt is when they finished the wizard. All three are empty on the
+	// flag-driven path.
+	StartedAt   string
+	Description string
+	AnsweredAt  string
+
+	// Sampled is what --sample-nodes chose, with the reason each node stood out.
+	// Empty unless --sample-nodes was given.
+	Sampled []sampledNode
 }
 
 // Diags collects a snapshot of diagnostic info and logs related to Calico for
 // the cluster and writes it to a .tar.gz file.
-func Diags(config, since string, maxLogs, maxParallelism int, focusNodes string, skipTempDirCleanup bool) error {
-	return collectDiags(buildDiagOpts(config, since, maxLogs, maxParallelism, focusNodes, skipTempDirCleanup))
+func Diags(o Options) error {
+	return collectDiags(&diagOpts{Options: o})
 }
 
-func buildDiagOpts(config, since string, maxLogs, maxParallelism int, focusNodes string, skipTempDirCleanup bool) *diagOpts {
-	// Default since to "0s", which kubectl understands as meaning all logs.
-	if since == "" {
-		since = "0s"
-	}
-	return &diagOpts{
-		Config:             config,
-		Since:              since,
-		MaxLogs:            maxLogs,
-		MaxParallelism:     maxParallelism,
-		FocusNodes:         focusNodes,
-		SkipTempDirCleanup: skipTempDirCleanup,
-	}
-}
+// Collection outcomes recorded in the bundle so whoever analyses it knows
+// whether it is a full snapshot or was cut short (and why).
+const (
+	outcomeComplete    = "complete"
+	outcomeTimedOut    = "timed-out"
+	outcomeInterrupted = "interrupted"
+)
 
 func collectDiags(opts *diagOpts) error {
-	common.MaxParallelism = opts.MaxParallelism
-
-	// Ensure since value is valid with proper time unit
-	argutils.ValidateSinceDuration(opts.Since)
-
 	// Ensure max-logs value is non-negative
 	argutils.ValidateMaxLogs(opts.MaxLogs)
+
+	commandTimeout, err := parseTimeout(opts.CommandTimeout, "--command-timeout")
+	if err != nil {
+		return err
+	}
+	overallTimeout, err := parseTimeout(opts.OverallTimeout, "--overall-timeout")
+	if err != nil {
+		return err
+	}
+
+	// Whether we can ask the operator where the problem is depends only on the
+	// terminal, so refuse here rather than after connecting: a usage error should
+	// not need working cluster access to report.
+	if !targetingSpecified(opts) {
+		if reason := wizardUnavailableReason(); reason != "" {
+			return targetingRequiredError(reason)
+		}
+	}
 
 	// Ensure kubectl command is available (since we need it to access BGP information)
 	if err := common.KubectlExists(); err != nil {
 		return fmt.Errorf("missing dependency: %s", err)
 	}
+
+	// Create Kubernetes client from config or env vars.
+	kubeClient, calicoClient, _, err := clientmgr.GetClients(opts.Config)
+	if err != nil {
+		fmt.Printf("ERROR creating clients: %v\n", err)
+		return err
+	}
+
+	// Work out which nodes to target before we print the banner or create the
+	// temp directory: the interactive picker (when applicable) runs here, and
+	// the operator may cancel it — in which case we want to have created
+	// nothing. The picker handles its own Ctrl-C, so we set up the collection's
+	// signal handling and timeout only after it returns.
+	if kubeClient != nil {
+		proceed, err := resolveNodeTargeting(kubeClient, opts)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			fmt.Println("Aborted; no diagnostics collected.")
+			return nil
+		}
+	}
+
+	// The collection runs under an overall deadline and a signal handler: the
+	// first Ctrl-C (or SIGTERM) cancels it and we still write a bundle of
+	// whatever was gathered; a second Ctrl-C hard-exits. Each command also gets
+	// its own no-output timeout inside the Collector.
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	ctx, cancel := context.WithTimeout(sigCtx, overallTimeout)
+	defer cancel()
+	coll := common.NewCollector(ctx, commandTimeout, opts.MaxParallelism)
 
 	fmt.Println("==== Begin collecting diagnostics. ====")
 
@@ -103,24 +180,154 @@ func collectDiags(opts *diagOpts) error {
 	archiveName := directoryName + ".tar.gz"
 	dir := fmt.Sprintf("%s/%s", tempDir, directoryName)
 
-	// Create Kubernetes client from config or env vars.
-	kubeClient, calicoClient, _, err := clientmgr.GetClients(opts.Config)
-	if err != nil {
-		fmt.Printf("ERROR creating clients: %v\n", err)
-		return err
-	}
 	// Skip the per-node BPF dumps if the BPF dataplane isn't enabled —
 	// they are slow and on iptables/nftables clusters produce no useful data.
 	bpfEnabled := isBPFEnabled(calicoClient)
+
 	if kubeClient != nil {
-		collectTLSSecrets(kubeClient, dir+"/tls")
-		collectSelectedNodeLogs(kubeClient, dir+"/nodes", dir+"/links", opts, bpfEnabled)
+		collectTLSSecrets(coll, kubeClient, dir+"/tls")
+		collectSelectedNodeLogs(coll, kubeClient, dir+"/nodes", dir+"/links", opts, bpfEnabled)
 	}
-	collectGlobalClusterInformation(dir + "/cluster")
+	collectGlobalClusterInformation(coll, dir+"/cluster")
 	collectUnsupportedAnnotations(tempDir, directoryName)
-	createArchive(tempDir, directoryName, archiveName)
+
+	// Record what was collected (and how) at the top of the bundle, including
+	// whether the run finished cleanly or was cut short, and any commands that
+	// hung — those are themselves a diagnostic clue.
+	outcome := collectionOutcome(ctx, overallTimeout)
+	writeBundleInfo(dir, opts, bpfEnabled, outcome, coll.TimedOut())
+
+	// The archive step must run even after cancellation — producing the bundle
+	// is the whole point — so it uses its own context, not the (possibly
+	// cancelled) collection one.
+	createArchive(tempDir, directoryName, archiveName, commandTimeout)
 
 	return nil
+}
+
+// parseTimeout parses a duration flag value, returning an error that names the
+// flag so the operator can correct and re-run.
+func parseTimeout(val, flag string) (time.Duration, error) {
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w (expected a duration such as 30s, 5m or 1h)", flag, val, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("invalid %s %q: must be greater than zero", flag, val)
+	}
+	return d, nil
+}
+
+// collectionOutcome reports how the collection ended, printing a warning when it
+// was cut short so the operator knows the bundle is partial.
+func collectionOutcome(ctx context.Context, overallTimeout time.Duration) string {
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		fmt.Printf("\nWARNING: collection hit the overall timeout of %s and was stopped; "+
+			"the bundle contains only what was collected so far. Re-run with a larger "+
+			"--overall-timeout to allow more time.\n", overallTimeout)
+		return outcomeTimedOut
+	case ctx.Err() != nil:
+		fmt.Println("\nWARNING: collection was interrupted; the bundle contains only what was " +
+			"collected so far.")
+		return outcomeInterrupted
+	default:
+		return outcomeComplete
+	}
+}
+
+// bundleInfo is the top-level metadata file (bundle-info.yaml) written into the
+// diagnostics bundle. It records what was collected and how — the targeting
+// decisions and the tool version behind them — so whoever analyses the bundle
+// later doesn't have to guess.
+type bundleInfo struct {
+	CollectedAt      string `json:"collectedAt"`
+	CalicoctlVersion string `json:"calicoctlVersion,omitempty"`
+	GitRevision      string `json:"gitRevision,omitempty"`
+	BuildDate        string `json:"buildDate,omitempty"`
+	BPFDataplane     bool   `json:"bpfDataplaneEnabled"`
+	// ProblemStartedAt is the operator's answer to "when did the problem start?",
+	// ProblemDescription is their per-resource account of the roles involved, and
+	// QuestionsAnsweredAt is when they finished the interactive wizard. All are
+	// empty on the non-interactive (flag-driven) path.
+	ProblemStartedAt    string          `json:"problemStartedAt,omitempty"`
+	ProblemDescription  string          `json:"problemDescription,omitempty"`
+	QuestionsAnsweredAt string          `json:"questionsAnsweredAt,omitempty"`
+	Options             bundleOptions   `json:"options"`
+	Targeting           bundleTargeting `json:"targeting"`
+	// CollectionOutcome is one of "complete", "timed-out" or "interrupted".
+	// TimedOutCommands lists commands killed by the per-command no-output
+	// timeout — a hung command (e.g. a wedged `nft list ruleset`) is itself a
+	// clue, so it is surfaced here as well as marked in its own output file.
+	CollectionOutcome string                   `json:"collectionOutcome"`
+	TimedOutCommands  []common.TimedOutCommand `json:"timedOutCommands,omitempty"`
+}
+
+type bundleOptions struct {
+	MaxLogs        int `json:"maxLogs"`
+	MaxParallelism int `json:"maxParallelism"`
+}
+
+type bundleTargeting struct {
+	ProblemNodes    []string `json:"problemNodes,omitempty"`
+	ComparisonNodes []string `json:"comparisonNodes,omitempty"`
+	FocusNodes      []string `json:"focusNodes,omitempty"`
+	// ProblemPods is the pods the operator pointed at (interactively or via
+	// --problem-pods) that the problem nodes were derived from, as
+	// "namespace/name" refs.
+	ProblemPods []string `json:"problemPods,omitempty"`
+	// SampledNodes is set when --sample-nodes chose the targets rather than the
+	// operator, and says why each node was picked. Its presence tells whoever reads
+	// the bundle that nobody had identified the problem yet, so the nodes here are
+	// a spread of candidates rather than known-involved.
+	SampledNodes            []sampledNode `json:"sampledNodes,omitempty"`
+	FullCollectionNodeCount int           `json:"fullCollectionNodeCount"`
+}
+
+// writeBundleInfo writes bundle-info.yaml at the top level of the bundle. It is
+// best-effort: a failure here only warns, never aborts the collection.
+func writeBundleInfo(dir string, opts *diagOpts, bpfEnabled bool, outcome string, timedOut []common.TimedOutCommand) {
+	problem := parseCSV(opts.ProblemNodes)
+	comparison := parseCSV(opts.ComparisonNodes)
+	info := bundleInfo{
+		CollectedAt:         time.Now().UTC().Format(time.RFC3339),
+		CalicoctlVersion:    buildinfo.Version,
+		GitRevision:         buildinfo.GitRevision,
+		BuildDate:           buildinfo.BuildDate,
+		BPFDataplane:        bpfEnabled,
+		ProblemStartedAt:    opts.StartedAt,
+		ProblemDescription:  opts.Description,
+		QuestionsAnsweredAt: opts.AnsweredAt,
+		CollectionOutcome:   outcome,
+		TimedOutCommands:    timedOut,
+		Options: bundleOptions{
+			MaxLogs:        opts.MaxLogs,
+			MaxParallelism: opts.MaxParallelism,
+		},
+		Targeting: bundleTargeting{
+			ProblemNodes:    problem,
+			ComparisonNodes: comparison,
+			FocusNodes:      parseCSV(opts.FocusNodes),
+			ProblemPods:     parseCSV(opts.ProblemPods),
+			SampledNodes:    opts.Sampled,
+			FullCollectionNodeCount: fullCollectionCount(selection{
+				ProblemNodes:    problem,
+				ComparisonNodes: comparison,
+			}),
+		},
+	}
+	data, err := yaml.Marshal(&info)
+	if err != nil {
+		fmt.Printf("WARNING: could not render bundle-info.yaml: %v\n", err)
+		return
+	}
+	if err := os.MkdirAll(dir, 0o777); err != nil {
+		fmt.Printf("WARNING: could not create bundle directory for bundle-info.yaml: %v\n", err)
+		return
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bundle-info.yaml"), data, 0o644); err != nil {
+		fmt.Printf("WARNING: could not write bundle-info.yaml: %v\n", err)
+	}
 }
 
 // isBPFEnabled reports whether the BPF dataplane is turned on in the cluster's
@@ -145,37 +352,43 @@ func isBPFEnabled(calicoClient clientv3.Interface) bool {
 	return *fc.Spec.BPFEnabled
 }
 
-func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts, bpfEnabled bool) {
-	// If --focus-nodes is specified, put those node names at the start of the node list.
-	nodeList := strings.Split(opts.FocusNodes, ",")
+func collectSelectedNodeLogs(coll *common.Collector, kubeClient kubernetes.Interface, dir, linkDir string, opts *diagOpts, bpfEnabled bool) {
+	ctx := coll.Ctx()
 
-	// Keep track of nodes already in the list.
-	nodesAlreadyListed := set.New[string]()
-	for _, nodeName := range nodeList {
-		nodesAlreadyListed.Add(nodeName)
-	}
+	// Build the ordered node list and the set of nodes that are collected in
+	// full (problem and comparison nodes), exempt from the --max-logs cap.
+	problem := parseCSV(opts.ProblemNodes)
+	comparison := parseCSV(opts.ComparisonNodes)
+	focus := parseCSV(opts.FocusNodes)
 
-	// Add all other nodes into the list.
-	nl, err := kubeClient.CoreV1().Nodes().List(context.TODO(), v1.ListOptions{})
+	var allNodes []string
+	nl, err := kubeClient.CoreV1().Nodes().List(ctx, v1.ListOptions{})
 	if err != nil {
 		fmt.Printf("ERROR listing all nodes in cluster: %v\n", err)
-		// Continue because we can still use the --focus-nodes, if specified.
+		// Continue because we can still use the targeted nodes, if specified.
 	} else {
 		for _, node := range nl.Items {
-			if !nodesAlreadyListed.Contains(node.Name) {
-				nodeList = append(nodeList, node.Name)
-			}
+			allNodes = append(allNodes, node.Name)
 		}
 	}
 
+	nodeList, uncapped := buildNodeOrdering(allNodes, problem, comparison, focus)
+	if uncapped.Len() > 0 {
+		fmt.Printf("Collecting full diagnostics from %d targeted node(s): %s\n",
+			uncapped.Len(), joinOrNone(append(append([]string{}, problem...), comparison...)))
+	}
+
 	// Iterate through all Calico/Tigera namespaces.
-	nsl, err := kubeClient.CoreV1().Namespaces().List(context.TODO(), v1.ListOptions{})
+	nsl, err := kubeClient.CoreV1().Namespaces().List(ctx, v1.ListOptions{})
 	if err != nil {
 		fmt.Printf("ERROR listing namespaces: %v\n", err)
 		// Fatal, can't identify our namespaces.
 		return
 	}
 	for _, ns := range nsl.Items {
+		if ctx.Err() != nil {
+			return // Collection cancelled; stop launching more work.
+		}
 		if !strings.Contains(ns.Name, "calico") && !strings.Contains(ns.Name, "tigera") {
 			continue
 		}
@@ -183,41 +396,41 @@ func collectSelectedNodeLogs(kubeClient kubernetes.Interface, dir, linkDir strin
 		fmt.Printf("Collecting detailed diags for namespace %v...\n", ns.Name)
 
 		// Iterate through DaemonSets in this namespace.
-		dsl, err := kubeClient.AppsV1().DaemonSets(ns.Name).List(context.TODO(), v1.ListOptions{})
+		dsl, err := kubeClient.AppsV1().DaemonSets(ns.Name).List(ctx, v1.ListOptions{})
 		if err != nil {
 			fmt.Printf("ERROR listing DaemonSets in namespace %v: %v\n", ns.Name, err)
 			// Continue because deployments or other namespaces might work.
 		} else {
 			for _, ds := range dsl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, ds.Spec.Selector)
+				collectDiagsForSelectedPods(coll, dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, ds.Spec.Selector)
 			}
 		}
 
 		// Iterate through Deployments in this namespace.
-		dl, err := kubeClient.AppsV1().Deployments(ns.Name).List(context.TODO(), v1.ListOptions{})
+		dl, err := kubeClient.AppsV1().Deployments(ns.Name).List(ctx, v1.ListOptions{})
 		if err != nil {
 			fmt.Printf("ERROR listing Deployments in namespace %v: %v\n", ns.Name, err)
 			// Continue because other namespaces might work.
 		} else {
 			for _, d := range dl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, d.Spec.Selector)
+				collectDiagsForSelectedPods(coll, dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, d.Spec.Selector)
 			}
 		}
 
 		// Iterate through StatefulSets in this namespace.
-		sl, err := kubeClient.AppsV1().StatefulSets(ns.Name).List(context.TODO(), v1.ListOptions{})
+		sl, err := kubeClient.AppsV1().StatefulSets(ns.Name).List(ctx, v1.ListOptions{})
 		if err != nil {
 			fmt.Printf("ERROR listing StatefulSets in namespace %v: %v\n", ns.Name, err)
 			// Continue because other namespaces might work.
 		} else {
 			for _, s := range sl.Items {
-				collectDiagsForSelectedPods(dir, linkDir, opts, kubeClient, nodeList, bpfEnabled, ns.Name, s.Spec.Selector)
+				collectDiagsForSelectedPods(coll, dir, linkDir, opts, kubeClient, nodeList, uncapped, bpfEnabled, ns.Name, s.Spec.Selector)
 			}
 		}
 	}
 }
 
-func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, bpfEnabled bool, ns string, selector *v1.LabelSelector) {
+func collectDiagsForSelectedPods(coll *common.Collector, dir, linkDir string, opts *diagOpts, kubeClient kubernetes.Interface, nodeList []string, uncapped set.Set[string], bpfEnabled bool, ns string, selector *v1.LabelSelector) {
 	labelMap, err := v1.LabelSelectorAsMap(selector)
 	if err != nil {
 		fmt.Printf("ERROR forming pod selector: %v\n", err)
@@ -226,7 +439,7 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 	selectorString := labels.SelectorFromSet(labelMap).String()
 
 	// List pods matching the namespace and selector.
-	pl, err := kubeClient.CoreV1().Pods(ns).List(context.TODO(), v1.ListOptions{LabelSelector: selectorString})
+	pl, err := kubeClient.CoreV1().Pods(ns).List(coll.Ctx(), v1.ListOptions{LabelSelector: selectorString})
 	if err != nil {
 		fmt.Printf("ERROR listing pods in namespace %v matching '%v': %v\n", ns, selectorString, err)
 		return
@@ -238,34 +451,52 @@ func collectDiagsForSelectedPods(dir, linkDir string, opts *diagOpts, kubeClient
 		podsByNode[p.Spec.NodeName] = append(podsByNode[p.Spec.NodeName], p)
 	}
 
-	nextNodeIndex := 0
 	var cmds []common.Cmd
-	for logsWanted := opts.MaxLogs; logsWanted > 0; {
-		// Get the next node name to look at.
-		if nextNodeIndex >= len(nodeList) {
-			// There are no more nodes we can look at.
-			break
+	for _, sel := range selectPodsForCollection(nodeList, uncapped, podsByNode, opts.MaxLogs) {
+		fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", sel.pod.Name, ns, sel.node)
+		if strings.HasPrefix(sel.pod.Name, "calico-node-") {
+			nodeDir := dir + "/" + sel.node
+			collectCalicoNodeDiags(coll, nodeDir, sel.node, ns, sel.pod.Name, bpfEnabled)
 		}
-		nodeName := nodeList[nextNodeIndex]
-		nextNodeIndex++
-
-		for _, pod := range podsByNode[nodeName] {
-			fmt.Printf("Collecting detailed diags for pod %v in namespace %v on node %v...\n", pod.Name, ns, nodeName)
-			if strings.HasPrefix(pod.Name, "calico-node-") {
-				nodeDir := dir + "/" + nodeName
-				collectCalicoNodeDiags(nodeDir, nodeName, ns, pod.Name, bpfEnabled)
-			}
-			cmds = append(cmds, diagsCmdsForPod(dir, linkDir, opts, nodeName, ns, &pod)...)
-			logsWanted--
-			if logsWanted <= 0 {
-				break
-			}
-		}
+		cmds = append(cmds, diagsCmdsForPod(dir, linkDir, sel.node, ns, sel.pod)...)
 	}
-	common.ExecAllCmdsWriteToFile(cmds)
+	coll.ExecAllWriteToFile(cmds)
 }
 
-func collectCalicoResource(dir string) {
+// podOnNode pairs a pod with the node it runs on, for collection.
+type podOnNode struct {
+	node string
+	pod  *apiv1.Pod
+}
+
+// selectPodsForCollection decides which pods to collect for one component, in
+// order. It walks nodeList in priority order: pods on uncapped nodes (problem
+// and comparison nodes) are always selected, while pods on other nodes are
+// selected only until the maxLogs budget is exhausted. Because uncapped nodes
+// are ordered first, the budget is spent on the remaining best-effort nodes.
+func selectPodsForCollection(nodeList []string, uncapped set.Set[string], podsByNode map[string][]apiv1.Pod, maxLogs int) []podOnNode {
+	var out []podOnNode
+	logsWanted := maxLogs
+	for _, nodeName := range nodeList {
+		pods := podsByNode[nodeName]
+		if len(pods) == 0 {
+			continue
+		}
+		exempt := uncapped.Contains(nodeName)
+		for i := range pods {
+			if !exempt {
+				if logsWanted <= 0 {
+					continue
+				}
+				logsWanted--
+			}
+			out = append(out, podOnNode{node: nodeName, pod: &pods[i]})
+		}
+	}
+	return out
+}
+
+func collectCalicoResource(coll *common.Collector, dir string) {
 	log.Info("Auditing calico resource definitions")
 
 	collected := set.New[string]()
@@ -277,7 +508,7 @@ func collectCalicoResource(dir string) {
 	// and version is the storage version. We use these to construct fully qualified resource identifiers
 	// (<plural>.<version>.<group>) to avoid ambiguity when multiple API groups define the same resource
 	// name (e.g., apiservers.operator.tigera.io vs apiservers.config.openshift.io).
-	buf, err := common.Exec([]string{
+	buf, err := coll.Exec([]string{
 		"kubectl", "get", "customresourcedefinition", "-o", "go-template", "--template",
 		"{{range .items}}{{.metadata.name}}={{range .spec.versions}}{{if .storage}}{{.name}}{{end}}{{end}} {{end}}",
 	})
@@ -323,7 +554,7 @@ func collectCalicoResource(dir string) {
 	// server is running, v3 resources are served via API aggregation rather than CRDs, so they
 	// won't appear in the CRD listing above. This catches them regardless of serving mode.
 	// Use --no-headers with default output to get APIVERSION and NAME columns for fully qualified lookups.
-	buf, err = common.Exec([]string{"kubectl", "api-resources", "--api-group=projectcalico.org", "--no-headers"})
+	buf, err = coll.Exec([]string{"kubectl", "api-resources", "--api-group=projectcalico.org", "--no-headers"})
 	if err != nil {
 		log.WithError(err).Warn("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery")
 		fmt.Printf("Couldn't list api-resources for projectcalico.org group, skipping v3 API resource discovery: %s\n", err)
@@ -376,10 +607,10 @@ func collectCalicoResource(dir string) {
 		}
 	}
 
-	common.ExecAllCmdsWriteToFile(commands)
+	coll.ExecAllWriteToFile(commands)
 }
 
-func collectCalicoSystemNamespace(dir string) {
+func collectCalicoSystemNamespace(coll *common.Collector, dir string) {
 	commands := []common.Cmd{}
 	commands = append(commands, common.Cmd{
 		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.CalicoNamespace),
@@ -390,10 +621,10 @@ func collectCalicoSystemNamespace(dir string) {
 		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.CalicoNamespace),
 		FilePath: fmt.Sprintf("%s/calico-system.txt", dir),
 	})
-	common.ExecAllCmdsWriteToFile(commands)
+	coll.ExecAllWriteToFile(commands)
 }
 
-func collectTigeraOperatorNamespace(dir string) {
+func collectTigeraOperatorNamespace(coll *common.Collector, dir string) {
 	commands := []common.Cmd{}
 	commands = append(commands, common.Cmd{
 		Info:     fmt.Sprintf("Collect all in %s (yaml)", common.TigeraOperatorNamespace),
@@ -404,10 +635,10 @@ func collectTigeraOperatorNamespace(dir string) {
 		CmdStr:   fmt.Sprintf("kubectl get all -n %s -o wide", common.TigeraOperatorNamespace),
 		FilePath: fmt.Sprintf("%s/tigera-operator.txt", dir),
 	})
-	common.ExecAllCmdsWriteToFile(commands)
+	coll.ExecAllWriteToFile(commands)
 }
 
-func collectKubernetesResource(dir string) {
+func collectKubernetesResource(coll *common.Collector, dir string) {
 	fmt.Println("Collecting core kubernetes resources...")
 	commands := []common.Cmd{}
 	for _, resource := range []string{
@@ -520,10 +751,10 @@ func collectKubernetesResource(dir string) {
 		CmdStr:   "kubectl get apiservices.apiregistration.k8s.io -o yaml",
 		FilePath: fmt.Sprintf("%s/apiservices.yaml", dir),
 	})
-	common.ExecAllCmdsWriteToFile(commands)
+	coll.ExecAllWriteToFile(commands)
 }
 
-func collectThirdPartyResource(dir string) {
+func collectThirdPartyResource(coll *common.Collector, dir string) {
 	fmt.Println("Collecting third party resources...")
 	commands := []common.Cmd{}
 	for _, resource := range []string{
@@ -542,7 +773,7 @@ func collectThirdPartyResource(dir string) {
 			FilePath: fmt.Sprintf("%s/%v.txt", dir, resource),
 		})
 	}
-	common.ExecAllCmdsWriteToFile(commands)
+	coll.ExecAllWriteToFile(commands)
 }
 
 type tls struct {
@@ -551,9 +782,9 @@ type tls struct {
 }
 
 // collectTLSSecrets collects a selection of TLS assets, removes confidential information and stores the results.
-func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
+func collectTLSSecrets(coll *common.Collector, kubeClient kubernetes.Interface, dir string) {
 	fmt.Println("Collecting (censored) TLS secrets")
-	ctx := context.Background()
+	ctx := coll.Ctx()
 	err := os.MkdirAll(dir, 0o777)
 	if err != nil {
 		fmt.Printf("failed to create TLS directory: %v\n", err)
@@ -586,6 +817,9 @@ func collectTLSSecrets(kubeClient kubernetes.Interface, dir string) {
 		{"tigera-compliance-snapshotter-tls ", "tigera-compliance"},
 		{"tigera-dex-tls ", "tigera-dex"},
 	} {
+		if ctx.Err() != nil {
+			return // Collection cancelled; stop hitting the API server.
+		}
 		for _, ns := range []string{t.ns, "tigera-operator"} {
 			fmt.Printf("Collecting secret %s/%s (censoring sensitive data) \n", t.ns, t.name)
 			secret, err := kubeClient.CoreV1().Secrets(ns).Get(ctx, t.name, v1.GetOptions{})
@@ -623,9 +857,9 @@ func censorSecret(secret *apiv1.Secret) {
 }
 
 // collectGlobalClusterInformation collects the Kubernetes resource, Calico Resource and Tigera operator details
-func collectGlobalClusterInformation(dir string) {
+func collectGlobalClusterInformation(coll *common.Collector, dir string) {
 	fmt.Println("Collecting kubernetes version...")
-	common.ExecAllCmdsWriteToFile([]common.Cmd{
+	coll.ExecAllWriteToFile([]common.Cmd{
 		{
 			Info:     "Collect kubernetes Client and Server version",
 			CmdStr:   "kubectl version -o yaml",
@@ -633,20 +867,20 @@ func collectGlobalClusterInformation(dir string) {
 		},
 	})
 
-	collectCalicoResource(dir + "/crd")
-	collectTigeraOperatorNamespace(dir + "/tigera-operator")
-	collectCalicoSystemNamespace(dir + "/calico-system")
-	collectKubernetesResource(dir + "/kubernetes")
-	collectThirdPartyResource(dir + "/third-party")
+	collectCalicoResource(coll, dir+"/crd")
+	collectTigeraOperatorNamespace(coll, dir+"/tigera-operator")
+	collectCalicoSystemNamespace(coll, dir+"/calico-system")
+	collectKubernetesResource(coll, dir+"/kubernetes")
+	collectThirdPartyResource(coll, dir+"/third-party")
 }
 
-func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace string, pod *apiv1.Pod) []common.Cmd {
+func diagsCmdsForPod(dir, linkDir, nodeName, namespace string, pod *apiv1.Pod) []common.Cmd {
 	nodeDir := dir + "/" + nodeName
 	namespaceDir := nodeDir + "/" + namespace
 	cmds := []common.Cmd{
 		{
 			Info:     fmt.Sprintf("Collect logs for pod %s", pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --since=%s -n %s %s --all-containers", opts.Since, namespace, pod.Name),
+			CmdStr:   fmt.Sprintf("kubectl logs -n %s %s --all-containers", namespace, pod.Name),
 			FilePath: fmt.Sprintf("%s/%s.log", namespaceDir, pod.Name),
 			SymLink:  fmt.Sprintf("%s/%s/%s.log", linkDir, namespace, pod.Name),
 		},
@@ -668,7 +902,7 @@ func diagsCmdsForPod(dir, linkDir string, opts *diagOpts, nodeName, namespace st
 	for _, container := range containersWithPreviousLogs(pod) {
 		cmds = append(cmds, common.Cmd{
 			Info:     fmt.Sprintf("Collect previous logs for container %s in pod %s", container, pod.Name),
-			CmdStr:   fmt.Sprintf("kubectl logs --previous --since=%s -n %s %s -c %s", opts.Since, namespace, pod.Name, container),
+			CmdStr:   fmt.Sprintf("kubectl logs --previous -n %s %s -c %s", namespace, pod.Name, container),
 			FilePath: fmt.Sprintf("%s/%s.%s.previous.log", namespaceDir, pod.Name, container),
 			SymLink:  fmt.Sprintf("%s/%s/%s.%s.previous.log", linkDir, namespace, pod.Name, container),
 		})
@@ -716,7 +950,7 @@ func bpfJSONCmd(curNodeDir, nodeName, namespace, podName, info, sub, file string
 	}
 }
 
-func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName string, bpfEnabled bool) {
+func collectCalicoNodeDiags(coll *common.Collector, curNodeDir string, nodeName, namespace, podName string, bpfEnabled bool) {
 	fmt.Printf("Collecting dataplane diags for calico-node: %s\n", podName)
 	cmds := []common.Cmd{
 		// ip diagnostics
@@ -811,10 +1045,10 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 			},
 		)
 	}
-	common.ExecAllCmdsWriteToFile(cmds)
+	coll.ExecAllWriteToFile(cmds)
 
 	if bpfEnabled {
-		output, err := common.ExecCmd(fmt.Sprintf(
+		output, err := coll.ExecCmd(fmt.Sprintf(
 			"kubectl exec -n %s -t %s -c calico-node -- bpftool map list",
 			namespace,
 			podName,
@@ -844,12 +1078,12 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 					})
 				}
 			}
-			common.ExecAllCmdsWriteToFile(bpfDumpCmds)
+			coll.ExecAllWriteToFile(bpfDumpCmds)
 		}
 	}
 
 	// Collect all of the CNI logs
-	output, err := common.ExecCmd(fmt.Sprintf(
+	output, err := coll.ExecCmd(fmt.Sprintf(
 		"kubectl exec -n %s -t %s -c calico-node -- ls /var/log/calico/cni",
 		namespace,
 		podName,
@@ -866,7 +1100,7 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 				FilePath: fmt.Sprintf("%s/%s.log", curNodeDir, logFile),
 			})
 		}
-		common.ExecAllCmdsWriteToFile(cmds)
+		coll.ExecAllWriteToFile(cmds)
 	}
 }
 
@@ -910,9 +1144,17 @@ func collectUnsupportedAnnotations(tempDir string, directoryName string) {
 	}
 }
 
-// createArchive attempts to bundle all the diagnostics files into a single compressed archive.
-func createArchive(tempDir string, directoryName string, archiveName string) {
+// createArchive attempts to bundle all the diagnostics files into a single
+// compressed archive. It runs under its own context — not the collection one —
+// so the bundle is still produced after an overall timeout or Ctrl-C. tar is
+// silent on success, so the inactivity timeout is disabled and the archive gets
+// an absolute deadline instead.
+func createArchive(tempDir string, directoryName string, archiveName string, timeout time.Duration) {
 	fmt.Println("\n==== Producing a diagnostics bundle. ====")
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	coll := common.NewCollector(ctx, 0, 1)
 
 	// Attempt to remove archive file (if it previously existed)
 	err := os.Remove(fmt.Sprintf("rm -f %s", archiveName))
@@ -922,7 +1164,7 @@ func createArchive(tempDir string, directoryName string, archiveName string) {
 	}
 
 	// Attempt to create new archive
-	output, err := common.ExecCmd(fmt.Sprintf("tar cfz ./%s -C %s %s", archiveName, tempDir, directoryName))
+	output, err := coll.ExecCmd(fmt.Sprintf("tar cfz ./%s -C %s %s", archiveName, tempDir, directoryName))
 	log.Debugf("creating archive %s: output %s", archiveName, output.String())
 	if err != nil {
 		fmt.Printf("Could not create new archive %s: %s\n", archiveName, err)
