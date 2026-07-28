@@ -26,6 +26,7 @@ import (
 	"github.com/gavv/monotime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
@@ -3775,6 +3776,61 @@ func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
 	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
 }
 
+// TestContinuousModeRunsSweepFromMainLoop is the one test that exercises the sweep the way
+// production does: through the collector's own select loop, driven by the policy-eval ticker. Every
+// other policy-eval test calls snapshotFlowsForRecalc/processRecalcBatch directly, so nothing else
+// would notice if the ticker stopped firing or the batch path stopped being reached.
+//
+// It asserts on the counter rather than on Data fields, because epStats belongs to the collector
+// goroutine and reading it from the test would race.
+func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
+	RegisterTestingT(t)
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1: localEd1,
+		localIp2: localEd2,
+	}
+	c := newCollector(newMockLookupsCache(epMap, nil, nil, nil), &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		// Short enough that a tick, and the following re-evaluation, land within the timeout
+		// below: the ticker fires at 8/10 of this and a flow becomes due again at 4/10.
+		FlowLogsFlushInterval: 100 * time.Millisecond,
+		PolicyEvaluationMode:  string(apiv3.FlowLogsPolicyEvaluationModeContinuous),
+	}).(*collector)
+
+	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	Expect(c.Start()).To(Succeed())
+
+	// Hand the flow to the collector over its reporting channel so that it is created on the
+	// collector's own goroutine.
+	c.ReportingChannel() <- &proto.DataplaneStats{
+		SrcIp:    localIp1Str,
+		DstIp:    localIp2Str,
+		SrcPort:  1000,
+		DstPort:  2000,
+		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: proto_tcp}},
+	}
+
+	Eventually(func() float64 {
+		return testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	}, 5*time.Second, 20*time.Millisecond).Should(BeNumerically(">", before),
+		"the ticker should drive a re-evaluation sweep through the main loop")
+}
+
+// TestNonContinuousModeLeavesSweepIdle verifies the feature gate suppresses the work, not just the
+// log line: with pending policies disabled there is no ticker, so the sweep never runs.
+func TestNonContinuousModeLeavesSweepIdle(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t) // no PolicyEvaluationMode set
+
+	Expect(c.tickerPolicyEval).To(BeNil())
+	Expect(c.policyEvalTickChan()).To(BeNil(), "a nil channel masks the sweep out of the select")
+}
+
 // TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows covers the early-uptime case: monotime counts
 // from boot, so when the freshness window exceeds the current uptime the "too recent" threshold is
 // negative. Flows that have never been evaluated must still be evaluated, not skipped.
@@ -3788,13 +3844,13 @@ func TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows(t *testing.T) {
 		"window must exceed uptime for this test to cover the negative-threshold case")
 	clearPendingRuleIDs(c)
 
-	before := testutil.ToFloat64(counterPolicyEvalFlows)
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	c.snapshotFlowsForRecalc()
 	flows := len(c.recalcSnapshot)
 	for !c.processRecalcBatch(time.Hour) {
 	}
 
-	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows)-before)).To(Equal(flows),
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(flows),
 		"never-evaluated flows must not be skipped as too-recent")
 }
 
@@ -3839,10 +3895,10 @@ func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
 	// Delete one flow after the snapshot was taken.
 	c.deleteDataFromEpStats(c.epStats[ft1])
 
-	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows)
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	for !c.processRecalcBatch(time.Hour) {
 	}
-	flowsDelta := testutil.ToFloat64(counterPolicyEvalFlows) - flowsBefore
+	flowsDelta := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore
 
 	Expect(int(flowsDelta)).To(Equal(snapshotLen-1), "the deleted flow should be skipped, not evaluated")
 	// The surviving flow was still evaluated.
@@ -3862,7 +3918,7 @@ func TestPolicyEvalMetrics(t *testing.T) {
 	}
 
 	batchesBefore := testutil.ToFloat64(counterPolicyEvalBatches)
-	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows)
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	sweepsBefore := sweepSampleCount()
 
 	clearPendingRuleIDs(c)
@@ -3878,7 +3934,7 @@ func TestPolicyEvalMetrics(t *testing.T) {
 	}
 
 	Expect(int(testutil.ToFloat64(counterPolicyEvalBatches) - batchesBefore)).To(Equal(batches))
-	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows) - flowsBefore)).To(Equal(flows))
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore)).To(Equal(flows))
 	// One completed sweep records exactly one histogram observation.
 	Expect(sweepSampleCount()).To(Equal(sweepsBefore + 1))
 }
@@ -3896,20 +3952,20 @@ func TestProcessRecalcBatchSkipsRecentlyEvaluatedFlows(t *testing.T) {
 	total := len(c.recalcSnapshot)
 	Expect(total).To(BeNumerically(">", 1), "the snapshot should capture every flow")
 
-	before := testutil.ToFloat64(counterPolicyEvalFlows)
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	for !c.processRecalcBatch(time.Hour) {
 	}
-	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows)-before)).To(Equal(0),
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(0),
 		"recently-evaluated flows should be skipped at re-evaluation time")
 
 	// Once the stamps are cleared, every flow is due again.
 	clearPendingRuleIDs(c)
 	c.snapshotFlowsForRecalc()
 	Expect(len(c.recalcSnapshot)).To(Equal(total))
-	before = testutil.ToFloat64(counterPolicyEvalFlows)
+	before = testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
 	for !c.processRecalcBatch(time.Hour) {
 	}
-	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows)-before)).To(Equal(total),
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(total),
 		"cleared flows should all be re-evaluated")
 }
 

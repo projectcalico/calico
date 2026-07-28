@@ -49,6 +49,15 @@ const (
 	policyEvalBatchDuration = 100 * time.Millisecond
 )
 
+// policyEvalReason is what prompted a pending-policy evaluation. It labels the evaluation counter,
+// so the periodic sweep can be told apart from the one-off evaluation done when a flow appears.
+type policyEvalReason string
+
+const (
+	policyEvalInitial policyEvalReason = "initial"
+	policyEvalRecalc  policyEvalReason = "recalc"
+)
+
 var (
 	// conntrack processing prometheus metrics
 	histogramConntrackLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
@@ -94,10 +103,11 @@ var (
 		Help: "Number of time-boxed policy re-evaluation batches processed.",
 	})
 
-	counterPolicyEvalFlows = prometheus.NewCounter(prometheus.CounterOpts{
+	counterPolicyEvalFlows = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "felix_collector_policy_eval_flows_total",
-		Help: "Number of flows evaluated during policy re-evaluation.",
-	})
+		Help: "Number of flows whose pending policy was evaluated, by what triggered the evaluation.",
+	},
+		[]string{"reason"})
 
 	histogramPolicyEvalSweepDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Name: "felix_collector_policy_eval_sweep_duration_seconds",
@@ -177,7 +187,6 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		luc:                   lc,
 		epStats:               make(map[tuple.Tuple]*Data),
 		ticker:                jitter.NewTicker(cfg.ExportingInterval, cfg.ExportingInterval/10),
-		tickerPolicyEval:      jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval/10),
 		config:                cfg,
 		dumpLog:               log.New(),
 		ds:                    make(chan *proto.DataplaneStats, 1000),
@@ -190,8 +199,11 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 		c.policyStoreManager = policystore.NewPolicyStoreManager()
 	}
 
+	// Only run the re-evaluation sweep when pending policies are enabled; leaving the ticker nil
+	// masks the sweep out of the main loop entirely.
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
 		log.Infof("Pending policies enabled, initiating pending policy evaluation ticker")
+		c.tickerPolicyEval = jitter.NewTicker(recalcInterval, cfg.FlowLogsFlushInterval/10)
 	} else {
 		log.Infof("Pending policies disabled")
 	}
@@ -291,7 +303,7 @@ func (c *collector) startStatsCollectionAndReporting() {
 	batchReady := make(chan struct{})
 	close(batchReady)
 
-	policyEvalTickC := c.tickerPolicyEval.Channel()
+	policyEvalTickC := c.policyEvalTickChan()
 	var batchTriggerC <-chan struct{}
 
 	// When a collector is started, we respond to the following events:
@@ -323,10 +335,19 @@ func (c *collector) startStatsCollectionAndReporting() {
 		case <-batchTriggerC:
 			if c.processRecalcBatch(policyEvalBatchDuration) {
 				batchTriggerC = nil
-				policyEvalTickC = c.tickerPolicyEval.Channel()
+				policyEvalTickC = c.policyEvalTickChan()
 			}
 		}
 	}
+}
+
+// policyEvalTickChan returns the policy re-evaluation tick channel, or nil when pending policies
+// are disabled. A nil channel blocks forever, masking the sweep out of the main loop.
+func (c *collector) policyEvalTickChan() <-chan time.Time {
+	if c.tickerPolicyEval == nil {
+		return nil
+	}
+	return c.tickerPolicyEval.Channel()
 }
 
 // loopProcessingDataplaneInfoUpdates processes the dataplane info updates. The dataplaneInfoReader
@@ -382,7 +403,7 @@ func (c *collector) getDataAndUpdateEndpoints(t tuple.Tuple, expired bool, packe
 		c.updateEpStatsCache(t, data)
 
 		// Perform an initial evaluation of pending rule traces.
-		c.evaluatePendingRuleTraceForLocalEp(data)
+		c.evaluatePendingRuleTraceForLocalEp(data, policyEvalInitial)
 	} else if data.Reported {
 		if !data.UnreportedPacketInfo && !packetinfo {
 			// Data has been reported.  If the request has not come from a packet info update (e.g. nflog) and we do not
@@ -958,8 +979,7 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 			continue
 		}
 
-		c.evaluatePendingRuleTraceForLocalEp(data)
-		counterPolicyEvalFlows.Inc()
+		c.evaluatePendingRuleTraceForLocalEp(data, policyEvalRecalc)
 
 		// Checked last, so every batch evaluates at least one flow.
 		if monotime.Now() >= deadline {
@@ -984,7 +1004,7 @@ func (c *collector) popFlowForRecalc() *Data {
 	return data
 }
 
-func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
+func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policyEvalReason) {
 	flow := TupleAsFlow(data.Tuple)
 
 	srcEp, dstEp := c.findEndpointBestMatch(data.Tuple)
@@ -995,6 +1015,7 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 	}
 
 	data.lastPolicyEvalAt = monotime.Now()
+	counterPolicyEvalFlows.WithLabelValues(string(reason)).Inc()
 	c.policyStoreManager.DoWithReadLock(func(ps *policystore.PolicyStore) {
 		// Evaluate ingress if destination is local workload endpoint
 		if data.DstEp != nil && !data.DstEp.IsHostEndpoint() && data.DstEp.IsLocal() {
