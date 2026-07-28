@@ -172,7 +172,7 @@ func (m ipNetSet) Contains(addr string) bool {
 	if ip == nil {
 		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
 		// connections, like Pipes.
-		log.WithField("addr", ip).Warn("could not parse IP")
+		log.WithField("addr", addr).Warn("could not parse IP")
 		return false
 	}
 	return m.ContainsIP(ip)
