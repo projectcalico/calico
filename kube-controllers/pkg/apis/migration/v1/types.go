@@ -21,7 +21,7 @@ import (
 
 const (
 	Group   = "migration.projectcalico.org"
-	Version = "v1beta1"
+	Version = "v1"
 )
 
 var DatastoreMigrationGVR = schema.GroupVersionResource{
