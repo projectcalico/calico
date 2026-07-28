@@ -20,10 +20,34 @@ import (
 	"math/big"
 	"net"
 	"net/netip"
+	"strings"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"go4.org/netipx"
+
+	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
+
+// NumReservedIPsInCIDR returns how many of the addresses in cidr the given
+// IPReservations cover, whether or not they are also allocated.
+//
+// GetUtilization reports this alongside the allocated and free counts, but doing so
+// costs a list of every allocation block.  This is for callers that already hold the
+// IPReservations — kube-controllers gets them from its syncer — and need only this
+// number.
+func NumReservedIPsInCIDR(cidr cnet.IPNet, reservations []*v3.IPReservation) (int, error) {
+	prefix, err := prefixFromCIDR(cidr.IPNet)
+	if err != nil {
+		return 0, err
+	}
+
+	assignable, err := subtractReservations(prefix, reservedCIDRs(reservations)).IPSet()
+	if err != nil {
+		return 0, err
+	}
+	return clampToInt(new(big.Int).Sub(numIPsInPrefix(prefix), numIPsInSet(assignable))), nil
+}
 
 // countPoolSpace reports address counts for a whole IP pool CIDR, including the
 // parts of it that no allocation block covers yet:
@@ -34,28 +58,12 @@ import (
 //   - availableOutsideBlocks: how many are neither reserved nor inside one of
 //     the given blocks.  IPs inside a block are left to the caller, which has
 //     the block's allocations and so can tell free from in-use.
-//
-// Reservations may overlap and nest arbitrarily — one IPReservation can cover a
-// /24 while another names a single address inside it — so the counting is a set
-// operation rather than a sum over the CIDRs.
 func countPoolSpace(poolCIDR net.IPNet, reserved cidrSliceFilter, blocks []BlockUtilization) (capacity, reservedCount, availableOutsideBlocks int, err error) {
-	poolPrefix, ok := netipx.FromStdIPNet(&poolCIDR)
-	if !ok {
-		return 0, 0, 0, fmt.Errorf("IP pool CIDR %s cannot be represented as a prefix", poolCIDR.String())
+	poolPrefix, err := prefixFromCIDR(poolCIDR)
+	if err != nil {
+		return 0, 0, 0, err
 	}
-
-	// Start from the whole pool and subtract the reservations.  Subtracting a
-	// prefix splits whatever it partly overlaps and repeats are no-ops, so
-	// overlapping reservations need no deduplication of our own.
-	var assignable netipx.IPSetBuilder
-	assignable.AddPrefix(poolPrefix)
-	for _, r := range reserved {
-		if p, ok := netipx.FromStdIPNet(&r.IPNet); ok {
-			assignable.RemovePrefix(p)
-		} else {
-			log.WithField("cidr", r.String()).Warn("Ignoring reservation that cannot be represented as a prefix.")
-		}
-	}
+	assignable := subtractReservations(poolPrefix, reserved)
 
 	// Clone before subtracting the blocks so we can measure the pool both with
 	// and without them.  Clone drops errors accumulated so far, but they stay on
@@ -81,6 +89,57 @@ func countPoolSpace(poolCIDR net.IPNet, reserved cidrSliceFilter, blocks []Block
 		clampToInt(new(big.Int).Sub(poolSize, numIPsInSet(assignableSet))),
 		clampToInt(numIPsInSet(outsideBlocksSet)),
 		nil
+}
+
+// reservedCIDRs returns the CIDRs that the given IPReservations cover.  Malformed
+// entries are logged and skipped; validation should prevent them.
+func reservedCIDRs(reservations []*v3.IPReservation) cidrSliceFilter {
+	var cidrs cidrSliceFilter
+	for _, r := range reservations {
+		for _, cidrStr := range r.Spec.ReservedCIDRs {
+			cidrStr = strings.TrimSpace(cidrStr)
+			if cidrStr == "" {
+				continue
+			}
+			_, cidr, err := cnet.ParseCIDROrIP(cidrStr)
+			if err != nil {
+				log.WithError(err).WithFields(log.Fields{
+					"reservation": r.Name,
+					"cidr":        cidrStr,
+				}).Error("Ignoring malformed CIDR in IPReservation.")
+				continue
+			}
+			cidrs = append(cidrs, *cidr)
+		}
+	}
+	return cidrs
+}
+
+// subtractReservations returns the part of prefix that no reservation covers.
+//
+// Reservations may overlap and nest arbitrarily — one IPReservation can cover a /24
+// while another names a single address inside it — so this has to be a set operation
+// rather than a sum over the CIDRs.  Subtracting a prefix splits whatever it partly
+// overlaps and repeats are no-ops, so the set needs no deduplication of our own.
+func subtractReservations(prefix netip.Prefix, reserved cidrSliceFilter) *netipx.IPSetBuilder {
+	var assignable netipx.IPSetBuilder
+	assignable.AddPrefix(prefix)
+	for _, r := range reserved {
+		if p, ok := netipx.FromStdIPNet(&r.IPNet); ok {
+			assignable.RemovePrefix(p)
+		} else {
+			log.WithField("cidr", r.String()).Warn("Ignoring reservation that cannot be represented as a prefix.")
+		}
+	}
+	return &assignable
+}
+
+func prefixFromCIDR(cidr net.IPNet) (netip.Prefix, error) {
+	p, ok := netipx.FromStdIPNet(&cidr)
+	if !ok {
+		return netip.Prefix{}, fmt.Errorf("CIDR %s cannot be represented as a prefix", cidr.String())
+	}
+	return p, nil
 }
 
 func numIPsInSet(s *netipx.IPSet) *big.Int {

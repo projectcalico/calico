@@ -15,8 +15,13 @@
 package ipam
 
 import (
+	"fmt"
 	"math"
+	"slices"
 	"testing"
+
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -135,6 +140,71 @@ func TestCountPoolSpace(t *testing.T) {
 			}
 			if availableOutsideBlocks != tc.wantAvailableOutsideBlock {
 				t.Errorf("availableOutsideBlocks = %d, want %d", availableOutsideBlocks, tc.wantAvailableOutsideBlock)
+			}
+
+			// The exported entry point skips the block arithmetic, but its reserved
+			// count must agree with the one above; kube-controllers reports that
+			// number for the same pools that calicoctl shows.
+			numReserved, err := NumReservedIPsInCIDR(cnet.MustParseNetwork(tc.pool), reservationsCovering(tc.reservations))
+			if err != nil {
+				t.Fatalf("NumReservedIPsInCIDR returned an error: %v", err)
+			}
+			if numReserved != tc.wantReserved {
+				t.Errorf("NumReservedIPsInCIDR = %d, want %d", numReserved, tc.wantReserved)
+			}
+		})
+	}
+}
+
+// reservationsCovering returns one IPReservation per CIDR, which is the interesting
+// shape: reservations that overlap each other arrive as separate resources.
+func reservationsCovering(cidrs []string) []*v3.IPReservation {
+	var reservations []*v3.IPReservation
+	for i, cidr := range cidrs {
+		reservations = append(reservations, &v3.IPReservation{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("reservation-%d", i)},
+			Spec:       v3.IPReservationSpec{ReservedCIDRs: []string{cidr}},
+		})
+	}
+	return reservations
+}
+
+func TestReservedCIDRs(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		reserved []string
+		want     []string
+	}{
+		{
+			name:     "CIDRs and bare IPs",
+			reserved: []string{"10.0.0.0/24", "10.1.0.1", "fd00::1"},
+			want:     []string{"10.0.0.0/24", "10.1.0.1/32", "fd00::1/128"},
+		},
+		{
+			name:     "surrounding whitespace",
+			reserved: []string{" 10.0.0.0/24 "},
+			want:     []string{"10.0.0.0/24"},
+		},
+		{
+			// Validation should prevent all of these, but a hand-written CRD can
+			// still carry them and they must not take the count with them.
+			name:     "malformed entries are skipped",
+			reserved: []string{"", "   ", "not-a-cidr", "10.0.0.0/33", "10.0.0.0/24"},
+			want:     []string{"10.0.0.0/24"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cidrs := reservedCIDRs([]*v3.IPReservation{{
+				ObjectMeta: metav1.ObjectMeta{Name: "reservation"},
+				Spec:       v3.IPReservationSpec{ReservedCIDRs: tc.reserved},
+			}})
+
+			var got []string
+			for _, c := range cidrs {
+				got = append(got, c.String())
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("reservedCIDRs = %v, want %v", got, tc.want)
 			}
 		})
 	}

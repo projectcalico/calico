@@ -2624,24 +2624,11 @@ func (c ipamClient) getReservedCIDRs(ctx context.Context) (cidrSliceFilter, erro
 	if err != nil {
 		return nil, err
 	}
-	var cidrs cidrSliceFilter
-	for _, r := range reservations.Items {
-		for _, cidrVal := range r.Spec.ReservedCIDRs {
-			cidrStr := strings.TrimSpace(string(cidrVal))
-			if len(cidrVal) == 0 {
-				// Defensive, validation should prevent.
-				continue
-			}
-			_, cidr, err := net.ParseCIDROrIP(cidrStr)
-			if err != nil {
-				// Defensive, validation should prevent.
-				log.WithError(err).WithField("cidr", cidrStr).Error("Ignoring malformed CIDR in IPReservation.")
-				continue
-			}
-			cidrs = append(cidrs, *cidr)
-		}
+	items := make([]*v3.IPReservation, len(reservations.Items))
+	for i := range reservations.Items {
+		items[i] = &reservations.Items[i]
 	}
-	return cidrs, nil
+	return reservedCIDRs(items), nil
 }
 
 func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {

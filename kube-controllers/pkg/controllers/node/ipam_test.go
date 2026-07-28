@@ -236,30 +236,43 @@ var _ = Describe("IPAM controller UTs", func() {
 		done()
 	})
 
-	It("should publish the reserved-IP gauge for the pools it tracks", func() {
+	It("should publish the reserved-IP gauge from syncer updates", func() {
 		c.Start(stopChan)
 		resume := c.pause()
 		defer resume()
 
 		poolReservedGauge.Reset()
 		poolName := "reserved-gauge-test-pool"
-
-		cli.IPAM().(*fakeIPAMClient).utilization = []*ipam.PoolUtilization{
-			{Name: poolName, Reserved: 6},
-			// Not tracked by the controller, so it should never be asked for -
-			// GetUtilization reports one of these for orphaned blocks.  The fake
-			// honours args.Pools, so a gauge here means we asked too broadly.
-			{Name: "orphaned allocation blocks", Reserved: 99},
+		reservedGauge := func() float64 {
+			c.updateReservedMetrics()
+			return testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))
 		}
-		c.onPoolUpdated(&apiv3.IPPool{
-			ObjectMeta: metav1.ObjectMeta{Name: poolName},
-			Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
+
+		c.handleUpdate(model.KVPair{
+			Key: model.ResourceKey{Kind: apiv3.KindIPPool, Name: poolName},
+			Value: &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: poolName},
+				Spec:       apiv3.IPPoolSpec{CIDR: "10.0.0.0/24"},
+			},
 		})
+		Expect(reservedGauge()).To(BeZero(), "no reservations yet")
 
-		c.updateReservedMetrics()
+		// No block covers this space, so the count cannot come from the block state
+		// the controller tracks.  The two reservations overlap, so the shared /29
+		// must only be counted once.
+		reservationKey := model.ResourceKey{Kind: apiv3.KindIPReservation, Name: "test-reservation"}
+		c.handleUpdate(model.KVPair{
+			Key: reservationKey,
+			Value: &apiv3.IPReservation{
+				ObjectMeta: metav1.ObjectMeta{Name: reservationKey.Name},
+				Spec:       apiv3.IPReservationSpec{ReservedCIDRs: []string{"10.0.0.128/28", "10.0.0.128/29"}},
+			},
+		})
+		Expect(reservedGauge()).To(Equal(16.0))
 
-		Expect(testutil.ToFloat64(poolReservedGauge.With(prometheus.Labels{"ippool": poolName}))).To(Equal(6.0))
-		Expect(testutil.CollectAndCount(poolReservedGauge)).To(Equal(1), "only tracked pools should be reported")
+		// Deleting the reservation frees the addresses again.
+		c.handleUpdate(model.KVPair{Key: reservationKey})
+		Expect(reservedGauge()).To(BeZero())
 
 		// Deleting the pool should take its gauge with it.
 		c.onPoolDeleted(poolName)

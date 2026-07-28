@@ -643,18 +643,39 @@ var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure
 	})
 
 	It("should export the reserved-IP metric for an IPReservation", func() {
-		// The reservation goes in first because the controller does not watch
-		// IPReservations; creating the pool is what wakes it up.  The reservation
-		// covers pool space that no block has been carved from, which is the case
-		// the metric has to get right.
-		createIPReservation("test-reservation", []string{"10.17.0.0/28"}, calicoClient)
-		createIPPool("test-ippool-reserved", "10.17.0.0/24", calicoClient)
+		poolName := "test-ippool-reserved"
+		createIPPool(poolName, "10.17.0.0/24", calicoClient)
 
 		validateExpectedAndUnexpectedMetrics(
 			[]string{
-				`ipam_ippool_size{ippool="test-ippool-reserved"} 256`,
-				`ipam_ippool_reserved{ippool="test-ippool-reserved"} 16`,
+				fmt.Sprintf(`ipam_ippool_size{ippool=%q} 256`, poolName),
+				fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 0`, poolName),
 			},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+
+		// The reservation is the only thing that changes from here, so the metric
+		// updating proves the controller watches IPReservations.  It covers pool
+		// space that no block has been carved from, which is the case the metric
+		// cannot get from the controller's block state.
+		reservationName := "test-reservation"
+		createIPReservation(reservationName, []string{"10.17.0.0/28"}, calicoClient)
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 16`, poolName)},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+
+		// And deleting it frees the addresses again.
+		_, err := calicoClient.IPReservations().Delete(context.Background(), reservationName, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 0`, poolName)},
 			nil,
 			kubeControllers.IP,
 			30*time.Second, 1*time.Second,

@@ -11969,6 +11969,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
