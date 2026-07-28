@@ -323,9 +323,9 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 #                           the container at this limit, so a runaway compile or
 #                           link fails the build ("signal: killed") rather than
 #                           driving the whole host into swap thrash.
-#   DOCKER_MEMORY_SWAP=8g   Cap on memory and swap combined. Defaults to
-#                           DOCKER_MEMORY, which denies the container swap
-#                           entirely and keeps it off the host swap device.
+#   DOCKER_MEMORY_SWAP=8g   Cap on memory+swap combined (requires DOCKER_MEMORY).
+#                           Must be >= DOCKER_MEMORY or -1; defaults to DOCKER_MEMORY
+#                           (denies container swap entirely, keeps it off host swap).
 ifneq ($(DOCKER_CPUS),)
 EXTRA_DOCKER_ARGS += --cpus=$(DOCKER_CPUS)
 endif
