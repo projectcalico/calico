@@ -247,6 +247,11 @@ type NftablesTable struct {
 
 	inSyncWithDataPlane bool
 
+	// readDataplane and sawOurState back Done(), which lets a table we only keep around for
+	// cleanup drop out of the cleanup list once it's gone from the dataplane.
+	readDataplane bool
+	sawOurState   bool
+
 	// overlayDevices contains the names of tunnel/overlay devices (e.g., vxlan.calico, tunl0)
 	// that should be included in the flowtable device list.
 	overlayDevices []string
@@ -324,6 +329,9 @@ type TableOptions struct {
 	Disabled bool
 
 	RefreshInterval time.Duration
+
+	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
+	NewCmdOverride cmdshim.CmdFactory
 
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
@@ -443,6 +451,9 @@ func newTable(
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
+	if options.NewCmdOverride != nil {
+		newCmd = options.NewCmdOverride
+	}
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
 		sleep = options.SleepOverride
@@ -529,6 +540,19 @@ func (n *NftablesTable) Name() string {
 
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+// CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
+// an ordinary apply deletes the whole thing. That's only safe because every table we build an
+// NftablesTable for belongs to a single component; see IPTablesCleanup for the standard
+// tables, which we share with everyone else.
+func (n *NftablesTable) CleanUp() time.Duration {
+	return n.Apply()
+}
+
+// Done implements generictables.CleanupTable: the table is gone from the dataplane.
+func (n *NftablesTable) Done() bool {
+	return n.readDataplane && !n.sawOurState
 }
 
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
@@ -849,6 +873,8 @@ func (t *NftablesTable) loadDataplaneState() {
 	t.logCxt.Debug("Finished loading nftables state")
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.inSyncWithDataPlane = true
+	t.readDataplane = true
+	t.sawOurState = len(dataplaneHashes) != 0
 }
 
 // markChainDirty marks the given chain as dirty, causing it to be re-written on the next Apply.
