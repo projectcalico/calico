@@ -43,7 +43,7 @@ spec:
       name: Conflicts
       priority: 1
       type: integer
-    name: v1beta1
+    name: v1
     schema:
       openAPIV3Schema:
         description: |-
