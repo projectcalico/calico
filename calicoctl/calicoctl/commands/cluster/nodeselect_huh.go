@@ -17,6 +17,7 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -69,6 +70,22 @@ func wizardUnavailableReasonFor(stdinIsTTY, stdoutIsTTY bool, term string) strin
 // dumbTerm is the TERM value huh treats as "use accessible mode"; see
 // wizardUnavailableReason for why that rules the picker out.
 const dumbTerm = "dumb"
+
+// errNoAccessibleMode is what the custom fields' RunAccessible returns. The
+// interactive path refuses accessible-mode terminals up front
+// (wizardUnavailableReason), so this is a backstop: it keeps the fields honest
+// about not implementing accessible mode, rather than reporting success and
+// yielding an empty selection.
+var errNoAccessibleMode = errors.New("this field has no accessible (line-based) mode")
+
+// refuseAccessible tells the operator on w that the field cannot be shown, and
+// what to do instead. The message has to go to w because huh's accessible walk
+// discards the error RunAccessible returns.
+func refuseAccessible(w io.Writer, title string) error {
+	fmt.Fprintf(w, "%s\n%v — name the targets on the command line instead, "+
+		"e.g. --problem-nodes=worker-1, or --sample-nodes=10 to collect a spread.\n", title, errNoAccessibleMode)
+	return errNoAccessibleMode
+}
 
 // Comparison-node choices on the by-node comparison step.
 const (

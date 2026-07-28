@@ -17,6 +17,7 @@ package cluster
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -58,11 +59,57 @@ func testNodes() []nodeInfo {
 	}
 }
 
+// Both custom fields publish their keys through KeyBinds so huh renders the help
+// in the group footer, the same place the built-in fields' help appears. When
+// KeyBinds returned nil the picker pages had a blank footer and carried their own
+// hand-written help line instead.
+func TestCustomFields_PublishKeyHelpToHuhsFooter(t *testing.T) {
+	RegisterTestingT(t)
+
+	footerOf := func(f huh.Field) string {
+		return huh.NewGroup(f).WithTheme(tigeraTheme()).WithWidth(120).Footer()
+	}
+
+	Expect(footerOf(newNodeMultiSelect().Options(nodeOptions(testNodes())...))).To(SatisfyAll(
+		ContainSubstring("select"), ContainSubstring("clear filter"), ContainSubstring("back")))
+
+	// The textarea's help follows the focus within the field: editing the box and
+	// standing on the Continue button offer different keys.
+	ta := newSeededTextArea()
+	Expect(footerOf(ta)).To(ContainSubstring("new line"))
+	ta.buttonFocused = true
+	Expect(footerOf(ta)).To(SatisfyAll(
+		ContainSubstring("continue"), ContainSubstring("back to editing")))
+	Expect(footerOf(ta)).NotTo(ContainSubstring("new line"))
+}
+
+// Accessible mode cannot drive either custom field, and huh throws away the error
+// RunAccessible returns — so the field has to say so on the writer it is given.
+// The wizard refuses such terminals up front (TestWizardUnavailableReason); this
+// is the backstop that keeps the fields from reporting a bogus success.
+func TestCustomFields_RefuseAccessibleMode(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, f := range []huh.Field{
+		newNodeMultiSelect().Title("Which nodes?").Options(nodeOptions(testNodes())...),
+		newSeededTextArea().Title("How is each node involved?"),
+	} {
+		var out strings.Builder
+		Expect(f.RunAccessible(&out, strings.NewReader("\n"))).To(MatchError(errNoAccessibleMode))
+		// The operator is told which field failed and how to get their bundle.
+		Expect(out.String()).To(SatisfyAll(
+			ContainSubstring("?"),
+			ContainSubstring("--problem-nodes"),
+			ContainSubstring("--sample-nodes")))
+	}
+}
+
 func TestNodeMultiSelect_KeyNamesAreAsExpected(t *testing.T) {
 	RegisterTestingT(t)
-	// The widget dispatches on msg.String(), so the names it switches on must be
-	// the ones bubbletea actually produces. If an upgrade renames any of these,
-	// the rest of the tests below would silently pass through the default branch.
+	// The widget's keybindings match on msg.String(), so the names in
+	// multiSelectKeys/textAreaKeys must be the ones bubbletea actually produces.
+	// If an upgrade renames any of these, the rest of the tests below would
+	// silently pass through the default branch.
 	Expect(tea.KeyPressMsg{Code: tea.KeySpace}.String()).To(Equal("space"))
 	Expect(tea.KeyPressMsg{Code: tea.KeyEnter}.String()).To(Equal("enter"))
 	Expect(tea.KeyPressMsg{Code: tea.KeyBackspace}.String()).To(Equal("backspace"))

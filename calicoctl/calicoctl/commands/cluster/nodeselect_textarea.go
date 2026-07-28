@@ -31,16 +31,16 @@ import (
 // lets the wizard pre-populate the per-resource role lines from the node/pod
 // selection while keeping everything in a single, back-navigable form.
 //
-// Editing keys go to the textarea (Enter inserts a newline); tab advances to the
-// next field and shift+tab steps back, mirroring the other custom field.
+// Editing keys go to the textarea (Enter inserts a newline); tab moves down to a
+// Continue button, which is the way on, and shift+tab steps back to the previous
+// field as it does in the other custom field.
 type seededTextArea struct {
 	key   string
 	title string
 	desc  string
 
-	area     textarea.Model
-	value    *string
-	validate func(string) error
+	area  textarea.Model
+	value *string
 
 	// seedFunc supplies the initial content lazily on first focus. lastSeed is
 	// the text it last produced, so a revisit can refresh the scaffold when the
@@ -49,7 +49,6 @@ type seededTextArea struct {
 	lastSeed string
 	seeded   bool
 
-	err error
 	// focused is whether the whole field has focus; buttonFocused is whether the
 	// "Continue" button (rather than the textarea) is the active element within it.
 	focused       bool
@@ -76,11 +75,6 @@ func (m *seededTextArea) Description(d string) *seededTextArea     { m.desc = d;
 func (m *seededTextArea) Key(k string) *seededTextArea             { m.key = k; return m }
 func (m *seededTextArea) SeedFunc(f func() string) *seededTextArea { m.seedFunc = f; return m }
 
-func (m *seededTextArea) Validate(f func(string) error) *seededTextArea {
-	m.validate = f
-	return m
-}
-
 func (m *seededTextArea) Value(p *string) *seededTextArea {
 	m.value = p
 	if p != nil && *p != "" {
@@ -98,14 +92,32 @@ func (m *seededTextArea) writeValue() {
 	}
 }
 
-func (m *seededTextArea) validateValue() error {
-	if m.validate == nil {
-		return nil
-	}
-	return m.validate(m.area.Value())
+// --- huh.Field / huh.Model implementation ---
+
+// textAreaKeys are this field's keybindings, published through KeyBinds so the
+// help renders in the group footer like the built-in fields'. They are the
+// field's own rather than huh's Text keymap (so WithKeyMap is ignored) because
+// this field puts a Continue button below the box: Enter inserts a newline as
+// huh's Text does, but tab moves to the button rather than leaving the field.
+var textAreaKeys = struct {
+	newLine, toButton, prev key.Binding
+	continueBtn, backToEdit key.Binding
+}{
+	newLine:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "new line")),
+	toButton:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "→ Continue")),
+	prev:        key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back")),
+	continueBtn: key.NewBinding(key.WithKeys("enter", "space", "tab"), key.WithHelp("enter", "continue")),
+	backToEdit:  key.NewBinding(key.WithKeys("shift+tab", "up"), key.WithHelp("shift+tab/↑", "back to editing")),
 }
 
-// --- huh.Field / huh.Model implementation ---
+// KeyBinds reports the keys for whichever element is active, so the footer help
+// changes with the focus like the inline hints used to.
+func (m *seededTextArea) KeyBinds() []key.Binding {
+	if m.buttonFocused {
+		return []key.Binding{textAreaKeys.continueBtn, textAreaKeys.backToEdit}
+	}
+	return []key.Binding{textAreaKeys.newLine, textAreaKeys.toButton, textAreaKeys.prev}
+}
 
 func (m *seededTextArea) Init() tea.Cmd { return nil }
 
@@ -120,10 +132,11 @@ func (m *seededTextArea) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 		// While the Continue button is focused, the textarea is inert: Enter/Tab
 		// advance, shift+tab/Up return to editing, everything else is ignored.
 		if m.buttonFocused {
-			switch msg.String() {
-			case "enter", "space", "tab":
-				return m, m.advance()
-			case "shift+tab", "up":
+			switch {
+			case key.Matches(msg, textAreaKeys.continueBtn):
+				m.writeValue()
+				return m, huh.NextField
+			case key.Matches(msg, textAreaKeys.backToEdit):
 				m.buttonFocused = false
 				return m, m.area.Focus()
 			}
@@ -131,17 +144,16 @@ func (m *seededTextArea) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 		}
 		// Editing the textarea. Tab steps down to the Continue button (rather than
 		// inserting a tab); shift+tab leaves the field; Enter inserts a newline.
-		switch msg.String() {
-		case "tab":
+		switch {
+		case key.Matches(msg, textAreaKeys.toButton):
 			m.writeValue()
 			m.buttonFocused = true
 			m.area.Blur()
 			return m, nil
-		case "shift+tab":
+		case key.Matches(msg, textAreaKeys.prev):
 			m.writeValue()
 			return m, huh.PrevField
 		}
-		m.err = nil
 	}
 	var cmd tea.Cmd
 	m.area, cmd = m.area.Update(msg)
@@ -149,20 +161,9 @@ func (m *seededTextArea) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// advance validates and moves to the next field, or — if validation fails —
-// drops focus back into the textarea so the operator can fix it.
-func (m *seededTextArea) advance() tea.Cmd {
-	m.writeValue()
-	if err := m.validateValue(); err != nil {
-		m.err = err
-		m.buttonFocused = false
-		return m.area.Focus()
-	}
-	return huh.NextField
-}
-
 func (m *seededTextArea) View() string {
 	st := m.activeStyles()
+	m.themeTextArea(st)
 	var b strings.Builder
 	b.WriteString(st.Title.Render(m.title))
 	b.WriteByte('\n')
@@ -196,17 +197,26 @@ func (m *seededTextArea) View() string {
 		button = lipgloss.NewStyle().Width(inner).Align(lipgloss.Center).Render(button)
 	}
 	b.WriteString(button)
-	b.WriteByte('\n')
-
-	switch {
-	case m.err != nil:
-		b.WriteString(st.ErrorMessage.Render(m.err.Error()))
-	case m.buttonFocused:
-		b.WriteString(st.Description.Render("enter continue · shift+tab / ↑ back to editing"))
-	default:
-		b.WriteString(st.Description.Render("enter new line · tab → Continue · shift+tab back"))
-	}
 	return st.Base.Width(m.width).Render(b.String())
+}
+
+// themeTextArea maps the huh theme onto the bubbles textarea, which otherwise
+// renders in bubbles' own palette while the rest of the card is themed. Mirrors
+// huh's built-in Text field, except for the cursor: huh reads the cursor colour
+// from the theme's background, which none of the shipped themes set — the
+// foreground is where the colour is (as huh's Input field reads it).
+func (m *seededTextArea) themeTextArea(st *huh.FieldStyles) {
+	styles := m.area.Styles()
+	state := &styles.Blurred
+	if m.focused && !m.buttonFocused {
+		state = &styles.Focused
+	}
+	state.Text = st.TextInput.Text
+	state.Placeholder = st.TextInput.Placeholder
+	state.Prompt = st.TextInput.Prompt
+	state.CursorLine = st.TextInput.Text
+	styles.Cursor.Color = st.TextInput.Cursor.GetForeground()
+	m.area.SetStyles(styles)
 }
 
 func (m *seededTextArea) activeStyles() *huh.FieldStyles {
@@ -249,22 +259,21 @@ func (m *seededTextArea) Focus() tea.Cmd {
 func (m *seededTextArea) Blur() tea.Cmd {
 	m.focused = false
 	m.writeValue()
-	m.err = m.validateValue()
 	m.area.Blur()
 	return nil
 }
 
-func (m *seededTextArea) Error() error { return m.err }
+// Error is always nil: any answer here is a valid one, including none at all —
+// the box asks how each node or pod is involved, and pressing for an answer would
+// add friction to a form the operator is filling in mid-incident.
+func (m *seededTextArea) Error() error { return nil }
 func (m *seededTextArea) Skip() bool   { return false }
 func (m *seededTextArea) Zoom() bool   { return false }
-
-func (m *seededTextArea) KeyBinds() []key.Binding { return nil }
 
 func (m *seededTextArea) Run() error { return huh.NewForm(huh.NewGroup(m)).Run() }
 
 func (m *seededTextArea) RunAccessible(w io.Writer, _ io.Reader) error {
-	_, _ = io.WriteString(w, m.title+"\n")
-	return nil
+	return refuseAccessible(w, m.title)
 }
 
 func (m *seededTextArea) WithTheme(theme huh.Theme) huh.Field {
@@ -274,6 +283,7 @@ func (m *seededTextArea) WithTheme(theme huh.Theme) huh.Field {
 	return m
 }
 
+// WithKeyMap is a no-op: this field binds its own keys (see textAreaKeys).
 func (m *seededTextArea) WithKeyMap(*huh.KeyMap) huh.Field { return m }
 
 func (m *seededTextArea) WithWidth(width int) huh.Field {
@@ -288,6 +298,9 @@ func (m *seededTextArea) WithWidth(width int) huh.Field {
 
 func (m *seededTextArea) WithHeight(int) huh.Field { return m }
 
+// WithPosition is a no-op. huh's built-in fields use the position to relabel
+// their exit key "submit" on the form's last field; the wizard always ends with
+// the confirmation step, so neither custom field is ever last.
 func (m *seededTextArea) WithPosition(huh.FieldPosition) huh.Field { return m }
 
 func (m *seededTextArea) GetKey() string { return m.key }

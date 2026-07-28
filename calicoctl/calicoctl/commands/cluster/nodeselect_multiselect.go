@@ -261,6 +261,43 @@ func (m *nodeMultiSelect) applyFilter() {
 
 // --- huh.Field / huh.Model implementation ---
 
+// multiSelectKeys are this field's keybindings. They are its own rather than
+// huh's MultiSelect keymap (and so WithKeyMap is ignored) because the picker is
+// filter-first: every printable key extends the filter, which rules out huh's
+// letter bindings — j/k to move, x to toggle, g/G for top/bottom. KeyBinds
+// publishes them so the help renders in the group footer, where the built-in
+// fields' help appears too.
+var multiSelectKeys = struct {
+	up, down, pageUp, pageDown, top, bottom key.Binding
+	toggle, next, prev                      key.Binding
+	clearFilter, deleteChar                 key.Binding
+}{
+	up:          key.NewBinding(key.WithKeys("up", "ctrl+p"), key.WithHelp("↑", "up")),
+	down:        key.NewBinding(key.WithKeys("down", "ctrl+n"), key.WithHelp("↓", "down")),
+	pageUp:      key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
+	pageDown:    key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "page down")),
+	top:         key.NewBinding(key.WithKeys("home"), key.WithHelp("home", "first")),
+	bottom:      key.NewBinding(key.WithKeys("end"), key.WithHelp("end", "last")),
+	toggle:      key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "select")),
+	next:        key.NewBinding(key.WithKeys("enter", "tab"), key.WithHelp("enter", "confirm")),
+	prev:        key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "back")),
+	clearFilter: key.NewBinding(key.WithKeys("esc", "ctrl+u"), key.WithHelp("esc", "clear filter")),
+	deleteChar:  key.NewBinding(key.WithKeys("backspace")),
+}
+
+// KeyBinds is the help huh renders in the group footer. The filter needs no
+// entry: the always-visible filter line says "type to filter" itself.
+func (m *nodeMultiSelect) KeyBinds() []key.Binding {
+	return []key.Binding{
+		multiSelectKeys.toggle,
+		multiSelectKeys.up,
+		multiSelectKeys.down,
+		multiSelectKeys.clearFilter,
+		multiSelectKeys.prev,
+		multiSelectKeys.next,
+	}
+}
+
 func (m *nodeMultiSelect) Init() tea.Cmd { return nil }
 
 func (m *nodeMultiSelect) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
@@ -269,22 +306,22 @@ func (m *nodeMultiSelect) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 		m.hasDarkBg = msg.IsDark()
 	case tea.KeyPressMsg:
 		m.err = nil
-		switch msg.String() {
-		case "up", "ctrl+p":
+		switch {
+		case key.Matches(msg, multiSelectKeys.up):
 			m.move(-1)
-		case "down", "ctrl+n":
+		case key.Matches(msg, multiSelectKeys.down):
 			m.move(1)
-		case "pgup":
+		case key.Matches(msg, multiSelectKeys.pageUp):
 			m.move(-m.visibleRows())
-		case "pgdown":
+		case key.Matches(msg, multiSelectKeys.pageDown):
 			m.move(m.visibleRows())
-		case "home":
+		case key.Matches(msg, multiSelectKeys.top):
 			m.moveTo(0)
-		case "end":
+		case key.Matches(msg, multiSelectKeys.bottom):
 			m.moveTo(len(m.filtered) - 1)
-		case "space":
+		case key.Matches(msg, multiSelectKeys.toggle):
 			m.toggleCurrent()
-		case "enter", "tab":
+		case key.Matches(msg, multiSelectKeys.next):
 			if m.validate != nil {
 				if err := m.validate(m.selectedValues()); err != nil {
 					m.err = err
@@ -293,25 +330,22 @@ func (m *nodeMultiSelect) Update(msg tea.Msg) (huh.Model, tea.Cmd) {
 			}
 			m.writeValue()
 			return m, huh.NextField
-		case "shift+tab":
+		case key.Matches(msg, multiSelectKeys.prev):
 			m.writeValue()
 			return m, huh.PrevField
-		case "esc":
+		case key.Matches(msg, multiSelectKeys.clearFilter):
 			if m.filter != "" {
 				m.filter = ""
 				m.applyFilter()
 			}
-		case "ctrl+u":
-			m.filter = ""
-			m.applyFilter()
-		case "backspace":
+		case key.Matches(msg, multiSelectKeys.deleteChar):
 			if r := []rune(m.filter); len(r) > 0 {
 				m.filter = string(r[:len(r)-1])
 				m.applyFilter()
 			}
 		default:
-			// Any other printable input extends the filter. Space is handled
-			// above (toggle), so it never lands here.
+			// Any other printable input extends the filter. Space is bound to
+			// toggle above, so it never lands here.
 			if msg.Text != "" {
 				m.filter += msg.Text
 				m.applyFilter()
@@ -397,7 +431,8 @@ func (m *nodeMultiSelect) renderRow(o huh.Option[string], cursor, selected, disa
 // problem nodes) so they read as locked rather than pickable.
 var disabledRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
-// statusText is the muted position/help line under the options.
+// statusText is the muted position line under the options. The keys are not
+// repeated here — huh renders KeyBinds in the group footer.
 func (m *nodeMultiSelect) statusText() string {
 	total := len(m.filtered)
 	start, fin := 0, 0
@@ -405,8 +440,7 @@ func (m *nodeMultiSelect) statusText() string {
 		start = m.offset + 1
 		fin = min(m.offset+m.visibleRows(), total)
 	}
-	return fmt.Sprintf("%d–%d of %d · %d selected · space select · enter confirm · shift+tab back · type to filter",
-		start, fin, total, len(m.selectedValues()))
+	return fmt.Sprintf("%d–%d of %d · %d selected", start, fin, total, len(m.selectedValues()))
 }
 
 // warningText is the over-budget warning, or "" when within budget.
@@ -451,13 +485,10 @@ func (m *nodeMultiSelect) Error() error   { return m.err }
 func (m *nodeMultiSelect) Skip() bool     { return false }
 func (m *nodeMultiSelect) Zoom() bool     { return false }
 
-func (m *nodeMultiSelect) KeyBinds() []key.Binding { return nil }
-
 func (m *nodeMultiSelect) Run() error { return huh.NewForm(huh.NewGroup(m)).Run() }
 
 func (m *nodeMultiSelect) RunAccessible(w io.Writer, _ io.Reader) error {
-	_, _ = io.WriteString(w, m.title+"\n")
-	return nil
+	return refuseAccessible(w, m.title)
 }
 
 func (m *nodeMultiSelect) WithTheme(theme huh.Theme) huh.Field {
@@ -467,6 +498,7 @@ func (m *nodeMultiSelect) WithTheme(theme huh.Theme) huh.Field {
 	return m
 }
 
+// WithKeyMap is a no-op: this field binds its own keys (see multiSelectKeys).
 func (m *nodeMultiSelect) WithKeyMap(*huh.KeyMap) huh.Field { return m }
 
 func (m *nodeMultiSelect) WithWidth(width int) huh.Field { m.width = width; return m }
@@ -478,6 +510,7 @@ func (m *nodeMultiSelect) WithHeight(height int) huh.Field {
 	return m
 }
 
+// WithPosition is a no-op; see the note on seededTextArea.WithPosition.
 func (m *nodeMultiSelect) WithPosition(huh.FieldPosition) huh.Field { return m }
 
 func (m *nodeMultiSelect) GetKey() string { return m.key }
