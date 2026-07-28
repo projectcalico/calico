@@ -17,6 +17,7 @@ package nftables_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -1296,10 +1297,89 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 
 		table.SetOverlayDevices([]string{"vxlan.calico"})
 		table.SetWorkloadInterfaces([]string{"cali1234", "caliDEAD"})
-		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// Dropping a device asks for a prompt retry, in case it was on its way up rather than gone.
+		Expect(table.Apply()).To(Equal(5 * time.Second))
 
 		// caliDEAD is dropped; only the surviving devices are programmed.
 		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
 		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
 	})
+
+	// A device can be missing because it's still being created, not because it's gone. The desired
+	// list doesn't change when it finally appears, so without the retry the device would go
+	// unoffloaded until the next resync.
+	It("should re-assert the flowtable once a pruned device appears", func() {
+		present := []string{"vxlan.calico", "lo"}
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logutils.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return present, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(Equal(5 * time.Second))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { vxlan.calico }"))
+
+		// The veth lands. Nothing tells the table about it, so the retry has to notice.
+		present = append(present, "cali1234")
+		Expect(table.Apply()).To(BeZero())
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+
+		// knftables' fake ignores an "add flowtable" for a flowtable that already exists, where
+		// real nft treats it as create-or-update, so the device list in Dump() is stuck at what
+		// the first Apply wrote. Assert on what we asked nft to do instead.
+		Expect(flowtableDevicesProgrammed(f)).To(ContainElement("devices = { cali1234, vxlan.calico }"))
+	})
+
+	// A workload endpoint whose veth is gone for good would otherwise keep us re-asserting the
+	// flowtable every few seconds forever.
+	It("should stop retrying a pruned device that never appears", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"caliGHOST"})
+
+		for i := 0; i < 5; i++ {
+			Expect(table.Apply()).To(Equal(5*time.Second), "expected a retry on attempt %d", i+1)
+		}
+		Expect(table.Apply()).To(BeZero())
+	})
 })
+
+// flowtableDevicesProgrammed returns the "devices = { ... }" clause of every "add flowtable"
+// operation the table has sent to nft, oldest first.
+func flowtableDevicesProgrammed(f *fakeNFT) []string {
+	var clauses []string
+	for _, tx := range f.Transactions() {
+		for _, line := range strings.Split(tx.String(), "\n") {
+			if !strings.Contains(line, "add flowtable") {
+				continue
+			}
+
+			start := strings.Index(line, "devices = {")
+			if start < 0 {
+				continue
+			}
+			end := strings.Index(line[start:], "}")
+			if end < 0 {
+				continue
+			}
+			clauses = append(clauses, line[start:start+end+1])
+		}
+	}
+	return clauses
+}
