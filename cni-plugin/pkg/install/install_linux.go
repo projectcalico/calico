@@ -19,7 +19,7 @@ package install
 func defaultNetConf() string {
 	netconf := `{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
