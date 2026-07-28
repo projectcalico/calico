@@ -52,6 +52,17 @@ const (
 	rbacBareNameUser     = "e2e-rbac-bare-name"
 	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
 
+	// Read-path users. One user per spec: the API server caches authorization decisions
+	// (see authzUnauthorizedTTL), so two specs that issue the same request as the same user
+	// are not independent.
+	rbacListTierUser       = "e2e-rbac-list-tier"
+	rbacListNoTierGetUser  = "e2e-rbac-list-no-tier-get"
+	rbacListRestrictedUser = "e2e-rbac-list-restricted"
+	rbacListAllTiersUser   = "e2e-rbac-list-all-tiers"
+	rbacListRecoveryUser   = "e2e-rbac-list-recovery"
+	rbacListRevokeUser     = "e2e-rbac-list-revoke"
+	rbacFailClosedUser     = "e2e-rbac-fail-closed"
+
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
 )
@@ -553,8 +564,16 @@ var _ = describe.CalicoDescribe(
 				cli := newImpersonatedClient(rbacWatchUser)
 
 				By("Listing policies in the test tier namespace")
+				// Scoped to the tier by label selector. The aggregated API server would also
+				// allow this list unselectored, narrowing the result to the tiers the user can
+				// see, but the authorization webhook refuses an unselectored list from a
+				// tier-restricted user outright. Selecting the tier is the request shape that
+				// means the same thing under both.
 				list := &v3.NetworkPolicyList{}
-				err := cli.List(ctx, list, ctrlclient.InNamespace(f.Namespace.Name))
+				err := cli.List(ctx, list,
+					ctrlclient.InNamespace(f.Namespace.Name),
+					ctrlclient.MatchingLabels{v3.LabelTier: testTier},
+				)
 				Expect(err).NotTo(HaveOccurred(), "user with list permission should be able to list policies")
 
 				// Verify the created policy is in the list.
@@ -905,6 +924,101 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 		},
 	})
 
+	// tierScopedReader returns the rules for a user who may read policies in one tier only:
+	// GET on that tier, plus read verbs on the tier-scoped policy resources for it. This is
+	// the shape every read-path spec below starts from.
+	tierScopedReader := func(tier string) []rbacv1.PolicyRule {
+		return []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"networkpolicies", "globalnetworkpolicies"},
+				Verbs:     []string{"get", "list", "watch"},
+			},
+			{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"tiers"},
+				Verbs:         []string{"get"},
+				ResourceNames: []string{tier},
+			},
+			{
+				APIGroups:     []string{"projectcalico.org"},
+				Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+				Verbs:         []string{"get", "list", "watch"},
+				ResourceNames: []string{tier + ".*"},
+			},
+		}
+	}
+
+	// List-tier user: reads in testTier only. Used for the tier-scoped list positives and
+	// for tier isolation on list.
+	addRoleAndBinding("list-tier", rbacListTierUser, tierScopedReader(testTier))
+
+	// List-restricted user: identical grants to the list-tier user, but used only by the
+	// unselectored-list spec so that spec's cached decision cannot affect any other.
+	addRoleAndBinding("list-restricted", rbacListRestrictedUser, tierScopedReader(testTier))
+
+	// Fail-closed user: identical grants again, used only by the webhook-outage spec. It must
+	// have made no earlier request, or an entry in the API server's authorization cache would
+	// let a read through while the webhook is down.
+	addRoleAndBinding("fail-closed", rbacFailClosedUser, tierScopedReader(testTier))
+
+	// Revoke user: reads in otherTier only. The revocation spec moves a policy out of
+	// otherTier and into testTier and expects this user to lose access to it.
+	addRoleAndBinding("list-revoke", rbacListRevokeUser, tierScopedReader(otherTier))
+
+	// List-no-tier-get user: read verbs on the tier-scoped policy resources for testTier but
+	// no GET on the tier itself. Tiered RBAC requires both, so reads must be denied.
+	addRoleAndBinding("list-no-tier-get", rbacListNoTierGetUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "globalnetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			Verbs:         []string{"get", "list", "watch"},
+			ResourceNames: []string{testTier + ".*"},
+		},
+	})
+
+	// List-recovery user: starts out as the no-tier-GET shape above, and the recovery spec
+	// adds the missing tier GET grant part-way through.
+	addRoleAndBinding("list-recovery", rbacListRecoveryUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "globalnetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			Verbs:         []string{"get", "list", "watch"},
+			ResourceNames: []string{testTier + ".*"},
+		},
+	})
+
+	// All-tiers user: unrestricted by tier. "Unrestricted" means the grants carry no
+	// ResourceNames at all, because an unselectored list authorizes as an unnamed request,
+	// which RBAC matches only against rules without ResourceNames.
+	addRoleAndBinding("list-all-tiers", rbacListAllTiersUser, []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "globalnetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"tiers"},
+			Verbs:     []string{"get"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+	})
+
 	return setup
 }
 
@@ -1037,16 +1151,9 @@ var _ = describe.CalicoDescribe(
 // must call this in a BeforeEach so they fail immediately with a clear
 // message when the API server is absent.
 func requireCalicoAPIServer(cfg *rest.Config) {
-	cs, err := kubernetes.NewForConfig(cfg)
+	present, err := calicoAPIServerPresent(cfg)
 	Expect(err).NotTo(HaveOccurred())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-apiserver",
-	})
-	Expect(err).NotTo(HaveOccurred())
-	if len(pods.Items) == 0 {
+	if !present {
 		Fail(fmt.Sprintf(
 			"This test requires the aggregated Calico API server (calico-apiserver), " +
 				"but no calico-apiserver pods were found. In v3 CRD mode, GET/LIST/WATCH " +
@@ -1055,4 +1162,22 @@ func requireCalicoAPIServer(cfg *rest.Config) {
 				"tests with -skip=RequiresCalicoAPIServer.",
 		))
 	}
+}
+
+// calicoAPIServerPresent reports whether any calico-apiserver pod exists in the cluster.
+func calicoAPIServerPresent(cfg *rest.Config) (bool, error) {
+	cs, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return false, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-apiserver",
+	})
+	if err != nil {
+		return false, err
+	}
+	return len(pods.Items) > 0, nil
 }

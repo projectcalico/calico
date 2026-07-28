@@ -105,6 +105,23 @@ func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
+// RequiresAuthzWebhook marks tests that depend on the Calico authorization webhook being
+// wired into the kube-apiserver's authorization chain (--authorization-config). That webhook
+// is what enforces tier RBAC on GET/LIST/WATCH in v3 CRD mode, where there is no aggregated
+// API server to do it. Tests with this label assert webhook-specific behavior that the
+// aggregated API server does not share, such as an unselectored list being refused.
+func RequiresAuthzWebhook() any {
+	return framework.WithLabel("RequiresAuthzWebhook")
+}
+
+// RequiresReadPathTierRBAC marks tests that need tier RBAC enforced on GET/LIST/WATCH by
+// either of the two components that can do it: the aggregated Calico API server, or the
+// Calico authorization webhook in v3 CRD mode. The assertions hold identically under both.
+// A cluster with neither bypasses tier RBAC on reads entirely.
+func RequiresReadPathTierRBAC() any {
+	return framework.WithLabel("RequiresReadPathTierRBAC")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
