@@ -1,4 +1,4 @@
-// Copyright 2026 Tigera, Inc.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 //
 // Copyright 2018 The Kubernetes Authors.
 //
@@ -17,6 +17,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -35,15 +36,23 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kauth "k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/cel"
+	"k8s.io/apiserver/plugin/pkg/authorizer/webhook"
+	authzmetrics "k8s.io/apiserver/plugin/pkg/authorizer/webhook/metrics"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
 
+	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
 	ctls "github.com/projectcalico/calico/crypto/pkg/tls"
 	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/authz"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/policycache"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
+	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
@@ -125,9 +134,18 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create Calico clientset")
 	}
+	metadataClient, err := metadata.NewForConfig(rc)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create metadata client")
+	}
+
+	// The informers backing the policy cache must keep running for the life of the process,
+	// not just through startup: a short-lived context would close their watches once it expired.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Register webhook handlers.
-	registerHooks(cs, calicoCS)
+	registerHooks(ctx, cs, calicoCS, metadataClient)
 
 	// Create and run the server.
 	cfg, err := ctls.NewTLSConfig()
@@ -163,17 +181,51 @@ func serveWebhookTLS(cmd *cobra.Command, args []string) {
 	}
 }
 
-func registerHooks(cs kubernetes.Interface, calicoCS calicoclient.Interface) {
-	rbac.RegisterHook(cs, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
+// registerHooks builds the shared authorizer and policy tier cache once, then hands them to
+// both hooks so the admission and authorization paths cannot drift on the decision core they use.
+func registerHooks(
+	ctx context.Context,
+	cs kubernetes.Interface,
+	calicoCS calicoclient.Interface,
+	metadataClient metadata.Interface,
+) *policycache.Cache {
+	bo := webhook.DefaultRetryBackoff()
+	authorizerClient, err := webhook.NewFromInterface(
+		cs.AuthorizationV1(),
+		5*time.Second,
+		5*time.Second,
+		*bo,
+		kauth.DecisionDeny,
+		&authzmetrics.NoopAuthorizerMetrics{},
+		cel.NewDefaultCompiler(),
+	)
+	if err != nil {
+		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
+	}
+
+	cache := policycache.New(metadataClient, calicoCS, 10*time.Minute)
+	if err := cache.Start(ctx); err != nil {
+		logrus.WithError(err).Fatal("Failed to start the policy tier cache")
+	}
+
+	decider := tierauth.New(authorizer.NewTierAuthorizer(authorizerClient), cache)
+
+	rbac.RegisterHook(decider, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
 	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
-	authz.RegisterHook(cs, authz.HandleAuthzFn(handleAuthzFn))
+	authz.RegisterHook(decider, authz.HandleAuthzFn(handleAuthzFn))
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
-	http.HandleFunc("/readyz", readyFn())
+	http.HandleFunc("/readyz", readyFn(cache))
+
+	return cache
 }
 
-func readyFn() func(http.ResponseWriter, *http.Request) {
+func readyFn(cache *policycache.Cache) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !cache.HasSynced() {
+			http.Error(w, "policy tier cache has not synced", http.StatusServiceUnavailable)
+			return
+		}
 		if _, err := w.Write([]byte("ok")); err != nil {
 			logrus.WithError(err).Error("Failed to write readiness response")
 		}
