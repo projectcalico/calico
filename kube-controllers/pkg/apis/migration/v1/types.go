@@ -65,7 +65,12 @@ const (
 )
 
 // DatastoreMigrationType identifies the type of migration to perform.
+//
+// MaxLength lives here rather than on the field because controller-gen refuses a
+// length marker on a field whose type is a named string. It bounds the cost of
+// the immutability rule on Spec.Type.
 // +kubebuilder:validation:Enum=APIServerToCRDs
+// +kubebuilder:validation:MaxLength=64
 type DatastoreMigrationType string
 
 const (
@@ -151,13 +156,14 @@ type DatastoreMigrationStatus struct {
 	Progress DatastoreMigrationProgress `json:"progress"`
 
 	// Conditions report conflicts and errors encountered during migration.
+	//
+	// Deliberately atomic, with no MaxItems: the controller emits one
+	// Conflict-typed condition per conflicting resource, so a list-map would
+	// reject the write on duplicate keys and any bound could reject a
+	// legitimate one. Collapsing conflict reporting to a single condition, and
+	// then adding the list-map markers back, is follow-on work.
 	// +optional
-	// +listType=map
-	// +listMapKey=type
-	// +patchStrategy=merge
-	// +patchMergeKey=type
-	// +kubebuilder:validation:MaxItems=16
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // DatastoreMigrationProgress tracks aggregate and per-type migration counters.

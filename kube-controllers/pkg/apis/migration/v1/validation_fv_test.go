@@ -27,7 +27,6 @@ import (
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -227,88 +226,9 @@ func hasCause(err error, field string, causeType metav1.CauseType) bool {
 	return false
 }
 
-// TestConditionsMergeByType checks that two writers touching different conditions
-// don't clobber each other. Without listType=map on the conditions list,
+// TestTypeDetailsMergeByKind checks that two writers touching different
+// typeDetails entries don't clobber each other. Without listType=map on the list,
 // server-side apply treats it as atomic and the second writer wins outright.
-func TestConditionsMergeByType(t *testing.T) {
-	ctx := context.Background()
-	m := newMigration("conditions-merge")
-	if err := schemaClient.Create(ctx, m); err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	defer func() { _ = schemaClient.Delete(ctx, m) }()
-
-	now := metav1.Now()
-	applyCondition := func(fieldOwner, condType string) error {
-		patch := &migrationv1.DatastoreMigration{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "DatastoreMigration",
-				APIVersion: migrationv1.SchemeGroupVersion.String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{Name: m.Name},
-			Status: migrationv1.DatastoreMigrationStatus{
-				Conditions: []metav1.Condition{{
-					Type:               condType,
-					Status:             metav1.ConditionTrue,
-					Reason:             "Testing",
-					Message:            "set by " + fieldOwner,
-					LastTransitionTime: now,
-				}},
-			},
-		}
-		return applyStatus(ctx, t, fieldOwner, patch)
-	}
-
-	if err := applyCondition("writer-a", "Conflicted"); err != nil {
-		t.Fatalf("writer-a apply: %v", err)
-	}
-	if err := applyCondition("writer-b", "Degraded"); err != nil {
-		t.Fatalf("writer-b apply: %v", err)
-	}
-
-	got := &migrationv1.DatastoreMigration{}
-	if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
-		t.Fatalf("get: %v", err)
-	}
-
-	// Check identity, not just how many survived. The message records which writer
-	// set each condition, so a survivor carrying the wrong message means one apply
-	// overwrote the other's entry in place rather than merging alongside it.
-	for _, expected := range []struct {
-		condType string
-		message  string
-	}{
-		{
-			condType: "Conflicted",
-			message:  "set by writer-a",
-		},
-		{
-			condType: "Degraded",
-			message:  "set by writer-b",
-		},
-	} {
-		cond := apimeta.FindStatusCondition(got.Status.Conditions, expected.condType)
-		if cond == nil {
-			t.Errorf("condition %q did not survive, conditions are %+v", expected.condType, got.Status.Conditions)
-			continue
-		}
-		if cond.Message != expected.message {
-			t.Errorf("condition %q has message %q, want %q", expected.condType, cond.Message, expected.message)
-		}
-	}
-
-	// Per-entry ownership is the thing listType=map actually buys. With a map each
-	// applier owns the entry keyed by its own condition type; with an atomic list
-	// there are no per-entry keys to own, so writer-b's forced apply takes the whole
-	// field and writer-a's entry goes away.
-	if !ownsListEntry(t, got.ManagedFields, "writer-a", []string{"f:status", "f:conditions"}, fmt.Sprintf(`k:{"type":%q}`, "Conflicted")) {
-		t.Errorf("expected writer-a to still own the Conflicted condition, managed fields are %+v", got.ManagedFields)
-	}
-}
-
-// TestTypeDetailsMergeByKind is TestConditionsMergeByType for the other status
-// list. status.progress.typeDetails is keyed on kind rather than type, and getting
-// the key wrong is the easy mistake, so it gets its own check.
 func TestTypeDetailsMergeByKind(t *testing.T) {
 	ctx := context.Background()
 	m := newMigration("type-details-merge")
@@ -414,22 +334,6 @@ func TestStatusBoundsAreEnforced(t *testing.T) {
 			causeType: metav1.CauseTypeTooLong,
 		},
 		{
-			name: "conditions past MaxItems",
-			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
-				now := metav1.Now()
-				for i := range 17 {
-					status.Conditions = append(status.Conditions, metav1.Condition{
-						Type:               fmt.Sprintf("Condition%d", i),
-						Status:             metav1.ConditionTrue,
-						Reason:             "Testing",
-						LastTransitionTime: now,
-					})
-				}
-			},
-			field:     "status.conditions",
-			causeType: metav1.CauseTypeTooMany,
-		},
-		{
 			name: "typeDetails past MaxItems",
 			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
 				for i := range 129 {
@@ -479,6 +383,11 @@ func applyStatus(ctx context.Context, t *testing.T, fieldOwner string, patch *mi
 	if metadata, ok := raw["metadata"].(map[string]any); ok {
 		delete(metadata, "creationTimestamp")
 	}
+
+	// The converter also emits an empty spec, which a status-subresource apply has
+	// no business claiming ownership of.
+	delete(raw, "spec")
+
 	return schemaClient.Status().Apply(
 		ctx,
 		ctrlclient.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: raw}),

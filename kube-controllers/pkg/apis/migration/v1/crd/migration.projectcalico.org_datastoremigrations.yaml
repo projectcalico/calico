@@ -82,6 +82,7 @@ spec:
                   migration type is added.
                 enum:
                 - APIServerToCRDs
+                maxLength: 64
                 type: string
                 x-kubernetes-validations:
                 - message: spec.type is immutable
@@ -98,8 +99,14 @@ spec:
                 format: date-time
                 type: string
               conditions:
-                description: Conditions report conflicts and errors encountered during
-                  migration.
+                description: |-
+                  Conditions report conflicts and errors encountered during migration.
+
+                  Deliberately atomic, with no MaxItems: the controller emits one
+                  Conflict-typed condition per conflicting resource, so a list-map would
+                  reject the write on duplicate keys and any bound could reject a
+                  legitimate one. Collapsing conflict reporting to a single condition, and
+                  then adding the list-map markers back, is follow-on work.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -154,11 +161,7 @@ spec:
                   - status
                   - type
                   type: object
-                maxItems: 16
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
               message:
                 description: |-
                   Message is a human-readable status message describing what the controller
