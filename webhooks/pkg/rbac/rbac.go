@@ -1,7 +1,5 @@
 // Copyright 2026 Tigera, Inc.
 //
-// Copyright 2018 The Kubernetes Authors.
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -148,9 +146,8 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 	}
 	logCtx = logCtx.WithFields(logrus.Fields{"newTier": newTier, "oldTier": oldTier})
 
-	if result := h.decider.Authorize(ctx, h.request(ar.Request, obj, tier)); result.Decision == tierauth.DecisionDenied {
-		logCtx.WithField("reason", result.Reason).Warn("User is not authorized")
-		return forbidden(result.Reason)
+	if resp := h.authorizeTier(ctx, logCtx, ar.Request, obj, tier, ""); resp != nil {
+		return resp
 	}
 
 	// For CREATE and UPDATE, verify the target tier exists and is not being deleted.
@@ -162,9 +159,8 @@ func (h *tieredRBACHook) authorize(ar v1.AdmissionReview) *v1.AdmissionResponse 
 
 	// A tier change needs permission on the old tier too, to take the policy out of it.
 	if newTier != "" && oldTier != "" && oldTier != newTier {
-		if result := h.decider.Authorize(ctx, h.request(ar.Request, obj, oldTier)); result.Decision == tierauth.DecisionDenied {
-			logCtx.WithField("reason", result.Reason).Warn("User is not authorized for the old tier")
-			return forbidden(result.Reason)
+		if resp := h.authorizeTier(ctx, logCtx, ar.Request, obj, oldTier, "old tier"); resp != nil {
+			return resp
 		}
 	}
 
@@ -251,6 +247,26 @@ func (h *tieredRBACHook) parsePolicy(kind string, body []byte) (client.Object, s
 	return obj, tier, nil
 }
 
+// authorizeTier calls the decider for tier and returns a non-nil admission response if the
+// request must be refused. label identifies which tier this check is for in the denial
+// message ("old tier", or "" for the primary check), since a tier move needs both.
+func (h *tieredRBACHook) authorizeTier(ctx context.Context, logCtx *logrus.Entry, req *v1.AdmissionRequest, obj client.Object, tier, label string) *v1.AdmissionResponse {
+	result := h.decider.Authorize(ctx, h.request(req, obj, tier))
+	switch result.Decision {
+	case tierauth.DecisionPermitted:
+		return nil
+	case tierauth.DecisionDenied:
+		logCtx.WithField("reason", result.Reason).Warn("User is not authorized")
+		return forbidden(label, result.Reason)
+	default:
+		// DecisionNotApplicable means the decider didn't recognize this as a tiered policy
+		// request, which should be unreachable here — this hook only registers for the 5
+		// tiered policy kinds. Deny rather than trust that unreachability holds.
+		logCtx.WithField("reason", result.Reason).Error("Tier authorization returned no opinion for a tiered policy resource; denying")
+		return internalError(fmt.Sprintf("could not determine tier authorization: %s", result.Reason))
+	}
+}
+
 // request builds a tierauth.Request from an admission request and the tier in question.
 func (h *tieredRBACHook) request(req *v1.AdmissionRequest, obj client.Object, tier string) tierauth.Request {
 	extra := make(map[string][]string, len(req.UserInfo.Extra))
@@ -273,13 +289,30 @@ func (h *tieredRBACHook) request(req *v1.AdmissionRequest, obj client.Object, ti
 	}
 }
 
-func forbidden(reason string) *v1.AdmissionResponse {
+// forbidden builds a Denied admission response. label distinguishes which tier check
+// produced reason, e.g. "old tier" for the source side of a tier move.
+func forbidden(label, reason string) *v1.AdmissionResponse {
+	msg := fmt.Sprintf("Authorization failed: %s", reason)
+	if label != "" {
+		msg = fmt.Sprintf("Authorization failed for %s: %s", label, reason)
+	}
 	return &v1.AdmissionResponse{
 		Allowed: false,
 		Result: &metav1.Status{
 			Status:  metav1.StatusFailure,
-			Message: fmt.Sprintf("Authorization failed: %s", reason),
+			Message: msg,
 			Reason:  metav1.StatusReasonForbidden,
+		},
+	}
+}
+
+func internalError(msg string) *v1.AdmissionResponse {
+	return &v1.AdmissionResponse{
+		Allowed: false,
+		Result: &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: msg,
+			Reason:  metav1.StatusReasonInternalError,
 		},
 	}
 }
