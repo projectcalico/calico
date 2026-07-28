@@ -94,6 +94,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 				// Can fail if felix is trying to do a concurrent update.  Just keep trying...
 				return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "/iptables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			// Cleanup runs from startup until the dataplane comes back clean, so the leftover
+			// rules have to be in place before Felix starts, as they would be after a mode switch.
+			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up iptables rules when running in nftables mode", func() {
@@ -118,6 +122,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 			Eventually(func() error {
 				return tc.Felixes[0].ExecMayFail("nft", "-f", "/nftables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			// See the iptables -> nftables case: the table has to be there before Felix starts.
+			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up nftables rules when running in iptables mode", func() {
