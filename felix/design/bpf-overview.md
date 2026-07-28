@@ -118,21 +118,15 @@ uses plain `bpf_redirect`. See
 [bpf-tc-programs.md → Attach mechanisms](./bpf-tc-programs.md).
 
 `bpf_redirect_peer` also leaves the L2 header untouched, so the packet
-reaches the destination addressed to the host side of the veth. A pod
-does not care — the kernel already classified the packet as
-`PACKET_HOST` — but a workload that bridges the veth on to something
-else does. A KubeVirt VM behind a bridge sees a destination MAC that is
-not the guest's and drops the frame as `PACKET_OTHERHOST`. Such
-destinations therefore opt out: the calc graph sets `SkipRedir.Ingress`
-on the workload (VM workloads, and workloads with ingress bandwidth QoS,
-which needs the host qdisc), Felix turns that into the
-`CALI_RT_SKIP_INGRESS_REDIRECT` flag on the workload's route, and a
-program that resolves a route with the flag records
-`CALI_CT_FLAG_SKIP_REDIR_PEER` on the conntrack entry. Every packet of
-the flow then takes the FIB path, which rewrites the destination MAC.
-The opt-out belongs to the *destination*, so it must be applied whether
-the client is off-host (`from-HEP`) or a workload on the same node
-(`from-WEP`).
+arrives addressed to the veth's host side. Ordinary pods do not care —
+the kernel has already classified it `PACKET_HOST` — but a workload
+that bridges its veth onward, such as a KubeVirt VM, drops the frame as
+`PACKET_OTHERHOST`. Those workloads, and any using ingress QoS (which
+needs the host qdisc), set `SkipRedir.Ingress`; Felix propagates it as
+`CALI_RT_SKIP_INGRESS_REDIRECT` on the route and
+`CALI_CT_FLAG_SKIP_REDIR_PEER` on the conntrack entry, pinning the flow
+to the FIB path, which does rewrite the MAC. The opt-out is the
+*destination's*, so it applies to both `from-HEP` and `from-WEP`.
 
 ### When BPF defers to the host stack
 
