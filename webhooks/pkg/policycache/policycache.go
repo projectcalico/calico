@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/metadata/metadatainformer"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/webhooks/pkg/metrics"
 	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 )
 
@@ -81,6 +82,7 @@ func (c *Cache) Start(ctx context.Context) error {
 		}
 	}
 
+	metrics.CacheLastSyncSeconds.Set(float64(time.Now().Unix()))
 	logrus.WithField("resources", len(c.informers)).Info("Policy tier cache synced")
 	return nil
 }
@@ -129,6 +131,7 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 	if err != nil {
 		// Any lister error means the object is not in the cache. Fall back to a live GET
 		// rather than denying, so a read-after-write does not produce a spurious Forbidden.
+		metrics.CacheFallbackGetsTotal.WithLabelValues(resource, "miss").Inc()
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"resource":  resource,
 			"namespace": namespace,
@@ -147,6 +150,7 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 
 	// Policies created before the tier-label MutatingAdmissionPolicy was installed carry no
 	// label, so read spec.tier directly.
+	metrics.CacheFallbackGetsTotal.WithLabelValues(resource, "unlabeled").Inc()
 	return c.tierFromLiveGet(ctx, resource, namespace, name)
 }
 

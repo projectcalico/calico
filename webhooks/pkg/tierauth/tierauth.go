@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/projectcalico/calico/apiserver/pkg/registry/projectcalico/authorizer"
+	"github.com/projectcalico/calico/webhooks/pkg/metrics"
 )
 
 // Decision is the outcome of a tier authorization check.
@@ -46,6 +48,18 @@ const (
 	// DecisionNotApplicable means tier authorization has nothing to say about this request.
 	DecisionNotApplicable
 )
+
+// String returns the metric label for a decision.
+func (d Decision) String() string {
+	switch d {
+	case DecisionPermitted:
+		return "permitted"
+	case DecisionDenied:
+		return "denied"
+	default:
+		return "not_applicable"
+	}
+}
 
 // Result is a Decision plus a human-readable reason. The reason is surfaced to the
 // client in the Forbidden message, so it is user-facing text.
@@ -102,11 +116,24 @@ func New(tiers authorizer.TierAuthorizer, resolver PolicyTierResolver) *Authoriz
 
 // Authorize decides whether req is permitted by tier-based RBAC.
 func (a *Authorizer) Authorize(ctx context.Context, req Request) Result {
+	start := time.Now()
+	result := a.authorize(ctx, req)
+
+	metrics.DecisionDuration.WithLabelValues(req.Resource, req.Verb).Observe(time.Since(start).Seconds())
+	metrics.DecisionsTotal.WithLabelValues(result.Decision.String(), req.Resource, req.Verb).Inc()
+
+	return result
+}
+
+// authorize is the decision logic proper. Authorize wraps it to record metrics uniformly
+// across every return path, without scattering instrumentation through the branches below.
+func (a *Authorizer) authorize(ctx context.Context, req Request) Result {
 	if !IsTieredPolicyResource(req.Resource) {
 		return Result{Decision: DecisionNotApplicable, Reason: "not a tiered policy resource"}
 	}
 
 	logCtx := logrus.WithFields(logrus.Fields{
+		"user":      req.User.GetName(),
 		"verb":      req.Verb,
 		"resource":  req.Resource,
 		"namespace": req.Namespace,
@@ -126,8 +153,9 @@ func (a *Authorizer) Authorize(ctx context.Context, req Request) Result {
 			// Let RBAC run so the API server can return its usual 404.
 			return Result{Decision: DecisionNotApplicable, Reason: "policy does not exist"}
 		case err != nil:
-			logCtx.WithError(err).Warn("Failed to resolve policy tier, denying")
-			return Result{Decision: DecisionDenied, Reason: fmt.Sprintf("could not determine the tier of policy %q", req.Name)}
+			reason := fmt.Sprintf("could not determine the tier of policy %q", req.Name)
+			logCtx.WithError(err).WithField("reason", reason).Warn("Denied: failed to resolve policy tier")
+			return Result{Decision: DecisionDenied, Reason: reason}
 		}
 		tier = resolved
 		logCtx = logCtx.WithField("resolvedTier", tier)
@@ -137,8 +165,9 @@ func (a *Authorizer) Authorize(ctx context.Context, req Request) Result {
 	// which RBAC matches only against rules that carry no resourceNames. That is exactly
 	// "is this user unrestricted by tier".
 	if err := a.tiers.AuthorizeTierOperation(a.withAttributes(ctx, req), req.Name, tier); err != nil {
-		logCtx.WithError(err).Debug("Tier authorization failed")
-		return Result{Decision: DecisionDenied, Reason: a.denyReason(req, tier, err)}
+		reason := a.denyReason(req, tier, err)
+		logCtx.WithField("resolvedTier", tier).WithField("reason", reason).Info("Denied tier access")
+		return Result{Decision: DecisionDenied, Reason: reason}
 	}
 
 	return Result{Decision: DecisionPermitted, Reason: "authorized for tier"}

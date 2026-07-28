@@ -30,6 +30,8 @@ import (
 	"time"
 
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"
@@ -50,6 +52,7 @@ import (
 	"github.com/projectcalico/calico/pkg/buildinfo"
 	"github.com/projectcalico/calico/webhooks/pkg/authz"
 	"github.com/projectcalico/calico/webhooks/pkg/clusterinfo"
+	"github.com/projectcalico/calico/webhooks/pkg/metrics"
 	"github.com/projectcalico/calico/webhooks/pkg/policycache"
 	"github.com/projectcalico/calico/webhooks/pkg/rbac"
 	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
@@ -216,6 +219,15 @@ func registerHooks(
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn(cache))
+
+	// Registration errors here are startup errors: a collector name collision or a bad
+	// metric definition should fail loudly rather than run with half the metrics missing.
+	if err := metrics.RegisterAll(prometheus.DefaultRegisterer); err != nil {
+		logrus.WithError(err).Fatal("Failed to register metrics")
+	}
+	// /metrics is served on the same TLS listener as the admission and authorization
+	// endpoints, so it is an HTTPS scrape target rather than a separate plaintext port.
+	http.Handle("/metrics", promhttp.Handler())
 
 	return cache
 }

@@ -20,9 +20,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apiserver/pkg/authentication/user"
+
+	"github.com/projectcalico/calico/webhooks/pkg/metrics"
 )
 
 // fakeTierAuthorizer allows the tiers named in allowed, and denies everything else.
@@ -237,6 +240,21 @@ func TestUnselectoredListUsesAnUnnamedCheck(t *testing.T) {
 	// Both the tier and the policy name must be empty, so that RBAC matches only
 	// rules that carry no resourceNames.
 	assert.Equal(t, []string{"/"}, fa.calls)
+}
+
+func TestAuthorizeCountsDecisions(t *testing.T) {
+	metrics.DecisionsTotal.Reset()
+	fa := &fakeTierAuthorizer{allowed: map[string]bool{"production": true}}
+	a := New(fa, &fakeResolver{})
+
+	a.Authorize(context.Background(), Request{
+		User:     testUser("alice"),
+		Verb:     "list",
+		Resource: "networkpolicies",
+		Tier:     "production",
+	})
+
+	assert.Equal(t, 1.0, testutil.ToFloat64(metrics.DecisionsTotal.WithLabelValues("permitted", "networkpolicies", "list")))
 }
 
 func TestIsTieredPolicyResource(t *testing.T) {

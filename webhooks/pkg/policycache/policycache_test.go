@@ -22,6 +22,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	fakecalicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +32,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/webhooks/pkg/metrics"
 	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 )
 
@@ -105,6 +107,8 @@ func TestTierForPolicyUnknownResource(t *testing.T) {
 }
 
 func TestTierForPolicyFallsBackWhenLabelMissing(t *testing.T) {
+	metrics.CacheFallbackGetsTotal.Reset()
+
 	meta := namespacedPolicyMeta("ns1", "unlabeled", "")
 	delete(meta.Labels, v3.LabelTier)
 
@@ -126,6 +130,12 @@ func TestTierForPolicyFallsBackWhenLabelMissing(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "production", tier, "a policy predating the tier-label MutatingAdmissionPolicy must still resolve")
+	assert.Equal(
+		t,
+		1.0,
+		testutil.ToFloat64(metrics.CacheFallbackGetsTotal.WithLabelValues("networkpolicies", "unlabeled")),
+		"an unlabeled policy must be counted under the unlabeled reason, not miss",
+	)
 }
 
 func TestTierForPolicyClusterScopedFromLabel(t *testing.T) {
@@ -138,6 +148,8 @@ func TestTierForPolicyClusterScopedFromLabel(t *testing.T) {
 }
 
 func TestTierForPolicyCacheMissFallsBackToLiveTier(t *testing.T) {
+	metrics.CacheFallbackGetsTotal.Reset()
+
 	calicoClient := fakecalicoclient.NewSimpleClientset(&v3.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "just-created"},
 		Spec:       v3.NetworkPolicySpec{Tier: "production"},
@@ -156,6 +168,12 @@ func TestTierForPolicyCacheMissFallsBackToLiveTier(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "production", tier, "a read-after-write must resolve via the live GET, not deny on a cache miss")
+	assert.Equal(
+		t,
+		1.0,
+		testutil.ToFloat64(metrics.CacheFallbackGetsTotal.WithLabelValues("networkpolicies", "miss")),
+		"a cache miss must be counted under the miss reason, not unlabeled",
+	)
 }
 
 func TestTierForPolicyLookupFailureIsFailClosed(t *testing.T) {
