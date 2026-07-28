@@ -123,8 +123,15 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	// every policy is looked up by ID, as before.
 	ce, _ := store.CompiledEndpoints[ep].(*compiledEndpoint)
 
+	// The walk below logs per tier, per policy and per profile, so — as in the
+	// match functions — it tests the level once rather than paying the
+	// argument boxing on every iteration with debug logging switched off.
+	debugEnabled := log.IsLevelEnabled(log.DebugLevel)
+
 	for ti, tier := range ep.Tiers {
-		log.Debugf("Checking tier %s", tier.GetName())
+		if debugEnabled {
+			log.Debugf("Checking tier %s", tier.GetName())
+		}
 		policies := getPoliciesByDirection(dir, tier)
 		if len(policies) == 0 {
 			continue
@@ -140,7 +147,9 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	Policy:
 		for i, pID := range policies {
 			action, ruleIndex = checkTierPolicy(store, slotAt(slots, i), pID, dir, request)
-			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			if debugEnabled {
+				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			}
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {
@@ -185,7 +194,9 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
 			action, ruleIndex := checkEndpointProfile(store, slotAt(slots, i), &pID, dir, request)
-			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
+			if debugEnabled {
+				log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
+			}
 			switch action {
 			case NO_MATCH:
 				continue
