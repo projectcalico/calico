@@ -94,6 +94,9 @@ func (store *PolicyStore) processIPSetUpdate(update *proto.IPSetUpdate) {
 			s.AddString(addr)
 		}
 		store.IPSetByID[update.Id] = s
+		// Compiled policies hold the replaced IPSet object; recompile them
+		// against the new one.
+		store.onIPSetReplaced(update.Id)
 	}
 }
 
@@ -111,6 +114,8 @@ func (store *PolicyStore) processIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate
 		return // we shouldn't be getting a delta update before we've seen the IPSet
 	}
 
+	// A delta mutates the IPSet object in place, so compiled policies holding
+	// the object see the new membership without recompilation.
 	for _, addr := range update.AddedMembers {
 		s.AddString(addr)
 	}
@@ -126,6 +131,11 @@ func (store *PolicyStore) processIPSetRemove(update *proto.IPSetRemove) {
 		}).Debug("Processing IPSetRemove")
 	}
 	delete(store.IPSetByID, update.Id)
+	// Felix only removes an IP set once no policy references it, so normally
+	// no policy needs recompiling here. Recompile defensively in case the
+	// store is out of sync; affected policies keep the missing-set semantics
+	// of the uncompiled path.
+	store.onIPSetReplaced(update.Id)
 }
 
 func (store *PolicyStore) processActiveProfileUpdate(update *proto.ActiveProfileUpdate) {
@@ -139,7 +149,9 @@ func (store *PolicyStore) processActiveProfileUpdate(update *proto.ActiveProfile
 		return
 	}
 	id := types.ProtoToProfileID(update.GetId())
+	old := store.ProfileByID[id]
 	store.ProfileByID[id] = update.Profile
+	store.onProfileUpdate(id, old, update.Profile)
 }
 
 func (store *PolicyStore) processActiveProfileRemove(update *proto.ActiveProfileRemove) {
@@ -153,7 +165,9 @@ func (store *PolicyStore) processActiveProfileRemove(update *proto.ActiveProfile
 		return
 	}
 	id := types.ProtoToProfileID(update.GetId())
+	old := store.ProfileByID[id]
 	delete(store.ProfileByID, id)
+	store.onProfileRemove(id, old)
 }
 
 func (store *PolicyStore) processActivePolicyUpdate(update *proto.ActivePolicyUpdate) {
@@ -167,7 +181,9 @@ func (store *PolicyStore) processActivePolicyUpdate(update *proto.ActivePolicyUp
 		return
 	}
 	id := types.ProtoToPolicyID(update.GetId())
+	old := store.PolicyByID[id]
 	store.PolicyByID[id] = update.Policy
+	store.onPolicyUpdate(id, old, update.Policy)
 }
 
 func (store *PolicyStore) processActivePolicyRemove(update *proto.ActivePolicyRemove) {
@@ -181,7 +197,9 @@ func (store *PolicyStore) processActivePolicyRemove(update *proto.ActivePolicyRe
 		return
 	}
 	id := types.ProtoToPolicyID(update.GetId())
+	old := store.PolicyByID[id]
 	delete(store.PolicyByID, id)
+	store.onPolicyRemove(id, old)
 }
 
 func (store *PolicyStore) processWorkloadEndpointUpdate(subscriptionType string, update *proto.WorkloadEndpointUpdate) {

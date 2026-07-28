@@ -132,8 +132,14 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
-			action, ruleIndex = checkPolicy(policy, dir, request)
+			id := ftypes.ProtoToPolicyID(pID)
+			if cp, ok := store.CompiledPolicyByID[id].(*compiledPolicy); ok {
+				action, ruleIndex = cp.check(dir, request)
+			} else {
+				// No compiled form (no compiler configured, or this policy
+				// failed to compile): interpret the policy per flow.
+				action, ruleIndex = checkPolicy(store.PolicyByID[id], dir, request)
+			}
 			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			switch action {
 			case NO_MATCH:
@@ -177,8 +183,14 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	if len(ep.ProfileIds) > 0 {
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
-			profile := store.ProfileByID[ftypes.ProtoToProfileID(&pID)]
-			action, ruleIndex := checkProfile(profile, dir, request)
+			id := ftypes.ProtoToProfileID(&pID)
+			var action Action
+			var ruleIndex int
+			if cp, ok := store.CompiledProfileByID[id].(*compiledPolicy); ok {
+				action, ruleIndex = cp.check(dir, request)
+			} else {
+				action, ruleIndex = checkProfile(store.ProfileByID[id], dir, request)
+			}
 			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
 			switch action {
 			case NO_MATCH:
