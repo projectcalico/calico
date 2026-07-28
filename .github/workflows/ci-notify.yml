@@ -72,7 +72,11 @@ jobs:
     # state. Skip 'pending' — that's CI starting/running, not finishing.
     # Reviews fire only on an approval: 'commented' and 'changes_requested'
     # already reach the author by GitHub's own notifications, and a comment
-    # review would be a firehose.
+    # review would be a firehose. The approval must also come from someone
+    # with write access — on a public repo any account can submit an
+    # approving review, so without this any number of drive-by approvals
+    # would each DM the author (the review path claims no dedup marker), and
+    # an untrusted actor could start runs holding the Slack token at will.
     # Manual workflow_dispatch runs always proceed (state comes from input).
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -81,7 +85,9 @@ jobs:
         github.event.state == 'failure' ||
         github.event.state == 'error')) ||
       (github.event_name == 'pull_request_review' &&
-       github.event.review.state == 'approved')
+       github.event.review.state == 'approved' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                github.event.review.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -94,11 +100,13 @@ jobs:
       # event, the review, or the dispatch input, in that order (a missing
       # property evaluates to empty, so the fallbacks pick the live one).
       STATE: ${{ github.event.state || github.event.review.state || inputs.state }}
-      # Status events only — it names the commit the dedup marker claims.
-      # Empty on a review or a manual run, which is what disables dedup and
-      # marker pruning on those paths.
+      # Status events only — names the commit the dedup marker claims. Empty
+      # on the review and manual paths, which claim no marker at all: see the
+      # event-name gate on the claim step.
       SHA: ${{ github.event.sha }}
-      # Review path: who approved. A GitHub login passed via env (not via `${{ }}` interpolation inside the `run:` script), so it can't affect shell parsing.
+      # Review path: who approved. A GitHub login passed via env (not via
+      # `${{ }}` interpolation inside the `run:` script), so it can't affect
+      # shell parsing.
       REVIEWER: ${{ github.event.review.user.login }}
     steps:
       - name: Skip if not configured
@@ -299,14 +307,17 @@ jobs:
               success) EMOJI=":white_check_mark:" WORD="passed" ;;
               failure) EMOJI=":x:"                WORD="failed" ;;
               error)   EMOJI=":warning:"          WORD="errored" ;;
+              # Unreachable via the job's `if`; keeps a state added later
+              # from rendering as a blank word.
               *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
             esac
             TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
-            # On failure/error, point at the sem-ai triage analysis on the PR
-            # (which itself links the run), when triage actually posted one (it
-            # skips on PASS or backend hiccups). No raw CI-run link on any
+            # Point at the sem-ai triage analysis on the PR (which itself
+            # links the run) when triage actually posted one — the poll only
+            # runs on failure/error, and triage skips on backend hiccups, so
+            # a URL here is the whole condition. No raw CI-run link on any
             # outcome — the PR link above is the lead.
-            if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
+            if [[ -n "$TRIAGE_COMMENT_URL" ]]; then
               TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
             fi
           fi
@@ -381,13 +392,17 @@ jobs:
               NAME=${REF#refs/ci-notify/}
               DATE=${NAME%%-*}
               if [[ ! "$DATE" =~ ^[0-9]{8}$ ]]; then
-                # A marker with no date prefix predates this naming scheme
-                # and cannot be aged, so retire it on sight. Worst case it
+                # A <40-hex>-<state> name predates this naming scheme and
+                # cannot be aged, so retire it on sight. Worst case it
                 # belonged to a burst still in flight during the rollout and
-                # that burst sends one extra DM.
-                gh api "repos/$REPO/git/$REF" --method DELETE \
-                  && echo "pruned undated $REF" \
-                  || echo "::notice::could not prune $REF"
+                # that burst sends one extra DM. Anything else under this
+                # namespace was put there by hand — leave it alone rather
+                # than delete someone's debugging marker.
+                if [[ "$NAME" =~ ^[0-9a-f]{40}- ]]; then
+                  gh api "repos/$REPO/git/$REF" --method DELETE \
+                    && echo "pruned legacy $REF" \
+                    || echo "::notice::could not prune $REF"
+                fi
                 continue
               fi
               # yyyymmdd sorts lexicographically, so '<' compares dates.
