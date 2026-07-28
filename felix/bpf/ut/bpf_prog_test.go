@@ -925,6 +925,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 				}
 
+				if topts.redirectPeer {
+					globals.Flags |= libbpf.GlobalsRedirectPeer
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -1309,6 +1313,7 @@ type testOpts struct {
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
 	wgPort                        uint16
+	redirectPeer                  bool
 }
 
 type testOption func(opts *testOpts)
@@ -1433,6 +1438,12 @@ func withIPFragTimeout(timeout uint32) testOption {
 func withWgPort(port uint16) testOption {
 	return func(o *testOpts) {
 		o.wgPort = port
+	}
+}
+
+func withRedirectPeer() testOption {
+	return func(o *testOpts) {
+		o.redirectPeer = true
 	}
 }
 
