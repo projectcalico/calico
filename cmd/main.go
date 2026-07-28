@@ -87,14 +87,10 @@ var (
 // configuration for the operator loaded at startup.
 const bootstrapConfigMapName = "operator-bootstrap-config"
 
-// buildVariant is injected at build time via -ldflags "-X main.buildVariant=cloud" when building the
-// Calico Cloud operator image (see CLOUD_LDFLAGS in the Makefile). It is empty for the regular
-// Calico/Calico Enterprise image. Baking it into the binary means cloud mode is immutable: it cannot
-// be disabled by editing the operator Deployment's environment.
+// buildVariant is set to "cloud" via -ldflags "-X main.buildVariant=cloud" when building the Calico
+// Cloud operator image (see CLOUD_LDFLAGS in the Makefile), and is empty otherwise.
 var buildVariant string
 
-// isCloudBuild reports whether this binary was built as the Calico Cloud variant. When true, cloud
-// mode is baked in and cannot be disabled at runtime.
 func isCloudBuild() bool {
 	return buildVariant == "cloud"
 }
@@ -141,10 +137,6 @@ func main() {
 		&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
 	)
-	// Leader-election timings. Defaults match the controller-runtime defaults (i.e. the values a
-	// regular Calico Enterprise install runs with). They are exposed as flags so a deployment on a
-	// higher-latency API server (e.g. a Calico Cloud management cluster) can loosen them without a
-	// separate code path.
 	flag.DurationVar(
 		&leaderElectionLeaseDuration, "leader-election-lease-duration", 15*time.Second,
 		"Duration non-leader candidates wait before force-acquiring leadership.",
@@ -380,9 +372,6 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		// had changed out from under us, so better to continue to explicitly set it as we know this is the mapper we want.
 		MapperProvider: apiutil.NewDynamicRESTMapper,
 
-		// Leader-election timings, flag-configurable and defaulted to the controller-runtime defaults
-		// (see flag definitions above). Passing the defaults explicitly is equivalent to leaving them
-		// unset, so this changes nothing for a standard install.
 		LeaseDuration: &leaderElectionLeaseDuration,
 		RenewDeadline: &leaderElectionRenewDeadline,
 		RetryPeriod:   &leaderElectionRetryPeriod,
@@ -588,14 +577,11 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		ShutdownContext:     ctx,
 		K8sClientset:        clientset,
 		MultiTenant:         multiTenant,
-		// External-ES is a single knob, sourced only from the operator bootstrap configmap
-		// (operator-bootstrap-config) via discovery.UseExternalElastic, shared by both cloud and
-		// enterprise so there is one downstream knob rather than a per-variant source.
-		ElasticExternal: useExternalElastic,
-		Cloud:           isCloudBuild(),
-		ESMigration:     elasticIsMigrating,
-		UseV3CRDs:       v3CRDs,
-		APIDiscovery:    apiDiscovery,
+		ElasticExternal:     useExternalElastic,
+		Cloud:               isCloudBuild(),
+		ESMigration:         elasticIsMigrating,
+		UseV3CRDs:           v3CRDs,
+		APIDiscovery:        apiDiscovery,
 	}
 
 	// Before we start any controllers, make sure our options are valid.

@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package setup resolves everything that differs between the regular Calico/Enterprise release and
-// the Calico Cloud release — the publish registry/image, the release-version format, and the
-// GitHub-release default — once, at package-init time, keyed off the VARIANT env var. This is what
-// makes one release binary serve both flows (per PR review from @radTuti / @caseydavenport): the
-// difference is options resolved at runtime, not a separate build.
+// Package setup resolves the release defaults that differ between the Calico/Enterprise and Calico
+// Cloud variants (publish registry/image, release-version format, GitHub-release default) at init
+// time, keyed off the VARIANT env var.
 //
-// It is a separate package purely for initialization ordering. Go fully initializes an imported
-// package — its variables AND its init() — before the importing package initializes its own
-// variables. The release tool's flag defaults (hack/release/flags.go) are package-level vars that
-// capture these values by value, so resolving the variant here means those flag defaults capture the
-// correct cloud/enterprise values directly, with no later fix-up in the main package.
+// It is a separate package so it initializes before the release tool's flag defaults
+// (hack/release/flags.go), which capture these values by value and so need them resolved first.
 package setup
 
 import (
@@ -38,35 +33,26 @@ const (
 	gcrRegistry = "gcr.io"
 	cloudImage  = "tigera-tesla/operator-cloud"
 
-	// releaseVersionFormat is the plain operator/Calico release format (vX.Y.Z). The cloud operator
-	// release uses the same scheme with a -cloud suffix (e.g. v1.44.0-cloud); the Calico version
-	// always uses the plain form regardless of variant (see IsValidCalicoReleaseVersion).
 	releaseVersionFormat      = `^v\d+\.\d+\.\d+$`
 	cloudReleaseVersionFormat = `^v\d+\.\d+\.\d+-cloud$`
 )
 
-// IsCloud reports whether the release tool is running as the Calico Cloud variant. It is driven by
-// the VARIANT env var (set by `make ... VARIANT=cloud`). Resolved once, at package init.
+// IsCloud reports whether the release tool is running as the Calico Cloud variant.
 var IsCloud = os.Getenv("VARIANT") == "cloud"
 
-// Variant-dependent defaults. They start as the enterprise values and are switched to the cloud
-// values by init() when IsCloud is true.
+// Variant-dependent defaults, set to the enterprise values here and switched to cloud by init().
 var (
-	// DefaultRegistry and DefaultImage are the publish defaults for the operator image.
 	DefaultRegistry = quayRegistry
 	DefaultImage    = enterpriseImage
 
-	// IsValidReleaseVersion validates an operator release version string for the active variant
-	// (plain vX.Y.Z for enterprise, vX.Y.Z-cloud for cloud).
+	// IsValidReleaseVersion validates the operator release version for the active variant (plain
+	// vX.Y.Z for enterprise, vX.Y.Z-cloud for cloud).
 	IsValidReleaseVersion = matchesFormat(releaseVersionFormat)
 
-	// IsValidCalicoReleaseVersion validates a Calico release version (vX.Y.Z). It is
-	// variant-independent: the Calico version never carries the -cloud suffix, even when releasing
-	// the Calico Cloud operator variant, so it always uses the plain format.
+	// IsValidCalicoReleaseVersion validates a Calico release version. It stays plain vX.Y.Z for all
+	// variants: the Calico version never carries the -cloud suffix.
 	IsValidCalicoReleaseVersion = matchesFormat(releaseVersionFormat)
 
-	// CreateGitHubReleaseDefault is the default for the --create-github-release flag. Cloud releases
-	// are not published on GitHub, so cloud defaults it off.
 	CreateGitHubReleaseDefault = true
 )
 

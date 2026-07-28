@@ -88,9 +88,7 @@ type Configuration struct {
 	UnusedTLSSecret *corev1.Secret
 	Enabled         bool
 
-	// CloudConfigOverrides holds Calico Cloud Kibana config overrides parsed from the
-	// cloud-kibana-config ConfigMap by the cloud-gated controller path. It is merged over the default
-	// Kibana configuration. For regular Calico/Calico Enterprise it is nil and is a no-op.
+	// CloudConfigOverrides is merged over the default Kibana config. Nil outside of Calico Cloud.
 	CloudConfigOverrides map[string]interface{}
 }
 
@@ -261,7 +259,6 @@ func (k *kibana) kibanaCR() *kbv1.Kibana {
 		"xpack.productDocBase.artifactRepositoryUrl": "http://localhost:5601",
 	}
 
-	// Merge any Calico Cloud Kibana config overrides over the defaults. Nil (a no-op) for non-cloud.
 	for k, v := range k.cfg.CloudConfigOverrides {
 		config[k] = v
 	}

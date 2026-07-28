@@ -320,25 +320,15 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 		}
 	} else {
-		// External ES. Two ways to obtain the tenant's ES endpoint:
-		//   - multi-tenant (incl. enterprise) and non-cloud single-tenant: the Tenant CR must carry it.
-		//   - Calico Cloud single-tenant: there is no Tenant CR, so it's derived from the cloud config map.
-		//
-		// The `!r.cloud` clause is load-bearing, not a no-op for EE: for any non-cloud install (r.cloud
-		// is false) this reduces to the original pre-cloud check `if tenant == nil || ...`, so EE
-		// behavior here is unchanged. An EE cluster only reaches this whole else branch when it is
-		// configured for external ES (r.elasticExternal), and in that case it has always required the
-		// Tenant CR to carry the ES URL, whether multi-tenant or single-tenant.
-		if r.multiTenant || !r.cloud {
-			// If we're using an external ES, the Tenant resource must specify the ES endpoint.
+		if r.multiTenant {
+			// The Tenant resource must specify the ES endpoint.
 			if tenant == nil || tenant.Spec.Elastic == nil || tenant.Spec.Elastic.URL == "" {
 				reqLogger.Error(nil, "Elasticsearch URL must be specified for this tenant")
 				r.status.SetDegraded(operatorv1.ResourceValidationError, "Elasticsearch URL must be specified for this tenant", nil, reqLogger)
 				return reconcile.Result{}, nil
 			}
-		} else {
-			// This is a Calico Cloud single-tenant cluster connected to a multi-tenant ES. Read the
-			// tenant configuration from the CloudConfig ConfigMap.
+		} else if r.cloud {
+			// Calico Cloud single-tenant: there is no Tenant CR, so read it from the cloud config map.
 			cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
 			if err != nil {
 				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, reqLogger)

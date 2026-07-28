@@ -486,9 +486,6 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		}
 
 		if r.cloud {
-			// Read the cloud-kibana-config ConfigMap and parse it into overrides that we pass to the
-			// render code, which merges them over the default Kibana configuration. This is a fresh
-			// local per reconcile, so a deleted ConfigMap leaves no stale overrides behind.
 			kbCm := &corev1.ConfigMap{}
 			if err = r.client.Get(ctx, types.NamespacedName{Name: "cloud-kibana-config", Namespace: common.OperatorNamespace()}, kbCm); err != nil {
 				if !errors.IsNotFound(err) {
