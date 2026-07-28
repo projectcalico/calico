@@ -484,7 +484,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 
 	// Initialize progress tracking.
 	dm.Status.Progress = migrationv1.DatastoreMigrationProgress{
-		TotalTypes:   len(allMigrators),
+		TotalTypes:   int32(len(allMigrators)),
 		TypeProgress: fmt.Sprintf("0 / %d", len(allMigrators)),
 		TypeDetails:  make([]migrationv1.TypeMigrationProgress, 0, len(allMigrators)),
 	}
@@ -492,7 +492,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 	for i, migrator := range allMigrators {
 		// Update current-type progress before starting each type.
 		dm.Status.Progress.CurrentType = migrator.Kind()
-		dm.Status.Progress.CompletedTypes = i
+		dm.Status.Progress.CompletedTypes = int32(i)
 		dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", i, len(allMigrators))
 		if err := m.updateStatus(dm); err != nil {
 			logCtx.WithError(err).Warn("Failed to update progress status")
@@ -510,15 +510,15 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 		migrationResourcesTotal.WithLabelValues(migrator.Kind(), "skipped").Add(float64(result.Skipped))
 		migrationResourcesTotal.WithLabelValues(migrator.Kind(), "conflict").Add(float64(len(result.Conflicts)))
 
-		dm.Status.Progress.Migrated += result.Migrated
-		dm.Status.Progress.Skipped += result.Skipped
-		dm.Status.Progress.Total += result.Migrated + result.Skipped + len(result.Conflicts)
-		dm.Status.Progress.Conflicts += len(result.Conflicts)
+		dm.Status.Progress.Migrated += int32(result.Migrated)
+		dm.Status.Progress.Skipped += int32(result.Skipped)
+		dm.Status.Progress.Total += int32(result.Migrated + result.Skipped + len(result.Conflicts))
+		dm.Status.Progress.Conflicts += int32(len(result.Conflicts))
 		dm.Status.Progress.TypeDetails = append(dm.Status.Progress.TypeDetails, migrationv1.TypeMigrationProgress{
 			Kind:      migrator.Kind(),
-			Migrated:  result.Migrated,
-			Skipped:   result.Skipped,
-			Conflicts: len(result.Conflicts),
+			Migrated:  int32(result.Migrated),
+			Skipped:   int32(result.Skipped),
+			Conflicts: int32(len(result.Conflicts)),
 		})
 
 		allConflicts = append(allConflicts, result.Conflicts...)
@@ -529,7 +529,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 	}
 
 	// Mark all types complete.
-	dm.Status.Progress.CompletedTypes = len(allMigrators)
+	dm.Status.Progress.CompletedTypes = int32(len(allMigrators))
 	dm.Status.Progress.TypeProgress = fmt.Sprintf("%d / %d", len(allMigrators), len(allMigrators))
 	dm.Status.Progress.CurrentType = ""
 

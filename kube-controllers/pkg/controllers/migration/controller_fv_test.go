@@ -209,7 +209,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Progress tracking should be populated. All migrators are registered
 	// but only the seeded types (Tier, GNP) produce resources; the rest
 	// report zero.
-	g.Expect(dm.Status.Progress.Migrated).To(Equal(3), "2 tiers + 1 GNP = 3 migrated")
+	g.Expect(dm.Status.Progress.Migrated).To(Equal(int32(3)), "2 tiers + 1 GNP = 3 migrated")
 	g.Expect(dm.Status.Progress.TypeDetails).To(HaveLen(len(NewMigrators(bc, fvRTClient))))
 
 	// v3 ClusterInformation should have DatastoreReady=true (unlocked after converging).
