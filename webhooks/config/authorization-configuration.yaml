@@ -1,32 +1,18 @@
 # Kubernetes AuthorizationConfiguration for Calico tier-based RBAC.
 #
-# This configures the kube-apiserver authorization chain to include the Calico
-# authorization webhook between the Node and RBAC authorizers:
+# Inserts the Calico authorization webhook between the Node and RBAC authorizers:
 #
 #   Node -> Calico Webhook -> RBAC
 #
-# The Calico webhook enforces tier-based access control for read operations
-# (GET/LIST/WATCH) on tiered policy resources (NetworkPolicy, GlobalNetworkPolicy,
-# and their staged variants). It returns NoOpinion for all other requests, allowing
-# RBAC to handle them as usual.
+# The webhook enforces tier-based access control for reads (GET/LIST/WATCH) of tiered policy
+# resources. Mutating operations are covered by the tiered RBAC admission webhook instead,
+# which unlike this one can read the object body. The webhook returns Denied or NoOpinion and
+# never Allowed, so base RBAC still applies to every request it lets through.
 #
-# Setup:
-#   1. Deploy the Calico webhooks server (calico-webhooks) in your cluster.
-#   2. Create a webhook kubeconfig that tells the API server how to reach the
-#      webhook (see calico-authz-webhook-kubeconfig.yaml).
-#   3. Place both files on the control-plane node(s) and configure the API server:
-#        kube-apiserver --authorization-config=/etc/kubernetes/authz/authorization-configuration.yaml
+# --authorization-config is mutually exclusive with --authorization-mode. This file replaces
+# the --authorization-mode=Node,RBAC flag entirely.
 #
-# Note: --authorization-config is mutually exclusive with --authorization-mode.
-#       This file replaces the --authorization-mode=Node,RBAC flag entirely.
-#
-# The failurePolicy is set to NoOpinion so that if the webhook is unreachable
-# (e.g. during cluster bootstrap or webhook rollout), requests fall through to
-# RBAC and the cluster continues to operate normally.
-#
-# The matchConditions restrict the webhook to only Calico API group requests,
-# so non-Calico resources (core k8s, RBAC, etc.) are never sent to the webhook.
-# This avoids unnecessary latency and ensures cluster bootstrap is not delayed.
+# See README.md in this directory for the install and break-glass procedures.
 apiVersion: apiserver.config.k8s.io/v1
 kind: AuthorizationConfiguration
 authorizers:
@@ -36,15 +22,36 @@ authorizers:
     name: calico-tiered-rbac
     webhook:
       timeout: 3s
+      # We never return Allowed, so authorizedTTL is inert. unauthorizedTTL caches both
+      # Denied and NoOpinion, which makes it the security-relevant knob: spec.tier is
+      # mutable, so moving a policy into a restricted tier leaves a stale NoOpinion for a
+      # previously authorized reader for up to this long. Lower it to shrink that window at
+      # the cost of putting the webhook in front of every Calico read.
       authorizedTTL: 5m
       unauthorizedTTL: 30s
-      failurePolicy: NoOpinion
+      # Fail closed. If the webhook is unreachable, tiered policy reads are denied rather
+      # than silently falling through to RBAC. See the break-glass procedure in README.md.
+      failurePolicy: Deny
       subjectAccessReviewVersion: v1
       matchConditionSubjectAccessReviewVersion: v1
       connectionInfo:
         type: KubeConfigFile
         kubeConfigFile: /etc/kubernetes/authz/calico-authz-webhook-kubeconfig.yaml
       matchConditions:
+        # Only Calico API group resource requests reach the webhook. Everything else, including
+        # cluster bootstrap traffic, skips it entirely.
         - expression: has(request.resourceAttributes) && request.resourceAttributes.group == 'projectcalico.org'
+        # Never gate Calico's own components. The webhook's informers read the very resources
+        # it authorizes, so gating them would deadlock informer bootstrap under this failure
+        # policy. Listed explicitly rather than by namespace prefix: these service accounts
+        # live in kube-system, and exempting everything in kube-system would be far broader
+        # than intended. Every field access is guarded so this expression cannot error,
+        # because a matchConditions error counts as a webhook failure and would itself deny.
+        - expression: >-
+            !(has(request.user) && request.user in [
+              'system:serviceaccount:kube-system:calico-webhooks',
+              'system:serviceaccount:kube-system:calico-node',
+              'system:serviceaccount:kube-system:calico-kube-controllers'
+            ])
   - type: RBAC
     name: rbac
