@@ -1666,12 +1666,22 @@ endif
 # and RBAC in the authorization chain.
 KIND_AUTHZ_CONFIG := $(KIND_DIR)/kind-authz.config
 KIND_AUTHZ_WEBHOOK_DIR := $(KIND_DIR)/authz-webhook-config
+# The AuthorizationConfiguration must be on disk before kube-apiserver starts, but the
+# calico-webhooks Service's ClusterIP isn't known until after the cluster is up: a
+# chicken-and-egg that the checked-in kubeconfig resolves with a CLUSTER_IP placeholder.
+# For kind we pin the address instead of discovering it: 10.96.0.99 is a fixed address
+# inside kind's default Service CIDR (10.96.0.0/16) that nothing else in this cluster
+# config claims. This only works if the calico-webhooks Service is deployed with
+# spec.clusterIP pinned to the same address; that pinning is not part of this target.
+KIND_AUTHZ_WEBHOOK_CLUSTER_IP := 10.96.0.99
 kind-authz-cluster-create: $(KIND_AUTHZ_CONFIG)
-	# Copy the checked-in config files, patching the webhook kubeconfig to use
-	# insecure-skip-tls-verify instead of a CA cert (sufficient for kind testing).
+	# Copy the checked-in config files, patching the webhook kubeconfig's placeholder
+	# server address to the pinned ClusterIP above and using insecure-skip-tls-verify
+	# instead of a CA cert (sufficient for kind testing).
 	mkdir -p $(KIND_AUTHZ_WEBHOOK_DIR)
 	cp $(REPO_ROOT)/webhooks/config/authorization-configuration.yaml $(KIND_AUTHZ_WEBHOOK_DIR)/
-	sed 's|certificate-authority:.*|insecure-skip-tls-verify: true|' \
+	sed -e 's|CLUSTER_IP|$(KIND_AUTHZ_WEBHOOK_CLUSTER_IP)|' \
+		-e 's|certificate-authority:.*|insecure-skip-tls-verify: true|' \
 		$(REPO_ROOT)/webhooks/config/calico-authz-webhook-kubeconfig.yaml \
 		> $(KIND_AUTHZ_WEBHOOK_DIR)/calico-authz-webhook-kubeconfig.yaml
 	# Create the cluster using the standard kind-cluster-create target.

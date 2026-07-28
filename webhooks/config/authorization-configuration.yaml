@@ -29,8 +29,12 @@ authorizers:
       # the cost of putting the webhook in front of every Calico read.
       authorizedTTL: 5m
       unauthorizedTTL: 30s
-      # Fail closed. If the webhook is unreachable, tiered policy reads are denied rather
-      # than silently falling through to RBAC. See the break-glass procedure in README.md.
+      # Fail closed. If the webhook is unreachable, every request that reaches it is denied
+      # rather than silently falling through to RBAC. The first matchCondition below matches
+      # the whole projectcalico.org group with no verb or resource guard, so that is every
+      # verb (not just reads) on every resource in the group (not just tiered policy), from
+      # every identity not in the exempt list below. See the break-glass procedure in
+      # README.md.
       failurePolicy: Deny
       subjectAccessReviewVersion: v1
       matchConditionSubjectAccessReviewVersion: v1
