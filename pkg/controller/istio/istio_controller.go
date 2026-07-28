@@ -92,12 +92,15 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	// The waypoint controller reconciles the per-Gateway state the Istio
-	// feature needs beyond istiod's own rendering. It replicates the
-	// Installation pull secret into namespaces that contain istio-waypoint
-	// Gateways, so waypoint pods can pull the Istio proxy image from a private
-	// registry (the imagePullSecrets reference injected via istiod's global
-	// config is namespace-scoped and the secret must exist in the user
-	// namespace). It also deletes the per-class resource sets that istiod
+	// feature needs beyond istiod's own rendering. It creates a
+	// tigera-operator-secrets RoleBinding in namespaces that contain
+	// istio-waypoint Gateways — granting the operator permission to manage
+	// secrets there on clusters where its ClusterRole doesn't allow
+	// cluster-wide secret writes — and replicates the Installation pull
+	// secrets into those namespaces, so waypoint pods can pull the Istio proxy
+	// image from a private registry (the imagePullSecrets reference injected
+	// via istiod's global config is namespace-scoped and the secret must exist
+	// in the user namespace). It also deletes the per-class resource sets that istiod
 	// strands when a Gateway's spec.gatewayClassName changes: istiod only
 	// applies the set for the current class and never deletes the previous
 	// class's set, and owner-reference GC only fires when the Gateway itself

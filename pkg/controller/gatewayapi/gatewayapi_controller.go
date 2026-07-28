@@ -670,40 +670,54 @@ func (r *ReconcileGatewayAPI) maintainFinalizer(ctx context.Context, gatewayAPI 
 // Gateways, so the GC removes them once the last Gateway is gone (and the GatewayAPI CR's deletion
 // doesn't strand them). Reserved namespaces are skipped; trust bundle on both variants, the rest on
 // Enterprise.
+// Each object is written once per owning Gateway, because the component handler takes a single
+// owner. MultipleOwnersLabel makes it merge that owner reference into the references already on the
+// object instead of replacing them, which is what keeps the namespace's other Gateways — and any
+// reference another feature added, such as the waypoint controller's Istio CR — in place.
 func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Context, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, enterprise bool, gateways []gapi.Gateway, ownedClass map[string]bool) error {
-	ownersByNamespace := map[string][]metav1.OwnerReference{}
+	gatewaysByNamespace := map[string][]*gapi.Gateway{}
 	for i := range gateways {
 		gw := &gateways[i]
 		if !ownedClass[string(gw.Spec.GatewayClassName)] || gw.Namespace == common.CalicoNamespace || gw.Namespace == common.OperatorNamespace() {
 			continue
 		}
-		ownersByNamespace[gw.Namespace] = append(ownersByNamespace[gw.Namespace], metav1.OwnerReference{
-			APIVersion: "gateway.networking.k8s.io/v1",
-			Kind:       "Gateway",
-			Name:       gw.Name,
-			UID:        gw.UID,
-		})
+		gatewaysByNamespace[gw.Namespace] = append(gatewaysByNamespace[gw.Namespace], gw)
 	}
-	for namespace, owners := range ownersByNamespace {
-		var objs []client.Object
-		if bundle != nil {
-			objs = append(objs, bundle.ConfigMap(namespace))
-		}
-		if enterprise {
-			objs = append(objs,
-				gatewayapi.GatewayNamespaceServiceAccount(namespace),
-				gatewayapi.GatewayNamespaceRoleBinding(namespace),
-				render.CreateOperatorSecretsRoleBinding(namespace),
-			)
-			objs = append(objs, secret.ToRuntimeObjects(secret.CopyToNamespace(namespace, pullSecrets...)...)...)
-		}
-		for _, obj := range objs {
-			if err := r.upsertGatewayOwned(ctx, obj, owners); err != nil {
+	for namespace, gws := range gatewaysByNamespace {
+		for _, gw := range gws {
+			// Rendered per pass: the handler stamps its owner reference onto the objects it
+			// is given and strips the label before writing them.
+			objs := gatewayNamespaceObjects(namespace, bundle, pullSecrets, enterprise)
+			hdlr := r.newComponentHandler(log, r.client, r.scheme, gw)
+			if err := hdlr.CreateOrUpdateOrDelete(ctx, render.NewPassthrough(objs, nil), nil); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// gatewayNamespaceObjects returns the resources a namespace hosting our Gateways needs, each marked
+// for merged ownership.
+func gatewayNamespaceObjects(namespace string, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, enterprise bool) []client.Object {
+	var objs []client.Object
+	if bundle != nil {
+		objs = append(objs, bundle.ConfigMap(namespace))
+	}
+	if enterprise {
+		objs = append(objs,
+			gatewayapi.GatewayNamespaceServiceAccount(namespace),
+			gatewayapi.GatewayNamespaceRoleBinding(namespace),
+			render.CreateOperatorSecretsRoleBinding(namespace),
+		)
+		objs = append(objs, secret.ToRuntimeObjects(secret.CopyToNamespace(namespace, pullSecrets...)...)...)
+	}
+	for _, obj := range objs {
+		labels := common.MapExistsOrInitialize(obj.GetLabels())
+		labels[common.MultipleOwnersLabel] = "true"
+		obj.SetLabels(labels)
+	}
+	return objs
 }
 
 // legacyGatewayOrphans returns the resources in namespace owned by the tigera-gateway-class
@@ -749,28 +763,4 @@ func (r *ReconcileGatewayAPI) legacyGatewayOrphans(ctx context.Context, namespac
 		}
 	}
 	return orphans, nil
-}
-
-// upsertGatewayOwned creates or updates obj, refreshing its owner references (and ConfigMap/Secret
-// data) so the namespace's owner set stays current as its Gateways come and go.
-func (r *ReconcileGatewayAPI) upsertGatewayOwned(ctx context.Context, desired client.Object, owners []metav1.OwnerReference) error {
-	desired.SetOwnerReferences(owners)
-	existing := desired.DeepCopyObject().(client.Object)
-	switch err := r.client.Get(ctx, client.ObjectKeyFromObject(desired), existing); {
-	case errors.IsNotFound(err):
-		return r.client.Create(ctx, desired)
-	case err != nil:
-		return err
-	default:
-		existing.SetOwnerReferences(owners)
-		switch d := desired.(type) {
-		case *corev1.ConfigMap:
-			e := existing.(*corev1.ConfigMap)
-			e.Data, e.Annotations = d.Data, d.Annotations
-		case *corev1.Secret:
-			e := existing.(*corev1.Secret)
-			e.Data, e.Type = d.Data, d.Type
-		}
-		return r.client.Update(ctx, existing)
-	}
 }

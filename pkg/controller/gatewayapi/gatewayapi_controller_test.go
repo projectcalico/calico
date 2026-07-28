@@ -742,6 +742,9 @@ var _ = Describe("Gateway API controller tests", func() {
 	})
 
 	It("writes per-namespace Gateway resources owned by the namespace's Gateways (Enterprise)", func() {
+		// These go through the real component handler, which is what merges each Gateway's
+		// owner reference in rather than replacing what is already there.
+		r.newComponentHandler = utils.NewComponentHandler
 		bundle, err := certificatemanagement.CreateTrustedBundleWithSystemRootCertificates(nil)
 		Expect(err).NotTo(HaveOccurred())
 		pullSecrets := []*corev1.Secret{{ObjectMeta: metav1.ObjectMeta{Name: "tigera-pull-secret", Namespace: common.OperatorNamespace()}}}
@@ -774,6 +777,78 @@ var _ = Describe("Gateway API controller tests", func() {
 		By("skipping namespaces whose Gateway is not ours, and reserved namespaces")
 		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: "other-ns", Name: certificatemanagement.TrustedCertConfigMapName}, &corev1.ConfigMap{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: common.CalicoNamespace, Name: "waf-http-filter"}, &corev1.ServiceAccount{}))).To(BeTrue())
+	})
+
+	It("keeps owner references another feature put on the shared RoleBinding and pull secret", func() {
+		// The waypoint controller renders the same tigera-operator-secrets RoleBinding and the
+		// same pull secret copies into the same namespaces, owned by the Istio CR. Dropping
+		// those references would have the objects garbage collected along with the last of our
+		// Gateways while a waypoint in that namespace still needed them.
+		r.newComponentHandler = utils.NewComponentHandler
+		istioRef := metav1.OwnerReference{APIVersion: "operator.tigera.io/v1", Kind: "Istio", Name: "default", UID: "istio-uid"}
+
+		By("seeding both objects with an Istio owner reference")
+		rb := render.CreateOperatorSecretsRoleBinding("app-ns")
+		rb.OwnerReferences = []metav1.OwnerReference{istioRef}
+		Expect(c.Create(ctx, rb)).NotTo(HaveOccurred())
+		Expect(c.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "app-ns",
+			Name:            "tigera-pull-secret",
+			OwnerReferences: []metav1.OwnerReference{istioRef},
+		}})).NotTo(HaveOccurred())
+
+		pullSecrets := []*corev1.Secret{{ObjectMeta: metav1.ObjectMeta{Name: "tigera-pull-secret", Namespace: common.OperatorNamespace()}}}
+		gateways := []gapi.Gateway{
+			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "gw1", UID: "u1"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
+		}
+		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, pullSecrets, true, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+
+		By("keeping the Istio reference and adding our Gateway alongside it")
+		ownerKinds := func(o client.Object) []string {
+			var k []string
+			for _, ref := range o.GetOwnerReferences() {
+				k = append(k, ref.Kind+"/"+ref.Name)
+			}
+			return k
+		}
+		updatedRB := &rbacv1.RoleBinding{}
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "tigera-operator-secrets"}, updatedRB)).NotTo(HaveOccurred())
+		Expect(ownerKinds(updatedRB)).To(ConsistOf("Istio/default", "Gateway/gw1"))
+
+		updatedSecret := &corev1.Secret{}
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "tigera-pull-secret"}, updatedSecret)).NotTo(HaveOccurred())
+		Expect(ownerKinds(updatedSecret)).To(ConsistOf("Istio/default", "Gateway/gw1"))
+
+		By("not leaving the multiple-owners label behind on the written objects")
+		Expect(updatedRB.Labels).NotTo(HaveKey(common.MultipleOwnersLabel))
+	})
+
+	It("retains the reference of a Gateway that has changed to a class we do not own", func() {
+		// References are merged, never recomputed, so one stays until the Gateway that owns it is
+		// deleted and garbage collection removes it. A Gateway that moved to a class we do not
+		// manage therefore keeps its reference and holds the object alive. That is the accepted
+		// trade for never dropping a reference some other controller wrote: recomputing our own
+		// references on every pass is what dropped the waypoint controller's Istio reference.
+		r.newComponentHandler = utils.NewComponentHandler
+		flippedRef := metav1.OwnerReference{APIVersion: "gateway.networking.k8s.io/v1", Kind: "Gateway", Name: "flipped", UID: "u-flipped"}
+
+		rb := render.CreateOperatorSecretsRoleBinding("app-ns")
+		rb.OwnerReferences = []metav1.OwnerReference{flippedRef}
+		Expect(c.Create(ctx, rb)).NotTo(HaveOccurred())
+
+		gateways := []gapi.Gateway{
+			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "gw1", UID: "u1"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
+			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "flipped", UID: "u-flipped"}, Spec: gapi.GatewaySpec{GatewayClassName: "not-ours"}},
+		}
+		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, nil, true, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+
+		updatedRB := &rbacv1.RoleBinding{}
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "tigera-operator-secrets"}, updatedRB)).NotTo(HaveOccurred())
+		var owners []string
+		for _, ref := range updatedRB.OwnerReferences {
+			owners = append(owners, ref.Kind+"/"+ref.Name)
+		}
+		Expect(owners).To(ConsistOf("Gateway/flipped", "Gateway/gw1"))
 	})
 })
 
