@@ -152,13 +152,14 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 
 		var (
 			ruleIndex               int
+			matched                 *compiledPolicy
 			tierDefaultActionRuleID *calc.RuleID
 		)
 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
-			action, ruleIndex = checkTierPolicy(store, slotAt(slots, i), pID, dir, request)
+			action, ruleIndex, matched = checkTierPolicy(store, slotAt(slots, i), pID, dir, request)
 			if debugEnabled {
 				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			}
@@ -171,14 +172,14 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			// If the Policy matches, end evaluation (skipping profiles, if any)
 			case ALLOW:
 				s.Code = OK
-				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionAllow))
+				trace = append(trace, policyRuleID(matched, dir, ruleIndex, pID, tier, rules.RuleActionAllow))
 				return
 			case DENY:
 				s.Code = PERMISSION_DENIED
-				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionDeny))
+				trace = append(trace, policyRuleID(matched, dir, ruleIndex, pID, tier, rules.RuleActionDeny))
 				return
 			case PASS:
-				trace = append(trace, calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, ruleIndex, dir, rules.RuleActionPass))
+				trace = append(trace, policyRuleID(matched, dir, ruleIndex, pID, tier, rules.RuleActionPass))
 				// Pass means end evaluation of policies and proceed to next tier (or profiles), if any.
 				break Policy
 			case LOG:
@@ -207,7 +208,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		slots := ce.profileSlotsFor(len(ep.ProfileIds))
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
-			action, ruleIndex := checkEndpointProfile(store, slotAt(slots, i), &pID, dir, request)
+			action, ruleIndex, matched := checkEndpointProfile(store, slotAt(slots, i), &pID, dir, request)
 			if debugEnabled {
 				log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
 			}
@@ -216,11 +217,11 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 				continue
 			case ALLOW:
 				s.Code = OK
-				trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, name, "", ruleIndex, dir, rules.RuleActionAllow))
+				trace = append(trace, profileRuleID(matched, dir, ruleIndex, name, rules.RuleActionAllow))
 				return
 			case DENY, PASS:
 				s.Code = PERMISSION_DENIED
-				trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, name, "", ruleIndex, dir, rules.RuleActionDeny))
+				trace = append(trace, profileRuleID(matched, dir, ruleIndex, name, rules.RuleActionDeny))
 				return
 			case LOG:
 				log.Debug("profile should never return LOG action")
@@ -265,31 +266,57 @@ func slotAt(slots []*policystore.PolicySlot, i int) *policystore.PolicySlot {
 // flow (no compiler configured, the policy failed to compile, or it is absent
 // from the store). slot is the precomputed slot for this policy, or nil when
 // the endpoint has no compiled form and the slot must be looked up by ID.
+// It also returns the compiled policy it used, if any, so that the caller can
+// take the matched rule's trace entry from it instead of building one.
 func checkTierPolicy(
 	store *policystore.PolicyStore, slot *policystore.PolicySlot, pID *proto.PolicyID,
 	dir rules.RuleDir, req *requestCache,
-) (Action, int) {
+) (Action, int, *compiledPolicy) {
 	if slot == nil {
 		slot = store.CompiledPolicyByID[ftypes.ProtoToPolicyID(pID)]
 	}
 	if cp, ok := slot.Compiled().(*compiledPolicy); ok {
-		return cp.check(dir, req)
+		action, index := cp.check(dir, req)
+		return action, index, cp
 	}
-	return checkPolicy(store.PolicyByID[ftypes.ProtoToPolicyID(pID)], dir, req)
+	action, index := checkPolicy(store.PolicyByID[ftypes.ProtoToPolicyID(pID)], dir, req)
+	return action, index, nil
 }
 
 // checkEndpointProfile is checkTierPolicy for one of an endpoint's profiles.
 func checkEndpointProfile(
 	store *policystore.PolicyStore, slot *policystore.PolicySlot, pID *proto.ProfileID,
 	dir rules.RuleDir, req *requestCache,
-) (Action, int) {
+) (Action, int, *compiledPolicy) {
 	if slot == nil {
 		slot = store.CompiledProfileByID[ftypes.ProtoToProfileID(pID)]
 	}
 	if cp, ok := slot.Compiled().(*compiledPolicy); ok {
-		return cp.check(dir, req)
+		action, index := cp.check(dir, req)
+		return action, index, cp
 	}
-	return checkProfile(store.ProfileByID[ftypes.ProtoToProfileID(pID)], dir, req)
+	action, index := checkProfile(store.ProfileByID[ftypes.ProtoToProfileID(pID)], dir, req)
+	return action, index, nil
+}
+
+// policyRuleID returns the trace entry for the rule a policy matched, memoized
+// on the compiled rule when the policy was compiled.
+func policyRuleID(
+	cp *compiledPolicy, dir rules.RuleDir, index int,
+	pID *proto.PolicyID, tier *proto.TierInfo, action rules.RuleAction,
+) *calc.RuleID {
+	if cp != nil {
+		return cp.ruleID(dir, index, pID.Kind, tier.GetName(), pID.Name, pID.Namespace, action)
+	}
+	return calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, index, dir, action)
+}
+
+// profileRuleID is policyRuleID for a rule a profile matched.
+func profileRuleID(cp *compiledPolicy, dir rules.RuleDir, index int, name string, action rules.RuleAction) *calc.RuleID {
+	if cp != nil {
+		return cp.ruleID(dir, index, v3.KindProfile, profileStr, name, "", action)
+	}
+	return calc.NewRuleID(v3.KindProfile, profileStr, name, "", index, dir, action)
 }
 
 // checkPolicy checks the policy against the request and returns the action to take.

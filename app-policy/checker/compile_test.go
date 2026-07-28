@@ -19,9 +19,11 @@ import (
 	"net"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
 
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	googleproto "google.golang.org/protobuf/proto"
 
@@ -29,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 )
 
 // compileStoreForTest compiles every policy, profile and endpoint already
@@ -381,6 +384,96 @@ func TestCompiledEndpointFollowsPolicyUpdates(t *testing.T) {
 	// ...and matches what the interpreted path does for the same store.
 	clearCompiledForTest(store)
 	Expect(checkStore(store, ep, rules.RuleDirIngress, flow).Code).To(Equal(PERMISSION_DENIED))
+}
+
+// TestCompiledRuleIDMemo covers the memoized trace entries: the entry is
+// reused across evaluations, but only for the policy identity it was built
+// for, so two endpoints naming the same policy under differently-named tiers
+// each get their own.
+func TestCompiledRuleIDMemo(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	policyID := &proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}
+	store.PolicyByID[types.ProtoToPolicyID(policyID)] = &proto.Policy{
+		InboundRules: []*proto.Rule{{Action: "allow"}},
+	}
+	endpointInTier := func(tierName string) *proto.WorkloadEndpoint {
+		return &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{
+			Name:            tierName,
+			IngressPolicies: []*proto.PolicyID{policyID},
+			DefaultAction:   "Deny",
+		}}}
+	}
+	epA, epB := endpointInTier("tier-a"), endpointInTier("tier-b")
+	store.Endpoints[types.WorkloadEndpointID{WorkloadId: "a"}] = epA
+	store.Endpoints[types.WorkloadEndpointID{WorkloadId: "b"}] = epB
+	compileStoreForTest(store)
+
+	flow := &MockFlow{
+		SourceIP: net.ParseIP("10.0.0.1"),
+		DestIP:   net.ParseIP("10.0.0.2"),
+		Protocol: 6,
+	}
+	traceFor := func(ep *proto.WorkloadEndpoint) []*calc.RuleID {
+		return Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
+	}
+
+	traceA := traceFor(epA)
+	Expect(traceA).To(HaveLen(1))
+	Expect(traceA[0].Tier).To(Equal("tier-a"))
+
+	// Same rule, different tier: the memoized entry must not be reused.
+	traceB := traceFor(epB)
+	Expect(traceB).To(HaveLen(1))
+	Expect(traceB[0].Tier).To(Equal("tier-b"))
+
+	// Repeat evaluations hit the memo and must still be correct, and the entry
+	// for an unchanged identity is the very same object.
+	traceB2 := traceFor(epB)
+	Expect(traceB2[0]).To(BeIdenticalTo(traceB[0]))
+	Expect(traceFor(epA)[0].Tier).To(Equal("tier-a"))
+}
+
+// TestCompiledRuleIDMemoConcurrent evaluates one policy from several
+// goroutines, as dikastes does under the store's read lock: memoizing a trace
+// entry must be safe (run under -race to mean anything).
+func TestCompiledRuleIDMemoConcurrent(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	policyID := &proto.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}
+	store.PolicyByID[types.ProtoToPolicyID(policyID)] = &proto.Policy{
+		InboundRules: []*proto.Rule{{Action: "allow"}},
+	}
+	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{{
+		Name:            "tier1",
+		IngressPolicies: []*proto.PolicyID{policyID},
+		DefaultAction:   "Deny",
+	}}}
+	store.Endpoint = ep
+	compileStoreForTest(store)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			flow := &MockFlow{
+				SourceIP: net.ParseIP("10.0.0.1"),
+				DestIP:   net.ParseIP("10.0.0.2"),
+				Protocol: 6,
+			}
+			for j := 0; j < 100; j++ {
+				trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
+				if len(trace) != 1 || trace[0].Tier != "tier1" || trace[0].Action != rules.RuleActionAllow {
+					t.Errorf("unexpected trace: %v", trace)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // TestCompiledStaleEndpointReference covers the deleted-endpoint race: the

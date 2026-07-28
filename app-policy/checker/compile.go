@@ -19,6 +19,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	log "github.com/sirupsen/logrus"
 
@@ -237,6 +238,57 @@ type compiledPolicy struct {
 type compiledRule struct {
 	action   Action
 	matchers []ruleMatcher
+
+	// traced is this rule's trace entry, built the first time a flow matches
+	// the rule rather than for all of them up front: a walk only ever traces
+	// the one rule it stops at, and a RuleID costs 164 bytes and six
+	// allocations to build, so building one per rule eagerly would cost
+	// megabytes for entries that are almost all never used. Read by concurrent
+	// evaluations under the store's read lock, so it is published atomically;
+	// writing it twice is harmless, as every write stores an equivalent value.
+	traced atomic.Pointer[tracedRuleID]
+}
+
+// tracedRuleID is a memoized trace entry, together with the identity it was
+// built for. A rule's entry depends on its position, its action and the policy
+// the endpoint named — and one policy can be named by many endpoints — so a
+// memoized entry is reused only for the identity that produced it.
+type tracedRuleID struct {
+	kind, tier, name, namespace string
+	action                      rules.RuleAction
+	id                          *calc.RuleID
+}
+
+func (t *tracedRuleID) isFor(kind, tier, name, namespace string, action rules.RuleAction) bool {
+	return t != nil && t.action == action &&
+		t.kind == kind && t.tier == tier && t.name == name && t.namespace == namespace
+}
+
+// ruleID returns the trace entry for the rule at index in the given direction,
+// building and memoizing it on first use. Callers pass the identity of the
+// policy (or profile) the endpoint named, which is what the entry records
+// alongside the rule's own position and action.
+func (cp *compiledPolicy) ruleID(
+	dir rules.RuleDir, index int, kind, tier, name, namespace string, action rules.RuleAction,
+) *calc.RuleID {
+	crs := cp.inbound
+	if dir == rules.RuleDirEgress {
+		crs = cp.outbound
+	}
+	if index < 0 || index >= len(crs) {
+		// Not a rule of this policy (the tier's default action, say).
+		return calc.NewRuleID(kind, tier, name, namespace, index, dir, action)
+	}
+	cr := &crs[index]
+	if t := cr.traced.Load(); t.isFor(kind, tier, name, namespace, action) {
+		return t.id
+	}
+	t := &tracedRuleID{
+		kind: kind, tier: tier, name: name, namespace: namespace, action: action,
+		id: calc.NewRuleID(kind, tier, name, namespace, index, dir, action),
+	}
+	cr.traced.Store(t)
+	return t.id
 }
 
 // ruleMatcher is a single compiled criterion of a rule.
@@ -324,10 +376,10 @@ func compileRules(store *policystore.PolicyStore, rs []*proto.Rule, policyNamesp
 	}
 	starts[len(rs)] = len(all)
 	for i, r := range rs {
-		out[i] = compiledRule{
-			action:   actionFromString(r.Action),
-			matchers: all[starts[i]:starts[i+1]:starts[i+1]],
-		}
+		// Field by field: a compiledRule carries an atomic, so it must not be
+		// copied.
+		out[i].action = actionFromString(r.Action)
+		out[i].matchers = all[starts[i]:starts[i+1]:starts[i+1]]
 	}
 	return out
 }
