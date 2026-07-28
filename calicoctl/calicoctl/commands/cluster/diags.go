@@ -59,6 +59,11 @@ type Options struct {
 	ProblemPods     string
 	ComparisonNodes string
 
+	// SampleNodes asks us to choose this many nodes ourselves, spread across the
+	// axes in nodeSamplers, and collect them in full — for the operator who
+	// doesn't yet know where the problem is. Zero means "don't".
+	SampleNodes int
+
 	SkipTempDirCleanup bool
 }
 
@@ -74,6 +79,10 @@ type diagOpts struct {
 	StartedAt   string
 	Description string
 	AnsweredAt  string
+
+	// Sampled is what --sample-nodes chose, with the reason each node stood out.
+	// Empty unless --sample-nodes was given.
+	Sampled []sampledNode
 }
 
 // Diags collects a snapshot of diagnostic info and logs related to Calico for
@@ -101,6 +110,15 @@ func collectDiags(opts *diagOpts) error {
 	overallTimeout, err := parseTimeout(opts.OverallTimeout, "--overall-timeout")
 	if err != nil {
 		return err
+	}
+
+	// Whether we can ask the operator where the problem is depends only on the
+	// terminal, so refuse here rather than after connecting: a usage error should
+	// not need working cluster access to report.
+	if !targetingSpecified(opts) {
+		if reason := wizardUnavailableReason(); reason != "" {
+			return targetingRequiredError(reason)
+		}
 	}
 
 	// Ensure kubectl command is available (since we need it to access BGP information)
@@ -257,8 +275,13 @@ type bundleTargeting struct {
 	// ProblemPods is the pods the operator pointed at (interactively or via
 	// --problem-pods) that the problem nodes were derived from, as
 	// "namespace/name" refs.
-	ProblemPods             []string `json:"problemPods,omitempty"`
-	FullCollectionNodeCount int      `json:"fullCollectionNodeCount"`
+	ProblemPods []string `json:"problemPods,omitempty"`
+	// SampledNodes is set when --sample-nodes chose the targets rather than the
+	// operator, and says why each node was picked. Its presence tells whoever reads
+	// the bundle that nobody had identified the problem yet, so the nodes here are
+	// a spread of candidates rather than known-involved.
+	SampledNodes            []sampledNode `json:"sampledNodes,omitempty"`
+	FullCollectionNodeCount int           `json:"fullCollectionNodeCount"`
 }
 
 // writeBundleInfo writes bundle-info.yaml at the top level of the bundle. It is
@@ -286,6 +309,7 @@ func writeBundleInfo(dir string, opts *diagOpts, bpfEnabled bool, outcome string
 			ComparisonNodes: comparison,
 			FocusNodes:      parseCSV(opts.FocusNodes),
 			ProblemPods:     parseCSV(opts.ProblemPods),
+			SampledNodes:    opts.Sampled,
 			FullCollectionNodeCount: fullCollectionCount(selection{
 				ProblemNodes:    problem,
 				ComparisonNodes: comparison,

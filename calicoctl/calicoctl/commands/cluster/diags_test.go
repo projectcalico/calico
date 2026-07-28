@@ -72,6 +72,36 @@ func TestWriteBundleInfo(t *testing.T) {
 	Expect(info.ProblemStartedAt).To(Equal("10:30am today"))
 	Expect(info.ProblemDescription).To(Equal("Pod ns/widget-runner: source, sends TCP to backend"))
 	Expect(info.QuestionsAnsweredAt).To(Equal("2026-06-18T10:35:00Z"))
+	// The operator named these, so nothing was auto-sampled.
+	Expect(info.Targeting.SampledNodes).To(BeEmpty())
+}
+
+// A --sample-nodes run must be distinguishable in the bundle from one where the
+// operator identified the nodes: the reader needs to know nobody had found the
+// problem yet, and on what grounds each node was picked.
+func TestWriteBundleInfo_SampledNodes(t *testing.T) {
+	RegisterTestingT(t)
+
+	dir := t.TempDir()
+	sampled := []sampledNode{
+		{Node: "nodeA", Reason: "node is not Ready"},
+		{Node: "nodeB", Reason: "most calico-node restarts"},
+	}
+	writeBundleInfo(dir, &diagOpts{
+		Options: Options{MaxLogs: 5, SampleNodes: 2, ProblemNodes: "nodeA,nodeB"},
+		Sampled: sampled,
+	}, false, outcomeComplete, nil)
+
+	data, err := os.ReadFile(filepath.Join(dir, "bundle-info.yaml"))
+	Expect(err).NotTo(HaveOccurred())
+	var info bundleInfo
+	Expect(yaml.Unmarshal(data, &info)).To(Succeed())
+
+	Expect(info.Targeting.SampledNodes).To(Equal(sampled))
+	Expect(info.Targeting.ProblemNodes).To(Equal([]string{"nodeA", "nodeB"}),
+		"sampled nodes are collected in full, like problem nodes")
+	// The reasons must survive into the YAML, not just the names.
+	Expect(string(data)).To(ContainSubstring("most calico-node restarts"))
 }
 
 func init() {

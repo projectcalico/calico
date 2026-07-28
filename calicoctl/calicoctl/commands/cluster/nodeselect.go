@@ -16,6 +16,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -30,13 +31,26 @@ import (
 )
 
 // nodeInfo is the selection/display metadata we carry for a cluster node. It is
-// a small projection of the Kubernetes Node object holding just what the picker
-// needs to render and what suggestComparisonNodes uses to find similar nodes.
+// a small projection of the Kubernetes Node object holding what the picker needs
+// to render, what suggestComparisonNodes uses to find similar nodes, and what
+// sampleNodes uses to spread a sample across interesting axes. Everything here
+// comes from the one Nodes().List the picker already makes.
 type nodeInfo struct {
 	Name  string
 	Roles []string
 	Zone  string
 	Ready bool
+
+	// NetworkUnavailable is the node's NetworkUnavailable condition — the
+	// condition most directly implicating the CNI, so worth sampling on.
+	NetworkUnavailable bool
+	// Unschedulable is true for a cordoned node.
+	Unschedulable bool
+	// KernelVersion and KubeletVersion let the sampler pick the odd node out:
+	// dataplane behaviour is often kernel-specific, and a lone kubelet version
+	// usually means an upgrade stopped half way.
+	KernelVersion  string
+	KubeletVersion string
 }
 
 // selection is the outcome of node targeting: the nodes where the problem is
@@ -76,13 +90,30 @@ func gatherNodeInfo(ctx context.Context, kubeClient kubernetes.Interface) ([]nod
 	}
 	infos := make([]nodeInfo, 0, len(nl.Items))
 	for i := range nl.Items {
-		infos = append(infos, nodeInfoFromLabels(
-			nl.Items[i].Name,
-			nl.Items[i].Labels,
-			nodeReady(&nl.Items[i]),
-		))
+		infos = append(infos, nodeInfoFromNode(&nl.Items[i]))
 	}
 	return infos, nil
+}
+
+// nodeInfoFromNode projects a Node into a nodeInfo: the label-derived fields plus
+// the status fields the sampler spreads across.
+func nodeInfoFromNode(node *apiv1.Node) nodeInfo {
+	ni := nodeInfoFromLabels(node.Name, node.Labels, nodeReady(node))
+	ni.NetworkUnavailable = nodeConditionIsTrue(node, apiv1.NodeNetworkUnavailable)
+	ni.Unschedulable = node.Spec.Unschedulable
+	ni.KernelVersion = node.Status.NodeInfo.KernelVersion
+	ni.KubeletVersion = node.Status.NodeInfo.KubeletVersion
+	return ni
+}
+
+// nodeConditionIsTrue reports whether the named condition is present and True.
+func nodeConditionIsTrue(node *apiv1.Node, want apiv1.NodeConditionType) bool {
+	for _, c := range node.Status.Conditions {
+		if c.Type == want {
+			return c.Status == apiv1.ConditionTrue
+		}
+	}
+	return false
 }
 
 // podInfo is the display/selection metadata for a pod on the by-pod picker: its
@@ -368,27 +399,26 @@ func mergeNodeNames(dst, src []string) []string {
 
 // resolveNodeTargeting decides which nodes to target and updates opts in place.
 //
-//   - If no targeting flag was given and we're on an interactive terminal, it
-//     runs the interactive picker; a user abort returns proceed=false (no error)
-//     so the caller can stop without collecting anything.
-//   - Otherwise (a targeting flag was given, or we're non-interactive) it leaves
-//     the flags as-is, except that --problem-pods is resolved to node names and
-//     folded into --problem-nodes.
-//
-// When no targeting is given in a non-interactive context, it returns
-// proceed=true with opts unchanged, preserving the historical "collect from all
-// nodes" behaviour.
+//   - If no targeting flag was given and the picker can run, it runs the
+//     interactive wizard; a user abort returns proceed=false (no error) so the
+//     caller can stop without collecting anything.
+//   - If no targeting flag was given and the picker cannot run, it returns an
+//     error telling the operator how to say what they want. We never fall back to
+//     collecting from the whole cluster: an unfocused sweep is the thing this
+//     command moved away from, and doing it silently is worse than refusing.
+//   - Otherwise the flags stand, except that --sample-nodes is expanded into node
+//     names and --problem-pods is resolved to node names, both folded into
+//     --problem-nodes.
 //
 // A failure to talk to the cluster (e.g. listing nodes or resolving pods)
 // returns a non-nil error so the caller bails out rather than silently
 // proceeding: if we can't reach the API server to pick targets, the collection
-// that follows would fail too, and "collecting from all nodes" would be a
-// misleading thing to print.
+// that follows would fail too.
 func resolveNodeTargeting(kubeClient kubernetes.Interface, opts *diagOpts) (proceed bool, err error) {
-	explicit := opts.FocusNodes != "" || opts.ProblemNodes != "" ||
-		opts.ProblemPods != "" || opts.ComparisonNodes != ""
-
-	if !explicit && stdinIsInteractive() {
+	if !targetingSpecified(opts) {
+		if reason := wizardUnavailableReason(); reason != "" {
+			return false, targetingRequiredError(reason)
+		}
 		sel, ok, err := runInteractiveSelection(kubeClient)
 		if err != nil {
 			return false, fmt.Errorf("interactive node selection failed: %w", err)
@@ -404,6 +434,25 @@ func resolveNodeTargeting(kubeClient kubernetes.Interface, opts *diagOpts) (proc
 		// Record when the operator finished answering the wizard's questions.
 		opts.AnsweredAt = time.Now().UTC().Format(time.RFC3339)
 		return true, nil
+	}
+
+	if opts.SampleNodes > 0 {
+		ctx, cancel := shortContext()
+		sampled, err := sampleNodes(ctx, kubeClient, opts.SampleNodes)
+		cancel()
+		if err != nil {
+			return false, fmt.Errorf("choosing nodes for --sample-nodes: %w", err)
+		}
+		if len(sampled) == 0 {
+			return false, errors.New("--sample-nodes was given but the cluster has no nodes to sample")
+		}
+		fmt.Printf("Sampled %d node(s) to collect in full:\n", len(sampled))
+		for _, s := range sampled {
+			fmt.Printf("  - %s (%s)\n", s.Node, s.Reason)
+		}
+		opts.Sampled = sampled
+		opts.ProblemNodes = strings.Join(
+			mergeNodeNames(parseCSV(opts.ProblemNodes), sampledNodeNames(sampled)), ",")
 	}
 
 	if opts.ProblemPods != "" {
@@ -428,6 +477,37 @@ func resolveNodeTargeting(kubeClient kubernetes.Interface, opts *diagOpts) (proc
 		fmt.Println(w)
 	}
 	return true, nil
+}
+
+// targetingSpecified reports whether the operator told us what to collect, in any
+// of the ways they can: named nodes or pods, or a sample size to choose for them.
+// When they didn't, we have to ask — or refuse.
+func targetingSpecified(opts *diagOpts) bool {
+	return opts.FocusNodes != "" || opts.ProblemNodes != "" ||
+		opts.ProblemPods != "" || opts.ComparisonNodes != "" || opts.SampleNodes > 0
+}
+
+// targetingRequiredError explains that we could neither ask the operator where
+// the problem is nor be told: the picker is unavailable for the given reason and
+// no targeting flag was passed. It shows the ways forward rather than just naming
+// the flags, because the operator running this is mid-incident.
+func targetingRequiredError(reason string) error {
+	return fmt.Errorf(`cannot ask which nodes to collect from: %s
+
+Diagnostics are collected in full from the nodes you point at, so this command
+asks where the problem is. That needs an interactive terminal.
+
+Either re-run in an interactive terminal, or name the targets yourself:
+
+  calicoctl cluster diags --problem-nodes=<node>,<node> --comparison-nodes=<node>
+  calicoctl cluster diags --problem-pods=<namespace>/<pod>
+
+Or, if you don't know yet where the problem is, collect a spread of %d nodes
+(unhealthy ones, odd kernel or version out, most-restarted calico-node, and some
+healthy ones for contrast):
+
+  calicoctl cluster diags --sample-nodes=%d`,
+		reason, recommendedMaxFullNodes, recommendedMaxFullNodes)
 }
 
 // parseCSV splits a comma-separated option value into trimmed, non-empty parts.

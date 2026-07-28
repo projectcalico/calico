@@ -56,11 +56,19 @@ The problem and comparison nodes are collected in full. Every other node is
 swept for logs up to the --max-logs cap (5 per kind of Calico pod, e.g.
 calico-node or Typha) to keep the bundle a reasonable size.
 
-For scripts and pipelines (or any non-interactive run), give the targeting
-directly: --problem-nodes / --problem-pods for the affected nodes (collected in
-full, exempt from --max-logs), --comparison-nodes for healthy nodes to contrast
-against, and --focus-nodes to prefer particular nodes when spending the
---max-logs budget. With no targeting flags at all, it collects from every node.
+Where the picker cannot run - output is redirected, there is no terminal, or the
+terminal cannot display it - name the targets instead: --problem-nodes /
+--problem-pods for the affected nodes (collected in full, exempt from
+--max-logs), --comparison-nodes for healthy nodes to contrast against, and
+--focus-nodes to prefer particular nodes when spending the --max-logs budget.
+Given no targeting flags and no usable terminal, the command stops and says so
+rather than collecting from the whole cluster.
+
+If you don't yet know where the problem is, --sample-nodes=N picks N nodes for
+you and collects them in full. They are chosen to differ from one another - nodes
+that are not Ready or report NetworkUnavailable, the calico-node that has
+restarted most or most recently, the odd kernel/kubelet/image version out, one
+per zone - topped up with healthy nodes for contrast.
 
 Collection is resilient to a stuck cluster: a command that produces no output
 for --command-timeout is killed (and noted in the bundle), the whole run is
@@ -73,7 +81,10 @@ bundle of whatever was collected so far is still written.`,
   calicoctl cluster diags --problem-nodes=worker-1,worker-2 --comparison-nodes=worker-7,worker-8
 
   # Target by pod; the nodes hosting them are collected in full.
-  calicoctl cluster diags --problem-pods=calico-system/calico-node-abcde`,
+  calicoctl cluster diags --problem-pods=calico-system/calico-node-abcde
+
+  # Don't know where the problem is: let it pick a spread of 10 nodes.
+  calicoctl cluster diags --sample-nodes=10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := cluster.Options{}
 			opts.Config, _ = cmd.Flags().GetString("config")
@@ -85,6 +96,7 @@ bundle of whatever was collected so far is still written.`,
 			opts.ProblemNodes, _ = cmd.Flags().GetString("problem-nodes")
 			opts.ProblemPods, _ = cmd.Flags().GetString("problem-pods")
 			opts.ComparisonNodes, _ = cmd.Flags().GetString("comparison-nodes")
+			opts.SampleNodes, _ = cmd.Flags().GetInt("sample-nodes")
 			opts.SkipTempDirCleanup, _ = cmd.Flags().GetBool("skip-temp-dir-cleanup")
 			return cluster.Diags(opts)
 		},
@@ -98,6 +110,7 @@ bundle of whatever was collected so far is still written.`,
 	cmd.Flags().String("problem-nodes", "", "Comma-separated list of nodes where the problem is occurring; collected in full.")
 	cmd.Flags().String("problem-pods", "", "Comma-separated list of pods (namespace/pod) having trouble; their nodes are collected in full.")
 	cmd.Flags().String("comparison-nodes", "", "Comma-separated list of healthy nodes to also collect in full, for comparison.")
+	cmd.Flags().Int("sample-nodes", 0, "When you don't know where the problem is: pick this many nodes that differ from each other (unhealthy, odd version out, restarting calico-node, plus healthy ones) and collect them in full.")
 	cmd.Flags().Bool("skip-temp-dir-cleanup", false, "Don't clean up the temporary directory.")
 
 	// Offer live node-name completion for the node-targeting flags.

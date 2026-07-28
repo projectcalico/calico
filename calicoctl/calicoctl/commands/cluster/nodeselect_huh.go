@@ -34,12 +34,41 @@ import (
 // contrast by default.
 const defaultComparisonNodeCount = 2
 
-// stdinIsInteractive reports whether we should drive the interactive picker:
-// both stdin and stdout must be a real terminal. This is the gate that keeps CI,
-// pipes and redirected runs on the unchanged flag-driven path.
-func stdinIsInteractive() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+// wizardUnavailableReason returns "" when the interactive picker can run, or a
+// short reason why it cannot, for the error that asks the operator to name their
+// targets instead.
+//
+// TERM=dumb counts as unavailable even though it may well be a real terminal:
+// huh switches to accessible mode there, and accessible mode walks every field of
+// every group (ignoring the hide funcs that pick a path) calling RunAccessible,
+// which our custom pickers cannot implement meaningfully. Half-running the wizard
+// and collecting nothing is worse than refusing, so refuse.
+func wizardUnavailableReason() string {
+	return wizardUnavailableReasonFor(
+		isatty.IsTerminal(os.Stdin.Fd()),
+		isatty.IsTerminal(os.Stdout.Fd()),
+		os.Getenv("TERM"),
+	)
 }
+
+// wizardUnavailableReasonFor is wizardUnavailableReason's logic over explicit
+// inputs, so the terminal cases can be tested (under `go test` the process's own
+// stdin is never a terminal, which would mask every other case).
+func wizardUnavailableReasonFor(stdinIsTTY, stdoutIsTTY bool, term string) string {
+	switch {
+	case !stdinIsTTY:
+		return "stdin is not a terminal"
+	case !stdoutIsTTY:
+		return "stdout is not a terminal"
+	case term == dumbTerm:
+		return "TERM=" + dumbTerm + ", which cannot display the picker"
+	}
+	return ""
+}
+
+// dumbTerm is the TERM value huh treats as "use accessible mode"; see
+// wizardUnavailableReason for why that rules the picker out.
+const dumbTerm = "dumb"
 
 // Comparison-node choices on the by-node comparison step.
 const (
