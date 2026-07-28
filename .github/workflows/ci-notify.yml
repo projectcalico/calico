@@ -1,6 +1,6 @@
 # DMs a PR author on Slack when their PR's Semaphore CI finishes, and when
 # someone approves their PR. Approvals arrive here indirectly, via a
-# workflow_run from ci-notify-approval.yml — that file explains why.
+# workflow_run from ci-notify-trigger.yml — that file explains why.
 #
 # Opt-in is a repo *variable* (not a secret — Slack member IDs aren't
 # sensitive): CI_NOTIFY_MAP, a comma-separated list of
@@ -22,14 +22,15 @@ name: PR Slack notify
 
 on:
   status: {}
-  # Approval path — delivery half of a cascade. ci-notify-approval.yml owns
-  # the pull_request_review trigger and gates on (approved, write access);
-  # its success fires the workflow_run this reacts to. The review event
-  # cannot deliver on its own: it is pull-request-scoped, so a fork PR's run
-  # gets no secrets. See that file for the full reasoning. Each approval is a
-  # single event, so this path claims no dedup marker.
+  # Approval path — stage 2 of a cascade. ci-notify-trigger.yml owns the
+  # pull_request_review trigger; its success fires the workflow_run this
+  # reacts to. The review event cannot deliver on its own: it is
+  # pull-request-scoped, so a fork PR's run receives neither secrets nor
+  # variables. See that file for the full reasoning, including why its gate
+  # is not the authorization — this workflow re-checks the reviewer below.
+  # Each approval is a single event, so this path claims no dedup marker.
   workflow_run:
-    workflows: ["PR approval detected"]
+    workflows: ["PR Slack notify (trigger)"]
     types: [completed]
   # Manual test path: simulate a finished-CI status (or an approval) for a
   # given PR, so the full chain (resolve -> opt-in lookup -> DM) can be
@@ -74,10 +75,10 @@ jobs:
   notify:
     # Fire once when the aggregate Semaphore status reaches a terminal
     # state. Skip 'pending' — that's CI starting/running, not finishing.
-    # An approval reaches here only as a successful run of the detector
-    # workflow, which has already checked that the review was an approval
-    # from someone with write access — a skipped detector run means there is
-    # nothing to notify about.
+    # An approval reaches here as a successful run of the stage-1 trigger. A
+    # skipped stage-1 run means it saw nothing worth notifying about; a
+    # successful one is only a hint, since a fork PR controls that file, so
+    # who approved is confirmed later from the API.
     # Manual workflow_dispatch runs always proceed (state comes from input).
     if: >-
       github.event_name == 'workflow_dispatch' ||
@@ -135,8 +136,19 @@ jobs:
             # projectcalico/calico PRs all come from forks. A cascade run
             # whose PR has since been merged or closed finds nothing and
             # skips, which is the right outcome.
-            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
-                   --jq '.items[0].number // empty')
+            # Retry once: the search index can lag a few seconds behind a very
+            # fresh commit, and an approval can arrive that soon after a push.
+            # The hit is not re-checked against the PR's current head sha on
+            # purpose — the head legitimately moves on after the event (CI
+            # finishing for a commit that has since been pushed over, or a push
+            # landing between an approval and this run), and the PR is still
+            # the one to notify about.
+            for _ in 1 2; do
+              PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                     --jq '.items[0].number // empty')
+              [[ -n "$PR" ]] && break
+              sleep 5
+            done
             if [[ -z "$PR" ]]; then
               echo "::notice::no open PR for sha=$SHA — skipping"
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -175,11 +187,12 @@ jobs:
             echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
           fi
 
-      # The cascade deliberately carries no data from the review event, so
-      # name the reviewer from the PR's reviews instead. Naming them is a
-      # nicety: an empty result just yields a DM that says the PR was
-      # approved without saying by whom.
-      - name: Look up the approving reviewer
+      # This is where an approval is authorized. Stage 1's matching `if` runs
+      # from the PR head — a fork PR can edit it away — so it only filters
+      # cost; this step runs from the base branch, and the reviews API carries
+      # author_association, so the check and the reviewer's name come out of
+      # one call.
+      - name: Confirm an approval from someone with write access
         id: reviewer
         if: >-
           steps.gate.outputs.skip != 'true' &&
@@ -189,13 +202,40 @@ jobs:
         env:
           PR: ${{ steps.resolve.outputs.pr }}
         run: |
-          # The most recent approval is this one. Two approvals landing within
-          # the cascade's lag would both name the later reviewer — each DM
-          # still states something true.
-          # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
-          LOGIN=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate \
-            --jq '[.[] | select(.state == "APPROVED")][-1].user.login // empty')
-          echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+          # --paginate applies --jq per page and concatenates the results, so
+          # an index-into-array filter would emit one login *per page*. Filter
+          # flat and take the last line: the most recent qualifying approval.
+          set +e
+          OUT=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" --paginate \
+            --jq '.[] | select(.state == "APPROVED" and (.author_association
+                    | IN("OWNER","MEMBER","COLLABORATOR"))) | .user.login' 2>&1)
+          RC=$?
+          set -e
+          if [[ $RC -ne 0 ]]; then
+            # Fail CLOSED: an approval we cannot verify sends nothing. Still
+            # never fail the job — the notifier does not break other work.
+            echo "::warning::could not read reviews for PR #$PR ($OUT) — skipping rather than sending an unverified approval"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LOGIN=$(printf '%s\n' "$OUT" | tail -n1)
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            # A dispatch simulates an approval that need not exist, and only
+            # someone with write access can start one, so authorization is
+            # already settled: name the reviewer if there is one, gate on
+            # nothing.
+            echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "$LOGIN" ]]; then
+            echo "::notice::no approval from a write-access reviewer on PR #$PR — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
+            echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+          fi
 
       # Dedup: claim a git ref named after (commit, state) before sending.
       # Ref creation is atomic on GitHub's side, so concurrent duplicate
@@ -287,9 +327,13 @@ jobs:
           SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           # ~120s budget (12 x 10s). Triage typically comments well within
           # this; if not, we just omit the analysis link from the DM.
+          # Filter flat and take the last line rather than indexing into an
+          # array: --paginate applies --jq per page, so [-1] would emit one URL
+          # per page and a busy PR would yield a multi-line value.
           for _ in $(seq 1 12); do
             COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
-              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH)][-1].html_url // empty")
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH) | .html_url" \
+              | tail -n1)
             [[ -n "$COMMENT_URL" ]] && break
             sleep 10
           done
@@ -302,6 +346,7 @@ jobs:
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
+          steps.reviewer.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false'
         env:
           SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
@@ -317,8 +362,8 @@ jobs:
 
           # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
           if [[ "$STATE" == "approved" ]]; then
-            # REVIEWER is empty on a manual run, and on a cascade run whose
-            # reviewer lookup came back empty, so name them only if known.
+            # REVIEWER is empty on a manual run against a PR that has no
+            # approval to name, so name the reviewer only when known.
             TEXT=":+1: Your <$URL|PR #$PR> was approved${REVIEWER:+ by $REVIEWER}: $TITLE"
           else
             case "$STATE" in
