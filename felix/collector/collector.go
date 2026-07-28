@@ -153,7 +153,9 @@ func newCollector(lc *calc.LookupsCache, cfg *Config) Collector {
 	}
 
 	if c.policyStoreManager == nil {
-		c.policyStoreManager = policystore.NewPolicyStoreManager()
+		c.policyStoreManager = policystore.NewPolicyStoreManagerWithOpts(
+			policystore.WithPolicyCompiler(checker.NewPolicyCompiler()),
+		)
 	}
 
 	if apiv3.FlowLogsPolicyEvaluationModeType(cfg.PolicyEvaluationMode) == apiv3.FlowLogsPolicyEvaluationModeContinuous {
