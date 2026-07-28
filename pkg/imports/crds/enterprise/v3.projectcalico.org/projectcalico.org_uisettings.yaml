@@ -340,5 +340,6 @@ spec:
           type: object
       selectableFields:
         - jsonPath: .spec.group
+        - jsonPath: .spec.user
       served: true
       storage: true
