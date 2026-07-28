@@ -2,6 +2,7 @@
 # nixos-fw is the host firewall, ts-* Tailscale, KUBE-* kubelet, CNI-* the portmap plugin.
 # The fib and pkttype matches are what iptables-nft-save chokes on.
 # Base chains are left out: iptables has already created them.
+# nixos-fw default-denies, so port 9099 is added to its accept list for Felix's health port.
 add chain ip filter nixos-fw-accept
 add chain ip filter nixos-fw-refuse
 add chain ip filter nixos-fw-log-refuse
@@ -43,6 +44,7 @@ add rule ip filter nixos-fw tcp dport 2380 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 5473 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 6443 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 7946 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 9099 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 9100 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 10250 counter jump nixos-fw-accept
 add rule ip filter nixos-fw tcp dport 10254 counter jump nixos-fw-accept
