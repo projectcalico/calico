@@ -36,6 +36,16 @@ Requires Kubernetes 1.32 or later. `apiserver.config.k8s.io/v1 AuthorizationConf
 
 `calico-webhooks` also serves `/metrics` on the same TLS listener as the webhook endpoints (`--port`, default 6443). If `--client-ca-file` is set, that listener requires a verified client certificate for every connection, including scrapes: a Prometheus job configured with only CA trust and no client cert gets a TLS handshake failure and never scrapes, silently.
 
+## Operator-managed installs
+
+Not supported yet. The install above is the Helm chart path, and it is the only one that works today. On an operator-managed cluster the operator renders `calico-webhooks` itself (`pkg/render/webhooks` in tigera/operator), and three things block this webhook there:
+
+- The webhook's ClusterRole grants `create` on `subjectaccessreviews` and `get` on `tiers`, but no `get`/`list`/`watch` on the tiered policy resources the authorizer's policy cache needs. The cache never syncs, the pod never goes ready, and under `failurePolicy: Deny` that denies the whole `projectcalico.org` group.
+- The rendered Service has no `clusterIP`, so there is no way to pin the address the kubeconfig has to name. The chart pins it via `authzWebhookClusterIP`.
+- The operator installs into `calico-system`, while the exempt identities in `authorization-configuration.yaml` are `kube-system` service accounts, and the operator's own service account is not exempt at all. Bootstrap deadlocks.
+
+There is also no operator API surface for `--authorization-config` itself, which is a control-plane flag and outside what the operator manages.
+
 ## Break-glass
 
 `failurePolicy: Deny` means an unreachable webhook denies every request the `matchConditions` route to it, not just the reads the webhook itself would otherwise have denied. The first `matchCondition` matches the entire `projectcalico.org` group with no verb or resource guard, so an outage denies every verb (including writes) on every resource in that group (not just tiered policy), for every identity not on the exempt list. Concretely: a webhook outage can block `kubectl apply` of an `IPPool` or `FelixConfiguration`, and `calico-cni-plugin`, which reads IP pools through this group in `useV3CRDs` mode, is not on the exempt list, so pod setup can fail too. Causes include the webhook pod being down, a cert that expired, or a dataplane failure that keeps `calico-webhooks` from starting.
