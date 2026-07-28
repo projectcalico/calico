@@ -114,6 +114,7 @@ var _ = Describe("Defaulting logic tests", func() {
 		logSeverity := operator.LogLevelError
 		var linuxPolicySetupTimeoutSeconds int32 = 1
 		cniBinDir := "/opt/custom/cni/bin"
+		cniSpecVersion := operator.CNISpecVersion100
 		cniConfDir := "/etc/custom/cni/net.d"
 		cniInstallMode := operator.CNIInstallModeAll
 
@@ -140,6 +141,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					BinDir:      &cniBinDir,
 					ConfDir:     &cniConfDir,
 					InstallMode: &cniInstallMode,
+					SpecVersion: &cniSpecVersion,
 				},
 				CalicoNetwork: &operator.CalicoNetworkSpec{
 					LinuxDataplane:   &dpIptables, // Actually the default but BPF would make other values invalid.
@@ -211,6 +213,7 @@ var _ = Describe("Defaulting logic tests", func() {
 		logFileMaxSize := resource.MustParse("50Mi")
 		logSeverity := operator.LogLevelError
 		cniBinDir := "/opt/custom/cni/bin"
+		cniSpecVersion := operator.CNISpecVersion100
 		cniConfDir := "/etc/custom/cni/net.d"
 		cniInstallMode := operator.CNIInstallModeAll
 
@@ -237,6 +240,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					BinDir:      &cniBinDir,
 					ConfDir:     &cniConfDir,
 					InstallMode: &cniInstallMode,
+					SpecVersion: &cniSpecVersion,
 				},
 				CalicoNetwork: &operator.CalicoNetworkSpec{
 					LinuxDataplane:   &dpBPF, // Actually the default but BPF would make other values invalid.
@@ -313,6 +317,36 @@ var _ = Describe("Defaulting logic tests", func() {
 		err := fillDefaults(instance, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPEnabled))
+		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
+	})
+
+	It("should default CNI spec version to Auto for Calico CNI", func() {
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CNI: &operator.CNISpec{
+					Type: operator.PluginCalico,
+				},
+			},
+		}
+		err := fillDefaults(instance, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.Spec.CNI.SpecVersion).NotTo(BeNil())
+		Expect(*instance.Spec.CNI.SpecVersion).To(Equal(operator.CNISpecVersionAuto))
+		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
+	})
+
+	It("should not set CNI spec version for other CNI plugins", func() {
+		instance := &operator.Installation{
+			Spec: operator.InstallationSpec{
+				CNI: &operator.CNISpec{
+					Type: operator.PluginAmazonVPC,
+				},
+				CalicoNetwork: &operator.CalicoNetworkSpec{},
+			},
+		}
+		err := fillDefaults(instance, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(instance.Spec.CNI.SpecVersion).To(BeNil())
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 	})
 

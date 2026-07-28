@@ -558,6 +558,12 @@ func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList
 		}
 	}
 
+	// Default the CNI spec version for Calico CNI.
+	if instance.Spec.CNI.Type == operatorv1.PluginCalico && instance.Spec.CNI.SpecVersion == nil {
+		auto := operatorv1.CNISpecVersionAuto
+		instance.Spec.CNI.SpecVersion = &auto
+	}
+
 	// Default any unspecified fields within the CalicoNetworkSpec.
 	if instance.Spec.CalicoNetwork == nil {
 		instance.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}

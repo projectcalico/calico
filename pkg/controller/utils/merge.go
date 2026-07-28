@@ -275,6 +275,11 @@ func mergeCNISpecs(cfg, override *operatorv1.CNISpec) *operatorv1.CNISpec {
 		out.IPAM = override.IPAM.DeepCopy()
 	}
 
+	switch compareFields(out.SpecVersion, override.SpecVersion) {
+	case BOnlySet, Different:
+		out.SpecVersion = override.SpecVersion
+	}
+
 	switch compareFields(out.BinDir, override.BinDir) {
 	case BOnlySet, Different:
 		out.BinDir = override.BinDir

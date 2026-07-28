@@ -904,6 +904,11 @@ func (in *CNISpec) DeepCopyInto(out *CNISpec) {
 		*out = new(IPAMSpec)
 		**out = **in
 	}
+	if in.SpecVersion != nil {
+		in, out := &in.SpecVersion, &out.SpecVersion
+		*out = new(CNISpecVersion)
+		**out = **in
+	}
 	if in.BinDir != nil {
 		in, out := &in.BinDir, &out.BinDir
 		*out = new(string)
