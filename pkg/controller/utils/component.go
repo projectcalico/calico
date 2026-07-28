@@ -253,7 +253,7 @@ func (c *componentHandler) createOrUpdateObject(ctx context.Context, obj client.
 	setProbeTimeouts(obj)
 
 	// Make sure we have our standard selector and pod labels
-	setStandardSelectorAndLabels(obj, c.cr)
+	setStandardSelectorAndLabels(obj, c.cr, multipleOwners)
 
 	if err := ensureTLSCiphers(obj, installationSpec); err != nil {
 		return fmt.Errorf("failed to set TLS Ciphers: %w", err)
@@ -1041,7 +1041,7 @@ func setProbeTimeouts(obj client.Object) {
 // It will also set the k8s-app and app.kubernetes.io/name Labels on the podTemplates
 // for Deployments and Daemonsets. If there is no Selector specified a selector will also be added
 // that selects the k8s-app label.
-func setStandardSelectorAndLabels(obj client.Object, customResource metav1.Object) {
+func setStandardSelectorAndLabels(obj client.Object, customResource metav1.Object, multipleOwners bool) {
 	if obj.GetLabels() == nil {
 		obj.SetLabels(make(map[string]string))
 	}
@@ -1049,8 +1049,15 @@ func setStandardSelectorAndLabels(obj client.Object, customResource metav1.Objec
 		// We do not want to set these labels on objects without a CR. They are usually deliberately not getting an
 		// owner ref and are not controlled by our operator.
 		addNameLabel(obj, obj.GetName())
-		addInstanceLabel(obj, customResource)
-		addComponentLabel(obj, customResource)
+		if !multipleOwners {
+			// The instance and component labels identify the owning CR. An object shared by
+			// several owners has no single identity to stamp: each writer would stamp its own
+			// CR's name and kind, the values would flip with every writer, and the object
+			// would be rewritten on every reconcile for as long as the owners keep
+			// reconciling. Values already on the object are left as they are.
+			addInstanceLabel(obj, customResource)
+			addComponentLabel(obj, customResource)
+		}
 		addPartOfLabel(obj)
 		addManagedByLabel(obj)
 	}

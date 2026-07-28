@@ -642,6 +642,54 @@ var _ = Describe("Component handler tests", func() {
 		Expect(ns.GetLabels()).To(Equal(expectedLabels))
 	})
 
+	It("skips the per-owner instance and component labels on objects shared by multiple owners", func() {
+		// A shared object is written by more than one controller, each passing its own CR.
+		// The instance and component labels identify the writing CR, so stamping them would
+		// flip the values with every writer and the object would be rewritten on every
+		// reconcile. The writer-independent labels are still applied.
+		sharedRoleBinding := func() *rbacv1.RoleBinding {
+			return &rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "shared-rolebinding",
+					Namespace: "test-namespace",
+					Labels:    map[string]string{common.MultipleOwnersLabel: "true"},
+				},
+			}
+		}
+		fc := &fakeComponent{
+			supportedOSType: rmeta.OSTypeLinux,
+			objs:            []client.Object{sharedRoleBinding()},
+		}
+
+		Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).To(BeNil())
+
+		rbKey := client.ObjectKey{Namespace: "test-namespace", Name: "shared-rolebinding"}
+		rb := &rbacv1.RoleBinding{}
+		Expect(c.Get(ctx, rbKey, rb)).To(BeNil())
+		Expect(rb.GetLabels()).To(Equal(map[string]string{
+			"app.kubernetes.io/managed-by": "tigera-operator",
+			"app.kubernetes.io/name":       "shared-rolebinding",
+			"app.kubernetes.io/part-of":    "Calico",
+			"k8s-app":                      "shared-rolebinding",
+		}))
+
+		By("leaving an instance label stamped by an earlier writer as it is")
+		rb.Labels["app.kubernetes.io/instance"] = "some-other-owner"
+		Expect(c.Update(ctx, rb)).NotTo(HaveOccurred())
+
+		fc = &fakeComponent{
+			supportedOSType: rmeta.OSTypeLinux,
+			objs:            []client.Object{sharedRoleBinding()},
+		}
+		Expect(handler.CreateOrUpdateOrDelete(ctx, fc, sm)).To(BeNil())
+
+		rb = &rbacv1.RoleBinding{}
+		Expect(c.Get(ctx, rbKey, rb)).To(BeNil())
+		Expect(rb.GetLabels()).To(HaveKeyWithValue("app.kubernetes.io/instance", "some-other-owner"))
+		Expect(rb.GetLabels()).NotTo(HaveKey("app.kubernetes.io/component"))
+		Expect(rb.GetLabels()).NotTo(HaveKey(common.MultipleOwnersLabel))
+	})
+
 	Context("ensureTLSCiphers", func() {
 		cipher1 := operatorv1.TLS_AES_128_GCM_SHA256
 		cipher2 := operatorv1.TLS_AES_256_GCM_SHA384
