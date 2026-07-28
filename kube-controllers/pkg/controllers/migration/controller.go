@@ -270,8 +270,15 @@ func (m *migrationController) processNextWorkItem() bool {
 			m.queue.AddAfter(key, time.Duration(requeue))
 		} else if isTerminal(err) {
 			logrus.WithError(err).Error("Terminal migration error, setting Failed status")
-			m.handleTerminalError(err)
-			m.queue.Forget(key)
+			if statusErr := m.handleTerminalError(err); statusErr != nil {
+				// Without the status write the Failed phase never reaches the CR,
+				// so a log line is the only record that anything went wrong.
+				// Retry with backoff until it lands.
+				logrus.WithError(statusErr).Error("Failed to record terminal migration error in CR status, will retry")
+				m.queue.AddRateLimited(key)
+			} else {
+				m.queue.Forget(key)
+			}
 		} else {
 			logrus.WithError(err).Error("Migration reconcile error, will retry")
 			m.queue.AddRateLimited(key)
@@ -284,18 +291,18 @@ func (m *migrationController) processNextWorkItem() bool {
 }
 
 // handleTerminalError fetches the current CR and sets it to Failed with the
-// error message. If the CR can't be fetched or updated, the error is logged
-// but not retried — the next reconcile will pick it up.
-func (m *migrationController) handleTerminalError(err error) {
+// error message. It returns an error if the CR can't be fetched or updated, so
+// the caller can retry rather than leaving the failure visible only in the log.
+func (m *migrationController) handleTerminalError(err error) error {
 	dm := &migrationv1.DatastoreMigration{}
 	if getErr := m.rtClient.Get(m.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); getErr != nil {
-		logrus.WithError(getErr).Error("Failed to fetch CR for terminal error status update")
-		return
+		return fmt.Errorf("fetching CR for terminal error status update: %w", getErr)
 	}
 	m.setFailedStatus(dm, err.Error())
 	if updateErr := m.updateStatus(dm); updateErr != nil {
-		logrus.WithError(updateErr).Error("Failed to update CR status for terminal error")
+		return fmt.Errorf("updating CR status for terminal error: %w", updateErr)
 	}
+	return nil
 }
 
 func (m *migrationController) reconcile() error {
@@ -602,7 +609,11 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *migrationv
 			})
 		}
 		if err := m.updateStatus(dm); err != nil {
-			logCtx.WithError(err).Warn("Failed to update conflict status")
+			// Returning the error instead of the poll interval so the failure
+			// retries with backoff. Swallowing it hides the conflict list from
+			// the CR entirely.
+			logCtx.WithError(err).Error("Failed to update conflict status, will retry")
+			return fmt.Errorf("updating conflict status: %w", err)
 		}
 		return requeueAfter(m.waitingPollInterval)
 	}

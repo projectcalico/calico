@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,6 +37,7 @@ import (
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -481,4 +483,75 @@ func TestLifecycle_DeletionBlockedThenCompleted(t *testing.T) {
 		err := fvRTClient.Get(ctx, dmKey, &migrationv1.DatastoreMigration{})
 		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after completed cleanup, got: %v", err)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestStatusWriteFailuresSurface checks that a rejected status write reaches the
+// caller rather than being logged and dropped. Both of these paths used to
+// swallow it, which is how a status the apiserver refuses to accept stays
+// invisible to anyone reading the CR.
+func TestStatusWriteFailuresSurface(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	createMigrationCR(t, ctx)
+
+	// Pre-create a v3 Tier whose spec differs from the v1 source, so it is
+	// handleWaiting's conflict branch that runs. Same setup as
+	// TestLifecycle_ConflictResolution, and for the same reason: a non-default
+	// tier, because CEL validation locks the default tier's fields.
+	conflictingTier := &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom"},
+		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: actionPtr(apiv3.Deny)},
+	}
+	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
+	t.Cleanup(func() {
+		if err := fvRTClient.Delete(ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "custom"}}); err != nil {
+			t.Logf("cleanup: deleting tier: %v", err)
+		}
+	})
+
+	rejected := fmt.Errorf("simulated status write rejection")
+	failingClient := interceptor.NewClient(fvRTClient, interceptor.Funcs{
+		SubResourceUpdate: func(
+			ctx context.Context,
+			client rtclient.Client,
+			subResourceName string,
+			obj rtclient.Object,
+			opts ...rtclient.SubResourceUpdateOption,
+		) error {
+			if _, ok := obj.(*migrationv1.DatastoreMigration); ok {
+				return rejected
+			}
+			return client.SubResource(subResourceName).Update(ctx, obj, opts...)
+		},
+	})
+
+	bc := &mockBackendClient{
+		resources:   conflictV1Resources(),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+	m := &migrationController{
+		ctx:                 ctx,
+		rtClient:            failingClient,
+		migrators:           NewMigrators(bc, fvRTClient),
+		waitingPollInterval: 500 * time.Millisecond,
+	}
+
+	t.Run("terminal error", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Expect(m.handleTerminalError(fmt.Errorf("unsupported migration type"))).To(MatchError(rejected))
+	})
+
+	t.Run("conflicts still present", func(t *testing.T) {
+		g := NewWithT(t)
+		dm := newFVHelper(t, g, ctx).getMigration()
+
+		err := m.handleWaiting(logrus.WithField("test", t.Name()), dm)
+		g.Expect(err).To(MatchError(rejected))
+
+		// Specifically not a requeueAfter. That is what the swallowing version
+		// returned, and it carries no signal that anything failed.
+		var requeue requeueAfter
+		g.Expect(errors.As(err, &requeue)).To(BeFalse(), "a rejected status write must not look like a plain requeue")
+	})
 }
