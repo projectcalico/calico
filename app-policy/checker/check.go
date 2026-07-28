@@ -117,12 +117,26 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	request := NewRequestCache(store, flow)
 	defer handlePanic(&s)
 
-	for _, tier := range ep.Tiers {
-		log.Debugf("Checking tier %s", tier.GetName())
+	// The endpoint's compiled form, if it has one, holds its policies' compiled
+	// forms in slices parallel to its tiers, so the walk below indexes a slice
+	// instead of hashing each policy ID. A nil compiledEndpoint just means
+	// every policy is looked up by ID, as before.
+	ce, _ := store.CompiledEndpoints[ep].(*compiledEndpoint)
+
+	// The walk below logs per tier, per policy and per profile, so — as in the
+	// match functions — it tests the level once rather than paying the
+	// argument boxing on every iteration with debug logging switched off.
+	debugEnabled := log.IsLevelEnabled(log.DebugLevel)
+
+	for ti, tier := range ep.Tiers {
+		if debugEnabled {
+			log.Debugf("Checking tier %s", tier.GetName())
+		}
 		policies := getPoliciesByDirection(dir, tier)
 		if len(policies) == 0 {
 			continue
 		}
+		slots := ce.policySlotsFor(ti, dir, len(policies))
 
 		var (
 			ruleIndex               int
@@ -132,9 +146,10 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
-			action, ruleIndex = checkPolicy(policy, dir, request)
-			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			action, ruleIndex = checkTierPolicy(store, slotAt(slots, i), pID, dir, request)
+			if debugEnabled {
+				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			}
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {
@@ -175,11 +190,13 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 
 	// If we reach here, there were either no tiers, or a policy PASSed the request.
 	if len(ep.ProfileIds) > 0 {
+		slots := ce.profileSlotsFor(len(ep.ProfileIds))
 		for i, name := range ep.ProfileIds {
 			pID := proto.ProfileID{Name: name}
-			profile := store.ProfileByID[ftypes.ProtoToProfileID(&pID)]
-			action, ruleIndex := checkProfile(profile, dir, request)
-			log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
+			action, ruleIndex := checkEndpointProfile(store, slotAt(slots, i), &pID, dir, request)
+			if debugEnabled {
+				log.Debugf("Profile checked (ordinal=%d, profileId=%v, action=%v)", i, &pID, action)
+			}
 			switch action {
 			case NO_MATCH:
 				continue
@@ -203,6 +220,47 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, profileStr, "", tierDefaultActionIndex, dir, rules.RuleActionDeny))
 	}
 	return
+}
+
+// slotAt returns the precomputed slot at index i, or nil if the caller has no
+// precomputed slots (slots is nil unless the endpoint has a compiled form).
+func slotAt(slots []*policystore.PolicySlot, i int) *policystore.PolicySlot {
+	if slots == nil {
+		return nil
+	}
+	return slots[i]
+}
+
+// checkTierPolicy checks one of a tier's policies against the request: its
+// compiled form when it has one, otherwise the stored policy interpreted per
+// flow (no compiler configured, the policy failed to compile, or it is absent
+// from the store). slot is the precomputed slot for this policy, or nil when
+// the endpoint has no compiled form and the slot must be looked up by ID.
+func checkTierPolicy(
+	store *policystore.PolicyStore, slot *policystore.PolicySlot, pID *proto.PolicyID,
+	dir rules.RuleDir, req *requestCache,
+) (Action, int) {
+	if slot == nil {
+		slot = store.CompiledPolicyByID[ftypes.ProtoToPolicyID(pID)]
+	}
+	if cp, ok := slot.Compiled().(*compiledPolicy); ok {
+		return cp.check(dir, req)
+	}
+	return checkPolicy(store.PolicyByID[ftypes.ProtoToPolicyID(pID)], dir, req)
+}
+
+// checkEndpointProfile is checkTierPolicy for one of an endpoint's profiles.
+func checkEndpointProfile(
+	store *policystore.PolicyStore, slot *policystore.PolicySlot, pID *proto.ProfileID,
+	dir rules.RuleDir, req *requestCache,
+) (Action, int) {
+	if slot == nil {
+		slot = store.CompiledProfileByID[ftypes.ProtoToProfileID(pID)]
+	}
+	if cp, ok := slot.Compiled().(*compiledPolicy); ok {
+		return cp.check(dir, req)
+	}
+	return checkProfile(store.ProfileByID[ftypes.ProtoToProfileID(pID)], dir, req)
 }
 
 // checkPolicy checks the policy against the request and returns the action to take.
