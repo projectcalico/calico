@@ -16,12 +16,18 @@ package v1_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -33,19 +39,34 @@ import (
 )
 
 var (
-	testEnv      *testutils.TestEnv
 	schemaClient ctrlclient.Client
+	crdClient    apiextclient.Interface
 )
 
+// crdName is the installed CRD's object name, derived from the GVR so it follows
+// the group version flip.
+var crdName = migrationv1.DatastoreMigrationGVR.Resource + "." + migrationv1.Group
+
 func TestMain(m *testing.M) {
+	os.Exit(run(m))
+}
+
+// run wraps setup, m.Run and teardown. TestMain can't do this itself because
+// os.Exit skips deferred calls, which would orphan the envtest apiserver and its
+// etcd whenever setup failed part way through.
+func run(m *testing.M) int {
 	repoRoot := libtestutils.FindRepoRoot()
 	crdPath := filepath.Join(repoRoot, "kube-controllers", "pkg", "apis", "migration", "v1", "crd")
 
-	var err error
-	testEnv, err = testutils.NewTestEnv(crdPath)
+	testEnv, err := testutils.NewTestEnv(crdPath)
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		if err := testEnv.Stop(); err != nil {
+			panic(err)
+		}
+	}()
 
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
@@ -58,12 +79,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-
-	rc := m.Run()
-	if err := testEnv.Stop(); err != nil {
+	crdClient, err = apiextclient.NewForConfig(testEnv.RestConfig)
+	if err != nil {
 		panic(err)
 	}
-	os.Exit(rc)
+	return m.Run()
 }
 
 // newMigration builds a valid DatastoreMigration. Each test uses a distinct name
@@ -77,9 +97,23 @@ func newMigration(name string) *migrationv1.DatastoreMigration {
 	}
 }
 
-// TestSpecTypeIsImmutable checks that spec.type can be set at create time but
-// not changed afterwards. The migration is a one-shot operation; switching type
-// mid-flight has no coherent meaning.
+// TestSpecTypeIsImmutable checks that spec.type carries a transition rule pinning
+// it to the value it was created with. The migration is a one-shot operation;
+// switching type mid-flight has no coherent meaning.
+//
+// The immutability assertion is structural, against the CRD schema, and that is
+// deliberate. Do not "strengthen" it into an assertion about the rejection the
+// apiserver returns for a changed spec.type, because no such assertion is
+// possible. spec.type is enum constrained to a single value, so any changed value
+// trips the enum, and an enum violation is a blocking error: see hasBlockingErr in
+// apiextensions-apiserver's customresource strategy, which skips CEL validation
+// entirely and appends a placeholder error on field "<nil>" in its place. Scoping
+// the rule up to spec doesn't help, since hasBlockingErr scans the whole error
+// list.
+//
+// The rule is latent for the same reason. On a single member enum self == oldSelf
+// can never fire in production. It goes live the day a second migration type is
+// added, which is exactly when it starts to matter.
 func TestSpecTypeIsImmutable(t *testing.T) {
 	ctx := context.Background()
 	m := newMigration("immutable-type")
@@ -88,33 +122,45 @@ func TestSpecTypeIsImmutable(t *testing.T) {
 	}
 	defer func() { _ = schemaClient.Delete(ctx, m) }()
 
+	// Smoke check only: a changed type must not slip through, whichever rule
+	// catches it.
 	m.Spec.Type = migrationv1.DatastoreMigrationType("SomethingElse")
-	err := schemaClient.Update(ctx, m)
-	if err == nil {
-		t.Fatal("expected the update to be rejected, spec.type should be immutable")
+	if err := schemaClient.Update(ctx, m); err == nil {
+		t.Error("expected a changed spec.type to be rejected")
 	}
-	if !hasNonEnumFieldError(err, "spec.type") {
-		t.Fatalf("update was rejected by the spec.type enum alone, no immutability rule fired: %v", err)
+
+	crd, err := crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crdName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get crd %q: %v", crdName, err)
+	}
+	for _, version := range crd.Spec.Versions {
+		if !version.Served {
+			continue
+		}
+		if !specTypeHasTransitionRule(version) {
+			t.Errorf("version %q carries no transition rule referencing oldSelf on spec.type", version.Name)
+		}
 	}
 }
 
-// hasNonEnumFieldError reports whether err carries a validation cause on field
-// that is something other than the enum's "unsupported value" complaint.
-// spec.type is enum constrained to a single value, so the enum rejects any
-// changed value on its own; only a second cause on the same field proves a
-// transition rule rejected the update too.
-func hasNonEnumFieldError(err error, field string) bool {
-	var statusErr kerrors.APIStatus
-	if !errors.As(err, &statusErr) {
+// specTypeHasTransitionRule reports whether version puts a CEL rule referencing
+// oldSelf on spec.type. Matching on oldSelf rather than on the whole expression
+// keeps this independent of how the rule ends up being spelled.
+func specTypeHasTransitionRule(version apiextv1.CustomResourceDefinitionVersion) bool {
+	if version.Schema == nil || version.Schema.OpenAPIV3Schema == nil {
 		return false
 	}
 
-	details := statusErr.Status().Details
-	if details == nil {
+	spec, ok := version.Schema.OpenAPIV3Schema.Properties["spec"]
+	if !ok {
 		return false
 	}
-	for _, cause := range details.Causes {
-		if cause.Field == field && cause.Type != metav1.CauseTypeFieldValueNotSupported {
+	specType, ok := spec.Properties["type"]
+	if !ok {
+		return false
+	}
+	for _, rule := range specType.XValidations {
+		if strings.Contains(rule.Rule, "oldSelf") {
 			return true
 		}
 	}
@@ -131,6 +177,9 @@ func TestPhaseEnumIsEnforced(t *testing.T) {
 	}
 	defer func() { _ = schemaClient.Delete(ctx, m) }()
 
+	// Fatal rather than Errorf on purpose. Status().Update writes the server
+	// response back into m, so carrying on past a failure here would leave a stale
+	// resourceVersion and turn the rejection check below into a Conflict.
 	for _, phase := range []migrationv1.DatastoreMigrationPhase{
 		migrationv1.DatastoreMigrationPhasePending,
 		migrationv1.DatastoreMigrationPhaseMigrating,
@@ -141,20 +190,45 @@ func TestPhaseEnumIsEnforced(t *testing.T) {
 	} {
 		m.Status.Phase = phase
 		if err := schemaClient.Status().Update(ctx, m); err != nil {
-			t.Errorf("phase %q should be accepted: %v", phase, err)
+			t.Fatalf("phase %q should be accepted: %v", phase, err)
 		}
 	}
 
 	m.Status.Phase = migrationv1.DatastoreMigrationPhase("Bogus")
-	if err := schemaClient.Status().Update(ctx, m); err == nil {
+	err := schemaClient.Status().Update(ctx, m)
+	if err == nil {
 		t.Fatal("expected an out-of-enum phase to be rejected")
+	}
+	if !hasCause(err, "status.phase", metav1.CauseTypeFieldValueNotSupported) {
+		t.Fatalf("expected the enum to reject status.phase, got: %v", err)
 	}
 }
 
-// TestConditionsMergeByType checks that two writers touching different
-// conditions don't clobber each other. Without listType=map on the conditions
-// list, server-side apply treats it as atomic and the second writer wins
-// outright.
+// hasCause reports whether err is an API status error carrying a validation cause
+// of causeType on field. Asserting on the cause rather than on "an error came
+// back" stops an unrelated rejection, a Conflict for instance, from satisfying the
+// caller, and keeps clear of the rule's message text.
+func hasCause(err error, field string, causeType metav1.CauseType) bool {
+	var statusErr kerrors.APIStatus
+	if !errors.As(err, &statusErr) {
+		return false
+	}
+
+	details := statusErr.Status().Details
+	if details == nil {
+		return false
+	}
+	for _, cause := range details.Causes {
+		if cause.Field == field && cause.Type == causeType {
+			return true
+		}
+	}
+	return false
+}
+
+// TestConditionsMergeByType checks that two writers touching different conditions
+// don't clobber each other. Without listType=map on the conditions list,
+// server-side apply treats it as atomic and the second writer wins outright.
 func TestConditionsMergeByType(t *testing.T) {
 	ctx := context.Background()
 	m := newMigration("conditions-merge")
@@ -196,7 +270,70 @@ func TestConditionsMergeByType(t *testing.T) {
 	if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if len(got.Status.Conditions) != 2 {
-		t.Fatalf("expected both conditions to survive, got %d: %+v", len(got.Status.Conditions), got.Status.Conditions)
+
+	// Check identity, not just how many survived. The message records which writer
+	// set each condition, so a survivor carrying the wrong message means one apply
+	// overwrote the other's entry in place rather than merging alongside it.
+	for _, expected := range []struct {
+		condType string
+		message  string
+	}{
+		{
+			condType: "Conflicted",
+			message:  "set by writer-a",
+		},
+		{
+			condType: "Degraded",
+			message:  "set by writer-b",
+		},
+	} {
+		cond := apimeta.FindStatusCondition(got.Status.Conditions, expected.condType)
+		if cond == nil {
+			t.Errorf("condition %q did not survive, conditions are %+v", expected.condType, got.Status.Conditions)
+			continue
+		}
+		if cond.Message != expected.message {
+			t.Errorf("condition %q has message %q, want %q", expected.condType, cond.Message, expected.message)
+		}
 	}
+
+	// Per-entry ownership is the thing listType=map actually buys. With a map each
+	// applier owns the entry keyed by its own condition type; with an atomic list
+	// there are no per-entry keys to own, so writer-b's forced apply takes the whole
+	// field and writer-a's entry goes away.
+	if !ownsCondition(t, got.ManagedFields, "writer-a", "Conflicted") {
+		t.Errorf("expected writer-a to still own the Conflicted condition, managed fields are %+v", got.ManagedFields)
+	}
+}
+
+// ownsCondition reports whether manager holds a managed fields entry owning the
+// status condition keyed by condType. The field set gets decoded rather than
+// string matched, because the key is itself JSON and so comes back with its quotes
+// escaped in the raw bytes.
+func ownsCondition(t *testing.T, entries []metav1.ManagedFieldsEntry, manager, condType string) bool {
+	t.Helper()
+
+	key := fmt.Sprintf(`k:{"type":%q}`, condType)
+	for _, entry := range entries {
+		if entry.Manager != manager || entry.FieldsV1 == nil {
+			continue
+		}
+
+		var fields map[string]any
+		if err := json.Unmarshal(entry.FieldsV1.Raw, &fields); err != nil {
+			t.Fatalf("decode managed fields for %q: %v", manager, err)
+		}
+		status, ok := fields["f:status"].(map[string]any)
+		if !ok {
+			continue
+		}
+		conditions, ok := status["f:conditions"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, ok := conditions[key]; ok {
+			return true
+		}
+	}
+	return false
 }
