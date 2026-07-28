@@ -8,7 +8,9 @@ This file is **operational guidance** for agents working in this repo: build com
   Destructive CI-only targets.
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
 - **NEVER** include customer names in code comments, commit messages, or PR
-  descriptions. Refer to the ticket instead (GitHub issue number/JIRA key).
+  descriptions — this repo is public. Cite a dev ticket (`CORE-1234`, `EV-1234`)
+  or a GitHub issue instead; JIRA picks those keys up and links the ticket to
+  the PR. Avoid `CI-1234` keys here — they track customer escalations.
 - **ALWAYS** remove `FIt`/`FDescribe` before committing. Nothing in the repo
   catches these for you — check your own diff.
 - **ALWAYS** commit generated files alongside source changes.
