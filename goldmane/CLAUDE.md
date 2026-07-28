@@ -14,9 +14,6 @@ configuration surface, and Prometheus metric reference, see
 # Build binaries
 make build
 
-# Build Docker image
-make image
-
 # Run unit tests
 make ut
 
