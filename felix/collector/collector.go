@@ -135,6 +135,12 @@ type collector struct {
 	metricReporters       []types.Reporter
 	policyStoreManager    policystore.PolicyStoreManager
 	displayDebugTraceLogs bool
+
+	// pendingTraceScratch is the buffer policy evaluation appends each rule
+	// trace to, reused across flows so that an unchanged trace — the common
+	// case — costs neither an allocation nor a copy. Only touched from the
+	// stats collection goroutine.
+	pendingTraceScratch []*calc.RuleID
 }
 
 // newCollector instantiates a new collector. The StartDataplaneStatsCollector function is the only public
@@ -908,9 +914,12 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data) {
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
 	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace := checker.Evaluate(direction, store, protoEp, &flow)
-		if !equal(*ruleIDs, trace) {
-			*ruleIDs = append([]*calc.RuleID(nil), trace...)
+		c.pendingTraceScratch = checker.Evaluate(direction, store, protoEp, &flow, c.pendingTraceScratch[:0])
+		if !equal(*ruleIDs, c.pendingTraceScratch) {
+			// Copy rather than hand over the scratch buffer: the Data's slice is
+			// passed on to the metric reporters, so its backing array must not
+			// be written to again.
+			*ruleIDs = append([]*calc.RuleID(nil), c.pendingTraceScratch...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
 		}
 	} else {

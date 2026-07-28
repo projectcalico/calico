@@ -61,9 +61,12 @@ const (
 	unknownIndex = -2
 )
 
-// Evaluate evaluates the flow against the policy store and returns the trace of rules.
-func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(store, ep, dir, flow)
+// Evaluate evaluates the flow against the policy store, appending the trace of
+// rules it took to trace and returning the result. Callers that evaluate
+// repeatedly should pass a scratch slice (as buf[:0]) so that a trace costs no
+// allocation; pass nil for a freshly allocated one.
+func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow, trace []*calc.RuleID) []*calc.RuleID {
+	_, trace = checkTiers(store, ep, dir, flow, trace)
 	return trace
 }
 
@@ -100,21 +103,29 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
 func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
-	// Check using the configured policy
-	s, _ = checkTiers(store, ep, dir, req)
+	// Check using the configured policy. Dikastes wants the verdict, not the
+	// trace, so it passes no slice to append it to.
+	s, _ = checkTiers(store, ep, dir, req, nil)
 	return
 }
 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow, traceBuf []*calc.RuleID) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
+	trace = traceBuf
 	if ep == nil {
 		return
 	}
 
-	request := NewRequestCache(store, flow)
+	// The request cache is scratch space for one evaluation. It cannot live on
+	// the stack — the compiled matchers take it through a func value, so escape
+	// analysis has to assume it leaks — so it is pooled rather than allocated
+	// per flow. A single shared one would race: dikastes evaluates concurrently
+	// under the store's read lock.
+	request := getRequestCache(store, flow)
+	defer putRequestCache(request)
 	defer handlePanic(&s)
 
 	// The endpoint's compiled form, if it has one, holds its policies' compiled

@@ -76,6 +76,27 @@ func NewRequestCache(store *policystore.PolicyStore, request Flow) *requestCache
 	}
 }
 
+// requestCaches recycles the per-evaluation scratch space. Evaluation is on the
+// felix collector's and dikastes' hot paths, and the cache cannot be stack
+// allocated: compiled matchers receive it through a func value, so escape
+// analysis must assume it leaks.
+var requestCaches = sync.Pool{New: func() any { return &requestCache{} }}
+
+func getRequestCache(store *policystore.PolicyStore, request Flow) *requestCache {
+	r := requestCaches.Get().(*requestCache)
+	r.Flow = request
+	r.store = store
+	return r
+}
+
+// putRequestCache returns the cache to the pool, clearing it so that no value
+// from this flow can be read by the next one, and so that it holds on to
+// neither the flow nor the store.
+func putRequestCache(r *requestCache) {
+	*r = requestCache{}
+	requestCaches.Put(r)
+}
+
 // getSrcPeer returns the source peer.
 func (r *requestCache) getSrcPeer() *peer {
 	if principal := r.GetSourcePrincipal(); principal != nil {

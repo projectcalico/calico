@@ -37,7 +37,7 @@ func TestEvaluateNoEndpoint(t *testing.T) {
 	store := policystore.NewPolicyStore()
 
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, nil, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, nil, flow, nil)
 	Expect(trace).To(BeNil())
 }
 
@@ -48,7 +48,7 @@ func TestEvaluateEndpointNoTiersNoProfiles(t *testing.T) {
 
 	ep := &proto.WorkloadEndpoint{}
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -84,7 +84,7 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -150,7 +150,7 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 			store.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{Tier: "default"}
 
 			flow := &MockFlow{Protocol: 6, DestPort: 443}
-			trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+			trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 
 			Expect(trace).To(HaveLen(tt.expLen))
 			for i, act := range tt.expActs {
@@ -180,7 +180,7 @@ func TestEvaluateEndpointWithMatchingProfile(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -237,7 +237,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace := Evaluate(rules.RuleDirEgress, store, ep, flow1)
+	trace := Evaluate(rules.RuleDirEgress, store, ep, flow1, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -254,7 +254,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow2)
+	trace = Evaluate(rules.RuleDirEgress, store, ep, flow2, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -271,7 +271,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_192_168_1_2,
 		DestIP:     ip_10_0_0_2,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow3)
+	trace = Evaluate(rules.RuleDirEgress, store, ep, flow3, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))

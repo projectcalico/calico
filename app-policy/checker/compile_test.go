@@ -60,9 +60,9 @@ func checkStoreBothEngines(store *policystore.PolicyStore, ep *proto.WorkloadEnd
 // checkTiersBothEngines is checkStoreBothEngines for callers that also want
 // the rule trace.
 func checkTiersBothEngines(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (*status.Status, []*calc.RuleID) {
-	s, trace := checkTiers(store, ep, dir, req)
+	s, trace := checkTiers(store, ep, dir, req, nil)
 	compileStoreForTest(store)
-	compiledS, compiledTrace := checkTiers(store, ep, dir, req)
+	compiledS, compiledTrace := checkTiers(store, ep, dir, req, nil)
 	clearCompiledForTest(store)
 	ExpectWithOffset(2, googleproto.Equal(&compiledS, &s)).To(BeTrue(),
 		"compiled and interpreted engines returned different statuses: %v vs %v", &compiledS, &s)
