@@ -30,10 +30,11 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/utils"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // Note: these benchmarks must be run as root, because they create a dummy
@@ -56,7 +57,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 		b.Fatal("This test must be run as root.")
 	}
 
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	logrus.SetLevel(logrus.WarnLevel)
 
 	ifaceName := fmt.Sprintf("testcali%04x", rand.Intn(65536))
@@ -66,7 +67,7 @@ func benchResyncNumRoutes(b *testing.B, numRoutes int) {
 	})
 	utils.Run("ip", "link", "set", "dev", ifaceName, "up")
 
-	sum := logutils.NewSummarizer("test")
+	sum := logrusr.NewSummarizer("test")
 	mockDP := mocknetlink.New()
 	rt := New(
 		ownershippol.NewMainTable(

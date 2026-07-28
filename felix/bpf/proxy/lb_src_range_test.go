@@ -27,11 +27,11 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 )
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	logrus.SetOutput(GinkgoWriter)
 	logrus.SetLevel(logrus.DebugLevel)
 }

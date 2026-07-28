@@ -17,13 +17,14 @@
 // standard library and logrus so that lightweight command-line tools can
 // import it to get consistent log formatting without pulling in the heavier
 // dependency tree (Prometheus, etc.) of the parent logutils package.
-package logformat
+package logrusr
 
 import (
 	"bytes"
 	"fmt"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,6 +32,16 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+)
+
+// Packages whose frames we skip when reporting a log line's caller.
+// logrus's own getCaller only skips itself, which means wrapper types in
+// this package (RateLimitedLogger, the log.Logger adapter, Summarizer)
+// would otherwise be reported as the caller instead of the user code.
+const (
+	logrusPackage  = "github.com/sirupsen/logrus"
+	logrusrPackage = "github.com/projectcalico/calico/lib/logrusr"
+	maxCallerDepth = 32
 )
 
 const (
@@ -43,10 +54,10 @@ const (
 	FileNameUnknown = "<nil>"
 )
 
-func init() {
-	// We need logrus to record the caller on each log entry for us.
-	log.SetReportCaller(true)
-}
+// SetReportCaller is left off intentionally: our own GetFileInfo walks
+// the stack from Format() and knows to skip both logrus and lib/logrusr
+// frames, so logrus's own caller detection (which only skips logrus)
+// would land on wrapper types in this package instead of the user code.
 
 // FilterLevels returns all the logrus.Level values <= maxLevel.
 func FilterLevels(maxLevel log.Level) []log.Level {
@@ -225,13 +236,70 @@ func FormatForSyslog(entry *log.Entry) string {
 	return b.String()
 }
 
-// GetFileInfo returns the base file name and line number recorded on the log
-// entry, or (FileNameUnknown, 0) if the caller could not be determined.
+// pcsPool re-uses program-counter buffers across log emissions so the
+// caller walk allocates once per goroutine, not once per line.
+var pcsPool = sync.Pool{
+	New: func() any {
+		pcs := make([]uintptr, maxCallerDepth)
+		return &pcs
+	},
+}
+
+// GetFileInfo returns the base file name and line number of the first
+// stack frame that isn't part of logrus or lib/logrusr. This is called
+// from Format() / Fire() which run synchronously with the log-emitting
+// code, so the wrapper frames (RateLimitedLogger, log.Logger adapter,
+// Summarizer, ...) are still on the stack — we walk past them to reach
+// the user code that actually asked for the log.
+//
+// If entry.Caller is already set (e.g. a test injecting a synthetic
+// frame, or an integration that populated it directly), we honour it
+// instead of walking.
 func GetFileInfo(entry *log.Entry) (string, int) {
-	if entry.Caller == nil {
+	if entry.Caller != nil {
+		return path.Base(entry.Caller.File), entry.Caller.Line
+	}
+
+	pcsPtr := pcsPool.Get().(*[]uintptr)
+	defer pcsPool.Put(pcsPtr)
+	pcs := *pcsPtr
+
+	// Skip 2 frames: runtime.Callers itself and GetFileInfo.
+	n := runtime.Callers(2, pcs)
+	if n == 0 {
 		return FileNameUnknown, 0
 	}
-	return path.Base(entry.Caller.File), entry.Caller.Line
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		pkg := getPackageName(frame.Function)
+		if pkg != logrusPackage && pkg != logrusrPackage {
+			return path.Base(frame.File), frame.Line
+		}
+		if !more {
+			break
+		}
+	}
+	return FileNameUnknown, 0
+}
+
+// getPackageName extracts the fully-qualified package path from a
+// runtime.Frame.Function string such as
+// "github.com/sirupsen/logrus.(*Entry).Info" — returning
+// "github.com/sirupsen/logrus". The convention is: strip trailing
+// dot-separated segments until only a slash-terminated path prefix
+// remains.
+func getPackageName(f string) string {
+	for {
+		lastPeriod := strings.LastIndex(f, ".")
+		lastSlash := strings.LastIndex(f, "/")
+		if lastPeriod > lastSlash {
+			f = f[:lastPeriod]
+		} else {
+			break
+		}
+	}
+	return f
 }
 
 // appendKVsAndNewLine writes the entry's KV pairs to the end of the buffer,

@@ -22,13 +22,13 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector/parser"
 )
 
 func main() {
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	// We use stdout for the parseable output of the tool so we _do_ want
 	// logging to go to stderr.
 	logrus.SetOutput(os.Stderr)

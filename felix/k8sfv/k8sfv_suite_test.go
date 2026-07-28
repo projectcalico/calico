@@ -23,13 +23,13 @@ import (
 	"github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/logging"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureEarlyLogging()
+	logging.ConfigureEarlyLogging()
 	logLevel, err := log.ParseLevel(os.Getenv("K8SFV_LOG_LEVEL"))
 	panicIfError(err)
 	log.SetLevel(logLevel)

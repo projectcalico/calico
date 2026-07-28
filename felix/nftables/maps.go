@@ -27,7 +27,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/deltatracker"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -83,7 +83,7 @@ type Maps struct {
 	mapsWithDirtyMembers set.Set[string]
 
 	gaugeNumMaps prometheus.Gauge
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	sleep        func(time.Duration)
 	logCxt       *logrus.Entry
 
@@ -100,7 +100,7 @@ func NewMaps(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	return NewMapsWithShims(
 		ipVersionConfig,
@@ -119,7 +119,7 @@ func NewMapsWithShims(
 	nft knftables.Interface,
 	increfChain func(chain string),
 	decrefChain func(chain string),
-	recorder logutils.OpRecorder,
+	recorder logrusr.OpRecorder,
 ) *Maps {
 	familyStr := string(ipVersionConfig.Family)
 	familyLogger := logrus.WithFields(logrus.Fields{"family": ipVersionConfig.Family})
