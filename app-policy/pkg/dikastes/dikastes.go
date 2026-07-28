@@ -70,7 +70,9 @@ func RunServer(listenPath, dialTarget string) {
 	defer cancel()
 
 	gs := grpc.NewServer()
-	storeManager := policystore.NewPolicyStoreManager()
+	storeManager := policystore.NewPolicyStoreManagerWithOpts(
+		policystore.WithPolicyCompiler(checker.NewPolicyCompiler()),
+	)
 	NewCheckServer(ctx, gs, storeManager)
 
 	opts := uds.GetDialOptions()

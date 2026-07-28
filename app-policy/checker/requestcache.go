@@ -17,6 +17,7 @@ package checker
 import (
 	"fmt"
 	"maps"
+	"net"
 	"regexp"
 	"sync"
 
@@ -44,9 +45,14 @@ type requestCache struct {
 	Flow
 	store *policystore.PolicyStore
 
-	// Memoized string forms of per-flow values. The match functions need these for
-	// every rule that carries an IP set reference; recomputing them per rule dominates
-	// allocation when many policies apply to an endpoint.
+	// Memoized per-flow values. The match functions need these for every rule that
+	// carries an IP set reference; recomputing them per rule dominates allocation
+	// when many policies apply to an endpoint. The IPs need explicit "fetched"
+	// flags because nil is a valid value (non-IP connections, e.g. pipes).
+	srcIP          net.IP
+	dstIP          net.IP
+	srcIPFetched   bool
+	dstIPFetched   bool
 	srcIPStr       string
 	dstIPStr       string
 	dstIPProtoPort string
@@ -68,6 +74,27 @@ func NewRequestCache(store *policystore.PolicyStore, request Flow) *requestCache
 		Flow:  request,
 		store: store,
 	}
+}
+
+// requestCaches recycles the per-evaluation scratch space. Evaluation is on the
+// felix collector's and dikastes' hot paths, and the cache cannot be stack
+// allocated: compiled matchers receive it through a func value, so escape
+// analysis must assume it leaks.
+var requestCaches = sync.Pool{New: func() any { return &requestCache{} }}
+
+func getRequestCache(store *policystore.PolicyStore, request Flow) *requestCache {
+	r := requestCaches.Get().(*requestCache)
+	r.Flow = request
+	r.store = store
+	return r
+}
+
+// putRequestCache returns the cache to the pool, clearing it so that no value
+// from this flow can be read by the next one, and so that it holds on to
+// neither the flow nor the store.
+func putRequestCache(r *requestCache) {
+	*r = requestCache{}
+	requestCaches.Put(r)
 }
 
 // getSrcPeer returns the source peer.
@@ -107,10 +134,29 @@ func (r *requestCache) getDstNamespace() *namespace {
 	return nil
 }
 
+// getSrcIP returns the source IP, memoized across the request (the Flow
+// implementations construct a fresh net.IP per call).
+func (r *requestCache) getSrcIP() net.IP {
+	if !r.srcIPFetched {
+		r.srcIP = r.GetSourceIP()
+		r.srcIPFetched = true
+	}
+	return r.srcIP
+}
+
+// getDstIP returns the destination IP, memoized across the request.
+func (r *requestCache) getDstIP() net.IP {
+	if !r.dstIPFetched {
+		r.dstIP = r.GetDestIP()
+		r.dstIPFetched = true
+	}
+	return r.dstIP
+}
+
 // getSrcIPStr returns the source IP in string form, memoized across the request.
 func (r *requestCache) getSrcIPStr() string {
 	if r.srcIPStr == "" {
-		r.srcIPStr = r.GetSourceIP().String()
+		r.srcIPStr = r.getSrcIP().String()
 	}
 	return r.srcIPStr
 }
@@ -118,7 +164,7 @@ func (r *requestCache) getSrcIPStr() string {
 // getDstIPStr returns the destination IP in string form, memoized across the request.
 func (r *requestCache) getDstIPStr() string {
 	if r.dstIPStr == "" {
-		r.dstIPStr = r.GetDestIP().String()
+		r.dstIPStr = r.getDstIP().String()
 	}
 	return r.dstIPStr
 }
