@@ -30,17 +30,16 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
-var legacyIPTablesTables = []string{"filter", "nat", "mangle", "raw"}
+var iptablesTables = []string{"filter", "nat", "mangle", "raw"}
 
-// LegacyIPTablesCleanup removes what an iptables-mode Felix using the nft backend left in the
-// standard filter/nat/mangle/raw tables of one IP family. (A Felix on the legacy backend wrote to
-// xtables, which nft cannot see; that cleanup goes through iptables-legacy.)
+// IPTablesCleanup removes what an iptables-mode Felix left in the standard filter/nat/mangle/raw
+// tables of one IP family. Those are nftables tables too, since iptables-nft writes there.
 //
 // We read the tables with nft rather than iptables-nft-save, because iptables-nft-save refuses to
 // read a table holding anything iptables can't express, which is what made Felix crash-loop next
 // to Tailscale (#13263). The catch is that nft can't decode the comments holding our rule hashes,
 // so we identify our own state structurally instead - see ourState.
-type LegacyIPTablesCleanup struct {
+type IPTablesCleanup struct {
 	ipVersion uint8
 	family    knftables.Family
 
@@ -61,15 +60,15 @@ type LegacyIPTablesCleanup struct {
 	opReporter      logutils.OpRecorder
 }
 
-// NewLegacyIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given IP
+// NewIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given IP
 // version. markMask should be the widest mark mask Felix reserves, since the rules were written by
 // a Felix that may have been configured differently to this one.
-func NewLegacyIPTablesCleanup(
+func NewIPTablesCleanup(
 	ipVersion uint8,
 	chainPrefixes []string,
 	markMask uint32,
 	options TableOptions,
-) *LegacyIPTablesCleanup {
+) *IPTablesCleanup {
 	family := knftables.IPv4Family
 	if ipVersion == 6 {
 		family = knftables.IPv6Family
@@ -96,11 +95,11 @@ func NewLegacyIPTablesCleanup(
 	}
 
 	pending := map[string]bool{}
-	for _, t := range legacyIPTablesTables {
+	for _, t := range iptablesTables {
 		pending[t] = true
 	}
 
-	return &LegacyIPTablesCleanup{
+	return &IPTablesCleanup{
 		ipVersion:       ipVersion,
 		family:          family,
 		chainPrefixes:   chainPrefixes,
@@ -115,22 +114,22 @@ func NewLegacyIPTablesCleanup(
 	}
 }
 
-func (c *LegacyIPTablesCleanup) Name() string {
-	return "legacy-iptables"
+func (c *IPTablesCleanup) Name() string {
+	return "iptables"
 }
 
-func (c *LegacyIPTablesCleanup) IPVersion() uint8 {
+func (c *IPTablesCleanup) IPVersion() uint8 {
 	return c.ipVersion
 }
 
 // Done reports whether every table has come back clean.
-func (c *LegacyIPTablesCleanup) Done() bool {
+func (c *IPTablesCleanup) Done() bool {
 	return len(c.pending) == 0
 }
 
 // CleanUp makes one pass over the tables we haven't yet seen clean, rate limited to one pass per
 // refresh interval. A table that errors out is retried.
-func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
+func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	if c.Done() {
 		return 0
 	}
@@ -146,7 +145,7 @@ func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	present, err := c.listTables()
 	if err != nil {
 		logrus.WithError(err).WithField("family", c.family).Warn(
-			"Failed to list nftables tables; will retry legacy iptables cleanup")
+			"Failed to list nftables tables; will retry iptables cleanup")
 		return c.refreshInterval
 	}
 
@@ -172,14 +171,14 @@ func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	}
 
 	if c.Done() {
-		logrus.WithField("family", c.family).Debug("No legacy iptables state left to clean up")
+		logrus.WithField("family", c.family).Debug("No iptables state left to clean up")
 		return 0
 	}
 	return c.refreshInterval
 }
 
 // sweepTable removes our state from one table, reporting whether the table came back without any.
-func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
+func (c *IPTablesCleanup) sweepTable(table string) (bool, error) {
 	raw, err := c.listTable(table)
 	if err != nil {
 		return false, err
@@ -218,7 +217,7 @@ func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
 	}
 
 	if c.opReporter != nil {
-		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-legacy-%s-v%d", table, c.ipVersion))
+		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-iptables-%s-v%d", table, c.ipVersion))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
@@ -248,7 +247,7 @@ func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
 //
 // The last two also require an iptables comment match, which all of our rules carry and no
 // natively-programmed nft rule does.
-func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]string, map[string][]int) {
+func (c *IPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]string, map[string][]int) {
 	ourChains := []string{}
 	isOurChain := map[string]bool{}
 	for _, ch := range chains {
@@ -295,7 +294,7 @@ func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]
 }
 
 // listTables returns the names of the tables that exist in our family.
-func (c *LegacyIPTablesCleanup) listTables() (map[string]bool, error) {
+func (c *IPTablesCleanup) listTables() (map[string]bool, error) {
 	out, err := c.runNFT("--json", "list", "tables", string(c.family))
 	if err != nil {
 		return nil, err
@@ -322,7 +321,7 @@ func (c *LegacyIPTablesCleanup) listTables() (map[string]bool, error) {
 }
 
 // listTable returns the raw `nft --json` output for one table.
-func (c *LegacyIPTablesCleanup) listTable(table string) ([]byte, error) {
+func (c *IPTablesCleanup) listTable(table string) ([]byte, error) {
 	out, err := c.runNFT("--json", "list", "table", string(c.family), table)
 	if err != nil {
 		return nil, fmt.Errorf("list table %s: %w", table, err)
@@ -332,7 +331,7 @@ func (c *LegacyIPTablesCleanup) listTable(table string) ([]byte, error) {
 
 // runNFT runs one nft command, folding its stderr into the error: Output() keeps it out of
 // err.Error(), and nft says everything useful there.
-func (c *LegacyIPTablesCleanup) runNFT(args ...string) ([]byte, error) {
+func (c *IPTablesCleanup) runNFT(args ...string) ([]byte, error) {
 	out, err := c.newCmd("nft", args...).Output()
 	if err != nil {
 		var exitErr *exec.ExitError

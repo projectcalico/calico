@@ -46,13 +46,13 @@ func loadTestdata(table string) ([]nftChain, []nftRule) {
 	return chains, rules
 }
 
-var _ = Describe("Legacy iptables cleanup, identifying our own state", func() {
+var _ = Describe("iptables cleanup, identifying our own state", func() {
 	const markMask = 0xffff0000
 
-	var cleanup *LegacyIPTablesCleanup
+	var cleanup *IPTablesCleanup
 
 	BeforeEach(func() {
-		cleanup = NewLegacyIPTablesCleanup(4, ourPrefixes, markMask, TableOptions{})
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, markMask, TableOptions{})
 	})
 
 	Describe("filter table", func() {
@@ -176,13 +176,13 @@ var _ = Describe("Legacy iptables cleanup, identifying our own state", func() {
 	})
 })
 
-var _ = Describe("Legacy iptables cleanup, deciding when it's finished", func() {
+var _ = Describe("iptables cleanup, deciding when it's finished", func() {
 	var (
 		listed  []string
 		cmds    [][]string
 		output  []byte
 		listErr error
-		cleanup *LegacyIPTablesCleanup
+		cleanup *IPTablesCleanup
 	)
 
 	// Stands in for the nft binary. Of our four tables only "filter" exists on this host.
@@ -205,7 +205,7 @@ var _ = Describe("Legacy iptables cleanup, deciding when it's finished", func() 
 			{"chain":{"family":"ip","table":"filter","name":"ts-input"}},
 			{"rule":{"family":"ip","table":"filter","chain":"ts-input","handle":3,"expr":[{"accept":null}]}}
 		]}`)
-		cleanup = NewLegacyIPTablesCleanup(4, ourPrefixes, 0xffff0000,
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, 0xffff0000,
 			TableOptions{NewCmdOverride: newCmd})
 	})
 
@@ -243,7 +243,7 @@ var _ = Describe("Legacy iptables cleanup, deciding when it's finished", func() 
 	})
 
 	It("retries the whole pass if it can't even list the tables", func() {
-		cleanup = NewLegacyIPTablesCleanup(4, ourPrefixes, 0xffff0000, TableOptions{
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, 0xffff0000, TableOptions{
 			RefreshInterval: time.Second,
 			NewCmdOverride: func(name string, args ...string) cmdshim.CmdIface {
 				return &fakeCmd{err: errors.New("exit status 1")}

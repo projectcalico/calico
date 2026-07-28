@@ -544,7 +544,7 @@ func (n *NftablesTable) IPVersion() uint8 {
 
 // CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
 // an ordinary apply deletes the whole thing. That's only safe because every table we build an
-// NftablesTable for belongs to a single component; see LegacyIPTablesCleanup for the standard
+// NftablesTable for belongs to a single component; see IPTablesCleanup for the standard
 // tables, which we share with everyone else.
 func (n *NftablesTable) CleanUp() time.Duration {
 	return n.Apply()
