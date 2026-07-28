@@ -50,8 +50,6 @@ type Cache struct {
 	factory      metadatainformer.SharedInformerFactory
 	informers    map[string]informers.GenericInformer
 	calicoClient calicoclient.Interface
-
-	synced bool
 }
 
 var _ tierauth.PolicyTierResolver = &Cache{}
@@ -82,7 +80,6 @@ func (c *Cache) Start(ctx context.Context) error {
 			return fmt.Errorf("timed out waiting for the %s cache to sync", resource)
 		}
 	}
-	c.synced = true
 
 	logrus.WithField("resources", len(c.informers)).Info("Policy tier cache synced")
 	return nil
@@ -103,11 +100,10 @@ func cacheSyncWithContext(ctx context.Context, inf informers.GenericInformer) bo
 	}
 }
 
-// HasSynced reports whether every informer has completed its initial list.
+// HasSynced reports whether every informer has completed its initial list. Safe to call
+// concurrently with Start: sharedIndexInformer.HasSynced() is a select on a channel that
+// Run closes, and c.informers is populated once in New and never written again.
 func (c *Cache) HasSynced() bool {
-	if !c.synced {
-		return false
-	}
 	for _, inf := range c.informers {
 		if !inf.Informer().HasSynced() {
 			return false
