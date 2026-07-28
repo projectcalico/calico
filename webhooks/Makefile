@@ -16,12 +16,13 @@ clean:
 # UTs
 ###############################################################################
 ci: static-checks ut ut-authz
+## ./pkg/... rather than ./... so that ut does not pick up ./test/authz, which needs the envtest
+## binaries. Anything new outside ./pkg needs adding here.
 ut:
 	mkdir -p report
 	$(DOCKER_GO_BUILD) gotestsum --junitfile report/webhooks_ut.xml -- ./pkg/... -coverprofile coverage.profile -race -count 1
 
-## Run the authorization webhook suite against a real kube-apiserver. Kept out of ut because it
-## needs the envtest binaries, which ut deliberately does not depend on.
+## Run the authorization webhook suite against a real kube-apiserver.
 .PHONY: ut-authz
 ut-authz: setup-envtest
 	mkdir -p report

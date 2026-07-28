@@ -95,7 +95,10 @@ const (
 
 	// unauthorizedTTL replaces the shipped 30s so the decision-cache spec does not have to
 	// wait that long for an entry to expire. It is the only value this suite overrides.
-	unauthorizedTTL = 2 * time.Second
+	//
+	// It cuts both ways, so don't shorten it further: the spec's cache-hit assertion needs
+	// both of its requests to land inside the TTL, and that half has no retry.
+	unauthorizedTTL = 5 * time.Second
 )
 
 var (
@@ -565,9 +568,9 @@ var _ = Describe("Calico authorization webhook", func() {
 		})
 
 		It("keeps non-resource requests away from the webhook", func() {
-			// has(request.resourceAttributes) guards the group comparison. Without the guard
-			// this request makes the expression error, an error counts as a webhook failure,
-			// and failurePolicy: Deny turns that into a 403 on /version.
+			// has(request.resourceAttributes) guards the group comparison. Drop the guard and
+			// the API server rejects the whole expression at startup rather than failing this
+			// request, so BeforeSuite is where that mistake surfaces.
 			_, err := kubernetes.NewForConfigOrDie(configFor(userNonResource)).Discovery().ServerVersion()
 
 			Expect(err).NotTo(HaveOccurred())
@@ -607,14 +610,16 @@ var _ = Describe("Calico authorization webhook", func() {
 		// Paired with the specs above: an expression that matches nothing exempts nothing,
 		// which looks like success everywhere else in this suite. These two pin it down.
 		It("consults the webhook for a service account whose name is not on the list", func() {
-			Expect(listPolicies(userNearMissName, metav1.ListOptions{})).NotTo(Succeed())
+			err := listPolicies(userNearMissName, metav1.ListOptions{})
 
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected Forbidden, got %v", err)
 			Expect(hook.callsFor(userNearMissName, "networkpolicies")).To(BeNumerically(">", 0))
 		})
 
 		It("consults the webhook for an exempt name in a different namespace", func() {
-			Expect(listPolicies(userNearMissNS, metav1.ListOptions{})).NotTo(Succeed())
+			err := listPolicies(userNearMissNS, metav1.ListOptions{})
 
+			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected Forbidden, got %v", err)
 			Expect(hook.callsFor(userNearMissNS, "networkpolicies")).To(BeNumerically(">", 0),
 				"the exemption names three service accounts in kube-system, not three names anywhere")
 		})
@@ -625,7 +630,7 @@ var _ = Describe("Calico authorization webhook", func() {
 			err := listPolicies(userNoTier, metav1.ListOptions{})
 
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected Forbidden, got %v", err)
-			Expect(err.Error()).To(ContainSubstring(v3.LabelTier),
+			Expect(err.Error()).To(ContainSubstring("--selector "+v3.LabelTier+"="),
 				"the deny message is the only place a user learns how to make the request succeed")
 			Expect(hook.callsFor(userNoTier, "networkpolicies")).To(BeNumerically(">", 0))
 		})
@@ -634,6 +639,8 @@ var _ = Describe("Calico authorization webhook", func() {
 			// The control for the spec above: the same request, denied only for want of
 			// tier-unrestricted RBAC.
 			Expect(listPolicies(userUnrestricted, metav1.ListOptions{})).To(Succeed())
+			Expect(hook.callsFor(userUnrestricted, "networkpolicies")).To(BeNumerically(">", 0),
+				"a success the webhook never saw would prove nothing about the unrestricted path")
 		})
 
 		It("allows a list scoped to a tier the user may read", func() {
@@ -643,7 +650,7 @@ var _ = Describe("Calico authorization webhook", func() {
 			Expect(hook.callsFor(userTierScoped, "networkpolicies")).To(BeNumerically(">", 0))
 		})
 
-		It("resolves the tier of a labelled policy from the cache", func() {
+		It("authorizes a named policy against the tier it belongs to", func() {
 			Expect(getPolicy(userNamedAllowed, labeledPolicy)).To(Succeed())
 
 			err := getPolicy(userNamedDenied, labeledPolicy)
