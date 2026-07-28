@@ -309,7 +309,7 @@ log "Step 5: Installing migration CRD"
 
 # Install the DatastoreMigration CRD (separate from the v3 Calico CRDs — it lives
 # in the migration.projectcalico.org group to avoid APIService conflicts).
-${kubectl} apply -f "${REPO_ROOT}/kube-controllers/pkg/controllers/migration/crd/"
+${kubectl} apply -f "${REPO_ROOT}/kube-controllers/pkg/apis/migration/v1/crd/"
 echo "  DatastoreMigration CRD installed"
 
 if ! ${kubectl} get crd datastoremigrations.migration.projectcalico.org &>/dev/null; then
@@ -330,7 +330,7 @@ kind: DatastoreMigration
 metadata:
   name: v1-to-v3
 spec:
-  type: V1ToV3
+  type: APIServerToCRDs
 EOF
 echo "  DatastoreMigration CR 'v1-to-v3' created"
 
