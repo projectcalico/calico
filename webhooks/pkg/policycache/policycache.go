@@ -82,7 +82,7 @@ func (c *Cache) Start(ctx context.Context) error {
 		}
 	}
 
-	metrics.CacheLastSyncSeconds.Set(float64(time.Now().Unix()))
+	metrics.CacheInitialSyncSeconds.Set(float64(time.Now().Unix()))
 	logrus.WithField("resources", len(c.informers)).Info("Policy tier cache synced")
 	return nil
 }

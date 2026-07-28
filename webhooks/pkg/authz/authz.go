@@ -103,15 +103,9 @@ func (h *Hook) Authorize(sar authorizationv1.SubjectAccessReview) *authorization
 		Tier:      extractTierFromSelectors(ra),
 	})
 
+	// tierauth.Authorize already logs the deny with every field this hook could add, so
+	// there is no logging here: doing it at both layers would print every deny twice.
 	if result.Decision == tierauth.DecisionDenied {
-		logrus.WithFields(logrus.Fields{
-			"user":      sar.Spec.User,
-			"verb":      ra.Verb,
-			"resource":  ra.Resource,
-			"namespace": ra.Namespace,
-			"name":      ra.Name,
-			"reason":    result.Reason,
-		}).Warn("Denying tiered policy read")
 		return deny(result.Reason)
 	}
 

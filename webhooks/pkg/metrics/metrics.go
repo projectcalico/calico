@@ -51,11 +51,11 @@ var CacheFallbackGetsTotal = prometheus.NewCounterVec(
 	[]string{"resource", "reason"},
 )
 
-var CacheLastSyncSeconds = prometheus.NewGauge(
+var CacheInitialSyncSeconds = prometheus.NewGauge(
 	prometheus.GaugeOpts{
 		Namespace: namespace,
-		Name:      "policy_cache_last_sync_timestamp_seconds",
-		Help:      "Unix timestamp of the last successful policy cache sync.",
+		Name:      "policy_cache_initial_sync_timestamp_seconds",
+		Help:      "Unix timestamp of the policy cache's initial sync at startup. Does not update on resync.",
 	},
 )
 
@@ -66,7 +66,7 @@ func RegisterAll(registry prometheus.Registerer) error {
 		DecisionsTotal,
 		DecisionDuration,
 		CacheFallbackGetsTotal,
-		CacheLastSyncSeconds,
+		CacheInitialSyncSeconds,
 	}
 
 	for _, c := range collectors {

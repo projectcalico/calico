@@ -166,7 +166,7 @@ func (a *Authorizer) authorize(ctx context.Context, req Request) Result {
 	// "is this user unrestricted by tier".
 	if err := a.tiers.AuthorizeTierOperation(a.withAttributes(ctx, req), req.Name, tier); err != nil {
 		reason := a.denyReason(req, tier, err)
-		logCtx.WithField("resolvedTier", tier).WithField("reason", reason).Info("Denied tier access")
+		logCtx.WithField("reason", reason).Warn("Denied tier access")
 		return Result{Decision: DecisionDenied, Reason: reason}
 	}
 
