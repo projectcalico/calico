@@ -48,6 +48,14 @@ type IPSet interface {
 	Members() []string
 }
 
+// IPAddrSet is implemented by IPSet types that can test membership of an
+// already-parsed IP address. Hot callers that hold a net.IP should use this
+// in preference to Contains, which (for NET sets) re-parses the string on
+// every call.
+type IPAddrSet interface {
+	ContainsIP(ip net.IP) bool
+}
+
 // We'll use golang's map type under the covers here because it is simple to implement.
 type ipMapSet map[string]bool
 type ipPortMapSet map[string]bool
@@ -164,9 +172,13 @@ func (m ipNetSet) Contains(addr string) bool {
 	if ip == nil {
 		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
 		// connections, like Pipes.
-		log.WithField("addr", ip).Warn("could not parse IP")
+		log.WithField("addr", addr).Warn("could not parse IP")
 		return false
 	}
+	return m.ContainsIP(ip)
+}
+
+func (m ipNetSet) ContainsIP(ip net.IP) bool {
 	ip4 := ip.To4()
 	if ip4 != nil {
 		return m.v4.containsIP(ip4, 0)

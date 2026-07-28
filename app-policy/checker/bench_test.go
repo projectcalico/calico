@@ -75,6 +75,16 @@ func defaultBaselinePolicyScaleParams() baselinePolicyScaleParams {
 	}
 }
 
+// oneRulePerPolicyScaleParams is the same total rule count spread over many
+// single-rule policies, a common shape where per-policy work (resolving the
+// policy from the endpoint's tier) costs as much as evaluating its one rule.
+func oneRulePerPolicyScaleParams() baselinePolicyScaleParams {
+	p := defaultBaselinePolicyScaleParams()
+	p.numPolicies = 2000
+	p.rulesPerPolicy = 1
+	return p
+}
+
 // ipSetSizeHistogram is the per-node IP set size distribution measured in the same
 // deployment: 3,708 sets, ~256k members in total, dominated by tiny sets with a long
 // tail of large ones.
@@ -111,9 +121,43 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 	b.Run("MatchEarly", func(b *testing.B) {
 		benchEvaluateBaselinePolicyScale(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
 	})
+	// Same rule count spread over single-rule policies, so per-policy work is
+	// not amortized over 68 rules.
+	b.Run("OneRulePerPolicy", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScale(b, oneRulePerPolicyScaleParams(), log.WarnLevel, false)
+	})
+}
+
+// BenchmarkEvaluateBaselinePolicyScaleCompiled is BenchmarkEvaluateBaselinePolicyScale
+// with the store's policies compiled, as when a PolicyCompiler is configured. Missing
+// IP sets warn at compile time (outside the timed loop) rather than per flow, so there
+// is no MissingSetsLogsOff variant to distinguish.
+func BenchmarkEvaluateBaselinePolicyScaleCompiled(b *testing.B) {
+	b.Run("AllSetsPresent", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, false)
+	})
+	b.Run("MissingSets", func(b *testing.B) {
+		p := defaultBaselinePolicyScaleParams()
+		p.numMissingIPSets = 8
+		benchEvaluateBaselinePolicyScaleCompiled(b, p, log.WarnLevel, false)
+	})
+	b.Run("MatchEarly", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, defaultBaselinePolicyScaleParams(), log.WarnLevel, true)
+	})
+	b.Run("OneRulePerPolicy", func(b *testing.B) {
+		benchEvaluateBaselinePolicyScaleCompiled(b, oneRulePerPolicyScaleParams(), log.WarnLevel, false)
+	})
 }
 
 func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
+	benchEvaluateBaselinePolicyScaleImpl(b, p, level, matchEarly, false)
+}
+
+func benchEvaluateBaselinePolicyScaleCompiled(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
+	benchEvaluateBaselinePolicyScaleImpl(b, p, level, matchEarly, true)
+}
+
+func benchEvaluateBaselinePolicyScaleImpl(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly, compiled bool) {
 	logger := log.StandardLogger()
 	oldLevel, oldOut := logger.GetLevel(), logger.Out
 	counter := &ipsetMissCounter{}
@@ -134,6 +178,17 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 	if matchEarly {
 		addMatchEarlyPolicy(store, ep)
 	}
+	if compiled {
+		// Compiling moves the missing-set warnings to compile time (once per
+		// missing reference), off the per-flow path entirely.
+		compileStoreForTest(store)
+		if logger.IsLevelEnabled(log.WarnLevel) && counter.count.Load() != int64(expectedWarns) {
+			b.Fatalf("expected %d 'IPSet not found' warnings at compile time, got %d",
+				expectedWarns, counter.count.Load())
+		}
+		counter.count.Store(0)
+		expectedWarns = 0
+	}
 	flow := &MockFlow{
 		// TEST-NET addresses; generated IP set members all come from 10.0.0.0/8, so no
 		// rule ever matches and the walk covers the whole policy set.
@@ -146,7 +201,7 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 
 	// Pre-flight outside the timed loop: prove the walk is the intended one and that
 	// the warning count matches the analytic count, so that warnings/op is exact.
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	if matchEarly {
 		if len(trace) != 1 || trace[0].Action != rules.RuleActionAllow || trace[0].Index != 0 {
 			b.Fatalf("expected an immediate allow from the match-early policy, got %v", trace)
@@ -165,7 +220,8 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchTraceSink = Evaluate(rules.RuleDirIngress, store, ep, flow)
+		// Reuse the trace buffer, as the felix collector does.
+		benchTraceSink = Evaluate(rules.RuleDirIngress, store, ep, flow, benchTraceSink[:0])
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(counter.count.Load())/float64(b.N), "warnings/op")
@@ -235,7 +291,10 @@ func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyS
 		expectedWarns += refCount[id]
 	}
 
+	// The endpoint goes into the store, as dikastes' per-pod store holds it:
+	// evaluation resolves an endpoint's compiled form by identity.
 	ep := &proto.WorkloadEndpoint{Tiers: []*proto.TierInfo{tier}}
+	store.Endpoint = ep
 	return store, ep, expectedWarns
 }
 
