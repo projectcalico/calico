@@ -23,10 +23,29 @@ type TableSet interface {
 	WithTable(name string) Table
 }
 
-// Table is a logical table of chains and rules.
-type Table interface {
+// CleanupTable removes state Calico left in a table it no longer programs: a dataplane we've
+// switched away from, or a component (such as kube-proxy) whose rules we've taken over.
+//
+// Cleanup finishes: once a pass finds none of the state we're looking for, we stop reading the
+// table. That's exact for state a previous Felix left, less so for a component still running
+// (kube-proxy, in BPF mode) - but we remove its configuration too, so what it writes is transient.
+type CleanupTable interface {
 	Name() string
 	IPVersion() uint8
+
+	// CleanUp makes one pass at removing our state, returning the minimum time to wait before
+	// another pass is worth making.
+	CleanUp() time.Duration
+
+	// Done reports whether a pass has confirmed there is nothing of ours left. False until at
+	// least one successful read.
+	Done() bool
+}
+
+// Table is a logical table of chains and rules. Every Table can also be driven purely for cleanup.
+type Table interface {
+	CleanupTable
+
 	InsertOrAppendRules(chainName string, rules []Rule)
 	AppendRules(chainName string, rules []Rule)
 	UpdateChain(chain *Chain)
@@ -58,5 +77,7 @@ func (t *NoopTable) RemoveChains([]*Chain)                               {}
 func (t *NoopTable) RemoveChainByName(name string)                       {}
 func (t *NoopTable) InvalidateDataplaneCache(reason string)              {}
 func (t *NoopTable) Apply() time.Duration                                { return 0 }
+func (t *NoopTable) CleanUp() time.Duration                              { return 0 }
+func (t *NoopTable) Done() bool                                          { return true }
 func (n *NoopTable) InsertRulesNow(chainName string, rules []Rule) error { return nil }
 func (n *NoopTable) CheckRulesPresent(chain string, rules []Rule) []Rule { return nil }

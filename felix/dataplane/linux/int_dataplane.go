@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,7 +179,13 @@ type Config struct {
 	ProgramClusterRoutes         bool
 	NoEncapEnabled               bool
 
-	IPForwarding                   string
+	IPForwarding string
+
+	// CleanupMarkMask is the widest mark mask Felix reserves, used to recognise rules a previous
+	// Felix left behind. Deliberately not the mask we program with: that Felix may have been
+	// configured differently.
+	CleanupMarkMask uint32
+
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
@@ -351,6 +358,7 @@ type InternalDataplane struct {
 
 	mainRouteTables []routetable.SyncerInterface
 	allTables       []generictables.Table
+	cleanupTables   []generictables.CleanupTable
 	mangleTables    []generictables.Table
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
@@ -565,6 +573,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		OnStillAlive:          dp.reportHealth,
 		OpRecorder:            dp.loopSummarizer,
 	}
+	if nftablesEnabled {
+		// We only read these tables to clean up after a previous iptables-mode Felix, so one we
+		// can't read is one we skip rather than a reason to restart (#13263).
+		iptablesOptions.CleanupOnly = true
+
+		// Pin them to the legacy backend: the nft backend writes into the same nftables tables
+		// LegacyIPTablesCleanup sweeps below, and two cleanups racing is wasted work at best.
+		iptablesOptions.BackendMode = "legacy"
+	}
 	nftablesOptions := nftables.TableOptions{
 		RefreshInterval:  config.TableRefreshInterval,
 		LookPathOverride: config.LookPathOverride,
@@ -574,7 +591,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		NewDataplane:     config.NewNftablesDataplane,
 	}
 
-	var cleanupTables []generictables.Table
+	var cleanupTables []generictables.CleanupTable
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
@@ -639,8 +656,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Cleanup iptables.
+		// Clean up after a previous iptables-mode Felix. Its rules are in the nftables tables or
+		// in xtables depending on the backend it used, and the two are invisible to each other,
+		// so sweep both.
 		cleanupTables = append(cleanupTables,
+			// HistoricChainPrefixes rather than rules.AllHistoricChainNamePrefixes: in BPF mode
+			// it also covers kube-proxy's chains.
+			nftables.NewLegacyIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 			mangleTableV4IPT,
 			natTableV4IPT,
 			rawTableV4IPT,
@@ -1367,8 +1389,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
 
-			// Cleanup iptables.
+			// Clean up after a previous iptables-mode Felix; see the IPv4 path.
 			cleanupTables = append(cleanupTables,
+				nftables.NewLegacyIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 				mangleTableV6IPT,
 				natTableV6IPT,
 				rawTableV6IPT,
@@ -1567,8 +1590,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
-	// Include cleanup tables in allTables so that they are cleaned up.
-	dp.allTables = append(dp.allTables, cleanupTables...)
+	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
 	dp.ipSets = append(dp.ipSets, cleanupIPSets...)
 
 	// Register that we will report liveness and readiness.
@@ -2891,10 +2913,11 @@ func (d *InternalDataplane) apply() {
 	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
 	var iptablesWG sync.WaitGroup
-	for _, t := range d.allTables {
+	runTable := func(f func() time.Duration) {
 		iptablesWG.Add(1)
-		go func(t generictables.Table) {
-			tableReschedAfter := t.Apply()
+		go func() {
+			defer iptablesWG.Done()
+			tableReschedAfter := f()
 
 			reschedDelayMutex.Lock()
 			defer reschedDelayMutex.Unlock()
@@ -2902,10 +2925,30 @@ func (d *InternalDataplane) apply() {
 				reschedDelay = tableReschedAfter
 			}
 			d.reportHealth()
-			iptablesWG.Done()
-		}(t)
+		}()
+	}
+	for _, t := range d.allTables {
+		runTable(t.Apply)
+	}
+
+	// Sweep the tables we're no longer programming, to remove whatever a previous Felix left in
+	// them. Cleanup finishes: once a table reports that nothing of ours is left we stop visiting
+	// it, so on the great majority of nodes this costs one read of each table at startup.
+	for _, t := range d.cleanupTables {
+		runTable(t.CleanUp)
 	}
 	iptablesWG.Wait()
+
+	d.cleanupTables = slices.DeleteFunc(d.cleanupTables, func(t generictables.CleanupTable) bool {
+		if !t.Done() {
+			return false
+		}
+		log.WithFields(log.Fields{
+			"table":     t.Name(),
+			"ipVersion": t.IPVersion(),
+		}).Debug("Nothing of ours left to clean up in this table, will stop checking it")
+		return true
+	})
 
 	// Now clean up any left-over IP sets.
 	var ipSetsNeedsReschedule atomic.Bool
