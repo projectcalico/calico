@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build pickerdemo
-
-// This file is a developer harness, compiled only under the `pickerdemo` build
-// tag, so the cmd/pickerdemo program can drive the (unexported) interactive
-// picker against a fake clientset. It is excluded from all normal builds; use it
-// to eyeball the picker against arbitrarily large fake clusters. A normal test
-// (TestPickerDemoBuilds) keeps it compiling.
+// This file exists so the cmd/pickerdemo developer harness can drive the
+// (unexported) interactive picker against a fake clientset — use it to eyeball
+// the picker against arbitrarily large fake clusters.
 
 package cluster
 

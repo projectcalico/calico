@@ -152,6 +152,7 @@ local:calicoctl/calicoctl/commands
 local:calicoctl/calicoctl/commands/argutils
 local:calicoctl/calicoctl/commands/clientmgr
 local:calicoctl/calicoctl/commands/cluster
+local:calicoctl/calicoctl/commands/cluster/cmd/pickerdemo
 local:calicoctl/calicoctl/commands/common
 local:calicoctl/calicoctl/commands/constants
 local:calicoctl/calicoctl/commands/datastore/migrate

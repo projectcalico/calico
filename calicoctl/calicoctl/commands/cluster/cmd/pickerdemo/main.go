@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build pickerdemo
-
 // Command pickerdemo is a developer tool to eyeball the cluster-diags
 // interactive node picker against a fake cluster of arbitrary size, with no real
-// Kubernetes needed. It is compiled only under the `pickerdemo` build tag, so it
-// never ships in the calico binary.
+// Kubernetes needed. It is a program of its own, so it never ships in the calico
+// binary.
 //
-//	go run -tags pickerdemo ./calicoctl/calicoctl/commands/cluster/cmd/pickerdemo
-//	go run -tags pickerdemo ./calicoctl/calicoctl/commands/cluster/cmd/pickerdemo -nodes 5000
+//	go run ./calicoctl/calicoctl/commands/cluster/cmd/pickerdemo
+//	go run ./calicoctl/calicoctl/commands/cluster/cmd/pickerdemo -nodes 5000
 package main
 
 import (
