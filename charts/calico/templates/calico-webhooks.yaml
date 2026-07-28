@@ -30,6 +30,20 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      # The policy tier cache watches metadata for these to resolve a policy name to its
+      # tier, and reads the object itself when the tier label is absent.
+      - networkpolicies
+      - globalnetworkpolicies
+      - stagednetworkpolicies
+      - stagedglobalnetworkpolicies
+      - stagedkubernetesnetworkpolicies
+    verbs:
+      - get
+      - list
+      - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -52,7 +66,7 @@ metadata:
   labels:
     k8s-app: calico-webhooks
 spec:
-  replicas: 1
+  replicas: {{ if .Values.authzWebhookEnabled }}2{{ else }}1{{ end }}
   selector:
     matchLabels:
       k8s-app: calico-webhooks
@@ -74,6 +88,13 @@ spec:
           effect: NoSchedule
         - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              k8s-app: calico-webhooks
       containers:
         - name: calico-webhooks
           image: {{.Values.calico.registry}}/{{.Values.calico.image}}:{{ .Values.version }}
@@ -84,7 +105,11 @@ spec:
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key
           ports:
-            - containerPort: 6443
+            # /metrics is served on this same TLS listener alongside the admission and
+            # authorization endpoints (see webhooks/pkg/webhook/command.go); named so a
+            # future ServiceMonitor can reference it without hardcoding the port number.
+            - name: https
+              containerPort: 6443
               protocol: TCP
           readinessProbe:
             httpGet:
@@ -112,6 +137,19 @@ spec:
         - name: certs
           secret:
             secretName: calico-webhooks-tls
+{{- if .Values.authzWebhookEnabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: calico-webhooks
+  namespace: kube-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      k8s-app: calico-webhooks
+{{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -126,6 +164,9 @@ spec:
       targetPort: 6443
       protocol: TCP
   type: ClusterIP
+  {{- if .Values.authzWebhookClusterIP }}
+  clusterIP: {{ .Values.authzWebhookClusterIP }}
+  {{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
