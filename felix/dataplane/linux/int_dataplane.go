@@ -180,9 +180,10 @@ type Config struct {
 
 	IPForwarding string
 
-	// MarkMask is the bitmask of packet mark bits reserved for Felix. Nothing else on the host
-	// writes these, so a rule touching them is one of ours.
-	MarkMask uint32
+	// CleanupMarkMask is the widest mark mask Felix reserves, used to recognise rules a previous
+	// Felix left behind. Deliberately not the mask we program with: that Felix may have been
+	// configured differently.
+	CleanupMarkMask uint32
 
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
@@ -570,12 +571,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride:      config.LookPathOverride,
 		OnStillAlive:          dp.reportHealth,
 		OpRecorder:            dp.loopSummarizer,
+	}
+	if nftablesEnabled {
+		// We only read these tables to clean up after a previous iptables-mode Felix, so one we
+		// can't read is one we skip rather than a reason to restart (#13263).
+		iptablesOptions.CleanupOnly = true
 
-		// In nftables mode these tables are only used to clean up after a previous
-		// iptables-mode Felix, so a table we can't read is a table we skip rather than a
-		// reason to give up and restart (#13263). In iptables mode we're programming them and
-		// carrying on regardless would mean silently not writing policy.
-		SkipIfIncompatible: nftablesEnabled,
+		// Pin them to the legacy backend: the nft backend writes into the same nftables tables
+		// LegacyIPTablesCleanup sweeps below, and two cleanups racing is wasted work at best.
+		iptablesOptions.BackendMode = "legacy"
 	}
 	nftablesOptions := nftables.TableOptions{
 		RefreshInterval:  config.TableRefreshInterval,
@@ -651,13 +655,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Clean up after a previous iptables-mode Felix. Which dataplane its rules are in
-		// depends on the iptables backend it was using, and the two are invisible to each
-		// other, so we sweep both: the nft view for the nft backend (which also copes with a
-		// table another tool has made unreadable to iptables, see #13263) and the iptables
-		// tables for the legacy backend's xtables rules.
+		// Clean up after a previous iptables-mode Felix. Its rules are in the nftables tables or
+		// in xtables depending on the backend it used, and the two are invisible to each other,
+		// so sweep both.
 		cleanupTables = append(cleanupTables,
-			nftables.NewLegacyIPTablesCleanup(4, rules.AllHistoricChainNamePrefixes, config.MarkMask, nftablesOptions),
+			// HistoricChainPrefixes rather than rules.AllHistoricChainNamePrefixes: in BPF mode
+			// it also covers kube-proxy's chains.
+			nftables.NewLegacyIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 			mangleTableV4IPT,
 			natTableV4IPT,
 			rawTableV4IPT,
@@ -1386,7 +1390,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Clean up after a previous iptables-mode Felix; see the IPv4 path.
 			cleanupTables = append(cleanupTables,
-				nftables.NewLegacyIPTablesCleanup(6, rules.AllHistoricChainNamePrefixes, config.MarkMask, nftablesOptions),
+				nftables.NewLegacyIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 				mangleTableV6IPT,
 				natTableV6IPT,
 				rawTableV6IPT,

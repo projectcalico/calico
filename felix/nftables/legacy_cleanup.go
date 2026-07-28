@@ -17,7 +17,9 @@ package nftables
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -28,40 +30,28 @@ import (
 	"github.com/projectcalico/calico/felix/logutils"
 )
 
-// legacyIPTablesTables are the standard tables a previous iptables-mode Felix would have
-// written into. In nftables mode we sweep our chains and rules back out of them.
 var legacyIPTablesTables = []string{"filter", "nat", "mangle", "raw"}
 
-// LegacyIPTablesCleanup removes what a previous iptables-mode Felix left in the standard
-// filter/nat/mangle/raw tables of one IP family, for a Felix that was using the nft backend of
-// iptables. (A Felix on the legacy backend wrote to xtables instead, which is a different
-// dataplane that nft cannot see; that cleanup goes through iptables-legacy.)
+// LegacyIPTablesCleanup removes what an iptables-mode Felix using the nft backend left in the
+// standard filter/nat/mangle/raw tables of one IP family. (A Felix on the legacy backend wrote to
+// xtables, which nft cannot see; that cleanup goes through iptables-legacy.)
 //
-// We read these tables with nft rather than iptables-nft-save, because iptables-nft-save
-// refuses to read a table holding anything iptables can't express - which is what made Felix
-// crash-loop next to Tailscale (#13263). nft has no such trouble, so we can still clean up a
-// table another tool has "poisoned".
-//
-// The catch is that nft can't see the rule comments iptables wrote: iptables stores them as an
-// extension blob that nft renders as an opaque `xt` expression with no payload. So we identify
-// our own state structurally instead - see ourRules.
+// We read the tables with nft rather than iptables-nft-save, because iptables-nft-save refuses to
+// read a table holding anything iptables can't express, which is what made Felix crash-loop next
+// to Tailscale (#13263). The catch is that nft can't decode the comments holding our rule hashes,
+// so we identify our own state structurally instead - see ourState.
 type LegacyIPTablesCleanup struct {
 	ipVersion uint8
 	family    knftables.Family
 
-	// chainPrefixes are the chain name prefixes Felix has used over the years, and markMask is
-	// the mark bitmask Felix owns. Together they're enough to recognise our own state without
-	// the rule comments.
 	chainPrefixes []string
 	markMask      uint32
 
 	newDataplane NewNftablesDataplaneFn
 	newCmd       cmdshim.CmdFactory
 
-	// pending holds the tables we have yet to see a clean pass on. A table drops out once it
-	// comes back with none of our state in it, so cleanup finishes instead of reading the
-	// dataplane forever. Leftovers can only be written by a previous Felix process, so a table
-	// that is clean once stays clean.
+	// pending holds the tables we have yet to see a clean pass on, so cleanup finishes instead of
+	// reading the dataplane forever.
 	pending map[string]bool
 
 	refreshInterval time.Duration
@@ -71,8 +61,9 @@ type LegacyIPTablesCleanup struct {
 	opReporter      logutils.OpRecorder
 }
 
-// NewLegacyIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given
-// IP version. markMask should be Felix's iptables mark mask.
+// NewLegacyIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given IP
+// version. markMask should be the widest mark mask Felix reserves, since the rules were written by
+// a Felix that may have been configured differently to this one.
 func NewLegacyIPTablesCleanup(
 	ipVersion uint8,
 	chainPrefixes []string,
@@ -86,8 +77,6 @@ func NewLegacyIPTablesCleanup(
 
 	newDataplane := options.NewDataplane
 	if newDataplane == nil {
-		// Same convention as NewTable: production leaves this nil and gets the real knftables
-		// client, tests inject a fake.
 		newDataplane = knftables.New
 	}
 
@@ -134,13 +123,13 @@ func (c *LegacyIPTablesCleanup) IPVersion() uint8 {
 	return c.ipVersion
 }
 
-// Done reports whether every table has come back clean, so there is nothing left to do.
+// Done reports whether every table has come back clean.
 func (c *LegacyIPTablesCleanup) Done() bool {
 	return len(c.pending) == 0
 }
 
 // CleanUp makes one pass over the tables we haven't yet seen clean, rate limited to one pass per
-// refresh interval. A table that errors out keeps its place in the queue and is retried.
+// refresh interval. A table that errors out is retried.
 func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	if c.Done() {
 		return 0
@@ -152,8 +141,22 @@ func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	}
 	c.lastSweep = now
 
+	// Asking which tables exist up front saves us telling "no such table" apart from a real read
+	// failure below.
+	present, err := c.listTables()
+	if err != nil {
+		logrus.WithError(err).WithField("family", c.family).Warn(
+			"Failed to list nftables tables; will retry legacy iptables cleanup")
+		return c.refreshInterval
+	}
+
 	for table := range c.pending {
 		c.onStillAlive()
+
+		if !present[table] {
+			delete(c.pending, table)
+			continue
+		}
 
 		clean, err := c.sweepTable(table)
 		if err != nil {
@@ -177,13 +180,9 @@ func (c *LegacyIPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 
 // sweepTable removes our state from one table, reporting whether the table came back without any.
 func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
-	raw, absent, err := c.listTable(table)
+	raw, err := c.listTable(table)
 	if err != nil {
 		return false, err
-	}
-	if absent {
-		// No such table, so no previous Felix ever wrote here.
-		return true, nil
 	}
 
 	chains, rules, err := parseNFTTable(raw)
@@ -202,17 +201,15 @@ func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
 	}
 	tx := nft.NewTransaction()
 
-	// Delete our rules out of chains belonging to others first, so that our own chains stop
-	// being referenced and become deletable. Rules inside our own chains go with the chain.
+	// Delete our rules from other people's chains first, so our own chains stop being referenced.
 	for chain, handles := range ourRuleHandles {
 		for _, h := range handles {
 			handle := h
 			tx.Delete(&knftables.Rule{Chain: chain, Handle: &handle})
 		}
 	}
-	// Flush every one of our chains before deleting any of them. Our chains jump to each other,
-	// and nft applies a transaction in order, so deleting as we go would hit a chain that a later
-	// one still references ("Device or resource busy") and lose the whole transaction.
+	// Flush all of our chains before deleting any: they jump to each other, and deleting as we go
+	// would hit a chain a later one still references, losing the whole transaction.
 	for _, name := range ourChains {
 		tx.Flush(&knftables.Chain{Name: name})
 	}
@@ -223,7 +220,9 @@ func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
 	if c.opReporter != nil {
 		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-legacy-%s-v%d", table, c.ipVersion))
 	}
-	if err := nft.Run(context.Background(), tx); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	if err := nft.Run(ctx, tx); err != nil {
 		return false, fmt.Errorf("apply cleanup transaction: %w", err)
 	}
 
@@ -237,18 +236,18 @@ func (c *LegacyIPTablesCleanup) sweepTable(table string) (bool, error) {
 	return false, nil
 }
 
-// ourState picks out the chains and rules that a previous iptables-mode Felix wrote.
-//
-// Chains are easy: we have always prefixed them. Rules in chains belonging to others (the base
-// chains) take three signals, because the comment holding our rule hash is invisible here:
+// ourState picks out the chains and rules a previous iptables-mode Felix wrote. Chains are matched
+// by prefix; rules in other people's chains take one of three signals, since our rule hashes are
+// invisible here:
 //
 //   - a jump or goto into one of our chains
-//   - a match on mark bits inside the mask Felix owns, which nothing else on the host uses
-//   - an opaque MARK target, but only in a base chain where we found one of our own jumps.
-//     iptables renders no payload for its own targets, so this last one is a judgement call:
-//     Felix writes its mark rules alongside its jump, and leaving a stray rule that sets our
-//     accept mark on every packet is worse than the small chance of removing a MARK rule that
-//     belonged to someone else who was also using the chain we had hooked.
+//   - a match on mark bits inside the mask Felix owns
+//   - an opaque MARK target, but only in a chain where we found one of our own jumps. A judgement
+//     call: leaving a rule that sets our accept mark on every packet is worse than the chance of
+//     removing someone else's MARK rule from a chain we had hooked.
+//
+// The last two also require an iptables comment match, which all of our rules carry and no
+// natively-programmed nft rule does.
 func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]string, map[string][]int) {
 	ourChains := []string{}
 	isOurChain := map[string]bool{}
@@ -259,8 +258,7 @@ func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]
 		}
 	}
 
-	// First pass: the unambiguous signals, which also tell us which foreign chains we had
-	// hooked into.
+	// First pass: the unambiguous signals, which also tell us which chains we had hooked.
 	handles := map[string][]int{}
 	hookedChains := map[string]bool{}
 	var undecided []nftRule
@@ -272,14 +270,16 @@ func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]
 		case hasAnyPrefix(r.jumpTarget(), c.chainPrefixes):
 			hookedChains[r.Chain] = true
 			handles[r.Chain] = append(handles[r.Chain], *r.Handle)
+		case !r.hasXT("match", "comment"):
+			// Not written by iptables at all, so not ours.
 		case r.matchesMarkWithin(c.markMask):
 			handles[r.Chain] = append(handles[r.Chain], *r.Handle)
-		case r.hasXTTarget("MARK"):
+		case r.hasXT("target", "MARK"):
 			undecided = append(undecided, r)
 		}
 	}
 
-	// Second pass: opaque MARK targets, in chains we know we had hooked.
+	// Second pass: opaque MARK targets, in chains we had hooked.
 	for _, r := range undecided {
 		if hookedChains[r.Chain] {
 			handles[r.Chain] = append(handles[r.Chain], *r.Handle)
@@ -294,20 +294,54 @@ func (c *LegacyIPTablesCleanup) ourState(chains []nftChain, rules []nftRule) ([]
 	return ourChains, handles
 }
 
-// listTable returns the raw `nft --json` output for one table, reporting separately when the
-// table doesn't exist.
-func (c *LegacyIPTablesCleanup) listTable(table string) (raw []byte, absent bool, err error) {
-	cmd := c.newCmd("nft", "--json", "list", "table", string(c.family), table)
-	out, err := cmd.Output()
+// listTables returns the names of the tables that exist in our family.
+func (c *LegacyIPTablesCleanup) listTables() (map[string]bool, error) {
+	out, err := c.runNFT("--json", "list", "tables", string(c.family))
 	if err != nil {
-		// nft says this on a table that was never created, which is the common case.
-		if strings.Contains(err.Error(), "No such file or directory") ||
-			strings.Contains(string(out), "No such file or directory") {
-			return nil, true, nil
-		}
-		return nil, false, fmt.Errorf("list table %s: %w", table, err)
+		return nil, err
 	}
-	return out, false, nil
+
+	var doc struct {
+		Nftables []struct {
+			Table *struct {
+				Name string `json:"name"`
+			} `json:"table"`
+		} `json:"nftables"`
+	}
+	if err := json.Unmarshal(out, &doc); err != nil {
+		return nil, fmt.Errorf("parse nft table list: %w", err)
+	}
+
+	tables := map[string]bool{}
+	for _, obj := range doc.Nftables {
+		if obj.Table != nil {
+			tables[obj.Table.Name] = true
+		}
+	}
+	return tables, nil
+}
+
+// listTable returns the raw `nft --json` output for one table.
+func (c *LegacyIPTablesCleanup) listTable(table string) ([]byte, error) {
+	out, err := c.runNFT("--json", "list", "table", string(c.family), table)
+	if err != nil {
+		return nil, fmt.Errorf("list table %s: %w", table, err)
+	}
+	return out, nil
+}
+
+// runNFT runs one nft command, folding its stderr into the error: Output() keeps it out of
+// err.Error(), and nft says everything useful there.
+func (c *LegacyIPTablesCleanup) runNFT(args ...string) ([]byte, error) {
+	out, err := c.newCmd("nft", args...).Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
 // nftChain and nftRule are the parts of nft's JSON output we care about.
@@ -369,8 +403,8 @@ func (r nftRule) jumpTarget() string {
 	return ""
 }
 
-// matchesMarkWithin reports whether the rule tests packet mark bits, all of which fall inside
-// the given mask. nft renders such a match as {"&": [{"meta": {"key": "mark"}}, <mask>]}.
+// matchesMarkWithin reports whether the rule tests mark bits that all fall inside the given mask.
+// nft renders such a match as {"&": [{"meta": {"key": "mark"}}, <mask>]}.
 func (r nftRule) matchesMarkWithin(mask uint32) bool {
 	for _, e := range r.Expr {
 		v, ok := e["match"]
@@ -404,9 +438,9 @@ func (r nftRule) matchesMarkWithin(mask uint32) bool {
 	return false
 }
 
-// hasXTTarget reports whether the rule uses the named iptables target extension. nft can't
-// decode the target's payload, so the name is all we get.
-func (r nftRule) hasXTTarget(name string) bool {
+// hasXT reports whether the rule uses the named iptables extension, e.g. ("target", "MARK"). nft
+// can't decode the payload, so type and name are all we get.
+func (r nftRule) hasXT(xtType, name string) bool {
 	for _, e := range r.Expr {
 		v, ok := e["xt"]
 		if !ok {
@@ -416,7 +450,7 @@ func (r nftRule) hasXTTarget(name string) bool {
 			Type string `json:"type"`
 			Name string `json:"name"`
 		}
-		if err := json.Unmarshal(v, &xt); err == nil && xt.Type == "target" && xt.Name == name {
+		if err := json.Unmarshal(v, &xt); err == nil && xt.Type == xtType && xt.Name == name {
 			return true
 		}
 	}
