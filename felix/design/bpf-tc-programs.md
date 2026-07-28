@@ -282,6 +282,23 @@ drop rules apply. Confirmed (already-established) flows are allowed
 through directly — the policy check happened when the flow was
 created.
 
+`bpf_redirect_peer` (in `try_redirect_to_peer`,
+`felix/bpf-gpl/fib_co_re.h`) is a stronger form of the same forward: it
+delivers into the destination's network namespace, so the destination's
+program does not run at all. It is gated on the conntrack verdict being
+`CALI_CT_ESTABLISHED_BYPASS`, which means both endpoints have approved
+their own leg — but that guarantee is not airtight. A host-endpoint
+program updating an already-seen packet approves the leg facing away
+from the host, and a packet bound for a local workload can reach a host
+endpoint while the workload's route is still being programmed. The
+entry then reads as fully approved on behalf of a workload that has
+never run policy.
+
+TCP SYNs are therefore excluded from the peer redirect. Every new
+connection reaches the destination's program, which runs policy because
+of the `CT_RES_SYN` handling in `tc.c`. Established traffic still takes
+the fast path.
+
 ### Review notes for this section
 
 - A new sub-program added to the generic program chain needs:
@@ -307,6 +324,11 @@ created.
   through `*tables` should consult `fib_approve` (or an equivalent
   check) for the ifstate-ready flag; otherwise it reopens the
   attach-gap hole.
+- A path that skips the destination endpoint's program must not treat
+  `CALI_CT_ESTABLISHED_BYPASS` as proof that the destination ran
+  policy. Any such path needs its own new-connection check — for TCP
+  that is the SYN flag; UDP has no equivalent and needs a different
+  signal.
 - Helpers and maps keyed by the host-side ifindex must read
   `host_ifindex` from globals first and fall back to
   `skb->ifindex` only when it is zero. Reading `skb->ifindex`

@@ -35,7 +35,18 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 	struct cali_tc_state *state = ctx->state;
 	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+	/* A TCP SYN never takes this fast path.  The redirect delivers the packet
+	 * straight into the destination's netns, skipping the destination
+	 * endpoint's program and therefore its policy.  That is only sound while
+	 * BYPASS really means "both endpoints approved their own leg", and a
+	 * host-endpoint program can approve the far leg of a packet that was
+	 * transiently misrouted through the host, leaving BYPASS set for a
+	 * destination that has never run policy.  Sending the SYN the long way
+	 * costs one extra program run per connection and puts the destination's
+	 * program back in the path, where the CT_RES_SYN handling in tc.c runs its
+	 * policy. */
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
+			!ct_result_is_syn(state->ct_result.rc) &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
 		if (CALI_F_L3_DEV) {
