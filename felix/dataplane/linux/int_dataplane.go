@@ -572,15 +572,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		OnStillAlive:          dp.reportHealth,
 		OpRecorder:            dp.loopSummarizer,
 	}
-	if nftablesEnabled {
-		// We only read these tables to clean up after a previous iptables-mode Felix, so one we
-		// can't read is one we skip rather than a reason to restart (#13263).
-		iptablesOptions.CleanupOnly = true
-
-		// Pin them to the legacy backend: the nft backend writes into the same nftables tables
-		// LegacyIPTablesCleanup sweeps below, and two cleanups racing is wasted work at best.
-		iptablesOptions.BackendMode = "legacy"
-	}
 	nftablesOptions := nftables.TableOptions{
 		RefreshInterval:  config.TableRefreshInterval,
 		LookPathOverride: config.LookPathOverride,
@@ -635,13 +626,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
 		rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
 		filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+	} else {
+		// Create iptables table implementations.
+		mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+		filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
-
-	// Create iptables table implementations.
-	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
@@ -655,17 +646,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
 
-		// Clean up after a previous iptables-mode Felix. Its rules are in the nftables tables or
-		// in xtables depending on the backend it used, and the two are invisible to each other,
-		// so sweep both.
+		// Clean up after a previous iptables-mode Felix, which wrote into the same nftables tables
+		// via iptables-nft. We read them with nft rather than iptables-nft-save, which refuses to
+		// read a table holding rules it can't express (#13263).
 		cleanupTables = append(cleanupTables,
 			// HistoricChainPrefixes rather than rules.AllHistoricChainNamePrefixes: in BPF mode
 			// it also covers kube-proxy's chains.
-			nftables.NewLegacyIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
-			mangleTableV4IPT,
-			natTableV4IPT,
-			rawTableV4IPT,
-			filterTableV4IPT,
+			nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 		)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
@@ -1371,12 +1358,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
 			natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
 			rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+		} else {
+			// Define iptables table implementations for IPv6.
+			mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+			natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
+			rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 		}
-
-		// Define iptables table implementations for IPv6.
-		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
 		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
@@ -1390,11 +1377,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Clean up after a previous iptables-mode Felix; see the IPv4 path.
 			cleanupTables = append(cleanupTables,
-				nftables.NewLegacyIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
-				mangleTableV6IPT,
-				natTableV6IPT,
-				rawTableV6IPT,
-				filterTableV6IPT,
+				nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
 			)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {

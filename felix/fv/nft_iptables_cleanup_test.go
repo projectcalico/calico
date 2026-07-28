@@ -28,7 +28,7 @@ import (
 //
 // foreign-nft-dump.txt is the ruleset from the issue; cali-iptables-dump.txt is the state a
 // previous iptables-mode Felix would have left underneath it.
-var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables legacy cleanup with foreign nft rules", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
+var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables cleanup of iptables rules, with foreign nft rules present", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra infrastructure.DatastoreInfra
 		tc    infrastructure.TopologyContainers
@@ -46,13 +46,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables legacy cleanup wit
 
 	BeforeEach(func() {
 		if !NFTMode() {
-			Skip("Legacy iptables cleanup only runs in nftables mode.")
+			Skip("This cleanup only runs in nftables mode.")
 		}
 
 		infra = getInfra()
 		opts := infrastructure.DefaultTopologyOptions()
-		// On the legacy backend Felix reads xtables and never sees the foreign rules.
-		opts.ExtraEnvVars["FELIX_IptablesBackend"] = "nft"
 		tc, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 		infra.AddDefaultAllow()
 
@@ -82,7 +80,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables legacy cleanup wit
 		infra.Stop()
 	})
 
-	It("cleans up the legacy rules and leaves the foreign ones alone", func() {
+	It("cleans up the iptables rules and leaves the foreign ones alone", func() {
 		// Confirm we've reproduced the conditions for the bug: iptables-nft reports the unreadable
 		// table on stdout and exits 0, so otherwise this would pass on a readable ruleset.
 		out, err := tc.Felixes[0].ExecOutput("iptables-nft-save", "-t", "filter")
@@ -95,7 +93,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables legacy cleanup wit
 		Eventually(felixReady, "20s", "200ms").Should(BeGood())
 		Consistently(felixReady, "10s", "500ms").Should(BeGood())
 
-		// Felix programs its own table, and the legacy rules go from the shared ones.
+		// Felix programs its own table, and our old iptables rules go from the shared ones.
 		Eventually(func() string { return nftTable("calico") }, "10s", "500ms").Should(ContainSubstring("cali-"))
 		Eventually(func() string { return nftTable("filter") }, "20s", "500ms").ShouldNot(ContainSubstring("cali-"))
 

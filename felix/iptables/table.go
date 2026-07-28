@@ -59,11 +59,6 @@ var (
 	// uses nft features that iptables-nft doesn't understand.
 	nftErrorRegexp = regexp.MustCompile(`^# Table .* is incompatible, use 'nft' tool.`)
 
-	// ErrIncompatibleNFTRules is returned when iptables-save can't read a table because another
-	// tool has written nft rules there that iptables can't represent.
-	ErrIncompatibleNFTRules = errors.New(
-		"iptables-save failed because there are incompatible nft rules in the table")
-
 	// Prometheus metrics.
 	countNumRestoreCalls = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "felix_iptables_restore_calls",
@@ -292,16 +287,6 @@ type Table struct {
 	onStillAlive func()
 	opReporter   logrusr.OpRecorder
 	reason       string
-
-	// See TableOptions.CleanupOnly. We warn about an unreadable table once, not every refresh.
-	cleanupOnly      bool
-	loggedUnreadable bool
-
-	// These back Done(). skippedRead records that the last read didn't happen at all, so we don't
-	// mistake an unreadable table for an empty one.
-	readDataplane bool
-	sawOurState   bool
-	skippedRead   bool
 }
 
 type TableOptions struct {
@@ -314,11 +299,6 @@ type TableOptions struct {
 
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
-
-	// CleanupOnly says this Table exists only to remove state a previous Felix left behind, so
-	// failing to read it is not fatal: we skip the pass and retry later instead of panicking. Set
-	// it on a table we program and we would silently stop programming it.
-	CleanupOnly bool
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdshim.CmdFactory
@@ -459,7 +439,6 @@ func NewTable(
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		opReporter:            options.OpRecorder,
-		cleanupOnly:           options.CleanupOnly,
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
@@ -490,14 +469,6 @@ func (t *Table) IPVersion() uint8 {
 
 func (t *Table) Name() string {
 	return t.name
-}
-
-// CleanUp implements generictables.CleanupTable. iptables tables are always shared with other
-// components, so an ordinary apply already limits itself to our own chains and to the rules we
-// inserted into chains belonging to others. The first apply reads the dataplane, and the refresh
-// interval brings us back after that, so a table with nothing of ours in it costs one read.
-func (t *Table) CleanUp() time.Duration {
-	return t.Apply()
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -802,31 +773,6 @@ func (t *Table) loadDataplaneState() {
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
-	t.sawOurState = anyOfOurState(dataplaneHashes, t.ourChainsRegexp)
-	t.readDataplane = !t.skippedRead
-}
-
-// anyOfOurState reports whether the given dataplane read turned up any of our chains, or any
-// rule of ours inserted into a chain belonging to someone else (those carry our hash).
-func anyOfOurState(dataplaneHashes map[string][]string, ourChains *regexp.Regexp) bool {
-	for chainName, hashes := range dataplaneHashes {
-		if ourChains.MatchString(chainName) {
-			return true
-		}
-		for _, hash := range hashes {
-			if hash != "" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// Done implements generictables.CleanupTable: we've confirmed there's nothing of ours in this
-// table. Only meaningful for a table we're using purely for cleanup, since a table we program
-// has state of ours in it by design.
-func (t *Table) Done() bool {
-	return t.readDataplane && !t.sawOurState
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
@@ -884,13 +830,6 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 		t.onStillAlive()
 		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
-			if t.cleanupOnly && errors.Is(err, ErrIncompatibleNFTRules) {
-				// Skip the pass and pick the table up later, once whatever wrote those rules is
-				// gone.
-				t.warnUnreadableOnce("another tool has written nft rules that iptables doesn't understand")
-				return t.skipRead()
-			}
-
 			countNumSaveErrors.Inc()
 			var stderr string
 			if ee, ok := err.(*exec.ExitError); ok {
@@ -901,37 +840,14 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 				retries--
 				t.timeSleep(retryDelay)
 				retryDelay *= 2
-			} else if t.cleanupOnly {
-				// Most likely this host has no support for the backend we'd be cleaning up.
-				t.warnUnreadableOnce(fmt.Sprintf("%s keeps failing", t.iptablesSaveCmd))
-				return t.skipRead()
 			} else {
 				t.logCxt.Panicf("%s command failed after retries", t.iptablesSaveCmd)
 			}
 			continue
 		}
 
-		t.skippedRead = false
 		return hashes, rules
 	}
-}
-
-// skipRead gives loadDataplaneState empty maps to work with, while recording that we never read
-// the table, so Done() can't conclude it's clean.
-func (t *Table) skipRead() (hashes map[string][]string, rules map[string][]string) {
-	t.skippedRead = true
-	return map[string][]string{}, map[string][]string{}
-}
-
-// warnUnreadableOnce logs why we're giving up on this table, once per Table.
-func (t *Table) warnUnreadableOnce(reason string) {
-	if t.loggedUnreadable {
-		return
-	}
-	t.loggedUnreadable = true
-	t.logCxt.Warnf("Cannot read this table with %s: %s. We only read it to remove rules left "+
-		"behind by a previous iptables-mode Felix, so this is harmless unless this node used to "+
-		"run in iptables mode.", t.iptablesSaveCmd, reason)
 }
 
 // attemptToGetHashesAndRulesFromDataplane starts an iptables-save subprocess and feeds its output to
@@ -971,12 +887,7 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 	if err != nil {
 		// In case readHashesAndRulesFrom() returned due to an error that didn't cause the
 		// process to exit, kill it now.
-		if t.cleanupOnly && errors.Is(err, ErrIncompatibleNFTRules) {
-			// Expected; the caller logs about it once.
-			log.WithError(err).Debugf("Killing %s process after a failure", t.iptablesSaveCmd)
-		} else {
-			log.WithError(err).Warnf("Killing %s process after a failure", t.iptablesSaveCmd)
-		}
+		log.WithError(err).Warnf("Killing %s process after a failure", t.iptablesSaveCmd)
 		killErr := cmd.Kill()
 		if killErr != nil {
 			// If we don't know what state the process is in, we can't Wait() on it.
@@ -986,10 +897,7 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 	}
 	waitErr := cmd.Wait()
 	if waitErr != nil {
-		if t.cleanupOnly && errors.Is(err, ErrIncompatibleNFTRules) {
-			// We killed it ourselves; the caller logs about that once.
-			log.WithError(waitErr).Debug("iptables save failed after we killed it")
-		} else if log.IsLevelEnabled(log.DebugLevel) {
+		if log.IsLevelEnabled(log.DebugLevel) {
 			t.logCxt.WithFields(log.Fields{"cmd": t.iptablesSaveCmd}).Warn("iptables save failed")
 		} else {
 			log.WithError(waitErr).Warn("iptables save failed")
@@ -1034,11 +942,10 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		// Special-case, if iptables-nft can't handle a ruleset then it writes an error
 		// but then returns an RC of 0.  Detect this case.
 		if nftErrorRegexp.Match(line) {
-			if !t.cleanupOnly {
-				logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
-					"Remove the nft rules to continue.")
-			}
-			return nil, nil, ErrIncompatibleNFTRules
+			logCxt.Error("iptables-save failed because there are incompatible nft rules in the table.  " +
+				"Remove the nft rules to continue.")
+			return nil, nil, errors.New(
+				"iptables-save failed because there are incompatible nft rules in the table")
 		}
 
 		// Look for lines of the form ":chain-name - [0:0]", which are forward declarations

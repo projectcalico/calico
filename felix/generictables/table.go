@@ -42,9 +42,10 @@ type CleanupTable interface {
 	Done() bool
 }
 
-// Table is a logical table of chains and rules. Every Table can also be driven purely for cleanup.
+// Table is a logical table of chains and rules.
 type Table interface {
-	CleanupTable
+	Name() string
+	IPVersion() uint8
 
 	InsertOrAppendRules(chainName string, rules []Rule)
 	AppendRules(chainName string, rules []Rule)
@@ -77,7 +78,5 @@ func (t *NoopTable) RemoveChains([]*Chain)                               {}
 func (t *NoopTable) RemoveChainByName(name string)                       {}
 func (t *NoopTable) InvalidateDataplaneCache(reason string)              {}
 func (t *NoopTable) Apply() time.Duration                                { return 0 }
-func (t *NoopTable) CleanUp() time.Duration                              { return 0 }
-func (t *NoopTable) Done() bool                                          { return true }
 func (n *NoopTable) InsertRulesNow(chainName string, rules []Rule) error { return nil }
 func (n *NoopTable) CheckRulesPresent(chain string, rules []Rule) []Rule { return nil }
