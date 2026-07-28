@@ -23,9 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gavv/monotime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -3376,117 +3380,10 @@ func TestLoopDataplaneInfoUpdates(t *testing.T) {
 func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	RegisterTestingT(t)
 
-	// Helper function to convert model workload endpoint key to protobuf endpoint ID
-	convertWorkloadId := func(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
-		return types.WorkloadEndpointID{
-			OrchestratorId: key.OrchestratorID,
-			WorkloadId:     key.WorkloadID,
-			EndpointId:     key.EndpointID,
-		}
-	}
+	c, flowTuple1, flowTuple2 := setupPolicyEvalCollector(t)
 
-	// Setup test environment
-	epMap := map[[16]byte]calc.EndpointData{
-		localIp1:  localEd1,
-		localIp2:  localEd2,
-		remoteIp1: remoteEd1,
-	}
-
-	lm := newMockLookupsCache(epMap, nil, nil, nil)
-	policyStoreManager := policystore.NewPolicyStoreManager()
-
-	conf := &Config{
-		AgeTimeout:            time.Duration(10) * time.Second,
-		InitialReportingDelay: time.Duration(5) * time.Second,
-		ExportingInterval:     time.Duration(1) * time.Second,
-		FlowLogsFlushInterval: time.Duration(100) * time.Second,
-		DisplayDebugTraceLogs: true,
-		PolicyStoreManager:    policyStoreManager,
-	}
-	c := newCollector(lm, conf).(*collector)
-
-	// Create test flow tuples
-	// Flow 1: Local-to-local communication (localIp1 -> localIp2)
-	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
-
-	// Flow 2: Local-to-remote communication (localIp2 -> remoteIp1)
-	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
-
-	// Setup initial policy configuration
-	// localWlEp1 has policy1 for both ingress and egress
-	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{
-		{
-			Name:            "default",
-			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
-			EgressPolicies:  []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
-		},
-	})
-
-	// localWlEp2 initially has policy2 (deny) for both ingress and egress
-	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
-		{
-			Name:            "default",
-			IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
-			EgressPolicies:  []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
-		},
-	})
-
-	// remoteWlEp1 has no policies
-	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
-
-	// Initialize policy store with endpoints and policies
-	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-		// Add endpoint configurations
-		ps.Endpoints[convertWorkloadId(localWlEPKey1)] = localWlEp1Proto
-		ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
-		ps.Endpoints[convertWorkloadId(remoteWlEpKey1)] = remoteWlEp1Proto
-
-		// Add policy definitions
-		// policy1: Allow all traffic
-		ps.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
-			Tier:          "default",
-			InboundRules:  []*proto.Rule{{Action: "allow"}},
-			OutboundRules: []*proto.Rule{{Action: "allow"}},
-		}
-
-		// policy2: Deny all traffic
-		ps.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
-			Tier:          "default",
-			InboundRules:  []*proto.Rule{{Action: "deny"}},
-			OutboundRules: []*proto.Rule{{Action: "deny"}},
-		}
-	})
-	policyStoreManager.OnInSync()
-
-	// Simulate packet processing to create flow data
-	ruleIDIngressPolicy1 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
-	packetInfoIngress1 := clttypes.PacketInfo{
-		Tuple:     *flowTuple1,
-		Direction: rules.RuleDirIngress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDIngressPolicy1, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoIngress1)
-
-	ruleIDEgressPolicy1 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	packetInfoEgress1 := clttypes.PacketInfo{
-		Tuple:     *flowTuple1,
-		Direction: rules.RuleDirEgress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy1, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoEgress1)
-
-	// Process egress packet for flow 2 (localIp2 -> remoteIp1)
-	ruleIDEgressPolicy2 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
-	packetInfoEgress2 := clttypes.PacketInfo{
-		Tuple:     *flowTuple2,
-		Direction: rules.RuleDirEgress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy2, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoEgress2)
-
-	// Retrieve flow data from collector
-	flowData1 := c.epStats[*flowTuple1]
-	flowData2 := c.epStats[*flowTuple2]
+	flowData1 := c.epStats[flowTuple1]
+	flowData2 := c.epStats[flowTuple2]
 
 	// Verify initial pending rule trace evaluation
 	testCases := []struct {
@@ -3545,16 +3442,16 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 
 		// Update the policy store
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = updatedLocalWlEp2Proto
+			ps.Endpoints[workloadEndpointID(localWlEPKey2)] = updatedLocalWlEp2Proto
 		})
 		c.policyStoreManager.OnInSync()
 
 		// Trigger pending rule trace update
-		c.updatePendingRuleTraces()
+		drainRecalcSweep(c)
 
 		// Get updated flow data
-		updatedFlowData1 := c.epStats[*flowTuple1]
-		updatedFlowData2 := c.epStats[*flowTuple2]
+		updatedFlowData1 := c.epStats[flowTuple1]
+		updatedFlowData2 := c.epStats[flowTuple2]
 
 		// Verify updated policy evaluation
 		updatedTestCases := []struct {
@@ -3707,8 +3604,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
 		}
-		lm = newMockLookupsCache(epMapWithoutLocalEd1, nil, nil, nil)
-		c.luc = lm
+		c.luc = newMockLookupsCache(epMapWithoutLocalEd1, nil, nil, nil)
 
 		// Make another policy change to trigger evaluation
 		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
@@ -3716,19 +3612,19 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 		})
 
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
+			ps.Endpoints[workloadEndpointID(localWlEPKey2)] = localWlEp2Proto
 		})
 		c.policyStoreManager.OnInSync()
 
 		// Store original pending rule IDs before update
-		originalFlow1IngressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].IngressPendingRuleIDs...)
-		originalFlow1EgressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].EgressPendingRuleIDs...)
+		originalFlow1IngressRules := append([]*calc.RuleID(nil), c.epStats[flowTuple1].IngressPendingRuleIDs...)
+		originalFlow1EgressRules := append([]*calc.RuleID(nil), c.epStats[flowTuple1].EgressPendingRuleIDs...)
 
 		// Trigger update - should skip flow1 since localEd1 is deleted
-		c.updatePendingRuleTraces()
+		drainRecalcSweep(c)
 
-		currentFlowData1 := c.epStats[*flowTuple1]
-		currentFlowData2 := c.epStats[*flowTuple2]
+		currentFlowData1 := c.epStats[flowTuple1]
+		currentFlowData2 := c.epStats[flowTuple2]
 
 		// Verify that flow1 rules remain unchanged (endpoint deleted, so no update)
 		Expect(currentFlowData1.IngressPendingRuleIDs).To(Equal(originalFlow1IngressRules),
@@ -3746,6 +3642,331 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			validateRuleID(t, currentFlowData2.EgressPendingRuleIDs[0], defTierPolicy1AllowEgressRuleID, "Flow2 Egress After Endpoint Deletion")
 		}
 	})
+}
+
+// workloadEndpointID converts a model workload endpoint key to its protobuf endpoint ID.
+func workloadEndpointID(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
+	return types.WorkloadEndpointID{
+		OrchestratorId: key.OrchestratorID,
+		WorkloadId:     key.WorkloadID,
+		EndpointId:     key.EndpointID,
+	}
+}
+
+// setupPolicyEvalCollector builds a collector holding two flows against a populated policy store:
+// flow1 is local-to-local (policy1 allow), flow2 is local-to-remote (policy2 deny). It returns the
+// collector and the two flow tuples.
+func setupPolicyEvalCollector(t *testing.T) (*collector, tuple.Tuple, tuple.Tuple) {
+	t.Helper()
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1:  localEd1,
+		localIp2:  localEd2,
+		remoteIp1: remoteEd1,
+	}
+	lm := newMockLookupsCache(epMap, nil, nil, nil)
+	policyStoreManager := policystore.NewPolicyStoreManager()
+
+	c := newCollector(lm, &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		FlowLogsFlushInterval: 100 * time.Second,
+		PolicyStoreManager:    policyStoreManager,
+	}).(*collector)
+
+	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
+	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
+
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
+
+	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+		ps.Endpoints[workloadEndpointID(localWlEPKey1)] = localWlEp1Proto
+		ps.Endpoints[workloadEndpointID(localWlEPKey2)] = localWlEp2Proto
+		ps.Endpoints[workloadEndpointID(remoteWlEpKey1)] = remoteWlEp1Proto
+		ps.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "allow"}},
+			OutboundRules: []*proto.Rule{{Action: "allow"}},
+		}
+		ps.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "deny"}},
+			OutboundRules: []*proto.Rule{{Action: "deny"}},
+		}
+	})
+	policyStoreManager.OnInSync()
+
+	// Simulate packet processing to create flow data in epStats.
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirIngress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple2,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny), Hits: 1, Bytes: 100}},
+	})
+
+	return c, *flowTuple1, *flowTuple2
+}
+
+// makeAllFlowsDue zeroes the last-evaluated stamps so the next sweep re-evaluates every flow. The
+// fixture stamps flows as it creates them, which would otherwise be within the freshness window.
+func makeAllFlowsDue(c *collector) {
+	for _, data := range c.epStats {
+		data.lastPolicyEvalAt = 0
+	}
+}
+
+// clearPendingRuleIDs additionally discards the pending rule traces, for tests that need to
+// observe the sweep populating them from scratch.
+func clearPendingRuleIDs(c *collector) {
+	for _, data := range c.epStats {
+		data.IngressPendingRuleIDs = nil
+		data.EgressPendingRuleIDs = nil
+	}
+	makeAllFlowsDue(c)
+}
+
+// drainRecalcSweep runs a full policy re-evaluation sweep to completion.
+func drainRecalcSweep(c *collector) {
+	makeAllFlowsDue(c)
+	c.snapshotFlowsForRecalc()
+	for !c.processRecalcBatch(time.Hour) {
+	}
+}
+
+// TestProcessRecalcBatchTimeBoxes verifies that a small budget bounds each batch and that repeated
+// batches eventually drain the snapshot.
+func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	total := len(c.recalcSnapshot)
+	Expect(total).To(BeNumerically(">", 1), "fixture should have more than one flow")
+
+	// A zero budget still makes forward progress: exactly one flow per batch.
+	Expect(c.processRecalcBatch(0)).To(BeFalse())
+	Expect(c.recalcSnapshot).To(HaveLen(total-1), "a zero-budget batch should process exactly one flow")
+
+	batches := 1
+	for len(c.recalcSnapshot) > 0 {
+		c.processRecalcBatch(0)
+		batches++
+	}
+	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
+}
+
+// TestContinuousModeRunsSweepFromMainLoop is the one test that exercises the sweep the way
+// production does: through the collector's own select loop, driven by the policy-eval ticker. Every
+// other policy-eval test calls snapshotFlowsForRecalc/processRecalcBatch directly, so nothing else
+// would notice if the ticker stopped firing or the batch path stopped being reached.
+//
+// It asserts on the counter rather than on Data fields, because epStats belongs to the collector
+// goroutine and reading it from the test would race.
+func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
+	RegisterTestingT(t)
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1: localEd1,
+		localIp2: localEd2,
+	}
+	c := newCollector(newMockLookupsCache(epMap, nil, nil, nil), &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		// Short enough that a tick, and the following re-evaluation, land within the timeout
+		// below: the ticker fires at 8/10 of this and a flow becomes due again at 4/10.
+		FlowLogsFlushInterval: 100 * time.Millisecond,
+		PolicyEvaluationMode:  string(apiv3.FlowLogsPolicyEvaluationModeContinuous),
+	}).(*collector)
+
+	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	Expect(c.Start()).To(Succeed())
+
+	// Hand the flow to the collector over its reporting channel so that it is created on the
+	// collector's own goroutine.
+	c.ReportingChannel() <- &proto.DataplaneStats{
+		SrcIp:    localIp1Str,
+		DstIp:    localIp2Str,
+		SrcPort:  1000,
+		DstPort:  2000,
+		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: proto_tcp}},
+	}
+
+	Eventually(func() float64 {
+		return testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	}, 5*time.Second, 20*time.Millisecond).Should(BeNumerically(">", before),
+		"the ticker should drive a re-evaluation sweep through the main loop")
+}
+
+// TestNonContinuousModeLeavesSweepIdle verifies the feature gate suppresses the work, not just the
+// log line: with pending policies disabled there is no ticker, so the sweep never runs.
+func TestNonContinuousModeLeavesSweepIdle(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t) // no PolicyEvaluationMode set
+
+	Expect(c.tickerPolicyEval).To(BeNil())
+	Expect(c.policyEvalTickChan()).To(BeNil(), "a nil channel masks the sweep out of the select")
+}
+
+// TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows covers the early-uptime case: monotime counts
+// from boot, so when the freshness window exceeds the current uptime the "too recent" threshold is
+// negative. Flows that have never been evaluated must still be evaluated, not skipped.
+func TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	// A window longer than the machine has been up drives the threshold negative.
+	c.policyEvalMinInterval = 1000 * time.Hour
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", monotime.Now()),
+		"window must exceed uptime for this test to cover the negative-threshold case")
+	clearPendingRuleIDs(c)
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+	for !c.processRecalcBatch(time.Hour) {
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(flows),
+		"never-evaluated flows must not be skipped as too-recent")
+}
+
+// TestSnapshotRightSizesBuffer verifies the snapshot buffer stays proportional to the flow count,
+// rather than re-allocating as it fills or holding a peak-sized array forever.
+func TestSnapshotRightSizesBuffer(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	inBand := func() {
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically(">=", len(c.epStats)),
+			"buffer must hold every flow without growing mid-sweep")
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically("<=", 2*len(c.epStats)),
+			"buffer must not hold on to much more than the current flow count")
+	}
+
+	c.snapshotFlowsForRecalc()
+	Expect(c.recalcSnapshot).To(HaveLen(len(c.epStats)))
+	inBand()
+
+	// Shrinking the flow count must release the larger array.
+	grown := cap(c.recalcSnapshot)
+	for tpl := range c.epStats {
+		c.deleteDataFromEpStats(c.epStats[tpl])
+		break
+	}
+	c.snapshotFlowsForRecalc()
+	inBand()
+	Expect(cap(c.recalcSnapshot)).To(BeNumerically("<", grown))
+}
+
+// TestProcessRecalcBatchSkipsStaleFlows verifies that flows deleted from epStats after the snapshot
+// was taken are skipped rather than evaluated (no panic, not counted).
+func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, ft1, ft2 := setupPolicyEvalCollector(t)
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	snapshotLen := len(c.recalcSnapshot)
+
+	// Delete one flow after the snapshot was taken.
+	c.deleteDataFromEpStats(c.epStats[ft1])
+
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	flowsDelta := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore
+
+	Expect(int(flowsDelta)).To(Equal(snapshotLen-1), "the deleted flow should be skipped, not evaluated")
+	// The surviving flow was still evaluated.
+	Expect(c.epStats[ft2].EgressPendingRuleIDs).ToNot(BeEmpty())
+}
+
+// TestPolicyEvalMetrics verifies the batch/flow counters and the sweep-duration histogram move as
+// expected across a full drain.
+func TestPolicyEvalMetrics(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	sweepSampleCount := func() uint64 {
+		var m dto.Metric
+		Expect(histogramPolicyEvalSweepDuration.Write(&m)).To(Succeed())
+		return m.GetHistogram().GetSampleCount()
+	}
+
+	batchesBefore := testutil.ToFloat64(counterPolicyEvalBatches)
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	sweepsBefore := sweepSampleCount()
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+
+	batches := 0
+	for {
+		batches++
+		if c.processRecalcBatch(0) { // one flow per batch
+			break
+		}
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalBatches) - batchesBefore)).To(Equal(batches))
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore)).To(Equal(flows))
+	// One completed sweep records exactly one histogram observation.
+	Expect(sweepSampleCount()).To(Equal(sweepsBefore + 1))
+}
+
+// TestProcessRecalcBatchSkipsRecentlyEvaluatedFlows verifies the snapshot captures every flow but
+// only re-evaluates flows outside policyEvalMinInterval.
+func TestProcessRecalcBatchSkipsRecentlyEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", 0))
+
+	// The fixture stamped every flow as it created them, so none are due yet.
+	c.snapshotFlowsForRecalc()
+	total := len(c.recalcSnapshot)
+	Expect(total).To(BeNumerically(">", 1), "the snapshot should capture every flow")
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(0),
+		"recently-evaluated flows should be skipped at re-evaluation time")
+
+	// Once the stamps are cleared, every flow is due again.
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	Expect(len(c.recalcSnapshot)).To(Equal(total))
+	before = testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(total),
+		"cleared flows should all be re-evaluated")
 }
 
 // Helper function to validate rule ID fields
