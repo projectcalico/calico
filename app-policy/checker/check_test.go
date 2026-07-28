@@ -37,7 +37,7 @@ func TestEvaluateNoEndpoint(t *testing.T) {
 	store := policystore.NewPolicyStore()
 
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, nil, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, nil, flow, nil)
 	Expect(trace).To(BeNil())
 }
 
@@ -48,7 +48,7 @@ func TestEvaluateEndpointNoTiersNoProfiles(t *testing.T) {
 
 	ep := &proto.WorkloadEndpoint{}
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -84,7 +84,7 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -150,7 +150,7 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 			store.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{Tier: "default"}
 
 			flow := &MockFlow{Protocol: 6, DestPort: 443}
-			trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+			trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 
 			Expect(trace).To(HaveLen(tt.expLen))
 			for i, act := range tt.expActs {
@@ -180,7 +180,7 @@ func TestEvaluateEndpointWithMatchingProfile(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace := Evaluate(rules.RuleDirIngress, store, ep, flow, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -237,7 +237,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace := Evaluate(rules.RuleDirEgress, store, ep, flow1)
+	trace := Evaluate(rules.RuleDirEgress, store, ep, flow1, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -254,7 +254,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow2)
+	trace = Evaluate(rules.RuleDirEgress, store, ep, flow2, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -271,7 +271,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_192_168_1_2,
 		DestIP:     ip_10_0_0_2,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow3)
+	trace = Evaluate(rules.RuleDirEgress, store, ep, flow3, nil)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -424,7 +424,7 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status, _ := checkTiers(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status, _ := checkTiersBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	expectedStatus := rpc.Status{Code: OK}
 	Expect(status.Code).To(Equal(expectedStatus.Code))
 	Expect(status.Message).To(Equal(expectedStatus.Message))
@@ -448,7 +448,7 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, nil, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, nil, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -472,7 +472,7 @@ func TestCheckStoreNoTiers(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -522,13 +522,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -571,13 +571,13 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -627,7 +627,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -688,7 +688,7 @@ func TestCheckStorePass(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -715,7 +715,7 @@ func TestCheckStoreInitFails(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -757,7 +757,7 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
 }
 
@@ -842,20 +842,20 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	// Change to a bad path, and check that we get PERMISSION_DENIED
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Path = "/bad"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	// Change to a path that hits tier2 default Pass action, and then is allowed in tier3
 	http.Path = "/bar"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -921,13 +921,13 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "GET"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStoreBothEngines(store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
