@@ -20,9 +20,9 @@ Self-hosted clusters only. `--authorization-config` cannot be set on EKS, AKS, o
    kubectl get svc -n kube-system calico-webhooks -o jsonpath='{.spec.clusterIP}'
    ```
 
-   Set that IP as the `server` in `calico-authz-webhook-kubeconfig.yaml`, and set `certificate-authority-data` to the base64-encoded CA cert that signed `calico-webhooks`' TLS certificate.
+   Replace `CLUSTER_IP` in `calico-authz-webhook-kubeconfig.yaml`'s `server` field with that IP on port 443, and point `certificate-authority` at a file containing the CA cert that signed `calico-webhooks`' TLS certificate. Use a path here, not inline `certificate-authority-data`: you are already placing files on the control-plane nodes in the next step, so drop the CA cert alongside them. A `.svc` DNS name will not work in place of the IP: kube-apiserver resolves `server` from its own network namespace, which has no cluster DNS and no pod-network route.
 
-3. Place both `authorization-configuration.yaml` and `calico-authz-webhook-kubeconfig.yaml` under `/etc/kubernetes/authz/` on every control-plane node, then point the API server at the config file and remove `--authorization-mode`:
+3. Place `authorization-configuration.yaml`, `calico-authz-webhook-kubeconfig.yaml`, and the CA cert file under `/etc/kubernetes/authz/` on every control-plane node, then point the API server at the config file and remove `--authorization-mode`:
 
    ```
    kube-apiserver --authorization-config=/etc/kubernetes/authz/authorization-configuration.yaml
