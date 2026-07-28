@@ -23,10 +23,15 @@ migrate` parses the tunnel prefixes, and the CNI DEL path releases by both the h
 IPAM-meaningful subcommands; `configure` and `split` are admin-CRUD on `IPAMConfig` / `IPPool`. The `check` algorithm reuses the validity heuristics the GC applies, but exposed for
 manual review without a running controller.
 
+`show` prints IPS TOTAL / IN USE / RESERVED / FREE per pool and per block, taking all four straight from `GetUtilization` rather than deriving any of them: IN USE and RESERVED can
+cover the same address, so the columns need not sum to the total, and FREE is the only column that means "still assignable". See
+[ipam-core-library](./ipam-core-library.md#public-api-surface).
+
 **Review notes**
 
 - New tunnel handle prefixes need to be added to `calicoctl datastore migrate`, which rewrites tunnel handle IDs during node renames.
 - `check` and the GC share validity logic. If you change one, check the other doesn't drift.
+- The `show` columns are a reporting surface, not a derivation. If a new mechanism withholds addresses, it has to reach `GetUtilization` or `show` silently over-counts FREE.
 
 ## Node tunnel-address allocator
 
