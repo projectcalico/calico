@@ -136,7 +136,8 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		if len(policies) == 0 {
 			continue
 		}
-		slots := ce.policySlotsFor(ti, dir, len(policies))
+		td := ce.tierDirFor(ti, dir, len(policies))
+		slots := td.policySlots()
 
 		var (
 			ruleIndex               int
@@ -153,7 +154,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {
-					tierDefaultActionRuleID = calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace, tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction))
+					tierDefaultActionRuleID = td.tierDefaultRuleID(pID, tier, dir)
 				}
 				continue Policy
 			// If the Policy matches, end evaluation (skipping profiles, if any)
@@ -177,7 +178,9 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		}
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
 		if action == NO_MATCH {
-			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
+			if debugEnabled {
+				log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
+			}
 			trace = append(trace, tierDefaultActionRuleID)
 			// If the default action is anything beside Pass, then apply tier default deny action.
 			// Otherwise, continue to next tier or profiles.
@@ -217,9 +220,24 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	} else {
 		log.Debug("0 active profiles, deny request.")
 		s.Code = PERMISSION_DENIED
-		trace = append(trace, calc.NewRuleID(v3.KindProfile, profileStr, profileStr, "", tierDefaultActionIndex, dir, rules.RuleActionDeny))
+		trace = append(trace, noProfilesDenyRuleID(dir))
 	}
 	return
+}
+
+// The RuleID recording that an endpoint with no profiles denied the flow
+// depends only on the direction, so both are built once. RuleIDs are read-only
+// once constructed (as the calc package's own interning of them relies on).
+var (
+	noProfilesDenyIngress = calc.NewRuleID(v3.KindProfile, profileStr, profileStr, "", tierDefaultActionIndex, rules.RuleDirIngress, rules.RuleActionDeny)
+	noProfilesDenyEgress  = calc.NewRuleID(v3.KindProfile, profileStr, profileStr, "", tierDefaultActionIndex, rules.RuleDirEgress, rules.RuleActionDeny)
+)
+
+func noProfilesDenyRuleID(dir rules.RuleDir) *calc.RuleID {
+	if dir == rules.RuleDirEgress {
+		return noProfilesDenyEgress
+	}
+	return noProfilesDenyIngress
 }
 
 // slotAt returns the precomputed slot at index i, or nil if the caller has no
@@ -305,39 +323,38 @@ func checkRules(rules []*proto.Rule, req *requestCache, policyNamespace string) 
 }
 
 // actionFromString converts a string to an Action. It panics if the string is not a valid action.
-// The string is case-insensitive.
+// The string is case-insensitive. EqualFold compares without allocating, where lowercasing the
+// input would allocate on every call.
 func actionFromString(s string) Action {
 	// Felix currently passes us the v1 resource types where the "pass" action is called "next-tier".
 	// Here we support both the v1 and v3 action names.
-	m := map[string]Action{
-		"allow":     ALLOW,
-		"deny":      DENY,
-		"pass":      PASS,
-		"next-tier": PASS,
-		"log":       LOG,
+	switch {
+	case strings.EqualFold(s, "allow"):
+		return ALLOW
+	case strings.EqualFold(s, "deny"):
+		return DENY
+	case strings.EqualFold(s, "pass"), strings.EqualFold(s, "next-tier"):
+		return PASS
+	case strings.EqualFold(s, "log"):
+		return LOG
 	}
-	a, found := m[strings.ToLower(s)]
-	if !found {
-		log.Errorf("Got bad action %v", s)
-		panic(&InvalidDataFromDataPlane{"got bad action"})
-	}
-	return a
+	log.Errorf("Got bad action %v", s)
+	panic(&InvalidDataFromDataPlane{"got bad action"})
 }
 
 // ruleActionFromStr converts a string to a rules.RuleAction. It panics if the string is not a
 // valid action.
 func ruleActionFromStr(s string) rules.RuleAction {
-	switch strings.ToLower(s) {
-	case "allow":
+	switch {
+	case strings.EqualFold(s, "allow"):
 		return rules.RuleActionAllow
-	case "deny":
+	case strings.EqualFold(s, "deny"):
 		return rules.RuleActionDeny
-	case "pass":
+	case strings.EqualFold(s, "pass"):
 		return rules.RuleActionPass
-	default:
-		log.Errorf("Got bad action %v", s)
-		panic(&InvalidDataFromDataPlane{"got bad action"})
 	}
+	log.Errorf("Got bad action %v", s)
+	panic(&InvalidDataFromDataPlane{"got bad action"})
 }
 
 // handlePanic recovers from a panic and sets the status to INVALID_ARGUMENT if the panic was due

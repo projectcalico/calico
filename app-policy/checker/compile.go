@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
@@ -109,18 +110,40 @@ type compiledEndpoint struct {
 }
 
 type compiledTier struct {
-	ingress, egress []*policystore.PolicySlot
+	ingress, egress compiledTierDir
 }
 
-func compileEndpoint(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint) *compiledEndpoint {
+// compiledTierDir is one direction of one tier: its policies' slots, plus the
+// RuleID recording that the tier's default action applied. That RuleID is
+// constant, but the walk attributes it to the first policy that did not match,
+// so it is precomputed for the tier's first policy and used only for that one
+// (see tierDefaultRuleID).
+type compiledTierDir struct {
+	slots            []*policystore.PolicySlot
+	defaultRuleID    *calc.RuleID
+	defaultRuleIDFor *proto.PolicyID
+}
+
+func compileEndpoint(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint) (ce *compiledEndpoint) {
 	if ep == nil {
 		return nil
 	}
-	ce := &compiledEndpoint{tiers: make([]compiledTier, len(ep.Tiers))}
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(*InvalidDataFromDataPlane); !ok {
+				panic(r)
+			}
+			// A bad tier default action; the interpreted path panics on it per
+			// flow, as before.
+			log.Warn("Endpoint failed to compile; its policies will be resolved per flow instead")
+			ce = nil
+		}
+	}()
+	ce = &compiledEndpoint{tiers: make([]compiledTier, len(ep.Tiers))}
 	for i, tier := range ep.Tiers {
 		ce.tiers[i] = compiledTier{
-			ingress: policySlots(store, tier.GetIngressPolicies()),
-			egress:  policySlots(store, tier.GetEgressPolicies()),
+			ingress: compileTierDir(store, tier, tier.GetIngressPolicies(), rules.RuleDirIngress),
+			egress:  compileTierDir(store, tier, tier.GetEgressPolicies(), rules.RuleDirEgress),
 		}
 	}
 	for _, name := range ep.ProfileIds {
@@ -130,34 +153,60 @@ func compileEndpoint(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint)
 	return ce
 }
 
-func policySlots(store *policystore.PolicyStore, ids []*proto.PolicyID) []*policystore.PolicySlot {
+func compileTierDir(store *policystore.PolicyStore, tier *proto.TierInfo, ids []*proto.PolicyID, dir rules.RuleDir) compiledTierDir {
 	if len(ids) == 0 {
-		return nil
+		return compiledTierDir{}
 	}
-	slots := make([]*policystore.PolicySlot, len(ids))
+	td := compiledTierDir{slots: make([]*policystore.PolicySlot, len(ids))}
 	for i, id := range ids {
-		slots[i] = store.CompiledPolicyByID[ftypes.ProtoToPolicyID(id)]
+		td.slots[i] = store.CompiledPolicyByID[ftypes.ProtoToPolicyID(id)]
 	}
-	return slots
+	td.defaultRuleIDFor = ids[0]
+	td.defaultRuleID = newTierDefaultRuleID(ids[0], tier, dir)
+	return td
 }
 
-// policySlotsFor returns the precomputed slots for one direction of the tier
-// at index ti, or nil if there are none to use — no compiled endpoint, or a
+// tierDirFor returns the precomputed form of one direction of the tier at
+// index ti, or nil if there is none to use — no compiled endpoint, or a slot
 // slice that does not line up with the endpoint being evaluated (which would
-// mean the compiled form was built from a different object). Callers then fall
-// back to looking each policy up by ID.
-func (ce *compiledEndpoint) policySlotsFor(ti int, dir rules.RuleDir, numPolicies int) []*policystore.PolicySlot {
+// mean the compiled form was built from a different object). The walk then
+// falls back to looking each policy up by ID.
+func (ce *compiledEndpoint) tierDirFor(ti int, dir rules.RuleDir, numPolicies int) *compiledTierDir {
 	if ce == nil || ti >= len(ce.tiers) {
 		return nil
 	}
-	slots := ce.tiers[ti].ingress
+	td := &ce.tiers[ti].ingress
 	if dir == rules.RuleDirEgress {
-		slots = ce.tiers[ti].egress
+		td = &ce.tiers[ti].egress
 	}
-	if len(slots) != numPolicies {
+	if len(td.slots) != numPolicies {
 		return nil
 	}
-	return slots
+	return td
+}
+
+func (td *compiledTierDir) policySlots() []*policystore.PolicySlot {
+	if td == nil {
+		return nil
+	}
+	return td.slots
+}
+
+// tierDefaultRuleID returns the RuleID recording that the tier's default
+// action applied, attributed to pID — the first policy of the tier that did
+// not match. That is the tier's first policy unless earlier policies are
+// missing from the store (which makes them neither match nor not-match), so
+// the precomputed one is used only when it was built for this policy.
+func (td *compiledTierDir) tierDefaultRuleID(pID *proto.PolicyID, tier *proto.TierInfo, dir rules.RuleDir) *calc.RuleID {
+	if td != nil && td.defaultRuleIDFor == pID {
+		return td.defaultRuleID
+	}
+	return newTierDefaultRuleID(pID, tier, dir)
+}
+
+func newTierDefaultRuleID(pID *proto.PolicyID, tier *proto.TierInfo, dir rules.RuleDir) *calc.RuleID {
+	return calc.NewRuleID(pID.Kind, tier.GetName(), pID.Name, pID.Namespace,
+		tierDefaultActionIndex, dir, ruleActionFromStr(tier.DefaultAction))
 }
 
 // profileSlotsFor is policySlotsFor for the endpoint's profiles.
