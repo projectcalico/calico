@@ -29,6 +29,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -255,8 +256,7 @@ func TestConditionsMergeByType(t *testing.T) {
 				}},
 			},
 		}
-		return schemaClient.Status().Patch(ctx, patch, ctrlclient.Apply,
-			ctrlclient.FieldOwner(fieldOwner), ctrlclient.ForceOwnership)
+		return applyStatus(ctx, t, fieldOwner, patch)
 	}
 
 	if err := applyCondition("writer-a", "Conflicted"); err != nil {
@@ -301,37 +301,221 @@ func TestConditionsMergeByType(t *testing.T) {
 	// applier owns the entry keyed by its own condition type; with an atomic list
 	// there are no per-entry keys to own, so writer-b's forced apply takes the whole
 	// field and writer-a's entry goes away.
-	if !ownsCondition(t, got.ManagedFields, "writer-a", "Conflicted") {
+	if !ownsListEntry(t, got.ManagedFields, "writer-a", []string{"f:status", "f:conditions"}, fmt.Sprintf(`k:{"type":%q}`, "Conflicted")) {
 		t.Errorf("expected writer-a to still own the Conflicted condition, managed fields are %+v", got.ManagedFields)
 	}
 }
 
-// ownsCondition reports whether manager holds a managed fields entry owning the
-// status condition keyed by condType. The field set gets decoded rather than
-// string matched, because the key is itself JSON and so comes back with its quotes
-// escaped in the raw bytes.
-func ownsCondition(t *testing.T, entries []metav1.ManagedFieldsEntry, manager, condType string) bool {
+// TestTypeDetailsMergeByKind is TestConditionsMergeByType for the other status
+// list. status.progress.typeDetails is keyed on kind rather than type, and getting
+// the key wrong is the easy mistake, so it gets its own check.
+func TestTypeDetailsMergeByKind(t *testing.T) {
+	ctx := context.Background()
+	m := newMigration("type-details-merge")
+	if err := schemaClient.Create(ctx, m); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer func() { _ = schemaClient.Delete(ctx, m) }()
+
+	applyTypeDetail := func(fieldOwner, kind string, migrated int32) error {
+		patch := &migrationv1.DatastoreMigration{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "DatastoreMigration",
+				APIVersion: migrationv1.SchemeGroupVersion.String(),
+			},
+			ObjectMeta: metav1.ObjectMeta{Name: m.Name},
+			Status: migrationv1.DatastoreMigrationStatus{
+				Progress: migrationv1.DatastoreMigrationProgress{
+					TypeDetails: []migrationv1.TypeMigrationProgress{{
+						Kind:     kind,
+						Migrated: migrated,
+					}},
+				},
+			},
+		}
+		return applyStatus(ctx, t, fieldOwner, patch)
+	}
+
+	if err := applyTypeDetail("writer-a", "NetworkPolicy", 1); err != nil {
+		t.Fatalf("writer-a apply: %v", err)
+	}
+	if err := applyTypeDetail("writer-b", "GlobalNetworkPolicy", 2); err != nil {
+		t.Fatalf("writer-b apply: %v", err)
+	}
+
+	got := &migrationv1.DatastoreMigration{}
+	if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	// The migrated count identifies which writer set each entry, so a survivor
+	// carrying the wrong count means one apply overwrote the other in place.
+	for _, expected := range []struct {
+		kind     string
+		migrated int32
+	}{
+		{
+			kind:     "NetworkPolicy",
+			migrated: 1,
+		},
+		{
+			kind:     "GlobalNetworkPolicy",
+			migrated: 2,
+		},
+	} {
+		detail := findTypeDetail(got.Status.Progress.TypeDetails, expected.kind)
+		if detail == nil {
+			t.Errorf("type detail %q did not survive, type details are %+v", expected.kind, got.Status.Progress.TypeDetails)
+			continue
+		}
+		if detail.Migrated != expected.migrated {
+			t.Errorf("type detail %q has migrated %d, want %d", expected.kind, detail.Migrated, expected.migrated)
+		}
+	}
+
+	if !ownsListEntry(t, got.ManagedFields, "writer-a", []string{"f:status", "f:progress", "f:typeDetails"}, fmt.Sprintf(`k:{"kind":%q}`, "NetworkPolicy")) {
+		t.Errorf("expected writer-a to still own the NetworkPolicy type detail, managed fields are %+v", got.ManagedFields)
+	}
+}
+
+// findTypeDetail returns the entry for kind, or nil.
+func findTypeDetail(details []migrationv1.TypeMigrationProgress, kind string) *migrationv1.TypeMigrationProgress {
+	for i := range details {
+		if details[i].Kind == kind {
+			return &details[i]
+		}
+	}
+	return nil
+}
+
+// TestStatusBoundsAreEnforced checks the MaxItems and MaxLength bounds on status.
+// They keep an unbounded controller loop from growing the object without limit,
+// and v1 is the last chance to tighten them.
+func TestStatusBoundsAreEnforced(t *testing.T) {
+	ctx := context.Background()
+	m := newMigration("status-bounds")
+	if err := schemaClient.Create(ctx, m); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	defer func() { _ = schemaClient.Delete(ctx, m) }()
+
+	for _, tc := range []struct {
+		name      string
+		overrun   func(status *migrationv1.DatastoreMigrationStatus)
+		field     string
+		causeType metav1.CauseType
+	}{
+		{
+			name: "message past MaxLength",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				status.Message = strings.Repeat("m", 1025)
+			},
+			field:     "status.message",
+			causeType: metav1.CauseTypeTooLong,
+		},
+		{
+			name: "conditions past MaxItems",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				now := metav1.Now()
+				for i := range 17 {
+					status.Conditions = append(status.Conditions, metav1.Condition{
+						Type:               fmt.Sprintf("Condition%d", i),
+						Status:             metav1.ConditionTrue,
+						Reason:             "Testing",
+						LastTransitionTime: now,
+					})
+				}
+			},
+			field:     "status.conditions",
+			causeType: metav1.CauseTypeTooMany,
+		},
+		{
+			name: "typeDetails past MaxItems",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				for i := range 129 {
+					status.Progress.TypeDetails = append(status.Progress.TypeDetails, migrationv1.TypeMigrationProgress{
+						Kind: fmt.Sprintf("Kind%d", i),
+					})
+				}
+			},
+			field:     "status.progress.typeDetails",
+			causeType: metav1.CauseTypeTooMany,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Fetch fresh each time so a rejected update from a previous case can't
+			// leave a stale resourceVersion behind.
+			got := &migrationv1.DatastoreMigration{}
+			if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
+				t.Fatalf("get: %v", err)
+			}
+
+			tc.overrun(&got.Status)
+			err := schemaClient.Status().Update(ctx, got)
+			if err == nil {
+				t.Fatalf("expected the update to be rejected")
+			}
+			if !hasCause(err, tc.field, tc.causeType) {
+				t.Fatalf("expected a %s cause on %s, got: %v", tc.causeType, tc.field, err)
+			}
+		})
+	}
+}
+
+// applyStatus server-side applies patch's status subresource as fieldOwner. The
+// typed object gets routed through unstructured because there are no generated
+// apply configurations for DatastoreMigration.
+func applyStatus(ctx context.Context, t *testing.T, fieldOwner string, patch *migrationv1.DatastoreMigration) error {
 	t.Helper()
 
-	key := fmt.Sprintf(`k:{"type":%q}`, condType)
+	raw, err := runtime.DefaultUnstructuredConverter.ToUnstructured(patch)
+	if err != nil {
+		t.Fatalf("convert patch to unstructured: %v", err)
+	}
+
+	// The converter emits a null creationTimestamp from the empty ObjectMeta, and a
+	// null in an apply configuration means "clear this field", which the apiserver
+	// rejects on a field it manages itself.
+	if metadata, ok := raw["metadata"].(map[string]any); ok {
+		delete(metadata, "creationTimestamp")
+	}
+	return schemaClient.Status().Apply(
+		ctx,
+		ctrlclient.ApplyConfigurationFromUnstructured(&unstructured.Unstructured{Object: raw}),
+		ctrlclient.FieldOwner(fieldOwner),
+		ctrlclient.ForceOwnership,
+	)
+}
+
+// ownsListEntry reports whether manager holds a managed fields entry owning the
+// list entry at key, reached by walking path through its field set. The field set
+// gets decoded rather than string matched, because the key is itself JSON and so
+// comes back with its quotes escaped in the raw bytes.
+func ownsListEntry(t *testing.T, entries []metav1.ManagedFieldsEntry, manager string, path []string, key string) bool {
+	t.Helper()
+
 	for _, entry := range entries {
 		if entry.Manager != manager || entry.FieldsV1 == nil {
 			continue
 		}
 
 		var fields map[string]any
-		if err := json.Unmarshal(entry.FieldsV1.Raw, &fields); err != nil {
+		if err := json.Unmarshal(entry.FieldsV1.GetRawBytes(), &fields); err != nil {
 			t.Fatalf("decode managed fields for %q: %v", manager, err)
 		}
-		status, ok := fields["f:status"].(map[string]any)
-		if !ok {
+		cursor := fields
+		for _, step := range path {
+			next, ok := cursor[step].(map[string]any)
+			if !ok {
+				cursor = nil
+				break
+			}
+			cursor = next
+		}
+		if cursor == nil {
 			continue
 		}
-		conditions, ok := status["f:conditions"].(map[string]any)
-		if !ok {
-			continue
-		}
-		if _, ok := conditions[key]; ok {
+		if _, ok := cursor[key]; ok {
 			return true
 		}
 	}

@@ -113,59 +113,113 @@ type DatastoreMigrationList struct {
 // handles cleanup and APIService restoration.
 type DatastoreMigrationSpec struct {
 	// Type specifies the migration to perform (e.g., APIServerToCRDs).
+	// It cannot be changed once set; migration is a one-shot operation and
+	// switching type mid-flight has no coherent meaning.
+	//
+	// The rule is latent today: the enum has a single member, so any value that
+	// would violate it is already rejected one validation stage earlier. It is
+	// here because it documents intent and it goes live the day a second
+	// migration type is added.
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.type is immutable"
 	Type DatastoreMigrationType `json:"type"`
 }
 
 // DatastoreMigrationStatus reports the observed state of the migration.
 type DatastoreMigrationStatus struct {
 	// Phase is the current phase of the migration state machine.
+	// +optional
+	// +kubebuilder:validation:Enum=Pending;Migrating;WaitingForConflictResolution;Converged;Complete;Failed
 	Phase DatastoreMigrationPhase `json:"phase,omitempty"`
+
 	// Message is a human-readable status message describing what the controller
 	// is currently doing or waiting on.
+	// +optional
+	// +kubebuilder:validation:MaxLength=1024
 	Message string `json:"message,omitempty"`
+
 	// StartedAt is the timestamp when the migration transitioned to Migrating.
+	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
+
 	// CompletedAt is the timestamp when the migration transitioned to Complete.
+	// +optional
 	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
+
 	// Progress tracks per-type and aggregate migration counters.
-	Progress DatastoreMigrationProgress `json:"progress,omitempty"`
+	// +optional
+	Progress DatastoreMigrationProgress `json:"progress"`
+
 	// Conditions report conflicts and errors encountered during migration.
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +patchStrategy=merge
+	// +patchMergeKey=type
+	// +kubebuilder:validation:MaxItems=16
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // DatastoreMigrationProgress tracks aggregate and per-type migration counters.
 type DatastoreMigrationProgress struct {
 	// TotalTypes is the number of resource types to migrate.
-	TotalTypes int `json:"totalTypes,omitempty"`
+	// +optional
+	TotalTypes int32 `json:"totalTypes,omitempty"`
+
 	// CompletedTypes is the number of resource types that have been fully processed.
-	CompletedTypes int `json:"completedTypes,omitempty"`
+	// +optional
+	CompletedTypes int32 `json:"completedTypes,omitempty"`
+
 	// TypeProgress is a human-readable summary like "5 / 21" for printer columns.
+	// +optional
+	// +kubebuilder:validation:MaxLength=64
 	TypeProgress string `json:"typeProgress,omitempty"`
+
 	// CurrentType is the resource kind currently being migrated, or empty if done.
+	// +optional
+	// +kubebuilder:validation:MaxLength=253
 	CurrentType string `json:"currentType,omitempty"`
 
 	// Total is the total number of resources processed across all types.
-	Total int `json:"total,omitempty"`
+	// +optional
+	Total int32 `json:"total,omitempty"`
+
 	// Migrated is the number of resources successfully copied to v3.
-	Migrated int `json:"migrated,omitempty"`
+	// +optional
+	Migrated int32 `json:"migrated,omitempty"`
+
 	// Skipped is the number of resources that already existed in v3 with matching content.
-	Skipped int `json:"skipped,omitempty"`
+	// +optional
+	Skipped int32 `json:"skipped,omitempty"`
+
 	// Conflicts is the number of resources that existed in v3 with different content.
-	Conflicts int `json:"conflicts,omitempty"`
+	// +optional
+	Conflicts int32 `json:"conflicts,omitempty"`
 
 	// TypeDetails contains per-resource-type migration results.
+	// +optional
+	// +listType=map
+	// +listMapKey=kind
+	// +kubebuilder:validation:MaxItems=128
 	TypeDetails []TypeMigrationProgress `json:"typeDetails,omitempty"`
 }
 
 // TypeMigrationProgress tracks the migration result for a single resource kind.
 type TypeMigrationProgress struct {
 	// Kind is the Calico resource kind (e.g., "NetworkPolicy", "GlobalNetworkPolicy").
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MaxLength=253
 	Kind string `json:"kind"`
+
 	// Migrated is the number of resources of this kind successfully copied to v3.
-	Migrated int `json:"migrated,omitempty"`
+	// +optional
+	Migrated int32 `json:"migrated,omitempty"`
+
 	// Skipped is the number of resources of this kind that already existed in v3 with matching content.
-	Skipped int `json:"skipped,omitempty"`
+	// +optional
+	Skipped int32 `json:"skipped,omitempty"`
+
 	// Conflicts is the number of resources of this kind that existed in v3 with different content.
-	Conflicts int `json:"conflicts,omitempty"`
+	// +optional
+	Conflicts int32 `json:"conflicts,omitempty"`
 }
