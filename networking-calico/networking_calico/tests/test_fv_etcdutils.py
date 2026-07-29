@@ -273,7 +273,7 @@ class TestFVEtcdutils(unittest.TestCase):
         # the deadline.  (The delete must come from another process, since
         # this process is stalled.)
         eventlet.sleep(8)
-        subprocess.Popen(
+        curl = subprocess.Popen(
             [
                 "curl",
                 "-s",
@@ -287,6 +287,7 @@ class TestFVEtcdutils(unittest.TestCase):
             ]
         )
         eventlet.patcher.original("time").sleep(3.5)
+        curl.wait(timeout=10)
 
         # The delete event arrived during the stall, and the watch is now
         # being cancelled for inactivity; the cancellation must deliver the

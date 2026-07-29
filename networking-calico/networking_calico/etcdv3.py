@@ -605,10 +605,13 @@ class Etcd3AuthClient(Etcd3Client):
                     break
                 eventlet.sleep(0.05)
 
-            # Add the end-of-stream sentinel, behind any queued events; then
-            # stop the reader and close the connection.
-            event_queue.put(None)
+            # Stop the reader and close the connection; then add the
+            # end-of-stream sentinel behind any queued events.  This order
+            # means that any events that the reader manages to parse and
+            # queue while the connection is being torn down still land ahead
+            # of the sentinel and so are delivered.
             watcher.stop()
+            event_queue.put(None)
 
         def iterator():
             while True:
