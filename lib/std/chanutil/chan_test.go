@@ -54,12 +54,12 @@ func TestChanUtil_ReadError_ContextCancelled(t *testing.T) {
 	ch := make(chan error)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel the context immediately to force the context.Cancelled error.
+	// Cancel the context immediately to force the context.Canceled error.
 	cancel()
 
 	err := chanutil.ReadError(ctx, ch)
 	if err == nil {
-		t.Fatal("Expected and error to be returned.")
+		t.Fatal("Expected an error to be returned.")
 	} else if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Expected context canceled error, got '%s'", err)
 	}
