@@ -311,6 +311,36 @@ func TestRepeatedMissesForTheSameNameDoNotGetEveryTime(t *testing.T) {
 		"a flood of reads for the same non-existent name must not produce a GET per read")
 }
 
+// The negative cache must not answer the unlabeled path, where the lister already returned the
+// object. ErrPolicyNotFound becomes NoOpinion, so a stale entry would drop the tier check for a
+// policy that demonstrably exists.
+func TestNegativeCacheDoesNotSuppressTheUnlabeledLookup(t *testing.T) {
+	meta := namespacedPolicyMeta("ns1", "unlabeled", "")
+	delete(meta.Labels, v3.LabelTier)
+
+	scheme := metadatafake.NewTestScheme()
+	require.NoError(t, metav1.AddMetaToScheme(scheme))
+
+	calicoClient, _ := countingCalicoClient(t, nil, &v3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "unlabeled"},
+		Spec:       v3.NetworkPolicySpec{Tier: "production"},
+	})
+
+	c := New(metadatafake.NewSimpleMetadataClient(scheme, meta), calicoClient, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
+
+	// Stand in for an earlier read of the same name while it did not yet exist.
+	c.recordNotFound("networkpolicies/ns1/unlabeled")
+
+	tier, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "unlabeled")
+
+	require.NoError(t, err, "a prior not-found must not make an existing policy look absent")
+	assert.Equal(t, "production", tier)
+}
+
 func TestNegativeCacheEntriesExpire(t *testing.T) {
 	c := &Cache{notFound: map[string]time.Time{"k": time.Now().Add(-2 * negativeCacheTTL)}}
 

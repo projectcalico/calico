@@ -68,6 +68,13 @@ const (
 // created just after a miss keeps being treated as absent.
 const negativeCacheTTL = 5 * time.Second
 
+// Reasons a live GET was needed. These are metric label values, and reasonMiss additionally
+// gates the negative cache: see fallbackGet.
+const (
+	reasonMiss      = "miss"
+	reasonUnlabeled = "unlabeled"
+)
+
 // maxNegativeEntries caps the negative cache so a flood of unique names cannot grow it without
 // bound. Past the cap, expired entries are swept and new ones are not recorded: dropping an entry
 // costs a GET, not correctness.
@@ -132,14 +139,22 @@ func (c *Cache) logSyncProgress(ctx context.Context) {
 	const complainAfter = 30 * time.Second
 
 	start := time.Now()
-	ticker := time.NewTicker(complainAfter)
+	// Poll faster than we complain, so that a healthy sync records its timestamp promptly and
+	// never logs the warning. Ticking at complainAfter would park this goroutine past a sync
+	// that already happened, then warn about it.
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
+	var complained bool
 	for !c.HasSynced() {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if complained || time.Since(start) < complainAfter {
+				continue
+			}
+			complained = true
 			logrus.WithFields(logrus.Fields{
 				"waiting":  c.unsyncedResources(),
 				"since":    time.Since(start).Round(time.Second),
@@ -237,7 +252,7 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 			"namespace": namespace,
 			"name":      name,
 		}).Debug("Policy not in cache, falling back to a GET")
-		return c.fallbackGet(ctx, resource, namespace, name, "miss")
+		return c.fallbackGet(ctx, resource, namespace, name, reasonMiss)
 	}
 
 	meta, ok := obj.(*metav1.PartialObjectMetadata)
@@ -250,7 +265,7 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 
 	// Policies created before the tier-label MutatingAdmissionPolicy was installed carry no
 	// label, so read spec.tier directly.
-	return c.fallbackGet(ctx, resource, namespace, name, "unlabeled")
+	return c.fallbackGet(ctx, resource, namespace, name, reasonUnlabeled)
 }
 
 // fallbackGet resolves a tier from the API server, behind the negative cache, the rate limiter
@@ -258,13 +273,20 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 func (c *Cache) fallbackGet(ctx context.Context, resource, namespace, name, reason string) (string, error) {
 	key := resource + "/" + namespace + "/" + name
 
-	if c.recentlyNotFound(key) {
+	// Only a cache miss may be answered from the negative cache. On the "unlabeled" path the
+	// lister already returned the object, so a stale "does not exist" would resolve to
+	// ErrPolicyNotFound, which tierauth maps to NoOpinion: the tier check would be skipped for
+	// a policy that demonstrably exists.
+	if reason == reasonMiss && c.recentlyNotFound(key) {
 		return "", tierauth.ErrPolicyNotFound
 	}
 
 	// Concurrent readers of the same uncached policy share one GET. The leader's context
 	// bounds it, so a follower can be handed the leader's context error; that denies the
-	// follower, which is the fail-closed direction.
+	// follower, which is the fail-closed direction. It is still worth forgetting the key on a
+	// context error rather than letting the next arrival join a doomed call, because the API
+	// server caches the resulting Denied for unauthorizedTTL (30s) - far longer than the 2s
+	// decision budget that produced it.
 	tier, err, _ := c.getGroup.Do(key, func() (any, error) {
 		if err := c.fallbackLimiter.Wait(ctx); err != nil {
 			return "", fmt.Errorf("waiting for a policy GET token: %w", err)
@@ -274,6 +296,9 @@ func (c *Cache) fallbackGet(ctx context.Context, resource, namespace, name, reas
 	})
 	if errors.Is(err, tierauth.ErrPolicyNotFound) {
 		c.recordNotFound(key)
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		c.getGroup.Forget(key)
 	}
 	if err != nil {
 		return "", err
