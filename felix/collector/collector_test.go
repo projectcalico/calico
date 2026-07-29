@@ -26,7 +26,6 @@ import (
 	"github.com/gavv/monotime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
@@ -3832,7 +3831,7 @@ func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
 		// Short enough that a tick, and the following re-evaluation, land within the timeout
 		// below: the ticker fires at 8/10 of this and a flow becomes due again at 4/10.
 		FlowLogsFlushInterval: 100 * time.Millisecond,
-		PolicyEvaluationMode:  string(apiv3.FlowLogsPolicyEvaluationModeContinuous),
+		PolicyEvaluationMode:  string(v3.FlowLogsPolicyEvaluationModeContinuous),
 	}).(*collector)
 
 	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
