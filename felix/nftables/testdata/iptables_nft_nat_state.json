@@ -1,0 +1,166 @@
+{
+  "chains": [
+    {
+      "name": "PREROUTING"
+    },
+    {
+      "name": "INPUT"
+    },
+    {
+      "name": "OUTPUT"
+    },
+    {
+      "name": "POSTROUTING"
+    },
+    {
+      "name": "cali-OUTPUT"
+    },
+    {
+      "name": "cali-POSTROUTING"
+    },
+    {
+      "name": "cali-PREROUTING"
+    },
+    {
+      "name": "cali-fip-dnat"
+    },
+    {
+      "name": "cali-fip-snat"
+    },
+    {
+      "name": "cali-nat-outgoing"
+    },
+    {
+      "name": "KUBE-KUBELET-CANARY"
+    },
+    {
+      "name": "CNI-HOSTPORT-SETMARK"
+    },
+    {
+      "name": "CNI-HOSTPORT-MASQ"
+    },
+    {
+      "name": "CNI-HOSTPORT-DNAT"
+    },
+    {
+      "name": "CNI-DN-e39780ea08b399fa3bc03"
+    },
+    {
+      "name": "ts-postrouting"
+    }
+  ],
+  "rules": [
+    {
+      "chain": "PREROUTING",
+      "handle": 11,
+      "comment": "cali:6gwbT8clXdHdC1b1",
+      "jumpTarget": "cali-PREROUTING"
+    },
+    {
+      "chain": "PREROUTING",
+      "handle": 87,
+      "jumpTarget": "CNI-HOSTPORT-DNAT"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 12,
+      "comment": "cali:tVnHkvAo15HuiPy0",
+      "jumpTarget": "cali-OUTPUT"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 88,
+      "jumpTarget": "CNI-HOSTPORT-DNAT"
+    },
+    {
+      "chain": "POSTROUTING",
+      "handle": 13,
+      "comment": "cali:0i8pjzKKPyA34aQD",
+      "jumpTarget": "cali-POSTROUTING"
+    },
+    {
+      "chain": "POSTROUTING",
+      "handle": 83,
+      "jumpTarget": "ts-postrouting"
+    },
+    {
+      "chain": "POSTROUTING",
+      "handle": 84,
+      "jumpTarget": "CNI-HOSTPORT-MASQ"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 14,
+      "comment": "cali:GBTAv2p5CwevEyJm",
+      "jumpTarget": "cali-fip-dnat"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 15,
+      "comment": "cali:Z-c7XtVd2Bq7s_hA",
+      "jumpTarget": "cali-fip-snat"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 16,
+      "comment": "cali:nYKhEzDlr11Jccal",
+      "jumpTarget": "cali-nat-outgoing"
+    },
+    {
+      "chain": "cali-POSTROUTING",
+      "handle": 17,
+      "comment": "cali:e9dnSgSVNmIcpVhP"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 18,
+      "comment": "cali:r6XmIziWUJsdOK6Z",
+      "jumpTarget": "cali-fip-dnat"
+    },
+    {
+      "chain": "CNI-HOSTPORT-SETMARK",
+      "handle": 81
+    },
+    {
+      "chain": "CNI-HOSTPORT-MASQ",
+      "handle": 82
+    },
+    {
+      "chain": "CNI-HOSTPORT-DNAT",
+      "handle": 86,
+      "jumpTarget": "CNI-DN-e39780ea08b399fa3bc03"
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 89,
+      "jumpTarget": "CNI-HOSTPORT-SETMARK"
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 90,
+      "jumpTarget": "CNI-HOSTPORT-SETMARK"
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 91
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 92,
+      "jumpTarget": "CNI-HOSTPORT-SETMARK"
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 93,
+      "jumpTarget": "CNI-HOSTPORT-SETMARK"
+    },
+    {
+      "chain": "CNI-DN-e39780ea08b399fa3bc03",
+      "handle": 94
+    },
+    {
+      "chain": "ts-postrouting",
+      "handle": 95
+    }
+  ]
+}

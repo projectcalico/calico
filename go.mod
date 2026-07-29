@@ -35,6 +35,7 @@ require (
 	github.com/google/go-containerregistry v0.21.6
 	github.com/google/go-github/v53 v53.2.0
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
+	github.com/google/nftables v0.3.0
 	github.com/google/safetext v0.0.0-20260330151545-1fb717a317c5
 	github.com/google/uuid v1.6.0
 	github.com/gopacket/gopacket v1.4.0
@@ -289,7 +290,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-zglob v0.0.2-0.20190814121620-e3c945676326 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
-	github.com/mdlayher/netlink v1.7.2 // indirect
+	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mistifyio/go-zfs v2.1.2-0.20190413222219-f784269be439+incompatible // indirect

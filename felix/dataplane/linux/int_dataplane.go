@@ -179,13 +179,7 @@ type Config struct {
 	ProgramClusterRoutes         bool
 	NoEncapEnabled               bool
 
-	IPForwarding string
-
-	// CleanupMarkMask is the widest mark mask Felix reserves, used to recognise rules a previous
-	// Felix left behind. Deliberately not the mask we program with: that Felix may have been
-	// configured with another dataplane mode.
-	CleanupMarkMask uint32
-
+	IPForwarding                   string
 	TableRefreshInterval           time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
@@ -653,7 +647,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		cleanupTables = append(cleanupTables,
 			// HistoricChainPrefixes rather than rules.AllHistoricChainNamePrefixes: in BPF mode
 			// it also covers kube-proxy's chains.
-			nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
+			nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions),
 		)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
@@ -1378,7 +1372,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 			// Clean up after a previous iptables-mode Felix; see the IPv4 path.
 			cleanupTables = append(cleanupTables,
-				nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, config.CleanupMarkMask, nftablesOptions),
+				nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions),
 			)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
