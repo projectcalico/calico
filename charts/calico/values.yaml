@@ -25,6 +25,8 @@ includeCRDs: true
 # Enables the Calico authorization webhook, which enforces tier-based RBAC on reads
 # (GET/LIST/WATCH) of tiered policy resources. Self-hosted clusters only: it requires
 # --authorization-config on the kube-apiserver, which managed control planes do not expose.
+# Off by default, and off means off: the webhook process answers NoOpinion on /authz, does
+# not run the policy tier cache, and is not granted read access to policy resources.
 # See webhooks/config/README.md for the install procedure.
 authzWebhookEnabled: false
 

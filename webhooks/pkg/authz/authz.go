@@ -70,6 +70,26 @@ func RegisterHook(decider Decider, handleFn HandleAuthzFn) {
 	http.HandleFunc("/authz", handleFn(NewHook(decider)))
 }
 
+// RegisterDisabledHook registers /authz answering NoOpinion for every request.
+//
+// Registered rather than left off, because an unregistered path returns 404, the API server reads
+// that as a webhook failure, and under failurePolicy: Deny that denies every projectcalico.org
+// request in the cluster. So an operator who sets --authorization-config without enabling the
+// feature gets the pre-webhook status quo instead of an outage.
+func RegisterDisabledHook(handleFn HandleAuthzFn) {
+	logrus.WithField("path", "/authz").Warn(
+		"Authorization webhook is disabled: answering NoOpinion for every request. " +
+			"Pass --authz-enabled to enforce tier RBAC on reads")
+	http.HandleFunc("/authz", handleFn(disabledHook{}))
+}
+
+// disabledHook answers NoOpinion for every request.
+type disabledHook struct{}
+
+func (disabledHook) Authorize(authorizationv1.SubjectAccessReview) *authorizationv1.SubjectAccessReviewStatus {
+	return noOpinion("the Calico authorization webhook is disabled")
+}
+
 // Hook adapts SubjectAccessReview traffic onto a Decider.
 type Hook struct {
 	decider Decider

@@ -65,6 +65,7 @@ var (
 	clientCAFile string
 	logLevel     string
 	port         int
+	authzEnabled bool
 )
 
 // NewCommand returns a cobra.Command that serves Calico admission webhooks.
@@ -86,6 +87,10 @@ func NewCommand() *cobra.Command {
 	webhookCmd.Flags().StringVar(&clientCAFile, "client-ca-file", "", "If set, enables mTLS by requiring and verifying client certificates signed by this CA.")
 	webhookCmd.Flags().IntVar(&port, "port", 6443, "Secure port that the webhook listens on")
 	webhookCmd.Flags().StringVar(&logLevel, "log-level", "info", "Logrus log level to output (trace, debug, info, warning, error, fatal, panic)")
+	webhookCmd.Flags().BoolVar(&authzEnabled, "authz-enabled", false,
+		"Enforce tier RBAC on reads via the /authz authorization webhook, and run the policy tier cache it needs. "+
+			"Off by default: it also requires --authorization-config on the kube-apiserver, so it is opt-in. "+
+			"/authz is served either way, answering NoOpinion when this is off.")
 
 	versionCmd := &cobra.Command{
 		Use:   "version",
@@ -206,16 +211,27 @@ func registerHooks(
 		logrus.WithError(err).Fatal("Failed to create webhook authorizer")
 	}
 
-	cache := policycache.New(metadataClient, calicoCS, 10*time.Minute)
-	if err := cache.Start(ctx); err != nil {
-		logrus.WithError(err).Fatal("Failed to start the policy tier cache")
+	// The policy tier cache only serves the authorization path, and costs five cluster-wide
+	// metadata watches, so it only runs when that path is enabled.
+	var cache *policycache.Cache
+	var resolver tierauth.PolicyTierResolver = disabledResolver{}
+	if authzEnabled {
+		cache = policycache.New(metadataClient, calicoCS, 10*time.Minute)
+		if err := cache.Start(ctx); err != nil {
+			logrus.WithError(err).Fatal("Failed to start the policy tier cache")
+		}
+		resolver = cache
 	}
 
-	decider := tierauth.New(authorizer.NewTierAuthorizer(authorizerClient), cache)
+	decider := tierauth.New(authorizer.NewTierAuthorizer(authorizerClient), resolver)
 
 	rbac.RegisterHook(decider, calicoCS.ProjectcalicoV3().Tiers(), utils.HandleFn(handleFn))
 	clusterinfo.RegisterHook(utils.HandleFn(handleFn))
-	authz.RegisterHook(decider, authz.HandleAuthzFn(handleAuthzFn))
+	if authzEnabled {
+		authz.RegisterHook(decider, authz.HandleAuthzFn(handleAuthzFn))
+	} else {
+		authz.RegisterDisabledHook(authz.HandleAuthzFn(handleAuthzFn))
+	}
 
 	// Register a readiness endpoint that can be used by Kubernetes to check the health of the webhook server.
 	http.HandleFunc("/readyz", readyFn(cache))
@@ -232,9 +248,21 @@ func registerHooks(
 	return cache
 }
 
+// disabledResolver stands in for the policy tier cache when the authorization webhook is off.
+// The admission path shares the same tierauth.Authorizer but reads spec.tier out of the object
+// body, so it never asks for a resolution; erroring rather than passing nil keeps any future
+// path that does reach here fail-closed instead of panicking.
+type disabledResolver struct{}
+
+func (disabledResolver) TierForPolicy(_ context.Context, _, _, _ string) (string, error) {
+	return "", errors.New("the policy tier cache is not running; the authorization webhook is disabled (--authz-enabled)")
+}
+
+// readyFn reports on the policy tier cache. cache is nil when the authorization webhook is
+// disabled, in which case there is nothing to warm up and the server is ready once it listens.
 func readyFn(cache *policycache.Cache) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !cache.HasSynced() {
+		if cache != nil && !cache.HasSynced() {
 			http.Error(w, "policy tier cache has not synced", http.StatusServiceUnavailable)
 			return
 		}

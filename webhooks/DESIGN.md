@@ -21,7 +21,7 @@ Install steps, break-glass, and cert rotation live in [`webhooks/config/README.m
 | `/rbac` | `ValidatingWebhookConfiguration` (admission) | CREATE / UPDATE / DELETE on the five tiered policy resources |
 | `/authz` | `AuthorizationConfiguration` webhook authorizer (SubjectAccessReview) | GET / LIST / WATCH on the same five |
 | `/cluster-info` | admission handler | writes to `ClusterInformation` from anything but `calico-node`, `calico-typha`, `calico-kube-controllers` |
-| `/readyz` | plain HTTP | policy tier cache sync |
+| `/readyz` | plain HTTP | policy tier cache sync (always ready when `--authz-enabled` is off) |
 | `/metrics` | Prometheus | see [Metrics](#metrics) |
 
 The five tiered policy resources are `networkpolicies`, `globalnetworkpolicies`, `stagednetworkpolicies`, `stagedglobalnetworkpolicies`, `stagedkubernetesnetworkpolicies` (`tierauth.tieredPolicyResources`).
@@ -29,6 +29,8 @@ The five tiered policy resources are `networkpolicies`, `globalnetworkpolicies`,
 The split between `/rbac` and `/authz` is forced, not chosen. Admission is never invoked for reads, so an admission webhook cannot see a GET, LIST or WATCH at all. An authorization webhook sees every verb but only ever sees request attributes, never an object body, so it cannot authorize a CREATE whose tier is only knowable from `spec.tier`. Each path covers what the other structurally cannot.
 
 `/cluster-info` is served unconditionally but nothing in `charts/calico` registers a webhook for it, so it is dead weight in a chart install today.
+
+`/authz` is gated on `--authz-enabled`, off by default and set by the chart from `authzWebhookEnabled`. Off, the path is still registered but answers `NoOpinion` for everything, and the policy tier cache does not run. The path stays registered because an unregistered one 404s, the API server counts a 404 as a webhook failure, and under `failurePolicy: Deny` that denies every `projectcalico.org` request in the cluster. So the two halves of the install (the flag, and `--authorization-config` on the API server) can be done in either order without an outage in between.
 
 ### Review notes
 
@@ -105,7 +107,8 @@ The GVRs are `projectcalico.org/v3`, which is correct because in v3-CRD mode the
 
 - Readiness must gate on `HasSynced`. Serving before sync would deny reads that should pass.
 - Keep the informers metadata-only. Caching bodies for all five resources on every cluster is a memory regression for a value the label already holds.
-- The chart grants the read verbs on all five resources unconditionally, because the cache starts unconditionally. A v3-CRD install that never wires up `--authorization-config` still pays five cluster-wide metadata watches. Gating the cache on the authz webhook actually being installed is unfinished work, not a decision.
+- The cache and the chart's read grant are both gated on the authz feature (`--authz-enabled` / `authzWebhookEnabled`), and have to stay gated together. Granting without running wastes nothing; running without the grant means the cache never syncs, and under `failurePolicy: Deny` that denies the whole `projectcalico.org` group.
+- When the cache is off, `registerHooks` passes a stub resolver that returns an error rather than a nil interface. Nil would panic on the first named read; an error denies. The stub must never return `tierauth.ErrPolicyNotFound`, which would be read as "policy does not exist" and hand the request to RBAC.
 
 ## Install prerequisites
 

@@ -17,7 +17,9 @@ Requires Kubernetes 1.32 or later. `apiserver.config.k8s.io/v1 AuthorizationConf
      --set useV3CRDs=true --set authzWebhookEnabled=true
    ```
 
-   `useV3CRDs` is the CRD-mode gate that deploys `calico-webhooks` at all. `authzWebhookEnabled` does not switch the `/authz` endpoint on or off (the process always serves it; what puts it in the authorization path is step 3): it raises the Deployment to two replicas and adds a PodDisruptionBudget, which matter once an apiserver denies on the webhook being unreachable.
+   `useV3CRDs` is the CRD-mode gate that deploys `calico-webhooks` at all. `authzWebhookEnabled` passes `--authz-enabled` to the process, grants it read access to the tiered policy resources, raises the Deployment to two replicas, and adds a PodDisruptionBudget. Without it the process still serves `/authz`, but answers NoOpinion for everything and does not run the policy tier cache, so tier RBAC on reads is not enforced. `/authz` stays registered either way on purpose: an unregistered path 404s, which the API server counts as a webhook failure, and under `failurePolicy: Deny` that denies every `projectcalico.org` request in the cluster.
+
+   What puts the webhook in the authorization path is step 3, and the two are independent. Doing step 3 without `authzWebhookEnabled=true` degrades to the behavior you had before installing the webhook rather than breaking the cluster.
 
 2. Read the allocated ClusterIP and write it, along with the webhook's CA bundle, into `calico-authz-webhook-kubeconfig.yaml`:
 
