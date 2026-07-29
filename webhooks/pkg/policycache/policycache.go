@@ -51,25 +51,19 @@ var policyGVRs = map[string]schema.GroupVersionResource{
 	"stagedkubernetesnetworkpolicies": v3.SchemeGroupVersion.WithResource("stagedkubernetesnetworkpolicies"),
 }
 
-// The fallback GET path gets its own budget rather than sharing the rest client's (QPS 100 /
-// burst 200, set in webhooks/pkg/webhook/command.go). A flood of reads for names that miss the
-// informer cache would otherwise take the whole client budget and queue the admission path's
-// SubjectAccessReviews behind it. Waiting for a token is bounded by the caller's context, so a
-// request that cannot get one in time is denied on its own rather than timing the webhook out.
+// The fallback GET path gets its own budget rather than sharing the rest client's, so a flood of
+// reads for names that miss the informer cache can't starve the admission path.
 const (
 	fallbackGetQPS   = 25
 	fallbackGetBurst = 50
 )
 
-// negativeCacheTTL is how long a "policy does not exist" answer is reused, which is what keeps a
-// flood of reads for random names off the API server. Well under the AuthorizationConfiguration's
-// unauthorizedTTL (30s) on purpose: a not-found becomes NoOpinion, which the API server itself
-// caches for that long, so anything larger here would be the dominant term in how long a policy
-// created just after a miss keeps being treated as absent.
+// negativeCacheTTL is how long a "policy does not exist" answer is reused, keeping a flood of reads
+// for random names off the API server. Deliberately well under unauthorizedTTL, which the drift
+// test asserts.
 const negativeCacheTTL = 5 * time.Second
 
-// Reasons a live GET was needed. These are metric label values, and reasonMiss additionally
-// gates the negative cache: see fallbackGet.
+// Reasons a live GET was needed. Metric label values, and reasonMiss gates the negative cache.
 const (
 	reasonMiss      = "miss"
 	reasonUnlabeled = "unlabeled"
@@ -139,9 +133,8 @@ func (c *Cache) logSyncProgress(ctx context.Context) {
 	const complainAfter = 30 * time.Second
 
 	start := time.Now()
-	// Poll faster than we complain, so that a healthy sync records its timestamp promptly and
-	// never logs the warning. Ticking at complainAfter would park this goroutine past a sync
-	// that already happened, then warn about it.
+	// Poll faster than we complain, so a healthy sync records its timestamp promptly and never
+	// warns.
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -223,11 +216,9 @@ func (c *Cache) unsyncedResources() []string {
 
 // TierForPolicy returns the tier of the named policy, or tierauth.ErrPolicyNotFound.
 func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name string) (string, error) {
-	// Refuse rather than fall back while the cache is warming up. An unsynced lister reports
-	// every policy as missing, so falling back would put the whole cluster's read traffic on
-	// live GETs at exactly the moment the API server is least able to serve them. The error
-	// deliberately isn't ErrPolicyNotFound, which would be read as "the policy does not
-	// exist" and hand the request to RBAC.
+	// Refuse rather than fall back while warming up: an unsynced lister reports every policy as
+	// missing, which would put the cluster's whole read traffic on live GETs. Not
+	// ErrPolicyNotFound, which would hand the request to RBAC.
 	if !c.HasSynced() {
 		return "", fmt.Errorf("the policy tier cache has not synced; waiting on %v", c.unsyncedResources())
 	}
@@ -273,20 +264,14 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 func (c *Cache) fallbackGet(ctx context.Context, resource, namespace, name, reason string) (string, error) {
 	key := resource + "/" + namespace + "/" + name
 
-	// Only a cache miss may be answered from the negative cache. On the "unlabeled" path the
-	// lister already returned the object, so a stale "does not exist" would resolve to
-	// ErrPolicyNotFound, which tierauth maps to NoOpinion: the tier check would be skipped for
-	// a policy that demonstrably exists.
+	// Only a miss may be answered from the negative cache. On the unlabeled path the lister
+	// already returned the object, so a stale not-found would skip the tier check entirely.
 	if reason == reasonMiss && c.recentlyNotFound(key) {
 		return "", tierauth.ErrPolicyNotFound
 	}
 
-	// Concurrent readers of the same uncached policy share one GET. The leader's context
-	// bounds it, so a follower can be handed the leader's context error; that denies the
-	// follower, which is the fail-closed direction. It is still worth forgetting the key on a
-	// context error rather than letting the next arrival join a doomed call, because the API
-	// server caches the resulting Denied for unauthorizedTTL (30s) - far longer than the 2s
-	// decision budget that produced it.
+	// Concurrent readers of the same uncached policy share one GET, forgetting the key on a
+	// context error so the next arrival doesn't join a call that's already out of budget.
 	tier, err, _ := c.getGroup.Do(key, func() (any, error) {
 		if err := c.fallbackLimiter.Wait(ctx); err != nil {
 			return "", fmt.Errorf("waiting for a policy GET token: %w", err)

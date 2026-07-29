@@ -578,9 +578,8 @@ var _ = Describe("Calico authorization webhook", func() {
 			Expect(hook.callsBy(userNonResource)).To(Equal(0))
 		})
 
-		It("consults the webhook for writes as well as reads", func() {
-			// The condition carries no verb guard, so the webhook sees every verb on the
-			// group and declines to have an opinion on the mutating ones itself.
+		It("keeps writes away from the webhook", func() {
+			// Writes are the admission webhook's job, so the verb guard excludes them here.
 			policy := &v3.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "created-np", Namespace: testNamespace},
 				Spec:       v3.NetworkPolicySpec{Selector: "all()"},
@@ -594,7 +593,7 @@ var _ = Describe("Calico authorization webhook", func() {
 					NetworkPolicies(testNamespace).Delete(ctx, policy.Name, metav1.DeleteOptions{})).To(Succeed())
 			})
 
-			Expect(hook.callsFor(userMutating, "networkpolicies")).To(BeNumerically(">", 0))
+			Expect(hook.callsFor(userMutating, "networkpolicies")).To(Equal(0))
 		})
 	})
 

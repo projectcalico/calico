@@ -45,7 +45,7 @@ That's the whole reason `tierauth` exists. Two hooks enforcing the same rule fro
 
 `tierauth` delegates the actual RBAC evaluation to `apiserver/pkg/registry/projectcalico/authorizer.TierAuthorizer`, the same code the aggregated API server uses. So a v3-CRD cluster and an aggregated cluster answer the same question with the same code.
 
-One consequence worth knowing: `TierAuthorizer` answers by issuing SubjectAccessReviews of its own, for `tiers` (verb `get`) and for `tier.<resource>`, both in the `projectcalico.org` group. The API server authorizes those SARs through its full authorizer chain, which includes this webhook. `matchCondition` 1 matches on group alone, and the exempt-identity `matchCondition` tests the SAR's *subject*, not the webhook's service account, so the webhook is re-entered. It answers `NoOpinion` immediately (neither `tiers` nor `tier.networkpolicies` is a tiered policy resource), so the recursion stops at depth two, but it isn't free: a policy read costs roughly three webhook round trips rather than one.
+One consequence worth knowing: `TierAuthorizer` answers by issuing SubjectAccessReviews of its own, for `tiers` (verb `get`) and for `tier.<resource>`, both in the `projectcalico.org` group. The API server authorizes those SARs through its full authorizer chain, which includes this webhook, and the exempt-identity `matchCondition` tests the SAR's *subject* rather than the webhook's own service account. What keeps them out is `matchCondition` 1's resource list: neither `tiers` nor `tier.<resource>` is on it, so the SARs never re-enter the webhook. Widen that condition to the whole group and each policy read costs roughly three webhook round trips instead of one.
 
 ### Review notes
 
@@ -127,9 +127,9 @@ These are hard requirements, not recommendations. Missing any of them means tier
 
 ### Review notes
 
-- Adding a resource to `tieredPolicyResources` means adding it to `policyGVRs`, to the MAP's `matchConstraints`, and to the `ValidatingWebhookConfiguration` rules. Miss the MAP and the new resource's tier label is never maintained.
+- Adding a resource to `tieredPolicyResources` means adding it to `policyGVRs`, to the MAP's `matchConstraints`, to the `ValidatingWebhookConfiguration` rules, and to the `matchConditions` resource list. Miss the MAP and the new resource's tier label is never maintained.
 - The exempt list and the chart's namespace are coupled. Moving `calico-webhooks` to another namespace without editing `matchConditions` deadlocks bootstrap.
-- A new Calico component that reads the `projectcalico.org` group in v3-CRD mode may need adding to the exempt list. `calico-cni-plugin` is one that reads it (IP pools) and is not exempt today.
+- A new Calico component that reads tiered policy in v3-CRD mode needs adding to the exempt list. Components that read the rest of the group (`calico-cni-plugin` reads IP pools) don't, since `matchCondition` 1 already excludes them.
 
 ## The AuthorizationConfiguration
 
@@ -137,20 +137,15 @@ These are hard requirements, not recommendations. Missing any of them means tier
 
 **`unauthorizedTTL` is a security parameter, not a performance knob.** It caches NoOpinion as well as Denied. `spec.tier` is mutable, so moving a policy into a restricted tier leaves a previously authorized reader holding a stale NoOpinion for up to this long. Shipped value is 30s. `authorizedTTL` is inert, because we never Allow. The value is mirrored by hand as `authzUnauthorizedTTL` in `e2e/pkg/tests/policy/tiered_rbac_reads.go`, which polls for longer than it.
 
-**`failurePolicy: Deny` combined with a group-wide `matchCondition` gives a wide blast radius.** The first `matchCondition` filters on the whole `projectcalico.org` group with no verb or resource guard, so an unreachable webhook denies every verb on every resource in that group for every non-exempt identity: writes included, `IPPool` and `FelixConfiguration` included, and `calico-cni-plugin` (not exempt) included, so pod setup can fail too. `webhooks/config/README.md`'s break-glass section describes this accurately.
+**`failurePolicy: Deny` makes the first `matchCondition` a blast-radius decision.** It filters on group plus read verb plus the five tiered policy resources, so an unreachable webhook denies tiered policy reads and nothing else: writes, the rest of the `projectcalico.org` group (`IPPool`, `FelixConfiguration`), and `calico-cni-plugin` (which reads IP pools and is not exempt) all keep working. `webhooks/config/README.md`'s break-glass section describes what remains.
 
-Whether to narrow that filter is **open**, deliberately:
-
-- For narrowing to read verbs plus the five tiered resources: it shrinks the blast radius at no cost to enforcement, since the Go side already answers `NoOpinion` for everything else. It would also cut out the second-order `tiers` / `tier.<resource>` re-entry described above, which is most of the webhook's traffic.
-- Against: a tiered resource added later would silently fall outside a narrowed filter and lose enforcement, with nothing to catch it. Group-wide plus Go-side `NoOpinion` is safe by default.
-
-Both sides are real. Nobody has picked one.
+The alternative, filtering on the group alone, was considered and rejected. It costs nothing in enforcement either way, since the Go side answers `NoOpinion` for anything outside those lists, but group-wide widens the outage radius to every verb on every Calico resource and re-enters the webhook for the `tiers` / `tier.<resource>` SARs described above. The risk narrowing introduces is a tiered resource added later falling silently outside the filter; `TestMatchConditionsCoverEveryTieredResourceAndReadVerb` in `webhooks/pkg/authz` fails the build if that happens.
 
 ### Review notes
 
-- Every field access in `matchConditions` needs `has()`. A CEL evaluation error counts as a webhook failure, so under `failurePolicy: Deny` an unguarded expression denies the entire `projectcalico.org` group. This is the review note, not just a fact.
+- Every field access in `matchConditions` needs `has()`. A CEL evaluation error counts as a webhook failure, and since `matchConditions` are evaluated for every request the authorizer sees, an unguarded expression under `failurePolicy: Deny` denies far more than the filter selects. This is the review note, not just a fact.
 - Lowering `unauthorizedTTL` shrinks a real stale-permission window and puts the webhook in front of proportionally more reads. It's a tradeoff, not a tuning default. Change `authzUnauthorizedTTL` in the e2e specs in the same PR.
-- Narrowing `matchConditions` is a correctness change, not a cleanup: it changes which requests are enforced, not just which are consulted.
+- Widening or narrowing `matchConditions` is a correctness change, not a cleanup: it changes which requests are enforced, not just which are consulted. Adding a tiered policy resource means editing the config file too.
 
 ## Metrics
 
@@ -183,7 +178,7 @@ Honest state: **the e2e specs have never been executed.** No install path deploy
 ### Review notes
 
 - A behavior that depends on the API server (CEL, SAR wire format, TTLs, the authorizer chain order) is not covered by a unit test with a fake. Put it in the envtest suite.
-- `webhooks/config/authorization-configuration.yaml` is a file an operator copies onto control-plane nodes; nothing at build or run time reconciles it against the Go constants that assume its values. `webhooks/pkg/authz/config_drift_test.go` is that reconciliation, and covers `timeout` vs `decisionTimeout`, `unauthorizedTTL` vs `negativeCacheTTL`, and `unauthorizedTTL` vs the e2e specs' `authzUnauthorizedTTL`. A new constant that assumes a value from that file belongs in it.
+- `webhooks/config/authorization-configuration.yaml` is a file an operator copies onto control-plane nodes; nothing at build or run time reconciles it against the Go constants that assume its values. `webhooks/pkg/authz/config_drift_test.go` is that reconciliation, and covers `timeout` vs `decisionTimeout`, `unauthorizedTTL` vs `negativeCacheTTL`, `unauthorizedTTL` vs the e2e specs' `authzUnauthorizedTTL`, and the `matchConditions` resource and verb lists vs `tierauth.TieredPolicyResources` and `readVerbs`. A new constant that assumes a value from that file belongs in it.
 - The e2e specs fail rather than skip when the run asked for them by name, so a pipeline that means to run them can't pass by skipping them. "Asked for by name" has to include `--label-filter`, not just `-focus`: our pipelines select by label expression, and a spec that only consults `-focus` can never tell that it was selected. `describe.ExplicitlySelected` covers both, and is what these specs call.
 
 ## Open questions
@@ -191,9 +186,8 @@ Honest state: **the e2e specs have never been executed.** No install path deploy
 Observed state, not what documentation claims.
 
 1. **Does reloading `--authorization-config` cover the referenced kubeconfig and CA bundle, or only the config file?** Unverified. Kubernetes documents the config file as reloading from disk without a restart; nothing in this branch tested that, and nothing tested whether a changed kubeconfig or CA file is picked up. `webhooks/config/README.md` says so and prescribes an apiserver restart as the fallback. Matters because break-glass depends on it.
-2. **Blast radius of the group-wide `matchCondition`.** See [The AuthorizationConfiguration](#the-authorizationconfiguration). Open on purpose.
-3. **No operator install path.** Verified against `tigera/operator@0a6dac02a`: `pkg/render/webhooks/render.go` grants the webhook only `create` on `subjectaccessreviews` and `get` on `tiers`, so the cache never syncs and the pod never goes ready; the rendered Service pins no `ClusterIP`, so the kubeconfig has no address to name; and everything renders into `calico-system` while the exempt identities are `kube-system` service accounts. Layering the chart on top of an operator install would give the cluster two webhook Deployments. See the README's "Operator-managed installs" section.
-4. **Cert rotation is manual.** See the README.
+2. **No operator install path.** Verified against `tigera/operator@0a6dac02a`: `pkg/render/webhooks/render.go` grants the webhook only `create` on `subjectaccessreviews` and `get` on `tiers`, so the cache never syncs and the pod never goes ready; the rendered Service pins no `ClusterIP`, so the kubeconfig has no address to name; and everything renders into `calico-system` while the exempt identities are `kube-system` service accounts. Layering the chart on top of an operator install would give the cluster two webhook Deployments. See the README's "Operator-managed installs" section.
+3. **Cert rotation is manual.** See the README.
 
 Resolved during implementation, recorded so nobody re-litigates them:
 

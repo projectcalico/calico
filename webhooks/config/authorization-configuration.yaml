@@ -21,27 +21,15 @@ authorizers:
   - type: Webhook
     name: calico-tiered-rbac
     webhook:
-      # decisionTimeout in webhooks/pkg/authz/authz.go must stay strictly below this, so that a
-      # slow decision times out on our side (a scoped deny for one request) rather than on the
-      # API server's (a webhook failure, which under failurePolicy: Deny denies the whole
-      # projectcalico.org group). A drift test asserts the two agree; change them together.
+      # decisionTimeout in webhooks/pkg/authz/authz.go must stay below this, so a slow decision
+      # denies one request rather than failing the webhook. A drift test asserts it.
       timeout: 3s
-      # We never return Allowed, so authorizedTTL is inert. unauthorizedTTL caches both
-      # Denied and NoOpinion, which makes it the security-relevant knob: spec.tier is
-      # mutable, so moving a policy into a restricted tier leaves a stale NoOpinion for a
-      # previously authorized reader for up to this long. Lower it to shrink that window at
-      # the cost of putting the webhook in front of every Calico read.
-      # unauthorizedTTL is mirrored by hand as authzUnauthorizedTTL in
-      # e2e/pkg/tests/policy/tiered_rbac_reads.go, which polls for longer than it. Change both
-      # together or those specs start asserting against the wrong window.
+      # authorizedTTL is inert (we never return Allowed). unauthorizedTTL caches Denied and
+      # NoOpinion, so it bounds how long a stale decision survives a policy moving tier.
+      # Mirrored by hand as authzUnauthorizedTTL in e2e/pkg/tests/policy/tiered_rbac_reads.go.
       authorizedTTL: 5m
       unauthorizedTTL: 30s
-      # Fail closed. If the webhook is unreachable, every request that reaches it is denied
-      # rather than silently falling through to RBAC. The first matchCondition below matches
-      # the whole projectcalico.org group with no verb or resource guard, so that is every
-      # verb (not just reads) on every resource in the group (not just tiered policy), from
-      # every identity not in the exempt list below. See the break-glass procedure in
-      # README.md.
+      # Fail closed, bounded by the matchConditions below. See README.md for break-glass.
       failurePolicy: Deny
       subjectAccessReviewVersion: v1
       matchConditionSubjectAccessReviewVersion: v1
@@ -49,15 +37,28 @@ authorizers:
         type: KubeConfigFile
         kubeConfigFile: /etc/kubernetes/authz/calico-authz-webhook-kubeconfig.yaml
       matchConditions:
-        # Only Calico API group resource requests reach the webhook. Everything else, including
-        # cluster bootstrap traffic, skips it entirely.
-        - expression: has(request.resourceAttributes) && request.resourceAttributes.group == 'projectcalico.org'
-        # Never gate Calico's own components. The webhook's informers read the very resources
-        # it authorizes, so gating them would deadlock informer bootstrap under this failure
-        # policy. Listed explicitly rather than by namespace prefix: these service accounts
-        # live in kube-system, and exempting everything in kube-system would be far broader
-        # than intended. Every field access is guarded so this expression cannot error,
-        # because a matchConditions error counts as a webhook failure and would itself deny.
+        # Only tiered policy reads reach the webhook. The Go side NoOpinions everything else
+        # anyway, so this changes no decisions - it just keeps the failurePolicy: Deny blast
+        # radius off the rest of the group, and stops the webhook recursing into itself via the
+        # SubjectAccessReviews the tier decision issues for tiers and tier.<resource>.
+        # These lists mirror tierauth.TieredPolicyResources and readVerbs; a drift test in
+        # webhooks/pkg/authz keeps them in sync.
+        - expression: >-
+            has(request.resourceAttributes)
+            && request.resourceAttributes.group == 'projectcalico.org'
+            && has(request.resourceAttributes.verb)
+            && request.resourceAttributes.verb in ['get', 'list', 'watch']
+            && has(request.resourceAttributes.resource)
+            && request.resourceAttributes.resource in [
+              'networkpolicies',
+              'globalnetworkpolicies',
+              'stagednetworkpolicies',
+              'stagedglobalnetworkpolicies',
+              'stagedkubernetesnetworkpolicies'
+            ]
+        # Never gate Calico's own components: the webhook's informers read the resources it
+        # authorizes, so gating them deadlocks informer bootstrap under failurePolicy: Deny.
+        # Listed by name rather than namespace, since kube-system holds far more than these.
         - expression: >-
             !(has(request.user) && request.user in [
               'system:serviceaccount:kube-system:calico-webhooks',

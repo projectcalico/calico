@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -101,6 +102,17 @@ var tieredPolicyResources = map[string]bool{
 // IsTieredPolicyResource reports whether the named resource is scoped by tier.
 func IsTieredPolicyResource(resource string) bool {
 	return tieredPolicyResources[resource]
+}
+
+// TieredPolicyResources returns the tier-scoped resources, sorted. The AuthorizationConfiguration
+// mirrors this set in a CEL matchCondition; a drift test in the authz package compares the two.
+func TieredPolicyResources() []string {
+	out := make([]string, 0, len(tieredPolicyResources))
+	for resource := range tieredPolicyResources {
+		out = append(out, resource)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // Authorizer decides tier access. Construct one per process and share it between hooks.

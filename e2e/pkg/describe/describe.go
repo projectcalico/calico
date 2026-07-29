@@ -254,13 +254,11 @@ func IncludesFocus(s string) bool {
 }
 
 // ExplicitlySelected reports whether the run asked for s by name, through either -focus or
-// --label-filter. Use it where IncludesFocus alone would be wrong: our pipelines select by label
-// expression, so a spec that only consults -focus can never tell that it was asked for, and
-// self-skipping there silently passes a run that meant to exercise it.
+// --label-filter. Our pipelines select by label expression, so a spec that only consults -focus
+// can't tell it was asked for and self-skips, silently passing a run that meant to exercise it.
 //
-// The label-filter check is textual rather than an evaluation of the expression, since a spec
-// cannot evaluate the filter against its own labels from inside its body. A negated mention
-// (`!Foo`, `Foo && !Bar` asked about Bar, or `!(Serial || Foo)`) does not count as selecting it.
+// The label-filter check is textual, since a spec can't evaluate the filter against its own labels
+// from inside its body. A negated mention (`!Foo`, or `!(Serial || Foo)`) doesn't count.
 func ExplicitlySelected(s string) bool {
 	if IncludesFocus(s) {
 		return true
@@ -270,8 +268,8 @@ func ExplicitlySelected(s string) bool {
 }
 
 // mentionsUnnegated reports whether expr names s somewhere that is not negated, either directly
-// (`!Foo`) or by an enclosing group (`!(A || Foo)`). Matching is case-insensitive because Ginkgo
-// compares labels that way, so a lowercase filter selects the spec and must be seen to.
+// (`!Foo`) or by an enclosing group (`!(A || Foo)`). Case-insensitive, because Ginkgo compares
+// labels that way.
 func mentionsUnnegated(expr, s string) bool {
 	expr, s = strings.ToLower(expr), strings.ToLower(s)
 
@@ -289,8 +287,7 @@ func mentionsUnnegated(expr, s string) bool {
 }
 
 // negatedAt reports whether the token at position at sits under a `!`, walking left through any
-// groups that enclose it. Treating an unrecognized shape as negated makes an unparseable filter
-// skip rather than fail, which is the pre-existing behavior.
+// enclosing groups.
 func negatedAt(expr string, at int) bool {
 	if strings.HasSuffix(strings.TrimRight(expr[:at], " \t"), "!") {
 		return true

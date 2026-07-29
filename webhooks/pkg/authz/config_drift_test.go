@@ -19,12 +19,15 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
+
+	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 )
 
 // The AuthorizationConfiguration is a file an operator copies onto control-plane nodes, so
@@ -41,10 +44,9 @@ func TestDecisionTimeoutStaysBelowTheWebhookTimeout(t *testing.T) {
 
 	require.NotZero(t, timeout, "the webhook has no explicit timeout; decisionTimeout has nothing to sit below")
 	assert.Less(t, decisionTimeout, timeout,
-		"decisionTimeout (%s) must stay strictly below the webhook timeout (%s) in %s. Otherwise a slow "+
-			"decision times out on the API server's side, which is a webhook failure, and under "+
-			"failurePolicy: Deny that denies every projectcalico.org request from every non-exempt "+
-			"identity rather than just the slow one.", decisionTimeout, timeout, authzConfigPath)
+		"decisionTimeout (%s) must stay below the webhook timeout (%s) in %s, or a slow decision "+
+			"becomes a webhook failure and denies every request the matchConditions route to it",
+		decisionTimeout, timeout, authzConfigPath)
 }
 
 func TestNegativeCacheAssumptionAboutUnauthorizedTTL(t *testing.T) {
@@ -52,25 +54,55 @@ func TestNegativeCacheAssumptionAboutUnauthorizedTTL(t *testing.T) {
 
 	require.NotZero(t, ttl, "unauthorizedTTL is unset, so the API server's default applies and this "+
 		"test is no longer checking what it thinks it is")
-	// The cache's negative entries have to expire well inside the API server's own cache of a
-	// NoOpinion, or a policy that appears after a miss stays invisible for longer than the
-	// config file says it should.
+	// Negative entries must expire inside the API server's own cache of a NoOpinion, or a policy
+	// created after a miss stays invisible for longer than the config file says.
 	negativeTTL := durationConst(t, policycachePath, "negativeCacheTTL")
 	assert.Less(t, negativeTTL, ttl,
 		"negativeCacheTTL in %s (%s) must stay below unauthorizedTTL in %s (%s)",
 		policycachePath, negativeTTL, authzConfigPath, ttl)
 
-	// The e2e specs mirror unauthorizedTTL by hand, because they poll for longer than the API
-	// server caches a Denied or NoOpinion. Nothing links the two but this assertion.
+	// The e2e specs mirror unauthorizedTTL by hand, since they poll for longer than it.
 	mirrored := durationConst(t, e2eSpecPath, "authzUnauthorizedTTL")
 	assert.Equal(t, ttl, mirrored,
-		"authzUnauthorizedTTL in %s must match unauthorizedTTL in %s; the read-path specs poll "+
-			"against it and silently assert on the wrong window if it drifts", e2eSpecPath, authzConfigPath)
+		"authzUnauthorizedTTL in %s must match unauthorizedTTL in %s, or those specs assert on "+
+			"the wrong window", e2eSpecPath, authzConfigPath)
+}
+
+// A resource added to tierauth but not to the config's CEL filter would silently never reach the
+// webhook, losing enforcement for it.
+func TestMatchConditionsCoverEveryTieredResourceAndReadVerb(t *testing.T) {
+	exprs := webhookConfig(t).MatchConditions
+	require.NotEmpty(t, exprs, "the webhook has no matchConditions")
+
+	joined := strings.Join(exprs, "\n")
+
+	assert.ElementsMatch(t, tierauth.TieredPolicyResources(), celList(t, joined, "resource"),
+		"the resource list in %s must match tierauth.TieredPolicyResources", authzConfigPath)
+
+	verbs := make([]string, 0, len(readVerbs))
+	for verb := range readVerbs {
+		verbs = append(verbs, verb)
+	}
+	assert.ElementsMatch(t, verbs, celList(t, joined, "verb"),
+		"the verb list in %s must match readVerbs", authzConfigPath)
+}
+
+// celList pulls the quoted strings out of a `request.resourceAttributes.<field> in [...]` clause.
+func celList(t *testing.T, expr, field string) []string {
+	t.Helper()
+
+	clause := regexp.MustCompile(`request\.resourceAttributes\.` + field + `\s+in\s+\[([^\]]*)\]`).FindStringSubmatch(expr)
+	require.NotNil(t, clause, "no `resourceAttributes.%s in [...]` clause in the matchConditions", field)
+
+	var out []string
+	for _, m := range regexp.MustCompile(`'([^']*)'`).FindAllStringSubmatch(clause[1], -1) {
+		out = append(out, m[1])
+	}
+	return out
 }
 
 // authorizationConfiguration is the subset of the AuthorizationConfiguration these tests read.
-// Deliberately not the upstream type: apiserver's config types are internal to the API server
-// and pulling them in for two duration fields is not worth the dependency.
+// Not the upstream type: apiserver's config types are internal to the API server.
 type authorizationConfiguration struct {
 	Authorizers []struct {
 		Type    string `json:"type"`
@@ -79,6 +111,9 @@ type authorizationConfiguration struct {
 			Timeout         metaDuration `json:"timeout"`
 			UnauthorizedTTL metaDuration `json:"unauthorizedTTL"`
 			FailurePolicy   string       `json:"failurePolicy"`
+			MatchConditions []struct {
+				Expression string `json:"expression"`
+			} `json:"matchConditions"`
 		} `json:"webhook"`
 	} `json:"authorizers"`
 }
@@ -87,8 +122,8 @@ type authorizationConfiguration struct {
 type metaDuration time.Duration
 
 func (d *metaDuration) UnmarshalJSON(b []byte) error {
-	// Unquote rather than slicing blindly: a bare number in the YAML (timeout: 3) would slice out
-	// of range and panic, hiding the config error this test exists to report.
+	// Unquote rather than slicing: a bare number in the YAML (timeout: 3) would panic and hide
+	// the config error this test exists to report.
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return fmt.Errorf("duration %q is not a string: %w", b, err)
@@ -104,6 +139,7 @@ func (d *metaDuration) UnmarshalJSON(b []byte) error {
 type webhookSettings struct {
 	Timeout         time.Duration
 	UnauthorizedTTL time.Duration
+	MatchConditions []string
 }
 
 // webhookConfig returns the calico-tiered-rbac webhook's settings from the shipped config file.
@@ -123,10 +159,14 @@ func webhookConfig(t *testing.T) webhookSettings {
 		require.NotNil(t, a.Webhook, "the calico-tiered-rbac authorizer has no webhook stanza")
 		require.Equal(t, "Deny", a.Webhook.FailurePolicy,
 			"this webhook fails closed by design; see the invariants in webhooks/DESIGN.md")
-		return webhookSettings{
+		settings := webhookSettings{
 			Timeout:         time.Duration(a.Webhook.Timeout),
 			UnauthorizedTTL: time.Duration(a.Webhook.UnauthorizedTTL),
 		}
+		for _, mc := range a.Webhook.MatchConditions {
+			settings.MatchConditions = append(settings.MatchConditions, mc.Expression)
+		}
+		return settings
 	}
 
 	t.Fatalf("no authorizer named calico-tiered-rbac in %s", authzConfigPath)

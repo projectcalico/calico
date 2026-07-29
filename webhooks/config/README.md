@@ -51,7 +51,7 @@ There is also no operator API surface for `--authorization-config` itself, which
 
 ## Break-glass
 
-`failurePolicy: Deny` means an unreachable webhook denies every request the `matchConditions` route to it, not just the reads the webhook itself would otherwise have denied. The first `matchCondition` matches the entire `projectcalico.org` group with no verb or resource guard, so an outage denies every verb (including writes) on every resource in that group (not just tiered policy), for every identity not on the exempt list. Concretely: a webhook outage can block `kubectl apply` of an `IPPool` or `FelixConfiguration`, and `calico-cni-plugin`, which reads IP pools through this group in `useV3CRDs` mode, is not on the exempt list, so pod setup can fail too. Causes include the webhook pod being down, a cert that expired, or a dataplane failure that keeps `calico-webhooks` from starting.
+`failurePolicy: Deny` means an unreachable webhook denies every request the `matchConditions` route to it, not just the reads the webhook itself would otherwise have denied. The `matchConditions` bound that to GET/LIST/WATCH of tiered policy from identities not on the exempt list, so an outage blocks `kubectl get networkpolicies.p` and the like while leaving writes and the rest of the `projectcalico.org` group (`IPPool`, `FelixConfiguration`, and so the CNI plugin's IP pool reads) working. Causes include the webhook pod being down, a cert that expired, or a dataplane failure that keeps `calico-webhooks` from starting.
 
 To restore access, edit `authorization-configuration.yaml` on each control-plane node and either:
 

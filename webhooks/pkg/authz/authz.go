@@ -53,15 +53,10 @@ var readVerbs = map[string]bool{
 	"watch": true,
 }
 
-// decisionTimeout bounds a single authorization decision, including any fallback GET. It stays
-// strictly below the webhook timeout in webhooks/config/authorization-configuration.yaml (3s),
-// and the drift test in this package asserts that it does.
-//
-// The ordering is what makes a slow decision survivable. Outrunning the API server instead turns
-// the decision into a webhook failure, and under failurePolicy: Deny a failure denies every
-// projectcalico.org request from every non-exempt identity, not just the slow one.
-//
-// A var rather than a const so the overrun test can shorten it.
+// decisionTimeout bounds a single authorization decision, including any fallback GET. It must stay
+// below the webhook timeout in webhooks/config/authorization-configuration.yaml, so a slow decision
+// denies one request rather than failing the webhook; a drift test asserts it. A var so the
+// overrun test can shorten it.
 var decisionTimeout = 2 * time.Second
 
 // RegisterHook registers the /authz HTTP handler.
