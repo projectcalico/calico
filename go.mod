@@ -436,7 +436,7 @@ replace (
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.37.0-beta.0
 	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
 	// exist; pin to the pseudo-version used by the rest of our k8s dependencies.
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.37.0-beta.0
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.37.0-beta.0
 	k8s.io/kubectl => k8s.io/kubectl v0.37.0-beta.0
