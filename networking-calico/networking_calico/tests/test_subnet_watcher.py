@@ -12,7 +12,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import json
 import logging
+from collections import namedtuple
 
 from etcd3gw.exceptions import Etcd3Exception
 
@@ -25,6 +27,8 @@ from networking_calico.etcdutils import EtcdWatcher
 
 
 LOG = logging.getLogger(__name__)
+
+EtcdResponse = namedtuple("EtcdResponse", ["value"])
 
 
 class TestSubnetWatcher(base.BaseTestCase):
@@ -49,3 +53,42 @@ class TestSubnetWatcher(base.BaseTestCase):
                 "Etcd3Exception in SubnetWatcher.start():\n%s",
                 "from test_exception_detail",
             )
+
+    def test_snapshot_reconciliation(self):
+        # Deletion events can be missed, so SubnetWatcher must discard any
+        # subnet that a snapshot no longer reports.
+        sw = SubnetWatcher(mock.Mock(), "/calico/dhcp/v2/no-region/subnet")
+
+        def set_subnet(subnet_id):
+            sw.on_subnet_set(
+                EtcdResponse(
+                    value=json.dumps(
+                        {
+                            "network_id": "net-1",
+                            "cidr": "10.65.0.0/24",
+                            "gateway_ip": "10.65.0.1",
+                        }
+                    )
+                ),
+                subnet_id,
+            )
+
+        # Learn two subnets from watch events.
+        set_subnet("subnet-a")
+        set_subnet("subnet-b")
+        self.assertEqual({"subnet-a", "subnet-b"}, set(sw.subnets_by_id.keys()))
+
+        # Process a snapshot that reports subnet-b again, plus a new
+        # subnet-c, but not subnet-a - as when subnet-a's deletion event was
+        # missed.  subnet-a must be discarded; the others must survive.
+        snapshot_data = sw._pre_snapshot_hook()
+        set_subnet("subnet-b")
+        set_subnet("subnet-c")
+        sw._post_snapshot_hook(snapshot_data)
+        self.assertEqual({"subnet-b", "subnet-c"}, set(sw.subnets_by_id.keys()))
+
+        # An ordinary deletion event still works, whether or not the subnet
+        # is known.
+        sw.on_subnet_del(None, "subnet-b")
+        sw.on_subnet_del(None, "subnet-never-seen")
+        self.assertEqual({"subnet-c"}, set(sw.subnets_by_id.keys()))
