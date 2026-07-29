@@ -336,7 +336,6 @@ func StartDataplaneDriver(
 			VXLANMTUV6:                     configParams.VXLANMTUV6,
 			VXLANPort:                      configParams.VXLANPort,
 			IptablesBackend:                configParams.IptablesBackend,
-			CleanupMarkMask:                configParams.IptablesMarkMask | configParams.NftablesMarkMask,
 			TableRefreshInterval:           configParams.TableRefreshInterval(),
 			RouteSyncDisabled:              configParams.RouteSyncDisabled,
 			RouteRefreshInterval:           configParams.RouteRefreshInterval,

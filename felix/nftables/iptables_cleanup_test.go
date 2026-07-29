@@ -15,16 +15,14 @@
 package nftables
 
 import (
-	"bytes"
+	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/felix/iptables/cmdshim"
+	"sigs.k8s.io/knftables"
 )
 
 // Copy of rules.AllHistoricChainNamePrefixes; felix/rules imports this package, so importing it
@@ -33,43 +31,38 @@ var ourPrefixes = []string{
 	"cali-", "califw-", "calitw-", "califh-", "calith-", "calipi-", "calipo-", "felix-",
 }
 
-// The testdata files are real `nft --json list table ip <table>` output, captured from the ruleset
-// attached to #13263 (Tailscale, NixOS firewall, CNI port mapping, kubelet) with the state a
-// previous iptables-mode Felix would have left underneath it. Testing against the real encoding
-// matters: iptables writes its rule comments as an opaque `xt` blob, so our rule hashes are
-// invisible in this view and we have to recognise our own rules structurally.
-func loadTestdata(table string) ([]nftChain, []nftRule) {
-	raw, err := os.ReadFile("testdata/iptables_nft_" + table + "_table.json")
+// The testdata files are real netlink reads of the #13263 ruleset (Tailscale, NixOS firewall, CNI
+// port mapping, kubelet) over the state a previous iptables-mode Felix would have left, captured
+// from felix/fv/cali-iptables-dump.txt plus felix/fv/foreign-nft-dump.txt.
+func loadTestdata(table string) *iptablesTableState {
+	raw, err := os.ReadFile("testdata/iptables_nft_" + table + "_state.json")
 	Expect(err).NotTo(HaveOccurred())
-	chains, rules, err := parseNFTTable(raw)
-	Expect(err).NotTo(HaveOccurred())
-	return chains, rules
+	var state iptablesTableState
+	Expect(json.Unmarshal(raw, &state)).To(Succeed())
+	return &state
 }
 
 var _ = Describe("iptables cleanup, identifying our own state", func() {
-	const markMask = 0xffff0000
-
 	var cleanup *IPTablesCleanup
 
 	BeforeEach(func() {
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, markMask, TableOptions{})
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{})
 	})
 
 	Describe("filter table", func() {
-		var chains []nftChain
-		var rules []nftRule
+		var state *iptablesTableState
 
 		BeforeEach(func() {
-			chains, rules = loadTestdata("filter")
+			state = loadTestdata("filter")
 		})
 
-		It("parses the real nft output", func() {
-			Expect(chains).To(HaveLen(22))
-			Expect(rules).NotTo(BeEmpty())
+		It("loads the real capture", func() {
+			Expect(state.Chains).To(HaveLen(22))
+			Expect(state.Rules).NotTo(BeEmpty())
 		})
 
 		It("claims every chain of ours and none of anyone else's", func() {
-			ourChains, _ := cleanup.ourState(chains, rules)
+			ourChains, _ := cleanup.ourState(state)
 			Expect(ourChains).To(HaveLen(11))
 			Expect(ourChains).To(ContainElement("cali-FORWARD"))
 			Expect(ourChains).NotTo(ContainElement("ts-input"))
@@ -77,12 +70,11 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 			Expect(ourChains).NotTo(ContainElement("FORWARD"))
 		})
 
-		It("claims our rules in the base chains, by all three signals", func() {
-			_, handles := cleanup.ourState(chains, rules)
-
-			// 15/16/19 are jumps into our chains, 17 matches our accept mark, 18 is an opaque MARK
-			// target in a chain we had hooked.
-			Expect(handles).To(Equal(map[string][]int{
+		// 17 and 18 are the accept-mark rules, which used to need the mark mask and the MARK
+		// target judgement call. Both carry a hash.
+		It("claims our rules in the base chains by their hash", func() {
+			_, handles := cleanup.ourState(state)
+			Expect(handles).To(Equal(map[string][]uint64{
 				"INPUT":   {15},
 				"FORWARD": {16, 17, 18},
 				"OUTPUT":  {19},
@@ -90,12 +82,12 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 		})
 
 		It("leaves the neighbours' rules alone", func() {
-			_, handles := cleanup.ourState(chains, rules)
+			_, handles := cleanup.ourState(state)
 
-			// 83/84/85 jump to ts-input, KUBE-FIREWALL and nixos-fw; 87/88 likewise.
-			Expect(handles["INPUT"]).NotTo(ContainElements(83, 84, 85))
-			Expect(handles["OUTPUT"]).NotTo(ContainElement(87))
-			Expect(handles["FORWARD"]).NotTo(ContainElement(88))
+			// 374/375/376 jump to ts-input, KUBE-FIREWALL and nixos-fw; 378/379 likewise.
+			Expect(handles["INPUT"]).NotTo(ContainElements(uint64(374), uint64(375), uint64(376)))
+			Expect(handles["OUTPUT"]).NotTo(ContainElement(uint64(378)))
+			Expect(handles["FORWARD"]).NotTo(ContainElement(uint64(379)))
 			Expect(handles).NotTo(HaveKey("ts-input"))
 			Expect(handles).NotTo(HaveKey("ts-forward"))
 			Expect(handles).NotTo(HaveKey("nixos-fw"))
@@ -103,17 +95,16 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 	})
 
 	Describe("nat table", func() {
-		var chains []nftChain
-		var rules []nftRule
+		var state *iptablesTableState
 
 		BeforeEach(func() {
-			chains, rules = loadTestdata("nat")
+			state = loadTestdata("nat")
 		})
 
 		It("claims our chains and our jumps, and nothing else", func() {
-			ourChains, handles := cleanup.ourState(chains, rules)
+			ourChains, handles := cleanup.ourState(state)
 			Expect(ourChains).To(HaveLen(6))
-			Expect(handles).To(Equal(map[string][]int{
+			Expect(handles).To(Equal(map[string][]uint64{
 				"PREROUTING":  {11},
 				"OUTPUT":      {12},
 				"POSTROUTING": {13},
@@ -121,161 +112,117 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 		})
 
 		It("ignores the neighbours' mark rules", func() {
-			// CNI uses 0x2000 and Tailscale 0x400; both fall outside Felix's mask.
-			_, handles := cleanup.ourState(chains, rules)
+			_, handles := cleanup.ourState(state)
 			Expect(handles).NotTo(HaveKey("CNI-HOSTPORT-SETMARK"))
 			Expect(handles).NotTo(HaveKey("CNI-HOSTPORT-MASQ"))
 			Expect(handles).NotTo(HaveKey("ts-postrouting"))
 		})
 	})
 
-	It("does not claim a MARK rule in a chain it never hooked", func() {
-		raw := []byte(`{"nftables":[
-			{"chain":{"family":"ip","table":"filter","name":"INPUT"}},
-			{"rule":{"family":"ip","table":"filter","chain":"INPUT","handle":7,
-			  "expr":[{"xt":{"type":"target","name":"MARK"}}]}}
-		]}`)
-		chains, rules, err := parseNFTTable(raw)
-		Expect(err).NotTo(HaveOccurred())
-
-		ourChains, handles := cleanup.ourState(chains, rules)
-		Expect(ourChains).To(BeEmpty())
+	// Tailscale matches 0x40000/0xff0000, inside Felix's default mask, so the old mark matching
+	// claimed it as ours.
+	It("ignores another tool's rules whatever mark bits they touch", func() {
+		state := &iptablesTableState{
+			Chains: []iptablesChain{{Name: "ts-forward"}},
+			Rules: []iptablesRule{
+				{Chain: "ts-forward", Handle: 9, Comment: "tailscale internal"},
+				{Chain: "ts-forward", Handle: 10},
+			},
+		}
+		_, handles := cleanup.ourState(state)
 		Expect(handles).To(BeEmpty())
 	})
 
-	It("ignores a mark match that falls outside our mask", func() {
-		raw := []byte(`{"nftables":[
-			{"chain":{"family":"ip","table":"filter","name":"INPUT"}},
-			{"rule":{"family":"ip","table":"filter","chain":"INPUT","handle":8,
-			  "expr":[{"xt":{"type":"match","name":"comment"}},
-			          {"match":{"op":"==","left":{"&":[{"meta":{"key":"mark"}},255]},"right":255}}]}}
-		]}`)
-		chains, rules, err := parseNFTTable(raw)
-		Expect(err).NotTo(HaveOccurred())
-
-		_, handles := cleanup.ourState(chains, rules)
-		Expect(handles).To(BeEmpty())
+	It("claims a rule that jumps into one of our chains even without a hash", func() {
+		state := &iptablesTableState{
+			Chains: []iptablesChain{{Name: "INPUT"}},
+			Rules:  []iptablesRule{{Chain: "INPUT", Handle: 30, JumpTarget: "cali-INPUT"}},
+		}
+		_, handles := cleanup.ourState(state)
+		Expect(handles).To(HaveKeyWithValue("INPUT", []uint64{30}))
 	})
 
-	It("ignores mark rules that iptables didn't write", func() {
-		// Native nft rules using mark bits inside our mask: ours all carry a comment match, and
-		// nothing written natively carries any xt expression.
-		raw := []byte(`{"nftables":[
-			{"chain":{"family":"ip","table":"filter","name":"INPUT"}},
-			{"rule":{"family":"ip","table":"filter","chain":"INPUT","handle":9,
-			  "expr":[{"match":{"op":"==","left":{"&":[{"meta":{"key":"mark"}},65536]},"right":65536}},
-			          {"accept":null}]}},
-			{"rule":{"family":"ip","table":"filter","chain":"INPUT","handle":10,
-			  "expr":[{"mangle":{"key":{"meta":{"key":"mark"}},"value":65536}}]}}
-		]}`)
-		chains, rules, err := parseNFTTable(raw)
-		Expect(err).NotTo(HaveOccurred())
-
-		_, handles := cleanup.ourState(chains, rules)
-		Expect(handles).To(BeEmpty())
+	It("does not claim a rule on the strength of a comment that isn't a hash", func() {
+		state := &iptablesTableState{
+			Chains: []iptablesChain{{Name: "INPUT"}},
+			Rules: []iptablesRule{
+				{Chain: "INPUT", Handle: 31, Comment: "calico-ish but not ours"},
+				{Chain: "INPUT", Handle: 32, Comment: "cali-INPUT"},
+			},
+		}
+		_, handles := cleanup.ourState(state)
+		Expect(handles).To(BeEmpty(), "the hash prefix is cali: with the colon")
 	})
 })
 
 var _ = Describe("iptables cleanup, deciding when it's finished", func() {
 	var (
-		listed  []string
-		cmds    [][]string
-		output  []byte
-		listErr error
-		cleanup *IPTablesCleanup
+		read     [][]string
+		readErr  error
+		contents *iptablesTableState
+		cleanup  *IPTablesCleanup
 	)
 
-	// Stands in for the nft binary. Of our four tables only "filter" exists on this host.
-	newCmd := func(name string, args ...string) cmdshim.CmdIface {
-		cmds = append(cmds, append([]string{name}, args...))
-		if args[2] == "tables" {
-			return &fakeCmd{output: []byte(`{"nftables":[
-				{"table":{"family":"ip","name":"filter","handle":1}},
-				{"table":{"family":"ip","name":"kube-proxy","handle":2}}
-			]}`)}
+	// Stands in for the netlink read. Of our four tables only "filter" exists on this host.
+	readTables := func(family knftables.Family, tables []string) (map[string]*iptablesTableState, error) {
+		read = append(read, tables)
+		if readErr != nil {
+			return nil, readErr
 		}
-		listed = append(listed, args[len(args)-1])
-		return &fakeCmd{err: listErr, output: output}
+		return map[string]*iptablesTableState{"filter": contents}, nil
+	}
+
+	tablesRead := func() []string {
+		var all []string
+		for _, pass := range read {
+			all = append(all, pass...)
+		}
+		return all
 	}
 
 	BeforeEach(func() {
-		listed, cmds, listErr = nil, nil, nil
+		read, readErr = nil, nil
 		// A table with none of our state in it.
-		output = []byte(`{"nftables":[
-			{"chain":{"family":"ip","table":"filter","name":"ts-input"}},
-			{"rule":{"family":"ip","table":"filter","chain":"ts-input","handle":3,"expr":[{"accept":null}]}}
-		]}`)
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, 0xffff0000,
-			TableOptions{NewCmdOverride: newCmd})
+		contents = &iptablesTableState{
+			Chains: []iptablesChain{{Name: "ts-input"}},
+			Rules:  []iptablesRule{{Chain: "ts-input", Handle: 3}},
+		}
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{})
+		cleanup.readTables = readTables
 	})
 
-	It("only reads the tables that exist", func() {
+	It("asks for every table it hasn't cleared yet", func() {
 		cleanup.CleanUp()
-		Expect(listed).To(ConsistOf("filter"))
-		for _, cmd := range cmds {
-			Expect(cmd[0]).To(Equal("nft"))
-			Expect(cmd).To(ContainElement("--json"))
-			// Listing the whole ruleset can crash older nft binaries, see #11750.
-			Expect(cmd).NotTo(ContainElement("ruleset"))
-		}
+		Expect(tablesRead()).To(ConsistOf("filter", "nat", "mangle", "raw"))
 	})
 
 	It("finishes after one pass when there is nothing of ours anywhere", func() {
 		Expect(cleanup.CleanUp()).To(BeZero())
 		Expect(cleanup.Done()).To(BeTrue())
 
-		listed = nil
+		read = nil
 		Expect(cleanup.CleanUp()).To(BeZero())
-		Expect(listed).To(BeEmpty())
+		Expect(read).To(BeEmpty())
 	})
 
-	It("keeps a table that errored, and drops it once the read succeeds", func() {
-		listErr = errors.New("nft blew up")
-		cleanup.CleanUp()
-		Expect(cleanup.Done()).To(BeFalse())
-		Expect(listed).To(ContainElement("filter"))
+	It("retries the whole pass if the read fails", func() {
+		readErr = errors.New("netlink blew up")
+		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{RefreshInterval: time.Second})
+		cleanup.readTables = readTables
 
-		listErr = nil
-		listed = nil
-		cleanup.CleanUp()
-		Expect(listed).To(ConsistOf("filter"))
-		Expect(cleanup.Done()).To(BeTrue())
-	})
-
-	It("retries the whole pass if it can't even list the tables", func() {
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, 0xffff0000, TableOptions{
-			RefreshInterval: time.Second,
-			NewCmdOverride: func(name string, args ...string) cmdshim.CmdIface {
-				return &fakeCmd{err: errors.New("exit status 1")}
-			},
-		})
 		Expect(cleanup.CleanUp()).To(Equal(time.Second))
 		Expect(cleanup.Done()).To(BeFalse())
 	})
 
-	It("treats unparseable output as a failure rather than as a clean table", func() {
-		output = []byte("this is not json")
+	It("keeps a table that errored, and drops it once the read succeeds", func() {
+		readErr = errors.New("netlink blew up")
 		cleanup.CleanUp()
 		Expect(cleanup.Done()).To(BeFalse())
+
+		readErr = nil
+		read = nil
+		cleanup.CleanUp()
+		Expect(tablesRead()).To(ConsistOf("filter", "nat", "mangle", "raw"))
+		Expect(cleanup.Done()).To(BeTrue())
 	})
 })
-
-// fakeCmd stands in for the nft binary, returning canned output.
-type fakeCmd struct {
-	output []byte
-	err    error
-}
-
-func (c *fakeCmd) SetStdin(io.Reader)      {}
-func (c *fakeCmd) SetStdout(io.Writer)     {}
-func (c *fakeCmd) SetStderr(io.Writer)     {}
-func (c *fakeCmd) Run() error              { return c.err }
-func (c *fakeCmd) Start() error            { return c.err }
-func (c *fakeCmd) Kill() error             { return nil }
-func (c *fakeCmd) Wait() error             { return c.err }
-func (c *fakeCmd) Output() ([]byte, error) { return c.output, c.err }
-func (c *fakeCmd) String() string          { return "fakeCmd" }
-
-func (c *fakeCmd) StdoutPipe() (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(c.output)), c.err
-}
