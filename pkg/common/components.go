@@ -15,6 +15,7 @@
 package common
 
 import (
+	"slices"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,15 +48,25 @@ func MapExistsOrInitialize(m map[string]string) map[string]string {
 }
 
 // MergeOwnerReferences merges desired and current owner references, removing the duplicates.
+// A UID identifies an owner, so desired's version of a reference wins over current's.
+//
+// The result is sorted by UID, which keeps the merge convergent when more than one controller
+// writes the object. Each caller passes its own reference in desired, so an order that followed
+// the arguments would put a different reference first depending on who wrote last, and the two
+// controllers would rewrite the object in turn for as long as both keep reconciling. Order carries
+// no meaning to Kubernetes: owner references are a set, and the controller reference is identified
+// by its Controller field rather than its position.
 func MergeOwnerReferences(desired, current []metav1.OwnerReference) []metav1.OwnerReference {
-	mergedOwnerReferences := append(desired, current...)
-	allKeys := make(map[metav1.OwnerReference]bool)
-	refList := []metav1.OwnerReference{}
-	for _, item := range mergedOwnerReferences {
-		if _, ok := allKeys[item]; !ok {
+	refList := make([]metav1.OwnerReference, 0, len(desired)+len(current))
+	seen := make(map[string]bool, len(desired)+len(current))
+	for _, item := range slices.Concat(desired, current) {
+		if !seen[string(item.UID)] {
 			refList = append(refList, item)
-			allKeys[item] = true
+			seen[string(item.UID)] = true
 		}
 	}
+	slices.SortFunc(refList, func(a, b metav1.OwnerReference) int {
+		return strings.Compare(string(a.UID), string(b.UID))
+	})
 	return refList
 }
