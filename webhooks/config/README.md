@@ -10,13 +10,14 @@ Requires Kubernetes 1.32 or later. `apiserver.config.k8s.io/v1 AuthorizationConf
 
 ## Install
 
-1. Apply the chart with `useV3CRDs` enabled so `calico-webhooks` is deployed:
+1. Apply the chart with `useV3CRDs` enabled so `calico-webhooks` is deployed, and `authzWebhookEnabled` set so it is deployed for availability:
 
    ```
-   helm upgrade calico charts/calico --install -n kube-system --set useV3CRDs=true
+   helm upgrade calico charts/calico --install -n kube-system \
+     --set useV3CRDs=true --set authzWebhookEnabled=true
    ```
 
-   `useV3CRDs` is the CRD-mode gate, not a webhook-specific value; there is no separate flag to enable `calico-webhooks` today.
+   `useV3CRDs` is the CRD-mode gate that deploys `calico-webhooks` at all. `authzWebhookEnabled` does not switch the `/authz` endpoint on or off (the process always serves it; what puts it in the authorization path is step 3): it raises the Deployment to two replicas and adds a PodDisruptionBudget, which matter once an apiserver denies on the webhook being unreachable.
 
 2. Read the allocated ClusterIP and write it, along with the webhook's CA bundle, into `calico-authz-webhook-kubeconfig.yaml`:
 
