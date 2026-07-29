@@ -55,8 +55,8 @@ const (
 	// row we'll do it before falling back to the refresh timer. A device that is merely slow to
 	// appear is back within a retry or two; one that never appears - a workload endpoint whose
 	// veth is gone for good - mustn't keep us reprogramming forever.
-	flowtablePruneRetryDelay = 5 * time.Second
-	maxFlowtablePruneRetries = 5
+	FlowtablePruneRetryDelay = 5 * time.Second
+	MaxFlowtablePruneRetries = 5
 )
 
 type FlowTableHandler interface {
@@ -194,6 +194,10 @@ var (
 		Name: "felix_nft_flowtable_devices",
 		Help: "Number of devices attached to the Calico nftables flowtable.",
 	}, []string{"ip_version"})
+	gaugeNumFlowtableMissingDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_nft_flowtable_missing_devices",
+		Help: "Number of desired Calico nftables flowtable devices that do not exist in the kernel.",
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -204,6 +208,7 @@ func init() {
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
 	prometheus.MustRegister(gaugeNumFlowtableDevices)
+	prometheus.MustRegister(gaugeNumFlowtableMissingDevices)
 }
 
 // NftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -280,7 +285,7 @@ type NftablesTable struct {
 	flowtableDirty bool
 
 	// flowtablePruneRetries counts consecutive Applies that left the flowtable dirty because
-	// pruning dropped a device. Bounded by maxFlowtablePruneRetries.
+	// pruning dropped a device. Bounded by MaxFlowtablePruneRetries.
 	flowtablePruneRetries int
 
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
@@ -308,9 +313,10 @@ type NftablesTable struct {
 	logCxt               *logrus.Entry
 	updateRateLimitedLog *logutilslc.RateLimitedLogger
 
-	gaugeNumChains           prometheus.Gauge
-	gaugeNumRules            prometheus.Gauge
-	gaugeNumFlowtableDevices prometheus.Gauge
+	gaugeNumChains                  prometheus.Gauge
+	gaugeNumRules                   prometheus.Gauge
+	gaugeNumFlowtableDevices        prometheus.Gauge
+	gaugeNumFlowtableMissingDevices prometheus.Gauge
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdshim.CmdFactory
@@ -523,10 +529,11 @@ func newTable(
 
 		listInterfaces: listInterfaces,
 
-		gaugeNumChains:           gaugeNumChains.WithLabelValues(gaugeLabel),
-		gaugeNumRules:            gaugeNumRules.WithLabelValues(gaugeLabel),
-		gaugeNumFlowtableDevices: gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
-		opReporter:               options.OpRecorder,
+		gaugeNumChains:                  gaugeNumChains.WithLabelValues(gaugeLabel),
+		gaugeNumRules:                   gaugeNumRules.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableDevices:        gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableMissingDevices: gaugeNumFlowtableMissingDevices.WithLabelValues(gaugeLabel),
+		opReporter:                      options.OpRecorder,
 
 		disabled: options.Disabled,
 
@@ -583,6 +590,11 @@ func (t *NftablesTable) SetExternalDevices(ifces []string) {
 // use by tests outside this package.
 func (t *NftablesTable) GaugeNumFlowtableDevices() prometheus.Gauge {
 	return t.gaugeNumFlowtableDevices
+}
+
+// GaugeNumFlowtableMissingDevices exposes the felix_nft_flowtable_missing_devices gauge for tests.
+func (t *NftablesTable) GaugeNumFlowtableMissingDevices() prometheus.Gauge {
+	return t.gaugeNumFlowtableMissingDevices
 }
 
 // enableFlowtable turns on offload and recalculates the device list. The first enable marks
@@ -1177,8 +1189,8 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 	// A flowtable left dirty is waiting on a device to appear, so come back for it promptly
 	// instead of waiting out the refresh interval (which may be disabled entirely).
-	if t.flowtableDirty && (rescheduleAfter == 0 || rescheduleAfter > flowtablePruneRetryDelay) {
-		rescheduleAfter = flowtablePruneRetryDelay
+	if t.flowtableDirty && (rescheduleAfter == 0 || rescheduleAfter > FlowtablePruneRetryDelay) {
+		rescheduleAfter = FlowtablePruneRetryDelay
 	}
 	return
 }
@@ -1242,16 +1254,15 @@ func (t *NftablesTable) applyUpdates() error {
 			Devices:  devices,
 		})
 		t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
+		t.gaugeNumFlowtableMissingDevices.Set(float64(len(t.flowtableDevices) - len(devices)))
 
 		// Pruning is symmetric: it also drops a device that hasn't appeared yet, which happens
 		// when we learn about a workload before its veth is created. Nothing re-dirties the
 		// flowtable when the device does show up - the desired list never changed - so stay dirty
 		// and re-assert shortly rather than leaving the device unoffloaded until the next resync.
-		if dropped && t.flowtablePruneRetries < maxFlowtablePruneRetries {
+		if dropped && t.flowtablePruneRetries < MaxFlowtablePruneRetries {
 			t.flowtablePruneRetries++
 			keepFlowtableDirty = true
-		} else {
-			t.flowtablePruneRetries = 0
 		}
 	}
 
@@ -1392,6 +1403,7 @@ func (t *NftablesTable) applyUpdates() error {
 	if t.flowtableDirty && !t.flowtableEnabled {
 		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
 		t.gaugeNumFlowtableDevices.Set(0)
+		t.gaugeNumFlowtableMissingDevices.Set(0)
 	}
 
 	if t.disabled && len(t.chainToDataplaneHashes) != 0 {
@@ -1427,6 +1439,9 @@ func (t *NftablesTable) applyUpdates() error {
 	t.dirtyBaseChains = set.New[string]()
 	if !keepFlowtableDirty {
 		t.flowtableDirty = false
+
+		// A stale count would shorten the retry budget of the next prune.
+		t.flowtablePruneRetries = 0
 	}
 
 	// Store off the updates.
