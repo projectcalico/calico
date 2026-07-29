@@ -23,48 +23,58 @@ import (
 	"time"
 
 	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/multireadbuf"
-	"github.com/projectcalico/calico/typha/pkg/promutils"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 )
 
 var (
+	snapshotMetricLabels = []string{"syncer", "compression"}
+
 	counterVecSnapshotsGenerated = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_snapshots_generated",
 		Help: "Number of binary snapshots generated.",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	counterVecSnapshotsReused = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_snapshots_reused",
 		Help: "Number of binary snapshots that were cached and reused.",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	gaugeVecSnapRawBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_snapshot_raw_bytes",
 		Help: "Size of the most recently generated binary snapshot (before compression).",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 	gaugeVecSnapCompressedBytes = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_snapshot_compressed_bytes",
 		Help: "Size of the most recently generated binary snapshot (after compression).",
-	}, []string{"syncer"})
+	}, snapshotMetricLabels)
 )
 
 func init() {
-	promutils.PreCreateCounterPerSyncer(counterVecSnapshotsGenerated)
+	// Pre-create all syncer × compression label combinations so that the
+	// metrics exist (with value 0) at startup rather than only appearing
+	// when the first snapshot is generated.
+	for _, st := range syncproto.AllSyncerTypes {
+		for _, alg := range syncproto.AllCompressionAlgorithms {
+			counterVecSnapshotsGenerated.WithLabelValues(string(st), string(alg))
+			counterVecSnapshotsReused.WithLabelValues(string(st), string(alg))
+			gaugeVecSnapRawBytes.WithLabelValues(string(st), string(alg))
+			gaugeVecSnapCompressedBytes.WithLabelValues(string(st), string(alg))
+		}
+	}
 	prometheus.MustRegister(counterVecSnapshotsGenerated)
-	promutils.PreCreateCounterPerSyncer(counterVecSnapshotsReused)
 	prometheus.MustRegister(counterVecSnapshotsReused)
-	promutils.PreCreateGaugePerSyncer(gaugeVecSnapRawBytes)
 	prometheus.MustRegister(gaugeVecSnapRawBytes)
-	promutils.PreCreateGaugePerSyncer(gaugeVecSnapCompressedBytes)
 	prometheus.MustRegister(gaugeVecSnapCompressedBytes)
 }
 
-type SnappySnapshotCache struct {
-	snapValidityTimeout time.Duration
-	logCtx              *logrus.Entry
+type SnapshotCache struct {
+	snapValidityTimeout  time.Duration
+	compressionAlgorithm syncproto.CompressionAlgorithm
+	logCtx               *logrus.Entry
 
 	cache BreadcrumbProvider
 
@@ -86,29 +96,61 @@ func NewSnappySnapCache(
 	cache BreadcrumbProvider,
 	snapValidityTimeout time.Duration,
 	writeTimeout time.Duration,
-) *SnappySnapshotCache {
-	s := &SnappySnapshotCache{
-		snapValidityTimeout: snapValidityTimeout,
-		writeTimeout:        writeTimeout,
-		cache:               cache,
+) *SnapshotCache {
+	return newSnapCache(
+		syncerName,
+		syncproto.CompressionSnappy,
+		cache,
+		snapValidityTimeout,
+		writeTimeout,
+	)
+}
+
+func NewZstdSnapCache(
+	syncerName string,
+	cache BreadcrumbProvider,
+	snapValidityTimeout time.Duration,
+	writeTimeout time.Duration,
+) *SnapshotCache {
+	return newSnapCache(
+		syncerName,
+		syncproto.CompressionZstd,
+		cache,
+		snapValidityTimeout,
+		writeTimeout,
+	)
+}
+
+func newSnapCache(
+	syncerName string,
+	compressionAlgorithm syncproto.CompressionAlgorithm,
+	cache BreadcrumbProvider,
+	snapValidityTimeout time.Duration,
+	writeTimeout time.Duration,
+) *SnapshotCache {
+	s := &SnapshotCache{
+		snapValidityTimeout:  snapValidityTimeout,
+		compressionAlgorithm: compressionAlgorithm,
+		writeTimeout:         writeTimeout,
+		cache:                cache,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"thread": "snapshotter",
 			"syncer": syncerName,
 		}),
-		counterBinSnapsGenerated: counterVecSnapshotsGenerated.WithLabelValues(syncerName),
-		counterBinSnapsReused:    counterVecSnapshotsReused.WithLabelValues(syncerName),
-		gaugeSnapBytesRaw:        gaugeVecSnapRawBytes.WithLabelValues(syncerName),
-		gaugeSnapBytesComp:       gaugeVecSnapCompressedBytes.WithLabelValues(syncerName),
+		counterBinSnapsGenerated: counterVecSnapshotsGenerated.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		counterBinSnapsReused:    counterVecSnapshotsReused.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		gaugeSnapBytesRaw:        gaugeVecSnapRawBytes.WithLabelValues(syncerName, string(compressionAlgorithm)),
+		gaugeSnapBytesComp:       gaugeVecSnapCompressedBytes.WithLabelValues(syncerName, string(compressionAlgorithm)),
 	}
 	s.cond.L = &s.lock
 	return s
 }
 
-// SendSnapshot waits for a binary snapshot to be ready and then sends it as a raw snappy-compressed gob stream
-// on the given connection.  Since the stream is cached, it starts with fresh snappy/gob headers.  Hence, the
-// decoder at the client side must also be reset before sending such a snapshot.  The snapshot ends with
-// a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
-func (s *SnappySnapshotCache) SendSnapshot(ctx context.Context, w io.Writer, conn WriteDeadlineSetter) (*snapcache.Breadcrumb, error) {
+// SendSnapshot waits for a binary snapshot to be ready and then sends it as a raw compressed gob stream
+// on the given connection.  Since the stream is cached, it starts with fresh compressed gob headers.
+// Hence, the decoder at the client side must also be reset before sending such a snapshot.  The snapshot
+// ends with a MsgDecoderRestart, so the caller should wait for an ACK and then reset their encoder.
+func (s *SnapshotCache) SendSnapshot(ctx context.Context, w io.Writer, conn WriteDeadlineSetter) (*snapcache.Breadcrumb, error) {
 	// activeBinarySnapshot ensures there is an active snapshot and returns it.  The snapshot may or may not
 	// be complete yet.
 	snap := s.activeBinarySnapshot()
@@ -124,7 +166,7 @@ type WriteDeadlineSetter interface {
 
 // activeBinarySnapshot either returns the current active snapshot (which may still be being created on a background
 // goroutine), or it starts a new snapshot.  The returned snapshot's complete flag will be set once it is finished.
-func (s *SnappySnapshotCache) activeBinarySnapshot() *snapshot {
+func (s *SnapshotCache) activeBinarySnapshot() *snapshot {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -146,7 +188,7 @@ func (s *SnappySnapshotCache) activeBinarySnapshot() *snapshot {
 	return s.activeSnapshot
 }
 
-func (s *SnappySnapshotCache) populateSnapshot(snap *snapshot) {
+func (s *SnapshotCache) populateSnapshot(snap *snapshot) {
 	s.writeDataToSnapshot(snap)
 	// Wait until the snapshot expires...
 	time.Sleep(s.snapValidityTimeout)
@@ -155,14 +197,14 @@ func (s *SnappySnapshotCache) populateSnapshot(snap *snapshot) {
 	s.clearSnapshot()
 }
 
-func (s *SnappySnapshotCache) clearSnapshot() {
+func (s *SnapshotCache) clearSnapshot() {
 	s.lock.Lock()
 	s.activeSnapshot = nil
 	s.lock.Unlock()
 }
 
 type progressWriter struct {
-	W            *snappy.Writer
+	W            io.WriteCloser
 	BytesWritten int
 }
 
@@ -172,10 +214,24 @@ func (p2 *progressWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
+func (s *SnapshotCache) writeDataToSnapshot(snap *snapshot) {
 	s.counterBinSnapsGenerated.Inc()
-	snappyW := snappy.NewBufferedWriter(snap.buf)
-	progressW := progressWriter{W: snappyW}
+	var progressW progressWriter
+	var w io.WriteCloser
+	switch s.compressionAlgorithm {
+	case syncproto.CompressionSnappy:
+		w = snappy.NewBufferedWriter(snap.buf)
+		progressW = progressWriter{W: w}
+	case syncproto.CompressionZstd:
+		var err error
+		w, err = zstd.NewWriter(snap.buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		if err != nil {
+			s.logCtx.WithError(err).Panic("Failed to create Zstd writer")
+		}
+		progressW = progressWriter{W: w}
+	default:
+		s.logCtx.Panic("Unknown compression algorithm")
+	}
 	encoder := gob.NewEncoder(&progressW)
 	writeMsg := func(msg any) error {
 		envelope := syncproto.Envelope{
@@ -201,14 +257,14 @@ func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 
 	err = writeMsg(syncproto.MsgDecoderRestart{
 		Message:              "End of compressed snapshot.",
-		CompressionAlgorithm: syncproto.CompressionSnappy,
+		CompressionAlgorithm: s.compressionAlgorithm,
 	})
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
 		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot end message.")
 	}
 
-	err = snappyW.Close() // Does Flush() for us.
+	err = w.Close() // Does Flush() for us.
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
 		s.logCtx.WithError(err).Panic("Failed to close datastore snapshot.")
@@ -229,7 +285,7 @@ func (s *SnappySnapshotCache) writeDataToSnapshot(snap *snapshot) {
 	s.setLastSnapSize(snapSize)
 }
 
-func (s *SnappySnapshotCache) setLastSnapSize(snapSize int) {
+func (s *SnapshotCache) setLastSnapSize(snapSize int) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.lastSnapSize = snapSize
