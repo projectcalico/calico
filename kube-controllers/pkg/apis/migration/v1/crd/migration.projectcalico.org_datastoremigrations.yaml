@@ -75,11 +75,6 @@ spec:
                   Type specifies the migration to perform (e.g., APIServerToCRDs).
                   It cannot be changed once set; migration is a one-shot operation and
                   switching type mid-flight has no coherent meaning.
-
-                  The rule is latent today: the enum has a single member, so any value that
-                  would violate it is already rejected one validation stage earlier. It is
-                  here because it documents intent and it goes live the day a second
-                  migration type is added.
                 enum:
                 - APIServerToCRDs
                 maxLength: 64

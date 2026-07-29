@@ -120,14 +120,12 @@ type DatastoreMigrationSpec struct {
 	// Type specifies the migration to perform (e.g., APIServerToCRDs).
 	// It cannot be changed once set; migration is a one-shot operation and
 	// switching type mid-flight has no coherent meaning.
-	//
-	// The rule is latent today: the enum has a single member, so any value that
-	// would violate it is already rejected one validation stage earlier. It is
-	// here because it documents intent and it goes live the day a second
-	// migration type is added.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="spec.type is immutable"
 	Type DatastoreMigrationType `json:"type"`
+
+	// The Type immutability rule above is latent today: see TestSpecTypeIsImmutable
+	// in validation_fv_test.go for why, and when that changes.
 }
 
 // DatastoreMigrationStatus reports the observed state of the migration.
