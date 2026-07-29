@@ -1674,6 +1674,12 @@ KIND_AUTHZ_WEBHOOK_DIR := $(KIND_DIR)/authz-webhook-config
 # config claims. This only works if the calico-webhooks Service is deployed with
 # spec.clusterIP pinned to the same address; that pinning is not part of this target.
 KIND_AUTHZ_WEBHOOK_CLUSTER_IP := 10.96.0.99
+# The cluster this target produces is not usable for the authz e2e specs as-is. No install path
+# deploys calico-webhooks with spec.clusterIP pinned to the address above, so the apiserver's
+# authorizer cannot reach the webhook, and failurePolicy: Deny means every projectcalico.org
+# request from a non-exempt identity is denied: kubectl on IPPools and FelixConfigurations
+# included, plus calico-cni-plugin's IP pool reads in useV3CRDs mode. Deploying the chart with
+# authzWebhookEnabled=true and authzWebhookClusterIP set to match is the missing half.
 kind-authz-cluster-create: $(KIND_AUTHZ_CONFIG)
 	# Copy the checked-in config files, patching the webhook kubeconfig's placeholder
 	# server address to the pinned ClusterIP above and using insecure-skip-tls-verify
