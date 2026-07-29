@@ -3,7 +3,7 @@ Run 'make gen-deps-files' to regenerate.
 
 go 1.25.12
 cel.dev/expr v0.25.1
-github.com/antlr4-go/antlr/v4 v4.13.0
+github.com/antlr4-go/antlr/v4 v4.13.1
 github.com/aws/smithy-go v1.24.2
 github.com/beorn7/perks v1.0.1
 github.com/blang/semver/v4 v4.0.0
@@ -25,7 +25,7 @@ github.com/go-playground/locales v0.14.1
 github.com/go-playground/universal-translator v0.18.1
 github.com/gogo/protobuf v1.3.2
 github.com/golang/protobuf v1.5.4
-github.com/google/cel-go v0.26.0
+github.com/google/cel-go v0.29.0
 github.com/google/gnostic-models v0.7.0
 github.com/google/uuid v1.6.0
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
@@ -51,7 +51,6 @@ github.com/prometheus/procfs v0.19.2
 github.com/sirupsen/logrus v1.9.3
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
-github.com/stoewer/go-strcase v1.3.0
 github.com/x448/float16 v0.8.4
 go.etcd.io/etcd/api/v3 v3.6.5
 go.etcd.io/etcd/client/pkg/v3 v3.6.5
