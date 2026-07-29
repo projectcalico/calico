@@ -87,6 +87,16 @@ class TestSubnetWatcher(base.BaseTestCase):
         sw._post_snapshot_hook(snapshot_data)
         self.assertEqual({"subnet-b", "subnet-c"}, set(sw.subnets_by_id.keys()))
 
+        # A subnet whose key a snapshot reports with invalid data must not be
+        # discarded either: its previously cached data is retained, just as
+        # for an invalid update event on an established watch.
+        snapshot_data = sw._pre_snapshot_hook()
+        sw.on_subnet_set(EtcdResponse(value="not json"), "subnet-b")
+        set_subnet("subnet-c")
+        sw._post_snapshot_hook(snapshot_data)
+        self.assertEqual({"subnet-b", "subnet-c"}, set(sw.subnets_by_id.keys()))
+        self.assertEqual("10.65.0.1", sw.subnets_by_id["subnet-b"]["gateway_ip"])
+
         # An ordinary deletion event still works, whether or not the subnet
         # is known.
         sw.on_subnet_del(None, "subnet-b")

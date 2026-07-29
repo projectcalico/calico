@@ -797,6 +797,13 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
     def on_subnet_set(self, response, subnet_id):
         """Handler for subnet creations and updates."""
         LOG.debug("Subnet %s created or updated", subnet_id)
+
+        # This subnet's key is present, so snapshot reconciliation must not
+        # discard it - even if its data turns out to be invalid, in which
+        # case we hold on to any previously cached data for it, just as for
+        # an invalid update event on an established watch.
+        self._possibly_stale_subnet_ids.discard(subnet_id)
+
         subnet_data = etcdutils.safe_decode_json(response.value, "subnet")
 
         if subnet_data is None:
@@ -812,7 +819,6 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
             return
 
         self.subnets_by_id[subnet_id] = subnet_data
-        self._possibly_stale_subnet_ids.discard(subnet_id)
         return
 
     def on_subnet_del(self, response, subnet_id):
