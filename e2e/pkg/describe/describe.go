@@ -260,7 +260,7 @@ func IncludesFocus(s string) bool {
 //
 // The label-filter check is textual rather than an evaluation of the expression, since a spec
 // cannot evaluate the filter against its own labels from inside its body. A negated mention
-// (`!Foo`, or `Foo && !Bar` asked about Bar) does not count as selecting it.
+// (`!Foo`, `Foo && !Bar` asked about Bar, or `!(Serial || Foo)`) does not count as selecting it.
 func ExplicitlySelected(s string) bool {
 	if IncludesFocus(s) {
 		return true
@@ -269,8 +269,12 @@ func ExplicitlySelected(s string) bool {
 	return mentionsUnnegated(suiteConfig.LabelFilter, s)
 }
 
-// mentionsUnnegated reports whether expr names s somewhere that is not immediately negated.
+// mentionsUnnegated reports whether expr names s somewhere that is not negated, either directly
+// (`!Foo`) or by an enclosing group (`!(A || Foo)`). Matching is case-insensitive because Ginkgo
+// compares labels that way, so a lowercase filter selects the spec and must be seen to.
 func mentionsUnnegated(expr, s string) bool {
+	expr, s = strings.ToLower(expr), strings.ToLower(s)
+
 	for i := 0; ; {
 		at := strings.Index(expr[i:], s)
 		if at < 0 {
@@ -278,9 +282,35 @@ func mentionsUnnegated(expr, s string) bool {
 		}
 		at += i
 		i = at + len(s)
-		if strings.HasSuffix(strings.TrimRight(expr[:at], " \t("), "!") {
-			continue
+		if !negatedAt(expr, at) {
+			return true
 		}
+	}
+}
+
+// negatedAt reports whether the token at position at sits under a `!`, walking left through any
+// groups that enclose it. Treating an unrecognized shape as negated makes an unparseable filter
+// skip rather than fail, which is the pre-existing behavior.
+func negatedAt(expr string, at int) bool {
+	if strings.HasSuffix(strings.TrimRight(expr[:at], " \t"), "!") {
 		return true
 	}
+
+	// Walk left looking for the unmatched `(` that opens each enclosing group, and check whether
+	// a `!` applies to it.
+	for depth := 0; at > 0; at-- {
+		switch expr[at-1] {
+		case ')':
+			depth++
+		case '(':
+			if depth > 0 {
+				depth--
+				continue
+			}
+			if strings.HasSuffix(strings.TrimRight(expr[:at-1], " \t"), "!") {
+				return true
+			}
+		}
+	}
+	return false
 }

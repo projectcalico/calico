@@ -36,6 +36,16 @@ func TestMentionsUnnegated(t *testing.T) {
 		// A double mention where one side is negated still counts as selecting it: the run
 		// named the label affirmatively somewhere, so failing beats silently skipping.
 		{"!RequiresAuthzWebhook || RequiresAuthzWebhook", true},
+		// A group negation applies to everything inside it.
+		{"!(Serial || RequiresAuthzWebhook)", false},
+		{"!(Serial || (Disruptive && RequiresAuthzWebhook))", false},
+		{"Serial && !(Disruptive || RequiresAuthzWebhook)", false},
+		// ...but only to what it encloses.
+		{"!(Serial) && RequiresAuthzWebhook", true},
+		{"!(Serial || Disruptive) && RequiresAuthzWebhook", true},
+		// Ginkgo compares labels case-insensitively, so a lowercase filter selects the spec.
+		{"requiresauthzwebhook", true},
+		{"!requiresauthzwebhook", false},
 	} {
 		if got := mentionsUnnegated(tc.expr, label); got != tc.want {
 			t.Errorf("mentionsUnnegated(%q, %q) = %v, want %v", tc.expr, label, got, tc.want)
