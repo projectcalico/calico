@@ -13,14 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import array
+import fcntl
 import functools
 from importlib.metadata import version
+import queue
+import termios
+import time
 
+from etcd3gw import watch as etcd3gw_watch
 from etcd3gw.client import Etcd3Client
 from etcd3gw.exceptions import Etcd3Exception
 from etcd3gw.lease import Lease
 from etcd3gw.utils import _encode
 from etcd3gw.utils import _increment_last_byte
+
+import eventlet
 
 from oslo_config import cfg
 
@@ -549,6 +557,67 @@ class Etcd3AuthClient(Etcd3Client):
 
             # Otherwise re-raise.
             raise
+
+    def watch(self, key, **kwargs):
+        """Watch a key or range of keys, with drain-then-cancel semantics.
+
+        This reimplements etcd3gw's Client.watch, differing only in what
+        happens on cancellation.  etcd3gw's version discards events that the
+        server has already delivered but that have not yet been consumed -
+        both events parsed and queued by its reader thread, and bytes still
+        unread in the watch socket - because its cancel thunk marks the
+        iterator as cancelled before anything drains.  Our EtcdWatcher
+        (etcdutils) cancels any watch that goes WATCH_TIMEOUT_SECS without
+        delivering an event, so whenever this process stalls past that
+        deadline - e.g. under load - with an event in flight, that discard
+        loses the event.  In the DHCP agent this was observed to lose
+        WorkloadEndpoint deletions, leaving stale dnsmasq instances running.
+
+        Here, instead, cancel() first waits briefly for the reader to drain
+        any bytes already received on the watch socket, then puts the
+        end-of-stream sentinel *behind* whatever the reader has queued.  The
+        events iterator yields everything up to the sentinel, so
+        already-delivered events are processed rather than thrown away.
+        """
+        event_queue = queue.Queue()
+
+        def callback(event):
+            event_queue.put(event)
+
+        watcher = etcd3gw_watch.Watcher(self, key, callback, **kwargs)
+
+        def cancel():
+            # Drain phase: while the watch socket still has unread bytes,
+            # yield so that the reader thread can consume them and queue the
+            # corresponding events.  Bounded, so that a steady inbound flood
+            # cannot postpone cancellation indefinitely.
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                try:
+                    fd = watcher._response.raw._fp.fileno()
+                    pending = array.array("i", [0])
+                    fcntl.ioctl(fd, termios.FIONREAD, pending)
+                except Exception:
+                    # Response or socket already closed, or otherwise
+                    # unreadable; nothing more can be drained.
+                    break
+                if pending[0] == 0:
+                    break
+                eventlet.sleep(0.05)
+
+            # Add the end-of-stream sentinel, behind any queued events; then
+            # stop the reader and close the connection.
+            event_queue.put(None)
+            watcher.stop()
+
+        def iterator():
+            while True:
+                event = event_queue.get()
+                if event is None:
+                    return
+                yield event
+
+        return iterator(), cancel
 
 
 def _get_client():
