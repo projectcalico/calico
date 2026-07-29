@@ -29,6 +29,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/srv"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc/connectivity"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
@@ -147,7 +148,51 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		return nil, err
 	}
 
+	// clientv3.New() does not connect, so an unreachable endpoint must be caught
+	// here: callers rely on it being reported as an error from this function
+	// rather than surfacing later on an unrelated read.
+	if err := waitForConnection(client, clientTimeout); err != nil {
+		_ = client.Close()
+		return nil, err
+	}
+
 	return &etcdV3Client{etcdClient: client}, nil
+}
+
+// waitForConnection blocks until the client's connection is ready, returning the
+// context error if it does not become ready within timeout.
+//
+// It waits on gRPC connectivity rather than issuing an RPC, so it must not be
+// replaced with a Status()/Sync() call: that would require the configured
+// credentials to be authorized for that operation, turning a locked-down etcd
+// into a start-up failure.
+func waitForConnection(client *clientv3.Client, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	conn := client.ActiveConnection()
+	if conn == nil {
+		return errors.New("etcdv3 client has no active connection")
+	}
+
+	// The channel stays idle until it is used, so trigger the connection.
+	conn.Connect()
+
+	for {
+		switch state := conn.GetState(); state {
+		case connectivity.Ready:
+			return nil
+		case connectivity.Shutdown:
+			return errors.New("etcdv3 client connection is shut down")
+		default:
+			// Idle, Connecting or TransientFailure: keep waiting. An unreachable
+			// endpoint cycles between Connecting and TransientFailure until the
+			// timeout fires.
+			if !conn.WaitForStateChange(ctx, state) {
+				return ctx.Err()
+			}
+		}
+	}
 }
 
 // Create an entry in the datastore.  If the entry already exists, this will return
