@@ -34,23 +34,20 @@ const minKernelVersion = "2.6.24"
 
 // moduleCheck describes how to detect a kernel feature Calico may need.
 //
-// Name is the historical module name shown to the user.
+// Name is the module name shown to the user.
 // ConfigOptions are CONFIG_* symbols looked up in the kernel .config (any match is OK).
-// IPTMatches are tokens looked up in /proc/net/ip_tables_matches (any match is OK).
-// Alternatives are other module names that provide the same feature (e.g. xt_set for ipt_set).
+// Alternatives are other module names that provide the same feature (e.g. ipt_set for xt_set).
 // Optional modules only produce a WARNING when missing and do not fail the check.
 type moduleCheck struct {
 	Name          string
 	ConfigOptions []string
-	IPTMatches    []string
 	Alternatives  []string
 	Optional      bool
-	SkipModProbe  bool // feature is not a real loadable module on modern kernels
 }
 
 // requiredModules is the list of kernel features checked by `calicoctl node checksystem`.
-// Stale xt_icmp/xt_icmp6 module names are replaced with iptables-match / kconfig probes.
-// ipt_set is treated as satisfied by xt_set (the modern equivalent).
+// Prefer modern xt_* names; legacy ipt_* names appear only as Alternatives for module lookup.
+// icmp match is covered by ip_tables and is not listed separately.
 var requiredModules = []moduleCheck{
 	{Name: "ip_set", ConfigOptions: []string{"CONFIG_IP_SET"}},
 	{Name: "ip6_tables", ConfigOptions: []string{"CONFIG_IP6_NF_IPTABLES"}, Optional: true},
@@ -59,28 +56,10 @@ var requiredModules = []moduleCheck{
 	{Name: "vfio-pci", ConfigOptions: []string{"CONFIG_VFIO", "CONFIG_VFIO_PCI"}, Alternatives: []string{"vfio_pci"}},
 	{Name: "xt_bpf", ConfigOptions: []string{"CONFIG_BPF", "CONFIG_NETFILTER_XT_MATCH_BPF"}, Optional: true},
 	{Name: "ipt_REJECT", ConfigOptions: []string{"CONFIG_IP_NF_TARGET_REJECT", "CONFIG_NFT_REJECT", "CONFIG_NETFILTER_XT_TARGET_REJECT"}, Alternatives: []string{"xt_REJECT"}},
-	{Name: "ipt_rpfilter", ConfigOptions: []string{"CONFIG_IP_NF_MATCH_RPFILTER"}, Alternatives: []string{"xt_rpfilter"}},
 	{Name: "xt_rpfilter", ConfigOptions: []string{"CONFIG_IP_NF_MATCH_RPFILTER", "CONFIG_IP6_NF_MATCH_RPFILTER", "CONFIG_NETFILTER_XT_MATCH_RPFILTER"}, Alternatives: []string{"ipt_rpfilter"}},
-	// ipt_set is obsolete on modern kernels; xt_set provides the same match.
-	{Name: "ipt_set", ConfigOptions: []string{"CONFIG_NETFILTER_XT_SET", "CONFIG_IP_SET"}, Alternatives: []string{"xt_set"}},
 	{Name: "nf_conntrack_netlink", ConfigOptions: []string{"CONFIG_NF_CT_NETLINK"}},
 	{Name: "xt_addrtype", ConfigOptions: []string{"CONFIG_NETFILTER_XT_MATCH_ADDRTYPE"}},
 	{Name: "xt_conntrack", ConfigOptions: []string{"CONFIG_NETFILTER_XT_MATCH_CONNTRACK"}},
-	// xt_icmp / xt_icmp6 are not shipped as standalone modules on modern distros;
-	// the icmp match is built into iptables or provided via kconfig.
-	{
-		Name:          "xt_icmp",
-		ConfigOptions: []string{"CONFIG_IP_NF_MATCH_ICMP", "CONFIG_NETFILTER_XT_MATCH_ICMP"},
-		IPTMatches:    []string{"icmp"},
-		SkipModProbe:  true,
-	},
-	{
-		Name:          "xt_icmp6",
-		ConfigOptions: []string{"CONFIG_IP6_NF_MATCH_IPV6HEADER", "CONFIG_IP6_NF_MATCH_ICMP6", "CONFIG_NETFILTER_XT_MATCH_ICMP"},
-		IPTMatches:    []string{"icmp6", "icmpv6", "ipv6header"},
-		SkipModProbe:  true,
-		Optional:      true, // IPv4-only clusters do not need icmp6
-	},
 	{Name: "xt_mark", ConfigOptions: []string{"CONFIG_NETFILTER_XT_MARK", "CONFIG_IP_NF_TARGET_MARK", "CONFIG_NETFILTER_XT_TARGET_MARK"}},
 	{Name: "xt_multiport", ConfigOptions: []string{"CONFIG_NETFILTER_XT_MATCH_MULTIPORT", "CONFIG_IP_NF_MATCH_MULTIPORT"}},
 	{Name: "xt_set", ConfigOptions: []string{"CONFIG_NETFILTER_XT_SET"}, Alternatives: []string{"ipt_set"}},
@@ -170,9 +149,6 @@ func checkKernelModules() error {
 	// File path to module configs in boot time
 	modulesBootPath := findBootFile(kernelVersionStr)
 
-	// File path for loaded iptables modules
-	modulesLoadedIPtables := "/proc/net/ip_tables_matches"
-
 	// Keep track of modules that are not found
 	modulesNotFound := []string{}
 
@@ -186,7 +162,7 @@ func checkKernelModules() error {
 
 	// Go through all the required modules and check Loadable and Builtin in order
 	for _, mod := range requiredModules {
-		if moduleAvailable(mod, modulesLoadablePath, modulesBuiltinPath, modulesBootPath, modulesLoadedIPtables, lsmodStr) {
+		if moduleAvailable(mod, modulesLoadablePath, modulesBuiltinPath, modulesBootPath, lsmodStr) {
 			printResult(mod.Name, "OK")
 			continue
 		}
@@ -211,7 +187,7 @@ func checkKernelModules() error {
 }
 
 // moduleAvailable reports whether a required kernel feature is present.
-func moduleAvailable(mod moduleCheck, loadablePath, builtinPath, bootPath, iptMatchesPath, lsmodOut string) bool {
+func moduleAvailable(mod moduleCheck, loadablePath, builtinPath, bootPath, lsmodOut string) bool {
 	candidates := []string{mod.Name}
 	candidates = append(candidates, mod.Alternatives...)
 
@@ -243,16 +219,9 @@ func moduleAvailable(mod moduleCheck, loadablePath, builtinPath, bootPath, iptMa
 			if cfg == "" {
 				continue
 			}
-			if checkModule(bootPath, cfg, "", "^%s=[ym]") == nil {
+			if checkModule(bootPath, cfg, "^%s=[ym]") == nil {
 				return true
 			}
-		}
-	}
-
-	// Loaded iptables match names (useful for icmp which is not a standalone module).
-	for _, match := range mod.IPTMatches {
-		if checkModule(iptMatchesPath, match, "", "^%s$") == nil {
-			return true
 		}
 	}
 
@@ -312,10 +281,9 @@ func checkModuleFile(filename, module string) error {
 	return errors.New("module not found")
 }
 
-// checkModule is a utility function used by `checkKernelModules`
-// it opens the file provided and checks if the module passed in
-// as an argument exists for the provided kernelVersion
-func checkModule(filename, module, kernelVersion string, pattern string) error {
+// checkModule opens filename and checks whether module matches pattern
+// (pattern is a fmt-style format with one %s for the module token).
+func checkModule(filename, module, pattern string) error {
 	regex, err := regexp.Compile(fmt.Sprintf(pattern, regexp.QuoteMeta(module)))
 	if err != nil {
 		log.Errorf("Error: %v\n", err)

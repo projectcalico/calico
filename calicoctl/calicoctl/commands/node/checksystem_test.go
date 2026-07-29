@@ -80,74 +80,30 @@ func TestCheckModuleFileCompressedAndBuiltin(t *testing.T) {
 	}
 }
 
-func TestModuleAvailableIptSetViaXtSet(t *testing.T) {
+func TestModuleAvailableXtSetViaLegacyIptSet(t *testing.T) {
 	dir := t.TempDir()
 	dep := filepath.Join(dir, "modules.dep")
 	builtin := filepath.Join(dir, "modules.builtin")
 	boot := filepath.Join(dir, "config")
-	ipt := filepath.Join(dir, "ip_tables_matches")
 
-	// Only xt_set is present (modern distro); ipt_set is not.
-	if err := os.WriteFile(dep, []byte("kernel/net/netfilter/xt_set.ko:\n"), 0o644); err != nil {
+	// Old distro only ships ipt_set; xt_set entry should still pass via Alternatives.
+	if err := os.WriteFile(dep, []byte("kernel/net/netfilter/ipt_set.ko:\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(builtin, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(boot, []byte("CONFIG_NETFILTER_XT_SET=m\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(ipt, []byte("set\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	mod := moduleCheck{
-		Name:          "ipt_set",
-		ConfigOptions: []string{"CONFIG_NETFILTER_XT_SET", "CONFIG_IP_SET"},
-		Alternatives:  []string{"xt_set"},
-	}
-	if !moduleAvailable(mod, dep, builtin, boot, ipt, "") {
-		t.Fatal("ipt_set should be satisfied by xt_set alternative")
-	}
-}
-
-func TestModuleAvailableICMPViaConfigAndMatches(t *testing.T) {
-	dir := t.TempDir()
-	dep := filepath.Join(dir, "modules.dep")
-	builtin := filepath.Join(dir, "modules.builtin")
-	boot := filepath.Join(dir, "config")
-	ipt := filepath.Join(dir, "ip_tables_matches")
-
-	if err := os.WriteFile(dep, []byte(""), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(builtin, []byte(""), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// No standalone xt_icmp module; feature is in kconfig / iptables matches.
-	if err := os.WriteFile(boot, []byte("CONFIG_IP_NF_MATCH_ICMP=y\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(ipt, []byte("icmp\nstate\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	mod := moduleCheck{
-		Name:          "xt_icmp",
-		ConfigOptions: []string{"CONFIG_IP_NF_MATCH_ICMP"},
-		IPTMatches:    []string{"icmp"},
-		SkipModProbe:  true,
-	}
-	if !moduleAvailable(mod, dep, builtin, boot, ipt, "") {
-		t.Fatal("xt_icmp should be detected via kernel config / iptables matches")
-	}
-
-	// Empty config, matches only.
 	if err := os.WriteFile(boot, []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !moduleAvailable(mod, dep, builtin, boot, ipt, "") {
-		t.Fatal("xt_icmp should be detected via ip_tables_matches alone")
+
+	mod := moduleCheck{
+		Name:          "xt_set",
+		ConfigOptions: []string{"CONFIG_NETFILTER_XT_SET"},
+		Alternatives:  []string{"ipt_set"},
+	}
+	if !moduleAvailable(mod, dep, builtin, boot, "") {
+		t.Fatal("xt_set should be satisfied by ipt_set alternative")
 	}
 }
 
@@ -156,8 +112,7 @@ func TestModuleAvailableOptionalMissing(t *testing.T) {
 	dep := filepath.Join(dir, "modules.dep")
 	builtin := filepath.Join(dir, "modules.builtin")
 	boot := filepath.Join(dir, "config")
-	ipt := filepath.Join(dir, "ip_tables_matches")
-	for _, p := range []string{dep, builtin, boot, ipt} {
+	for _, p := range []string{dep, builtin, boot} {
 		if err := os.WriteFile(p, []byte(""), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +123,7 @@ func TestModuleAvailableOptionalMissing(t *testing.T) {
 		ConfigOptions: []string{"CONFIG_NETFILTER_XT_MATCH_U32"},
 		Optional:      true,
 	}
-	if moduleAvailable(mod, dep, builtin, boot, ipt, "") {
+	if moduleAvailable(mod, dep, builtin, boot, "") {
 		t.Fatal("xt_u32 should be missing")
 	}
 }
@@ -179,13 +134,23 @@ func TestCheckModuleConfigYAndM(t *testing.T) {
 	if err := os.WriteFile(boot, []byte("CONFIG_IP_SET=y\nCONFIG_NETFILTER_XT_SET=m\n# CONFIG_FOO is not set\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkModule(boot, "CONFIG_IP_SET", "", "^%s=[ym]"); err != nil {
+	if err := checkModule(boot, "CONFIG_IP_SET", "^%s=[ym]"); err != nil {
 		t.Errorf("CONFIG_IP_SET=y should match: %v", err)
 	}
-	if err := checkModule(boot, "CONFIG_NETFILTER_XT_SET", "", "^%s=[ym]"); err != nil {
+	if err := checkModule(boot, "CONFIG_NETFILTER_XT_SET", "^%s=[ym]"); err != nil {
 		t.Errorf("CONFIG_NETFILTER_XT_SET=m should match: %v", err)
 	}
-	if err := checkModule(boot, "CONFIG_FOO", "", "^%s=[ym]"); err == nil {
+	if err := checkModule(boot, "CONFIG_FOO", "^%s=[ym]"); err == nil {
 		t.Error("unset CONFIG_FOO should not match")
+	}
+}
+
+func TestRequiredModulesHasNoDuplicateFeatureRows(t *testing.T) {
+	// ipt_set / ipt_rpfilter / xt_icmp must not appear as primary Name rows.
+	banned := map[string]bool{"ipt_set": true, "ipt_rpfilter": true, "xt_icmp": true, "xt_icmp6": true}
+	for _, mod := range requiredModules {
+		if banned[mod.Name] {
+			t.Errorf("unexpected primary module row %q", mod.Name)
+		}
 	}
 }
