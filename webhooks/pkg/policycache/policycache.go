@@ -19,18 +19,22 @@ package policycache
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/metadata/metadatainformer"
+	"k8s.io/client-go/util/flowcontrol"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/webhooks/pkg/metrics"
@@ -46,11 +50,44 @@ var policyGVRs = map[string]schema.GroupVersionResource{
 	"stagedkubernetesnetworkpolicies": v3.SchemeGroupVersion.WithResource("stagedkubernetesnetworkpolicies"),
 }
 
+// The fallback GET path gets its own budget rather than sharing the rest client's (QPS 100 /
+// burst 200, set in webhooks/pkg/webhook/command.go). A flood of reads for names that miss the
+// informer cache would otherwise take the whole client budget and queue the admission path's
+// SubjectAccessReviews behind it. Waiting for a token is bounded by the caller's context, so a
+// request that cannot get one in time is denied on its own rather than timing the webhook out.
+const (
+	fallbackGetQPS   = 25
+	fallbackGetBurst = 50
+)
+
+// negativeCacheTTL is how long a "policy does not exist" answer is reused, which is what keeps a
+// flood of reads for random names off the API server. Well under the AuthorizationConfiguration's
+// unauthorizedTTL (30s) on purpose: a not-found becomes NoOpinion, which the API server itself
+// caches for that long, so anything larger here would be the dominant term in how long a policy
+// created just after a miss keeps being treated as absent.
+const negativeCacheTTL = 5 * time.Second
+
+// maxNegativeEntries caps the negative cache so a flood of unique names cannot grow it without
+// bound. Past the cap, expired entries are swept and new ones are not recorded: dropping an entry
+// costs a GET, not correctness.
+const maxNegativeEntries = 4096
+
 // Cache resolves policy names to tiers. It satisfies tierauth.PolicyTierResolver.
 type Cache struct {
 	factory      metadatainformer.SharedInformerFactory
 	informers    map[string]informers.GenericInformer
 	calicoClient calicoclient.Interface
+
+	// fallbackLimiter bounds the rate of live GETs. See fallbackGetQPS.
+	fallbackLimiter flowcontrol.RateLimiter
+
+	// getGroup collapses concurrent identical lookups into one GET, so that N simultaneous
+	// reads of the same uncached policy cost one round trip rather than N.
+	getGroup singleflight.Group
+
+	// notFound records recent ErrPolicyNotFound answers. See negativeCacheTTL.
+	notFoundMu sync.Mutex
+	notFound   map[string]time.Time
 }
 
 var _ tierauth.PolicyTierResolver = &Cache{}
@@ -61,9 +98,11 @@ func New(metadataClient metadata.Interface, calicoClient calicoclient.Interface,
 	factory := metadatainformer.NewFilteredSharedInformerFactory(metadataClient, resync, metav1.NamespaceAll, nil)
 
 	c := &Cache{
-		factory:      factory,
-		informers:    make(map[string]informers.GenericInformer, len(policyGVRs)),
-		calicoClient: calicoClient,
+		factory:         factory,
+		informers:       make(map[string]informers.GenericInformer, len(policyGVRs)),
+		calicoClient:    calicoClient,
+		fallbackLimiter: flowcontrol.NewTokenBucketRateLimiter(fallbackGetQPS, fallbackGetBurst),
+		notFound:        make(map[string]time.Time),
 	}
 	for resource, gvr := range policyGVRs {
 		c.informers[resource] = factory.ForResource(gvr)
@@ -131,13 +170,12 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 	if err != nil {
 		// Any lister error means the object is not in the cache. Fall back to a live GET
 		// rather than denying, so a read-after-write does not produce a spurious Forbidden.
-		metrics.CacheFallbackGetsTotal.WithLabelValues(resource, "miss").Inc()
 		logrus.WithError(err).WithFields(logrus.Fields{
 			"resource":  resource,
 			"namespace": namespace,
 			"name":      name,
 		}).Debug("Policy not in cache, falling back to a GET")
-		return c.tierFromLiveGet(ctx, resource, namespace, name)
+		return c.fallbackGet(ctx, resource, namespace, name, "miss")
 	}
 
 	meta, ok := obj.(*metav1.PartialObjectMetadata)
@@ -150,8 +188,68 @@ func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name str
 
 	// Policies created before the tier-label MutatingAdmissionPolicy was installed carry no
 	// label, so read spec.tier directly.
-	metrics.CacheFallbackGetsTotal.WithLabelValues(resource, "unlabeled").Inc()
-	return c.tierFromLiveGet(ctx, resource, namespace, name)
+	return c.fallbackGet(ctx, resource, namespace, name, "unlabeled")
+}
+
+// fallbackGet resolves a tier from the API server, behind the negative cache, the rate limiter
+// and the in-flight collapser. reason is the metric label describing why the GET was needed.
+func (c *Cache) fallbackGet(ctx context.Context, resource, namespace, name, reason string) (string, error) {
+	key := resource + "/" + namespace + "/" + name
+
+	if c.recentlyNotFound(key) {
+		return "", tierauth.ErrPolicyNotFound
+	}
+
+	// Concurrent readers of the same uncached policy share one GET. The leader's context
+	// bounds it, so a follower can be handed the leader's context error; that denies the
+	// follower, which is the fail-closed direction.
+	tier, err, _ := c.getGroup.Do(key, func() (any, error) {
+		if err := c.fallbackLimiter.Wait(ctx); err != nil {
+			return "", fmt.Errorf("waiting for a policy GET token: %w", err)
+		}
+		metrics.CacheFallbackGetsTotal.WithLabelValues(resource, reason).Inc()
+		return c.tierFromLiveGet(ctx, resource, namespace, name)
+	})
+	if errors.Is(err, tierauth.ErrPolicyNotFound) {
+		c.recordNotFound(key)
+	}
+	if err != nil {
+		return "", err
+	}
+	return tier.(string), nil
+}
+
+// recentlyNotFound reports whether this policy was found to be absent within negativeCacheTTL.
+func (c *Cache) recentlyNotFound(key string) bool {
+	c.notFoundMu.Lock()
+	defer c.notFoundMu.Unlock()
+
+	at, ok := c.notFound[key]
+	if !ok {
+		return false
+	}
+	if time.Since(at) >= negativeCacheTTL {
+		delete(c.notFound, key)
+		return false
+	}
+	return true
+}
+
+func (c *Cache) recordNotFound(key string) {
+	c.notFoundMu.Lock()
+	defer c.notFoundMu.Unlock()
+
+	if len(c.notFound) >= maxNegativeEntries {
+		for k, at := range c.notFound {
+			if time.Since(at) >= negativeCacheTTL {
+				delete(c.notFound, k)
+			}
+		}
+		if len(c.notFound) >= maxNegativeEntries {
+			return
+		}
+	}
+	c.notFound[key] = time.Now()
 }
 
 // tierFromLiveGet reads spec.tier straight from the API server. Used on a cache miss and

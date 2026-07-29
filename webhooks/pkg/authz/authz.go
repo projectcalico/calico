@@ -53,9 +53,16 @@ var readVerbs = map[string]bool{
 	"watch": true,
 }
 
-// decisionTimeout bounds a single authorization decision, including any fallback GET. The
-// API server's own webhook timeout is shorter, so this is a backstop against goroutine leaks.
-const decisionTimeout = 10 * time.Second
+// decisionTimeout bounds a single authorization decision, including any fallback GET. It stays
+// strictly below the webhook timeout in webhooks/config/authorization-configuration.yaml (3s),
+// and the drift test in this package asserts that it does.
+//
+// The ordering is what makes a slow decision survivable. Outrunning the API server instead turns
+// the decision into a webhook failure, and under failurePolicy: Deny a failure denies every
+// projectcalico.org request from every non-exempt identity, not just the slow one.
+//
+// A var rather than a const so the overrun test can shorten it.
+var decisionTimeout = 2 * time.Second
 
 // RegisterHook registers the /authz HTTP handler.
 func RegisterHook(decider Decider, handleFn HandleAuthzFn) {

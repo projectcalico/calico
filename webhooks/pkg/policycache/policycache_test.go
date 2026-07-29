@@ -17,6 +17,7 @@ package policycache
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	metadatafake "k8s.io/client-go/metadata/fake"
+	"k8s.io/client-go/util/flowcontrol"
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
@@ -225,3 +227,114 @@ func TestHasSyncedFalseBeforeStart(t *testing.T) {
 }
 
 var _ tierauth.PolicyTierResolver = &Cache{}
+
+// countingCalicoClient returns a fake Calico clientset that counts GETs of networkpolicies and,
+// if block is non-nil, holds each GET until that channel is closed.
+func countingCalicoClient(t *testing.T, block chan struct{}, objs ...runtime.Object) (*fakecalicoclient.Clientset, *atomic.Int64) {
+	t.Helper()
+
+	var gets atomic.Int64
+	client := fakecalicoclient.NewSimpleClientset(objs...)
+	client.PrependReactor("get", "networkpolicies", func(k8stesting.Action) (bool, runtime.Object, error) {
+		gets.Add(1)
+		if block != nil {
+			<-block
+		}
+		// Fall through to the object tracker, which answers with the object or a NotFound.
+		return false, nil, nil
+	})
+	return client, &gets
+}
+
+func TestConcurrentIdenticalLookupsShareOneGet(t *testing.T) {
+	block := make(chan struct{})
+	calicoClient, gets := countingCalicoClient(t, block, &v3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "uncached"},
+		Spec:       v3.NetworkPolicySpec{Tier: "production"},
+	})
+
+	scheme := metadatafake.NewTestScheme()
+	require.NoError(t, metav1.AddMetaToScheme(scheme))
+	c := New(metadatafake.NewSimpleMetadataClient(scheme), calicoClient, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	require.NoError(t, c.Start(ctx))
+
+	const readers = 8
+	tiers := make(chan string, readers)
+	errs := make(chan error, readers)
+	for range readers {
+		go func() {
+			tier, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "uncached")
+			tiers <- tier
+			errs <- err
+		}()
+	}
+
+	// The first GET is held open, so every reader that has started is parked behind it rather
+	// than issuing its own.
+	require.Eventually(t, func() bool { return gets.Load() == 1 }, 10*time.Second, 10*time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
+	close(block)
+
+	for range readers {
+		require.NoError(t, <-errs)
+		assert.Equal(t, "production", <-tiers)
+	}
+	assert.Equal(t, int64(1), gets.Load(), "concurrent reads of the same uncached policy must collapse into one GET")
+}
+
+func TestRepeatedMissesForTheSameNameDoNotGetEveryTime(t *testing.T) {
+	calicoClient, gets := countingCalicoClient(t, nil)
+
+	scheme := metadatafake.NewTestScheme()
+	require.NoError(t, metav1.AddMetaToScheme(scheme))
+	c := New(metadatafake.NewSimpleMetadataClient(scheme), calicoClient, 0)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	require.NoError(t, c.Start(ctx))
+
+	for range 5 {
+		_, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "missing")
+		require.True(t, errors.Is(err, tierauth.ErrPolicyNotFound), "got %v", err)
+	}
+
+	assert.Equal(t, int64(1), gets.Load(),
+		"a flood of reads for the same non-existent name must not produce a GET per read")
+}
+
+func TestNegativeCacheEntriesExpire(t *testing.T) {
+	c := &Cache{notFound: map[string]time.Time{"k": time.Now().Add(-2 * negativeCacheTTL)}}
+
+	assert.False(t, c.recentlyNotFound("k"), "an entry older than the TTL must not be reused")
+	assert.NotContains(t, c.notFound, "k", "an expired entry must be dropped rather than left to accumulate")
+}
+
+func TestFallbackGetGivesUpWithTheCallersDeadline(t *testing.T) {
+	calicoClient, gets := countingCalicoClient(t, nil)
+
+	scheme := metadatafake.NewTestScheme()
+	require.NoError(t, metav1.AddMetaToScheme(scheme))
+	c := New(metadatafake.NewSimpleMetadataClient(scheme), calicoClient, 0)
+	// One token, then nothing for the rest of the test: the second lookup has to wait.
+	c.fallbackLimiter = flowcontrol.NewTokenBucketRateLimiter(0.001, 1)
+
+	startCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	require.NoError(t, c.Start(startCtx))
+
+	_, err := c.TierForPolicy(startCtx, "networkpolicies", "ns1", "first")
+	require.True(t, errors.Is(err, tierauth.ErrPolicyNotFound), "got %v", err)
+	require.Equal(t, int64(1), gets.Load())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = c.TierForPolicy(ctx, "networkpolicies", "ns1", "second")
+
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, tierauth.ErrPolicyNotFound),
+		"a throttled lookup is a failure to resolve, which denies; it is not a missing policy, which does not")
+	assert.Equal(t, int64(1), gets.Load(), "the throttled lookup must not reach the API server")
+}

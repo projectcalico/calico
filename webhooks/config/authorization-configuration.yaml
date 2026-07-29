@@ -21,6 +21,10 @@ authorizers:
   - type: Webhook
     name: calico-tiered-rbac
     webhook:
+      # decisionTimeout in webhooks/pkg/authz/authz.go must stay strictly below this, so that a
+      # slow decision times out on our side (a scoped deny for one request) rather than on the
+      # API server's (a webhook failure, which under failurePolicy: Deny denies the whole
+      # projectcalico.org group). A drift test asserts the two agree; change them together.
       timeout: 3s
       # We never return Allowed, so authorizedTTL is inert. unauthorizedTTL caches both
       # Denied and NoOpinion, which makes it the security-relevant knob: spec.tier is

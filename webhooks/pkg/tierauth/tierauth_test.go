@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -270,4 +271,31 @@ func TestIsTieredPolicyResource(t *testing.T) {
 	for _, resource := range []string{"tiers", "hostendpoints", "networksets", ""} {
 		assert.False(t, IsTieredPolicyResource(resource), resource)
 	}
+}
+
+// blockingResolver waits out the caller's context and reports its error, as a live GET behind a
+// context with a deadline does.
+type blockingResolver struct{}
+
+func (blockingResolver) TierForPolicy(ctx context.Context, resource, namespace, name string) (string, error) {
+	<-ctx.Done()
+	return "", ctx.Err()
+}
+
+func TestTierLookupOutrunningTheDeadlineDenies(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	a := New(&fakeTierAuthorizer{allowed: map[string]bool{"production": true}}, blockingResolver{})
+
+	result := a.Authorize(ctx, Request{
+		User:      testUser("alice"),
+		Verb:      "get",
+		Resource:  "networkpolicies",
+		Namespace: "ns1",
+		Name:      "deny-external",
+	})
+
+	assert.Equal(t, DecisionDenied, result.Decision, "a tier lookup that runs out of time must deny, not fall through")
+	assert.Contains(t, result.Reason, "could not determine the tier")
 }

@@ -17,6 +17,7 @@ package authz
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,18 @@ type recordingDecider struct {
 func (d *recordingDecider) Authorize(ctx context.Context, req tierauth.Request) tierauth.Result {
 	d.got = append(d.got, req)
 	return d.result
+}
+
+// blockingDecider mimics what tierauth does when a tier lookup outruns the decision budget: it
+// waits on the context it was handed and denies once that expires.
+type blockingDecider struct {
+	deadline time.Time
+}
+
+func (d *blockingDecider) Authorize(ctx context.Context, req tierauth.Request) tierauth.Result {
+	d.deadline, _ = ctx.Deadline()
+	<-ctx.Done()
+	return tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "could not determine the tier"}
 }
 
 func sarFor(ra *authorizationv1.ResourceAttributes) authorizationv1.SubjectAccessReview {
@@ -214,4 +227,30 @@ func TestUserInfoIsPassedThrough(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, req.User.GetExtra()["scopes"])
 	assert.Equal(t, "deny-external", req.Name)
 	assert.Equal(t, "ns1", req.Namespace)
+}
+
+func TestSlowDecisionDeniesOneRequestRatherThanTimingOutTheWebhook(t *testing.T) {
+	original := decisionTimeout
+	decisionTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { decisionTimeout = original })
+
+	d := &blockingDecider{}
+	start := time.Now()
+
+	status := NewHook(d).Authorize(sarFor(&authorizationv1.ResourceAttributes{
+		Group:     "projectcalico.org",
+		Resource:  "networkpolicies",
+		Verb:      "get",
+		Namespace: "ns1",
+		Name:      "deny-external",
+	}))
+
+	assert.False(t, status.Allowed, "the webhook must never return Allowed")
+	assert.True(t, status.Denied, "an overrunning decision must produce a scoped deny")
+	assert.Less(t, time.Since(start), time.Second,
+		"the decision has to give up before the API server's webhook timeout, or the deny stops being scoped")
+	require.False(t, d.deadline.IsZero(), "the decider must be handed a deadline")
+	// A little slack: the deadline is set a moment after start is read.
+	assert.False(t, d.deadline.After(start.Add(decisionTimeout+100*time.Millisecond)),
+		"the deadline handed to the decider must be decisionTimeout, not something longer")
 }
