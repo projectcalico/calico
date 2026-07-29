@@ -30,7 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -63,7 +63,7 @@ func main() {
 }
 
 func configureLogging() {
-	logutils.ConfigureFormatter("docgen")
+	logrusr.ConfigureFormatter("docgen")
 	logrus.SetLevel(logrus.FatalLevel)
 	logLevel, err := logrus.ParseLevel(*logLevel)
 	if err != nil {
