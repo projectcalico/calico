@@ -692,10 +692,10 @@ func requireAuthzWebhook(cfg *rest.Config) {
 			"This test requires the Calico authorization webhook in the kube-apiserver's " +
 				"authorization chain (--authorization-config, see webhooks/config/README.md). " +
 				"An unselectored LIST as a tier-restricted user was allowed, so tier RBAC is not " +
-				"being enforced on reads by the webhook. Skip these tests with " +
-				"-skip=RequiresAuthzWebhook.",
+				"being enforced on reads by the webhook. Exclude these tests with " +
+				"--label-filter='!RequiresAuthzWebhook'.",
 		)
-		if describe.IncludesFocus("RequiresAuthzWebhook") {
+		if describe.ExplicitlySelected("RequiresAuthzWebhook") {
 			Fail(msg)
 		}
 		Skip(msg)
@@ -724,9 +724,9 @@ func requireReadPathTierRBAC(cfg *rest.Config) {
 
 	msg := "This test requires tier RBAC to be enforced on GET/LIST/WATCH, by either the " +
 		"aggregated Calico API server or the Calico authorization webhook. Neither was " +
-		"detected, so reads bypass tier RBAC entirely. Skip these tests with " +
-		"-skip=RequiresReadPathTierRBAC."
-	if describe.IncludesFocus("RequiresReadPathTierRBAC") {
+		"detected, so reads bypass tier RBAC entirely. Exclude these tests with " +
+		"--label-filter='!RequiresReadPathTierRBAC'."
+	if describe.ExplicitlySelected("RequiresReadPathTierRBAC") {
 		Fail(msg)
 	}
 	Skip(msg)

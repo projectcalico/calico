@@ -252,3 +252,35 @@ func IncludesFocus(s string) bool {
 	}
 	return false
 }
+
+// ExplicitlySelected reports whether the run asked for s by name, through either -focus or
+// --label-filter. Use it where IncludesFocus alone would be wrong: our pipelines select by label
+// expression, so a spec that only consults -focus can never tell that it was asked for, and
+// self-skipping there silently passes a run that meant to exercise it.
+//
+// The label-filter check is textual rather than an evaluation of the expression, since a spec
+// cannot evaluate the filter against its own labels from inside its body. A negated mention
+// (`!Foo`, or `Foo && !Bar` asked about Bar) does not count as selecting it.
+func ExplicitlySelected(s string) bool {
+	if IncludesFocus(s) {
+		return true
+	}
+	suiteConfig, _ := ginkgo.GinkgoConfiguration()
+	return mentionsUnnegated(suiteConfig.LabelFilter, s)
+}
+
+// mentionsUnnegated reports whether expr names s somewhere that is not immediately negated.
+func mentionsUnnegated(expr, s string) bool {
+	for i := 0; ; {
+		at := strings.Index(expr[i:], s)
+		if at < 0 {
+			return false
+		}
+		at += i
+		i = at + len(s)
+		if strings.HasSuffix(strings.TrimRight(expr[:at], " \t("), "!") {
+			continue
+		}
+		return true
+	}
+}

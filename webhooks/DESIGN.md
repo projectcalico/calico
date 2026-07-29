@@ -178,7 +178,7 @@ Honest state: **the e2e specs have never been executed.** No install path deploy
 ### Review notes
 
 - A behavior that depends on the API server (CEL, SAR wire format, TTLs, the authorizer chain order) is not covered by a unit test with a fake. Put it in the envtest suite.
-- The e2e specs fail rather than skip when explicitly focused, so a pipeline that means to run them can't pass by skipping them.
+- The e2e specs fail rather than skip when the run asked for them by name, so a pipeline that means to run them can't pass by skipping them. "Asked for by name" has to include `--label-filter`, not just `-focus`: our pipelines select by label expression, and a spec that only consults `-focus` can never tell that it was selected. `describe.ExplicitlySelected` covers both, and is what these specs call.
 
 ## Open questions
 
