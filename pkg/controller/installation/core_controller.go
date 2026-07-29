@@ -363,6 +363,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 		v3CRDs:               opts.UseV3CRDs,
 		kubernetesVersion:    opts.KubernetesVersion,
 		apiDiscovery:         opts.APIDiscovery,
+		cloud:                opts.Cloud,
 	}
 	r.status.Run(opts.ShutdownContext)
 	r.typhaAutoscaler.start(opts.ShutdownContext)
@@ -422,6 +423,10 @@ type ReconcileInstallation struct {
 	v3CRDs                        bool
 	kubernetesVersion             *common.VersionInfo
 	apiDiscovery                  *discovery.APIDiscovery
+
+	// cloud indicates the operator is running as a Calico Cloud install. When false the calico
+	// kube-controllers render config leaves cloud behavior (e.g. the tesla image) off.
+	cloud bool
 
 	// newComponentHandler returns a new component handler. Useful stub for unit testing.
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object) utils.ComponentHandler
@@ -1737,6 +1742,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		// cert above.
 		WAFWebhookCABundle:    certificateManager.KeyPair().GetCertificatePEM(),
 		RBACManagementEnabled: managerCR.RBACManagementEnabled(),
+		Cloud:                 r.cloud,
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 

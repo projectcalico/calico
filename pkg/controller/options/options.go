@@ -48,6 +48,15 @@ type ControllerOptions struct {
 	// and instead will configure the cluster to use an external Elasticsearch.
 	ElasticExternal bool
 
+	// Cloud indicates the operator is running in a Calico Cloud management cluster. When set,
+	// controllers activate cloud-specific behavior (cloud render decorations, cloud config maps,
+	// etc.). When false the operator behaves as a regular Calico/Calico Enterprise install.
+	Cloud bool
+
+	// ESMigration is enabled in the last phase of an ES migration, when we need to keep both an
+	// LSS configuration and internal elasticsearch running. Only meaningful when Cloud is set.
+	ESMigration bool
+
 	// Whether or not to use crd.projectcalico.org/v1 or projectcalico.org/v3 for Calico CRDs.
 	UseV3CRDs bool
 

@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"github.com/tigera/api/pkg/lib/numorstring"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/components"
@@ -39,6 +40,7 @@ import (
 	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
+	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esmetrics"
 	"github.com/tigera/operator/pkg/render/logstorage/kibana"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
@@ -57,6 +59,8 @@ const (
 	ElasticsearchHTTPSEndpoint = "https://tigera-secure-es-http.tigera-elasticsearch.svc:9200"
 
 	KibanaHTTPSEndpoint = "https://tigera-secure-kb-http.tigera-kibana.svc:5601"
+
+	CloudPolicyName = networkpolicy.CalicoComponentPolicyPrefix + "cloud-es-gateway-access"
 )
 
 func EsGateway(c *Config) render.Component {
@@ -83,6 +87,21 @@ type Config struct {
 	Namespace                  string
 	TruthNamespace             string
 	LogStorage                 *operatorv1.LogStorage
+	// Cloud holds Calico Cloud specific configuration. Inert unless Cloud.Enabled is set.
+	Cloud CloudConfig
+}
+
+// CloudConfig holds Calico Cloud specific es-gateway configuration. Enabled gates all cloud
+// behavior: when false (regular Calico/Calico Enterprise) the cloud decorators are no-ops.
+type CloudConfig struct {
+	Enabled              bool
+	EsAdminUserSecret    *corev1.Secret
+	ExternalCertsSecret  *corev1.Secret
+	TenantID             string
+	EnableMTLS           bool
+	ExternalElastic      bool
+	ExternalESDomain     string
+	ExternalKibanaDomain string
 }
 
 func (e *esGateway) ResolveImages(is *operatorv1.ImageSet) error {
@@ -115,6 +134,21 @@ func (e *esGateway) Objects() (toCreate, toDelete []client.Object) {
 	toCreate = append(toCreate, e.esGatewayRole())
 	toCreate = append(toCreate, e.esGatewayRoleBinding())
 	toCreate = append(toCreate, e.esGatewayServiceAccount())
+
+	if e.cfg.Cloud.Enabled {
+		// Copy the external ES certs and es-admin secret into the elasticsearch namespace so es-gateway can use them.
+		if e.cfg.Cloud.ExternalCertsSecret != nil {
+			toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(render.ElasticsearchNamespace, e.cfg.Cloud.ExternalCertsSecret)...)...)
+		}
+		if e.cfg.Cloud.EsAdminUserSecret != nil {
+			toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(render.ElasticsearchNamespace, e.cfg.Cloud.EsAdminUserSecret)...)...)
+		}
+
+		toCreate = append(toCreate, e.cloudAccessNetworkPolicy())
+
+		// allow-tigera Tier was renamed to calico-system
+		toDelete = append(toDelete, networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("cloud-es-gateway-access", render.ElasticsearchNamespace))
+	}
 
 	// allow-tigera Tier was renamed to calico-system
 	toDelete = append(toDelete, networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("es-gateway-access", e.cfg.Namespace))
@@ -191,15 +225,33 @@ func (e *esGateway) esGatewayRoleBinding() *rbacv1.RoleBinding {
 }
 
 func (e *esGateway) esGatewayDeployment() *appsv1.Deployment {
+	// The ES/Kibana endpoints and client cert paths default to the in-cluster values, but Calico
+	// Cloud points es-gateway at an external ES/Kibana and (optionally) mounts mTLS client certs.
+	// These are computed here rather than removed-and-re-added by the cloud path.
+	elasticEndpoint := ElasticsearchHTTPSEndpoint
+	kibanaEndpoint := KibanaHTTPSEndpoint
+	elasticClientCertPath := e.cfg.TrustedBundle.MountPath()
+	kibanaClientCertPath := e.cfg.TrustedBundle.MountPath()
+	if e.cfg.Cloud.Enabled {
+		if e.cfg.Cloud.ExternalElastic {
+			elasticEndpoint = "https://" + e.cfg.Cloud.ExternalESDomain + ":443"
+			kibanaEndpoint = "https://" + e.cfg.Cloud.ExternalKibanaDomain + ":443"
+		}
+		if e.cfg.Cloud.EnableMTLS {
+			elasticClientCertPath = "/certs/elasticsearch/mtls/client.crt"
+			kibanaClientCertPath = "/certs/kibana/mtls/client.crt"
+		}
+	}
+
 	envVars := []corev1.EnvVar{
 		{Name: "NAMESPACE", Value: e.cfg.Namespace},
 		{Name: "ES_GATEWAY_LOG_LEVEL", Value: "INFO"},
-		{Name: "ES_GATEWAY_ELASTIC_ENDPOINT", Value: ElasticsearchHTTPSEndpoint},
-		{Name: "ES_GATEWAY_KIBANA_ENDPOINT", Value: KibanaHTTPSEndpoint},
+		{Name: "ES_GATEWAY_ELASTIC_ENDPOINT", Value: elasticEndpoint},
+		{Name: "ES_GATEWAY_KIBANA_ENDPOINT", Value: kibanaEndpoint},
 		{Name: "ES_GATEWAY_HTTPS_CERT", Value: e.cfg.ESGatewayKeyPair.VolumeMountCertificateFilePath()},
 		{Name: "ES_GATEWAY_HTTPS_KEY", Value: e.cfg.ESGatewayKeyPair.VolumeMountKeyFilePath()},
-		{Name: "ES_GATEWAY_KIBANA_CLIENT_CERT_PATH", Value: e.cfg.TrustedBundle.MountPath()},
-		{Name: "ES_GATEWAY_ELASTIC_CLIENT_CERT_PATH", Value: e.cfg.TrustedBundle.MountPath()},
+		{Name: "ES_GATEWAY_KIBANA_CLIENT_CERT_PATH", Value: kibanaClientCertPath},
+		{Name: "ES_GATEWAY_ELASTIC_CLIENT_CERT_PATH", Value: elasticClientCertPath},
 		{Name: "ES_GATEWAY_ELASTIC_CA_BUNDLE_PATH", Value: e.cfg.TrustedBundle.MountPath()},
 		{Name: "ES_GATEWAY_KIBANA_CA_BUNDLE_PATH", Value: e.cfg.TrustedBundle.MountPath()},
 		{Name: "ES_GATEWAY_ELASTIC_USERNAME", Value: e.cfg.EsAdminUserName},
@@ -212,6 +264,29 @@ func (e *esGateway) esGatewayDeployment() *appsv1.Deployment {
 			},
 		}},
 	}
+
+	// Calico Cloud additions to the es-gateway env.
+	if e.cfg.Cloud.Enabled {
+		// Enable the prometheus metrics endpoint at :METRICS_PORT/metrics (default 9091).
+		envVars = append(envVars, corev1.EnvVar{Name: "ES_GATEWAY_METRICS_ENABLED", Value: "true"})
+		if e.cfg.Cloud.ExternalElastic {
+			// Enable the ILM dummy route so fluentd cannot modify ILM but its POSTs still succeed.
+			envVars = append(envVars, corev1.EnvVar{Name: "ES_GATEWAY_ILM_DUMMY_ROUTE_ENABLED", Value: "true"})
+		}
+		if e.cfg.Cloud.EnableMTLS {
+			// Cert paths are set above; here we add the client key paths and enable flags.
+			envVars = append(envVars,
+				corev1.EnvVar{Name: "ES_GATEWAY_ELASTIC_CLIENT_KEY_PATH", Value: "/certs/elasticsearch/mtls/client.key"},
+				corev1.EnvVar{Name: "ES_GATEWAY_ENABLE_ELASTIC_MUTUAL_TLS", Value: "true"},
+				corev1.EnvVar{Name: "ES_GATEWAY_KIBANA_CLIENT_KEY_PATH", Value: "/certs/kibana/mtls/client.key"},
+				corev1.EnvVar{Name: "ES_GATEWAY_ENABLE_KIBANA_MUTUAL_TLS", Value: "true"},
+			)
+		}
+		if e.cfg.Cloud.TenantID != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: "ES_GATEWAY_TENANT_ID", Value: e.cfg.Cloud.TenantID})
+		}
+	}
+
 	sc := securitycontext.NewNonRootContext()
 	var initContainers []corev1.Container
 	if e.cfg.ESGatewayKeyPair.UseCertificateManagement() {
@@ -230,6 +305,27 @@ func (e *esGateway) esGatewayDeployment() *appsv1.Deployment {
 
 	annotations := e.cfg.TrustedBundle.HashAnnotations()
 	annotations[e.cfg.ESGatewayKeyPair.HashAnnotationKey()] = e.cfg.ESGatewayKeyPair.HashAnnotationValue()
+
+	if e.cfg.Cloud.Enabled {
+		if e.cfg.Cloud.EnableMTLS {
+			// Mount the external certs secret so the mTLS client key/cert paths set above resolve.
+			volumes = append(volumes, corev1.Volume{
+				Name: logstorage.ExternalCertsVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: logstorage.ExternalCertsSecret,
+					},
+				},
+			})
+			volumeMounts = append(volumeMounts,
+				corev1.VolumeMount{Name: logstorage.ExternalCertsVolumeName, MountPath: "/certs/elasticsearch/mtls", ReadOnly: true},
+				corev1.VolumeMount{Name: logstorage.ExternalCertsVolumeName, MountPath: "/certs/kibana/mtls", ReadOnly: true},
+			)
+		}
+		if e.cfg.Cloud.ExternalCertsSecret != nil {
+			annotations["hash.operator.tigera.io/cloud-external-es-secrets"] = rmeta.SecretsAnnotationHash(e.cfg.Cloud.ExternalCertsSecret)
+		}
+	}
 
 	tolerations := e.cfg.Installation.ControlPlaneTolerations
 	if e.cfg.Installation.KubernetesProvider.IsGKE() {
@@ -305,7 +401,6 @@ func (e *esGateway) esGatewayDeployment() *appsv1.Deployment {
 	}
 
 	return &d
-
 }
 
 func (e *esGateway) esGatewayServiceAccount() *corev1.ServiceAccount {
@@ -430,6 +525,45 @@ func (e *esGateway) esGatewayCalicoSystemPolicy() *v3.NetworkPolicy {
 					// Allow all sources, as node CIDRs are not known. This also applies to DPI, which is host networked
 				},
 			},
+			Egress: egressRules,
+		},
+	}
+}
+
+func (e *esGateway) cloudAccessNetworkPolicy() *v3.NetworkPolicy {
+	// When using external elastic, allow egress to the external ES/Kibana endpoints.
+	var egressRules []v3.Rule
+	if e.cfg.Cloud.ExternalElastic {
+		egressRules = append(egressRules, v3.Rule{
+			Action:   v3.Allow,
+			Protocol: &networkpolicy.TCPProtocol,
+			Destination: v3.EntityRule{
+				Ports:   []numorstring.Port{{MinPort: 443, MaxPort: 443}},
+				Domains: []string{e.cfg.Cloud.ExternalESDomain, e.cfg.Cloud.ExternalKibanaDomain},
+			},
+		})
+	}
+	return &v3.NetworkPolicy{
+		TypeMeta:   metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
+		ObjectMeta: metav1.ObjectMeta{Name: CloudPolicyName, Namespace: render.ElasticsearchNamespace},
+		Spec: v3.NetworkPolicySpec{
+			Order:    &networkpolicy.HighPrecedenceOrder,
+			Tier:     networkpolicy.CalicoTierName,
+			Selector: networkpolicy.KubernetesAppSelector(DeploymentName),
+			Types:    []v3.PolicyType{v3.PolicyTypeIngress, v3.PolicyTypeEgress},
+			Ingress: []v3.Rule{{
+				Action:   v3.Allow,
+				Protocol: &networkpolicy.TCPProtocol,
+				Source: v3.EntityRule{
+					NamespaceSelector: "projectcalico.org/name == 'monitoring'",
+					Selector:          "app == 'prometheus'",
+				},
+				// Allow prometheus to scrape the metrics endpoint, which is enabled only on
+				// cloud (see ES_GATEWAY_METRICS_ENABLED added above).
+				Destination: v3.EntityRule{
+					Ports: []numorstring.Port{{MinPort: 9091, MaxPort: 9091}},
+				},
+			}},
 			Egress: egressRules,
 		},
 	}

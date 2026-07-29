@@ -122,6 +122,13 @@ func (r *ReconcileTiers) Reconcile(ctx context.Context, request reconcile.Reques
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
+	if r.opts.Cloud {
+		if err := r.cloudPatchTier(ctx); err != nil {
+			r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching tier", err, reqLogger)
+			return reconcile.Result{}, nil
+		}
+	}
+
 	tiersConfig, reconcileResult := r.prepareTiersConfig(ctx, reqLogger)
 	if reconcileResult != nil {
 		return *reconcileResult, nil

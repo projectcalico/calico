@@ -21,6 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 
@@ -54,7 +55,13 @@ var checkVersionMatchesGitVersion = func(ctx context.Context, c *cli.Command) (c
 	}
 	checkLog.WithField("git-version", gitVer).Debug("Checking version matches git version")
 	checkLog.Info("Using versions")
-	if version != gitVer {
+	// Calico Cloud releases carry a -cloud suffix on the version/image (e.g. v1.44.0-cloud) but ride
+	// the enterprise git tag (v1.44.0), so match against the base version without the suffix.
+	gitMatch := version
+	if setup.IsCloud {
+		gitMatch = strings.TrimSuffix(version, "-cloud")
+	}
+	if gitMatch != gitVer {
 		return ctx, fmt.Errorf("provided version %q does not match git version %q. This is required for releases. \n"+
 			"If building a hashrelease, use either the --%s flag or set environment variable %s=true", version, gitVer, hashreleaseFlag.Name, hashreleaseFlagEnvVar)
 	}
@@ -69,7 +76,7 @@ var checkVersionFormat = func(ctx context.Context, c *cli.Command) (context.Cont
 		return ctx, nil
 	}
 	checkLog.Debug("Checking version format")
-	if isRelease, err := isValidReleaseVersion(version); err != nil {
+	if isRelease, err := setup.IsValidReleaseVersion(version); err != nil {
 		return ctx, fmt.Errorf("checking version format: %w", err)
 	} else if !isRelease {
 		return ctx, fmt.Errorf("provided version %q is not a valid release version. \n"+

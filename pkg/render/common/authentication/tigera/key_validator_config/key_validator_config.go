@@ -44,6 +44,7 @@ type KeyValidatorConfig struct {
 	usernamePrefix  string
 	groupsPrefix    string
 	rootCA          []byte
+	cloud           CloudAuthenticationConfig
 }
 
 func New(issuerURL string, clientID string, options ...Option) (authentication.KeyValidatorConfig, error) {
@@ -83,7 +84,7 @@ func (kvc *KeyValidatorConfig) ClientID() string {
 }
 
 func (kvc *KeyValidatorConfig) RequiredEnv(prefix string) []corev1.EnvVar {
-	return []corev1.EnvVar{
+	return kvc.addCloudEnvs(prefix, []corev1.EnvVar{
 		{Name: fmt.Sprintf("%sOIDC_AUTH_ENABLED", prefix), Value: strconv.FormatBool(true)},
 		{Name: fmt.Sprintf("%sOIDC_AUTH_ISSUER", prefix), Value: kvc.Issuer()},
 		{Name: fmt.Sprintf("%sOIDC_AUTH_JWKSURL", prefix), Value: kvc.wellKnownConfig.JWKSURL},
@@ -92,7 +93,7 @@ func (kvc *KeyValidatorConfig) RequiredEnv(prefix string) []corev1.EnvVar {
 		{Name: fmt.Sprintf("%sOIDC_AUTH_GROUPS_CLAIM", prefix), Value: kvc.groupsClaim},
 		{Name: fmt.Sprintf("%sOIDC_AUTH_USERNAME_PREFIX", prefix), Value: kvc.usernamePrefix},
 		{Name: fmt.Sprintf("%sOIDC_AUTH_GROUPS_PREFIX", prefix), Value: kvc.groupsPrefix},
-	}
+	})
 }
 
 func (kvc *KeyValidatorConfig) RequiredAnnotations() map[string]string {

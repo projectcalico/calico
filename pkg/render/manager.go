@@ -224,6 +224,14 @@ type ManagerConfiguration struct {
 	// CACertCommonName is the CommonName from the CA certificate used for operator-managed certificates.
 	// Passed to Voltron so it can identify the correct CA issuer public key.
 	CACertCommonName string
+
+	// Cloud indicates the manager is being rendered for a Calico Cloud install. When false (regular
+	// Calico/Calico Enterprise) all cloud decorations below are inert and CloudResources is ignored.
+	Cloud bool
+
+	// CloudResources holds Calico Cloud specific manager/voltron customizations. Only consumed when
+	// Cloud is true.
+	CloudResources ManagerCloudResources
 }
 
 type managerComponent struct {
@@ -254,6 +262,10 @@ func (c *managerComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	if len(errMsgs) != 0 {
 		return fmt.Errorf("%s", strings.Join(errMsgs, ","))
 	}
+
+	// run cloud image customizations (no-op when not in cloud mode)
+	c.resolveCloudImages()
+
 	return nil
 }
 
@@ -354,7 +366,7 @@ func (c *managerComponent) managerDeployment() *appsv1.Deployment {
 		initContainers = append(initContainers, c.cfg.VoltronLinseedKeyPair.InitContainer(ManagerNamespace, securitycontext.NewNonRootContext()))
 	}
 
-	managerPodContainers := []corev1.Container{c.managerUIAPIsContainer(), c.voltronContainer()}
+	managerPodContainers := []corev1.Container{c.decorateCloudUIAPIsContainer(c.managerUIAPIsContainer()), c.decorateCloudVoltronContainer(c.voltronContainer())}
 	if c.cfg.Tenant == nil {
 		managerPodContainers = append(managerPodContainers, c.dashboardContainer(), c.managerContainer())
 	}
@@ -397,7 +409,7 @@ func (c *managerComponent) managerDeployment() *appsv1.Deployment {
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RecreateDeploymentStrategyType,
 			},
-			Template: *podTemplate,
+			Template: c.decorateCloudDeploymentSpec(*podTemplate),
 		},
 	}
 
@@ -505,6 +517,7 @@ func (c *managerComponent) managerEnvVars() []corev1.EnvVar {
 	}
 
 	envs = append(envs, c.managerOAuth2EnvVars()...)
+	envs = c.setManagerCloudEnvs(envs)
 	return envs
 }
 
@@ -538,6 +551,9 @@ func (c *managerComponent) managerOAuth2EnvVars() []corev1.EnvVar {
 		case *tigerakvc.KeyValidatorConfig:
 			envs = append(envs, corev1.EnvVar{Name: "CNX_WEB_OIDC_AUTHORITY", Value: ""})
 		}
+
+		// Apply cloud-only OIDC workarounds (no-op for non-cloud installs).
+		envs = c.decorateCloudOAuth2EnvVars(envs)
 	}
 	return envs
 }

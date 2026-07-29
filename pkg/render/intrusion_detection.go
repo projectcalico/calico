@@ -187,6 +187,20 @@ func (c *intrusionDetectionComponent) Objects() ([]client.Object, []client.Objec
 		// allow-tigera Tier was renamed to calico-system
 		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("intrusion-detection-controller", c.cfg.Namespace),
 		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("default-deny", c.cfg.Namespace),
+		// Image Assurance was removed; clean up the resources that prior versions copied
+		// into the intrusion-detection namespace.
+		&corev1.Secret{
+			TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "tigera-image-assurance-api-cert", Namespace: c.cfg.Namespace},
+		},
+		&corev1.ConfigMap{
+			TypeMeta:   metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "tigera-image-assurance-config", Namespace: c.cfg.Namespace},
+		},
+		&corev1.Secret{
+			TypeMeta:   metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "image-assurance-api-token", Namespace: c.cfg.Namespace},
+		},
 	}
 
 	if !c.cfg.ManagementCluster {

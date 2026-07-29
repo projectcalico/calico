@@ -43,6 +43,7 @@ import (
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -90,6 +91,13 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		{Name: render.ComplianceServerPolicyName, Namespace: installNS},
 		{Name: networkpolicy.CalicoComponentDefaultDenyPolicyName, Namespace: installNS},
 	})
+
+	if opts.Cloud && opts.ElasticExternal {
+		// This ConfigMap is needed for utils.GetCloudConfig
+		if err = utils.AddConfigMapWatch(complianceController, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("compliance-controller failed to watch the ConfigMap resource: %w", err)
+		}
+	}
 
 	// Watch for changes to primary resource Compliance
 	err = complianceController.WatchObject(&operatorv1.Compliance{}, &handler.EnqueueRequestForObject{})
@@ -353,19 +361,6 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 		r.status.SetDegraded(operatorv1.ResourceNotReady, "Linseed certificate is not available yet, waiting until it becomes available", nil, reqLogger)
 		return reconcile.Result{}, nil
 	}
-	bundleMaker := certificateManager.CreateTrustedBundle(managerInternalTLSSecret, linseedCertificate)
-	trustedBundle := bundleMaker.(certificatemanagement.TrustedBundleRO)
-	if r.opts.MultiTenant {
-		// For multi-tenant systems, we load the pre-created bundle for this tenant instead of using the one we built here.
-		// Multi-tenant compliance need the bundle variant that includes system root certificates, in order to verify external auth providers.
-		trustedBundle, err = certificateManager.LoadMultiTenantTrustedBundleWithRootCertificates(ctx, r.client, helper.InstallNamespace())
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting trusted bundle", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-		bundleMaker = nil
-	}
-
 	// Get the key pairs for each component, generating them as needed.
 	type complianceKeyPair struct {
 		SecretName string
@@ -411,6 +406,32 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 		return reconcile.Result{}, nil
 	}
 
+	// Build the trusted bundle now that the authenticationCR is known, so we can pick the right
+	// variant in one place. Default is the standard bundle; multi-tenant loads the per-tenant bundle
+	// with root certs; Calico Cloud management clusters use the system-root variant so
+	// compliance-server can verify an external OIDC provider. The bundle is not used until lower in
+	// the function, so building it here (rather than earlier) is safe.
+	bundleMaker := certificateManager.CreateTrustedBundle(managerInternalTLSSecret, linseedCertificate)
+	trustedBundle := bundleMaker.(certificatemanagement.TrustedBundleRO)
+	if r.opts.MultiTenant {
+		// For multi-tenant systems, we load the pre-created bundle for this tenant instead of using the one we built here.
+		// Multi-tenant compliance need the bundle variant that includes system root certificates, in order to verify external auth providers.
+		trustedBundle, err = certificateManager.LoadMultiTenantTrustedBundleWithRootCertificates(ctx, r.client, helper.InstallNamespace())
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting trusted bundle", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		bundleMaker = nil
+	} else if r.opts.Cloud && managementCluster != nil && authenticationCR != nil && authenticationCR.Spec.OIDC != nil &&
+		authenticationCR.Spec.OIDC.Type == operatorv1.OIDCTypeTigera {
+		bundleMaker, err = certificateManager.CreateTrustedBundleWithSystemRootCertificates(managerInternalTLSSecret, linseedCertificate)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceCreateError, "failed to create trusted bundle with system root certs", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		trustedBundle = bundleMaker.(certificatemanagement.TrustedBundleRO)
+	}
+
 	// Determine the namespaces to which we must bind the cluster role.
 	// For multi-tenant, the cluster role will be bind to the service account in the tenant namespace
 	// For single-tenant or zero-tenant, the cluster role will be bind to the service account in the tigera-compliance
@@ -423,10 +444,26 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 	// Create a component handler to manage the rendered component.
 	handler := utils.NewComponentHandler(log, r.client, r.scheme, instance)
 
-	keyValidatorConfig, err := utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain)
+	keyValidatorConfig, err := utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.opts.ClusterDomain, r.opts.Cloud && !r.opts.MultiTenant)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceValidationError, "Failed to process the authentication CR.", err, reqLogger)
 		return reconcile.Result{}, err
+	}
+
+	if r.opts.Cloud && r.opts.ElasticExternal && !r.opts.MultiTenant {
+		// For Calico Cloud single-tenant clusters sharing an external ES, extract the tenant
+		// information from the cloud config map.
+		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				reqLogger.Info("Failed to retrieve External Elasticsearch config map")
+				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve External Elasticsearch config map", err, reqLogger)
+				return reconcile.Result{}, nil
+			}
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Unable to read External Elasticsearch config map", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		tenant = cloudConfig.ToTenant()
 	}
 
 	reqLogger.V(3).Info("rendering components")
@@ -462,6 +499,7 @@ func (r *ReconcileCompliance) Reconcile(ctx context.Context, request reconcile.R
 		Tenant:                      tenant,
 		Compliance:                  instance,
 		ExternalElastic:             r.opts.ElasticExternal,
+		Cloud:                       r.opts.Cloud,
 	}
 
 	// Render the desired objects from the CRD and create or update them.

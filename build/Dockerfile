@@ -19,13 +19,15 @@ FROM registry.access.redhat.com/ubi9/ubi-minimal:latest AS ubi
 FROM scratch AS source
 
 ARG TARGETARCH
+# BINARY_NAME is "operator" for enterprise/OSS and "operator-cloud" for the Calico Cloud variant.
+ARG BINARY_NAME=operator
 
 COPY --from=ubi /etc/pki /etc/pki/
 COPY --from=ubi /usr/share/pki /usr/share/pki/
 
 COPY LICENSE /licenses/LICENSE
 
-COPY build/_output/bin/operator-${TARGETARCH} /usr/bin/operator
+COPY build/_output/bin/${BINARY_NAME}-${TARGETARCH} /usr/bin/operator
 
 FROM ${CALICO_BASE}
 

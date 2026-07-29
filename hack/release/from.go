@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tigera/operator/hack/release/internal/command"
 	"github.com/tigera/operator/hack/release/internal/middleware"
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/tigera/operator/hack/release/internal/versions"
 	"github.com/urfave/cli/v3"
 )
@@ -63,7 +64,7 @@ var releaseFromBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command)
 	if c.String(baseOperatorFlag.Name) == version {
 		return ctx, fmt.Errorf("base version and new version cannot be the same")
 	}
-	if isRelease, err := isReleaseVersionFormat(version); err != nil {
+	if isRelease, err := setup.IsValidReleaseVersion(version); err != nil {
 		return ctx, fmt.Errorf("determining if version is a release: %s", err)
 	} else if isRelease && c.Bool(publishFlag.Name) {
 		logrus.Warn("You are about to publish a release version. Ensure this is intended.")
@@ -126,7 +127,7 @@ var releaseFromAction = cli.ActionFunc(func(ctx context.Context, c *cli.Command)
 
 	// Build either a new release or a new hashrelease operator
 	version := c.String(versionFlag.Name)
-	isReleaseVersion, err := isReleaseVersionFormat(version)
+	isReleaseVersion, err := setup.IsValidReleaseVersion(version)
 	if err != nil {
 		return fmt.Errorf("determining if version is a release: %s", err)
 	} else if isReleaseVersion {
@@ -240,7 +241,7 @@ func publishHashreleaseOperator(version, imageName, registry string, archs []str
 // extractGitRef returns the tag for a release version
 // or the git hash for a hashrelease version from the baseVersion.
 func extractGitRef(baseVersion string) (string, error) {
-	isReleaseVersion, err := isReleaseVersionFormat(baseVersion)
+	isReleaseVersion, err := setup.IsValidReleaseVersion(baseVersion)
 	if err != nil {
 		return "", fmt.Errorf("determining if version is a release: %s", err)
 	}

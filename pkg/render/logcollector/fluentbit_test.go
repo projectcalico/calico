@@ -114,6 +114,41 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 		Expect(*initContainers[0].SecurityContext.Privileged).To(BeTrue())
 	})
 
+	It("preserves the cloud/enterprise log feature split on the Linseed outputs", func() {
+		// linseedTags renders the Linux fluent-bit config and returns the tags of
+		// the built-in Linseed (http) outputs — the fluent-bit equivalent of the
+		// log types fluentd shipped to Elasticsearch.
+		linseedTags := func() []string {
+			resources, _ := logcollector.FluentBitOSSpecific(cfg, rmeta.OSTypeLinux).Objects()
+			cm := rtest.GetResource(resources, logcollector.FluentBitConfConfigMapName, render.LogCollectorNamespace, "", "v1", "ConfigMap").(*corev1.ConfigMap)
+			var conf struct {
+				Pipeline struct {
+					Outputs []map[string]interface{} `json:"outputs"`
+				} `json:"pipeline"`
+			}
+			Expect(json.Unmarshal([]byte(cm.Data["fluent-bit.yaml"]), &conf)).NotTo(HaveOccurred())
+			var tags []string
+			for _, out := range conf.Pipeline.Outputs {
+				if out["name"] == "http" {
+					tags = append(tags, out["match"].(string))
+				}
+			}
+			return tags
+		}
+
+		By("shipping every log type to Linseed for enterprise (Cloud false)")
+		Expect(linseedTags()).To(ConsistOf(
+			"flows", "dns", "l7", "waf", "runtime", "audit.tsee", "audit.kube", "bird", "bird6", "policy_activity"))
+
+		By("omitting DNS, EE/kube audit, BGP and flow logs for a non-multi-tenant cloud install")
+		cfg.Cloud = true
+		Expect(linseedTags()).To(ConsistOf("l7", "waf", "runtime", "policy_activity"))
+
+		By("keeping flow logs (but still dropping DNS/audit/BGP) for a multi-tenant cloud management cluster")
+		cfg.Tenant = &operatorv1.Tenant{ObjectMeta: metav1.ObjectMeta{Namespace: "tigera-tenant"}}
+		Expect(linseedTags()).To(ConsistOf("flows", "l7", "waf", "runtime", "policy_activity"))
+	})
+
 	It("should render with a default configuration", func() {
 		expectedResources := []client.Object{
 			&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: logcollector.FluentBitPolicyName, Namespace: render.LogCollectorNamespace}, TypeMeta: metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"}},

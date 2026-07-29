@@ -27,6 +27,8 @@ import (
 type OSType string
 
 const (
+	DefaultCertificateDuration = 825 * 24 * time.Hour
+
 	OSTypeAny     OSType = "any"
 	OSTypeLinux   OSType = "linux"
 	OSTypeWindows OSType = "windows"

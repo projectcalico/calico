@@ -16,6 +16,8 @@ package main
 
 import (
 	"testing"
+
+	"github.com/tigera/operator/hack/release/internal/setup"
 )
 
 func TestIsReleaseVersionFormat(t *testing.T) {
@@ -50,7 +52,7 @@ func TestIsReleaseVersionFormat(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.version, func(t *testing.T) {
 			t.Parallel()
-			got, err := isReleaseVersionFormat(tc.version)
+			got, err := setup.IsValidReleaseVersion(tc.version)
 			if err != nil {
 				t.Fatalf("isReleaseVersionFormat(%q) unexpected error: %v", tc.version, err)
 			}
@@ -125,35 +127,6 @@ func TestAddTrailingSlash(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestIsValidReleaseVersionOverride(t *testing.T) {
-	orig := isValidReleaseVersion
-	defer func() { isValidReleaseVersion = orig }()
-
-	t.Run("set to isReleaseVersionFormat", func(t *testing.T) {
-		isValidReleaseVersion = isReleaseVersionFormat
-		ok, err := isValidReleaseVersion("v1.2.3")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !ok {
-			t.Fatal("expected v1.2.3 to be valid with default validator")
-		}
-	})
-
-	t.Run("can be overridden", func(t *testing.T) {
-		// Override to accept enterprise format (vX.Y.Z-A.B)
-		isValidReleaseVersion = isEnterpriseReleaseVersionFormat
-
-		ok, err := isValidReleaseVersion("v1.2.3-1.0")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !ok {
-			t.Fatal("expected v1.2.3-1.0 to be valid with enterprise validator")
-		}
-	})
 }
 
 func TestIsPrereleaseEnterpriseVersion(t *testing.T) {

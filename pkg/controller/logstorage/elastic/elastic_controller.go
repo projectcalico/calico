@@ -16,6 +16,7 @@ package elastic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -80,6 +81,7 @@ type ElasticSubController struct {
 	clusterDomain  string
 	tierWatchReady *utils.ReadyFlag
 	multiTenant    bool
+	cloud          bool
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
@@ -102,6 +104,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		clusterDomain:  opts.ClusterDomain,
 		provider:       opts.DetectedProvider,
 		multiTenant:    opts.MultiTenant,
+		cloud:          opts.Cloud,
 	}
 	r.status.Run(opts.ShutdownContext)
 
@@ -473,12 +476,28 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	var kbService *corev1.Service
+	var kibanaConfigOverrides map[string]interface{}
 	if kibanaEnabled {
 		// For now, Kibana is only supported in single tenant configurations.
 		kbService, err = r.getKibanaService(ctx)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve the Kibana service", err, reqLogger)
 			return reconcile.Result{}, err
+		}
+
+		if r.cloud {
+			kbCm := &corev1.ConfigMap{}
+			if err = r.client.Get(ctx, types.NamespacedName{Name: "cloud-kibana-config", Namespace: common.OperatorNamespace()}, kbCm); err != nil {
+				if !errors.IsNotFound(err) {
+					return reconcile.Result{}, fmt.Errorf("failed to read cloud-kibana-config ConfigMap: %w", err)
+				}
+			} else {
+				kibanaConfigOverrides = map[string]interface{}{}
+				if err = json.Unmarshal([]byte(kbCm.Data["config"]), &kibanaConfigOverrides); err != nil {
+					r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Failed to unmarshal config in cloud-kibana-config ConfigMap", err, reqLogger)
+					return reconcile.Result{}, err
+				}
+			}
 		}
 	}
 
@@ -517,18 +536,19 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 			UnusedTLSSecret:         unusedTLSSecret,
 		}),
 		kibana.Kibana(&kibana.Configuration{
-			LogStorage:      ls,
-			Installation:    installationSpec,
-			Kibana:          kibanaCR,
-			KibanaKeyPair:   kibanaKeyPair,
-			PullSecrets:     pullSecrets,
-			Provider:        r.provider,
-			KbService:       kbService,
-			ClusterDomain:   r.clusterDomain,
-			BaseURL:         baseURL,
-			TrustedBundle:   trustedBundle,
-			UnusedTLSSecret: unusedTLSSecret,
-			Enabled:         kibanaEnabled,
+			LogStorage:           ls,
+			Installation:         installationSpec,
+			Kibana:               kibanaCR,
+			KibanaKeyPair:        kibanaKeyPair,
+			PullSecrets:          pullSecrets,
+			Provider:             r.provider,
+			KbService:            kbService,
+			ClusterDomain:        r.clusterDomain,
+			BaseURL:              baseURL,
+			TrustedBundle:        trustedBundle,
+			UnusedTLSSecret:      unusedTLSSecret,
+			Enabled:              kibanaEnabled,
+			CloudConfigOverrides: kibanaConfigOverrides,
 		}),
 	}
 
@@ -656,7 +676,7 @@ func (r *ElasticSubController) applyILMPolicies(ls *operatorv1.LogStorage, reqLo
 		return err
 	}
 
-	if err = esClient.SetILMPolicies(ctx, ls); err != nil {
+	if err = esClient.SetILMPolicies(ctx, ls, r.cloud); err != nil {
 		return err
 	}
 	return nil

@@ -87,6 +87,9 @@ type Configuration struct {
 	TrustedBundle   certificatemanagement.TrustedBundleRO
 	UnusedTLSSecret *corev1.Secret
 	Enabled         bool
+
+	// CloudConfigOverrides is merged over the default Kibana config. Nil outside of Calico Cloud.
+	CloudConfigOverrides map[string]interface{}
 }
 
 type kibana struct {
@@ -254,6 +257,10 @@ func (k *kibana) kibanaCR() *kbv1.Kibana {
 		// "[INFO ][plugins.observabilityAIAssistant] Knowledge base index does not exist. Aborting updating index assets"
 		// "[ERROR][plugins.taskManager] Failed to poll for work: Response aborted while reading the body"
 		"xpack.productDocBase.artifactRepositoryUrl": "http://localhost:5601",
+	}
+
+	for k, v := range k.cfg.CloudConfigOverrides {
+		config[k] = v
 	}
 
 	var initContainers []corev1.Container

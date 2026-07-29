@@ -260,7 +260,7 @@ func ExpectVolumeMount(vms []corev1.VolumeMount, name, path string) {
 			return
 		}
 	}
-	Expect(false).To(BeTrue(), fmt.Sprintf("Missing expected volume mount %s", name))
+	ExpectWithOffset(1, false).To(BeTrue(), fmt.Sprintf("Missing expected volume mount %s", name))
 }
 
 // CreateCertSecret creates a secret that is not signed by the certificate manager, making it useful for testing legacy

@@ -34,19 +34,31 @@ global_job_config:
       - 'cache restore go-mod-cache-s390x-${SEMAPHORE_GIT_SHA}'
 
 blocks:
+  # Enterprise and cloud CD run as two parallel jobs (jobs in a block always run in parallel). Both
+  # build the same commit; the cloud job adds VARIANT=cloud and pushes operator-cloud to GCR instead
+  # of quay. Each job authenticates only to the registry it pushes to (quay vs GCR).
   - name: Push Images
     task:
       secrets:
         - name: quay-robot-semaphore_v2
         - name: operator-redhat-connect
+        - name: google-service-account-for-gcr
       prologue:
         commands:
-          - docker login -u="$QUAY_USERNAME" -p="$QUAY_TOKEN" quay.io;
           - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       jobs:
         - name: Build
           commands:
+            - docker login -u="$QUAY_USERNAME" -p="$QUAY_TOKEN" quay.io
             - make cd
+          env_vars:
+            - name: CONFIRM
+              value: "true"
+        - name: Build Cloud
+          commands:
+            - gcloud auth activate-service-account --key-file=/home/semaphore/secrets/secret.google-service-account-key.json
+            - docker login -u _json_key -p "$(cat ~/secrets/secret.google-service-account-key.json)" https://gcr.io
+            - make cd VARIANT=cloud
           env_vars:
             - name: CONFIRM
               value: "true"

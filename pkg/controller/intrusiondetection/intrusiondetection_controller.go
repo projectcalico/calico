@@ -429,6 +429,17 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 		bundleMaker = nil
 	}
 
+	if r.opts.Cloud && r.opts.ElasticExternal && !r.opts.MultiTenant {
+		// For Calico Cloud single-tenant clusters sharing an external ES, extract the tenant
+		// information from the cloud config map.
+		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		tenant = cloudConfig.ToTenant()
+	}
+
 	// Create a component handler to manage the rendered component.
 	handler := utils.NewComponentHandler(log, r.client, r.scheme, instance)
 

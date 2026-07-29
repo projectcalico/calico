@@ -142,6 +142,16 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		}))
 	})
 
+	It("should use the tesla calico image for kube-controllers when Cloud is enabled (TSLA-11580)", func() {
+		instance.Variant = operatorv1.CalicoEnterprise
+		cfg.Cloud = true
+		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := component.Objects()
+		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.CalicoCloudImage().Version))
+	})
+
 	It("should include kubevirt.io RBAC rules in calico-kube-controllers ClusterRole", func() {
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())

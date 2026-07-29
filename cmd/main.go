@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cloudflare/cfssl/log"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
@@ -86,6 +87,14 @@ var (
 // configuration for the operator loaded at startup.
 const bootstrapConfigMapName = "operator-bootstrap-config"
 
+// buildVariant is set to "cloud" via -ldflags "-X main.buildVariant=cloud" when building the Calico
+// Cloud operator image (see CLOUD_LDFLAGS in the Makefile), and is empty otherwise.
+var buildVariant string
+
+func isCloudBuild() bool {
+	return buildVariant == "cloud"
+}
+
 func init() {
 	// +kubebuilder:scaffold:scheme
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -96,12 +105,18 @@ func init() {
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Version: %v", version.VERSION))
+	if isCloudBuild() {
+		log.Info("Variant: Calico Cloud")
+	}
 	log.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
 }
 
 func main() {
 	var enableLeaderElection bool
+	var leaderElectionLeaseDuration time.Duration
+	var leaderElectionRenewDeadline time.Duration
+	var leaderElectionRetryPeriod time.Duration
 	// urlOnlyKubeconfig is a slight hack; we need to get the apiserver from the
 	// kubeconfig but should use the in-cluster service account
 	var urlOnlyKubeconfig string
@@ -121,6 +136,18 @@ func main() {
 	flag.BoolVar(
 		&enableLeaderElection, "enable-leader-election", true,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
+	)
+	flag.DurationVar(
+		&leaderElectionLeaseDuration, "leader-election-lease-duration", 15*time.Second,
+		"Duration non-leader candidates wait before force-acquiring leadership.",
+	)
+	flag.DurationVar(
+		&leaderElectionRenewDeadline, "leader-election-renew-deadline", 10*time.Second,
+		"Duration the acting leader retries refreshing leadership before giving up.",
+	)
+	flag.DurationVar(
+		&leaderElectionRetryPeriod, "leader-election-retry-period", 2*time.Second,
+		"Duration the leader-election clients wait between action retries.",
 	)
 	flag.StringVar(
 		&printCalicoCRDs, "print-calico-crds", "",
@@ -152,6 +179,9 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		fmt.Println("Operator:", version.VERSION)
 		fmt.Println("Calico:", components.CalicoRelease)
 		fmt.Println("Enterprise:", components.EnterpriseRelease)
+		if isCloudBuild() {
+			fmt.Println("Variant: Calico Cloud")
+		}
 		os.Exit(0)
 	}
 
@@ -305,7 +335,7 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		}
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgrOpts := ctrl.Options{
 		Scheme:  scheme,
 		Metrics: metricsOpts,
 		WebhookServer: webhook.NewServer(webhook.Options{
@@ -341,7 +371,13 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		// not being this mapper (which has since been rectified). It was a tough issue to figure out when the default
 		// had changed out from under us, so better to continue to explicitly set it as we know this is the mapper we want.
 		MapperProvider: apiutil.NewDynamicRESTMapper,
-	})
+
+		LeaseDuration: &leaderElectionLeaseDuration,
+		RenewDeadline: &leaderElectionRenewDeadline,
+		RetryPeriod:   &leaderElectionRetryPeriod,
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -504,12 +540,25 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		}
 	}
 
-	// Laod the operator's bootstrap configmap, if it exists.
+	// Load the operator's bootstrap ConfigMap, if it exists.
 	bootConfig, err := clientset.CoreV1().ConfigMaps(common.OperatorNamespace()).Get(ctx, bootstrapConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			log.Error(err, "Failed to load bootstrap configmap")
 			os.Exit(1)
+		}
+	}
+
+	elasticIsMigrating := false
+	useExternalElastic := discovery.UseExternalElastic(bootConfig)
+
+	if isCloudBuild() {
+		elasticIsMigrating = discovery.ElasticIsMigrating(bootConfig)
+		if !elasticIsMigrating {
+			if err := verifyElasticSearch(ctx, cs, useExternalElastic); err != nil {
+				setupLog.Error(err, "Elasticsearch configuration verification failed")
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -528,7 +577,9 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		ShutdownContext:     ctx,
 		K8sClientset:        clientset,
 		MultiTenant:         multiTenant,
-		ElasticExternal:     discovery.UseExternalElastic(bootConfig),
+		ElasticExternal:     useExternalElastic,
+		Cloud:               isCloudBuild(),
+		ESMigration:         elasticIsMigrating,
 		UseV3CRDs:           v3CRDs,
 		APIDiscovery:        apiDiscovery,
 	}
@@ -556,6 +607,30 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func verifyElasticSearch(ctx context.Context, cs kubernetes.Interface, isElasticsearchExternal bool) error {
+	if isElasticsearchExternal {
+		// There should not be an internal-es cert.
+		_, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, render.TigeraElasticsearchInternalCertSecret, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("unexpected error encountered when confirming elastic is not currently internal: %w", err)
+		}
+		return fmt.Errorf("refusing to run: operator configured as external-es but secret/%s found which suggests its internal-es", render.TigeraElasticsearchInternalCertSecret)
+	}
+
+	// There should not be an external-es cert.
+	_, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, logstorage.ExternalCertsSecret, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("unexpected error encountered when confirming elastic is not currently external: %w", err)
+	}
+	return fmt.Errorf("refusing to run: operator configured as internal-es but configmap/%s found which suggests its external-es", cloudconfig.CloudConfigConfigMapName)
 }
 
 // setKubernetesServiceEnv configured the environment with the location of the Kubernetes API
@@ -658,6 +733,12 @@ func executePreDeleteHook(ctx context.Context, c client.Client) error {
 
 // verifyConfiguration verifies that the final configuration of the operator is correct before starting any controllers.
 func verifyConfiguration(ctx context.Context, cs kubernetes.Interface, opts options.ControllerOptions) error {
+	if opts.ESMigration {
+		// During the final phase of an ES migration both internal and external ES exist
+		// simultaneously, so the internal/external cert exclusivity checks below do not apply.
+		return nil
+	}
+
 	if opts.ElasticExternal {
 		// There should not be an internal-es cert
 		if _, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, render.TigeraElasticsearchInternalCertSecret, metav1.GetOptions{}); err != nil {

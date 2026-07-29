@@ -44,6 +44,7 @@ import (
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
+	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -136,6 +137,13 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	// Watch for changes to TigeraStatus
 	if err = utils.AddTigeraStatusWatch(c, ResourceName); err != nil {
 		return fmt.Errorf("policy-recommendation-controller failed to watch policy-recommendation Tigerastatus: %w", err)
+	}
+
+	if opts.Cloud && opts.ElasticExternal {
+		// This ConfigMap is needed for utils.GetCloudConfig
+		if err = utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("policy-recommendation-controller failed to watch the ConfigMap resource: %w", err)
+		}
 	}
 
 	return nil
@@ -331,6 +339,17 @@ func (r *ReconcilePolicyRecommendation) Reconcile(ctx context.Context, request r
 		err = fmt.Errorf("having both a ManagementCluster and a ManagementClusterConnection is not supported")
 		r.status.SetDegraded(operatorv1.ResourceValidationError, "", err, logc)
 		return reconcile.Result{}, err
+	}
+
+	if r.opts.Cloud && r.opts.ElasticExternal && !r.opts.MultiTenant {
+		// For Calico Cloud single-tenant clusters sharing an external ES, extract the tenant
+		// information from the cloud config map.
+		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, logc)
+			return reconcile.Result{}, err
+		}
+		tenant = cloudConfig.ToTenant()
 	}
 
 	// Create a component handler to manage the rendered component.

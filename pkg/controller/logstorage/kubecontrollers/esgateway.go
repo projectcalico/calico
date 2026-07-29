@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,6 +110,13 @@ func (r *ESKubeControllersController) createESGateway(
 		Namespace:                  helper.InstallNamespace(),
 		TruthNamespace:             helper.TruthNamespace(),
 		LogStorage:                 logStorage,
+	}
+
+	// Calico Cloud modifications. Only applied for cloud external-ES installs.
+	if r.cloud && r.elasticExternal {
+		if proceed, err := r.esGatewayAddCloudModificationsToConfig(cfg, esAdminUserSecret, reqLogger, ctx); err != nil || !proceed {
+			return err
+		}
 	}
 
 	esGatewayComponent := esgateway.EsGateway(cfg)

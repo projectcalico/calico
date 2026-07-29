@@ -28,6 +28,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/tigera/operator/hack/release/internal/command"
 	"github.com/tigera/operator/hack/release/internal/middleware"
+	"github.com/tigera/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 
@@ -55,6 +56,16 @@ var publishCommand = &cli.Command{
 // It configures logging and performs validations.
 var publishBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	var err error
+
+	// Calico Cloud does not publish GitHub releases. The flag already defaults off for the cloud
+	// variant (setup.CreateGitHubReleaseDefault); force it off here too so an explicit flag/env
+	// request can't create one.
+	if setup.IsCloud && c.Bool(createGithubReleaseFlag.Name) {
+		logrus.Warn("GitHub releases are not supported for operator-cloud, disabling")
+		if err := c.Set(createGithubReleaseFlag.Name, "false"); err != nil {
+			return ctx, fmt.Errorf("disabling github release: %w", err)
+		}
+	}
 
 	ctx, err = addRepoInfoToCtx(ctx, c.String(gitRepoFlag.Name))
 	if err != nil {

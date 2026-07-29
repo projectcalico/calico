@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ func (m *MockESClient) CreateUser(_ context.Context, _ *utils.User) error {
 	return fmt.Errorf("CreateUser not implemented in mock client")
 }
 
-func (m *MockESClient) SetILMPolicies(_ context.Context, _ *operatorv1.LogStorage) error {
+func (m *MockESClient) SetILMPolicies(_ context.Context, _ *operatorv1.LogStorage, _ bool) error {
 	return nil
 }
 
