@@ -30,14 +30,38 @@ static CALI_BPF_INLINE int make_room_for_l2_header(struct cali_tc_ctx *ctx)
 	return 0;
 }
 
+/* Is this the initial SYN of a TCP connection, as opposed to a SYN-ACK?
+ *
+ * Reads the header from the packet rather than via tcp_hdr(): ctx->nh shares
+ * ctx->scratch with fib_params(), which forward_or_drop() has already written
+ * by the time it asks about the redirect.  A header we cannot read counts as a
+ * SYN, so an unreadable packet loses the fast path rather than the policy.
+ */
+static CALI_BPF_INLINE bool is_tcp_syn(struct cali_tc_ctx *ctx)
+{
+	struct tcphdr tcp;
+
+	if (ctx->state->ip_proto != IPPROTO_TCP) {
+		return false;
+	}
+	if (bpf_skb_load_bytes(ctx->skb, skb_l4hdr_offset(ctx), &tcp, sizeof(tcp))) {
+		return true;
+	}
+
+	return tcp.syn && !tcp.ack;
+}
+
 static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 {
 	struct cali_tc_state *state = ctx->state;
 	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+	/* Redirecting a SYN skips the destination's program, and with it the
+	 * policy that tc.c deliberately forces on every SYN. */
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
-			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
+			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER) &&
+			!is_tcp_syn(ctx)) {
 		if (CALI_F_L3_DEV) {
 			rc = make_room_for_l2_header(ctx);
 			if (rc < 0) {
