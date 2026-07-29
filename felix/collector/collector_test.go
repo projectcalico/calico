@@ -3776,6 +3776,41 @@ func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
 	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
 }
 
+// TestProcessRecalcBatchYieldsWhenEveryFlowIsSkipped covers a snapshot in which nothing is due.
+// Skipped flows do not reach the post-evaluation deadline check, so without the amortised check the
+// batch would pop the whole snapshot in one go, re-introducing the stall the batching exists to
+// prevent. A sweep that overruns the ticker interval produces exactly this snapshot, because the
+// pending tick fires as soon as the sweep drains and every flow has just been stamped.
+func TestProcessRecalcBatchYieldsWhenEveryFlowIsSkipped(t *testing.T) {
+	RegisterTestingT(t)
+
+	const flows = 3 * policyEvalDeadlineCheckInterval
+	c := &collector{
+		epStats: make(map[tuple.Tuple]*Data, flows),
+		// Far longer than the test takes, so every flow reads as recently evaluated.
+		policyEvalMinInterval: time.Hour,
+	}
+	now := monotime.Now()
+	for i := range flows {
+		tup := *tuple.New([16]byte{byte(i), byte(i >> 8)}, [16]byte{1}, proto_tcp, i, 80)
+		data := NewData(tup, nil, nil)
+		data.lastPolicyEvalAt = now
+		c.epStats[tup] = data
+	}
+
+	c.snapshotFlowsForRecalc()
+	Expect(c.processRecalcBatch(0)).To(BeFalse(), "a snapshot of skipped flows should not drain in one batch")
+	Expect(c.recalcSnapshot).To(HaveLen(flows-policyEvalDeadlineCheckInterval),
+		"batch should yield after one deadline-check interval of skipped flows")
+
+	batches := 1
+	for len(c.recalcSnapshot) > 0 {
+		c.processRecalcBatch(0)
+		batches++
+	}
+	Expect(batches).To(Equal(flows / policyEvalDeadlineCheckInterval))
+}
+
 // TestContinuousModeRunsSweepFromMainLoop is the one test that exercises the sweep the way
 // production does: through the collector's own select loop, driven by the policy-eval ticker. Every
 // other policy-eval test calls snapshotFlowsForRecalc/processRecalcBatch directly, so nothing else

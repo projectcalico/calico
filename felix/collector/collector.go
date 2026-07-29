@@ -47,6 +47,12 @@ const (
 	// policyEvalBatchDuration caps the wall-clock time spent re-evaluating policy in a single
 	// batch, so a large sweep does not starve the collector's other work sources.
 	policyEvalBatchDuration = 100 * time.Millisecond
+
+	// policyEvalDeadlineCheckInterval is how many flows the sweep pops between deadline checks
+	// when it is skipping rather than evaluating. Reading the clock costs several times more
+	// than deciding to skip a flow, so checking every flow would slow a skip-heavy sweep down
+	// more than the check protects against. 256 flows is a few microseconds either way.
+	policyEvalDeadlineCheckInterval = 256
 )
 
 // policyEvalReason is what prompted a pending-policy evaluation. It labels the evaluation counter,
@@ -965,7 +971,14 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 	deadline := now + budget
 	minLastEvalAt := now - c.policyEvalMinInterval
 
-	for len(c.recalcSnapshot) > 0 {
+	for popped := 0; len(c.recalcSnapshot) > 0; popped++ {
+		// Bound a run of flows that are all skipped: those never reach the post-evaluation
+		// deadline check below, so a whole snapshot of them would drain in one batch. Popping is
+		// what makes progress, so breaking here is safe once we have popped at least one flow.
+		if popped > 0 && popped%policyEvalDeadlineCheckInterval == 0 && monotime.Now() >= deadline {
+			break
+		}
+
 		data := c.popFlowForRecalc()
 
 		// Not due yet. Zero means never evaluated, which needs the explicit check: monotime
@@ -981,7 +994,7 @@ func (c *collector) processRecalcBatch(budget time.Duration) bool {
 
 		c.evaluatePendingRuleTraceForLocalEp(data, policyEvalRecalc)
 
-		// Checked last, so every batch evaluates at least one flow.
+		// Checked after the evaluation, so every batch evaluates at least one flow.
 		if monotime.Now() >= deadline {
 			break
 		}
