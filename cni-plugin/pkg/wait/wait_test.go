@@ -15,10 +15,12 @@
 package wait
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,6 +98,54 @@ var _ = Describe("k8s-wait", func() {
 
 			Eventually(exit, "3s").Should(Receive(&err), "Expected a return value to be passed from polling thread.")
 			Expect(err).NotTo(HaveOccurred(), "Polling thread returned an error.")
+		})
+	})
+
+	Context("waitForCreateEvent", func() {
+		It("should handle create events with multiple fsnotify operations", func() {
+			watcher, err := fsnotify.NewWatcher()
+			Expect(err).NotTo(HaveOccurred())
+			defer closeWatcherAndIgnoreErr(watcher)
+
+			const filename = "endpoint-status"
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				watcher.Events <- fsnotify.Event{
+					Name: filepath.Join("/tmp", filename),
+					Op:   fsnotify.Create | fsnotify.Write,
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			found, err := waitForCreateEvent(ctx, watcher, filename)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Eventually(done).Should(BeClosed())
+		})
+
+		It("should ignore write-only events", func() {
+			watcher, err := fsnotify.NewWatcher()
+			Expect(err).NotTo(HaveOccurred())
+			defer closeWatcherAndIgnoreErr(watcher)
+
+			const filename = "endpoint-status"
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				watcher.Events <- fsnotify.Event{
+					Name: filepath.Join("/tmp", filename),
+					Op:   fsnotify.Write,
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			found, err := waitForCreateEvent(ctx, watcher, filename)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeFalse())
+			Eventually(done).Should(BeClosed())
 		})
 	})
 })
