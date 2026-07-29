@@ -29,6 +29,7 @@ else
 	@echo "ASO kind cluster will now be deleted"
 	-$(BINDIR)/kind delete cluster --name $(KIND_CLUSTER_NAME)
 	-rm -f kubeconfig
+	-rm -f kind-kubeconfig
 	-rm -f $(ASO_INSTALLED_MARKER)
 endif
 
