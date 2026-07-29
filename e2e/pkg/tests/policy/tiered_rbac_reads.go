@@ -358,10 +358,19 @@ var _ = describe.CalicoDescribe(
 			// reaches the webhook while it is down, so a read that succeeds proves the
 			// matchCondition skipped the webhook and left the decision to RBAC.
 			exempt := fx.impersonate(authzExemptServiceAccount)
-			Expect(exempt.List(fx.ctx, &v3.NetworkPolicyList{}, ctrlclient.InNamespace(f.Namespace.Name))).To(
-				Succeed(), "an exempt Calico service account should still be able to read policies "+
-					"while the webhook is down; check the matchConditions exempt list in "+
-					"webhooks/config/authorization-configuration.yaml",
+			exemptErr := exempt.List(fx.ctx, &v3.NetworkPolicyList{}, ctrlclient.InNamespace(f.Namespace.Name))
+			if exemptErr != nil && strings.Contains(exemptErr.Error(), "cannot impersonate") {
+				// Not an exemption failure: the runner's own kubeconfig cannot impersonate a
+				// service account, so the exemption was never exercised. Distinguished because
+				// the two failures send you to completely different places.
+				Fail(fmt.Sprintf("this spec impersonates %s to check the service-account exemption, "+
+					"and the test runner lacks impersonate on serviceaccounts: %v. Run it with a "+
+					"kubeconfig that has it; nothing is known about the exemption either way.",
+					authzExemptServiceAccount, exemptErr))
+			}
+			Expect(exemptErr).To(Succeed(), "an exempt Calico service account should still be able to read "+
+				"policies while the webhook is down; check the matchConditions exempt list in "+
+				"webhooks/config/authorization-configuration.yaml",
 			)
 
 			By("Verifying Calico's own components stay ready")
