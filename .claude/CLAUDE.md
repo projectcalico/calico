@@ -52,7 +52,7 @@ make static-checks  # golangci-lint
 make yaml-lint      # ~30 seconds
 ```
 
-A repo-wide `go build` or `golangci-lint` fails locally in the go-build image on `felix/bpf/libbpf`: `fatal error: 'libbpf.h' file not found`. It is unrelated to whatever you changed. Either build the header first (`make -C felix libbpf`) or set `CGO_ENABLED=0` for the run (`EXTRA_DOCKER_ARGS="-e CGO_ENABLED=0"` when going through a make target).
+A repo-wide `go build` or `golangci-lint` fails locally on `felix/bpf/libbpf`: `fatal error: 'libbpf.h' file not found`, because the libbpf source tree isn't checked out. It is unrelated to whatever you changed. Fetch and build it once with `make -C felix libbpf`, or run with cgo off (`CGO_ENABLED=0 go build ./...`). Don't try to pass the setting through `EXTRA_DOCKER_ARGS` on a make command line: `lib.Makefile` builds that variable with `+=` and never `override`, so a command-line assignment silently drops the Go module cache mount and the container CPU limits.
 
 ### Code Generation
 

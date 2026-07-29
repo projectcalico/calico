@@ -14,8 +14,6 @@ You may obtain a copy of the License at
 
 Install steps, break-glass, and cert rotation live in [`webhooks/config/README.md`](./config/README.md). This document is architecture, invariants, and review criteria. Don't duplicate the README here.
 
-Ticket for this work: CORE-12363.
-
 ## Endpoints
 
 | Path | Mechanism | Covers |
@@ -35,7 +33,7 @@ The split between `/rbac` and `/authz` is forced, not chosen. Admission is never
 ### Review notes
 
 - Adding an endpoint means adding it to this table. The `/authz` and `/rbac` split is load-bearing: a new verb belongs on the path that can actually see it.
-- Everything, `/metrics` included, is on the one TLS listener. With `--client-ca-file` set that listener requires a client cert from every caller, scrapes included.
+- One TLS listener serves everything, `/metrics` included, so the listener's client-auth settings apply to scrapes as well. The README covers what that does to a Prometheus job.
 
 ## The shared decision core
 
@@ -45,7 +43,7 @@ That's the whole reason `tierauth` exists. Two hooks enforcing the same rule fro
 
 `tierauth` delegates the actual RBAC evaluation to `apiserver/pkg/registry/projectcalico/authorizer.TierAuthorizer`, the same code the aggregated API server uses. So a v3-CRD cluster and an aggregated cluster answer the same question with the same code.
 
-One consequence worth knowing: `TierAuthorizer` answers by issuing SubjectAccessReviews of its own, for `tiers` (verb `get`) and for `tier.<resource>`, both in the `projectcalico.org` group. The API server authorizes those SARs through its full authorizer chain, which includes this webhook. `matchCondition` 1 matches on group alone, and the exempt-identity `matchCondition` tests the SAR's *subject*, not the webhook's service account, so the webhook is re-entered. It answers `NoOpinion` immediately (neither `tiers` nor `tier.networkpolicies` is a tiered policy resource), so the recursion stops at depth two, but it isn't free: the envtest suite issues 12 first-order policy SARs and 27 second-order ones, so a policy read costs roughly three webhook round trips rather than one.
+One consequence worth knowing: `TierAuthorizer` answers by issuing SubjectAccessReviews of its own, for `tiers` (verb `get`) and for `tier.<resource>`, both in the `projectcalico.org` group. The API server authorizes those SARs through its full authorizer chain, which includes this webhook. `matchCondition` 1 matches on group alone, and the exempt-identity `matchCondition` tests the SAR's *subject*, not the webhook's service account, so the webhook is re-entered. It answers `NoOpinion` immediately (neither `tiers` nor `tier.networkpolicies` is a tiered policy resource), so the recursion stops at depth two, but it isn't free: a policy read costs roughly three webhook round trips rather than one.
 
 ### Review notes
 
@@ -57,7 +55,7 @@ One consequence worth knowing: `TierAuthorizer` answers by issuing SubjectAccess
 
 **`/authz` returns Denied or NoOpinion. Never Allowed.** This is the single most important thing not to break in this component.
 
-Authorizers in the chain are OR'd, and this one sits ahead of RBAC (`Node -> calico-tiered-rbac -> RBAC`). An `Allowed: true` would satisfy the whole chain on its own and hand the user base resource permissions they were never granted. Tier enforcement is strictly additive: it can subtract access from what RBAC would allow, never add.
+Authorizers in the chain are OR'd, and this one sits ahead of RBAC (`Node -> calico-tiered-rbac -> RBAC`). An `Allowed: true` would satisfy the whole chain on its own and hand the user base resource permissions they were never granted. Tier enforcement is strictly subtractive: it can subtract access from what RBAC would allow, never add.
 
 `DecisionPermitted` therefore maps to `NoOpinion` on the wire, not to Allowed. "Permitted" means "tier RBAC has no objection", and RBAC still has to agree.
 
@@ -71,12 +69,14 @@ The invariant is easy to hold and easy to break, because `SubjectAccessReviewSta
 
 ## Tier resolution
 
+A tiered read needs two separate RBAC grants, and conflating them is the usual way to misread this component. `TierAuthorizer` issues one check for `get` on `tiers` named for the tier in question, and one for the request's verb on `tier.<resource>` (matching either `<tier>.*` or the policy name as the client sent it). The request passes only if the `tiers` check and one of the `tier.<resource>` checks both allow (`AuthorizeTierOperation` in `apiserver/pkg/registry/projectcalico/authorizer/authorizer.go` builds the two checks and requires both). A grant on the policy resource itself, `networkpolicies` rather than `tier.networkpolicies`, is what RBAC evaluates after we return, and it is not what any of this reads.
+
 The decision needs a tier. How it gets one differs by path:
 
 - **`/rbac`** reads `spec.tier` out of the object body. On a tier move it authorizes both the old and the new tier, since taking a policy out of a tier is itself a tier operation.
 - **`/authz`** on a *named* request (GET, or a get-by-name) resolves the name to a tier through `policycache`.
 - **`/authz`** on a request narrowed to one tier by selector uses the selector. Both `spec.tier` field selectors and `projectcalico.org/tier` label selectors count, `In` with exactly one value. Anything else (a multi-value selector, `NotIn`, a raw selector string) yields no tier and falls through to the unnamed check below, which is the safe direction: an ambiguous selector is treated as "no tier named", not as one of the tiers it mentions.
-- **`/authz`** on an unselectored LIST or WATCH sends an *unnamed* check to `AuthorizeTierOperation`, with both name and tier empty. RBAC matches an unnamed check only against rules carrying no `resourceNames`, which makes it exactly the question "is this user unrestricted by tier". A tier-restricted user is denied, and the deny message tells them to add a tier selector.
+- **`/authz`** on an unselectored LIST or WATCH sends an *unnamed* check to `AuthorizeTierOperation`, with both name and tier empty. An empty tier means the `tiers` check goes out with no resource name, and RBAC matches an unnamed check only against rules that carry no `resourceNames`, so it comes down to whether the user's grant on `tiers` (not on the policy resource) is restricted to named tiers. That is exactly the question "is this user unrestricted by tier". A tier-restricted user is denied, and the deny message tells them to add a tier selector.
 
 That last one is a deliberate behavior change from the aggregated API server, which narrowed the response instead of refusing the request. The webhook sees request attributes, not stored objects: it can approve or deny a request, it cannot filter a response. Enumerating every tier and denying unless the user is authorized for all of them was considered and rejected, since it turns one decision into a per-tier fan-out and still can't produce the filtered list a user actually wanted.
 
@@ -115,7 +115,7 @@ These are hard requirements, not recommendations. Missing any of them means tier
 
 **The tier-label `MutatingAdmissionPolicy`.** `api/admission/tierlabel.mutatingadmissionpolicy.yaml` defaults `spec.tier` and maintains the `projectcalico.org/tier` label (`v3.LabelTier`) with an unconditional JSONPatch add, under `failurePolicy: Fail`. Tier resolution *trusts* that label, both in the cache and in the label-selector path, so the MAP is what makes it trustworthy. Without it, every named read falls back to a live GET, and a user can hand-set the label to a tier the policy isn't in. It does **not** cover `stagedkubernetesnetworkpolicies`, which has no `Tier` field and is always in the default tier.
 
-**The service-account exemption.** Three identities are exempt in the `AuthorizationConfiguration`'s `matchConditions`: `system:serviceaccount:kube-system:calico-webhooks`, `:calico-node`, `:calico-kube-controllers`. This is required, not defensive. In `useV3CRDs` mode Felix and kube-controllers read the `projectcalico.org` group directly, and the webhook's own informers read the resources it authorizes, so gating those identities under `failurePolicy: Deny` deadlocks the webhook's own bootstrap. The list hardcodes `kube-system`, which matches the chart and does not match an operator install.
+**The service-account exemption.** Three identities are exempt in the `AuthorizationConfiguration`'s `matchConditions`: `system:serviceaccount:kube-system:calico-webhooks`, `:calico-node`, `:calico-kube-controllers`. This is required, not defensive. In `useV3CRDs` mode Felix and kube-controllers read the `projectcalico.org` group directly, so gating them under `failurePolicy: Deny` stalls *their* informer bootstrap whenever the webhook is unreachable. `calico-webhooks` is the one that deadlocks the webhook itself: its informers read the very resources it authorizes, so without the exemption it can never reach the sync it needs to answer. The list hardcodes `kube-system`, which matches the chart and does not match an operator install.
 
 ### Review notes
 
