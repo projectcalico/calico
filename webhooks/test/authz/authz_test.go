@@ -296,7 +296,8 @@ var _ = BeforeSuite(func() {
 		calicoclient.NewForConfigOrDie(webhookCfg),
 		10*time.Minute,
 	)
-	Expect(cache.Start(ctx)).To(Succeed())
+	cache.Start(ctx)
+	Expect(cache.WaitForSync(ctx)).To(Succeed())
 
 	// Same construction as the webhook binary: tier decisions are answered by asking the API
 	// server, so the RBAC the specs install is the RBAC that decides them.

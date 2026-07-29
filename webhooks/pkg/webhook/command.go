@@ -220,9 +220,10 @@ func registerHooks(
 		// cache registers none. It reads the store directly, which the watch already keeps
 		// current.
 		cache = policycache.New(metadataClient, calicoCS, 0)
-		if err := cache.Start(ctx); err != nil {
-			logrus.WithError(err).Fatal("Failed to start the policy tier cache")
-		}
+		// Start does not wait for the initial list. The server listens straight away so
+		// /readyz can answer 503 with a reason while the cache warms up; until it syncs,
+		// TierForPolicy refuses to answer, which denies.
+		cache.Start(ctx)
 		resolver = cache
 	}
 
@@ -266,6 +267,7 @@ func (disabledResolver) TierForPolicy(_ context.Context, _, _, _ string) (string
 func readyFn(cache *policycache.Cache) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if cache != nil && !cache.HasSynced() {
+			// Reachable, unlike before: the listener comes up before the sync completes.
 			http.Error(w, "policy tier cache has not synced", http.StatusServiceUnavailable)
 			return
 		}

@@ -101,11 +101,14 @@ A NotFound from the fallback GET becomes `DecisionNotApplicable`, so RBAC runs a
 
 The GVRs are `projectcalico.org/v3`, which is correct because in v3-CRD mode the CRDs are served at that group/version and Felix and kube-controllers read it directly (`libcalico-go/lib/backend/k8s/discovery.go`). If that were ever wrong, every lister lookup would error, and the symptom would be a `policy_cache_fallback_gets_total{reason="miss"}` rate matching the named-read rate, with the fallback GETs carrying the cost.
 
-`Start` blocks until all five informers sync and `registerHooks` calls it before the server listens. So the `/readyz` 503 branch is unreachable as built: a cache that never syncs means the process never listens, and an operator sees connection-refused rather than a diagnosable 503. Worth knowing before anyone debugs a 503 that cannot happen.
+`Start` does not wait for the initial list, so the server listens while the cache warms up and `/readyz` can answer 503 with a reason. Blocking there instead would mean a cache that never syncs never listens, and an operator debugging it gets connection-refused rather than a diagnosable 503.
+
+Serving early is safe because `TierForPolicy` refuses to answer until `HasSynced`, and a refusal denies. Two things it deliberately does not do in that window: it does not fall back to a live GET (an unsynced lister reports every policy as missing, so the fallback would put the whole cluster's read traffic on live GETs exactly when the API server can least afford it), and it does not return `ErrPolicyNotFound` (which means "the policy does not exist" and hands the request to RBAC). A background goroutine warns, naming the outstanding resources, so a cache that never syncs is not a silent 503.
 
 ### Review notes
 
-- Readiness must gate on `HasSynced`. Serving before sync would deny reads that should pass.
+- Readiness must gate on `HasSynced`, and so must `TierForPolicy`. `/readyz` alone is not enough: readiness only controls whether the pod takes Service traffic, and the API server reaches this webhook through a pinned ClusterIP either way.
+- `WaitForSync` exists for the tests. Calling it from `registerHooks` would put the blocking behavior back and re-break the 503.
 - Keep the informers metadata-only. Caching bodies for all five resources on every cluster is a memory regression for a value the label already holds.
 - The cache and the chart's read grant are both gated on the authz feature (`--authz-enabled` / `authzWebhookEnabled`), and have to stay gated together. Granting without running wastes nothing; running without the grant means the cache never syncs, and under `failurePolicy: Deny` that denies the whole `projectcalico.org` group.
 - When the cache is off, `registerHooks` passes a stub resolver that returns an error rather than a nil interface. Nil would panic on the first named read; an error denies. The stub must never return `tierauth.ErrPolicyNotFound`, which would be read as "policy does not exist" and hand the request to RBAC.
@@ -178,6 +181,7 @@ Honest state: **the e2e specs have never been executed.** No install path deploy
 ### Review notes
 
 - A behavior that depends on the API server (CEL, SAR wire format, TTLs, the authorizer chain order) is not covered by a unit test with a fake. Put it in the envtest suite.
+- `webhooks/config/authorization-configuration.yaml` is a file an operator copies onto control-plane nodes; nothing at build or run time reconciles it against the Go constants that assume its values. `webhooks/pkg/authz/config_drift_test.go` is that reconciliation, and covers `timeout` vs `decisionTimeout`, `unauthorizedTTL` vs `negativeCacheTTL`, and `unauthorizedTTL` vs the e2e specs' `authzUnauthorizedTTL`. A new constant that assumes a value from that file belongs in it.
 - The e2e specs fail rather than skip when the run asked for them by name, so a pipeline that means to run them can't pass by skipping them. "Asked for by name" has to include `--label-filter`, not just `-focus`: our pipelines select by label expression, and a spec that only consults `-focus` can never tell that it was selected. `describe.ExplicitlySelected` covers both, and is what these specs call.
 
 ## Open questions

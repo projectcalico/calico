@@ -30,8 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	metadatafake "k8s.io/client-go/metadata/fake"
-	"k8s.io/client-go/util/flowcontrol"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/util/flowcontrol"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/webhooks/pkg/metrics"
@@ -76,7 +76,8 @@ func startCache(t *testing.T, objs ...runtime.Object) *Cache {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 	require.True(t, c.HasSynced())
 
 	return c
@@ -126,7 +127,8 @@ func TestTierForPolicyFallsBackWhenLabelMissing(t *testing.T) {
 	c := New(metadataClient, calicoClient, time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 
 	tier, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "unlabeled")
 
@@ -163,7 +165,8 @@ func TestTierForPolicyCacheMissFallsBackToLiveTier(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 
 	// The informer's list is empty, so this must come from the live GET, not the cache.
 	tier, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "just-created")
@@ -204,7 +207,8 @@ func TestTierForPolicyStagedKubernetesNetworkPolicyIsAlwaysDefaultTier(t *testin
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 
 	tier, err := c.TierForPolicy(ctx, "stagedkubernetesnetworkpolicies", "ns1", "staged")
 
@@ -259,7 +263,8 @@ func TestConcurrentIdenticalLookupsShareOneGet(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 
 	const readers = 8
 	tiers := make(chan string, readers)
@@ -294,7 +299,8 @@ func TestRepeatedMissesForTheSameNameDoNotGetEveryTime(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(ctx))
+	c.Start(ctx)
+	require.NoError(t, c.WaitForSync(ctx))
 
 	for range 5 {
 		_, err := c.TierForPolicy(ctx, "networkpolicies", "ns1", "missing")
@@ -323,7 +329,8 @@ func TestFallbackGetGivesUpWithTheCallersDeadline(t *testing.T) {
 
 	startCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
-	require.NoError(t, c.Start(startCtx))
+	c.Start(startCtx)
+	require.NoError(t, c.WaitForSync(startCtx))
 
 	_, err := c.TierForPolicy(startCtx, "networkpolicies", "ns1", "first")
 	require.True(t, errors.Is(err, tierauth.ErrPolicyNotFound), "got %v", err)
@@ -337,4 +344,25 @@ func TestFallbackGetGivesUpWithTheCallersDeadline(t *testing.T) {
 	assert.False(t, errors.Is(err, tierauth.ErrPolicyNotFound),
 		"a throttled lookup is a failure to resolve, which denies; it is not a missing policy, which does not")
 	assert.Equal(t, int64(1), gets.Load(), "the throttled lookup must not reach the API server")
+}
+
+func TestTierForPolicyRefusesUntilSynced(t *testing.T) {
+	calicoClient, gets := countingCalicoClient(t, nil)
+
+	scheme := metadatafake.NewTestScheme()
+	require.NoError(t, metav1.AddMetaToScheme(scheme))
+	// Never started, so nothing has synced. The server listens in this state on purpose, so
+	// this is the window /readyz reports 503 for.
+	c := New(metadatafake.NewSimpleMetadataClient(scheme), calicoClient, 0)
+	require.False(t, c.HasSynced())
+
+	_, err := c.TierForPolicy(context.Background(), "networkpolicies", "ns1", "deny-external")
+
+	require.Error(t, err, "an unsynced cache must not answer; a refusal denies")
+	assert.False(t, errors.Is(err, tierauth.ErrPolicyNotFound),
+		"unsynced is not 'the policy does not exist': that would hand the request to RBAC")
+	assert.Equal(t, int64(0), gets.Load(),
+		"an unsynced lister reports every policy as missing, so falling back would put the whole "+
+			"cluster's read traffic on live GETs")
+	assert.NotEmpty(t, c.unsyncedResources())
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -113,19 +114,56 @@ func New(metadataClient metadata.Interface, calicoClient calicoclient.Interface,
 	return c
 }
 
-// Start starts every informer and blocks until all caches have synced, or ctx is done.
-// Readiness must gate on HasSynced: serving before sync would deny reads that should pass.
-func (c *Cache) Start(ctx context.Context) error {
+// Start starts every informer and returns immediately. It does not wait for the initial list:
+// the caller is expected to start serving, so that /readyz can answer 503 with a reason while
+// the cache warms up. Blocking here instead would mean a cache that never syncs never listens,
+// and an operator debugging it sees connection-refused rather than a diagnosable 503.
+//
+// Serving before sync is safe because TierForPolicy refuses to answer until HasSynced, and a
+// refusal denies. The window is fail-closed, not permissive.
+func (c *Cache) Start(ctx context.Context) {
 	c.factory.Start(ctx.Done())
+	go c.logSyncProgress(ctx)
+}
 
+// logSyncProgress records the initial sync, and says which resources are outstanding until it
+// happens. Without this, a cache that never syncs is a silent 503.
+func (c *Cache) logSyncProgress(ctx context.Context) {
+	const complainAfter = 30 * time.Second
+
+	start := time.Now()
+	ticker := time.NewTicker(complainAfter)
+	defer ticker.Stop()
+
+	for !c.HasSynced() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			logrus.WithFields(logrus.Fields{
+				"waiting":  c.unsyncedResources(),
+				"since":    time.Since(start).Round(time.Second),
+				"endpoint": "/readyz",
+			}).Warn("Policy tier cache has not synced; the authorization webhook is denying " +
+				"tiered policy reads until it does")
+		}
+	}
+
+	metrics.CacheInitialSyncSeconds.Set(float64(time.Now().Unix()))
+	logrus.WithFields(logrus.Fields{
+		"resources": len(c.informers),
+		"took":      time.Since(start).Round(time.Millisecond),
+	}).Info("Policy tier cache synced")
+}
+
+// WaitForSync blocks until every informer has completed its initial list, or ctx is done. Only
+// tests need it: the server itself starts listening before the sync completes.
+func (c *Cache) WaitForSync(ctx context.Context) error {
 	for resource, inf := range c.informers {
 		if !cacheSyncWithContext(ctx, inf) {
 			return fmt.Errorf("timed out waiting for the %s cache to sync", resource)
 		}
 	}
-
-	metrics.CacheInitialSyncSeconds.Set(float64(time.Now().Unix()))
-	logrus.WithField("resources", len(c.informers)).Info("Policy tier cache synced")
 	return nil
 }
 
@@ -156,8 +194,29 @@ func (c *Cache) HasSynced() bool {
 	return true
 }
 
+// unsyncedResources names the informers still completing their initial list.
+func (c *Cache) unsyncedResources() []string {
+	var out []string
+	for resource, inf := range c.informers {
+		if !inf.Informer().HasSynced() {
+			out = append(out, resource)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // TierForPolicy returns the tier of the named policy, or tierauth.ErrPolicyNotFound.
 func (c *Cache) TierForPolicy(ctx context.Context, resource, namespace, name string) (string, error) {
+	// Refuse rather than fall back while the cache is warming up. An unsynced lister reports
+	// every policy as missing, so falling back would put the whole cluster's read traffic on
+	// live GETs at exactly the moment the API server is least able to serve them. The error
+	// deliberately isn't ErrPolicyNotFound, which would be read as "the policy does not
+	// exist" and hand the request to RBAC.
+	if !c.HasSynced() {
+		return "", fmt.Errorf("the policy tier cache has not synced; waiting on %v", c.unsyncedResources())
+	}
+
 	inf, ok := c.informers[resource]
 	if !ok {
 		return "", fmt.Errorf("%s is not a tiered policy resource", resource)
