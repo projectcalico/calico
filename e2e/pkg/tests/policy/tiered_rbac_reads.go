@@ -840,7 +840,7 @@ func probeAuthzWebhook(cfg *rest.Config) (bool, error) {
 	// Poll, because the RBAC just created has to reach the API server's authorizer before the
 	// probe means anything. Any other outcome is inconclusive and eventually reported as an
 	// error rather than guessed at.
-	var detected bool
+	var detected, stillUnserved bool
 	var lastErr error
 	pollErr := wait.PollUntilContextTimeout(ctx, 2*time.Second, time.Minute, true,
 		func(ctx context.Context) (bool, error) {
@@ -853,25 +853,37 @@ func probeAuthzWebhook(cfg *rest.Config) (bool, error) {
 				detected = true
 				return true, nil
 			case calicoV3Unserved(err):
-				detected = false
-				return true, nil
+				// Not conclusive on its own. A RESTMapper whose discovery cache was populated
+				// before the v3 CRDs were established answers NoKindMatchError once and serves
+				// the group fine thereafter, and treating that as "not installed" would skip
+				// every gated spec for the rest of the run. Only a group that is still unserved
+				// when the window expires means the feature is absent.
+				stillUnserved, lastErr = true, err
+				return false, nil
 			default:
-				lastErr = err
+				stillUnserved, lastErr = false, err
 				return false, nil
 			}
 		})
 	if pollErr != nil {
+		if stillUnserved {
+			return false, nil
+		}
+		if lastErr == nil {
+			return false, fmt.Errorf("the probe LIST never returned a conclusive result: %w", pollErr)
+		}
 		return false, fmt.Errorf("the probe LIST never returned a conclusive result: last error: %w", lastErr)
 	}
 
 	return detected, nil
 }
 
-// calicoV3Unserved reports whether err means the API server does not serve projectcalico.org/v3
-// at all, which is a conclusive "feature not installed" rather than a probe failure. The probe
-// talks to the API directly; a cluster that reaches Calico resources only through the calicoctl
-// fallback client (see e2e/pkg/utils/client.New) fails every poll this way, and without this arm
-// it would exhaust the poll and fail every read-path spec instead of skipping them.
+// calicoV3Unserved reports whether err means the API server does not serve projectcalico.org/v3.
+// Persisting for the whole poll window, it means "feature not installed" rather than a probe
+// failure. The probe talks to the API directly; a cluster that reaches Calico resources only
+// through the calicoctl fallback client (see e2e/pkg/utils/client.New) fails every poll this way,
+// and without this arm it would exhaust the poll and fail every read-path spec instead of
+// skipping them. One occurrence is not enough: see the caller.
 func calicoV3Unserved(err error) bool {
 	return meta.IsNoMatchError(err) || apierrors.IsNotFound(err)
 }
