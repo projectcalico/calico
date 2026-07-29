@@ -94,6 +94,9 @@ var _ tierauth.PolicyTierResolver = &Cache{}
 
 // New returns a Cache watching metadata for every tiered policy resource. calicoClient is
 // used only for the fallback GET when a policy carries no tier label.
+//
+// resync should be 0 in production: no event handlers are registered, so a resync has nothing to
+// re-deliver. It stays a parameter for the tests, which use it to force a re-list.
 func New(metadataClient metadata.Interface, calicoClient calicoclient.Interface, resync time.Duration) *Cache {
 	factory := metadatainformer.NewFilteredSharedInformerFactory(metadataClient, resync, metav1.NamespaceAll, nil)
 

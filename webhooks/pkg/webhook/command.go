@@ -216,7 +216,10 @@ func registerHooks(
 	var cache *policycache.Cache
 	var resolver tierauth.PolicyTierResolver = disabledResolver{}
 	if authzEnabled {
-		cache = policycache.New(metadataClient, calicoCS, 10*time.Minute)
+		// Resync 0: a periodic resync only re-delivers objects to event handlers, and this
+		// cache registers none. It reads the store directly, which the watch already keeps
+		// current.
+		cache = policycache.New(metadataClient, calicoCS, 0)
 		if err := cache.Start(ctx); err != nil {
 			logrus.WithError(err).Fatal("Failed to start the policy tier cache")
 		}
