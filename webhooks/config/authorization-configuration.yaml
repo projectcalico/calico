@@ -27,6 +27,9 @@ authorizers:
       # mutable, so moving a policy into a restricted tier leaves a stale NoOpinion for a
       # previously authorized reader for up to this long. Lower it to shrink that window at
       # the cost of putting the webhook in front of every Calico read.
+      # unauthorizedTTL is mirrored by hand as authzUnauthorizedTTL in
+      # e2e/pkg/tests/policy/tiered_rbac_reads.go, which polls for longer than it. Change both
+      # together or those specs start asserting against the wrong window.
       authorizedTTL: 5m
       unauthorizedTTL: 30s
       # Fail closed. If the webhook is unreachable, every request that reaches it is denied

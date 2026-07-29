@@ -29,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -54,6 +55,14 @@ const (
 	// label rather than by name and namespace because the chart installs it into kube-system
 	// and the operator installs it into calico-system.
 	webhookAppLabel = "k8s-app=calico-webhooks"
+
+	// authzExemptServiceAccount is one of the identities the matchConditions in
+	// webhooks/config/authorization-configuration.yaml exempt from the webhook. calico-node is
+	// picked of the three because its own ClusterRole (charts/calico/templates/
+	// calico-node-rbac.yaml) grants unrestricted get/list/watch on networkpolicies and none on
+	// tier.networkpolicies, so a list by this identity is allowed by RBAC alone and would be
+	// denied by the webhook. That makes it an unambiguous probe of the exemption.
+	authzExemptServiceAccount = "system:serviceaccount:kube-system:calico-node"
 )
 
 // DESCRIPTION: Verify tiered RBAC on the read path (GET/LIST/WATCH). Two different components
@@ -98,10 +107,11 @@ var _ = describe.CalicoDescribe(
 				ctrlclient.MatchingLabels{v3.LabelTier: fx.otherTier})
 			Expect(err).To(HaveOccurred(), "a list selecting an unauthorized tier should be refused")
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
-			Expect(err.Error()).To(ContainSubstring("tier"))
+			Expect(err.Error()).To(ContainSubstring(inTierMessage(fx.otherTier)),
+				"the denial should name the tier the request selected")
 		})
 
-		It("should scope a NetworkPolicy list to the selected tier", func() {
+		framework.ConformanceIt("should scope a NetworkPolicy list to the selected tier", func() {
 			mine := fx.createNetworkPolicy("list-np-mine", fx.testTier)
 			theirs := fx.createNetworkPolicy("list-np-theirs", fx.otherTier)
 
@@ -124,12 +134,14 @@ var _ = describe.CalicoDescribe(
 			)
 			Expect(err).To(HaveOccurred(), "a list selecting an unauthorized tier should be refused")
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			Expect(err.Error()).To(ContainSubstring(inTierMessage(fx.otherTier)),
+				"the denial should name the tier the request selected")
 		})
 
 		// Tiered RBAC needs two grants: GET on the tier, and the verb on the tier-scoped
 		// policy resource. This user has the second but not the first, which proves the tier
 		// GET is load-bearing on reads and not only on writes.
-		It("should deny a tier-scoped list for a user without GET on the tier", func() {
+		framework.ConformanceIt("should deny a tier-scoped list for a user without GET on the tier", func() {
 			fx.createNetworkPolicy("list-no-tier-get", fx.testTier)
 
 			cli := fx.impersonate(rbacListNoTierGetUser)
@@ -140,7 +152,10 @@ var _ = describe.CalicoDescribe(
 			)
 			Expect(err).To(HaveOccurred(), "a list should be refused without GET on the tier")
 			Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
-			Expect(err.Error()).To(ContainSubstring("tier"))
+			Expect(err.Error()).To(ContainSubstring(inTierMessage(fx.testTier)),
+				"the denial should name the tier the request selected")
+			Expect(err.Error()).To(ContainSubstring(missingTierGetMessage),
+				"the denial should say the missing grant is GET on the tier, not the policy verb")
 		})
 	},
 )
@@ -337,10 +352,22 @@ var _ = describe.CalicoDescribe(
 				}
 			}, 2*time.Minute, 2*time.Second).Should(Succeed(), "reads should be denied while the webhook is down")
 
+			By("Verifying an exempt Calico service account can still read policies")
+			// The direct assertion on the service-account exemption, and the counterpart to the
+			// denial above. failurePolicy: Deny refuses every projectcalico.org request that
+			// reaches the webhook while it is down, so a read that succeeds proves the
+			// matchCondition skipped the webhook and left the decision to RBAC.
+			exempt := fx.impersonate(authzExemptServiceAccount)
+			Expect(exempt.List(fx.ctx, &v3.NetworkPolicyList{}, ctrlclient.InNamespace(f.Namespace.Name))).To(
+				Succeed(), "an exempt Calico service account should still be able to read policies "+
+					"while the webhook is down; check the matchConditions exempt list in "+
+					"webhooks/config/authorization-configuration.yaml",
+			)
+
 			By("Verifying Calico's own components stay ready")
-			// Calico's components hold established watches, which the API server does not
-			// re-authorize, and their service accounts are exempt anyway. Either way they must
-			// not be disturbed by the outage.
+			// A supplementary signal, not the assertion that covers the exemption: established
+			// watches are not re-authorized, so a component that neither restarts nor issues a
+			// fresh request during the window would stay ready either way.
 			Consistently(fx.calicoComponentsReady, 30*time.Second, 5*time.Second).Should(
 				Succeed(), "Calico's components should be unaffected by a webhook outage",
 			)
@@ -352,8 +379,8 @@ var _ = describe.CalicoDescribe(
 	},
 )
 
-// tieredRBACFixture is the per-spec setup shared by the read-path suites: two tiers, the RBAC
-// for every test user, and cleanup for all of it.
+// tieredRBACFixture is the per-spec setup shared by every tiered RBAC suite, the write-path one
+// in tiered_rbac.go included: two tiers, the RBAC for every test user, and cleanup for all of it.
 type tieredRBACFixture struct {
 	f         *framework.Framework
 	adminCli  ctrlclient.Client
@@ -367,8 +394,8 @@ type tieredRBACFixture struct {
 // it from a BeforeEach. Cleanup is registered per resource so that LIFO ordering runs it after
 // anything a spec registers later, notably the policies the specs create inside the tiers.
 func setupTieredRBACFixture(f *framework.Framework) *tieredRBACFixture {
-	// Long enough to cover the polling specs, which wait out a 30s decision cache more than
-	// once, and the outage spec, which waits for the webhook to come back.
+	// Long enough for every caller: the polling specs wait out a 30s decision cache more than
+	// once, and the outage spec waits for the webhook to come back.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	DeferCleanup(cancel)
 
@@ -609,6 +636,19 @@ func (fx *tieredRBACFixture) deleteClusterRoleBinding(name string) {
 	}
 }
 
+// inTierMessage returns the fragment a tier denial carries for the named tier. Both backends
+// build it from the same forbiddenMessage in
+// apiserver/pkg/registry/projectcalico/authorizer/authorizer.go, so pinning it distinguishes a
+// tier denial from any other forbidden error on a resource whose name happens to contain "tier".
+func inTierMessage(tier string) string {
+	return fmt.Sprintf("in tier %q", tier)
+}
+
+// missingTierGetMessage is what forbiddenMessage appends when the user has the policy verb but
+// not GET on the tier. Pinning it is what makes the no-tier-GET spec assert its own case rather
+// than any tier denial.
+const missingTierGetMessage = "(user cannot get tier)"
+
 func npNames(list *v3.NetworkPolicyList) []string {
 	names := make([]string, 0, len(list.Items))
 	for _, p := range list.Items {
@@ -684,19 +724,28 @@ func requireReadPathTierRBAC(cfg *rest.Config) {
 }
 
 var (
-	authzWebhookProbeOnce sync.Once
+	authzWebhookProbeMu   sync.Mutex
+	authzWebhookProbeDone bool
 	authzWebhookPresent   bool
-	authzWebhookProbeErr  error
 )
 
 // authzWebhookInstalled reports whether the Calico authorization webhook is in the API server's
-// authorization chain. The result is cached: the answer is a property of the cluster, and the
-// probe writes cluster-scoped RBAC to get it.
+// authorization chain. Only a conclusive answer is cached: that answer is a property of the
+// cluster, and the probe writes cluster-scoped RBAC to get it. An error is deliberately not
+// cached, so one inconclusive probe does not turn into a failure for every spec that follows.
 func authzWebhookInstalled(cfg *rest.Config) (bool, error) {
-	authzWebhookProbeOnce.Do(func() {
-		authzWebhookPresent, authzWebhookProbeErr = probeAuthzWebhook(cfg)
-	})
-	return authzWebhookPresent, authzWebhookProbeErr
+	authzWebhookProbeMu.Lock()
+	defer authzWebhookProbeMu.Unlock()
+
+	if authzWebhookProbeDone {
+		return authzWebhookPresent, nil
+	}
+	present, err := probeAuthzWebhook(cfg)
+	if err != nil {
+		return false, err
+	}
+	authzWebhookPresent, authzWebhookProbeDone = present, true
+	return present, nil
 }
 
 // probeAuthzWebhook detects the authorization webhook behaviorally. Nothing in the API surface
@@ -708,7 +757,9 @@ func authzWebhookInstalled(cfg *rest.Config) (bool, error) {
 //     unnamed request and RBAC matches those only against rules without resourceNames;
 //   - allowed by the aggregated API server, which narrows the result to the tiers the user can
 //     see instead of refusing;
-//   - allowed outright by a cluster with neither.
+//   - allowed outright by a cluster with neither;
+//   - rejected as an unknown resource by a cluster that does not serve projectcalico.org/v3 at
+//     all, which is also "not installed".
 //
 // The probe user is granted the default tier so that the aggregated API server's narrowing path
 // has at least one tier to return; with no visible tiers it would refuse the list, and the
@@ -801,6 +852,9 @@ func probeAuthzWebhook(cfg *rest.Config) (bool, error) {
 			case apierrors.IsForbidden(err) && strings.Contains(err.Error(), v3.LabelTier):
 				detected = true
 				return true, nil
+			case calicoV3Unserved(err):
+				detected = false
+				return true, nil
 			default:
 				lastErr = err
 				return false, nil
@@ -811,4 +865,13 @@ func probeAuthzWebhook(cfg *rest.Config) (bool, error) {
 	}
 
 	return detected, nil
+}
+
+// calicoV3Unserved reports whether err means the API server does not serve projectcalico.org/v3
+// at all, which is a conclusive "feature not installed" rather than a probe failure. The probe
+// talks to the API directly; a cluster that reaches Calico resources only through the calicoctl
+// fallback client (see e2e/pkg/utils/client.New) fails every poll this way, and without this arm
+// it would exhaust the poll and fail every read-path spec instead of skipping them.
+func calicoV3Unserved(err error) bool {
+	return meta.IsNoMatchError(err) || apierrors.IsNotFound(err)
 }

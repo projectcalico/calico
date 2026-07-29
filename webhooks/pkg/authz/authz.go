@@ -115,6 +115,9 @@ func (h *Hook) Authorize(sar authorizationv1.SubjectAccessReview) *authorization
 // extractTierFromSelectors returns the single tier the request is scoped to, or empty if the
 // request is not scoped to exactly one tier. Both the spec.tier field selector and the
 // projectcalico.org/tier label selector count, since the deny message points users at the latter.
+//
+// The API server only populates these fields when the AuthorizeWithSelectors feature gate is on,
+// which it is by default from Kubernetes 1.32; the README declares that as the floor.
 func extractTierFromSelectors(ra *authorizationv1.ResourceAttributes) string {
 	if ra.FieldSelector != nil {
 		for _, req := range ra.FieldSelector.Requirements {
