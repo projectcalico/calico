@@ -151,6 +151,13 @@ var nonGoDeps = map[string][]string{
 	"whisker": {
 		"/whisker",
 	},
+
+	// The generated CRD YAML has no .go files, so it's invisible to the
+	// dir-scan that builds secondary-package inclusions, but validation_fv_test.go
+	// reads it directly.
+	"kube-controllers": {
+		"/kube-controllers/pkg/apis/migration/v1/crd",
+	},
 }
 
 var defaultExclusions = []string{
