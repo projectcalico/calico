@@ -90,10 +90,8 @@ var _ = describe.CalicoDescribe(
 		var (
 			adminCli  ctrlclient.Client
 			ctx       context.Context
-			cancel    context.CancelFunc
 			testTier  string
 			otherTier string
-			suffix    string
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
@@ -107,72 +105,15 @@ var _ = describe.CalicoDescribe(
 			return c
 		}
 
+		// The two tiers and every test user's RBAC come from the shared fixture, which the
+		// read-path suites in tiered_rbac_reads.go also use. The specs below work against the
+		// locals rather than the fixture struct, so the fixture's fields are unpacked here.
 		BeforeEach(func() {
-			var err error
-			ctx, cancel = context.WithTimeout(context.Background(), 2*time.Minute)
-			DeferCleanup(cancel)
-
-			adminCli, err = client.New(f.ClientConfig())
-			Expect(err).NotTo(HaveOccurred())
-
-			suffix = utils.GenerateRandomName("rbac")
-			testTier = "e2e-rbac-test-" + suffix
-			otherTier = "e2e-rbac-other-" + suffix
-
-			By("Creating test tiers")
-			for _, t := range []struct {
-				name  string
-				order float64
-			}{
-				{testTier, 500},
-				{otherTier, 501},
-			} {
-				tier := v3.NewTier()
-				tier.Name = t.name
-				tier.Spec.Order = ptr.To(t.order)
-				tier.Labels = map[string]string{utils.TestResourceLabel: "true"}
-				Expect(adminCli.Create(ctx, tier)).To(Succeed(), "failed to create tier %s", t.name)
-
-				// Tier cleanup is registered per-tier so LIFO ordering ensures
-				// it runs after any policy DeferCleanup registered in It blocks.
-				tierName := t.name
-				DeferCleanup(func() {
-					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cleanupCancel()
-					toDelete := v3.NewTier()
-					toDelete.Name = tierName
-					if err := adminCli.Delete(cleanupCtx, toDelete); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", tierName).Error("Failed to delete Tier")
-					}
-				})
-			}
-
-			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
-			for i := range setup.roles {
-				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				roleName := setup.roles[i].Name
-				DeferCleanup(func() {
-					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cleanupCancel()
-					if err := f.ClientSet.RbacV1().ClusterRoles().Delete(cleanupCtx, roleName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", roleName).Error("Failed to delete ClusterRole")
-					}
-				})
-			}
-			for i := range setup.bindings {
-				_, err := f.ClientSet.RbacV1().ClusterRoleBindings().Create(ctx, &setup.bindings[i], metav1.CreateOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				bindingName := setup.bindings[i].Name
-				DeferCleanup(func() {
-					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cleanupCancel()
-					if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(cleanupCtx, bindingName, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-						logrus.WithError(err).WithField("name", bindingName).Error("Failed to delete ClusterRoleBinding")
-					}
-				})
-			}
+			fx := setupTieredRBACFixture(f)
+			adminCli = fx.adminCli
+			ctx = fx.ctx
+			testTier = fx.testTier
+			otherTier = fx.otherTier
 		})
 
 		Context("NetworkPolicy", func() {
@@ -564,16 +505,8 @@ var _ = describe.CalicoDescribe(
 				cli := newImpersonatedClient(rbacWatchUser)
 
 				By("Listing policies in the test tier namespace")
-				// Scoped to the tier by label selector. The aggregated API server would also
-				// allow this list unselectored, narrowing the result to the tiers the user can
-				// see, but the authorization webhook refuses an unselectored list from a
-				// tier-restricted user outright. Selecting the tier is the request shape that
-				// means the same thing under both.
 				list := &v3.NetworkPolicyList{}
-				err := cli.List(ctx, list,
-					ctrlclient.InNamespace(f.Namespace.Name),
-					ctrlclient.MatchingLabels{v3.LabelTier: testTier},
-				)
+				err := cli.List(ctx, list, ctrlclient.InNamespace(f.Namespace.Name))
 				Expect(err).NotTo(HaveOccurred(), "user with list permission should be able to list policies")
 
 				// Verify the created policy is in the list.
