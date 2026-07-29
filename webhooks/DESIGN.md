@@ -109,7 +109,7 @@ Serving early is safe because `TierForPolicy` refuses to answer until `HasSynced
 
 ### Review notes
 
-- Readiness must gate on `HasSynced`, and so must `TierForPolicy`. `/readyz` alone is not enough: readiness only controls whether the pod takes Service traffic, and the API server reaches this webhook through a pinned ClusterIP either way.
+- Readiness must gate on `HasSynced`, and so must `TierForPolicy`. Readiness is the real protection: a pinned ClusterIP still routes only to ready endpoints, so an unsynced pod is kept out of the Service and a rolling restart keeps serving from the old one. `TierForPolicy`'s refusal is defense in depth for the paths readiness does not cover - a direct dial, a single-replica install mid-start, or a future caller that skips the Service.
 - `WaitForSync` exists for the tests. Calling it from `registerHooks` would put the blocking behavior back and re-break the 503.
 - Keep the informers metadata-only. Caching bodies for all five resources on every cluster is a memory regression for a value the label already holds.
 - The cache and the chart's read grant are both gated on the authz feature (`--authz-enabled` / `authzWebhookEnabled`), and have to stay gated together. Granting without running wastes nothing; running without the grant means the cache never syncs, and under `failurePolicy: Deny` that denies the whole `projectcalico.org` group.

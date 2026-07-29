@@ -15,6 +15,8 @@
 package authz
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"testing"
@@ -85,7 +87,13 @@ type authorizationConfiguration struct {
 type metaDuration time.Duration
 
 func (d *metaDuration) UnmarshalJSON(b []byte) error {
-	parsed, err := time.ParseDuration(string(b[1 : len(b)-1]))
+	// Unquote rather than slicing blindly: a bare number in the YAML (timeout: 3) would slice out
+	// of range and panic, hiding the config error this test exists to report.
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("duration %q is not a string: %w", b, err)
+	}
+	parsed, err := time.ParseDuration(s)
 	if err != nil {
 		return err
 	}
