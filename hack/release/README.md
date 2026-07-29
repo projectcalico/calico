@@ -95,10 +95,11 @@ binary and the same targets — only a few defaults change (publish to `gcr.io/t
 a `-cloud`-suffixed version, no GitHub release). Those variant-dependent defaults are resolved at
 startup in `internal/setup`; see that package's doc comment for how and why.
 
-In CI this runs automatically off the same tag as enterprise: pushing a `vA.B.C` release tag builds
-both the enterprise image and, from the same commit with `VARIANT=cloud`, the `vA.B.C-cloud` image —
-they are parallel jobs in the same `Release` block (see `.semaphore/release.yml`). There are no
-separate cloud release tags or pipelines.
+Here `RELEASE_TAG` is the operator version, which for cloud carries the `-cloud` suffix — not a
+separate git tag. CI never pushes a `-cloud` git tag: pushing a plain `vA.B.C` git tag builds both
+the enterprise image and, from the same commit with `VARIANT=cloud`, the `vA.B.C-cloud` image as
+parallel jobs in the same `Release` block (see `.semaphore/release.yml`). There are no separate
+cloud release tags or pipelines.
 
 ### Build and publish a hashrelease
 
