@@ -22,7 +22,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -79,7 +79,7 @@ type RouteRules struct {
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle func() (HandleIface, error)
 
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func New(
@@ -89,7 +89,7 @@ func New(
 	removeFunc RulesMatchFunc,
 	netlinkTimeout time.Duration,
 	newNetlinkHandle func() (HandleIface, error),
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) (*RouteRules, error) {
 	if tableIndexSet.Len() == 0 {
 		return nil, ErrTableIndexFailed
