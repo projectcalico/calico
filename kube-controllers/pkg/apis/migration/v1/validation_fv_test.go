@@ -383,6 +383,32 @@ func TestStatusBoundsAreEnforced(t *testing.T) {
 			field:     "status.progress.typeDetails",
 			causeType: metav1.CauseTypeTooMany,
 		},
+		{
+			name: "currentType past MaxLength",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				status.Progress.CurrentType = strings.Repeat("k", 254)
+			},
+			field:     "status.progress.currentType",
+			causeType: metav1.CauseTypeTooLong,
+		},
+		{
+			name: "typeProgress past MaxLength",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				status.Progress.TypeProgress = strings.Repeat("p", 65)
+			},
+			field:     "status.progress.typeProgress",
+			causeType: metav1.CauseTypeTooLong,
+		},
+		{
+			name: "typeDetails[].kind past MaxLength",
+			overrun: func(status *migrationv1.DatastoreMigrationStatus) {
+				status.Progress.TypeDetails = append(status.Progress.TypeDetails, migrationv1.TypeMigrationProgress{
+					Kind: strings.Repeat("k", 254),
+				})
+			},
+			field:     "status.progress.typeDetails[0].kind",
+			causeType: metav1.CauseTypeTooLong,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// Fetch fresh each time so a rejected update from a previous case can't
