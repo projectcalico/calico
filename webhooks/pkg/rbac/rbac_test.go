@@ -17,7 +17,6 @@ package rbac
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -25,25 +24,30 @@ import (
 	fakecalicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/admission/v1"
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/webhooks/pkg/tierauth"
 	"github.com/projectcalico/calico/webhooks/pkg/utils"
 )
 
-// MockTierAuthorizer is a mock implementation of authorizer.TierAuthorizer
-type MockTierAuthorizer struct {
+// MockDecider is a mock implementation of the Decider interface.
+type MockDecider struct {
 	mock.Mock
 }
 
-func (m *MockTierAuthorizer) AuthorizeTierOperation(ctx context.Context, policyName string, tierName string) error {
-	args := m.Called(ctx, policyName, tierName)
-	return args.Error(0)
+func (m *MockDecider) Authorize(ctx context.Context, req tierauth.Request) tierauth.Result {
+	args := m.Called(ctx, req)
+	res, ok := args.Get(0).(tierauth.Result)
+	if !ok {
+		return tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "mock misconfigured"}
+	}
+	return res
 }
 
 func init() {
@@ -277,49 +281,27 @@ func TestParsePolicy(t *testing.T) {
 }
 
 func TestNewTieredRBACHook(t *testing.T) {
-	mockAuthz := &MockTierAuthorizer{}
+	mockDecider := &MockDecider{}
 	fakeCS := fakecalicoclient.NewClientset()
-	h := NewTieredRBACHook(mockAuthz, fakeCS.ProjectcalicoV3().Tiers())
+	h := NewTieredRBACHook(mockDecider, fakeCS.ProjectcalicoV3().Tiers())
 	assert.NotNil(t, h)
 
 	handler := h.Handler()
 	assert.NotNil(t, handler.ProcessV1Review)
 }
 
-func TestAugmentContextWithUserInfo(t *testing.T) {
-	ctx := context.Background()
-	req := &v1.AdmissionRequest{
-		UserInfo: authv1.UserInfo{
-			Username: "test-user",
-			UID:      "user-123",
-			Groups:   []string{"group1", "group2"},
-			Extra:    map[string]authv1.ExtraValue{"foo": {"bar"}},
-		},
-		Operation: v1.Create,
-	}
-	obj := &v3.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-np",
-			Namespace: "test-ns",
-		},
-	}
-
-	newCtx, err := augmentContextWithUserInfo(ctx, req, obj)
-	assert.NoError(t, err)
-	assert.NotNil(t, newCtx)
-
-	u, ok := genericapirequest.UserFrom(newCtx)
-	assert.True(t, ok)
-	assert.Equal(t, "test-user", u.GetName())
-	assert.Equal(t, "user-123", u.GetUID())
-	assert.ElementsMatch(t, []string{"group1", "group2"}, u.GetGroups())
-
-	ri, ok := genericapirequest.RequestInfoFrom(newCtx)
-	assert.True(t, ok)
-	assert.Equal(t, "networkpolicies", ri.Resource)
-	assert.Equal(t, "test-np", ri.Name)
-	assert.Equal(t, "test-ns", ri.Namespace)
-	assert.Equal(t, "create", ri.Verb)
+// forTier matches an Authorize call for the given policy name, tier, verb, resource,
+// namespace and requesting user. A wrong or missing field here (e.g. an empty Resource)
+// changes the decision tierauth returns, so the fixtures that use this must set all of them.
+func forTier(name, tier, verb, resource, namespace, user string) any {
+	return mock.MatchedBy(func(req tierauth.Request) bool {
+		return req.Name == name &&
+			req.Tier == tier &&
+			req.Verb == verb &&
+			req.Resource == resource &&
+			req.Namespace == namespace &&
+			req.User.GetName() == user
+	})
 }
 
 func TestAuthorize(t *testing.T) {
@@ -352,11 +334,13 @@ func TestAuthorize(t *testing.T) {
 		},
 	}
 
+	npResource := metav1.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networkpolicies"}
+
 	testCases := []struct {
 		name           string
 		ar             v1.AdmissionReview
 		tiers          []runtime.Object
-		setupMock      func(mockAuthz *MockTierAuthorizer)
+		setupMock      func(d *MockDecider)
 		expectedAllow  bool
 		expectedReason metav1.StatusReason
 	}{
@@ -364,8 +348,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Authorized CREATE",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "123",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "123",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: npRaw,
 					},
@@ -374,8 +360,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "create", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow: true,
 		},
@@ -383,8 +369,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Authorized DELETE uses OldObject",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "1234",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "1234",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					OldObject: runtime.RawExtension{
 						Raw: npRaw,
 					},
@@ -393,8 +381,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "delete", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow: true,
 		},
@@ -402,8 +390,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Authorized UPDATE with tier change",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "456",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "456",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -420,9 +410,9 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier, securityTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(nil).Once()
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "security", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow: true,
 		},
@@ -430,8 +420,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Unauthorized UPDATE - no permission on new tier",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "457",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "457",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -448,8 +440,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier, securityTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(fmt.Errorf("unauthorized")).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "security", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "unauthorized"}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
@@ -458,8 +450,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Unauthorized UPDATE - no permission on old tier",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "458",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "458",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -476,9 +470,9 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier, securityTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "security").Return(nil).Once()
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(fmt.Errorf("unauthorized")).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "security", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "unauthorized"}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
@@ -487,8 +481,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Authorized UPDATE without tier change skips old tier check",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "459",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "459",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: npRaw,
 					},
@@ -500,8 +496,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow: true,
 		},
@@ -509,8 +505,10 @@ func TestAuthorize(t *testing.T) {
 			name: "Unauthorized CREATE",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "123",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "123",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: npRaw,
 					},
@@ -519,8 +517,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "default").Return(fmt.Errorf("unauthorized")).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "create", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "unauthorized"}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
@@ -529,8 +527,10 @@ func TestAuthorize(t *testing.T) {
 			name: "CREATE with non-existent tier",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "500",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "500",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -544,8 +544,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "nonexistent").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "nonexistent", "create", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
@@ -554,8 +554,10 @@ func TestAuthorize(t *testing.T) {
 			name: "CREATE with terminating tier",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "501",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "501",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -569,8 +571,8 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{terminatingTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "terminating").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "terminating", "create", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
@@ -579,8 +581,10 @@ func TestAuthorize(t *testing.T) {
 			name: "UPDATE to non-existent tier",
 			ar: v1.AdmissionReview{
 				Request: &v1.AdmissionRequest{
-					UID:  "502",
-					Kind: metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					UID:       "502",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
 					Object: runtime.RawExtension{
 						Raw: func() []byte {
 							newNP := np.DeepCopy()
@@ -597,11 +601,33 @@ func TestAuthorize(t *testing.T) {
 				},
 			},
 			tiers: []runtime.Object{defaultTier},
-			setupMock: func(mockAuthz *MockTierAuthorizer) {
-				mockAuthz.On("AuthorizeTierOperation", mock.Anything, "test-np", "nonexistent").Return(nil).Once()
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "nonexistent", "update", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionPermitted}).Once()
 			},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonForbidden,
+		},
+		{
+			name: "Tier authorization returns no opinion is denied, not allowed",
+			ar: v1.AdmissionReview{
+				Request: &v1.AdmissionRequest{
+					UID:       "503",
+					Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: v3.KindNetworkPolicy},
+					Resource:  npResource,
+					Namespace: "test-ns",
+					Object: runtime.RawExtension{
+						Raw: npRaw,
+					},
+					Operation: v1.Create,
+					UserInfo:  authv1.UserInfo{Username: "test-user"},
+				},
+			},
+			tiers: []runtime.Object{defaultTier},
+			setupMock: func(d *MockDecider) {
+				d.On("Authorize", mock.Anything, forTier("test-np", "default", "create", "networkpolicies", "test-ns", "test-user")).Return(tierauth.Result{Decision: tierauth.DecisionNotApplicable, Reason: "not a tiered policy resource"}).Once()
+			},
+			expectedAllow:  false,
+			expectedReason: metav1.StatusReasonInternalError,
 		},
 		{
 			name: "No object in request",
@@ -612,7 +638,7 @@ func TestAuthorize(t *testing.T) {
 					UserInfo:  authv1.UserInfo{Username: "test-user"},
 				},
 			},
-			setupMock:      func(mockAuthz *MockTierAuthorizer) {},
+			setupMock:      func(d *MockDecider) {},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonBadRequest,
 		},
@@ -629,7 +655,7 @@ func TestAuthorize(t *testing.T) {
 					UserInfo:  authv1.UserInfo{Username: "test-user"},
 				},
 			},
-			setupMock:      func(mockAuthz *MockTierAuthorizer) {},
+			setupMock:      func(d *MockDecider) {},
 			expectedAllow:  false,
 			expectedReason: metav1.StatusReasonInvalid,
 		},
@@ -637,16 +663,61 @@ func TestAuthorize(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockAuthz := &MockTierAuthorizer{}
+			mockDecider := &MockDecider{}
 			fakeCS := fakecalicoclient.NewClientset(tc.tiers...)
-			h := &tieredRBACHook{authz: mockAuthz, tierGetter: fakeCS.ProjectcalicoV3().Tiers()}
-			tc.setupMock(mockAuthz)
+			h := &tieredRBACHook{decider: mockDecider, tierGetter: fakeCS.ProjectcalicoV3().Tiers()}
+			tc.setupMock(mockDecider)
 			resp := h.authorize(tc.ar)
 			assert.Equal(t, tc.expectedAllow, resp.Allowed)
 			if !tc.expectedAllow && tc.expectedReason != "" {
 				assert.Equal(t, tc.expectedReason, resp.Result.Reason)
 			}
-			mockAuthz.AssertExpectations(t)
+			mockDecider.AssertExpectations(t)
 		})
 	}
+}
+
+func TestUpdateMovingTiersAuthorizesBothTiers(t *testing.T) {
+	oldPolicy := &v3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "deny-external"},
+		Spec:       v3.NetworkPolicySpec{Tier: "staging"},
+	}
+	newPolicy := &v3.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "deny-external"},
+		Spec:       v3.NetworkPolicySpec{Tier: "production"},
+	}
+
+	oldRaw, err := json.Marshal(oldPolicy)
+	require.NoError(t, err)
+	newRaw, err := json.Marshal(newPolicy)
+	require.NoError(t, err)
+
+	d := &MockDecider{}
+	// Authorized for the destination tier but not the source: the move must be refused.
+	d.On("Authorize", mock.Anything, mock.MatchedBy(func(req tierauth.Request) bool {
+		return req.Tier == "production"
+	})).Return(tierauth.Result{Decision: tierauth.DecisionPermitted})
+	d.On("Authorize", mock.Anything, mock.MatchedBy(func(req tierauth.Request) bool {
+		return req.Tier == "staging"
+	})).Return(tierauth.Result{Decision: tierauth.DecisionDenied, Reason: "not authorized for tier \"staging\""})
+
+	calicoClient := fakecalicoclient.NewClientset(&v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "production"}})
+	hook := NewTieredRBACHook(d, calicoClient.ProjectcalicoV3().Tiers())
+
+	response := hook.Handler().ProcessV1Review(v1.AdmissionReview{
+		Request: &v1.AdmissionRequest{
+			UID:       "test-uid",
+			Operation: v1.Update,
+			Kind:      metav1.GroupVersionKind{Group: "projectcalico.org", Version: "v3", Kind: "NetworkPolicy"},
+			Resource:  metav1.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networkpolicies"},
+			Name:      "deny-external",
+			Namespace: "ns1",
+			UserInfo:  authv1.UserInfo{Username: "alice"},
+			Object:    runtime.RawExtension{Raw: newRaw},
+			OldObject: runtime.RawExtension{Raw: oldRaw},
+		},
+	})
+
+	assert.False(t, response.Allowed, "moving a policy out of a tier the user cannot write must be refused")
+	d.AssertExpectations(t)
 }

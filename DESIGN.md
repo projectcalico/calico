@@ -50,6 +50,7 @@ pod2daemon/           - Flex volume driver for injecting credentials into pods
 key-cert-provisioner/ - TLS certificate provisioner for Calico components
 whisker/              - Flow log UI (TypeScript/React frontend)
 whisker-backend/      - Backend for whisker flow log UI
+webhooks/             - Admission and authorization webhooks for tiered RBAC
 e2e/                  - End-to-end test suites
 release/              - Release tooling and automation
 lib/std/              - Internal shared Go library (separate go.mod)
@@ -66,6 +67,7 @@ Components with their own design doc:
 | Goldmane | [`goldmane/DESIGN.md`](goldmane/DESIGN.md) |
 | Typha | [`typha/DESIGN.md`](typha/DESIGN.md) |
 | Node container | [`node/DESIGN.md`](node/DESIGN.md) |
+| Webhooks | [`webhooks/DESIGN.md`](webhooks/DESIGN.md) |
 
 Components without a `DESIGN.md` inherit constraints from the
 code and from this top-level overview. Adding a `DESIGN.md` when
