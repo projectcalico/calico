@@ -155,13 +155,33 @@ CONTAINERIZED= mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 
 DOCKER_RUN := $(CONTAINERIZED) $(CALICO_BUILD)
 
+# Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
+# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only.
+# These sit before the enterprise defaults and use `?=` so the environment still wins: hashreleases
+# push the cloud image to the hashrelease registry instead (see hack/release/README.md).
+CLOUD_LDFLAGS=
+ifeq ($(VARIANT),cloud)
+BUILD_IMAGE?=tigera-tesla/operator-cloud
+BINARY_NAME?=operator-cloud
+IMAGE_REGISTRY?=gcr.io
+PUSH_IMAGE_PREFIXES?=gcr.io/
+EXCLUDE_MANIFEST_REGISTRIES?=gcr.io/
+# amd64 only. Constrain ARCHES (not just VALIDARCHES) so push-all, which iterates ARCHES, does not
+# try to push arches that were never built.
+ARCHES:=amd64
+# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see isCloudBuild in
+# cmd/cloud.go). buildVariant lives in package main, which the linker addresses as "main" (not by its
+# import path), so this -X target is "main.buildVariant" rather than a $(PACKAGE_NAME)-prefixed path.
+CLOUD_LDFLAGS=-X main.buildVariant=cloud
+endif
+
 BUILD_IMAGE?=tigera/operator
 
 BUILD_DIR?=build/_output
 BINDIR?=$(BUILD_DIR)/bin
 
 # Name of the built operator binary. The Calico Cloud variant suffixes it with -cloud
-# (see VARIANT=cloud below) so the cloud artifact is easy to tell apart from the enterprise one.
+# (see VARIANT=cloud above) so the cloud artifact is easy to tell apart from the enterprise one.
 BINARY_NAME?=operator
 
 $(BUILD_DIR):
@@ -179,25 +199,6 @@ endif
 EXCLUDE_MANIFEST_REGISTRIES?=""
 PUSH_MANIFEST_IMAGE_PREFIXES=$(PUSH_IMAGE_PREFIXES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
 PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(PUSH_IMAGE_PREFIXES))
-
-# Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
-# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only.
-CLOUD_LDFLAGS=
-ifeq ($(VARIANT),cloud)
-BUILD_IMAGE:=tigera-tesla/operator-cloud
-BINARY_NAME:=operator-cloud
-IMAGE_REGISTRY:=gcr.io
-PUSH_IMAGE_PREFIXES:=gcr.io/
-EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
-# amd64 only. Constrain ARCHES (not just VALIDARCHES) so push-all, which iterates ARCHES, does not
-# try to push arches that were never built.
-ARCHES:=amd64
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see isCloudBuild in
-# cmd/cloud.go). buildVariant lives in package main, which the linker addresses as "main" (not by its
-# import path), so this -X target is "main.buildVariant" rather than a $(PACKAGE_NAME)-prefixed path.
-CLOUD_LDFLAGS=-X main.buildVariant=cloud
-endif
-
 
 imagetag:
 ifndef IMAGETAG

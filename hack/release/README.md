@@ -95,6 +95,12 @@ binary and the same targets — only a few defaults change (publish to `gcr.io/t
 a `-cloud`-suffixed version, no GitHub release). Those variant-dependent defaults are resolved at
 startup in `internal/setup`; see that package's doc comment for how and why.
 
+The cloud defaults for the published image (`BUILD_IMAGE`, `IMAGE_REGISTRY`, `PUSH_IMAGE_PREFIXES`)
+are set with `?=` in the Makefile, so the environment still wins. Calico Enterprise hashreleases use
+that: calico-private's release tool builds the cloud variant with `IMAGE_NAME=tigera/operator-cloud`
+and the hashrelease registry, so hashrelease images land next to the enterprise operator instead of
+in `gcr.io/tigera-tesla`.
+
 Here `RELEASE_TAG` is the operator version, which for cloud carries the `-cloud` suffix — not a
 separate git tag. CI never pushes a `-cloud` git tag: pushing a plain `vA.B.C` git tag builds both
 the enterprise image and, from the same commit with `VARIANT=cloud`, the `vA.B.C-cloud` image as
