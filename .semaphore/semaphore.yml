@@ -347,7 +347,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/controllers/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -556,6 +556,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -1315,6 +1317,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -2126,6 +2130,7 @@ blocks:
         '/key-cert-provisioner/pkg/k8s/*.go',
         '/key-cert-provisioner/pkg/keycert/*.go',
         '/key-cert-provisioner/pkg/tls/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -2933,6 +2938,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
@@ -5594,6 +5601,8 @@ blocks:
         '/key-cert-provisioner/pkg/tls/*.go',
         '/kube-controllers/cmd/check-status/*.go',
         '/kube-controllers/cmd/kube-controllers/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/*.go',
+        '/kube-controllers/pkg/apis/migration/v1/crd',
         '/kube-controllers/pkg/cache/*.go',
         '/kube-controllers/pkg/config/*.go',
         '/kube-controllers/pkg/controllers/controller/*.go',
