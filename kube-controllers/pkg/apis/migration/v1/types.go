@@ -157,14 +157,18 @@ type DatastoreMigrationStatus struct {
 	// controller reports one condition per conflicting resource, so entries are
 	// not unique by type and are not merged.
 	// +optional
+	// +kubebuilder:validation:MaxItems=64
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	// Conditions is deliberately atomic, with no listType=map and no MaxItems: a
-	// list-map would reject the write on duplicate Conflict keys, and any bound
-	// could reject a legitimate write. Collapsing conflict reporting to a single
-	// condition, and then adding the list-map markers back, is follow-on work.
-	// This note sits after the field so controller-gen keeps it out of the
-	// published API description.
+	// Conditions is deliberately atomic, with no listType=map: a list-map would
+	// reject the write on duplicate Conflict keys. Collapsing conflict reporting
+	// to a single condition, and then adding the list-map markers back, is
+	// follow-on work. The controller itself caps the number of per-conflict
+	// conditions well below MaxItems, so MaxItems here is a backstop rather than
+	// the primary limit (32 conflict conditions plus a truncation summary, plus
+	// the separate Failed condition, with headroom for condition types added
+	// later). This note sits after the field so controller-gen keeps it out of
+	// the published API description.
 }
 
 // DatastoreMigrationProgress tracks aggregate and per-type migration counters.
