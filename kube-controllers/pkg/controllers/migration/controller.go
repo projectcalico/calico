@@ -367,10 +367,7 @@ func conflictConditions(conflicts []ConflictInfo) []metav1.Condition {
 	}
 
 	now := metav1.Now()
-	n := len(conflicts)
-	if n > maxConflictConditions {
-		n = maxConflictConditions
-	}
+	n := min(len(conflicts), maxConflictConditions)
 
 	conditions := make([]metav1.Condition, 0, n+1)
 	for _, ci := range conflicts[:n] {
@@ -383,13 +380,16 @@ func conflictConditions(conflicts []ConflictInfo) []metav1.Condition {
 		})
 	}
 
-	if len(conflicts) > maxConflictConditions {
-		omitted := len(conflicts) - maxConflictConditions
+	if omitted := len(conflicts) - n; omitted > 0 {
+		noun := "conflicts"
+		if omitted == 1 {
+			noun = "conflict"
+		}
 		conditions = append(conditions, metav1.Condition{
 			Type:               conditionTypeConflict,
 			Status:             metav1.ConditionTrue,
 			Reason:             conditionReasonConflictsOmitted,
-			Message:            fmt.Sprintf("%d more conflicts not shown", omitted),
+			Message:            fmt.Sprintf("%d more %s not shown", omitted, noun),
 			LastTransitionTime: now,
 		})
 	}
@@ -629,6 +629,7 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *migrationv
 		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
 		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(remaining))
 		dm.Status.Conditions = conflictConditions(remaining)
+
 		// The poll cadence here is deliberate: this path is polling for the user
 		// to resolve conflicts, and exponential backoff would delay detection of
 		// that resolution by many minutes. A failed status write is surfaced in
