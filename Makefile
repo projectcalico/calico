@@ -181,11 +181,7 @@ PUSH_MANIFEST_IMAGE_PREFIXES=$(PUSH_IMAGE_PREFIXES:$(EXCLUDE_MANIFEST_REGISTRIES
 PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(PUSH_IMAGE_PREFIXES))
 
 # Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
-# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only, instead of the enterprise quay
-# image, and bakes cloud mode into the binary via CLOUD_LDFLAGS (see the operator build below).
-# Enterprise/OSS builds (VARIANT unset) are completely unaffected. PUSH_MANIFEST_IMAGE_PREFIXES and
-# PUSH_NONMANIFEST_IMAGE_PREFIXES above use recursive `=`, so they pick up these overrides.
-# Note: this is the same tigera/operator repo — only the published image differs (operator-cloud).
+# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only.
 CLOUD_LDFLAGS=
 ifeq ($(VARIANT),cloud)
 BUILD_IMAGE:=tigera-tesla/operator-cloud
@@ -193,7 +189,9 @@ BINARY_NAME:=operator-cloud
 IMAGE_REGISTRY:=gcr.io
 PUSH_IMAGE_PREFIXES:=gcr.io/
 EXCLUDE_MANIFEST_REGISTRIES:=gcr.io/
-VALIDARCHES:=amd64
+# amd64 only. Constrain ARCHES (not just VALIDARCHES) so push-all, which iterates ARCHES, does not
+# try to push arches that were never built.
+ARCHES:=amd64
 # Bake cloud mode into the operator binary so it cannot be disabled at runtime (see isCloudBuild in
 # cmd/cloud.go). buildVariant lives in package main, which the linker addresses as "main" (not by its
 # import path), so this -X target is "main.buildVariant" rather than a $(PACKAGE_NAME)-prefixed path.
