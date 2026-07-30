@@ -723,10 +723,17 @@ syn_force_policy:
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
-	} else if (CALI_F_FROM_HEP) {
+	} else if (CALI_F_TO_HOST) {
 		if (cali_rt_flags_skip_ingress_redirect(dest_rt->flags)) {
+			/* The destination workload cannot accept peer-redirected packets;
+			 * bpf_redirect_peer() leaves the L2 header alone, so they reach a
+			 * VM behind a bridge addressed to the veth's MAC rather than the
+			 * guest's, and the guest drops them as PACKET_OTHERHOST.  Record
+			 * it on the conntrack entry so every packet of the flow takes the
+			 * FIB path, which rewrites the destination MAC.  The client may be
+			 * off-host or a workload on this node, so this covers both. */
 			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
-		} else if (!ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
+		} else if (CALI_F_FROM_HEP && !ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
 			/* Disable FIB, let the packet go through the host after it is
 			 * policed. It is ingress into the system and we got a packet, which is
 			 * not for this host, and it wasn't resolved as a service and it is not
