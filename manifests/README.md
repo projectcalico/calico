@@ -19,7 +19,7 @@ To make changes to the auto-generated manifests:
 One manifest is generated, but not from `charts/`:
 
 - `migration.projectcalico.org_datastoremigrations.yaml` is copied from
-  `kube-controllers/pkg/controllers/migration/crd/`, which is controller-gen output. Edit the Go
+  `kube-controllers/pkg/apis/migration/v1/crd/`, which is controller-gen output. Edit the Go
   types there and run `make -C kube-controllers gen-files`, then `make gen-manifests`.
 
 Some of these manifests are not automatically generated. To edit these, modify the manifests directly and
