@@ -330,7 +330,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/controllers/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -341,6 +341,7 @@ blocks:
             - make -C libcalico-go gen-files
             - make -C felix gen-files
             - make -C goldmane gen-files
+            - make -C kube-controllers gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
