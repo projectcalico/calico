@@ -56,6 +56,12 @@ const (
 // traverse the IPIP tunnel), then asserts that the client node's route to the
 // server's block is owned by the configured cluster-route owner via tunl0.
 func TestClusterRouteOwnership(t *testing.T) {
+	// Safe to parallelise: this test confines its mutations to its own
+	// dedicated IPPool and randomly-suffixed namespace, and only reads
+	// cluster-global config (the default FelixConfiguration). Go defers
+	// parallel tests until all serial tests have finished, so the
+	// cluster-disruptive k8st tests never overlap with this one.
+	t.Parallel()
 	defer utils.CollectDiagsOnFailure(t)()
 
 	g := NewWithT(t)
