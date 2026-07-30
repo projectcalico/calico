@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package migration implements the v1-to-v3 CRD migration controller.
+// Package v1 contains the DatastoreMigration API types.
 //
 // +kubebuilder:object:generate=true
 // +groupName=migration.projectcalico.org
-// +versionName=v1beta1
-package migration
+// +versionName=v1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
