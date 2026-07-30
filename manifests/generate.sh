@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 export LC_ALL=C
 
 # Filter out Helm symlink warnings (walk.go).  The charts/calico directory
