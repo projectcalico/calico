@@ -22,6 +22,10 @@ One manifest is generated, but not from `charts/`:
   `kube-controllers/pkg/controllers/migration/crd/`, which is controller-gen output. Edit the Go
   types there and run `make -C kube-controllers gen-files`, then `make gen-manifests`.
 
+  It's not in the charts because it isn't part of a Calico install. The DatastoreMigration API
+  drives a one-time migration of stored resources from the v1 CRDs to the v3 CRDs, so a user only
+  installs the CRD if and when they run that migration.
+
 Some of these manifests are not automatically generated. To edit these, modify the manifests directly and
 commit your changes. **The following manifests are not auto generated:**
 
