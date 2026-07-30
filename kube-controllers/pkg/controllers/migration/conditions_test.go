@@ -21,7 +21,7 @@ import (
 
 func conflictInfos(n int) []ConflictInfo {
 	infos := make([]ConflictInfo, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		infos = append(infos, ConflictInfo{Kind: "Tier", Name: fmt.Sprintf("tier-%d", i)})
 	}
 	return infos
@@ -59,11 +59,12 @@ func TestConflictConditions_ExactlyAtCap(t *testing.T) {
 	}
 }
 
+// 200 conflicts rather than 33, so the length assertion is load-bearing on its
+// own: an uncapped implementation returns 200 here, where at 33 inputs it would
+// return 33 either way and only the summary assertions would catch it.
 func TestConflictConditions_OverCap(t *testing.T) {
-	conditions := conflictConditions(conflictInfos(33))
+	conditions := conflictConditions(conflictInfos(200))
 
-	// 32 per-resource conditions plus one truncation summary, not 33
-	// per-resource conditions: the count actually emitted must stay at 33.
 	if len(conditions) != 33 {
 		t.Fatalf("expected 33 conditions (32 + summary), got %d", len(conditions))
 	}
@@ -81,7 +82,24 @@ func TestConflictConditions_OverCap(t *testing.T) {
 	if summary.Type != conditionTypeConflict {
 		t.Errorf("expected summary type %s, got %s", conditionTypeConflict, summary.Type)
 	}
-	wantMessage := "1 more conflicts not shown"
+	wantMessage := "168 more conflicts not shown"
+	if summary.Message != wantMessage {
+		t.Errorf("expected summary message %q, got %q", wantMessage, summary.Message)
+	}
+}
+
+// One past the cap is the boundary a user is most likely to hit, and the one
+// where the summary message has to read as singular.
+func TestConflictConditions_OnePastCap(t *testing.T) {
+	conditions := conflictConditions(conflictInfos(33))
+	if len(conditions) != 33 {
+		t.Fatalf("expected 33 conditions (32 + summary), got %d", len(conditions))
+	}
+	summary := conditions[32]
+	if summary.Reason != conditionReasonConflictsOmitted {
+		t.Fatalf("expected summary reason %s, got %s", conditionReasonConflictsOmitted, summary.Reason)
+	}
+	wantMessage := "1 more conflict not shown"
 	if summary.Message != wantMessage {
 		t.Errorf("expected summary message %q, got %q", wantMessage, summary.Message)
 	}
