@@ -79,6 +79,13 @@ const (
 	// Condition reasons used in DatastoreMigration status.
 	conditionReasonResourceMismatch = "ResourceMismatch"
 	conditionReasonMigrationError   = "MigrationError"
+	conditionReasonConflictsOmitted = "ConflictsOmitted"
+
+	// maxConflictConditions caps the number of per-resource Conflict conditions
+	// emitted to status.conditions. This must stay strictly below the schema's
+	// MaxItems (64 in types.go) so the cap here is what's actually hit, not the
+	// apiserver rejecting the write.
+	maxConflictConditions = 32
 )
 
 // ControllerConfig holds all dependencies for creating the migration controller.
@@ -349,6 +356,47 @@ func (m *migrationController) reconcile() error {
 	}
 }
 
+// conflictConditions builds the Conflict conditions for status.conditions from
+// a list of detected conflicts, capped at maxConflictConditions. When conflicts
+// is longer than that, a final condition summarizes the remainder so the true
+// count isn't lost from the conditions list (dm.Status.Message separately
+// carries the full total).
+func conflictConditions(conflicts []ConflictInfo) []metav1.Condition {
+	if len(conflicts) == 0 {
+		return nil
+	}
+
+	now := metav1.Now()
+	n := len(conflicts)
+	if n > maxConflictConditions {
+		n = maxConflictConditions
+	}
+
+	conditions := make([]metav1.Condition, 0, n+1)
+	for _, ci := range conflicts[:n] {
+		conditions = append(conditions, metav1.Condition{
+			Type:               conditionTypeConflict,
+			Status:             metav1.ConditionTrue,
+			Reason:             conditionReasonResourceMismatch,
+			Message:            ci.String(),
+			LastTransitionTime: now,
+		})
+	}
+
+	if len(conflicts) > maxConflictConditions {
+		omitted := len(conflicts) - maxConflictConditions
+		conditions = append(conditions, metav1.Condition{
+			Type:               conditionTypeConflict,
+			Status:             metav1.ConditionTrue,
+			Reason:             conditionReasonConflictsOmitted,
+			Message:            fmt.Sprintf("%d more conflicts not shown", omitted),
+			LastTransitionTime: now,
+		})
+	}
+
+	return conditions
+}
+
 // handlePending validates prerequisites, adds the finalizer, and transitions to Migrating.
 func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
@@ -442,16 +490,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 		logCtx.WithField("conflicts", len(conflicts)).Warn("Pre-check found conflicts, waiting for resolution before migrating")
 		dm.Status.Phase = migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution
 		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(conflicts))
-		dm.Status.Conditions = nil
-		for _, ci := range conflicts {
-			dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
-				Type:               conditionTypeConflict,
-				Status:             metav1.ConditionTrue,
-				Reason:             conditionReasonResourceMismatch,
-				Message:            ci.String(),
-				LastTransitionTime: metav1.Now(),
-			})
-		}
+		dm.Status.Conditions = conflictConditions(conflicts)
 		setPhaseMetric(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution)
 		return m.updateStatus(dm)
 	}
@@ -546,16 +585,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 	}
 
 	// Update conditions for conflicts.
-	dm.Status.Conditions = nil
-	for _, ci := range allConflicts {
-		dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
-			Type:               conditionTypeConflict,
-			Status:             metav1.ConditionTrue,
-			Reason:             conditionReasonResourceMismatch,
-			Message:            ci.String(),
-			LastTransitionTime: metav1.Now(),
-		})
-	}
+	dm.Status.Conditions = conflictConditions(allConflicts)
 
 	if len(allConflicts) > 0 {
 		logCtx.WithField("conflicts", len(allConflicts)).Warn("Migration has conflicts that need manual resolution")
@@ -598,22 +628,13 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *migrationv
 	if len(remaining) > 0 {
 		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
 		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(remaining))
-		dm.Status.Conditions = nil
-		for _, ci := range remaining {
-			dm.Status.Conditions = append(dm.Status.Conditions, metav1.Condition{
-				Type:               conditionTypeConflict,
-				Status:             metav1.ConditionTrue,
-				Reason:             conditionReasonResourceMismatch,
-				Message:            ci.String(),
-				LastTransitionTime: metav1.Now(),
-			})
-		}
+		dm.Status.Conditions = conflictConditions(remaining)
+		// The poll cadence here is deliberate: this path is polling for the user
+		// to resolve conflicts, and exponential backoff would delay detection of
+		// that resolution by many minutes. A failed status write is surfaced in
+		// the log instead of via the return value.
 		if err := m.updateStatus(dm); err != nil {
-			// Returning the error instead of the poll interval so the failure
-			// retries with backoff. Swallowing it hides the conflict list from
-			// the CR entirely.
 			logCtx.WithError(err).Error("Failed to update conflict status, will retry")
-			return fmt.Errorf("updating conflict status: %w", err)
 		}
 		return requeueAfter(m.waitingPollInterval)
 	}

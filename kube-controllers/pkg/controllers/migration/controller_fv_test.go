@@ -486,10 +486,13 @@ func TestLifecycle_DeletionBlockedThenCompleted(t *testing.T) {
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
-// TestStatusWriteFailuresSurface checks that a rejected status write reaches the
-// caller rather than being logged and dropped. Both of these paths used to
-// swallow it, which is how a status the apiserver refuses to accept stays
-// invisible to anyone reading the CR.
+// TestStatusWriteFailuresSurface checks how a rejected status write is handled
+// on the terminal-error and conflict-polling paths. handleTerminalError returns
+// the failure, since it used to swallow it and a status the apiserver refuses
+// to accept would then stay invisible to anyone reading the CR. handleWaiting
+// deliberately does not: it keeps its fixed poll cadence and only logs the
+// failure, since routing it through backoff would delay noticing conflict
+// resolution by many minutes.
 func TestStatusWriteFailuresSurface(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
@@ -582,11 +585,13 @@ func TestStatusWriteFailuresSurface(t *testing.T) {
 		dm := newFVHelper(t, g, ctx).getMigration()
 
 		err := m.handleWaiting(logrus.WithField("test", t.Name()), dm)
-		g.Expect(err).To(MatchError(rejected))
 
-		// Specifically not a requeueAfter. That is what the swallowing version
-		// returned, and it carries no signal that anything failed.
+		// The status write failure must not propagate as an error: it is only
+		// logged, so the fixed poll cadence below is what actually retries it.
+		g.Expect(err).NotTo(MatchError(rejected))
+
 		var requeue requeueAfter
-		g.Expect(errors.As(err, &requeue)).To(BeFalse(), "a rejected status write must not look like a plain requeue")
+		g.Expect(errors.As(err, &requeue)).To(BeTrue(), "a failed conflict-status write must still requeue at the fixed poll interval")
+		g.Expect(time.Duration(requeue)).To(Equal(m.waitingPollInterval))
 	})
 }
