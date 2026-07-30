@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,11 @@ type diagCmd struct {
 	filename string
 }
 
+// containerRuntimes is the preference order for tooling that can run or inspect
+// containers on a node. Modern Kubernetes nodes typically only have crictl
+// (containerd/CRI-O); docker-based installs still have docker.
+var containerRuntimes = []string{"docker", "nerdctl", "crictl"}
+
 // Diags gathers diagnostic information and logs from a Calico node, reading
 // logs from logDir.
 func Diags(logDir string) error {
@@ -56,7 +61,6 @@ func runDiags(logDir string) error {
 		{"Dumping iptables (IPv4)", "iptables-save -c", "ipv4_tables"},
 		{"Dumping iptables (IPv6)", "ip6tables-save -c", "ipv6_tables"},
 		{"Dumping ipsets", "ipset list", "ipsets"},
-		{"Dumping ipsets (container)", "docker run --rm --privileged --net=host calico/node ipset list", "ipset_container"},
 		{"Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager", "journalctl_calico_node"},
 		{"Dumping felix stats", "pkill -SIGUSR1 felix", ""},
 	}
@@ -104,6 +108,15 @@ func runDiags(logDir string) error {
 		cmds = append(cmds, ssCmd)
 	}
 
+	// Prefer host `ipset list`, then also try via a container runtime so the
+	// dump still works when the host lacks the ipset binary (common on k8s
+	// nodes that only have containerd/CRI-O tooling).
+	if ipsetCmd, err := containerIpsetCmd(); err == nil {
+		cmds = append(cmds, diagCmd{"Dumping ipsets (container)", ipsetCmd, "ipset_container"})
+	} else {
+		fmt.Printf("Skipping container ipset dump: %v\n", err)
+	}
+
 	for _, v := range cmds {
 		_ = writeDiags(v, diagsTmpDir)
 	}
@@ -145,6 +158,62 @@ func runDiags(logDir string) error {
 	return nil
 }
 
+// findContainerRuntime returns the first supported container CLI found in PATH.
+// lookPath is injected so unit tests can simulate different environments.
+func findContainerRuntime(lookPath func(string) (string, error)) string {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	for _, name := range containerRuntimes {
+		if _, err := lookPath(name); err == nil {
+			return name
+		}
+	}
+	return ""
+}
+
+// containerIpsetCmd builds a command that runs `ipset list` in a privileged
+// calico/node context. Docker and nerdctl start an ephemeral container; crictl
+// execs into the already-running calico-node (which is privileged + host net).
+func containerIpsetCmd() (string, error) {
+	return containerIpsetCmdFor(findContainerRuntime(nil), crictlFindContainer)
+}
+
+// containerIpsetCmdFor is the testable core of containerIpsetCmd.
+func containerIpsetCmdFor(runtime string, findCrictlContainer func(name string) (string, error)) (string, error) {
+	switch runtime {
+	case "docker", "nerdctl":
+		return runtime + " run --rm --privileged --net=host calico/node ipset list", nil
+	case "crictl":
+		id, err := findCrictlContainer("calico-node")
+		if err != nil {
+			return "", fmt.Errorf("crictl: %w", err)
+		}
+		return "crictl exec " + id + " ipset list", nil
+	default:
+		return "", fmt.Errorf("no supported container runtime found in PATH (tried %s)", strings.Join(containerRuntimes, ", "))
+	}
+}
+
+// crictlFindContainer returns the first container ID whose name matches name.
+func crictlFindContainer(name string) (string, error) {
+	// Prefer running containers, then fall back to -a.
+	for _, args := range [][]string{
+		{"ps", "--name", name, "-q"},
+		{"ps", "-a", "--name", name, "-q"},
+	} {
+		out, err := exec.Command("crictl", args...).CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("crictl %s failed: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		}
+		ids := strings.Fields(string(out))
+		if len(ids) > 0 {
+			return ids[0], nil
+		}
+	}
+	return "", fmt.Errorf("no container matching %q found", name)
+}
+
 // getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.
 func getNodeContainerLogs(logDir string) {
 	err := os.MkdirAll(logDir, os.ModeDir)
@@ -153,10 +222,23 @@ func getNodeContainerLogs(logDir string) {
 		return
 	}
 
+	runtime := findContainerRuntime(nil)
+	switch runtime {
+	case "docker", "nerdctl":
+		getDockerStyleContainerLogs(runtime, logDir)
+	case "crictl":
+		getCrictlContainerLogs(logDir)
+	default:
+		fmt.Printf("Could not collect container logs: no container runtime found (tried %s)\n", strings.Join(containerRuntimes, ", "))
+	}
+}
+
+// getDockerStyleContainerLogs copies logs using docker or nerdctl (compatible CLIs).
+func getDockerStyleContainerLogs(cli, logDir string) {
 	// Get a list of Calico containers running on this Node.
-	result, err := exec.Command("docker", "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
+	result, err := exec.Command(cli, "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()
 	if err != nil {
-		fmt.Printf("Could not run docker command: %s\n", string(result))
+		fmt.Printf("Could not run %s command: %s\n", cli, string(result))
 		return
 	}
 
@@ -170,10 +252,10 @@ func getNodeContainerLogs(logDir string) {
 	re := regexp.MustCompile("(?m)[\r\n]+^.*k8s_POD.*$")
 	containers := re.ReplaceAllString(string(result), "")
 
-	fmt.Println("Copying logs from Calico containers")
+	fmt.Printf("Copying logs from Calico containers (%s)\n", cli)
 	err = os.WriteFile(logDir+"/"+"container_creation_time", []byte(containers), 0o666)
 	if err != nil {
-		fmt.Printf("Could not save output of `docker ps` command to container_creation_time: %s\n", err)
+		fmt.Printf("Could not save output of `%s ps` command to container_creation_time: %s\n", cli, err)
 	}
 
 	// Grab the log for each container and write it as <containerName>.log.
@@ -181,7 +263,7 @@ func getNodeContainerLogs(logDir string) {
 	for scanner.Scan() {
 		name := strings.Split(scanner.Text(), ":")[0]
 		log.Debugf("Getting logs for container %s", name)
-		cLog, err := exec.Command("docker", "logs", name).CombinedOutput()
+		cLog, err := exec.Command(cli, "logs", name).CombinedOutput()
 		if err != nil {
 			fmt.Printf("Could not pull log for container %s: %s\n", name, err)
 			continue
@@ -189,6 +271,38 @@ func getNodeContainerLogs(logDir string) {
 		err = os.WriteFile(logDir+"/"+name+".log", cLog, 0o666)
 		if err != nil {
 			fmt.Printf("Failed to write log for container %s to file: %s\n", name, err)
+		}
+	}
+}
+
+// getCrictlContainerLogs copies logs for calico containers via crictl (containerd/CRI-O).
+func getCrictlContainerLogs(logDir string) {
+	// --name does a substring match on the container name (e.g. calico-node).
+	idsOut, err := exec.Command("crictl", "ps", "-a", "--name", "calico", "-q").CombinedOutput()
+	if err != nil {
+		fmt.Printf("Could not run crictl command: %s\n", strings.TrimSpace(string(idsOut)))
+		return
+	}
+	ids := strings.Fields(string(idsOut))
+	if len(ids) == 0 {
+		log.Debug("Did not find any Calico containers via crictl")
+		return
+	}
+
+	fmt.Println("Copying logs from Calico containers (crictl)")
+	if err := os.WriteFile(logDir+"/container_creation_time", []byte(strings.Join(ids, "\n")+"\n"), 0o666); err != nil {
+		fmt.Printf("Could not save container list to container_creation_time: %s\n", err)
+	}
+
+	for _, id := range ids {
+		log.Debugf("Getting logs for container %s", id)
+		cLog, err := exec.Command("crictl", "logs", id).CombinedOutput()
+		if err != nil {
+			fmt.Printf("Could not pull log for container %s: %s\n", id, err)
+			continue
+		}
+		if err := os.WriteFile(logDir+"/"+id+".log", cLog, 0o666); err != nil {
+			fmt.Printf("Failed to write log for container %s to file: %s\n", id, err)
 		}
 	}
 }
