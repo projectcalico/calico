@@ -109,6 +109,12 @@ done
 # Maintain legacy operator-crds.yaml for a while.
 cp v1_crd_projectcalico_org.yaml operator-crds.yaml
 
+# The DatastoreMigration CRD is installed as its own step in the CRD migration
+# procedure, separately from the v3 CRD bundle, so publish it as a standalone
+# manifest rather than folding it into a chart.
+cp ../kube-controllers/pkg/controllers/migration/crd/migration.projectcalico.org_datastoremigrations.yaml \
+	migration.projectcalico.org_datastoremigrations.yaml
+
 echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > v3_projectcalico_org.yaml
 for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
 	${HELM} template \
