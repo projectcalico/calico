@@ -35,9 +35,12 @@ static CALI_BPF_INLINE int try_redirect_to_peer(struct cali_tc_ctx *ctx)
 	struct cali_tc_state *state = ctx->state;
 	int rc = 0;
 	bool redirect_peer = GLOBAL_FLAGS & CALI_GLOBALS_REDIRECT_PEER;
+	/* Redirecting a SYN skips the destination's program, and with it the
+	 * policy that tc.c deliberately forces on every SYN. */
 	if (redirect_peer && ct_result_rc(state->ct_result.rc) == CALI_CT_ESTABLISHED_BYPASS &&
 			state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX  &&
-			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER)) {
+			!(ctx->state->ct_result.flags & CALI_CT_FLAG_SKIP_REDIR_PEER) &&
+			!is_tcp_syn(ctx)) {
 		if (CALI_F_L3_DEV) {
 			rc = make_room_for_l2_header(ctx);
 			if (rc < 0) {
