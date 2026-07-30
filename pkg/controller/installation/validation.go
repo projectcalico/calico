@@ -44,6 +44,13 @@ func validateCustomResource(instance *operatorv1.Installation) error {
 		return fmt.Errorf("spec.cni must be defined")
 	}
 
+	// The CNI spec version only applies to the CNI config that the operator
+	// generates, which only exists when using the Calico CNI plugin.
+	if instance.Spec.CNI.SpecVersion != nil && instance.Spec.CNI.Type != operatorv1.PluginCalico {
+		return fmt.Errorf("spec.cni.specVersion is only valid when spec.cni.type is Calico, not %s",
+			instance.Spec.CNI.Type)
+	}
+
 	// Perform validation based on the chosen CNI plugin.
 	// For example, make sure the plugin is supported on the specified k8s provider.
 	switch instance.Spec.CNI.Type {

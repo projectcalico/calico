@@ -187,9 +187,9 @@ func (c *windowsComponent) windowsCNIConfigMap() *corev1.ConfigMap {
 
 	config := fmt.Sprintf(`{
 			  "name": "Calico",
-			  "cniVersion": "0.3.1",
+			  "cniVersion": "%s",
 			  "plugins": %s
-			}`, string(pluginsArray))
+			}`, c.cfg.Installation.CNI.ResolvedSpecVersion(), string(pluginsArray))
 
 	return &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"},

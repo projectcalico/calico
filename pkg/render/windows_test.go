@@ -176,7 +176,7 @@ var _ = Describe("Windows rendering tests", func() {
 				}
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
 "name": "Calico",
-"cniVersion": "0.3.1",
+"cniVersion": "1.0.0",
 "plugins": [
   {
 	"DNS": {
@@ -580,7 +580,7 @@ var _ = Describe("Windows rendering tests", func() {
 		cniCm := cniCmResource.(*corev1.ConfigMap)
 		Expect(cniCm.Data["config"]).To(MatchJSON(`{
 "name": "Calico",
-"cniVersion": "0.3.1",
+"cniVersion": "1.0.0",
 "plugins": [
   {
 	"DNS": {
@@ -1085,7 +1085,7 @@ var _ = Describe("Windows rendering tests", func() {
 		cniCm := cniCmResource.(*corev1.ConfigMap)
 		Expect(cniCm.Data["config"]).To(MatchJSON(`{
 "name": "Calico",
-"cniVersion": "0.3.1",
+"cniVersion": "1.0.0",
 "plugins": [
   {
     "DNS": {
@@ -2212,7 +2212,7 @@ var _ = Describe("Windows rendering tests", func() {
 
 		Expect(cniCm.Data["config"]).To(MatchJSON(`{
 "name": "Calico",
-"cniVersion": "0.3.1",
+"cniVersion": "1.0.0",
 "plugins": [
   {
 	"DNS": {
@@ -2359,7 +2359,7 @@ var _ = Describe("Windows rendering tests", func() {
 		cniCm := cniCmResource.(*corev1.ConfigMap)
 		Expect(cniCm.Data["config"]).To(MatchJSON(`{
 "name": "Calico",
-"cniVersion": "0.3.1",
+"cniVersion": "1.0.0",
 "plugins": [
   {
 	"DNS": {
