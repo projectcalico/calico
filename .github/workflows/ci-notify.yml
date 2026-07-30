@@ -1,4 +1,6 @@
-# DMs a PR author on Slack when their PR's Semaphore CI finishes.
+# DMs a PR author on Slack when their PR's Semaphore CI finishes, and when
+# someone approves their PR. Approvals arrive here indirectly, via a
+# workflow_run from ci-notify-trigger.yml — that file explains why.
 #
 # Opt-in is a repo *variable* (not a secret — Slack member IDs aren't
 # sensitive): CI_NOTIFY_MAP, a comma-separated list of
@@ -16,15 +18,25 @@
 # The workflow is a no-op (never fails noisily) if the variable/secret
 # are unset, the author hasn't opted in, or Slack is unreachable.
 
-name: CI finished Slack notify
+name: PR Slack notify
 
 on:
   status: {}
-  # Manual test path: simulate a finished-CI status for a given PR, so the
-  # full chain (resolve -> opt-in lookup -> DM) can be exercised on demand
-  # without waiting for real CI. Dispatchable only once this file is on the
-  # default branch (a GitHub limitation), so it's for post-merge sanity
-  # checks, not pre-merge testing.
+  # Approval path — stage 2 of a cascade. ci-notify-trigger.yml owns the
+  # pull_request_review trigger; its success fires the workflow_run this
+  # reacts to. The review event cannot deliver on its own: it is
+  # pull-request-scoped, so a fork PR's run receives neither secrets nor
+  # variables. See that file for the full reasoning, including why its gate
+  # is not the authorization — this workflow re-checks the reviewer below.
+  # Each approval is a single event, so this path claims no dedup marker.
+  workflow_run:
+    workflows: ["PR Slack notify (trigger)"]
+    types: [completed]
+  # Manual test path: simulate a finished-CI status (or an approval) for a
+  # given PR, so the full chain (resolve -> opt-in lookup -> DM) can be
+  # exercised on demand without waiting for real CI. Dispatchable only once
+  # this file is on the default branch (a GitHub limitation), so it's for
+  # post-merge sanity checks, not pre-merge testing.
   workflow_dispatch:
     inputs:
       pr_number:
@@ -32,20 +44,22 @@ on:
         required: true
         type: string
       state:
-        description: "Simulated CI outcome"
+        description: "Simulated CI outcome, or 'approved' for the review path"
         required: false
         default: success
         type: choice
-        options: [success, failure, error]
+        options: [success, failure, error, approved]
 
 # Semaphore re-posts the same terminal status several times per commit.
-# Dedup claims a git ref named after (commit, state) atomically — see "Claim
-# dedup marker" below — so concurrent duplicate events race to create the
-# same ref and exactly one wins. No concurrency group is needed: the claim
-# is atomic on GitHub's side, so runs don't need to be serialized to avoid
-# a double-send race. Markers only matter for the duplicate-event burst
-# (minutes), so each run opportunistically prunes markers older than 2 days
-# — see "Prune stale dedup markers" — keeping refs/ci-notify/* bounded.
+# Dedup claims a git ref named refs/ci-notify/<yyyymmdd>-<commit>-<state>
+# atomically — see "Claim dedup marker" below — so concurrent duplicate
+# events race to create the same ref and exactly one wins. No concurrency
+# group is needed: the claim is atomic on GitHub's side, so runs don't need
+# to be serialized to avoid a double-send race. Markers only matter for the
+# duplicate-event burst (minutes), so each run opportunistically prunes
+# markers whose date prefix is more than 2 days old — see "Prune stale dedup
+# markers" — keeping refs/ci-notify/* bounded.
+# This applies to the `status` path only; see the trigger comments above.
 
 permissions:
   pull-requests: read
@@ -61,13 +75,19 @@ jobs:
   notify:
     # Fire once when the aggregate Semaphore status reaches a terminal
     # state. Skip 'pending' — that's CI starting/running, not finishing.
+    # An approval reaches here as a successful run of the stage-1 trigger. A
+    # skipped stage-1 run means it saw nothing worth notifying about; a
+    # successful one is only a hint, since a fork PR controls that file, so
+    # who approved is confirmed later from the API.
     # Manual workflow_dispatch runs always proceed (state comes from input).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.context == 'ci/semaphoreci/pr: Calico' &&
        (github.event.state == 'success' ||
         github.event.state == 'failure' ||
-        github.event.state == 'error'))
+        github.event.state == 'error')) ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
@@ -75,10 +95,15 @@ jobs:
       REPO: ${{ github.repository }}
       CI_NOTIFY_MAP: ${{ vars.CI_NOTIFY_MAP }}
       SLACK_BOT_TOKEN: ${{ secrets.GH_PR_MONITOR_BOT_TOKEN }}
-      # On a status event these come from the event; on workflow_dispatch
-      # STATE falls through to the input and SHA is empty.
-      STATE: ${{ github.event.state || inputs.state }}
-      SHA: ${{ github.event.sha }}
+      # STATE drives everything downstream: 'success'/'failure'/'error' mean
+      # the CI path, 'approved' the review path. A cascade run is only ever
+      # an approval — the detector has no other reason to succeed. Missing
+      # properties evaluate to empty, so the chain picks the live source.
+      STATE: ${{ github.event.state || (github.event_name == 'workflow_run' && 'approved') || inputs.state }}
+      # The commit to resolve a PR from, and on the status path the commit the
+      # dedup marker is named after. Empty on a manual run, which takes the
+      # PR number from its input instead and claims no marker.
+      SHA: ${{ github.event.sha || github.event.workflow_run.head_sha }}
     steps:
       - name: Skip if not configured
         id: gate
@@ -105,12 +130,31 @@ jobs:
             fi
             PR="$INPUT_PR"
           else
-            # Status event: resolve PR from SHA. Use the search API rather
-            # than repos/$REPO/commits/$SHA/pulls — the latter does not
-            # return PRs whose head commit lives on a fork, and
-            # projectcalico/calico PRs all come from forks.
-            PR=$(gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
-                   --jq '.items[0].number // empty')
+            # Status and cascade events: resolve PR from SHA. Use the search
+            # API rather than repos/$REPO/commits/$SHA/pulls — the latter does
+            # not return PRs whose head commit lives on a fork, and
+            # projectcalico/calico PRs all come from forks. A cascade run
+            # whose PR has since been merged or closed finds nothing and
+            # skips, which is the right outcome.
+            # Retry once: the search index can lag a few seconds behind a very
+            # fresh commit, and an approval can arrive that soon after a push.
+            # A transient API error counts as a miss and retries the same way
+            # (`|| true` keeps it from killing the step under -e; gh already
+            # put the error on stderr).
+            # The hit is not re-checked against the PR's current head sha on
+            # purpose — the head legitimately moves on after the event (CI
+            # finishing for a commit that has since been pushed over, or a push
+            # landing between an approval and this run), and the PR is still
+            # the one to notify about.
+            search_pr() {
+              gh api "search/issues?q=sha:$SHA+is:pr+is:open+repo:$REPO" \
+                --jq '.items[0].number // empty' || true
+            }
+            PR=$(search_pr)
+            if [[ -z "$PR" ]]; then
+              sleep 5
+              PR=$(search_pr)
+            fi
             if [[ -z "$PR" ]]; then
               echo "::notice::no open PR for sha=$SHA — skipping"
               echo "skip=true" >> "$GITHUB_OUTPUT"
@@ -149,20 +193,90 @@ jobs:
             echo "slack_id=$SLACK_ID" >> "$GITHUB_OUTPUT"
           fi
 
+      # This is where an approval is authorized. Stage 1's matching `if` runs
+      # from the PR head — a fork PR can edit it away — so it only filters
+      # cost; this step runs from the base branch, and the reviews API carries
+      # author_association, so the check and the reviewer's name come out of
+      # one call.
+      - name: Confirm an approval from someone with write access
+        id: reviewer
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          steps.resolve.outputs.skip != 'true' &&
+          steps.lookup.outputs.skip != 'true' &&
+          env.STATE == 'approved'
+        env:
+          PR: ${{ steps.resolve.outputs.pr }}
+        run: |
+          # --paginate applies --jq per page and concatenates the results, so
+          # an index-into-array filter would emit one login *per page*. Filter
+          # flat and take the last line: the most recent qualifying approval.
+          # stderr goes to its own file, not into the list — mixed in, a mere
+          # gh warning on an otherwise successful call would read as a login.
+          set +e
+          LOGINS=$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" --paginate \
+            --jq '.[] | select(.state == "APPROVED" and (.author_association
+                    | IN("OWNER","MEMBER","COLLABORATOR"))) | .user.login' 2>reviews-err.txt)
+          RC=$?
+          set -e
+          if [[ $RC -ne 0 ]]; then
+            # Fail CLOSED: an approval we cannot verify sends nothing. Still
+            # never fail the job — the notifier does not break other work.
+            # Newlines flattened: a ::warning:: annotation ends at the first.
+            echo "::warning::could not read reviews for PR #$PR ($(tr '\n' ' ' <reviews-err.txt)) — skipping rather than sending an unverified approval"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LOGIN=$(printf '%s\n' "$LOGINS" | tail -n1)
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            # A dispatch simulates an approval that need not exist, and only
+            # someone with write access can start one, so authorization is
+            # already settled: name the reviewer if there is one, gate on
+            # nothing.
+            echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -z "$LOGIN" ]]; then
+            echo "::notice::no approval from a write-access reviewer on PR #$PR — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            # A GitHub login is [A-Za-z0-9-], so it is safe via GITHUB_OUTPUT.
+            echo "login=$LOGIN" >> "$GITHUB_OUTPUT"
+          fi
+
       # Dedup: claim a git ref named after (commit, state) before sending.
       # Ref creation is atomic on GitHub's side, so concurrent duplicate
       # status events race to create the same ref and exactly one wins —
       # no concurrency group or serialization required. A non-"already
       # exists" failure fails OPEN (proceeds to send) rather than silently
-      # swallowing a real notification on an API hiccup. Status events only
-      # (SHA non-empty); manual workflow_dispatch runs always proceed.
+      # swallowing a real notification on an API hiccup. Status events only:
+      # a review is a single event, and keying a marker on (sha, 'approved')
+      # would wrongly swallow a second reviewer's approval of the same
+      # commit. Manual workflow_dispatch runs always proceed too.
       - name: Claim dedup marker (atomic)
         id: claim
-        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && env.SHA != ''
+        if: steps.gate.outputs.skip != 'true' && steps.resolve.outputs.skip != 'true' && steps.lookup.outputs.skip != 'true' && github.event_name == 'status'
         run: |
+          # The marker name carries everything dedup and pruning need: the
+          # claim date, then the (commit, state) this DM is for. Duplicates
+          # that straddle midnight UTC compute different names and so both
+          # send — one extra DM at most, once a day, in exchange for keeping
+          # age in the name.
+          REF="refs/ci-notify/$(date -u +%Y%m%d)-${SHA}-${STATE}"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          # The ref *target* is GITHUB_SHA — the default-branch tip this run
+          # was resolved from — deliberately not the status sha. A status sha
+          # is a PR head commit living in a fork, and creating a ref that
+          # points at one is not reliably permitted here: freshly pushed fork
+          # commits have been observed to 403 ("Resource not accessible by
+          # integration") while a day-old one succeeded, and that failure
+          # takes the fail-open branch below and re-sends the DM. Nothing
+          # reads the target, so a commit that is certainly local is enough.
           set +e
           ERR=$(gh api "repos/$REPO/git/refs" --method POST \
-            -f ref="refs/ci-notify/${SHA}-${STATE}" -f sha="$SHA" 2>&1 >/dev/null)
+            -f ref="$REF" -f sha="$GITHUB_SHA" 2>&1 >/dev/null)
           RC=$?
           set -e
           if [[ $RC -eq 0 ]]; then
@@ -178,8 +292,9 @@ jobs:
       # On failure/error, sem-ai-ci-triage posts a failure-analysis comment
       # — but it runs concurrently on the same status event and only after
       # its LLM backend responds, so the comment usually isn't there yet.
-      # Poll briefly for it so the DM can deep-link to the analysis. Success
-      # never gets a triage comment, so we skip the poll entirely there.
+      # Poll briefly for it so the DM can deep-link to the analysis. A pass
+      # and an approval never get a triage comment, so the poll is skipped
+      # on every state but failure/error.
       - name: Wait for sem-ai-triage comment
         id: triage
         if: >-
@@ -187,7 +302,7 @@ jobs:
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false' &&
-          env.STATE != 'success'
+          (env.STATE == 'failure' || env.STATE == 'error')
         env:
           PR: ${{ steps.resolve.outputs.pr }}
           # When CI finished, per GitHub (status events only; empty on a
@@ -221,9 +336,13 @@ jobs:
           SINCE=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           # ~120s budget (12 x 10s). Triage typically comments well within
           # this; if not, we just omit the analysis link from the DM.
+          # Filter flat and take the last line rather than indexing into an
+          # array: --paginate applies --jq per page, so [-1] would emit one URL
+          # per page and a busy PR would yield a multi-line value.
           for _ in $(seq 1 12); do
             COMMENT_URL=$(gh api "repos/$REPO/issues/$PR/comments?since=$SINCE&per_page=100" --paginate \
-              --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH)][-1].html_url // empty")
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$MARKER\")) $FRESH) | .html_url" \
+              | tail -n1)
             [[ -n "$COMMENT_URL" ]] && break
             sleep 10
           done
@@ -236,31 +355,43 @@ jobs:
           steps.gate.outputs.skip != 'true' &&
           steps.resolve.outputs.skip != 'true' &&
           steps.lookup.outputs.skip != 'true' &&
+          steps.reviewer.outputs.skip != 'true' &&
           steps.claim.outputs.claimed != 'false'
         env:
           SLACK_ID: ${{ steps.lookup.outputs.slack_id }}
           PR: ${{ steps.resolve.outputs.pr }}
           TRIAGE_COMMENT_URL: ${{ steps.triage.outputs.comment_url }}
+          # A GitHub login, passed via env rather than interpolated into the
+          # script below, so it cannot affect shell parsing.
+          REVIEWER: ${{ steps.reviewer.outputs.login }}
         run: |
           # TITLE/URL come from pr.json via jq, never from a workflow expression.
           TITLE=$(jq -r .title pr.json)
           URL=$(jq -r .url pr.json)
 
-          case "$STATE" in
-            success) EMOJI=":white_check_mark:" WORD="passed" ;;
-            failure) EMOJI=":x:"                WORD="failed" ;;
-            error)   EMOJI=":warning:"          WORD="errored" ;;
-            *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
-          esac
-
           # Slack mrkdwn link: <url|text> renders "PR #N" as a hyperlink.
-          TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
-          # On failure/error, point at the sem-ai triage analysis on the PR
-          # (which itself links the run), when triage actually posted one (it
-          # skips on PASS or backend hiccups). No raw CI-run link on any
-          # outcome — the PR link above is the lead.
-          if [[ "$STATE" != "success" && -n "$TRIAGE_COMMENT_URL" ]]; then
-            TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+          if [[ "$STATE" == "approved" ]]; then
+            # REVIEWER is empty on a manual run against a PR that has no
+            # approval to name, so name the reviewer only when known.
+            TEXT=":+1: Your <$URL|PR #$PR> was approved${REVIEWER:+ by $REVIEWER}: $TITLE"
+          else
+            case "$STATE" in
+              success) EMOJI=":white_check_mark:" WORD="passed" ;;
+              failure) EMOJI=":x:"                WORD="failed" ;;
+              error)   EMOJI=":warning:"          WORD="errored" ;;
+              # Unreachable via the job's `if`; keeps a state added later
+              # from rendering as a blank word.
+              *)       EMOJI=":grey_question:"     WORD="$STATE" ;;
+            esac
+            TEXT="$EMOJI CI $WORD on your <$URL|PR #$PR>: $TITLE"
+            # Point at the sem-ai triage analysis on the PR (which itself
+            # links the run) when triage actually posted one — the poll only
+            # runs on failure/error, and triage skips on backend hiccups, so
+            # a URL here is the whole condition. No raw CI-run link on any
+            # outcome — the PR link above is the lead.
+            if [[ -n "$TRIAGE_COMMENT_URL" ]]; then
+              TEXT="$TEXT"$'\n'":mag: Failure analysis: $TRIAGE_COMMENT_URL"
+            fi
           fi
 
           # Resolve the member ID to a DM channel with conversations.open
@@ -309,14 +440,17 @@ jobs:
       - name: Release dedup marker if send failed
         if: steps.claim.outputs.claimed == 'true' && steps.send.outputs.sent != 'true'
         continue-on-error: true
-        run: gh api "repos/$REPO/git/refs/ci-notify/${SHA}-${STATE}" --method DELETE
+        env:
+          MARKER: ${{ steps.claim.outputs.ref }}
+        run: gh api "repos/$REPO/git/$MARKER" --method DELETE
 
       # Housekeeping: markers are dead weight once the duplicate-event burst
       # (minutes) has passed, so prune any older than 2 days here rather than
       # in a separate scheduled workflow — keeps the whole mechanism in this
-      # file and refs/ci-notify/* from growing without bound. Age proxy is
-      # the committer date of the ref's target commit (the marker is created
-      # moments after that commit's CI finishes). Best-effort throughout: a
+      # file and refs/ci-notify/* from growing without bound. Age is the
+      # yyyymmdd prefix of the marker name, so the whole sweep costs one list
+      # call and no per-ref lookups. This run's own marker carries today's
+      # date and so can never precede the cutoff. Best-effort throughout: a
       # failed prune must never fail the notifier, and a missed one just
       # waits for the next run. Duplicate runs may race to delete the same
       # ref — the loser's 422 is swallowed.
@@ -324,20 +458,29 @@ jobs:
         if: steps.claim.outcome == 'success'
         continue-on-error: true
         run: |
-          CUTOFF=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          gh api "repos/$REPO/git/matching-refs/ci-notify/" --paginate \
-            --jq '.[] | "\(.ref) \(.object.sha)"' \
-          | while read -r REF OBJ; do
-              # Never prune this run's own marker: a push can carry an old
-              # committer date (e.g. an untouched branch pushed late), and
-              # deleting our own marker would re-open the dedup window while
-              # duplicate events are still arriving.
-              [[ "$REF" == "refs/ci-notify/${SHA}-${STATE}" ]] && continue
-              DATE=$(gh api "repos/$REPO/commits/$OBJ" --jq .commit.committer.date) || continue
-              # ISO-8601 UTC sorts lexicographically, so '<' compares times.
+          CUTOFF=$(date -u -d '2 days ago' +%Y%m%d)
+          gh api "repos/$REPO/git/matching-refs/ci-notify/" --paginate --jq '.[].ref' \
+          | while read -r REF; do
+              NAME=${REF#refs/ci-notify/}
+              DATE=${NAME%%-*}
+              if [[ ! "$DATE" =~ ^[0-9]{8}$ ]]; then
+                # A <40-hex>-<state> name predates this naming scheme and
+                # cannot be aged, so retire it on sight. Worst case it
+                # belonged to a burst still in flight during the rollout and
+                # that burst sends one extra DM. Anything else under this
+                # namespace was put there by hand — leave it alone rather
+                # than delete someone's debugging marker.
+                if [[ "$NAME" =~ ^[0-9a-f]{40}- ]]; then
+                  gh api "repos/$REPO/git/$REF" --method DELETE \
+                    && echo "pruned legacy $REF" \
+                    || echo "::notice::could not prune $REF"
+                fi
+                continue
+              fi
+              # yyyymmdd sorts lexicographically, so '<' compares dates.
               if [[ "$DATE" < "$CUTOFF" ]]; then
                 gh api "repos/$REPO/git/$REF" --method DELETE \
-                  && echo "pruned $REF (target committed $DATE)" \
+                  && echo "pruned $REF (claimed $DATE)" \
                   || echo "::notice::could not prune $REF"
               fi
             done

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -143,6 +143,34 @@ var _ = Describe("IPSets with empty data plane", func() {
 		))
 	})
 
+	It("should not panic on a member it cannot parse and should reconcile it away", func() {
+		// Program a hash:net (interval) set. On readback, interval sets can return members in
+		// range form rather than CIDR form (CORE-13011), which Felix's canonicalisation can't
+		// parse. Felix must treat such a member as unknown rather than crash-looping on resync.
+		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashNet}
+		s.AddOrReplaceIPSet(meta, []string{"10.0.0.0/24"})
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+
+		// Inject a range-form element directly, simulating what the kernel may return on readback.
+		tx := f.NewTransaction()
+		tx.Add(&knftables.Element{
+			Set: "cali40test",
+			Key: []string{"10.0.0.0-10.0.0.255"},
+		})
+		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+		// Resync must tolerate the unparseable member and reconcile it away.
+		s.QueueResync()
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+		Expect(s.ApplyDeletions()).To(BeFalse())
+
+		elements, err := f.ListElements(context.Background(), "set", "cali40test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elements).To(ConsistOf(
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.0/24"}},
+		))
+	})
+
 	It("should resync with a large number of sets", func() {
 		// Create a large number of sets - larger than the number of gorooutines we limit
 		// ourselves to in the resync code.
@@ -159,6 +187,42 @@ var _ = Describe("IPSets with empty data plane", func() {
 		// Trigger a resync.
 		s.QueueResync()
 		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+	})
+
+	It("should reprogram members after the whole table disappears", func() {
+		// Program an IP set with members.
+		meta := ipsets.IPSetMetadata{SetID: "test", Type: ipsets.IPSetTypeHashIP}
+		s.AddOrReplaceIPSet(meta, []string{"10.0.0.1", "10.0.0.2"})
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+
+		elements, err := f.ListElements(context.Background(), "set", "cali40test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elements).To(ConsistOf(
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.1"}},
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.2"}},
+		))
+
+		// Delete the whole table out-of-band, so List returns IsNotFound on the next resync.
+		tx := f.NewTransaction()
+		tx.Delete(&knftables.Table{})
+		Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+		_, err = f.List(context.Background(), "set")
+		Expect(knftables.IsNotFound(err)).To(BeTrue())
+
+		// Resync and apply. The set and its members should be reprogrammed from scratch.
+		s.QueueResync()
+		Expect(func() { s.ApplyUpdates(nil) }).NotTo(Panic())
+
+		sets, err := f.List(context.Background(), "set")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(sets).To(ConsistOf("cali40test"))
+
+		elements, err = f.ListElements(context.Background(), "set", "cali40test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elements).To(ConsistOf(
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.1"}},
+			&knftables.Element{Set: "cali40test", Key: []string{"10.0.0.2"}},
+		))
 	})
 
 	It("should handle unexpected sets with types that are not supported", func() {

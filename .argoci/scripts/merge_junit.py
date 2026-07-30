@@ -44,6 +44,38 @@ def collect_suites(path):
     return []
 
 
+def suite_stats(suite):
+    """Count a suite's cases by status, from the testcase elements themselves.
+
+    Counting cases (rather than trusting the suite's own attributes) keeps the
+    aggregates correct for producers that omit or mis-set them.
+    """
+    tests = failures = errors = skipped = 0
+    for case in suite.findall("testcase"):
+        tests += 1
+        if case.find("error") is not None:
+            errors += 1
+        elif case.find("failure") is not None:
+            failures += 1
+        elif case.find("skipped") is not None:
+            skipped += 1
+    return tests, failures, errors, skipped
+
+
+def suite_time(suite):
+    # Prefer the suite's own time attribute; fall back to summing its cases'.
+    try:
+        return float(suite.get("time", ""))
+    except ValueError:
+        total = 0.0
+        for case in suite.findall("testcase"):
+            try:
+                total += float(case.get("time", ""))
+            except ValueError:
+                pass
+        return total
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit(f"usage: {sys.argv[0]} <dir> <output>")
@@ -54,7 +86,14 @@ def main():
     # alphabetical) — the ArgoCI viewer renders suites in file order.
     suites = []
     for dirpath, dirnames, filenames in os.walk(src_dir):
-        dirnames.sort()
+        # Prune diags subtrees at any depth.  Diags are unpacked captures of
+        # arbitrary node state (see repack_diags in calicotest's basetest.py), so
+        # any junit-shaped XML inside one is by construction a copy of a report
+        # from elsewhere -- merging it would double-count, and on exactly the runs
+        # (failures) where the numbers get scrutinised.  Non-junit XML in diags
+        # (libvirt domain definitions, say) is already filtered out by the
+        # root-element check in collect_suites.
+        dirnames[:] = sorted(d for d in dirnames if d != "diags")
         for fn in sorted(filenames):
             path = os.path.join(dirpath, fn)
             if not fn.lower().endswith(".xml") or os.path.abspath(path) == out_abs:
@@ -69,8 +108,31 @@ def main():
 
     merged = ET.Element("testsuites")
     merged.extend(suites)
+
+    # Populate aggregate attributes on the root: consumers that read totals off
+    # <testsuites> instead of summing its children would otherwise see 0 tests
+    # and treat a passing run as empty.
+    tests = failures = errors = skipped = 0
+    time_total = 0.0
+    for suite in suites:
+        t, f, e, s = suite_stats(suite)
+        tests += t
+        failures += f
+        errors += e
+        skipped += s
+        time_total += suite_time(suite)
+    merged.set("tests", str(tests))
+    merged.set("failures", str(failures))
+    merged.set("errors", str(errors))
+    merged.set("skipped", str(skipped))
+    merged.set("time", f"{time_total:.3f}")
+
     ET.ElementTree(merged).write(out_path, encoding="utf-8", xml_declaration=True)
-    print(f"[INFO] merge_junit: wrote {len(suites)} suite(s) to {out_path}")
+    print(
+        f"[INFO] merge_junit: wrote {len(suites)} suite(s) "
+        f"({tests} tests, {failures} failures, {errors} errors, {skipped} skipped) "
+        f"to {out_path}"
+    )
 
 
 if __name__ == "__main__":
