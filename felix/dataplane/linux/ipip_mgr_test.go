@@ -73,6 +73,18 @@ var _ = Describe("IPIPManager", func() {
 		)
 	})
 
+	It("should report whether the parent device actually changed", func() {
+		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
+		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeFalse())
+		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("bond0")).To(BeTrue())
+	})
+
+	It("should leave the parent device alone when handed an empty name", func() {
+		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
+		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("")).To(BeFalse())
+		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
+	})
+
 	It("should configure tunnel properly", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
