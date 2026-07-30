@@ -326,6 +326,7 @@ func (m *routeManager) CompleteDeferredWork() error {
 func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return false
 	}
 	if name == m.parentDevice {
 		return false
