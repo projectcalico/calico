@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package migration implements the v1-to-v3 CRD migration controller.
 package migration
 
 import (
