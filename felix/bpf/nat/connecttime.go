@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package nat
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
@@ -106,21 +108,19 @@ func RemoveConnectTimeLoadBalancer(ipv4Enabled bool, cgroupv2 string) error {
 		os.Remove(ctlbProgsMap[index].Path())
 	}
 
-	if err := detachCtlbPrograms(ipv4Enabled, pinDir, cgroupv2); err != nil {
+	if err := detachCtlbPrograms(pinDir); err != nil {
 		return err
 	}
 	bpf.CleanUpCalicoPins(pinDir)
 	return nil
 }
 
-func detachCtlbPrograms(ipv4Enabled bool, pinDir, cgroupv2 string) error {
-	numLinksDetached := 0
+func detachCtlbPrograms(pinDir string) error {
 	err := filepath.Walk(pinDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "cali_") || strings.HasPrefix(info.Name(), "calico_") {
-			numLinksDetached++
 			log.WithField("path", path).Debug("Detaching pinned link")
 			link, err := libbpf.OpenLink(path)
 			if err != nil {
@@ -140,18 +140,7 @@ func detachCtlbPrograms(ipv4Enabled bool, pinDir, cgroupv2 string) error {
 		log.WithError(err).Error("error detaching link")
 		return err
 	}
-	if numLinksDetached == 0 {
-		return detachLegacyCtlb(ipv4Enabled, cgroupv2)
-	}
 	return nil
-}
-
-func detachLegacyCtlb(ipv4Enabled bool, cgroupv2 string) error {
-	cgroupPath, err := ensureCgroupPath(cgroupv2)
-	if err != nil {
-		return fmt.Errorf("failed to set-up cgroupv2: %w", err)
-	}
-	return libbpf.DetachCTLBProgramsLegacy(ipv4Enabled, cgroupPath)
 }
 
 func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bool) (*libbpf.Obj, error) {
@@ -163,39 +152,49 @@ func loadProgram(logLevel, ipver string, udpNotSeen time.Duration, excludeUDP bo
 	return obj, nil
 }
 
-func attachProgram(name, ipver, bpfMount, cgroupPath string, udpNotSeen time.Duration, excludeUDP bool, obj *libbpf.Obj, legacy bool) error {
+// tryUpdateExistingCTLBLink updates the program behind a previously-pinned
+// cgroup link. It returns needsReattach=true if the pin should be discarded and
+// the caller should perform a fresh AttachCGroup + Pin — currently that means
+// the kernel reported ENOLINK, i.e. the link was severed from the cgroup.
+func tryUpdateExistingCTLBLink(obj *libbpf.Obj, progName, progPinPath string) (needsReattach bool, err error) {
+	link, err := libbpf.OpenLink(progPinPath)
+	if err != nil {
+		return false, fmt.Errorf("error opening link %s : %w", progPinPath, err)
+	}
+	defer link.Close()
+	if err := link.Update(obj, progName); err != nil {
+		if errors.Is(err, unix.ENOLINK) {
+			log.WithField("program", progName).Debug("Cgroup link severed, re-attaching")
+			if rmErr := os.Remove(progPinPath); rmErr != nil && !os.IsNotExist(rmErr) {
+				return false, fmt.Errorf("error removing stale pin %s: %w", progPinPath, rmErr)
+			}
+			return true, nil
+		}
+		return false, fmt.Errorf("error updating program %s : %w", progName, err)
+	}
+	return false, nil
+}
+
+func attachProgram(name, ipver, bpfMount, cgroupPath string, obj *libbpf.Obj) error {
 	progName := "calico_" + name + "_v" + ipver
 	progPinPath := path.Join(bpfMount, progName)
 	if _, err := os.Stat(progPinPath); err == nil {
-		link, err := libbpf.OpenLink(progPinPath)
+		needsReattach, err := tryUpdateExistingCTLBLink(obj, progName, progPinPath)
 		if err != nil {
-			return fmt.Errorf("error opening link %s : %w", progPinPath, err)
+			return err
 		}
-		defer link.Close()
-		if err := link.Update(obj, progName); err != nil {
-			return fmt.Errorf("error updating program %s : %w", progName, err)
+		if !needsReattach {
+			return nil
 		}
-		return nil
+		// Pin existed but the underlying cgroup link was severed (e.g. cleared
+		// across a Felix restart). Fall through to a fresh AttachCGroup + Pin.
 	}
 
-	// Used only for UT to test legacy way to attach.
-	if legacy {
-		err := obj.AttachCGroupLegacy(cgroupPath, progName)
-		if err != nil {
-			return fmt.Errorf("failed to attach program %s: %w", progName, err)
-		}
-		return nil
-	}
-
-	// Tries non-legacy and fallsback to legacy if non-legacy fails.
 	link, err := obj.AttachCGroup(cgroupPath, progName)
 	if err != nil {
-		err = obj.AttachCGroupLegacy(cgroupPath, progName)
-		if err != nil {
-			return fmt.Errorf("failed to attach program %s: %w", progName, err)
-		}
-		link = nil
-	} else if link != nil {
+		return fmt.Errorf("failed to attach program %s: %w", progName, err)
+	}
+	if link != nil {
 		defer link.Close()
 		err := link.Pin(progPinPath)
 		if err != nil {
@@ -220,7 +219,7 @@ func updateCTLBJumpMap(jumpMap maps.Map, obj *libbpf.Obj, prog string) error {
 	return nil
 }
 
-func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgsMap []maps.Map, legacy bool) error {
+func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgsMap []maps.Map) error {
 	bpfMount, err := utils.MaybeMountBPFfs()
 	if err != nil {
 		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
@@ -253,32 +252,32 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 			return err
 		}
 		defer v46Obj.Close()
-		err = attachProgram("connect", "4", pinDir, cgroupPath, udpNotSeen, excludeUDP, v4Obj, legacy)
+		err = attachProgram("connect", "4", pinDir, cgroupPath, v4Obj)
 		if err != nil {
 			return err
 		}
-		err = attachProgram("connect", "46", pinDir, cgroupPath, udpNotSeen, excludeUDP, v46Obj, legacy)
+		err = attachProgram("connect", "46", pinDir, cgroupPath, v46Obj)
 		if err != nil {
 			return err
 		}
 
 		if !excludeUDP {
-			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
+			err = attachProgram("sendmsg", "4", pinDir, cgroupPath, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, udpNotSeen, false, v4Obj, legacy)
+			err = attachProgram("recvmsg", "4", pinDir, cgroupPath, v4Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
+			err = attachProgram("sendmsg", "46", pinDir, cgroupPath, v46Obj)
 			if err != nil {
 				return err
 			}
 
-			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, udpNotSeen, false, v46Obj, legacy)
+			err = attachProgram("recvmsg", "46", pinDir, cgroupPath, v46Obj)
 			if err != nil {
 				return err
 			}
@@ -300,18 +299,18 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 				}
 			}
 		} else {
-			err = attachProgram("connect", "6", pinDir, cgroupPath, udpNotSeen, excludeUDP, v6Obj, legacy)
+			err = attachProgram("connect", "6", pinDir, cgroupPath, v6Obj)
 			if err != nil {
 				return err
 			}
 
 			if !excludeUDP {
-				err = attachProgram("sendmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj, legacy)
+				err = attachProgram("sendmsg", "6", pinDir, cgroupPath, v6Obj)
 				if err != nil {
 					return err
 				}
 
-				err = attachProgram("recvmsg", "6", pinDir, cgroupPath, udpNotSeen, false, v6Obj, legacy)
+				err = attachProgram("recvmsg", "6", pinDir, cgroupPath, v6Obj)
 				if err != nil {
 					return err
 				}
@@ -322,11 +321,7 @@ func installCTLB(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string
 }
 
 func InstallConnectTimeLoadBalancer(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgramsMap []maps.Map) error {
-	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, ctlbProgramsMap, false)
-}
-
-func InstallConnectTimeLoadBalancerLegacy(ipv4Enabled, ipv6Enabled bool, cgroupv2 string, logLevel string, udpNotSeen time.Duration, excludeUDP bool, ctlbProgramsMap []maps.Map) error {
-	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, ctlbProgramsMap, true)
+	return installCTLB(ipv4Enabled, ipv6Enabled, cgroupv2, logLevel, udpNotSeen, excludeUDP, ctlbProgramsMap)
 }
 
 func ProgFileName(logLevel, ipver string) string {
@@ -335,12 +330,7 @@ func ProgFileName(logLevel, ipver string) string {
 		logLevel = "no_log"
 	}
 
-	btf := ""
-	if utils.BTFEnabled {
-		btf = "_co-re"
-	}
-
-	return fmt.Sprintf("connect_balancer_%s%s_v%s.o", logLevel, btf, ipver)
+	return fmt.Sprintf("connect_balancer_%s_v%s.o", logLevel, ipver)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

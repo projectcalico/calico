@@ -5,7 +5,7 @@ import { noResultsStyles } from './styles';
 
 interface NoResultsProps extends HTMLChakraProps<'div'> {
     sx?: SystemStyleObject;
-    message: string;
+    message: string | React.ReactNode;
     colSpan: any;
 }
 
@@ -17,7 +17,7 @@ const NoResults: React.FC<React.PropsWithChildren<NoResultsProps>> = ({
 }) => {
     return (
         <Tr sx={{ ...noResultsStyles, ...sx }} as='div' {...rest}>
-            <Td colSpan={colSpan} as='div'>
+            <Td colSpan={colSpan} as='div' borderBottom='none'>
                 {message}
             </Td>
         </Tr>

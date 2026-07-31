@@ -32,8 +32,8 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/testutils"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/time"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 var (
@@ -56,7 +56,7 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 
 	// Hook logrus into testing.T
 	utils.ConfigureLogging("DEBUG")
-	logCancel := logutils.RedirectLogrusToTestingT(t)
+	logCancel := logrusr.RedirectLogrusToTestingT(t)
 	gm = goldmane.NewGoldmane(opts...)
 	return func() {
 		gm.Stop()
@@ -69,7 +69,7 @@ func setupTest(t *testing.T, opts ...goldmane.Option) func() {
 func ExpectFlowsEqual(t *testing.T, expected, actual *proto.Flow, additionalMsg ...string) {
 	if !googleproto.Equal(expected, actual) {
 		var msg strings.Builder
-		msg.WriteString(fmt.Sprintf("\nExpected:\n\t%v\nActual:\n\t%v", expected, actual))
+		fmt.Fprintf(&msg, "\nExpected:\n\t%v\nActual:\n\t%v", expected, actual)
 		for _, m := range additionalMsg {
 			msg.WriteString("\n" + m)
 		}
@@ -1616,9 +1616,9 @@ func TestStatistics(t *testing.T) {
 				GroupBy:    proto.StatisticsGroupBy_Policy,
 				TimeSeries: true,
 				PolicyMatch: &proto.PolicyMatch{
-					Tier:      hitToMatch.Tier,
-					Name:      hitToMatch.Name,
-					Namespace: hitToMatch.Namespace,
+					Tier:      &proto.StringMatch{Value: hitToMatch.Tier},
+					Name:      &proto.StringMatch{Value: hitToMatch.Name},
+					Namespace: &proto.StringMatch{Value: hitToMatch.Namespace},
 					Kind:      hitToMatch.Kind,
 				},
 			})

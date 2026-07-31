@@ -67,6 +67,7 @@ type ConfigurationOptions struct {
 }
 
 type Driver struct {
+	csi.UnimplementedIdentityServer
 	nodeService
 
 	server  *grpc.Server

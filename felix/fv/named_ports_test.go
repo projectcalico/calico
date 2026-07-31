@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -202,9 +202,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 			pol := api.NewNetworkPolicy()
 			pol.Namespace = "fv"
 			pol.Name = "policy-1"
-			ports := []numorstring.Port{
-				numorstring.NamedPort(sharedPortName),
-			}
+			ports := []numorstring.Port{{PortName: sharedPortName}}
 			for i := range numNumericPorts {
 				ports = append(ports, numorstring.SinglePort(3000+uint16(i)))
 			}
@@ -375,9 +373,9 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 
 			entityRule := api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.NamedPort(sharedPortName),
-					numorstring.NamedPort(w0PortName),
-					numorstring.NamedPort(w1PortName),
+					{PortName: sharedPortName},
+					{PortName: w0PortName},
+					{PortName: w1PortName},
 					numorstring.SinglePort(4000),
 				},
 				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
@@ -627,7 +625,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 		Describe("with negated ports conflicting with positive ports", func() {
 			BeforeEach(func() {
 				ports := []numorstring.Port{
-					numorstring.NamedPort(w0PortName),
+					{PortName: w0PortName},
 					numorstring.SinglePort(w1Port),
 					numorstring.SinglePort(4000),
 				}
@@ -654,6 +652,63 @@ func describeNamedPortTests(testSourcePorts bool, protocol string, getInfra infr
 				cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
 			})
 		})
+	})
+
+	Describe("with a policy with nil protocol and named ports only", func() {
+		var policy *api.NetworkPolicy
+		BeforeEach(func() {
+			policy = api.NewNetworkPolicy()
+			policy.Namespace = "fv"
+			policy.Name = "policy-1"
+
+			entityRule := api.EntityRule{
+				Ports: []numorstring.Port{
+					{PortName: sharedPortName},
+					{PortName: w0PortName},
+					{PortName: w1PortName},
+				},
+				Selector: fmt.Sprintf("(%s) || (%s) || (%s)",
+					w[0].NameSelector(), w[1].NameSelector(), w[2].NameSelector()),
+			}
+
+			apiRule := api.Rule{
+				Action:   api.Allow,
+				Protocol: nil,
+			}
+			if testSourcePorts {
+				apiRule.Source = entityRule
+			} else {
+				apiRule.Destination = entityRule
+			}
+			policy.Spec.Ingress = []api.Rule{
+				apiRule,
+			}
+			policy.Spec.Selector = "all()"
+		})
+
+		JustBeforeEach(func() {
+			createPolicy(policy)
+		})
+
+		// This spec establishes a baseline for the connectivity, then the specs below run
+		// with tweaked versions of the policy.
+		expectBaselineConnectivity := func() {
+			cc.ResetExpectations()
+			cc.ExpectSome(w[0], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[1], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[0].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[2].Port(sharedPort)) // Allowed by named port in list.
+			cc.ExpectNone(w[1], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectNone(w[2], w[3].Port(sharedPort)) // Disallowed by positive selector.
+			cc.ExpectSome(w[3], w[0].Port(w0Port))     // Allowed by named port in list.
+			cc.ExpectSome(w[3], w[1].Port(w1Port))     // Allowed by named port in list.
+			cc.ExpectNone(w[3], w[2].Port(w2Port))     // Not in ports list.
+			cc.ExpectNone(w[2], w[0].Port(3000))       // Numeric port not in list.
+
+			cc.CheckConnectivity(dumpResource(policy), connectivity.CheckWithBeforeRetry(cleanConntrack))
+		}
+		It("should have expected connectivity", expectBaselineConnectivity)
 	})
 }
 
@@ -730,7 +785,7 @@ var _ = infrastructure.DatastoreDescribe("TCP: named port with a simulated kuber
 			Protocol: &protoStruct,
 			Destination: api.EntityRule{
 				Ports: []numorstring.Port{
-					numorstring.NamedPort("http-port"),
+					{PortName: "http-port"},
 				},
 			},
 		}
@@ -880,7 +935,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("http")},
+					Ports: []numorstring.Port{{PortName: "http"}},
 				},
 			},
 		}
@@ -898,7 +953,7 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 				Action:   api.Allow,
 				Protocol: &tcp,
 				Destination: api.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("http")},
+					Ports: []numorstring.Port{{PortName: "http"}},
 				},
 			},
 		}
@@ -919,13 +974,13 @@ func describeNamedPortHostEndpointTests(getInfra infrastructure.InfraFactory, na
 		expectNamedPortOpen()
 
 		// Switch to incorrect named port, should fail.
-		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.NamedPort("wrong")
+		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.Port{PortName: "wrong"}
 		pol, err = client.GlobalNetworkPolicies().Update(utils.Ctx, pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectNoConnectivity()
 
 		// Switch to correct named port, should work.
-		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.NamedPort("http")
+		pol.Spec.Egress[0].Destination.Ports[0] = numorstring.Port{PortName: "http"}
 		pol, err = client.GlobalNetworkPolicies().Update(utils.Ctx, pol, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		expectNamedPortOpen()
@@ -1018,7 +1073,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoTCPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.NamedPort("udp-port"),
+						{PortName: "udp-port"},
 					},
 				},
 			},
@@ -1027,7 +1082,7 @@ var _ = infrastructure.DatastoreDescribe("tests with mixed TCP/UDP", []apiconfig
 				Protocol: &protoUDPStruct,
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{
-						numorstring.NamedPort("http-port"),
+						{PortName: "http-port"},
 					},
 				},
 			},

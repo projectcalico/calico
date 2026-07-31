@@ -1,0 +1,8 @@
+bin/
+containernetworking-plugins/
+flannel-cni-plugin/
+.containernetworking-plugins-*.cloned
+.flannel-cni-plugin-*.cloned
+.cni-plugins.created-*
+.release-*.created
+.release-*.published

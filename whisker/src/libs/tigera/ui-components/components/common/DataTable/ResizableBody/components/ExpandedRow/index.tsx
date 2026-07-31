@@ -35,7 +35,6 @@ const ExpandedRow: React.FC<ExpandedRowProps> = ({
             {...rest}
             {...(setHeight && {
                 minHeight: containerHeight,
-                backgroundColor: 'tigeraBlack',
             })}
         >
             <Td

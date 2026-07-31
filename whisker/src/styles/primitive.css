@@ -1,0 +1,7 @@
+@theme {
+    /**
+   * Primitive tokens for edge cases.
+   */
+    --color-tigera-token-white: var(--color-tigera-color-neutral-0);
+    --color-tigera-token-black: var(--color-tigera-color-neutral-1200);
+}

@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeGlobalNetworkSets implements GlobalNetworkSetInterface
 type fakeGlobalNetworkSets struct {
-	*gentype.FakeClientWithList[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList]
+	*gentype.FakeClientWithListAndApply[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList, *projectcalicov3.GlobalNetworkSetApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeGlobalNetworkSets(fake *FakeProjectcalicoV3) projectcalicov3.GlobalNetworkSetInterface {
+func newFakeGlobalNetworkSets(fake *FakeProjectcalicoV3) typedprojectcalicov3.GlobalNetworkSetInterface {
 	return &fakeGlobalNetworkSets{
-		gentype.NewFakeClientWithList[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList](
+		gentype.NewFakeClientWithListAndApply[*v3.GlobalNetworkSet, *v3.GlobalNetworkSetList, *projectcalicov3.GlobalNetworkSetApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("globalnetworksets"),

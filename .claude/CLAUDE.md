@@ -1,114 +1,67 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Repository Overview
-
-Project Calico is a large monorepo providing container networking and security for Kubernetes. The codebase contains ~2000 Go files across 30+ components, supporting multiple dataplanes (eBPF, iptables, nftables, Windows, VPP).
-
-**Primary language:** Go (also C/eBPF, Python, Shell, TypeScript/React)
-**Build system:** Make + Docker-based reproducible builds
-**CI/CD:** Semaphore CI (configuration in `.semaphore/`)
-**Default branch:** `master` (not `main`)
-**Separate docs repo**  https://github.com/tigera/docs/
+This file is **operational guidance** for agents working in this repo: build commands, test invocation, debugging, conventions, and the process rules every PR follows. For **architecture, invariants, and review criteria**, see [`DESIGN.md`](../DESIGN.md) at the repo root, and the per-component `DESIGN.md` files it links to. Do not look here for architecture; look there.
 
 ## Gotchas
 
-- **NEVER** run `make ci` or `make cd` locally — destructive CI-only targets
+- **NEVER** run `make ci` or `make cd` — in any component or at the root.
+  Destructive CI-only targets.
 - **NEVER** run `make test` at root — takes hours. Always test components individually.
-- **ALWAYS** run `make fix-changed` before committing — CI rejects formatting errors
-- **ALWAYS** remove `FIt`/`FDescribe` before committing — pre-commit hook rejects Ginkgo focused tests
-- **ALWAYS** commit generated files alongside source changes
+- **NEVER** include customer names in code comments, commit messages, or PR
+  descriptions — this repo is public. Cite a dev ticket (`CORE-1234`, `EV-1234`)
+  or a GitHub issue instead; JIRA picks those keys up and links the ticket to
+  the PR. Avoid `CI-1234` keys here — they track customer escalations.
+- **ALWAYS** remove `FIt`/`FDescribe` before committing. Nothing in the repo
+  catches these for you — check your own diff.
+- **ALWAYS** commit generated files alongside source changes.
 
 ## Essential Build Commands
 
-**Prerequisites:** Docker, Make, Git, Linux environment (Ubuntu 24.04+ recommended)
-
-### Building Components
+Builds run in Docker via `calico/go-build`; tool and base-image versions are
+pinned in `metadata.mk`. Run `make help` for the full target list.
 
 ```bash
-# Build specific component (2-5 minutes, RECOMMENDED)
-make -C felix build
-make -C typha build
-make -C node build
-make -C calicoctl build
-make -C kube-controllers build
-
-# Build all images (WARNING: 30+ minutes)
-make image
-
-# Build for specific architecture
-make -C felix build ARCH=arm64
+make -C <component> build   # 2-5 minutes — the usual way to build
+make image                  # ALL images — 30+ minutes
 ```
 
 ### Running Tests
 
 ```bash
-# Unit tests for a component via Make (runs in Docker, rebuilds tooling)
+# Per component, in Docker (rebuilds tooling)
 make -C felix ut
-make -C calicoctl test
-make -C typha test
 
-# Unit tests via go test (faster, no Docker overhead — use for quick iteration)
+# Faster iteration, no Docker overhead
 go test ./felix/calc/...
-go test ./libcalico-go/lib/...
 
-# Components with separate go.mod (must cd first)
+# Components with their own go.mod must be entered first
 cd api && go test ./...
 cd lib/std && go test ./...
 cd lib/httpmachinery && go test ./...
-
-# Felix FV (functional verification) tests
-# IMPORTANT: Always use Makefile targets — they build required tooling and set up permissions
-make -C felix fv GINKGO_ARGS="-ginkgo.v"
-
-# Run specific FV tests by pattern
-make -C felix fv GINKGO_FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
-
-# Felix FV in eBPF mode (BPF-SAFE tests only)
-make -C felix fv-bpf GINKGO_FOCUS="TestName" GINKGO_ARGS="-ginkgo.v"
-
-# Felix FV in nftables mode
-make -C felix fv GINKGO_ARGS="-ginkgo.v" FELIX_FV_NFTABLES=Enabled
 ```
 
-### Felix Testing Notes
-
-- Felix FV tests are in `felix/fv/`, using **Ginkgo v2** (`github.com/onsi/ginkgo/v2`)
-- Test IDs include all nested Context/Describe headings
-- **Always run FVs via Makefile** — builds required tooling and sets up permissions
-- Use `GINKGO_FOCUS="regex"` to target specific tests, `GINKGO_ARGS` for extra flags
-- Useful flags: `-ginkgo.dryRun` (list tests), `-ginkgo.v` (verbose), `FV_FELIX_LOG_LEVEL=debug`
-- **Prefer vanilla `go test` for new packages.** Only use Ginkgo if established pattern exists.
-- Felix "brain" is the calculation graph in `felix/calc/` — changes require calc graph "FV" tests (`felix/calc/calc_graph_fv_test.go`)
+**Always run FV tests via Makefile targets** — they build the required tooling
+and set up permissions. See [`felix/CLAUDE.md`](../felix/CLAUDE.md) for the
+Felix FV, BPF, and nftables invocations.
 
 ### Validation and Formatting
 
 ```bash
-make yaml-lint              # Quick YAML validation (~30 seconds)
-make check-go-mod           # Go module validation
-make check-dockerfiles      # Dockerfile linting
-make check-language         # Language/content checks
-make go-vet                 # Go static analysis (requires: make -C felix clone-libbpf)
-make verify-go-mods         # Cross-component module check
-make golangci-lint          # Run golangci-lint (--timeout 8m)
-make fix-changed            # Auto-fix formatting for changed files (RECOMMENDED)
-make pre-commit             # Run pre-commit checks in Docker
+make fix-changed    # Auto-fix formatting for changed files — prefer this
+make static-checks  # golangci-lint
+make yaml-lint      # ~30 seconds
 ```
 
 ### Code Generation
 
 ```bash
-# Regenerate all generated files (APIs, protobuf, manifests, CI config, etc.)
-make generate
-
-# Individual generation targets
-make protobuf               # Regenerate protobuf files
-make gen-manifests          # Update manifests/ from helm charts
-make gen-semaphore-yaml     # Regenerate .semaphore/semaphore.yml from templates
+make generate        # Everything: APIs, protobuf, manifests, CI config. Runs fix-changed itself.
+make gen-deps-files  # After adding imports to a component — deps.txt drives downstream CI triggers.
 ```
 
-**After modifying API types** (e.g., `api/pkg/apis/projectcalico/v3/felixconfig.go`), run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix config docs, manifests, and runs `fix-changed`. See also `hack/docs/adding-an-api.md`.
+**After modifying API types** (e.g. `api/pkg/apis/projectcalico/v3/felixconfig.go`),
+run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix
+config docs, and manifests. See also `hack/docs/adding-an-api.md`.
 
 ## Generated Files (DO NOT edit directly)
 
@@ -122,21 +75,12 @@ After regenerating, commit the generated files alongside your source changes.
 
 ## Code Conventions
 
-### Go Import Order
+### Formatting
 
-Three groups separated by blank lines: stdlib, external, calico-internal:
-```go
-import (
-	"fmt"
-	"net"
-
-	"k8s.io/api/core/v1"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/apis"
-)
-```
-
-Run `make fix-changed` to auto-fix import ordering. Do not run `goimports` or `go fmt` directly — the project uses a custom 3-step pipeline (`hack/format-changed-files.sh`).
+A repo-scoped PostToolUse hook (`.claude/settings.json`) runs
+`hack/cmd/format-go-file` after every Edit/Write/MultiEdit, which fixes gofmt
+and import grouping (stdlib, external, calico-internal). Don't hand-format
+imports.
 
 ### Copyright Headers
 
@@ -148,152 +92,83 @@ All new `.go` files require:
 // ...
 ```
 
-eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX identifiers. The pre-commit hook validates license headers.
+eBPF files in `felix/bpf-gpl/` require dual Apache/GPL headers with SPDX
+identifiers. Nothing enforces this automatically — add the header yourself.
 
-## Repository Architecture
+### File layout
 
-### Component Dependency Order
+- Place utility methods/functions after (but close to) the methods/functions 
+  that use them, generally want the context that a function is called in to 
+  appear before the detail of the function body.
+- For files that contain "object" structs:
+  - Small typedefs/enums/constants.
+  - Main struct definition
+  - Constructors
+  - Methods; in some intuitive ordering
+    - Expected call order works well for readability "Add" before "Remove", "Start" before "Stop"
+    - Group similar methods together
+  - Utility functions; can be interspersed with methods if tightly coupled with particular methods.
+  - Larger secondary structs at the bottom.
 
-Core components (dependency order):
-```
-api/              - Calico API definitions (CRDs, protobuf), separate go.mod
-libcalico-go/     - Core Go client library and data model
-typha/            - Datastore fan-out proxy for scaling (reduces etcd load)
-felix/            - Core per-host networking agent (eBPF/iptables/nftables dataplane)
-node/             - Node initialization container (includes Felix, confd, BIRD, startup scripts)
-calicoctl/        - CLI tool for Calico management
-kube-controllers/ - Kubernetes-specific controllers (namespace, pod, node, serviceaccount)
-cni-plugin/       - Kubernetes CNI integration
-confd/            - Configuration management daemon
-app-policy/       - Application layer policy (L7)
-apiserver/        - Kubernetes API aggregation layer
-```
+## Documentation map
 
-Additional components:
-```
-goldmane/             - Log aggregation and flow log storage
-guardian/             - Secure tunnel proxy for management cluster connections
-pod2daemon/           - Flex volume driver for injecting credentials into pods
-key-cert-provisioner/ - TLS certificate provisioner for Calico components
-whisker/              - Flow log UI (TypeScript/React frontend)
-whisker-backend/      - Backend for whisker flow log UI
-e2e/                  - End-to-end test suites
-release/              - Release tooling and automation
-lib/std/              - Internal shared Go library (separate go.mod)
-lib/httpmachinery/    - Internal HTTP utility library (separate go.mod)
-```
+This repo carries an extensive corpus of architecture and review guidance.
+**Consult it first, instead of reverse-engineering from the code** — it captures
+invariants, design rationale, and review criteria that are hard to recover from
+the source alone.
 
-### Key Architectural Concepts
+- [`DESIGN.md`](../DESIGN.md) at the repo root — cross-cutting architecture, and
+  the authoritative starting point for *what the repo is*.
+- `<component>/DESIGN.md` — per-component architecture, invariants, and
+  per-section review notes. A coding agent writing a PR and a reviewer checking
+  one read the same file and apply the same embedded review notes.
+- `design/<topic>/` — designs for subsystems spanning several components (e.g.
+  IPAM). Pointer stubs may sit in consumer subdirectories, but the canonical
+  content lives here.
+- `<component>/CLAUDE.md` — operational guidance only. Not architecture.
 
-**Felix** is the core per-host agent responsible for:
-- Programming dataplane (eBPF, iptables, nftables)
-- Maintaining routing tables
-- Processing policy and programming ACLs
-- Source: `felix/daemon/daemon.go`
-- **Calculation graph** (`felix/calc/`): DAG that processes datastore updates and calculates dataplane state. Changes here require calc graph FV tests.
+Complex components split their design across a directory with an "applies to"
+glob per topic — Felix uses [`felix/DESIGN.md`](../felix/DESIGN.md) as an index
+over [`felix/design/`](../felix/design/). A PR touching multiple globs must load
+every matching sub-design.
 
-**Typha** is a fan-out proxy that:
-- Sits between Felix instances and the datastore (etcd/K8s API)
-- Reduces load on datastore by caching and fanning out to multiple Felix instances
-- Optional but recommended for clusters >50 nodes
+**Rules for agents reading this repo:**
 
-**Node container** orchestrates node initialization:
-- Runs Felix, confd, and BIRD in a single container
-- Handles CNI plugin installation
-- Source: `node/pkg/lifecycle/startup/startup.go`
+1. Before writing or reviewing code in a component, read that component's
+   `DESIGN.md` (or, for Felix, the sub-designs matching the paths you touch).
+2. Follow links. A design is a graph, not a single node.
+3. A PR that changes how a component works — its behaviour, data model,
+   configuration surface, or any invariant the design records — must update the
+   relevant `DESIGN.md` in the same PR. Exemptions: bug fix restoring documented
+   behaviour, mechanical refactor, comment or log-message edits, dependency
+   bumps. If in doubt, update the doc.
 
-### Go Module Structure
+## Tests required for code changes
 
-- Root `go.mod` (`github.com/projectcalico/calico`) is the primary module for most components
-- `api/go.mod` (`github.com/projectcalico/api`) is separate (API exported as independent repo)
-- `lib/std/go.mod` and `lib/httpmachinery/go.mod` are internal libraries
-- When adding Go dependencies: `cd <component> && go mod tidy && cd .. && make check-go-mod`
+A PR that fixes a bug must include a test that reproduces the bug. A PR that
+adds a feature must include tests that exercise it. A change without a
+corresponding test is the exception, and requires explicit justification
+(untestable interface boundary, infrastructure-only change).
 
-### Docker Build System
+Prefer the lowest test level that meaningfully exercises the change:
 
-- All builds run inside Docker containers using `calico/go-build` (version pinned in `metadata.mk`)
-- Base images configured in `metadata.mk`
-- Build cache in `.go-pkg-cache/` (speeds up rebuilds)
-- Supported architectures: amd64, arm64, ppc64le, s390x (plus Windows builds)
-- Cross-compilation via `ARCH=<target>` and binfmt registration (`calico/binfmt`)
+1. **Unit tests** — deterministic, fast, hermetic. Always the first choice when
+   the behaviour is reachable without real infrastructure.
+2. **Functional verification (FV)** — real binary against real infrastructure.
+   Use when the integration *is* the thing being tested.
+3. **End-to-end / Kubernetes** — reserve for behaviour that genuinely needs a
+   full cluster.
 
-## Common Development Workflows
+Tests-only follow-ups are an anti-pattern: by the time they land, the change has
+shipped untested. A reviewer who sees "I tested it manually" or "tests in a
+follow-up PR" should push back.
 
-### Making Code Changes
-
-1. Create feature branch from `master`
-2. Make changes to relevant component(s)
-3. Run component-specific tests: `make -C <component> test` or `go test ./...`
-4. Run validation: `make yaml-lint` (if YAML changed)
-5. If APIs/config/CI changed: `make generate`
-6. **MANDATORY:** Run `make fix-changed` to fix formatting
-7. Commit changes (generated files must be included)
-8. Push and create PR
-
-### Updating Helm Charts and Manifests
-
-- Charts are in `charts/`
-- After editing chart templates: `make gen-manifests`
-- This regenerates `manifests/` directory (mostly auto-generated)
-- Commit both chart changes and regenerated manifests
-
-### Working with eBPF Code
-
-- eBPF programs: `felix/bpf-gpl/` (GPL v2.0 license for Linux compatibility)
-- Apache licensed BPF code: `felix/bpf-apache/`
-- Before building: `make -C felix clone-libbpf`
-- BPF tooling configured in `metadata.mk` (LIBBPF_VERSION, BPFTOOL_IMAGE)
-
-### Kind Cluster Development
-
-Kind cluster targets are defined in `lib.Makefile` and orchestrated from the root `Makefile`. Scripts and infrastructure live in `hack/test/kind/`.
-
-```bash
-make kind-up                # Build all images + create cluster + deploy Calico (full bringup)
-make kind-cluster-create    # Create the kind cluster (no images, no Calico)
-make kind-build-images      # Build all container images needed for the kind cluster
-make kind-deploy            # Load images + install Calico via Helm + wait for readiness
-make kind-reload            # Reload only changed images onto an existing cluster (incremental)
-make kind-cluster-destroy   # Tear down the kind cluster
-make kind-down              # Alias for kind-cluster-destroy
-```
-
-Image loading is incremental — `kind-reload` and `kind-deploy` compare local Docker image IDs against what's on the cluster and only transfer changed images. Override the cluster name with `KIND_NAME=<name>`.
-
-### Cherry-picking to Release Branches
-
-1. Merge PR to master first
-2. Use `hack/cherry-pick-pull` to create the cherry-pick PR:
-   ```bash
-   SRC_UPSTREAM_REMOTE=origin DST_UPSTREAM_REMOTE=origin FORK_REMOTE=<your-remote> CHERRY_PICK=1 \
-     ./hack/cherry-pick-pull origin/release-vX.YY <PR_NUMBER>
-   ```
-
-## Critical Files and Locations
-
-**Build Configuration:**
-- `metadata.mk` - Version pins, tool versions, registry config (all tool/image versions pinned here)
-- `lib.Makefile` - Shared Makefile logic for all components
-- `Makefile` - Root orchestration
-
-**Component Entry Points:**
-- `felix/daemon/daemon.go` - Felix main entry point
-- `felix/calc/` - Felix calculation graph (policy processing brain)
-- `felix/dataplane/` - Dataplane implementations (eBPF, iptables, nftables)
-- `node/pkg/lifecycle/startup/startup.go` - Node initialization
-- `calicoctl/calicoctl/calicoctl.go` - CLI entry point
-
-**Kind Cluster Infrastructure:**
-- `hack/test/kind/` - Kind cluster scripts (creation, image loading, deployment, teardown)
-- `hack/test/kind/infra/` - Kind cluster config, Helm values, supporting manifests
-
-**Testing:**
-- `felix/fv/` - Felix functional verification tests (Ginkgo v2-based)
-- Component unit tests co-located with source code
-- Felix FV supports batching: `FV_NUM_BATCHES` / `FV_BATCHES_TO_RUN` to split across CI jobs
-- Race detector enabled by default on amd64/arm64 (`FV_RACE_DETECTOR_ENABLED`)
+Per-area sub-designs carry area-specific test conventions on top of this rule
+(e.g. [`felix/design/bpf-tests.md`](../felix/design/bpf-tests.md)).
 
 ## PR Requirements
+
+**ALWAYS** use the PR template (`.github/PULL_REQUEST_TEMPLATE.md`). The only mandatory section is the **Release Note** — fill it in with a one-line summary of the user-facing impact of the change. Take a broad view of "user-facing": bug fixes, new features, performance improvements, and behavioral changes all qualify. If there is genuinely no user-facing impact, write "None".
 
 Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-not-required`) and one release note label (`release-note-required` or `release-note-not-required`). Optional: `cherry-pick-candidate` (bug fix backports), `needs-operator-pr` (requires operator change).
 
@@ -302,4 +177,5 @@ Every PR needs one docs label (`docs-pr-required`, `docs-completed`, or `docs-no
 - **Developer Guide:** `DEVELOPER_GUIDE.md`
 - **Contributing Guide:** `CONTRIBUTING.md`
 - **User Documentation:** https://docs.tigera.io/calico/latest/about
+- **Docs repo:** https://github.com/tigera/docs/
 - **Hack docs:** `hack/docs/`

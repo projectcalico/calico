@@ -1,0 +1,80 @@
+kind: BGPConfiguration
+apiVersion: projectcalico.org/v3
+metadata:
+  name: default
+spec:
+  logSeverityScreen: Info
+  nodeToNodeMeshEnabled: false
+  programClusterRoutes: Disabled
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-master
+spec:
+  bgp:
+    ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-1
+spec:
+  bgp:
+    ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: kube-node-2
+spec:
+  bgp:
+    ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippoolv4-1
+spec:
+  cidr: 192.168.0.0/16
+  ipipMode: Always
+  natOutgoing: true
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippoolv4-2
+spec:
+  cidr: 172.16.0.0/16
+  ipipMode: CrossSubnet
+  natOutgoing: true
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippoolv4-3
+spec:
+  cidr: 172.17.0.0/16
+  ipipMode: Never
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippoolv6-1
+spec:
+  cidr: 2002::/64
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: true
+---
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippoolv6-2
+spec:
+  cidr: 2010::/64
+  ipipMode: Never
+  vxlanMode: Never

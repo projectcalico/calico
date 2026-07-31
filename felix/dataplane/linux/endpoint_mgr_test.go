@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,11 @@
 package intdataplane
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +41,7 @@ import (
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -866,6 +869,14 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			epMgr = newEndpointManagerWithShims(
+				&endpointManagerConfig{
+					kubeIPVSSupportEnabled: rrConfigNormal.KubeIPVSSupportEnabled,
+					wlInterfacePrefixes:    []string{"cali"},
+					bpfEnabled:             false,
+					bpfAttachType:          v3.BPFAttachOptionTCX,
+					nft:                    false,
+					floatingIPsEnabled:     true,
+				},
 				rawTable,
 				mangleTable,
 				filterTable,
@@ -873,20 +884,17 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				routeTable,
 				ipVersion,
 				rules.NewEndpointMarkMapper(rrConfigNormal.MarkEndpoint, rrConfigNormal.MarkNonCaliEndpoint),
-				rrConfigNormal.KubeIPVSSupportEnabled,
-				[]string{"cali"},
 				statusReportRec.endpointStatusUpdateCallback,
 				mockProcSys.write,
 				mockProcSys.stat,
 				"1",
-				nil,
-				false,
-				v3.BPFAttachOptionTCX,
+				nil, // filterMaps
+				nil, // flowtableHandler
 				hepListener,
 				common.NewCallbacks(),
-				true,
-				false,
 				linkAddrsMgr,
+				nil, // arpTable
+				nil, // arpMaps
 			)
 		})
 
@@ -2028,7 +2036,7 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 					// programmed.
 					Context("with floating IPs disabled, but added to the endpoint", func() {
 						JustBeforeEach(func() {
-							epMgr.floatingIPsEnabled = false
+							epMgr.cfg.floatingIPsEnabled = false
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
 								Id: &wlEPID1,
 								Endpoint: &proto.WorkloadEndpoint{
@@ -2319,6 +2327,151 @@ func endpointManagerTests(ipVersion uint8, flowlogs bool) func() {
 				})
 
 				It("should remove routes", func() {
+					routeTable.checkRoutes("cali12345-ab", nil)
+				})
+			})
+		})
+
+		Describe("live migration route priority", func() {
+			const (
+				normalPriority   = 100
+				elevatedPriority = 50
+			)
+
+			wlEPUpdate := &proto.WorkloadEndpointUpdate{
+				Id: &wlEPID1,
+				Endpoint: &proto.WorkloadEndpoint{
+					State:      "active",
+					Mac:        "01:02:03:04:05:06",
+					Name:       "cali12345-ab",
+					ProfileIds: []string{},
+					Tiers:      []*proto.TierInfo{},
+					Ipv4Nets:   []string{"10.0.240.2/24"},
+					Ipv6Nets:   []string{"2001:db8:2::2/128"},
+				},
+			}
+
+			expectedRouteTarget := func(priority int) []routetable.Target {
+				var cidr string
+				if ipVersion == 6 {
+					cidr = "2001:db8:2::2/128"
+				} else {
+					cidr = "10.0.240.0/24"
+				}
+				return []routetable.Target{{
+					RouteKey: routetable.RouteKey{
+						CIDR:     ip.MustParseCIDROrIP(cidr),
+						Priority: priority,
+					},
+					DestMAC: testutils.MustParseMAC("01:02:03:04:05:06"),
+				}}
+			}
+
+			JustBeforeEach(func() {
+				// Override config with explicit route priorities.
+				epMgr.cfg.normalRoutePriority = normalPriority
+				epMgr.cfg.elevatedRoutePriority = elevatedPriority
+			})
+
+			Context("with endpoint already active", func() {
+				JustBeforeEach(func() {
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should set routes at normal priority", func() {
+					routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+				})
+
+				Context("when live migration state becomes Target", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateTarget,
+						)
+						applyUpdates(epMgr)
+					})
+
+					It("should suppress routes", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+					})
+
+					Context("when live migration state becomes Live", func() {
+						JustBeforeEach(func() {
+							epMgr.OnLiveMigrationStateUpdate(
+								types.ProtoToWorkloadEndpointID(&wlEPID1),
+								liveMigrationStateLive,
+							)
+							applyUpdates(epMgr)
+						})
+
+						It("should set routes at elevated priority", func() {
+							routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+						})
+
+						Context("when live migration state becomes TimeWait", func() {
+							JustBeforeEach(func() {
+								epMgr.OnLiveMigrationStateUpdate(
+									types.ProtoToWorkloadEndpointID(&wlEPID1),
+									liveMigrationStateTimeWait,
+								)
+								applyUpdates(epMgr)
+							})
+
+							It("should still set routes at elevated priority", func() {
+								routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(elevatedPriority))
+							})
+
+							Context("when live migration state becomes Base", func() {
+								JustBeforeEach(func() {
+									epMgr.OnLiveMigrationStateUpdate(
+										types.ProtoToWorkloadEndpointID(&wlEPID1),
+										liveMigrationStateBase,
+									)
+									applyUpdates(epMgr)
+								})
+
+								It("should revert to normal priority", func() {
+									routeTable.checkRoutes("cali12345-ab", expectedRouteTarget(normalPriority))
+								})
+							})
+						})
+					})
+				})
+
+				Context("when endpoint is removed while in live migration", func() {
+					JustBeforeEach(func() {
+						epMgr.OnLiveMigrationStateUpdate(
+							types.ProtoToWorkloadEndpointID(&wlEPID1),
+							liveMigrationStateLive,
+						)
+						applyUpdates(epMgr)
+						epMgr.OnUpdate(&proto.WorkloadEndpointRemove{Id: &wlEPID1})
+						applyUpdates(epMgr)
+					})
+
+					It("should remove routes and clean up live migration state", func() {
+						routeTable.checkRoutes("cali12345-ab", nil)
+						Expect(epMgr.pendingLiveMigrationStates).To(BeEmpty())
+					})
+				})
+			})
+
+			Context("when live migration state arrives before endpoint", func() {
+				JustBeforeEach(func() {
+					// Live migration state update arrives but WEP isn't active yet.
+					epMgr.OnLiveMigrationStateUpdate(
+						types.ProtoToWorkloadEndpointID(&wlEPID1),
+						liveMigrationStateTarget,
+					)
+					// Now the WEP arrives.
+					epMgr.OnUpdate(wlEPUpdate)
+					epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali12345-ab", State: "up"})
+					applyUpdates(epMgr)
+				})
+
+				It("should suppress routes for the target", func() {
 					routeTable.checkRoutes("cali12345-ab", nil)
 				})
 			})
@@ -3911,6 +4064,133 @@ func removePolChainNamePrefix(target string) string {
 	log.WithField("chainName", target).Panic("Not a policy chain name.")
 	panic("Not a policy chain name")
 }
+
+// fakeMapsDataplane is a no-op nftables.MapsDataplane, just enough to get the endpoint
+// manager past its "have we got a maps backend" nil check so the flowtable handler runs.
+type fakeMapsDataplane struct{}
+
+func (f *fakeMapsDataplane) AddOrReplaceMap(meta nftables.MapMetadata, members map[string][]string) {}
+func (f *fakeMapsDataplane) RemoveMap(id string)                                                    {}
+func (f *fakeMapsDataplane) MapUpdates() *nftables.MapUpdates                                       { return nil }
+func (f *fakeMapsDataplane) FinishMapUpdates(updates *nftables.MapUpdates)                          {}
+func (f *fakeMapsDataplane) LoadDataplaneState(ctx context.Context, mapNames []string) error {
+	return nil
+}
+
+// fakeFlowtableHandler records the workload interface lists handed to the flowtable.
+type fakeFlowtableHandler struct {
+	lastIfaces []string
+	callCount  int
+}
+
+func (f *fakeFlowtableHandler) SetWorkloadInterfaces(ifces []string) {
+	f.callCount++
+	f.lastIfaces = append([]string(nil), ifces...)
+	sort.Strings(f.lastIfaces)
+}
+
+// SetOverlayDevices and SetExternalDevices are no-ops here; the endpoint manager under test only
+// drives workload interfaces. They exist solely to satisfy nftables.FlowTableHandler.
+func (f *fakeFlowtableHandler) SetOverlayDevices(devices []string) {}
+
+func (f *fakeFlowtableHandler) SetExternalDevices(ifces []string) {}
+
+var _ = Describe("EndpointManager flowtable", func() {
+	var (
+		epMgr     *endpointManager
+		ftHandler *fakeFlowtableHandler
+	)
+
+	BeforeEach(func() {
+		ftHandler = &fakeFlowtableHandler{}
+		renderer := rules.NewRenderer(rules.Config{
+			IPSetConfigV4:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:         ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:            0x8,
+			MarkPass:              0x10,
+			MarkScratch0:          0x20,
+			MarkScratch1:          0x40,
+			MarkDrop:              0x80,
+			MarkEndpoint:          0xff00,
+			MarkNonCaliEndpoint:   0x0100,
+			WorkloadIfacePrefixes: []string{"cali", "tap"},
+		}, false)
+		mockProcSys := &testProcSys{state: map[string]string{}, pathsThatExist: map[string]bool{}}
+		nlDataplane := mocknetlink.New()
+		linkAddrsMgr := linkaddrs.New(
+			4,
+			[]string{"cali"},
+			&environment.FakeFeatureDetector{
+				Features: environment.Features{},
+			},
+			10*time.Second,
+			linkaddrs.WithNetlinkHandleShim(nlDataplane.NewMockNetlink),
+		)
+
+		epMgr = newEndpointManagerWithShims(
+			&endpointManagerConfig{
+				wlInterfacePrefixes: []string{"cali"},
+				bpfAttachType:       v3.BPFAttachOptionTCX,
+			},
+			newMockTable("raw"),
+			newMockTable("mangle"),
+			newMockTable("filter"),
+			renderer,
+			&mockRouteTable{index: 0, currentRoutes: map[string][]routetable.Target{}},
+			4,
+			rules.NewEndpointMarkMapper(0xff00, 0x0100),
+			(&statusReportRecorder{currentState: map[any]string{}, extraInfo: map[any]any{}}).endpointStatusUpdateCallback,
+			mockProcSys.write,
+			mockProcSys.stat,
+			"1",
+			&fakeMapsDataplane{}, // filterMaps
+			ftHandler,            // flowtableHandler
+			&testHEPListener{},
+			common.NewCallbacks(),
+			linkAddrsMgr,
+			nil, // arpTable
+			nil, // arpMaps
+		)
+	})
+
+	It("should only pass up interfaces to the flowtable", func() {
+		// Two workload endpoints, but only cali11111-aa is up.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
+		})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl2", EndpointId: "ep2"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali22222-bb", Mac: "01:02:03:04:05:07"},
+		})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+
+		Expect(ftHandler.lastIfaces).To(ConsistOf("cali11111-aa"))
+	})
+
+	It("should recompute the flowtable when a workload interface goes down, without an endpoint change", func() {
+		// One up workload endpoint.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateUp})
+		epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+			Id:       &proto.WorkloadEndpointID{OrchestratorId: "k8s", WorkloadId: "wl1", EndpointId: "ep1"},
+			Endpoint: &proto.WorkloadEndpoint{Name: "cali11111-aa", Mac: "01:02:03:04:05:06"},
+		})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+		Expect(ftHandler.lastIfaces).To(ConsistOf("cali11111-aa"))
+		callsBefore := ftHandler.callCount
+
+		// Interface goes away. No WorkloadEndpoint update yet.
+		epMgr.OnUpdate(&ifaceStateUpdate{Name: "cali11111-aa", State: ifacemonitor.StateNotPresent})
+		Expect(epMgr.ResolveUpdateBatch()).NotTo(HaveOccurred())
+		Expect(epMgr.CompleteDeferredWork()).NotTo(HaveOccurred())
+
+		Expect(ftHandler.callCount).To(BeNumerically(">", callsBefore))
+		Expect(ftHandler.lastIfaces).To(BeEmpty())
+	})
+})
 
 var _ = Describe("EndpointManager IPv4", endpointManagerTests(4, false))
 

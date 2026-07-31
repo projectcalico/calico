@@ -31,7 +31,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -56,7 +56,7 @@ func cleanup(calicoDir string) error {
 }
 
 func setup() {
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
 
 	_ = cleanup("")
@@ -720,7 +720,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 
 	member = "192.168.1.1"
@@ -735,7 +735,7 @@ func TestMemberToIPMask(t *testing.T) {
 		t.Fatalf("got wrong IP: ip=%v expectedIP=%q", ip, expectedIP)
 	}
 	if mask != expectedMask {
-		t.Fatalf("got wrong mask: mask=%v expectedMask=%q", mask, expectedMask)
+		t.Fatalf("got wrong mask: mask=%v expectedMask=%d", mask, expectedMask)
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 package caliconodestatus
 
@@ -32,20 +32,25 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	cns := obj.(*calico.CalicoNodeStatus)
+	cns.Status = calico.CalicoNodeStatusStatus{}
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newCNS := obj.(*calico.CalicoNodeStatus)
+	oldCNS := old.(*calico.CalicoNodeStatus)
+	newCNS.Status = oldCNS.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 
-func (apiServerStrategy) AllowCreateOnUpdate() bool {
+func (apiServerStrategy) AllowCreateOnUpdate(ctx context.Context) bool {
 	return false
 }
 
-func (apiServerStrategy) AllowUnconditionalUpdate() bool {
+func (apiServerStrategy) AllowUnconditionalUpdate(ctx context.Context) bool {
 	return false
 }
 
@@ -61,6 +66,25 @@ func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 }
 
 func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	return field.ErrorList{}
+}
+
+type apiServerStatusStrategy struct {
+	apiServerStrategy
+}
+
+func NewStatusStrategy(strategy apiServerStrategy) apiServerStatusStrategy {
+	return apiServerStatusStrategy{strategy}
+}
+
+func (apiServerStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newStatus := obj.(*calico.CalicoNodeStatus)
+	oldStatus := old.(*calico.CalicoNodeStatus)
+	newStatus.Spec = oldStatus.Spec
+	newStatus.Labels = oldStatus.Labels
+}
+
+func (apiServerStatusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 

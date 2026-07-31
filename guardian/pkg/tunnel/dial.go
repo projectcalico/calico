@@ -125,7 +125,8 @@ func (d *sessionDialer) dialTLS() (net.Conn, error) {
 	dialer := newDialer(d.timeout)
 	if d.httpProxyURL != nil {
 		// mTLS will be negotiated over a TCP connection to the proxy, which performs TCP passthrough to the target.
-		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL)
+		// Do not log the full proxy URL — it may contain credentials in userinfo.
+		logrus.Infof("Dialing to %s via HTTP proxy at %s", d.addr, d.httpProxyURL.Redacted())
 		var tlsConfig *tls.Config
 		tlsConfig, err = calicoTLS.NewTLSConfig()
 		if err != nil {
@@ -171,12 +172,12 @@ func tlsDialViaHTTPProxy(d *net.Dialer, destination string, proxyTargetURL *url.
 
 	// Build the HTTP CONNECT request.
 	var requestBuilder strings.Builder
-	requestBuilder.WriteString(fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n", destination, destination))
+	fmt.Fprintf(&requestBuilder, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n", destination, destination)
 	if proxyTargetURL.User != nil {
 		username := proxyTargetURL.User.Username()
 		password, _ := proxyTargetURL.User.Password()
 		encodedCredentials := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-		requestBuilder.WriteString(fmt.Sprintf("Proxy-Authorization: Basic %s\r\n", encodedCredentials))
+		fmt.Fprintf(&requestBuilder, "Proxy-Authorization: Basic %s\r\n", encodedCredentials)
 	}
 	requestBuilder.WriteString("\r\n")
 

@@ -16,6 +16,7 @@ package resources
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/json"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 

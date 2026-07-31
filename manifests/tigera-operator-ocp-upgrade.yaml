@@ -21,37 +21,6 @@ metadata:
     name: tigera-operator
     openshift.io/run-level: "0"
 ---
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator-secrets
-  namespace: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator-secrets
-  apiGroup: rbac.authorization.k8s.io
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: tigera-operator
-  labels:
-    k8s-app: tigera-operator
-subjects:
-  - kind: ServiceAccount
-    name: tigera-operator
-    namespace: tigera-operator
-roleRef:
-  kind: ClusterRole
-  name: tigera-operator
-  apiGroup: rbac.authorization.k8s.io
----
 # Permissions required to manipulate operator secrets for a Calico cluster.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -269,6 +238,15 @@ rules:
       - watch
   - apiGroups:
       - apps
+    resources:
+      # The status manager reads ReplicaSets to find a Deployment's active revision.
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
     resourceNames:
       - tigera-operator
     resources:
@@ -345,6 +323,7 @@ rules:
       - projectcalico.org
     resources:
       - felixconfigurations
+      - bgpconfigurations
       - ippools
     verbs:
       - create
@@ -440,9 +419,13 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     resourceNames:
+      - envoy-gateway-topology-injector.calico-system
+      # New install lives in calico-system; the .tigera-gateway entry is kept so the
+      # operator can also delete the legacy webhook on upgrade from 3.x.
       - envoy-gateway-topology-injector.tigera-gateway
     verbs:
       - update
+      - delete
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
@@ -488,6 +471,33 @@ rules:
       - admissionregistration.k8s.io
     resources:
       - validatingwebhookconfigurations
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
+  # The operator manages MutatingAdmissionPolicy resources for CRD defaulting (k8s 1.32+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingadmissionpolicies
+      - mutatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
+  # The operator manages ValidatingAdmissionPolicy resources protecting built-in
+  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs (k8s 1.30+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
     verbs:
       - create
       - update
@@ -574,20 +584,22 @@ rules:
       - list
       - watch
       - delete
-  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
+  # The operator needs to manage NetworkPolicies, GlobalNetworkPolicies, and NetworkSets via the projectcalico.org API group.
   - apiGroups:
       - projectcalico.org
     resources:
       - networkpolicies
       - globalnetworkpolicies
+      - networksets
     verbs:
       - get
       - list
       - watch
       - create
       - update
+      - patch
       - delete
-  # For tiered network policy actions, tigera-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
+  # For tiered network policy actions, calico-apiserver requires that we authorize the operator for the tier.networkpolicies and tier.globalnetworkpolicies pseudo-kinds.
   - apiGroups:
       - projectcalico.org
     resourceNames:
@@ -611,7 +623,7 @@ rules:
       - list
       - watch
       - get
-  # For tiered network policy actions, tigera-apiserver requires get authorization on the associated tier.
+  # For tiered network policy actions, calico-apiserver requires get authorization on the associated tier.
   - apiGroups:
       - projectcalico.org
     resourceNames:
@@ -652,7 +664,8 @@ rules:
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
-      - xlistenersets.gateway.networking.x-k8s.io
+      - listenersets.gateway.networking.k8s.io
+      - xmeshes.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
       - clienttrafficpolicies.gateway.envoyproxy.io
@@ -702,6 +715,16 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  # 4. The operator needs to be able to read Gateway resources to determine namespaces to apply
+  # CIG resources to.
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gateways
+    verbs:
+      - list
+      - get
+      - watch
   # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
   # be able to assign this RBAC to Typha and calico-node.
   - apiGroups:
@@ -729,6 +752,47 @@ rules:
       - update
     resourceNames:
       - istiod
+  # The operator checks DatastoreMigration CRs at startup and during reconciliation
+  # to determine whether a v1-to-v3 CRD migration is in progress or complete.
+  - apiGroups:
+      - migration.projectcalico.org
+    resources:
+      - datastoremigrations
+    verbs:
+      - get
+      - list
+      - watch
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator-secrets
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator-secrets
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+roleRef:
+  kind: ClusterRole
+  name: tigera-operator
+  apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -781,6 +845,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds=true
+            - -zap-devel=false
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -826,12 +891,12 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: quay.io/calico/ctl:master
+          image: quay.io/calico/calico:master
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - calicoctl
+            - /usr/bin/calicoctl
           args:
             - --allow-version-mismatch
             - create

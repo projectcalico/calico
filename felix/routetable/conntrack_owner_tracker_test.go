@@ -165,6 +165,29 @@ func TestConntrackCleanupManager_DeletedRoute(t *testing.T) {
 	expectWaitForPendingDeletionToDelay(h.ccm, h.conntrack, cidr1)
 }
 
+func TestConntrackCleanupManager_BlockRouteRemovalLeavesWorkloadIP(t *testing.T) {
+	h := setupConntrackTrackerTest(t)
+
+	// Workload owns an IP that is also an IPAM block's network address.
+	workloadAddr := ip.MustParseCIDROrIP("10.0.0.0/32")
+	h.ccm.UpdateCIDROwner(workloadAddr, 10, RouteClassLocalWorkload)
+	h.ccm.StartConntrackCleanupAndReset()
+
+	// The IPAM block route is removed.  Since we only track single-address
+	// CIDRs, this must not disturb the workload's entry, which is keyed on
+	// the same address.
+	h.ccm.RemoveCIDROwner(ip.MustParseCIDROrIP("10.0.0.0/26"))
+
+	// A dataplane flap of the workload's route should not trigger conntrack
+	// cleanup: the route isn't moving anywhere.
+	h.ccm.OnDataplaneRouteDeleted(workloadAddr, 10)
+	h.ccm.StartConntrackCleanupAndReset()
+	Consistently(h.conntrack.NumPendingRemovals, "10ms").Should(Equal(0))
+	expectWaitForPendingDeletionToReturnImmediately(h.ccm, workloadAddr)
+
+	expectInSyncAtEnd(h.ccm)
+}
+
 func TestConntrackCleanupManager_DeletedStaleRoute(t *testing.T) {
 	h := setupConntrackTrackerTest(t)
 

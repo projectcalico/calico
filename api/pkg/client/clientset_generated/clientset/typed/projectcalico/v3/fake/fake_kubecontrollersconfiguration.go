@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeKubeControllersConfigurations implements KubeControllersConfigurationInterface
 type fakeKubeControllersConfigurations struct {
-	*gentype.FakeClientWithList[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList]
+	*gentype.FakeClientWithListAndApply[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList, *projectcalicov3.KubeControllersConfigurationApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeKubeControllersConfigurations(fake *FakeProjectcalicoV3) projectcalicov3.KubeControllersConfigurationInterface {
+func newFakeKubeControllersConfigurations(fake *FakeProjectcalicoV3) typedprojectcalicov3.KubeControllersConfigurationInterface {
 	return &fakeKubeControllersConfigurations{
-		gentype.NewFakeClientWithList[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList](
+		gentype.NewFakeClientWithListAndApply[*v3.KubeControllersConfiguration, *v3.KubeControllersConfigurationList, *projectcalicov3.KubeControllersConfigurationApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("kubecontrollersconfigurations"),

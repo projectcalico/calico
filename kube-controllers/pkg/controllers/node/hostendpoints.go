@@ -309,7 +309,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) e
 		if err != nil {
 			return fmt.Errorf("failed to generate host endpoint name: %v", err)
 		}
-		expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
+		expectedHostEndpoint := c.generateAutoHostEndpoint(node, nil, nil, defaultHostEndpointName, c.getExpectedIPs(node), defaultHostEndpointInterface)
 		if err := c.createOrUpdateHostEndpoint(expectedHostEndpoint); err != nil {
 			syncErr = err
 		}
@@ -336,7 +336,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) e
 				if err != nil {
 					return fmt.Errorf("failed to generate host endpoint name: %v", err)
 				}
-				expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPs, "")
+				expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, template.Annotations, hostEndpointName, expectedIPs, "")
 				if err := c.createOrUpdateHostEndpoint(expectedHostEndpoint); err != nil {
 					syncErr = err
 				}
@@ -351,7 +351,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) e
 						return fmt.Errorf("failed to generate host endpoint name: %v", err)
 					}
 					expectedIPsWithInterfaceIPs := c.mergeExpectedIPsWithInterfaceIPs(expectedIPs, iface)
-					expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, hostEndpointName, expectedIPsWithInterfaceIPs, iface.Name)
+					expectedHostEndpoint := c.generateAutoHostEndpoint(node, template.Labels, template.Annotations, hostEndpointName, expectedIPsWithInterfaceIPs, iface.Name)
 					if err := c.createOrUpdateHostEndpoint(expectedHostEndpoint); err != nil {
 						syncErr = err
 					}
@@ -558,7 +558,7 @@ func (c *autoHostEndpointController) getExpectedIPs(node *internalapi.Node) []st
 }
 
 // generateAutoHostEndpoint returns a HostEndpoint created based on the specific parameters
-func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.Node, templateLabels map[string]string, hepName string, expectedIPs []string, interfaceName string) *api.HostEndpoint {
+func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.Node, templateLabels, templateAnnotations map[string]string, hepName string, expectedIPs []string, interfaceName string) *api.HostEndpoint {
 	hepLabels := make(map[string]string)
 	maps.Copy(hepLabels, node.Labels)
 	for k, v := range templateLabels {
@@ -570,13 +570,21 @@ func (c *autoHostEndpointController) generateAutoHostEndpoint(node *internalapi.
 	}
 	hepLabels[hepCreatedLabelKey] = hepCreatedLabelValue
 
+	// Only template annotations are applied to the HostEndpoint; Node annotations
+	// are intentionally not copied.
+	var hepAnnotations map[string]string
+	if len(templateAnnotations) > 0 {
+		hepAnnotations = maps.Clone(templateAnnotations)
+	}
+
 	hostEndpoint := &api.HostEndpoint{
 		TypeMeta: metav1.TypeMeta{
 			Kind: api.KindHostEndpoint,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   hepName,
-			Labels: hepLabels,
+			Name:        hepName,
+			Labels:      hepLabels,
+			Annotations: hepAnnotations,
 		},
 		Spec: api.HostEndpointSpec{
 			Node:          node.Name,
@@ -595,6 +603,10 @@ func (c *autoHostEndpointController) hostEndpointNeedsUpdate(current *api.HostEn
 	logrus.Debugf("checking if hostendpoint needs update\ncurrent: %#v\nexpected: %#v", current, expected)
 	if !reflect.DeepEqual(current.Labels, expected.Labels) {
 		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of labels")
+		return true
+	}
+	if !reflect.DeepEqual(current.Annotations, expected.Annotations) {
+		logrus.WithField("hep.Name", current.Name).Debug("hostendpoint needs update because of annotations")
 		return true
 	}
 	if !reflect.DeepEqual(current.Spec.ExpectedIPs, expected.Spec.ExpectedIPs) {
