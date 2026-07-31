@@ -1142,6 +1142,52 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		})
 	})
 
+	// The manager only drops a nameToIface entry once every field of the
+	// bpfInterface has gone back to its zero value.  A field left set by a
+	// teardown leaks the entry for the lifetime of the process, so check the
+	// teardown of each kind of workload that sets an otherwise-sticky field.
+	//
+	// Both teardown orderings matter.  In practice the CNI deletes the veth
+	// before the datastore reports the endpoint gone, and that ordering is the
+	// weaker one: once the interface is down, applyPolicy short-circuits and
+	// stops refreshing the derived state.
+	describeTeardown := func(desc string, teardown func(name string)) {
+		DescribeTable("should not leak a nameToIface entry when the workload is torn down, "+desc,
+			func(ep *proto.WorkloadEndpoint) {
+				newBpfEpMgr(false)
+				ep.Name = "cali12345"
+				bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+					Id: &proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     ep.Name,
+						EndpointId:     ep.Name,
+					},
+					Endpoint: ep,
+				})
+				genIfaceUpdate(ep.Name, ifacemonitor.StateUp, 15)()
+				Expect(bpfEpMgr.nameToIface).To(HaveKey(ep.Name))
+				// Pre-flight: the entry must actually be carrying the sticky
+				// state, otherwise the teardown check below is vacuous.
+				Expect(bpfEpMgr.nameToIface[ep.Name].info.hasIstioDSCP).
+					To(Equal(ep.IsIstioAmbient), "istio DSCP flag not recorded")
+
+				teardown(ep.Name)
+				Expect(bpfEpMgr.nameToIface).NotTo(HaveKey(ep.Name))
+			},
+			Entry("plain workload", &proto.WorkloadEndpoint{}),
+			Entry("istio ambient workload", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
+		)
+	}
+
+	describeTeardown("interface first", func(name string) {
+		genIfaceUpdate(name, ifacemonitor.StateNotPresent, 15)()
+		genWLUpdateEpRemove(name)()
+	})
+	describeTeardown("endpoint first", func(name string) {
+		genWLUpdateEpRemove(name)()
+		genIfaceUpdate(name, ifacemonitor.StateNotPresent, 15)()
+	})
+
 	Context("with jit-harden", func() {
 		JustBeforeEach(func() {
 			dp.jitHarden = true
