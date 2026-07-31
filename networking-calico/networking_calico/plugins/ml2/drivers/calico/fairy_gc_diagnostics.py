@@ -72,15 +72,20 @@ a target and times out as ``TimeoutError``.  Python's "Exception ignored in" mec
 swallows the error, but the hub has been wedged for ~10s and the connection record's
 state is indeterminate.
 
-In current code (after PR 13015), all of our DB access is inside
-``db_api.CONTEXT_*.using`` blocks, which close the session deterministically at block
-exit (oslo.db's ``_TransactionContext._session`` finally-block calls
-``session.close()``) and so never leave a fairy for GC.  In principle that should be
-enough.  This module is the safety net for the case where it isn't -- e.g. if a
-Neutron-framework path outside our control still drops a session unclosed, or if we add
-a code path later that bypasses the ``using`` pattern.  If the race fires again the
-diagnostic output identifies which code path checked out the leaking connection, so a
-targeted fix can follow.
+In current code (after PR 13015), our DB access falls into two patterns: raw
+``context.session.query(...)`` calls inside explicit ``db_api.CONTEXT_*.using`` blocks
+(which close the session deterministically at block exit via oslo.db's
+``_TransactionContext._session`` finally-block calling ``session.close()``); and
+``@db_api.retry_if_session_inactive``-decorated plugin API calls (``self.db.get_*``,
+etc.) outside any explicit ``using`` block, which rely on SQLAlchemy's own session
+lifecycle.  In the deployments we have tested neither pattern leaves a fairy for GC, but
+the decorator-only path is the weaker of the two -- the retry wrapper doesn't open its
+own ``using`` block, so deterministic close isn't guaranteed there.  This module is the
+safety net for cases where it isn't enough -- e.g. if a Neutron-framework path outside
+our control drops a session unclosed, or if a decorator-based call path leaks a fairy
+under some condition we haven't exercised.  If the race fires again the diagnostic
+output identifies which code path checked out the leaking connection, so a targeted fix
+can follow.
 
 What this module does
 ---------------------

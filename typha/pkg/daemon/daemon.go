@@ -44,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
+	"github.com/projectcalico/calico/typha/pkg/logging"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
@@ -109,8 +109,8 @@ func New() *TyphaDaemon {
 			}
 			return ClientV3Shim{client.(RealClientV3), config}, nil
 		},
-		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
-		ConfigureLogging:      logutils.ConfigureLogging,
+		ConfigureEarlyLogging: logging.ConfigureEarlyLogging,
+		ConfigureLogging:      logging.ConfigureLogging,
 		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
 	}
 }
@@ -473,10 +473,10 @@ type DatastoreClient interface {
 	NodeStatusSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
-// RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.
+// RealClientV3 is the real API of the V3 client, plus the BackendAccessor we use to get the backend.
 type RealClientV3 interface {
 	clientv3.Interface
-	Backend() bapi.Client
+	bapi.BackendAccessor
 }
 
 // TODO Typha: Share with Felix.

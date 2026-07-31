@@ -34,10 +34,11 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
+	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
 )
 
@@ -171,13 +172,45 @@ func setupBGPFilterEnv(t *testing.T, ctx context.Context, g *WithT) *bgpFilterEn
 	t.Cleanup(func() { _, _ = utils.Run(t, "docker rm -f "+externalNodeV6, utils.RunOptions{AllowFail: true}) })
 
 	// Mark the egress node so the node-selected BGPPeers attach to it.
-	labelNode(t, ctx, env.egressNode, "egress", "true")
+	labelNode(t, env.egressNode, "egress", "true")
+
+	// anchorNS pins an idle pod to the egress node so it owns an IPAM block to
+	// advertise. The random suffix keeps it unique per test so concurrent or
+	// repeated runs against the same cluster do not collide.
+	anchorNS := e2eutils.GenerateRandomName("bgp-filter-anchor")
+	ensureEgressNodeOwnsBlock(t, ctx, g, cli, env.egressNode, anchorNS)
 
 	// Establish BGPPeers from the egress node to each external router.
 	createBGPPeer(t, ctx, g, cli, peerNameV4, env.externalNodeIP)
 	createBGPPeer(t, ctx, g, cli, peerNameV6, env.externalNodeIP6)
 
 	return env
+}
+
+// ensureEgressNodeOwnsBlock pins an idle pod to the egress node so it owns an
+// IPAM block to advertise — otherwise the export assertions are checking a node
+// that may host no pods (and thus no block, especially for IPv6). The pod uses
+// the default pools so its block CIDRs match clusterRouteRegexV4/V6; waiting for
+// both IPs claims a block in each family before any assertion runs.
+func ensureEgressNodeOwnsBlock(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, node, nsName string) {
+	t.Helper()
+
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
+	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating anchor namespace")
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "block-anchor", Namespace: nsName},
+		Spec: corev1.PodSpec{
+			NodeName:   node,
+			Containers: []corev1.Container{{Name: "anchor", Image: utils.Agnhost, Args: []string{"pause"}}},
+		},
+	}
+	g.Expect(cli.Create(ctx, pod)).To(Succeed(), "creating block-anchor pod on egress node %s", node)
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), pod) })
+
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv4Protocol)
+	waitForPodIP(ctx, g, cli, pod, corev1.IPv6Protocol)
 }
 
 // testBGPFilterBasic adds a route to the external router, verifies import and
@@ -415,18 +448,6 @@ func testBGPFilterGlobalPeer(t *testing.T, env *bgpFilterEnv, ipv4, ipv6 bool) {
 
 // --- Fixture + resource helpers ---
 
-// labelNode applies a single label to a node via a strategic-merge patch (the
-// client-go equivalent of `kubectl label node ... --overwrite`).
-func labelNode(t *testing.T, ctx context.Context, nodeName, key, value string) {
-	t.Helper()
-	cs := utils.K8sClient(t)
-	patch := fmt.Appendf(nil, `{"metadata":{"labels":{%q:%q}}}`, key, value)
-	_, err := cs.CoreV1().Nodes().Patch(ctx, nodeName, types.MergePatchType, patch, metav1.PatchOptions{})
-	if err != nil {
-		t.Fatalf("labelling node %s with %s=%s: %v", nodeName, key, value, err)
-	}
-}
-
 // createBGPPeer creates a node-selected BGPPeer to the given external router
 // address and registers a cleanup that removes it.
 func createBGPPeer(t *testing.T, ctx context.Context, g *WithT, cli ctrlclient.Client, name, peerIP string) {
@@ -489,10 +510,29 @@ func (e *bgpFilterEnv) updatePeer(t *testing.T, ctx context.Context, g *WithT, p
 // "bird6") and birdCmd the matching client ("birdcl" or "birdcl6").
 func (e *bgpFilterEnv) addExternalStaticRoute(t *testing.T, container, birdDir, birdCmd, route, via string) {
 	t.Helper()
+	g := NewWithT(t)
 	conf := fmt.Sprintf("protocol static static1 {\n    route %s via %s;\n    export all;\n}", route, via)
-	utils.MustRun(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/%s/static-route.conf'\n%s\nEOF\n",
-		container, birdDir, conf))
-	utils.MustRun(t, fmt.Sprintf("docker exec %s %s configure", container, birdCmd))
+
+	// Write the config and reconfigure BIRD, verifying it actually accepted the
+	// new config: `birdcl configure` exits 0 even when it rejects the config
+	// (e.g. a truncated write), silently keeping the old config, which would
+	// otherwise surface only as an opaque timeout in the route assertions.
+	g.Eventually(func() error {
+		if _, err := utils.Run(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/%s/static-route.conf'\n%s\nEOF\n",
+			container, birdDir, conf), utils.RunOptions{AllowFail: true, SuppressErrLog: true}); err != nil {
+			return err
+		}
+		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s configure", container, birdCmd),
+			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(out, "Reconfigur") {
+			return fmt.Errorf("%s configure did not accept static-route.conf on %s:\n%s", birdCmd, container, out)
+		}
+		return nil
+	}, 30*time.Second, time.Second).Should(Succeed(), "adding external static route %s via %s on %s", route, via, container)
+
 	t.Cleanup(func() {
 		_, _ = utils.Run(t, fmt.Sprintf("docker exec %s sh -c 'rm /etc/%s/static-route.conf; %s configure'",
 			container, birdDir, birdCmd), utils.RunOptions{AllowFail: true})
@@ -514,17 +554,15 @@ func (e *bgpFilterEnv) assertClusterRoute(t *testing.T, route, peerIP string, ip
 	pattern := regexp.QuoteMeta(route) + ` *via ` + regexp.QuoteMeta(peerIP) + ` on .* \[` + proto
 	re := regexp.MustCompile(pattern)
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.ExecInCalicoNode(t, e.egressNode, birdCmd+" show route protocol "+proto,
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, route, present)
-	})
-	if err != nil {
-		t.Fatalf("cluster route check failed for %s on %s: %v", route, e.egressNode, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "cluster route check failed for %s on %s", route, e.egressNode)
 }
 
 // assertExternalRoute polls an external router's BIRD until a route matching
@@ -535,19 +573,42 @@ func assertExternalRoute(t *testing.T, container, proto, routeRegex, peerIPRegex
 	if ipv6 {
 		birdCmd = "birdcl6"
 	}
-	re := regexp.MustCompile(routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto)
+	// IPv4 routes use the peer's global address as the next-hop, with no "from"
+	// field:
+	//   v4: <route> via <peerIP> on eth0 [<proto> <time>] ...
+	//
+	// IPv6 depends on how the peer is configured in bird6.cfg.template:
+	//   - OSS pins "gateway recursive" on every peer, so the route is advertised
+	//     with the peer's global address as the next-hop (same shape as v4).
+	//   - Enterprise emits "direct" for a directly-connected peer (the external
+	//     router shares the egress node's segment), so BIRD uses a link-local
+	//     next-hop and carries the peer's global address in the "from" field:
+	//       v6: <route> via fe80::... on eth0 [<proto> <time> from <peerIP>] ...
+	//
+	// Accept either form so the assertion holds in both repos regardless of
+	// which next-hop BIRD emits. The query is already scoped with
+	// "show route protocol <proto>", so the link-local branch needn't re-verify
+	// the peer IP.
+	pattern := routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto
+	if ipv6 {
+		pattern = `(?:` +
+			routeRegex + ` *via ` + peerIPRegex + ` on .* \[` + proto +
+			`|` +
+			routeRegex + ` *via fe80:[0-9a-f:]+ on .* \[` + proto +
+			`)`
+	}
 
-	err := utils.RetryUntilSuccess(t, time.Minute, func() error {
+	re := regexp.MustCompile(pattern)
+
+	g := NewWithT(t)
+	g.Eventually(func() error {
 		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s show route protocol %s", container, birdCmd, proto),
 			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 		if err != nil {
 			return err
 		}
 		return checkRoutePresence(re, out, routeRegex, present)
-	})
-	if err != nil {
-		t.Fatalf("external route check failed for %s on %s: %v", routeRegex, container, err)
-	}
+	}, time.Minute, time.Second).Should(Succeed(), "external route check failed for %s on %s", routeRegex, container)
 }
 
 // checkRoutePresence returns nil when re's match of out agrees with the

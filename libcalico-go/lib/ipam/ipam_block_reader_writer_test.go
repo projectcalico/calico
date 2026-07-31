@@ -157,11 +157,6 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, option
 	panic("should not be called")
 }
 
-// backendClientAccessor is an interface used to access the backend client from the main clientv3.
-type backendClientAccessor interface {
-	Backend() api.Client
-}
-
 var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	log.SetLevel(log.DebugLevel)
 

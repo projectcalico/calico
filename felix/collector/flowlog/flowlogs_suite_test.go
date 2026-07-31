@@ -21,13 +21,13 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
 func init() {
 	testutils.HookLogrusForGinkgo()
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 	logrus.SetLevel(logrus.DebugLevel)
 }
 

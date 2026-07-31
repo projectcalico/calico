@@ -480,7 +480,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			goto deny;
 		}
 
-		if (ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
+		if (is_tcp_syn(ctx)) {
 			CALI_DEBUG("Forcing policy on SYN");
 			if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT) {
 				/* Set DNAT info for policy */
@@ -746,10 +746,17 @@ syn_force_policy:
 			goto skip_policy;
 		}
 		ctx->state->flags |= CALI_ST_DEST_IS_HOST;
-	} else if (CALI_F_FROM_HEP) {
+	} else if (CALI_F_TO_HOST) {
 		if (cali_rt_flags_skip_ingress_redirect(dest_rt->flags)) {
+			/* The destination workload cannot accept peer-redirected packets;
+			 * bpf_redirect_peer() leaves the L2 header alone, so they reach a
+			 * VM behind a bridge addressed to the veth's MAC rather than the
+			 * guest's, and the guest drops them as PACKET_OTHERHOST.  Record
+			 * it on the conntrack entry so every packet of the flow takes the
+			 * FIB path, which rewrites the destination MAC.  The client may be
+			 * off-host or a workload on this node, so this covers both. */
 			ctx->state->flags |= CALI_ST_SKIP_REDIR_PEER;
-		} else if (!ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
+		} else if (CALI_F_FROM_HEP && !ctx->nat_dest && !cali_rt_is_local(dest_rt)) {
 			/* Disable FIB, let the packet go through the host after it is
 			 * policed. It is ingress into the system and we got a packet, which is
 			 * not for this host, and it wasn't resolved as a service and it is not
@@ -1454,7 +1461,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * pass (~30s).
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped && INGRESS_CONN_LIMIT_CONFIGURED &&
-			ct_result_is_syn(ctx->state->ct_result.rc) &&
+			is_tcp_syn(ctx) &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
@@ -1491,7 +1498,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	// Set Istio DSCP mark, if traffic originates from a workload that's part of the mesh.
-	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
+	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && is_tcp_syn(ctx)) {
 		ipv46_addr_t src_ip = ctx->state->ip_src;
 		struct ip_set_key sip = {0};
 #ifdef IPVER6
@@ -1699,17 +1706,13 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	state->ct_result.nat_sport = ct_ctx_nat->sport;
 	/* fall through as DNAT is now established */
 
-	if ((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN))) {
+	if (!ip_void(HOST_TUNNEL_IP) &&
+			((CALI_F_TO_HOST && CALI_F_NAT_IF) || (CALI_F_TO_HEP && (CALI_F_LO || CALI_F_MAIN)))) {
 		struct cali_rt *r = cali_rt_lookup(&state->post_nat_ip_dst);
 		if (r && cali_rt_flags_remote_workload(r->flags) && cali_rt_is_tunneled(r)) {
 			CALI_DEBUG("remote wl " IP_FMT " tunneled via " IP_FMT "",
 					debug_ip(state->post_nat_ip_dst), debug_ip(HOST_TUNNEL_IP));
 			ct_ctx_nat->src = HOST_TUNNEL_IP;
-			/* This would be the place to set a new source port if we
-			 * had a way how to allocate it. Instead we rely on source
-			 * port collision resolution.
-			 * ct_ctx_nat->sport = 10101;
-			 */
 			state->ct_result.nat_sip = ct_ctx_nat->src;
 			state->ct_result.nat_sport = ct_ctx_nat->sport;
 		}
@@ -1919,7 +1922,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		goto do_post_nat;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
-		if (!ct_result_is_syn(state->ct_result.rc)) {
+		if (!is_tcp_syn(ctx)) {
 			seen_mark = CALI_SKB_MARK_BYPASS;
 			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
 		}

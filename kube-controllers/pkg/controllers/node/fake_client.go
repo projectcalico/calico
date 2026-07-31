@@ -16,6 +16,7 @@ package node
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -295,6 +296,10 @@ type fakeIPAMClient struct {
 	// controller caches the config rather than reading it on every sync.
 	getConfigCalls int
 
+	// garbageCollectedBlocks records the CIDR of every block passed to
+	// GarbageCollectColdIPs, so tests can assert which blocks the GC visited.
+	garbageCollectedBlocks []string
+
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
 	releaseHostAffinityErrors map[string]error
@@ -305,6 +310,13 @@ func (f *fakeIPAMClient) getIPAMConfigCallCount() int {
 	f.Lock()
 	defer f.Unlock()
 	return f.getConfigCalls
+}
+
+// gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
+func (f *fakeIPAMClient) gcBlocks() []string {
+	f.Lock()
+	defer f.Unlock()
+	return slices.Clone(f.garbageCollectedBlocks)
 }
 
 func (f *fakeIPAMClient) affinityReleased(aff string) bool {
@@ -470,6 +482,7 @@ func (f *fakeIPAMClient) GarbageCollectColdIPs(ctx context.Context, config *ipam
 	f.Lock()
 	defer f.Unlock()
 	f.garbageCollected = true
+	f.garbageCollectedBlocks = append(f.garbageCollectedBlocks, kvp.Key.(model.BlockKey).CIDR.String())
 	return nil
 }
 

@@ -120,7 +120,29 @@ XDP has an equivalent preamble in `xdp_preamble.c`. The cgroup
 connect-time hooks ([bpf-services.md → Connect-Time Load Balancer (CTLB)](./bpf-services.md)) are attached directly — they have no preamble.
 
 Because the preamble is cheap to reload, Felix can swap it per
-interface without re-verifying the large program chain it fronts.
+interface without re-verifying the large program chain it fronts — and
+must, since it bakes per-interface config (jump-map indices, host IP,
+flags) into `.rodata`, some of which changes without a restart. So the
+preamble is re-loaded, and re-verified, on every attach.
+
+The preamble calls `bpf_trace_printk` on its drop/error paths
+regardless of `BPFLogLevel`. Under kernel `lockdown=confidentiality`
+ftrace is disabled, so every load makes the kernel log `could not
+enable bpf_trace_printk events`. Felix detects this at startup
+(`bpf.KernelLockdownConfidentiality`) and instead loads
+trace-printk-free preamble variants (`*_notrace.o`,
+`AttachPoint.NoTracePrintk`), forcing `BPFLogLevel: Debug` off on such
+nodes.
+
+The main programs avoid `_notrace` duplicates (which would double the
+program matrix): each carries a `struct prog_flags` in its own frozen
+`.rodata.prog_flags` section. Felix sets `no_trace_printk` there before
+load (`bpf.SetNoTracePrintk` → `Map.SetProgFlags`); the frozen constant
+lets the verifier fold the flag and dead-code-eliminate `skb_log` (the
+policy `Log` action, which references the trace helper regardless of
+`BPFLogLevel`). **Per-program, load-time flags belong in `struct
+prog_flags`** — it is the vehicle for them, distinct from the node-wide
+globals.
 
 ### Two-tier jump maps
 
@@ -260,6 +282,34 @@ drop rules apply. Confirmed (already-established) flows are allowed
 through directly — the policy check happened when the flow was
 created.
 
+`bpf_redirect_peer` (in `try_redirect_to_peer`,
+`felix/bpf-gpl/fib_co_re.h`) is a stronger form of the same forward: it
+delivers into the destination's network namespace, so the destination's
+program does not run at all. It is gated on the conntrack verdict being
+`CALI_CT_ESTABLISHED_BYPASS`, which means both endpoints approved their
+own leg.
+
+That gate assumes the endpoint that approved a leg is the endpoint the
+packet will keep reaching, and while routing is still converging it is
+not. A packet can be forwarded to one endpoint, be approved by it, and
+then — once the route it was missing lands — be retransmitted to a
+different endpoint that has never seen it. An approval granted by
+whoever happened to be on the path becomes an approval on behalf of
+whoever ends up receiving the traffic.
+
+`tc.c` already guards against exactly this by forcing policy on every
+TCP SYN, so the retransmitted SYN would be re-evaluated by its real
+destination. The peer redirect defeats that guard, because it removes
+the program that would apply it. Initial SYNs are therefore excluded
+from the peer redirect; established traffic still takes the fast path.
+
+`is_tcp_syn()` in `felix/bpf-gpl/conntrack.h` is the single spelling of
+that question, shared with the force-policy path, the ingress connlimit
+counter, the Istio DSCP mark, and the withholding of the bypass mark. It
+reads `CT_RES_SYN`, which `calico_ct_lookup()` sets from the packet's own
+flags and only on a lookup hit, so it answers "SYN on a flow we already
+track" — which is what each of those callers wants.
+
 ### Review notes for this section
 
 - A new sub-program added to the generic program chain needs:
@@ -285,6 +335,12 @@ created.
   through `*tables` should consult `fib_approve` (or an equivalent
   check) for the ifstate-ready flag; otherwise it reopens the
   attach-gap hole.
+- A path that skips the destination endpoint's program must not treat
+  `CALI_CT_ESTABLISHED_BYPASS` as proof that *this* destination ran
+  policy. A leg can have been approved by a different endpoint the
+  packet reached earlier, while routing was still converging. Any such
+  path needs its own new-connection check — for TCP that is an initial
+  SYN; UDP has no equivalent and needs a different signal.
 - Helpers and maps keyed by the host-side ifindex must read
   `host_ifindex` from globals first and fall back to
   `skb->ifindex` only when it is zero. Reading `skb->ifindex`

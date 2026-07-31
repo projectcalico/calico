@@ -124,6 +124,9 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		"numOfAcceptedFiltersForBGPExport": len(config.BGPExportFilterForEnabledIPPools),
 	}).Debug("Processed ippools")
 
+	// Process WireGuard peer filter for kernel programming.
+	c.processWireguardPeerFilter(config, ipVersion)
+
 	// Update cache with write lock.
 	c.configCacheMutex.Lock()
 	c.configCache[ipVersion] = &bgpConfigCache{
@@ -970,6 +973,67 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 	slices.Sort(config.BGPExportFilterForEnabledIPPools)
 
 	return nil
+}
+
+// processWireguardPeerFilter generates BIRD kernel filter reject statements for peers
+// that have WireGuard enabled. When WireGuard is active on a remote node, Felix handles
+// routing via the WireGuard device, so BIRD should not install kernel routes for those
+// peers (they would fail with ENETUNREACH if the peer isn't on the same L2 segment).
+func (c *client) processWireguardPeerFilter(config *types.BirdBGPConfig, ipVersion int) {
+	ipAddrSuffix := "ip_addr_v4"
+	wgAddrSuffix := "wireguard_addr_v4"
+	if ipVersion == 6 {
+		ipAddrSuffix = "ip_addr_v6"
+		wgAddrSuffix = "wireguard_addr_v6"
+	}
+
+	hostKVs, err := c.GetValues([]string{"/calico/bgp/v1/host"})
+	if err != nil {
+		log.WithError(err).Debug("Failed to get host data for WireGuard peer filter")
+		return
+	}
+
+	// Build maps of hostname to BGP IP and hostname to WireGuard address.
+	bgpIPs := make(map[string]string)
+	wgAddrs := make(map[string]string)
+	for key, value := range hostKVs {
+		// Keys look like /calico/bgp/v1/host/<hostname>/<field>, which splits
+		// into 7 parts (the leading slash gives an empty first element).
+		parts := strings.Split(key, "/")
+		if len(parts) < 7 {
+			continue
+		}
+		hostname := parts[5]
+		field := parts[6]
+
+		if field == ipAddrSuffix && value != "" {
+			bgpIPs[hostname] = value
+		}
+		if field == wgAddrSuffix && value != "" {
+			wgAddrs[hostname] = value
+		}
+	}
+
+	// If the local node isn't running WireGuard, it reaches every peer over the
+	// normal BGP path, so leave BIRD's kernel routes in place. Only nodes that
+	// route to WireGuard peers via the WireGuard device should reject them.
+	if _, localHasWG := wgAddrs[NodeName]; !localHasWG {
+		return
+	}
+
+	// Reject BIRD's kernel route for each remote peer running WireGuard.
+	for hostname, bgpIP := range bgpIPs {
+		if hostname == NodeName {
+			continue
+		}
+		if _, hasWG := wgAddrs[hostname]; !hasWG {
+			continue
+		}
+		statement := fmt.Sprintf("  if (defined(bgp_next_hop) && bgp_next_hop = %s) then { reject; } # WireGuard routes handled by Felix.", bgpIP)
+		config.WireguardPeerKernelFilter = append(config.WireguardPeerKernelFilter, statement)
+	}
+
+	slices.Sort(config.WireguardPeerKernelFilter)
 }
 
 // This function generates BIRD statements for an IPPool to be used as BIRD filters based on the following input:

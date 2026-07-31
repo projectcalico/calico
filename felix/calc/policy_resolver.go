@@ -62,7 +62,7 @@ type PolicyResolver struct {
 	endpointComputedData  map[model.WorkloadEndpointKey]map[EndpointComputedDataKind]EndpointComputedData
 	policySorter          *PolicySorter
 	Callbacks             []PolicyResolverCallbacks
-	InSync                bool
+	InitialSyncCompleted  bool
 	endpointBGPPeerData   map[model.WorkloadEndpointKey]EndpointBGPPeer
 
 	// Track policy updates as they come in - these will be resolved on flush.
@@ -141,8 +141,8 @@ func (pr *PolicyResolver) OnUpdate(update api.Update) (filterOut bool) {
 }
 
 func (pr *PolicyResolver) OnDatamodelStatus(status api.SyncStatus) {
-	if status == api.InSync {
-		pr.InSync = true
+	if status == api.InSync && !pr.InitialSyncCompleted {
+		pr.InitialSyncCompleted = true
 	}
 }
 
@@ -186,7 +186,7 @@ func (pr *PolicyResolver) OnPolicyMatchStopped(policyKey model.PolicyKey, endpoi
 }
 
 func (pr *PolicyResolver) Flush() {
-	if !pr.InSync {
+	if !pr.InitialSyncCompleted {
 		log.Debugf("Not in sync, skipping flush")
 		return
 	}

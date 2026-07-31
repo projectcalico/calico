@@ -391,7 +391,7 @@ func (c *loadBalancerController) handleIPPoolUpdate(kvp model.KVPair) {
 // creating Service LoadBalancer before any valid pools were created
 func (c *loadBalancerController) syncIPAM() {
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping IPAM sync.")
 		return
 	}
 
@@ -441,17 +441,20 @@ func (c *loadBalancerController) ensureDatastoreUpgraded() error {
 // - Updates the IP addresses in the Service Status to match the IPAM DB.
 func (c *loadBalancerController) syncService(svcKey serviceKey) {
 	if c.syncStatus != bapi.InSync {
-		// Defer service sync until the syncer has replayed all existing IPAM blocks
-		// into allocationTracker. Otherwise a service event observed during the cold-start
-		// window would see an empty tracker and allocate a fresh IP alongside the historical
-		// one that arrives later, leaving the service with more IPs than its IPFamilyPolicy
-		// permits. Events received pre-InSync are picked up by syncIPAM, which is kicked
-		// once the syncer reaches InSync.
+		// Defer service sync until we are InSync, so we know that all existing IPAM blocks are
+		// tracked by the allocationTracker. Otherwise a service event observed during the cold-start
+		// window would see an empty tracker and allocate a fresh IP alongside the historical one
+		// that arrives later, leaving the service with more IPs than its IPFamilyPolicy permits.
+		// Outside of the cold-start window, deferring until we are InSync provides us confidence
+		// that we are programming in response to a coherent state.
+		//
+		// Events received while not InSync are picked up by syncIPAM, which is kicked once the
+		// syncer reaches InSync.
 		log.WithFields(log.Fields{
 			"status":    c.syncStatus,
 			"namespace": svcKey.namespace,
 			"name":      svcKey.name,
-		}).Debug("Syncer not yet InSync; deferring service sync")
+		}).Debug("Syncer not currently InSync; deferring service sync")
 		return
 	}
 

@@ -20,9 +20,12 @@ import (
 	"context"
 	"math/bits"
 	"net"
+	"os"
 	"os/exec"
 	"runtime/debug"
+	"runtime/pprof"
 	"strings"
+	"time"
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,7 +51,6 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/markbits"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
@@ -228,9 +230,10 @@ func StartDataplaneDriver(
 				NetlinkTimeout:    configParams.NetlinkTimeoutSecs,
 			},
 			RulesConfig: rules.Config{
-				FlowLogsEnabled:       configParams.FlowLogsEnabled(),
-				NFTablesMode:          configParams.NFTablesMode,
-				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),
+				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
+				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload != string(apiv3.NFTablesFlowTableOffloadDisabled),
+				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
 				IPSetConfigV4: ipsets.NewIPVersionConfig(
 					ipsets.IPFamilyV4,
@@ -303,6 +306,7 @@ func StartDataplaneDriver(
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
 				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
+				BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
 				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
@@ -364,10 +368,24 @@ func StartDataplaneDriver(
 				// a good time to force a GC and return any RAM that we can.
 				debug.FreeOSMemory()
 
-				if configParams.DebugMemoryProfilePath == "" {
+				fileName := configParams.DebugMemoryProfilePath
+				if fileName == "" {
 					return
 				}
-				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
+				fileName = renderProfileFileName(fileName)
+				logCxt := log.WithField("file", fileName)
+				logCxt.Info("Writing memory profile...")
+				f, err := os.Create(fileName)
+				if err != nil {
+					logCxt.WithError(err).Error("Could not create memory profile file")
+					return
+				}
+				defer f.Close()
+				if err := pprof.WriteHeapProfile(f); err != nil {
+					logCxt.WithError(err).Error("Could not write memory profile")
+					return
+				}
+				logCxt.Info("Finished writing memory profile")
 			},
 			HealthAggregator:                   healthAggregator,
 			WatchdogTimeout:                    configParams.DataplaneWatchdogTimeout,
@@ -376,6 +394,7 @@ func StartDataplaneDriver(
 			ExternalNodesCidrs:                 configParams.ExternalNodesCIDRList,
 			SidecarAccelerationEnabled:         configParams.SidecarAccelerationEnabled,
 			BPFEnabled:                         configParams.BPFEnabled,
+			BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
 			BPFPolicyDebugEnabled:              configParams.BPFPolicyDebugEnabled,
 			BPFDisableUnprivileged:             configParams.BPFDisableUnprivileged,
 			BPFJITHardening:                    configParams.BPFJITHardening,
@@ -389,6 +408,7 @@ func StartDataplaneDriver(
 			BPFCTLBLogFilter:                   configParams.BPFCTLBLogFilter,
 			BPFExtToServiceConnmark:            configParams.BPFExtToServiceConnmark,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			NFTablesFlowTableDataIfacePattern:  configParams.NFTablesFlowTableDataIfacePattern,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
@@ -516,4 +536,14 @@ func replaceWildcard(nftEnabled bool, s string) string {
 		return s[:len(s)-1] + nftables.Wildcard
 	}
 	return s
+}
+
+// renderProfileFileName expands the "<timestamp>" placeholder in the
+// profile file name using the current time.
+func renderProfileFileName(template string) string {
+	if strings.Contains(template, "<timestamp>") {
+		timestamp := time.Now().Format("2006-01-02-15:04:05")
+		return strings.Replace(template, "<timestamp>", timestamp, 1)
+	}
+	return template
 }

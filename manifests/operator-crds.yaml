@@ -16191,6 +16191,21 @@ spec:
                       required:
                         - type
                       type: object
+                    specVersion:
+                      description: |-
+                        SpecVersion configures the CNI specification version declared in the
+                        CNI configuration ("cniVersion") that the operator generates. Auto
+                        (the default) lets the operator choose an appropriate version, which
+                        may increase across operator upgrades. Pin an explicit version if a
+                        chained CNI plugin or container runtime in your environment requires
+                        one. Only relevant when using the Calico CNI plugin.
+                        Default: Auto
+                      enum:
+                        - Auto
+                        - 0.3.1
+                        - 0.4.0
+                        - 1.0.0
+                      type: string
                     type:
                       description: |-
                         Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -25608,6 +25623,21 @@ spec:
                           required:
                             - type
                           type: object
+                        specVersion:
+                          description: |-
+                            SpecVersion configures the CNI specification version declared in the
+                            CNI configuration ("cniVersion") that the operator generates. Auto
+                            (the default) lets the operator choose an appropriate version, which
+                            may increase across operator upgrades. Pin an explicit version if a
+                            chained CNI plugin or container runtime in your environment requires
+                            one. Only relevant when using the Calico CNI plugin.
+                            Default: Auto
+                          enum:
+                            - Auto
+                            - 0.3.1
+                            - 0.4.0
+                            - 1.0.0
+                          type: string
                         type:
                           description: |-
                             Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -31616,6 +31646,18 @@ spec:
                           type: object
                       type: object
                   type: object
+                waypointLogging:
+                  description: |-
+                    WaypointLogging controls whether L7 logging is enabled on every Gateway
+                    using the istio-waypoint GatewayClass. When Enabled (the default), the
+                    operator injects an l7-collector sidecar into each waypoint pod via
+                    class-level defaults. When Disabled, no sidecar is injected and the
+                    associated EnvoyFilters are not created. Allowed values are Enabled or
+                    Disabled.
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 ztunnel:
                   description:
                     ZTunnelDaemonset defines the resource requirements for
@@ -34946,7 +34988,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -35246,7 +35287,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36146,7 +36186,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36395,7 +36434,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36462,7 +36500,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36805,7 +36842,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36877,7 +36913,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -37302,6 +37337,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -37970,6 +38017,25 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -37988,9 +38054,10 @@ spec:
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -38057,7 +38124,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -38375,7 +38442,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39677,7 +39743,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39736,7 +39801,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39863,7 +39927,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40006,7 +40069,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40092,7 +40154,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40151,7 +40212,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40411,7 +40471,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40444,8 +40503,8 @@ spec:
                   description: |-
                     ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
                     Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -40468,7 +40527,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40570,6 +40628,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -40799,6 +40864,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -40961,7 +41033,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -42214,7 +42285,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -42271,7 +42341,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -43583,7 +43652,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -44115,7 +44183,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -45379,7 +45446,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1

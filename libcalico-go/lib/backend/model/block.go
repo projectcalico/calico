@@ -16,12 +16,10 @@ package model
 
 import (
 	"fmt"
-	"maps"
 	"math/big"
 	"net/netip"
 	"reflect"
 	"regexp"
-	"slices"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -130,6 +128,7 @@ func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
 	return BlockKey{CIDR: prefix.Masked()}
 }
 
+// +k8s:deepcopy-gen=true
 type AllocationBlock struct {
 	// The block's CIDR.
 	CIDR net.IPNet `json:"cidr"`
@@ -200,25 +199,11 @@ func (b *AllocationBlock) IsDeleted() bool {
 	return b.Deleted
 }
 
-// clone returns a copy of this block that can be modified without affecting
-// the original.
+// Clone returns a copy of this block that can be modified without affecting
+// the original. It delegates to the generated DeepCopy so new fields are
+// handled automatically rather than silently dropped.
 func (b *AllocationBlock) Clone() *AllocationBlock {
-	attributes := slices.Clone(b.Attributes)
-	for i := range attributes {
-		attributes[i] = attributes[i].Clone()
-	}
-	return &AllocationBlock{
-		CIDR:                        b.CIDR,
-		Affinity:                    b.Affinity,
-		AffinityClaimTime:           b.AffinityClaimTime,
-		Allocations:                 slices.Clone(b.Allocations),
-		Unallocated:                 slices.Clone(b.Unallocated),
-		Attributes:                  slices.Clone(attributes),
-		SequenceNumber:              b.SequenceNumber,
-		SequenceNumberForAllocation: maps.Clone(b.SequenceNumberForAllocation),
-		Deleted:                     b.Deleted,
-		HostAffinity:                b.HostAffinity,
-	}
+	return b.DeepCopy()
 }
 
 func (b *AllocationBlock) Host() string {
@@ -294,6 +279,7 @@ func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
 	return b.CIDR.NthIP(ord)
 }
 
+// +k8s:deepcopy-gen=true
 type AllocationAttribute struct {
 	// HandleID is the primary identifier for the allocation.
 	HandleID *string `json:"handle_id,omitempty"`
@@ -309,10 +295,5 @@ type AllocationAttribute struct {
 }
 
 func (a AllocationAttribute) Clone() AllocationAttribute {
-	return AllocationAttribute{
-		HandleID:            a.HandleID,
-		ActiveOwnerAttrs:    maps.Clone(a.ActiveOwnerAttrs),
-		AlternateOwnerAttrs: maps.Clone(a.AlternateOwnerAttrs),
-		ReleasedAt:          a.ReleasedAt,
-	}
+	return *a.DeepCopy()
 }

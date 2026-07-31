@@ -77,6 +77,17 @@ every other tail-caller ([bpf-tc-programs.md → TC program layout](./bpf-tc-pro
 - `skb->cb[0]` = fast-path main index (no match → go here),
 - `skb->cb[1]` = debug-path main index (match → go here).
 
+### Loops and `ip6 protochain`
+
+`ip6 protochain`, which walks the IPv6 extension-header chain, compiles to
+a loop with a backward `BPF_JA` that the eBPF verifier rejects. `cBPF2eBPF`
+**unrolls** it: a back-edge becomes a forward jump into the next of
+`maxLoopUnroll` copies of the loop body, and the last copy falls through to
+`miss` (chain longer than the bound ⇒ no match). This is a bounded walk of
+the extension-header chain, like the dataplane's own IPv6 header parsing in
+`felix/bpf-gpl/parsing6.h`. Only a single reducible loop is supported;
+anything more complex is rejected at compile time.
+
 ### Integration with the preamble
 
 `tc_preamble.c` checks `globals->data.log_filter_jmp`. If it is not
@@ -117,6 +128,12 @@ per-interface.
   machinery to load two path-variants of every sub-program is
   already there; duplicating it across filter types is how this
   area becomes unmaintainable.
+- `maxLoopUnroll` in `filter.go` is a correctness/size trade-off, not a
+  free knob: every increment replicates the whole loop body once more in
+  every filter that contains a loop. It is intentionally smaller than the
+  extension-header bound the C dataplane walks (`felix/bpf-gpl/parsing6.h`,
+  which goes up to 8) — a debug log filter does not need to follow every
+  chain to the end. Raise it only with a concrete need.
 
 
 

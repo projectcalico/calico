@@ -24,6 +24,14 @@ log_monitor_regexps=(
   "Test batch"
 )
 
+# Save the terminal state so we can restore it before our final output.  The
+# wrapped command can leave the terminal in a bad state (for example with
+# output post-processing disabled); the Semaphore agent detects command
+# completion by scanning the terminal output for a marker, and a corrupted
+# terminal state can prevent that marker from being recognised, hanging the
+# job until it times out.
+saved_stty="$(stty -g < /dev/tty 2>/dev/null || true)"
+
 echo "Current dir: $(pwd)"
 my_dir="$(dirname $0)"
 repo_dir="${my_dir}/.."
@@ -67,12 +75,21 @@ for r in "${log_monitor_regexps[@]}"; do
 done
 grep_args+=( "-e" "${pattern:1}" )
 
+# Strip control characters (keeping tab, newline, CR and the ANSI colour
+# escape) from everything we copy from the log to the console.  Test output
+# can contain binary junk, and a raw 0x01 byte in particular confuses the
+# Semaphore agent's command-completion marker detection, hanging the job.
+function sanitize()
+{
+  LC_ALL=C stdbuf -oL tr -d '\000-\010\013\014\016-\032\034-\037\177'
+}
+
 tail --pid $pid -n 1000000 -F "$log_file" | {
   # Always output the first n lines.
   head -n $num_unfiltered_lines;
   echo "---- Output to screen filtered from here ----";
   grep "${grep_args[@]}";
-} &
+} | sanitize &
 mon_pid=$!
 
 final_result=1
@@ -80,13 +97,26 @@ final_msg="==== Command ${cmd_escaped}INTERRUPTED (PID=$pid).  Full command outp
 cmd_done=false
 function cleanup()
 {
-  kill $mon_pid || true
   if ! $cmd_done; then
     echo "==== Stopping command PID=${pid}..."
     kill $pid || true
   fi
 
   sleep 1 # So tail and grep can finish after stopping the main process.
+
+  # Kill the monitor and wait for it to die so that nothing can write to the
+  # console after our final output.  $mon_pid is the sanitizer, the last
+  # element of the pipeline; killing it severs the monitor's access to the
+  # console and the upstream elements then exit on SIGPIPE/EOF.
+  kill $mon_pid 2>/dev/null || true
+  wait $mon_pid 2>/dev/null || true
+
+  # Undo any terminal state changes made by the wrapped command; see comment
+  # at the top of the file.
+  if [ -n "$saved_stty" ]; then
+    stty "$saved_stty" < /dev/tty 2>/dev/null || true
+  fi
+
   output-tail
   echo "$final_msg; exit with RC=$final_result"
   exit $final_result
@@ -97,14 +127,14 @@ function output-tail()
 {
   # Output the last num_unfiltered_lines lines of the log, unless the log is short, in which case
   # don't log lines that were already logged by head, above.
-  num_lines=$(wc "$log_file" | cut -d ' ' -f1)
+  num_lines=$(wc -l < "$log_file")
   if (( num_lines > num_unfiltered_lines )); then
     num_lines_to_tail=$(( num_lines - num_unfiltered_lines ))
     if (( num_lines_to_tail > num_unfiltered_lines )); then
       num_lines_to_tail=$num_unfiltered_lines
     fi
     echo "---- Tail of output (may duplicate some lines that hit the log filter above) ----";
-    tail -n $num_lines_to_tail "$log_file"
+    tail -n $num_lines_to_tail "$log_file" | sanitize
   fi
 }
 
