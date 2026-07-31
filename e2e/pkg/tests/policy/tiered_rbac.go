@@ -51,6 +51,7 @@ const (
 	rbacWatchNoTierUser  = "e2e-rbac-watch-no-tier"
 	rbacBareNameUser     = "e2e-rbac-bare-name"
 	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
+	rbacBareWildcardUser = "e2e-rbac-bare-wildcard"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
@@ -675,6 +676,65 @@ var _ = describe.CalicoDescribe(
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
 			})
 		})
+
+		// Verifies the bare "*" resource name, which grants access to any policy
+		// without naming the tier. Access is still scoped by the tier GET check,
+		// so a policy in a tier the user cannot GET remains forbidden.
+		//
+		// Requires the aggregated API server because this test verifies GET-path
+		// tier RBAC, which the admission webhook cannot enforce.
+		framework.Context("bare name wildcard", describe.RequiresCalicoAPIServer(), func() {
+			BeforeEach(func() { requireCalicoAPIServer(f.ClientConfig()) })
+
+			It("should allow access to policies in gettable tiers and deny others", func() {
+				By("Creating a policy in the permitted tier")
+				permitted := v3.NewNetworkPolicy()
+				permitted.Name = "rbac-test-wildcard-permitted"
+				permitted.Namespace = f.Namespace.Name
+				permitted.Spec.Tier = testTier
+				permitted.Spec.Order = ptr.To(100.0)
+				permitted.Spec.Selector = "all()"
+				permitted.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, permitted)).To(Succeed(), "admin failed to create policy in permitted tier")
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := adminCli.Delete(cleanupCtx, permitted); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", permitted.Name).Error("Failed to delete policy")
+					}
+				})
+
+				By("Creating a policy in a tier the wildcard user cannot GET")
+				forbidden := v3.NewNetworkPolicy()
+				forbidden.Name = "rbac-test-wildcard-forbidden"
+				forbidden.Namespace = f.Namespace.Name
+				forbidden.Spec.Tier = otherTier
+				forbidden.Spec.Order = ptr.To(100.0)
+				forbidden.Spec.Selector = "all()"
+				forbidden.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(adminCli.Create(ctx, forbidden)).To(Succeed(), "admin failed to create policy in other tier")
+				DeferCleanup(func() {
+					cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cleanupCancel()
+					if err := adminCli.Delete(cleanupCtx, forbidden); err != nil && !apierrors.IsNotFound(err) {
+						logrus.WithError(err).WithField("name", forbidden.Name).Error("Failed to delete policy")
+					}
+				})
+
+				cli := newImpersonatedClient(rbacBareWildcardUser)
+
+				By("Verifying the wildcard user can get a policy in the permitted tier")
+				got := v3.NewNetworkPolicy()
+				Expect(cli.Get(ctx, ctrlclient.ObjectKeyFromObject(permitted), got)).To(Succeed(),
+					"wildcard user should be able to get any policy in a gettable tier")
+
+				By("Verifying the wildcard user cannot get a policy in a tier it cannot GET")
+				got = v3.NewNetworkPolicy()
+				err := cli.Get(ctx, ctrlclient.ObjectKeyFromObject(forbidden), got)
+				Expect(err).To(HaveOccurred(), "wildcard user should not be able to get policies outside gettable tiers")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
+			})
+		})
 	},
 )
 
@@ -880,6 +940,24 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 			Resources:     []string{"tier.networkpolicies"},
 			Verbs:         []string{"get"},
 			ResourceNames: []string{testTier + ".rbac-test-disambig"},
+		},
+	))
+
+	// Bare-wildcard user: has tier GET on the test tier and the bare "*" resource
+	// name on tier.networkpolicies, which matches any policy name without naming
+	// the tier. The tier GET check is what keeps this scoped to the test tier.
+	addRoleAndBinding("bare-wildcard", rbacBareWildcardUser, append(baseRules(),
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{testTier},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{"*"},
 		},
 	))
 
