@@ -44,6 +44,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -501,7 +502,7 @@ func (cc *controllerControl) initControllers(
 		if err := apiv3.AddToScheme(migrationScheme); err != nil {
 			logrus.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
 		}
-		if err := dsmigration.AddToScheme(migrationScheme); err != nil {
+		if err := migrationv1.AddToScheme(migrationScheme); err != nil {
 			logrus.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
 		}
 		rtClient, err := rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
