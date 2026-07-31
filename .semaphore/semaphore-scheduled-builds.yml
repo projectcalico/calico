@@ -341,7 +341,6 @@ blocks:
             - make -C libcalico-go gen-files
             - make -C felix gen-files
             - make -C goldmane gen-files
-            - make -C kube-controllers gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
