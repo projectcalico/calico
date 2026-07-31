@@ -308,6 +308,26 @@ type Config struct {
 	NewNftablesDataplane nftables.NewNftablesDataplaneFn
 }
 
+// ctlbExcludesUDP returns whether the connect-time load balancer leaves UDP to
+// the TC programs.
+func (config *Config) ctlbExcludesUDP() bool {
+	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) &&
+		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
+}
+
+// ctlbUDPAffinityTimeout returns how long the connect-time load balancer holds a
+// backend affine to an unconnected UDP socket, or 0 if the CTLB does not handle
+// UDP on this node. The CTLB uses this so that consecutive datagrams from one
+// socket reach one backend; the BPF kube-proxy needs the same value so that its
+// affinity map cleanup leaves those entries alone until they really have expired.
+func (config *Config) ctlbUDPAffinityTimeout() time.Duration {
+	if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) || config.ctlbExcludesUDP() {
+		return 0
+	}
+	// The BPF programs are given the timeout in whole seconds.
+	return config.BPFConntrackTimeouts.UDPTimeout.Truncate(time.Second)
+}
+
 type UpdateBatchResolver interface {
 	// Opportunity for a manager component to resolve state that depends jointly on the updates
 	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
@@ -1089,10 +1109,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
-			excludeUDP := false
-			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) && config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
-				excludeUDP = true
-			}
+			excludeUDP := config.ctlbExcludesUDP()
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {
 				if logLevel != "off" && config.BPFCTLBLogFilter != "all" {
@@ -3052,6 +3069,7 @@ func startBPFDataplaneComponents(
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
+		bpfproxy.WithCTLBUDPAffinityTimeout(config.ctlbUDPAffinityTimeout()),
 	}
 
 	if config.bpfProxyHealthCheck != nil {

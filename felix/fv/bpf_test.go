@@ -3536,7 +3536,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
 								if testOpts.ipv6 {
 									aff := dumpAffMapV6(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
+									ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
 
 									// get the only key
 									for k, v := range aff {
@@ -3544,7 +3544,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									}
 								} else {
 									aff := dumpAffMap(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
+									ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
 
 									// get the only key
 									for k, v := range aff {
@@ -3556,25 +3556,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								return nil, nil
 							}
 
+							affLen := func() int {
+								if testOpts.ipv6 {
+									return len(dumpAffMapV6(tc.Felixes[0]))
+								}
+								return len(dumpAffMap(tc.Felixes[0]))
+							}
+
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							family := 4
+							natFEKey := func(ip string, port uint16) nat.FrontendKeyInterface {
+								return nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
+							}
+							if testOpts.ipv6 {
+								family = 6
+								natFEKey = func(ip string, port uint16) nat.FrontendKeyInterface {
+									return nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
+								}
+							}
 
 							if setAffinity {
 								// Sync with NAT tables to prevent creating extra entry when
 								// CTLB misses but regular DNAT hits, but connection fails and
 								// then CTLB succeeds.
-								var (
-									family   int
-									natFtKey nat.FrontendKeyInterface
-								)
-
-								if testOpts.ipv6 {
-									natFtKey = nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
-									family = 6
-								} else {
-									natFtKey = nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
-									family = 4
-								}
+								natFtKey := natFEKey(ip, port)
 
 								Eventually(func() bool {
 									m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
@@ -3602,6 +3609,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// This should happen consistently, but that may take quite some time.
 							Expect(val1.Backend()).To(Equal(v2.Backend()))
+
+							// The affinity entry must survive a kube-proxy sync. The
+							// syncer cleans the affinity map on every sync, and it only
+							// knows to keep an entry for a service it expects to have
+							// affinity - which, for unconnected UDP, includes services
+							// without session affinity because the CTLB enforces
+							// affinity for them too.
+							//
+							// Creating an unrelated service forces a sync; once felix
+							// has programmed it, the cleanup has definitely run.
+							By("keeping the affinity across a kube-proxy sync", func() {
+								syncSvcIP := "10.101.0.13"
+								if testOpts.ipv6 {
+									syncSvcIP = "dead:beef::abcd:0:0:13"
+								}
+								syncSvc := k8sService("test-service-sync", syncSvcIP, w[0][0], 80, 8055, 0, testOpts.protocol)
+								_, err := k8sClient.CoreV1().Services(testSvcNamespace).
+									Create(context.Background(), syncSvc, metav1.CreateOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								syncSvcKey := natFEKey(syncSvcIP, 80)
+								Eventually(func() bool {
+									m, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
+									_, ok := m[syncSvcKey]
+									return ok
+								}, "10s", "300ms").Should(BeTrue(), "kube-proxy did not sync the extra service")
+
+								Expect(affLen()).To(Equal(1),
+									"the kube-proxy sync deleted the affinity entry")
+								_, v3 := affKV()
+								Expect(v3.Backend()).To(Equal(val1.Backend()),
+									"the kube-proxy sync changed the affinity backend")
+							})
 
 							cc.ResetExpectations()
 
