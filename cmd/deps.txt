@@ -580,8 +580,12 @@ local:typha/pkg/syncclientutils
 local:typha/pkg/syncproto
 local:typha/pkg/syncserver
 local:typha/pkg/tlsutils
+local:webhooks/pkg/authz
 local:webhooks/pkg/clusterinfo
+local:webhooks/pkg/metrics
+local:webhooks/pkg/policycache
 local:webhooks/pkg/rbac
+local:webhooks/pkg/tierauth
 local:webhooks/pkg/utils
 local:webhooks/pkg/webhook
 local:whisker-backend/cmd/whiskerbackend

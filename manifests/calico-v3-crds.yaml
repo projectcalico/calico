@@ -13280,7 +13280,11 @@ spec:
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key
           ports:
-            - containerPort: 6443
+            # /metrics is served on this same TLS listener alongside the admission and
+            # authorization endpoints (see webhooks/pkg/webhook/command.go); named so a
+            # future ServiceMonitor can reference it without hardcoding the port number.
+            - name: https
+              containerPort: 6443
               protocol: TCP
           readinessProbe:
             httpGet:

@@ -105,6 +105,23 @@ func RequiresCalicoAPIServer() any {
 	return framework.WithLabel("RequiresCalicoAPIServer")
 }
 
+// RequiresAuthzWebhook marks tests that depend on the Calico authorization webhook being
+// wired into the kube-apiserver's authorization chain (--authorization-config). That webhook
+// is what enforces tier RBAC on GET/LIST/WATCH in v3 CRD mode, where there is no aggregated
+// API server to do it. Tests with this label assert webhook-specific behavior that the
+// aggregated API server does not share, such as an unselectored list being refused.
+func RequiresAuthzWebhook() any {
+	return framework.WithLabel("RequiresAuthzWebhook")
+}
+
+// RequiresReadPathTierRBAC marks tests that need tier RBAC enforced on GET/LIST/WATCH by
+// either of the two components that can do it: the aggregated Calico API server, or the
+// Calico authorization webhook in v3 CRD mode. The assertions hold identically under both.
+// A cluster with neither bypasses tier RBAC on reads entirely.
+func RequiresReadPathTierRBAC() any {
+	return framework.WithLabel("RequiresReadPathTierRBAC")
+}
+
 // RequiresNoEncap marks tests that require unencapsulated traffic to function.
 // This is typically used for tests that verify BGP functionality without IPIP, or other similar tests.
 // Such tests must be run on clusters that support unencapsulated traffic, such as bare-metal clusters
@@ -231,6 +248,65 @@ func IncludesFocus(s string) bool {
 	for _, focus := range suiteConfig.FocusStrings {
 		if strings.Contains(focus, s) {
 			return true
+		}
+	}
+	return false
+}
+
+// ExplicitlySelected reports whether the run asked for s by name, through either -focus or
+// --label-filter. Our pipelines select by label expression, so a spec that only consults -focus
+// can't tell it was asked for and self-skips, silently passing a run that meant to exercise it.
+//
+// The label-filter check is textual, since a spec can't evaluate the filter against its own labels
+// from inside its body. A negated mention (`!Foo`, or `!(Serial || Foo)`) doesn't count.
+func ExplicitlySelected(s string) bool {
+	if IncludesFocus(s) {
+		return true
+	}
+	suiteConfig, _ := ginkgo.GinkgoConfiguration()
+	return mentionsUnnegated(suiteConfig.LabelFilter, s)
+}
+
+// mentionsUnnegated reports whether expr names s somewhere that is not negated, either directly
+// (`!Foo`) or by an enclosing group (`!(A || Foo)`). Case-insensitive, because Ginkgo compares
+// labels that way.
+func mentionsUnnegated(expr, s string) bool {
+	expr, s = strings.ToLower(expr), strings.ToLower(s)
+
+	for i := 0; ; {
+		at := strings.Index(expr[i:], s)
+		if at < 0 {
+			return false
+		}
+		at += i
+		i = at + len(s)
+		if !negatedAt(expr, at) {
+			return true
+		}
+	}
+}
+
+// negatedAt reports whether the token at position at sits under a `!`, walking left through any
+// enclosing groups.
+func negatedAt(expr string, at int) bool {
+	if strings.HasSuffix(strings.TrimRight(expr[:at], " \t"), "!") {
+		return true
+	}
+
+	// Walk left looking for the unmatched `(` that opens each enclosing group, and check whether
+	// a `!` applies to it.
+	for depth := 0; at > 0; at-- {
+		switch expr[at-1] {
+		case ')':
+			depth++
+		case '(':
+			if depth > 0 {
+				depth--
+				continue
+			}
+			if strings.HasSuffix(strings.TrimRight(expr[:at-1], " \t"), "!") {
+				return true
+			}
 		}
 	}
 	return false
