@@ -20,6 +20,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -106,6 +107,63 @@ func TestBGPPeer_Validation(t *testing.T) {
 				Spec: v3.BGPPeerSpec{
 					LocalWorkloadSelector: "all()",
 					ASNumber:              numorstring.ASNumber(64512),
+				},
+			},
+		},
+		{
+			name: "reachableBy without peerIP is rejected",
+			obj: &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerSelector: "all()",
+					ReachableBy:  "10.0.0.254",
+				},
+			},
+			wantErr: "reachableBy must be empty when peerIP is empty",
+		},
+		{
+			name: "reachableBy with peerIP is accepted",
+			obj: &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					ReachableBy: "10.0.0.254",
+				},
+			},
+		},
+		{
+			name: "keepOriginalNextHop with nextHopMode is rejected",
+			obj: &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+					NextHopMode:         ptr.To(v3.NextHopMode(v3.NextHopModeSelf)),
+				},
+			},
+			wantErr: "keepOriginalNextHop and nextHopMode cannot both be set",
+		},
+		{
+			name: "keepOriginalNextHop alone is accepted",
+			obj: &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:              "10.0.0.1",
+					ASNumber:            numorstring.ASNumber(64512),
+					KeepOriginalNextHop: true,
+				},
+			},
+		},
+		{
+			name: "nextHopMode alone is accepted",
+			obj: &v3.BGPPeer{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgppeer")},
+				Spec: v3.BGPPeerSpec{
+					PeerIP:      "10.0.0.1",
+					ASNumber:    numorstring.ASNumber(64512),
+					NextHopMode: ptr.To(v3.NextHopMode(v3.NextHopModeKeep)),
 				},
 			},
 		},

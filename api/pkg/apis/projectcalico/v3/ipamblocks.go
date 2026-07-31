@@ -34,6 +34,7 @@ type IPAMBlock struct {
 }
 
 // IPAMBlockSpec contains the specification for an IPAMBlock resource.
+// This resource is managed internally by Calico IPAM and should not be modified manually.
 type IPAMBlockSpec struct {
 	// The block's CIDR.
 	// +kubebuilder:validation:Format=cidr
@@ -90,10 +91,22 @@ type IPAMBlockSpec struct {
 	DeprecatedStrictAffinity bool `json:"strictAffinity"`
 }
 
+// AllocationAttribute holds metadata associated with a single IP allocation within a block.
 type AllocationAttribute struct {
-	HandleID            *string           `json:"handle_id,omitempty"`
-	ActiveOwnerAttrs    map[string]string `json:"secondary,omitempty"`
+	// HandleID is the ID of the IPAM handle that owns this allocation.
+	HandleID *string `json:"handle_id,omitempty"`
+
+	// ActiveOwnerAttrs stores attributes of the primary owner of this allocation (e.g., pod name, namespace).
+	ActiveOwnerAttrs map[string]string `json:"secondary,omitempty"`
+
+	// AlternateOwnerAttrs stores attributes of a secondary owner, used during IP address migration.
 	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
+
+	// ReleasedAt is the time this allocation was released, and is set during the allocation's
+	// "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+	// from `Allocated` to `Unallocated`).
+	// +optional
+	ReleasedAt *metav1.Time `json:"releasedAt,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

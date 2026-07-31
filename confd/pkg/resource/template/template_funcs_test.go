@@ -314,7 +314,7 @@ func Test_filterMatchPriority(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	expected := "(krt_metric = 512)"
+	expected := "(defined(bgp_local_pref)&&(bgp_local_pref = 2147483135))"
 	if result != expected {
 		t.Errorf("got %q, want %q", result, expected)
 	}
@@ -359,7 +359,7 @@ func Test_filterOperationStatements(t *testing.T) {
 			ops: []v3.BGPFilterOperation{
 				{SetPriority: &v3.BGPFilterSetPriority{Value: intPtr(512)}},
 			},
-			expected: []string{"krt_metric = 512;"},
+			expected: []string{"bgp_local_pref = 2147483135;"},
 		},
 		{
 			name: "multiple operations",
@@ -371,7 +371,7 @@ func Test_filterOperationStatements(t *testing.T) {
 			expected: []string{
 				"bgp_community.add((65001, 200));",
 				"bgp_path.prepend(65000);",
-				"krt_metric = 100;",
+				"bgp_local_pref = 2147483547;",
 			},
 		},
 	}
@@ -406,7 +406,7 @@ func Test_filterStatementWithOperations(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
-	expected := "if ((net ~ 10.0.0.0/8)&&(krt_metric = 512)) then { bgp_community.add((65001, 200)); bgp_path.prepend(65000); accept; }"
+	expected := "if ((net ~ 10.0.0.0/8)&&(defined(bgp_local_pref)&&(bgp_local_pref = 2147483135))) then { bgp_community.add((65001, 200)); bgp_path.prepend(65000); accept; }"
 	if result != expected {
 		t.Errorf("got:\n  %s\nwant:\n  %s", result, expected)
 	}
@@ -458,12 +458,12 @@ func Test_BGPFilterBIRDFuncs_WithCommunitiesASPathPriorityAndOperations(t *testi
 	expectedV4 := []string{
 		"# v4 BGPFilter kubevirt-filter",
 		"function 'bgp_kubevirt-filter_importFilterV4'() {",
-		"  if (((65000, 100) ~ bgp_community)) then { krt_metric = 100; accept; }",
-		"  if ((bgp_path ~ [= 65000 65001 * =])) then { krt_metric = 200; accept; }",
+		"  if (((65000, 100) ~ bgp_community)) then { bgp_local_pref = 2147483547; accept; }",
+		"  if ((bgp_path ~ [= 65000 65001 * =])) then { bgp_local_pref = 2147483447; accept; }",
 		"}",
 		"function 'bgp_kubevirt-filter_exportFilterV4'() {",
-		"  if ((krt_metric = 512)) then { bgp_community.add((65001, 200)); accept; }",
-		"  if ((krt_metric = 512)) then { bgp_path.prepend(65000); accept; }",
+		"  if ((defined(bgp_local_pref)&&(bgp_local_pref = 2147483135))) then { bgp_community.add((65001, 200)); accept; }",
+		"  if ((defined(bgp_local_pref)&&(bgp_local_pref = 2147483135))) then { bgp_path.prepend(65000); accept; }",
 		"}",
 	}
 
@@ -608,12 +608,12 @@ func Test_BGPFilterBIRDFuncs_FullExample(t *testing.T) {
 	expectedV4 := []string{
 		"# v4 BGPFilter full-example",
 		"function 'bgp_full-example_importFilterV4'(bool is_same_as) {",
-		`  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(krt_metric = 512)) then { krt_metric = 256; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }`,
-		"  if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { krt_metric = 1024; accept; } }",
+		`  if (is_same_as) then { if ((net ~ [ 10.244.0.0/16{24,28} ])&&((defined(ifname))&&(ifname ~ "eth0"))&&((65000, 100) ~ bgp_community)&&(bgp_path ~ [= 65000 * =])&&(defined(bgp_local_pref)&&(bgp_local_pref = 2147483135))) then { bgp_local_pref = 2147483391; bgp_community.add((65000, 200)); bgp_path.prepend(65002); bgp_path.prepend(65001); accept; } }`,
+		"  if (!is_same_as) then { if ((net ~ 10.244.0.0/16)&&((65000, 100, 999) ~ bgp_large_community)&&(bgp_path ~ [= 65000 65001 * =])&&(defined(bgp_local_pref)&&(bgp_local_pref = 2147483547))) then { bgp_local_pref = 2147482623; accept; } }",
 		"  reject;",
 		"}",
 		"function 'bgp_full-example_exportFilterV4'(bool is_same_as) {",
-		`  if (!is_same_as) then { if ((net ~ 192.168.0.0/16)&&((defined(source))&&(source ~ [ RTS_BGP ]))&&((defined(ifname))&&(ifname ~ "eth1"))&&((65000, 42) ~ bgp_community)&&(bgp_path ~ [= 65000 65001 * =])&&(krt_metric = 100)) then { bgp_large_community.add((65000, 300, 400)); bgp_path.prepend(64999); accept; } }`,
+		`  if (!is_same_as) then { if ((net ~ 192.168.0.0/16)&&((defined(source))&&(source ~ [ RTS_BGP ]))&&((defined(ifname))&&(ifname ~ "eth1"))&&((65000, 42) ~ bgp_community)&&(bgp_path ~ [= 65000 65001 * =])&&(defined(bgp_local_pref)&&(bgp_local_pref = 2147483547))) then { bgp_large_community.add((65000, 300, 400)); bgp_path.prepend(64999); accept; } }`,
 		"  if (is_same_as) then { if ((net = 10.0.0.0/8)) then { accept; } }",
 		"}",
 	}
@@ -775,7 +775,7 @@ func Test_BGPFilterBIRDFuncs_MixedPeerTypeAndNonPeerTypeRules(t *testing.T) {
 	expectedV4 := []string{
 		"# v4 BGPFilter mixed-peertype",
 		"function 'bgp_mixed-peertype_importFilterV4'(bool is_same_as) {",
-		"  if (is_same_as) then { if ((net ~ 10.0.0.0/8)) then { krt_metric = 100; accept; } }",
+		"  if (is_same_as) then { if ((net ~ 10.0.0.0/8)) then { bgp_local_pref = 2147483547; accept; } }",
 		"  if ((net ~ 172.16.0.0/12)) then { reject; }",
 		"  if (!is_same_as) then { accept; }",
 		"}",

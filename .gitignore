@@ -1,5 +1,6 @@
 *.created*
 *.pyc
+.dev-stamps/
 .go-pkg-cache/
 .idea
 .vscode
@@ -38,6 +39,8 @@ hack/test/kind/.*updated*
 hack/test/kind/kubectl
 hack/test/kind/kubectl-v*
 hack/test/kind/*kubeconfig.yaml
+hack/test/kind/external-node-key*
+hack/test/kind/external-node-ip
 hack/test/envtest/
 pod2daemon/node-driver-registrar/
 
@@ -45,3 +48,8 @@ pod2daemon/node-driver-registrar/
 
 /* Created by libcalico-go UTs */
 ut-tmp-dir
+
+.remember
+
+# Build-time copy of metadata.mk for the release CLI's embedded defaults.
+release/internal/defaults/metadata.mk

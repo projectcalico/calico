@@ -8,17 +8,19 @@ package v3
 // with apply.
 //
 // ClusterInformationSpec contains the values of describing the cluster.
+// This resource is managed automatically by Calico components and should not be modified manually.
 type ClusterInformationSpecApplyConfiguration struct {
-	// ClusterGUID is the GUID of the cluster
+	// ClusterGUID is the unique identifier for this cluster, generated automatically at install time.
 	ClusterGUID *string `json:"clusterGUID,omitempty"`
-	// ClusterType describes the type of the cluster
+	// ClusterType describes the type of the cluster, e.g., "k8s,bgp,kubeadm".
+	// Set automatically based on the detected environment.
 	ClusterType *string `json:"clusterType,omitempty"`
-	// CalicoVersion is the version of Calico that the cluster is running
+	// CalicoVersion is the version of Calico running on the cluster, set automatically by calico/node.
 	CalicoVersion *string `json:"calicoVersion,omitempty"`
 	// DatastoreReady is used during significant datastore migrations to signal to components
 	// such as Felix that it should wait before accessing the datastore.
 	DatastoreReady *bool `json:"datastoreReady,omitempty"`
-	// Variant declares which variant of Calico should be active.
+	// Variant declares which variant of Calico is active.
 	Variant *string `json:"variant,omitempty"`
 }
 

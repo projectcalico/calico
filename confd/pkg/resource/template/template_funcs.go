@@ -19,6 +19,10 @@ import (
 	"github.com/projectcalico/calico/confd/pkg/backends"
 )
 
+const (
+	maxBIRDSymLen = 64
+)
+
 func newFuncMap() map[string]any {
 	m := make(map[string]any)
 	m["base"] = path.Base
@@ -154,14 +158,12 @@ func filterAction(action v3.BGPFilterAction) (string, error) {
 	return fmt.Sprintf("%s;", strings.ToLower(string(action))), nil
 }
 
-var (
-	operatorLUT = map[v3.BGPFilterMatchOperator]string{
-		v3.MatchOperatorEqual:    "=",
-		v3.MatchOperatorNotEqual: "!=",
-		v3.MatchOperatorIn:       "~",
-		v3.MatchOperatorNotIn:    "!~",
-	}
-)
+var operatorLUT = map[v3.BGPFilterMatchOperator]string{
+	v3.MatchOperatorEqual:    "=",
+	v3.MatchOperatorNotEqual: "!=",
+	v3.MatchOperatorIn:       "~",
+	v3.MatchOperatorNotIn:    "!~",
+}
 
 func filterMatchPrefixLength(cidr string, prefixMin, prefixMax *int32) (string, error) {
 	cidrIP, cidrNet, err := net.ParseCIDR(cidr)
@@ -260,13 +262,31 @@ func filterMatchASPathPrefix(asPathPrefix []numorstring.ASNumber) (string, error
 }
 
 // filterMatchPriority generates a BIRD condition that checks if a route has the specified
-// priority (krt_metric).
+// priority (bgp_local_pref, but inverted).
 func filterMatchPriority(priority *int) (string, error) {
 	if priority == nil {
 		return "", fmt.Errorf("nil priority in BGPFilter")
 	}
-	return fmt.Sprintf("(krt_metric = %d)", *priority), nil
+	return fmt.Sprintf("(defined(bgp_local_pref)&&(bgp_local_pref = %d))", BirdIntMaxValue-*priority), nil
 }
+
+const (
+	// This is a value we use when converting between priority/metric values and bgp_local_pref.
+	// The range of Linux priority/metric values is from 0 to 2^32-1, i.e. a uint32, with lower
+	// values meaning higher priority.  The range of bgp_local_pref is also 0 to 2^32-1, i.e. a
+	// uint32, but with higher values meaning higher priority.  But we also have to consider:
+	//
+	// 1. In FelixConfiguration and BGPConfiguration we use int fields, i.e. signed, to
+	// configure the priority values that we use.
+	//
+	// 2. The "0" value has a special meaning in Linux.  For IPv6 routes it gets "normalized" to
+	// 1024.
+	//
+	// Therefore we restrict the range of priority/metric values that Felix can actually use to
+	// be from 1 to 2^31-2, and we convert between priority/metric and bgp_local_pref with `x =
+	// 2^31-1 - y`.  The following value is 2^31-1.
+	BirdIntMaxValue = 2147483647
+)
 
 // filterOperationStatements generates BIRD statements for the operations in a filter rule.
 func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, error) {
@@ -295,7 +315,7 @@ func filterOperationStatements(operations []v3.BGPFilterOperation) ([]string, er
 			if op.SetPriority.Value == nil {
 				return nil, fmt.Errorf("BGPFilter SetPriority operation has nil value")
 			}
-			stmts = append(stmts, fmt.Sprintf("krt_metric = %d;", *op.SetPriority.Value))
+			stmts = append(stmts, fmt.Sprintf("bgp_local_pref = %d;", BirdIntMaxValue-*op.SetPriority.Value))
 		} else {
 			return nil, fmt.Errorf("BGPFilter operation has no field set")
 		}
@@ -312,7 +332,6 @@ func BGPFilterFunctionName(filterName, direction, version string) (string, error
 		return "", fmt.Errorf("provided direction '%s' does not map to either 'import' or 'export'", direction)
 	}
 	pieces := []string{"bgp_", "", "_", normalizedDirection, "FilterV", version}
-	maxBIRDSymLen := 64
 	resizedName, err := TruncateAndHashName(filterName, maxBIRDSymLen-len(strings.Join(pieces, "")))
 	if err != nil {
 		return "", err

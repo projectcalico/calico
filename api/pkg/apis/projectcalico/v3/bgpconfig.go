@@ -68,6 +68,7 @@ const (
 // BGPConfigurationSpec contains the values of the BGP configuration.
 // +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshPassword) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshPassword cannot be set when nodeToNodeMeshEnabled is false",reason=FieldValueForbidden
 // +kubebuilder:validation:XValidation:rule="!has(self.nodeMeshMaxRestartTime) || !has(self.nodeToNodeMeshEnabled) || self.nodeToNodeMeshEnabled == true",message="nodeMeshMaxRestartTime cannot be set when nodeToNodeMeshEnabled is false",reason=FieldValueForbidden
+// +kubebuilder:validation:XValidation:rule="!has(self.communities) || size(self.communities) == 0 || (has(self.prefixAdvertisements) && size(self.prefixAdvertisements) > 0)",message="communities are defined but not used in prefixAdvertisements",reason=FieldValueInvalid
 type BGPConfigurationSpec struct {
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	// +kubebuilder:default=Info
@@ -84,17 +85,17 @@ type BGPConfigurationSpec struct {
 
 	// ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes Service LoadBalancer IPs.
 	// Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.
-	// +listType=set
+	// +listType=atomic
 	ServiceLoadBalancerIPs []ServiceLoadBalancerIPBlock `json:"serviceLoadBalancerIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_loadbalancer_ips"`
 
 	// ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
 	// Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
-	// +listType=set
+	// +listType=atomic
 	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_external_ips"`
 
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
-	// +listType=set
+	// +listType=atomic
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
 
 	// ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised.
@@ -105,11 +106,13 @@ type BGPConfigurationSpec struct {
 	ServiceLoadBalancerAggregation *ServiceLoadBalancerAggregation `json:"serviceLoadBalancerAggregation,omitempty" validate:"omitempty" confignamev1:"svc_loadbalancer_aggregation"`
 
 	// Communities is a list of BGP community values and their arbitrary names for tagging routes.
-	// +listType=set
+	// +kubebuilder:validation:MaxItems=500
+	// +listType=atomic
 	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
 
 	// PrefixAdvertisements contains per-prefix advertisement configuration.
-	// +listType=set
+	// +kubebuilder:validation:MaxItems=500
+	// +listType=atomic
 	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
 
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179
@@ -201,11 +204,13 @@ type ServiceClusterIPBlock struct {
 // +mapType=atomic
 type Community struct {
 	// Name given to community value.
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name,omitempty" validate:"required,name"`
 	// Value must be of format `aa:nn` or `aa:nn:mm`.
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
 	// Where, `aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+	// +kubebuilder:validation:MaxLength=40
 	// +kubebuilder:validation:Pattern=`^(\d+):(\d+)$|^(\d+):(\d+):(\d+)$`
 	Value string `json:"value,omitempty" validate:"required"`
 }
@@ -220,6 +225,7 @@ type PrefixAdvertisement struct {
 	// For standard community use `aa:nn` format, where `aa` and `nn` are 16 bit number.
 	// For large community use `aa:nn:mm` format, where `aa`, `nn` and `mm` are 32 bit number.
 	// Where,`aa` is an AS Number, `nn` and `mm` are per-AS identifier.
+	// +kubebuilder:validation:MaxItems=50
 	// +listType=atomic
 	Communities []string `json:"communities,omitempty" validate:"required"`
 }

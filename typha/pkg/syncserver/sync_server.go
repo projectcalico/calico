@@ -52,6 +52,7 @@ var (
 	ErrReadFailed               = errors.New("failed to read from client")
 	ErrUnexpectedClientMsg      = errors.New("unexpected message from client")
 	ErrUnsupportedClientFeature = errors.New("unsupported client feature")
+	errInboundMessageTooLarge   = errors.New("inbound message too large")
 )
 
 var (
@@ -97,14 +98,21 @@ const (
 	defaultMaxMessageSize                 = 100
 	defaultMaxFallBehind                  = 300 * time.Second
 	defaultNewClientFallBehindGracePeriod = 300 * time.Second
-	defaultBatchingAgeThreshold           = 100 * time.Millisecond
-	defaultPingInterval                   = 10 * time.Second
-	defaultWriteTimeout                   = 120 * time.Second
-	defaultHandshakeTimeout               = 10 * time.Second
-	defaultDropInterval                   = 1 * time.Second
-	defaultShutdownTimeout                = 300 * time.Second
-	defaultMaxConns                       = math.MaxInt32
-	PortRandom                            = -1
+
+	// maxInboundMessageBytes is the maximum number of bytes we'll read from a
+	// client for a single gob message. Client messages (MsgClientHello, MsgPong,
+	// MsgACK, MsgDecoderRestart) are small; 1 MiB is far more than any legitimate
+	// message requires but safely caps memory usage against malformed or
+	// malicious input.
+	maxInboundMessageBytes      int64 = 1 << 20
+	defaultBatchingAgeThreshold       = 100 * time.Millisecond
+	defaultPingInterval               = 10 * time.Second
+	defaultWriteTimeout               = 120 * time.Second
+	defaultHandshakeTimeout           = 10 * time.Second
+	defaultDropInterval               = 1 * time.Second
+	defaultShutdownTimeout            = 300 * time.Second
+	defaultMaxConns                   = math.MaxInt32
+	PortRandom                        = -1
 )
 
 type Server struct {
@@ -131,6 +139,11 @@ type BreadcrumbProvider interface {
 	CurrentBreadcrumb() *snapcache.Breadcrumb
 }
 
+// Config holds the configuration for the Typha sync server.
+//
+// IMPORTANT: When adding new fields, also update LogFields() below so the
+// field appears in startup logs.  Do NOT add fields that contain credentials,
+// private keys, or other secrets — LogFields() is logged at Info level.
 type Config struct {
 	Host                           string
 	Port                           int
@@ -158,6 +171,32 @@ type Config struct {
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
 	DebugLogWrites bool
+}
+
+// LogFields returns a logrus.Fields map with operational config values
+// for logging.  TLS-related fields (KeyFile, CertFile, CAFile, ClientCN,
+// ClientURISAN) and internal fields (HealthAggregator, DebugLogWrites)
+// are omitted; a "tlsEnabled" boolean is included instead.
+func (c Config) LogFields() log.Fields {
+	return log.Fields{
+		"host":                           c.Host,
+		"port":                           c.Port,
+		"maxMessageSize":                 c.MaxMessageSize,
+		"binarySnapshotTimeout":          c.BinarySnapshotTimeout,
+		"maxFallBehind":                  c.MaxFallBehind,
+		"newClientFallBehindGracePeriod": c.NewClientFallBehindGracePeriod,
+		"minBatchingAgeThreshold":        c.MinBatchingAgeThreshold,
+		"pingInterval":                   c.PingInterval,
+		"pongTimeout":                    c.PongTimeout,
+		"handshakeTimeout":               c.HandshakeTimeout,
+		"writeTimeout":                   c.WriteTimeout,
+		"dropInterval":                   c.DropInterval,
+		"shutdownTimeout":                c.ShutdownTimeout,
+		"shutdownMaxDropInterval":        c.ShutdownMaxDropInterval,
+		"maxConns":                       c.MaxConns,
+		"tlsEnabled":                     c.requiringTLS(),
+		"writeBufferSize":                c.WriteBufferSize,
+	}
 }
 
 const (
@@ -279,7 +318,7 @@ func (c *Config) requiringTLS() bool {
 
 func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
-	log.WithField("config", config).Info("Creating server")
+	log.WithFields(config.LogFields()).Info("Creating server")
 	s := &Server{
 		config:               config,
 		caches:               caches,
@@ -847,8 +886,10 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		h.shutDownWG.Done()
 		logCxt.Info("Read goroutine finished")
 	}()
-	r := gob.NewDecoder(h.conn)
+	lr := &limitedReader{r: h.conn, limit: maxInboundMessageBytes}
+	r := gob.NewDecoder(lr)
 	for {
+		lr.reset()
 		var envelope syncproto.Envelope
 		err := r.Decode(&envelope)
 		if err != nil {
@@ -870,6 +911,33 @@ func (h *connection) readFromClient(logCxt *log.Entry) {
 		}
 
 	}
+}
+
+// limitedReader wraps an io.Reader and tracks the total bytes read since the
+// last call to reset. If the cumulative bytes exceed the limit, Read returns
+// an error. Call reset between gob Decode calls so the limit applies
+// per-message rather than over the whole connection lifetime.
+type limitedReader struct {
+	r     io.Reader
+	limit int64
+	n     int64
+}
+
+func (l *limitedReader) Read(p []byte) (int, error) {
+	avail := l.limit - l.n
+	if avail <= 0 {
+		return 0, fmt.Errorf("%w (read %d bytes, limit %d)", errInboundMessageTooLarge, l.n, l.limit)
+	}
+	if int64(len(p)) > avail {
+		p = p[:avail]
+	}
+	n, err := l.r.Read(p)
+	l.n += int64(n)
+	return n, err
+}
+
+func (l *limitedReader) reset() {
+	l.n = 0
 }
 
 // waitForMessage blocks, waiting for a message on the h.readC channel.  It imposes a timeout.

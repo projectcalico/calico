@@ -29,7 +29,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var (
@@ -40,8 +40,8 @@ var (
 	INTERNAL          = int32(code.Code_INTERNAL)
 	UNKNOWN           = int32(code.Code_UNKNOWN)
 
-	rlog1 = logutils.NewRateLimitedLogger()
-	rlog2 = logutils.NewRateLimitedLogger()
+	rlog1 = logrusr.NewRateLimitedLogger()
+	rlog2 = logrusr.NewRateLimitedLogger()
 )
 
 // Action is an enumeration of actions a policy rule can take if it is matched.

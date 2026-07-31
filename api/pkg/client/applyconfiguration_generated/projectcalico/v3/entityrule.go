@@ -65,7 +65,7 @@ type EntityRuleApplyConfiguration struct {
 	// list of integers or strings that represent ranges of ports.
 	//
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	Ports []numorstring.Port `json:"ports,omitempty"`
 	// NotNets is the negated version of the Nets field.
 	NotNets []string `json:"notNets,omitempty"`
@@ -74,7 +74,7 @@ type EntityRuleApplyConfiguration struct {
 	NotSelector *string `json:"notSelector,omitempty"`
 	// NotPorts is the negated version of the Ports field.
 	// Since only some protocols have ports, if any ports are specified it requires the
-	// Protocol match in the Rule to be set to "TCP" or "UDP".
+	// Protocol match in the Rule to be set to "TCP", "UDP", or "SCTP".
 	NotPorts []numorstring.Port `json:"notPorts,omitempty"`
 	// ServiceAccounts is an optional field that restricts the rule to only apply to traffic that originates from (or
 	// terminates at) a pod running as a matching service account.

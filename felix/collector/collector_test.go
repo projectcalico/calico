@@ -23,9 +23,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gavv/monotime"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -685,9 +688,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when source endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when source endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when source endpoint is marked for deletion")
 			})
 		})
 
@@ -718,9 +724,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when destination endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when destination endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when destination endpoint is marked for deletion")
 			})
 		})
 
@@ -751,9 +760,12 @@ var _ = Describe("NFLOG Datasource", func() {
 				Eventually(c.epStats).Should(HaveKey(*t))
 
 				data := c.epStats[*t]
-				// Verify that RuleHits were not processed (Path should be empty)
-				Expect(len(data.IngressRuleTrace.Path())).To(Equal(0), "IngressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
-				Expect(len(data.EgressRuleTrace.Path())).To(Equal(0), "EgressRuleTrace Path should be empty when remote source endpoint is marked for deletion")
+				// Verify that RuleHits are not processed.  The RuleHits are applied after the
+				// epStats entry is inserted, so keep checking rather than sampling immediately.
+				Consistently(func() [2]int {
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
+				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
+					"Ingress/EgressRuleTrace Paths should stay empty when remote source endpoint is marked for deletion")
 			})
 		})
 
@@ -1072,6 +1084,53 @@ var outCtEntryWithDNAT = nfnetlink.CtEntry{
 	ProtoInfo:        nfnetlink.CtProtoInfo{State: nfnl.TCP_CONNTRACK_ESTABLISHED},
 }
 
+// ctCounters collects Data's four conntrack counters into one comparable
+// value so that tests can poll for all of them at once.
+type ctCounters struct {
+	Packets        counter.Counter
+	Bytes          counter.Counter
+	PacketsReverse counter.Counter
+	BytesReverse   counter.Counter
+}
+
+func countersOfCtEntry(e nfnetlink.CtEntry) ctCounters {
+	return ctCounters{
+		Packets:        *counter.New(e.OriginalCounters.Packets),
+		Bytes:          *counter.New(e.OriginalCounters.Bytes),
+		PacketsReverse: *counter.New(e.ReplyCounters.Packets),
+		BytesReverse:   *counter.New(e.ReplyCounters.Bytes),
+	}
+}
+
+func countersOfData(c *collector, t tuple.Tuple) func() (ctCounters, error) {
+	return func() (ctCounters, error) {
+		data, ok := c.epStats[t]
+		if !ok {
+			return ctCounters{}, fmt.Errorf("no epStats entry for tuple %v", &t)
+		}
+		return ctCounters{
+			Packets:        data.ConntrackPacketsCounter(),
+			Bytes:          data.ConntrackBytesCounter(),
+			PacketsReverse: data.ConntrackPacketsCounterReverse(),
+			BytesReverse:   data.ConntrackBytesCounterReverse(),
+		}, nil
+	}
+}
+
+// eventuallyExpectCtStats waits until the epStats entry for t exists and its
+// conntrack counters match those of e, then returns the entry.
+//
+// The collector applies conntrack updates on its own goroutine: it inserts
+// the epStats entry first and fills in the NAT fields and counters
+// afterwards.  Asserting on those fields immediately after the entry appears
+// is therefore racy; the counters are written last, so once they match, the
+// whole update has been applied.
+func eventuallyExpectCtStats(c *collector, t tuple.Tuple, e nfnetlink.CtEntry) *Data {
+	GinkgoHelper()
+	Eventually(countersOfData(c, t), "2s", "100ms").Should(Equal(countersOfCtEntry(e)))
+	return c.epStats[t]
+}
+
 var _ = Describe("Conntrack Datasource", func() {
 	var c *collector
 	var ciReaderSenderChan chan []clttypes.ConntrackInfo
@@ -1131,13 +1190,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 		})
 		It("should handle destination becoming non-local by removing entry on next conntrack update for reported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
@@ -1210,8 +1263,8 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
+			Eventually(func() calc.EndpointData { return data.DstEp }, "2s", "100ms").ShouldNot(Equal(oldDest))
 			Expect(data.SrcEp).To(Equal(oldSrc))
-			Expect(data.DstEp).NotTo(Equal(oldDest))
 		})
 		It("should handle destination becoming non-local by removing entry on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirIngress, ingressPktAllow[ingressPktAllowNflogTuple])
@@ -1304,13 +1357,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(outCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(outCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(outCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(outCtEntry.ReplyCounters.Bytes)))
+			data := eventuallyExpectCtStats(c, *t, outCtEntry)
 
 			// Not SNAT'd so natOutgoingPort should not be set.
 			Expect(data.NatOutgoingPort).Should(Equal(0))
@@ -1321,8 +1368,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntryWithSNAT, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
+			data := eventuallyExpectCtStats(c, *t, outCtEntryWithSNAT)
 
 			Expect(data.NatOutgoingPort).Should(Equal(nodeSrcPort))
 		})
@@ -1332,8 +1378,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntrySNATToServiceToSelf, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
+			data := eventuallyExpectCtStats(c, *t, outCtEntrySNATToServiceToSelf)
 
 			Expect(data.NatOutgoingPort).Should(Equal(0))
 		})
@@ -1408,7 +1453,7 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			Expect(data.SrcEp).NotTo(Equal(oldSrc))
+			Eventually(func() calc.EndpointData { return data.SrcEp }, "2s", "100ms").ShouldNot(Equal(oldSrc))
 			Expect(data.DstEp).To(Equal(oldDest))
 		})
 		It("should handle source becoming non-local by removing entry on next packetinfo update for reported flow", func() {
@@ -1502,13 +1547,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntry, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t1))
-
-			data := c.epStats[*t1]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(localCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(localCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(localCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(localCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t1, localCtEntry)
 		})
 	})
 	Describe("Test local destination with DNAT", func() {
@@ -1518,25 +1557,14 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryWithDNAT, 0)}
 
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryWithDNAT.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryWithDNAT.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryWithDNAT.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryWithDNAT.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryWithDNAT)
 		})
 	})
 	Describe("Test local source to local destination with DNAT", func() {
 		It("should create a single entry with 'local' connection direction and with correct tuple extracted", func() {
 			t1 := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey((Equal(*t1))))
-			data := c.epStats[*t1]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(localCtEntryWithDNAT.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(localCtEntryWithDNAT.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(localCtEntryWithDNAT.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(localCtEntryWithDNAT.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t1, localCtEntryWithDNAT)
 		})
 	})
 
@@ -1545,12 +1573,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			data := c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 
 			By("handling a conntrack update with updated counters")
 			inCtEntryUpdatedCounters := inCtEntry
@@ -1559,16 +1582,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Packets)))
-
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryUpdatedCounters)
 
 			By("handling a conntrack update with TCP CLOSE_WAIT")
 			inCtEntryStateCloseWait := inCtEntryUpdatedCounters
@@ -1576,16 +1590,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounterReverse()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Packets)))
-
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryStateCloseWait)
 
 			By("handling an nflog update for destination matching on policy - all policy info is now gathered",
 				func() {
@@ -1605,17 +1610,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple")
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntry.OriginalCounters.Packets)))
-			data := c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntry.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntry.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntry)
 
 			By("handling a conntrack update with updated counters")
 			inCtEntryUpdatedCounters := inCtEntry
@@ -1624,17 +1619,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryUpdatedCounters.ReplyCounters.Packets = inCtEntry.ReplyCounters.Packets + 2
 			inCtEntryUpdatedCounters.ReplyCounters.Bytes = inCtEntry.ReplyCounters.Bytes + 50
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryUpdatedCounters, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounter()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Packets)))
-			data = c.epStats[*t]
-
-			Expect(data.ConntrackPacketsCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryUpdatedCounters.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryUpdatedCounters)
 
 			By("handling a conntrack update with TCP CLOSE_WAIT")
 			inCtEntryStateCloseWait := inCtEntryUpdatedCounters
@@ -1642,16 +1627,7 @@ var _ = Describe("Conntrack Datasource", func() {
 			inCtEntryStateCloseWait.ReplyCounters.Packets = inCtEntryUpdatedCounters.ReplyCounters.Packets + 1
 			inCtEntryStateCloseWait.ReplyCounters.Bytes = inCtEntryUpdatedCounters.ReplyCounters.Bytes + 10
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntryStateCloseWait, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
-
-			// know update is complete
-			Eventually(func() counter.Counter {
-				return c.epStats[*t].ConntrackPacketsCounterReverse()
-			}, "500ms", "100ms").Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Packets)))
-			data = c.epStats[*t]
-			Expect(data.ConntrackPacketsCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Packets)))
-			Expect(data.ConntrackBytesCounter()).Should(Equal(*counter.New(inCtEntryStateCloseWait.OriginalCounters.Bytes)))
-			Expect(data.ConntrackBytesCounterReverse()).Should(Equal(*counter.New(inCtEntryStateCloseWait.ReplyCounters.Bytes)))
+			eventuallyExpectCtStats(c, *t, inCtEntryStateCloseWait)
 
 			By("handling a conntrack update with TCP TIME_WAIT")
 			inCtEntryStateTimeWait := inCtEntry
@@ -1701,11 +1677,10 @@ var _ = Describe("Conntrack Datasource", func() {
 			By("handling a conntrack update to start tracking stats for tuple (w/ DNAT)")
 			t := tuple.New(localIp1, localIp2, proto_tcp, srcPort, dstPort)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(localCtEntryWithDNAT, 0)}
-			Eventually(c.epStats, "500ms", "100ms").Should(HaveKey(*t))
+			data := eventuallyExpectCtStats(c, *t, localCtEntryWithDNAT)
 
 			// Flagging as expired will attempt to expire the data when NFLOGs and service info are gathered.
 			By("flagging the data as expired")
-			data := c.epStats[*t]
 			data.Expired = true
 			Expect(data.IsDNAT).Should(BeTrue())
 
@@ -3404,117 +3379,10 @@ func TestLoopDataplaneInfoUpdates(t *testing.T) {
 func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 	RegisterTestingT(t)
 
-	// Helper function to convert model workload endpoint key to protobuf endpoint ID
-	convertWorkloadId := func(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
-		return types.WorkloadEndpointID{
-			OrchestratorId: key.OrchestratorID,
-			WorkloadId:     key.WorkloadID,
-			EndpointId:     key.EndpointID,
-		}
-	}
+	c, flowTuple1, flowTuple2 := setupPolicyEvalCollector(t)
 
-	// Setup test environment
-	epMap := map[[16]byte]calc.EndpointData{
-		localIp1:  localEd1,
-		localIp2:  localEd2,
-		remoteIp1: remoteEd1,
-	}
-
-	lm := newMockLookupsCache(epMap, nil, nil, nil)
-	policyStoreManager := policystore.NewPolicyStoreManager()
-
-	conf := &Config{
-		AgeTimeout:            time.Duration(10) * time.Second,
-		InitialReportingDelay: time.Duration(5) * time.Second,
-		ExportingInterval:     time.Duration(1) * time.Second,
-		FlowLogsFlushInterval: time.Duration(100) * time.Second,
-		DisplayDebugTraceLogs: true,
-		PolicyStoreManager:    policyStoreManager,
-	}
-	c := newCollector(lm, conf).(*collector)
-
-	// Create test flow tuples
-	// Flow 1: Local-to-local communication (localIp1 -> localIp2)
-	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
-
-	// Flow 2: Local-to-remote communication (localIp2 -> remoteIp1)
-	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
-
-	// Setup initial policy configuration
-	// localWlEp1 has policy1 for both ingress and egress
-	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{
-		{
-			Name:            "default",
-			IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
-			EgressPolicies:  []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
-		},
-	})
-
-	// localWlEp2 initially has policy2 (deny) for both ingress and egress
-	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
-		{
-			Name:            "default",
-			IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
-			EgressPolicies:  []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
-		},
-	})
-
-	// remoteWlEp1 has no policies
-	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
-
-	// Initialize policy store with endpoints and policies
-	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-		// Add endpoint configurations
-		ps.Endpoints[convertWorkloadId(localWlEPKey1)] = localWlEp1Proto
-		ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
-		ps.Endpoints[convertWorkloadId(remoteWlEpKey1)] = remoteWlEp1Proto
-
-		// Add policy definitions
-		// policy1: Allow all traffic
-		ps.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
-			Tier:          "default",
-			InboundRules:  []*proto.Rule{{Action: "allow"}},
-			OutboundRules: []*proto.Rule{{Action: "allow"}},
-		}
-
-		// policy2: Deny all traffic
-		ps.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
-			Tier:          "default",
-			InboundRules:  []*proto.Rule{{Action: "deny"}},
-			OutboundRules: []*proto.Rule{{Action: "deny"}},
-		}
-	})
-	policyStoreManager.OnInSync()
-
-	// Simulate packet processing to create flow data
-	ruleIDIngressPolicy1 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow)
-	packetInfoIngress1 := clttypes.PacketInfo{
-		Tuple:     *flowTuple1,
-		Direction: rules.RuleDirIngress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDIngressPolicy1, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoIngress1)
-
-	ruleIDEgressPolicy1 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow)
-	packetInfoEgress1 := clttypes.PacketInfo{
-		Tuple:     *flowTuple1,
-		Direction: rules.RuleDirEgress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy1, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoEgress1)
-
-	// Process egress packet for flow 2 (localIp2 -> remoteIp1)
-	ruleIDEgressPolicy2 := calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny)
-	packetInfoEgress2 := clttypes.PacketInfo{
-		Tuple:     *flowTuple2,
-		Direction: rules.RuleDirEgress,
-		RuleHits:  []clttypes.RuleHit{{RuleID: ruleIDEgressPolicy2, Hits: 1, Bytes: 100}},
-	}
-	c.applyPacketInfo(packetInfoEgress2)
-
-	// Retrieve flow data from collector
-	flowData1 := c.epStats[*flowTuple1]
-	flowData2 := c.epStats[*flowTuple2]
+	flowData1 := c.epStats[flowTuple1]
+	flowData2 := c.epStats[flowTuple2]
 
 	// Verify initial pending rule trace evaluation
 	testCases := []struct {
@@ -3573,16 +3441,16 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 
 		// Update the policy store
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = updatedLocalWlEp2Proto
+			ps.Endpoints[workloadEndpointID(localWlEPKey2)] = updatedLocalWlEp2Proto
 		})
 		c.policyStoreManager.OnInSync()
 
 		// Trigger pending rule trace update
-		c.updatePendingRuleTraces()
+		drainRecalcSweep(c)
 
 		// Get updated flow data
-		updatedFlowData1 := c.epStats[*flowTuple1]
-		updatedFlowData2 := c.epStats[*flowTuple2]
+		updatedFlowData1 := c.epStats[flowTuple1]
+		updatedFlowData2 := c.epStats[flowTuple2]
 
 		// Verify updated policy evaluation
 		updatedTestCases := []struct {
@@ -3735,8 +3603,7 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			localIp2:  localEd2,
 			remoteIp1: remoteEd1,
 		}
-		lm = newMockLookupsCache(epMapWithoutLocalEd1, nil, nil, nil)
-		c.luc = lm
+		c.luc = newMockLookupsCache(epMapWithoutLocalEd1, nil, nil, nil)
 
 		// Make another policy change to trigger evaluation
 		localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{
@@ -3744,19 +3611,19 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 		})
 
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
-			ps.Endpoints[convertWorkloadId(localWlEPKey2)] = localWlEp2Proto
+			ps.Endpoints[workloadEndpointID(localWlEPKey2)] = localWlEp2Proto
 		})
 		c.policyStoreManager.OnInSync()
 
 		// Store original pending rule IDs before update
-		originalFlow1IngressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].IngressPendingRuleIDs...)
-		originalFlow1EgressRules := append([]*calc.RuleID(nil), c.epStats[*flowTuple1].EgressPendingRuleIDs...)
+		originalFlow1IngressRules := append([]*calc.RuleID(nil), c.epStats[flowTuple1].IngressPendingRuleIDs...)
+		originalFlow1EgressRules := append([]*calc.RuleID(nil), c.epStats[flowTuple1].EgressPendingRuleIDs...)
 
 		// Trigger update - should skip flow1 since localEd1 is deleted
-		c.updatePendingRuleTraces()
+		drainRecalcSweep(c)
 
-		currentFlowData1 := c.epStats[*flowTuple1]
-		currentFlowData2 := c.epStats[*flowTuple2]
+		currentFlowData1 := c.epStats[flowTuple1]
+		currentFlowData2 := c.epStats[flowTuple2]
 
 		// Verify that flow1 rules remain unchanged (endpoint deleted, so no update)
 		Expect(currentFlowData1.IngressPendingRuleIDs).To(Equal(originalFlow1IngressRules),
@@ -3774,6 +3641,366 @@ func TestRunPendingRuleTraceEvaluation(t *testing.T) {
 			validateRuleID(t, currentFlowData2.EgressPendingRuleIDs[0], defTierPolicy1AllowEgressRuleID, "Flow2 Egress After Endpoint Deletion")
 		}
 	})
+}
+
+// workloadEndpointID converts a model workload endpoint key to its protobuf endpoint ID.
+func workloadEndpointID(key model.WorkloadEndpointKey) types.WorkloadEndpointID {
+	return types.WorkloadEndpointID{
+		OrchestratorId: key.OrchestratorID,
+		WorkloadId:     key.WorkloadID,
+		EndpointId:     key.EndpointID,
+	}
+}
+
+// setupPolicyEvalCollector builds a collector holding two flows against a populated policy store:
+// flow1 is local-to-local (policy1 allow), flow2 is local-to-remote (policy2 deny). It returns the
+// collector and the two flow tuples.
+func setupPolicyEvalCollector(t *testing.T) (*collector, tuple.Tuple, tuple.Tuple) {
+	t.Helper()
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1:  localEd1,
+		localIp2:  localEd2,
+		remoteIp1: remoteEd1,
+	}
+	lm := newMockLookupsCache(epMap, nil, nil, nil)
+	policyStoreManager := policystore.NewPolicyStoreManager()
+
+	c := newCollector(lm, &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		FlowLogsFlushInterval: 100 * time.Second,
+		PolicyStoreManager:    policyStoreManager,
+	}).(*collector)
+
+	flowTuple1 := tuple.New(localIp1, localIp2, proto_tcp, 1000, 1000)
+	flowTuple2 := tuple.New(localIp2, remoteIp1, proto_tcp, 1000, 1000)
+
+	localWlEp1Proto := calc.ModelWorkloadEndpointToProto(localWlEp1, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	localWlEp2Proto := calc.ModelWorkloadEndpointToProto(localWlEp2, nil, nil, []*proto.TierInfo{{
+		Name:            "default",
+		IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+		EgressPolicies:  []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+	}})
+	remoteWlEp1Proto := calc.ModelWorkloadEndpointToProto(remoteWlEp1, nil, nil, []*proto.TierInfo{})
+
+	policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
+		ps.Endpoints[workloadEndpointID(localWlEPKey1)] = localWlEp1Proto
+		ps.Endpoints[workloadEndpointID(localWlEPKey2)] = localWlEp2Proto
+		ps.Endpoints[workloadEndpointID(remoteWlEpKey1)] = remoteWlEp1Proto
+		ps.PolicyByID[types.PolicyID{Name: "policy1", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "allow"}},
+			OutboundRules: []*proto.Rule{{Action: "allow"}},
+		}
+		ps.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{
+			Tier:          "default",
+			InboundRules:  []*proto.Rule{{Action: "deny"}},
+			OutboundRules: []*proto.Rule{{Action: "deny"}},
+		}
+	})
+	policyStoreManager.OnInSync()
+
+	// Simulate packet processing to create flow data in epStats.
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirIngress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirIngress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple1,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy1", "", 0, rules.RuleDirEgress, rules.RuleActionAllow), Hits: 1, Bytes: 100}},
+	})
+	c.applyPacketInfo(clttypes.PacketInfo{
+		Tuple:     *flowTuple2,
+		Direction: rules.RuleDirEgress,
+		RuleHits:  []clttypes.RuleHit{{RuleID: calc.NewRuleID(v3.KindGlobalNetworkPolicy, "default", "policy2", "", 0, rules.RuleDirEgress, rules.RuleActionDeny), Hits: 1, Bytes: 100}},
+	})
+
+	return c, *flowTuple1, *flowTuple2
+}
+
+// makeAllFlowsDue zeroes the last-evaluated stamps so the next sweep re-evaluates every flow. The
+// fixture stamps flows as it creates them, which would otherwise be within the freshness window.
+func makeAllFlowsDue(c *collector) {
+	for _, data := range c.epStats {
+		data.lastPolicyEvalAt = 0
+	}
+}
+
+// clearPendingRuleIDs additionally discards the pending rule traces, for tests that need to
+// observe the sweep populating them from scratch.
+func clearPendingRuleIDs(c *collector) {
+	for _, data := range c.epStats {
+		data.IngressPendingRuleIDs = nil
+		data.EgressPendingRuleIDs = nil
+	}
+	makeAllFlowsDue(c)
+}
+
+// drainRecalcSweep runs a full policy re-evaluation sweep to completion.
+func drainRecalcSweep(c *collector) {
+	makeAllFlowsDue(c)
+	c.snapshotFlowsForRecalc()
+	for !c.processRecalcBatch(time.Hour) {
+	}
+}
+
+// TestProcessRecalcBatchTimeBoxes verifies that a small budget bounds each batch and that repeated
+// batches eventually drain the snapshot.
+func TestProcessRecalcBatchTimeBoxes(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	total := len(c.recalcSnapshot)
+	Expect(total).To(BeNumerically(">", 1), "fixture should have more than one flow")
+
+	// A zero budget still makes forward progress: exactly one flow per batch.
+	Expect(c.processRecalcBatch(0)).To(BeFalse())
+	Expect(c.recalcSnapshot).To(HaveLen(total-1), "a zero-budget batch should process exactly one flow")
+
+	batches := 1
+	for len(c.recalcSnapshot) > 0 {
+		c.processRecalcBatch(0)
+		batches++
+	}
+	Expect(batches).To(Equal(total), "zero-budget batches should drain one flow each")
+}
+
+// TestProcessRecalcBatchYieldsWhenEveryFlowIsSkipped covers a snapshot in which nothing is due.
+// Skipped flows do not reach the post-evaluation deadline check, so without the amortised check the
+// batch would pop the whole snapshot in one go, re-introducing the stall the batching exists to
+// prevent. A sweep that overruns the ticker interval produces exactly this snapshot, because the
+// pending tick fires as soon as the sweep drains and every flow has just been stamped.
+func TestProcessRecalcBatchYieldsWhenEveryFlowIsSkipped(t *testing.T) {
+	RegisterTestingT(t)
+
+	const flows = 3 * policyEvalDeadlineCheckInterval
+	c := &collector{
+		epStats: make(map[tuple.Tuple]*Data, flows),
+		// Far longer than the test takes, so every flow reads as recently evaluated.
+		policyEvalMinInterval: time.Hour,
+	}
+	now := monotime.Now()
+	for i := range flows {
+		tup := *tuple.New([16]byte{byte(i), byte(i >> 8)}, [16]byte{1}, proto_tcp, i, 80)
+		data := NewData(tup, nil, nil)
+		data.lastPolicyEvalAt = now
+		c.epStats[tup] = data
+	}
+
+	c.snapshotFlowsForRecalc()
+	Expect(c.processRecalcBatch(0)).To(BeFalse(), "a snapshot of skipped flows should not drain in one batch")
+	Expect(c.recalcSnapshot).To(HaveLen(flows-policyEvalDeadlineCheckInterval),
+		"batch should yield after one deadline-check interval of skipped flows")
+
+	batches := 1
+	for len(c.recalcSnapshot) > 0 {
+		c.processRecalcBatch(0)
+		batches++
+	}
+	Expect(batches).To(Equal(flows / policyEvalDeadlineCheckInterval))
+}
+
+// TestContinuousModeRunsSweepFromMainLoop is the one test that exercises the sweep the way
+// production does: through the collector's own select loop, driven by the policy-eval ticker. Every
+// other policy-eval test calls snapshotFlowsForRecalc/processRecalcBatch directly, so nothing else
+// would notice if the ticker stopped firing or the batch path stopped being reached.
+//
+// It asserts on the counter rather than on Data fields, because epStats belongs to the collector
+// goroutine and reading it from the test would race.
+func TestContinuousModeRunsSweepFromMainLoop(t *testing.T) {
+	RegisterTestingT(t)
+
+	epMap := map[[16]byte]calc.EndpointData{
+		localIp1: localEd1,
+		localIp2: localEd2,
+	}
+	c := newCollector(newMockLookupsCache(epMap, nil, nil, nil), &Config{
+		AgeTimeout:            10 * time.Second,
+		InitialReportingDelay: 5 * time.Second,
+		ExportingInterval:     time.Second,
+		// Short enough that a tick, and the following re-evaluation, land within the timeout
+		// below: the ticker fires at 8/10 of this and a flow becomes due again at 4/10.
+		FlowLogsFlushInterval: 100 * time.Millisecond,
+		PolicyEvaluationMode:  string(v3.FlowLogsPolicyEvaluationModeContinuous),
+	}).(*collector)
+
+	Expect(c.tickerPolicyEval).ToNot(BeNil(), "continuous mode should arm the policy-eval ticker")
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	Expect(c.Start()).To(Succeed())
+
+	// Hand the flow to the collector over its reporting channel so that it is created on the
+	// collector's own goroutine.
+	c.ReportingChannel() <- &proto.DataplaneStats{
+		SrcIp:    localIp1Str,
+		DstIp:    localIp2Str,
+		SrcPort:  1000,
+		DstPort:  2000,
+		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: proto_tcp}},
+	}
+
+	Eventually(func() float64 {
+		return testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	}, 5*time.Second, 20*time.Millisecond).Should(BeNumerically(">", before),
+		"the ticker should drive a re-evaluation sweep through the main loop")
+}
+
+// TestNonContinuousModeLeavesSweepIdle verifies the feature gate suppresses the work, not just the
+// log line: with pending policies disabled there is no ticker, so the sweep never runs.
+func TestNonContinuousModeLeavesSweepIdle(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t) // no PolicyEvaluationMode set
+
+	Expect(c.tickerPolicyEval).To(BeNil())
+	Expect(c.policyEvalTickChan()).To(BeNil(), "a nil channel masks the sweep out of the select")
+}
+
+// TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows covers the early-uptime case: monotime counts
+// from boot, so when the freshness window exceeds the current uptime the "too recent" threshold is
+// negative. Flows that have never been evaluated must still be evaluated, not skipped.
+func TestProcessRecalcBatchEvaluatesNeverEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	// A window longer than the machine has been up drives the threshold negative.
+	c.policyEvalMinInterval = 1000 * time.Hour
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", monotime.Now()),
+		"window must exceed uptime for this test to cover the negative-threshold case")
+	clearPendingRuleIDs(c)
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+	for !c.processRecalcBatch(time.Hour) {
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(flows),
+		"never-evaluated flows must not be skipped as too-recent")
+}
+
+// TestSnapshotRightSizesBuffer verifies the snapshot buffer stays proportional to the flow count,
+// rather than re-allocating as it fills or holding a peak-sized array forever.
+func TestSnapshotRightSizesBuffer(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	inBand := func() {
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically(">=", len(c.epStats)),
+			"buffer must hold every flow without growing mid-sweep")
+		Expect(cap(c.recalcSnapshot)).To(BeNumerically("<=", 2*len(c.epStats)),
+			"buffer must not hold on to much more than the current flow count")
+	}
+
+	c.snapshotFlowsForRecalc()
+	Expect(c.recalcSnapshot).To(HaveLen(len(c.epStats)))
+	inBand()
+
+	// Shrinking the flow count must release the larger array.
+	grown := cap(c.recalcSnapshot)
+	for tpl := range c.epStats {
+		c.deleteDataFromEpStats(c.epStats[tpl])
+		break
+	}
+	c.snapshotFlowsForRecalc()
+	inBand()
+	Expect(cap(c.recalcSnapshot)).To(BeNumerically("<", grown))
+}
+
+// TestProcessRecalcBatchSkipsStaleFlows verifies that flows deleted from epStats after the snapshot
+// was taken are skipped rather than evaluated (no panic, not counted).
+func TestProcessRecalcBatchSkipsStaleFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, ft1, ft2 := setupPolicyEvalCollector(t)
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	snapshotLen := len(c.recalcSnapshot)
+
+	// Delete one flow after the snapshot was taken.
+	c.deleteDataFromEpStats(c.epStats[ft1])
+
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	flowsDelta := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore
+
+	Expect(int(flowsDelta)).To(Equal(snapshotLen-1), "the deleted flow should be skipped, not evaluated")
+	// The surviving flow was still evaluated.
+	Expect(c.epStats[ft2].EgressPendingRuleIDs).ToNot(BeEmpty())
+}
+
+// TestPolicyEvalMetrics verifies the batch/flow counters and the sweep-duration histogram move as
+// expected across a full drain.
+func TestPolicyEvalMetrics(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	sweepSampleCount := func() uint64 {
+		var m dto.Metric
+		Expect(histogramPolicyEvalSweepDuration.Write(&m)).To(Succeed())
+		return m.GetHistogram().GetSampleCount()
+	}
+
+	batchesBefore := testutil.ToFloat64(counterPolicyEvalBatches)
+	flowsBefore := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	sweepsBefore := sweepSampleCount()
+
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	flows := len(c.recalcSnapshot)
+
+	batches := 0
+	for {
+		batches++
+		if c.processRecalcBatch(0) { // one flow per batch
+			break
+		}
+	}
+
+	Expect(int(testutil.ToFloat64(counterPolicyEvalBatches) - batchesBefore)).To(Equal(batches))
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc))) - flowsBefore)).To(Equal(flows))
+	// One completed sweep records exactly one histogram observation.
+	Expect(sweepSampleCount()).To(Equal(sweepsBefore + 1))
+}
+
+// TestProcessRecalcBatchSkipsRecentlyEvaluatedFlows verifies the snapshot captures every flow but
+// only re-evaluates flows outside policyEvalMinInterval.
+func TestProcessRecalcBatchSkipsRecentlyEvaluatedFlows(t *testing.T) {
+	RegisterTestingT(t)
+	c, _, _ := setupPolicyEvalCollector(t)
+
+	Expect(c.policyEvalMinInterval).To(BeNumerically(">", 0))
+
+	// The fixture stamped every flow as it created them, so none are due yet.
+	c.snapshotFlowsForRecalc()
+	total := len(c.recalcSnapshot)
+	Expect(total).To(BeNumerically(">", 1), "the snapshot should capture every flow")
+
+	before := testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(0),
+		"recently-evaluated flows should be skipped at re-evaluation time")
+
+	// Once the stamps are cleared, every flow is due again.
+	clearPendingRuleIDs(c)
+	c.snapshotFlowsForRecalc()
+	Expect(len(c.recalcSnapshot)).To(Equal(total))
+	before = testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))
+	for !c.processRecalcBatch(time.Hour) {
+	}
+	Expect(int(testutil.ToFloat64(counterPolicyEvalFlows.WithLabelValues(string(policyEvalRecalc)))-before)).To(Equal(total),
+		"cleared flows should all be re-evaluated")
 }
 
 // Helper function to validate rule ID fields

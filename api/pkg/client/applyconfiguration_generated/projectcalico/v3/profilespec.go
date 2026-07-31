@@ -10,14 +10,14 @@ package v3
 // ProfileSpec contains the specification for a security Profile resource.
 type ProfileSpecApplyConfiguration struct {
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Ingress []RuleApplyConfiguration `json:"ingress,omitempty"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Egress []RuleApplyConfiguration `json:"egress,omitempty"`
-	// An option set of labels to apply to each endpoint (in addition to their own labels)
-	// referencing this profile.  If labels configured on the endpoint have keys matching those
-	// labels inherited from the profile, the endpoint label values take precedence.
+	// An optional set of labels to apply to each endpoint (in addition to their own labels)
+	// referencing this profile. If a label key from the profile conflicts with a label already
+	// present on the endpoint, the endpoint's own label value takes precedence.
 	LabelsToApply map[string]string `json:"labelsToApply,omitempty"`
 }
 

@@ -30,9 +30,10 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type routeManager struct {
@@ -62,13 +63,13 @@ type routeManager struct {
 
 	// Indicates if configuration has changed since the last apply.
 	routesDirty   bool
-	nlHandle      netlinkHandle
+	nlHandle      netlinkshim.Interface
 	dpConfig      Config
 	routeProtocol netlink.RouteProtocol
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
 	// run 2 instance of the vxlan manager, one for each ip version - like in
@@ -87,8 +88,8 @@ func newRouteManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	opRecorder logrusr.OpRecorder,
+	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
 		hostname:             dpConfig.Hostname,
@@ -434,7 +435,11 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		return nil, fmt.Errorf("parent interface not yet known")
 	}
 
-	m.logCtx.WithField("address", parentAddr).Debug("Getting parent interface")
+	// Keep only the address, and remove subnet mask part if there is any.
+	parts := strings.Split(parentAddr, "/")
+	normalisedAddr := parts[0]
+
+	m.logCtx.WithField("address", normalisedAddr).Debug("Getting parent interface")
 	links, err := m.nlHandle.LinkList()
 	if err != nil {
 		return nil, err
@@ -452,13 +457,13 @@ func (m *routeManager) detectParentIface() (netlink.Link, error) {
 		}
 		for _, addr := range addrs {
 			// Match address with or without subnet mask
-			if addr.IP.String() == parentAddr || addr.IPNet.String() == parentAddr {
+			if addr.IP.String() == normalisedAddr {
 				m.logCtx.Debugf("Found parent interface: %+v", link)
 				return link, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("unable to find parent interface with address %s", parentAddr)
+	return nil, fmt.Errorf("unable to find parent interface with address %s", normalisedAddr)
 }
 
 // KeepDeviceInSync runs in a loop and checks that the device is still correctly configured, and updates it if necessary.
@@ -622,7 +627,9 @@ func (m *routeManager) configureTunnelDevice(
 		}
 	}
 
-	// Make sure the IP address is configured.
+	// Reconcile the tunnel device address. When addr is empty (BPF mode without an overlay device
+	// IP) this removes any previously-assigned address so a stale IP doesn't linger and influence
+	// source-IP selection.
 	if err := m.ensureAddressOnLink(addr, link); err != nil {
 		return fmt.Errorf("failed to ensure address of interface: %s", err)
 	}
@@ -647,8 +654,11 @@ func (m *routeManager) configureTunnelDevice(
 	return nil
 }
 
-// ensureAddressOnLink ensures that the provided IP address is configured on the provided Link. If there are other
-// addresses, this function will remove them, ensuring that the desired IP address is the _only_ address on the Link.
+// ensureAddressOnLink reconciles the Calico-managed address on the tunnel device so that the desired
+// address (ipStr) is the _only_ such address on the Link: any other address of the relevant family is
+// removed. The kernel-managed IPv6 link-local address is always left in place. If ipStr is empty no
+// address is desired, so all Calico-managed addresses are removed; this is used in BPF mode where the
+// dataplane handles encap/decap itself and does not need an IP on the overlay device.
 func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) error {
 	suffix := "/32"
 	family := netlink.FAMILY_V4
@@ -656,11 +666,16 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		suffix = "/128"
 		family = netlink.FAMILY_V6
 	}
-	_, net, err := net.ParseCIDR(ipStr + suffix)
-	if err != nil {
-		return err
+
+	var desired *netlink.Addr
+	if ipStr != "" {
+		_, ipNet, err := net.ParseCIDR(ipStr + suffix)
+		if err != nil {
+			return err
+		}
+		desired = &netlink.Addr{IPNet: ipNet}
 	}
-	addr := netlink.Addr{IPNet: net}
+
 	existingAddrs, err := m.nlHandle.AddrList(link, family)
 	if err != nil {
 		return err
@@ -669,8 +684,14 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 	// Remove any addresses which we don't want.
 	addrPresent := false
 	for _, existing := range existingAddrs {
-		if reflect.DeepEqual(existing.IPNet, addr.IPNet) {
+		if desired != nil && reflect.DeepEqual(existing.IPNet, desired.IPNet) {
 			addrPresent = true
+			continue
+		}
+		// Never strip the kernel-managed IPv6 link-local address. Guard on the address being IPv6
+		// (To4() == nil), since IsLinkLocalUnicast() also matches IPv4 169.254.0.0/16, which we do
+		// want to remove when reconciling to "no address".
+		if existing.IP.To4() == nil && existing.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		m.logCtx.WithFields(logrus.Fields{
@@ -683,9 +704,9 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 	}
 
 	// Actually add the desired address to the interface if needed.
-	if !addrPresent {
-		m.logCtx.WithFields(logrus.Fields{"address": addr}).Info("Assigning address to tunnel device")
-		if err := m.nlHandle.AddrAdd(link, &addr); err != nil {
+	if desired != nil && !addrPresent {
+		m.logCtx.WithFields(logrus.Fields{"address": *desired}).Info("Assigning address to tunnel device")
+		if err := m.nlHandle.AddrAdd(link, desired); err != nil {
 			return fmt.Errorf("failed to add IP address")
 		}
 	}

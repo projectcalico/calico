@@ -17,8 +17,10 @@ package node
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math"
 	"net"
+	"slices"
 	"strings"
 	"time"
 
@@ -62,6 +64,7 @@ var (
 	// Single dimension metrics. Legacy metrics are replaced by multidimensional equivalents above. Retain for
 	// backwards compatibility.
 	poolSizeGauge          *prometheus.GaugeVec
+	poolReservedGauge      *prometheus.GaugeVec
 	legacyAllocationsGauge *prometheus.GaugeVec
 	legacyBlocksGauge      *prometheus.GaugeVec
 	legacyBorrowedGauge    *prometheus.GaugeVec
@@ -97,6 +100,14 @@ func init() {
 		Help: "Total number of addresses in the IP Pool",
 	}, []string{"ippool"})
 	prometheus.MustRegister(poolSizeGauge)
+
+	poolReservedGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "ipam_ippool_reserved",
+		// Careful: the metrics FV asserts on substrings of this output, so naming
+		// another metric here would make its absence checks match this help text.
+		Help: "Number of addresses in the IP Pool that an IPReservation covers, and so cannot be assigned.",
+	}, []string{"ippool"})
+	prometheus.MustRegister(poolReservedGauge)
 
 	// Total IP allocations.
 	legacyAllocationsGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -171,6 +182,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		syncerUpdates: make(chan any, utils.BatchUpdateSize),
 
 		allBlocks:                   make(map[string]model.KVPair),
+		reservations:                make(map[string]*apiv3.IPReservation),
 		allocationsByBlock:          make(map[string]map[string]*allocation),
 		allocationState:             newAllocationState(),
 		handleTracker:               newHandleTracker(),
@@ -179,6 +191,7 @@ func NewIPAMController(cfg config.NodeControllerConfig, c client.Interface, cs k
 		nodesByBlock:                make(map[string]string),
 		blocksByNode:                make(map[string]map[string]bool),
 		emptyBlocks:                 make(map[string]string),
+		coldBlocks:                  make(map[string]metav1.Time),
 		poolManager:                 newPoolManager(),
 		datastoreReady:              true,
 		consolidationWindow:         1 * time.Second,
@@ -221,6 +234,11 @@ type IPAMController struct {
 	// Raw block storage, keyed by CIDR.
 	allBlocks map[string]model.KVPair
 
+	// IPReservations, keyed by name.  They make addresses unassignable without
+	// allocating them, so the block state above cannot account for them; only the
+	// reserved-IP metric needs them.
+	reservations map[string]*apiv3.IPReservation
+
 	// allocationState is the primary in-memory representation of IPAM allocations used by the garbage collector.
 	allocationState *allocationState
 
@@ -242,6 +260,12 @@ type IPAMController struct {
 	blockReleaseTracker *blockReleaseTracker
 
 	emptyBlocks map[string]string
+
+	// coldBlocks tracks blocks that have at least one IP in cooldown, mapping the
+	// block CIDR to the earliest ReleasedAt among its cooldown IPs. The cold-IP GC
+	// backstop only needs to visit these blocks, and only once their cooldown has
+	// elapsed, rather than walking every block on every sync.
+	coldBlocks map[string]metav1.Time
 
 	// poolManager associates IPPools with their blocks.
 	poolManager *poolManager
@@ -270,6 +294,37 @@ type IPAMController struct {
 	retryController *utils.RetryController
 }
 
+// assignAllocation registers a new allocation in all internal tracking maps.
+// This is the counterpart to releaseAllocation — both must be kept in sync
+// so that every map updated on assign is also cleaned up on release.
+func (c *IPAMController) assignAllocation(blockCIDR string, a *allocation) {
+	if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
+		c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
+	}
+	c.allocationsByBlock[blockCIDR][a.id()] = a
+	if a.node() != "" {
+		c.allocationState.allocate(a)
+	}
+	c.handleTracker.setAllocation(a)
+}
+
+// releaseAllocation removes an allocation from all internal tracking maps.
+// Every code path that removes an allocation should call this to ensure
+// consistent cleanup and avoid leaking entries in any map.
+func (c *IPAMController) releaseAllocation(a *allocation) {
+	c.handleTracker.removeAllocation(a)
+	delete(c.confirmedLeaks, a.id())
+	if a.node() != "" {
+		c.allocationState.release(a)
+	}
+
+	// Remove from allocationsByBlock. The block-level map entry itself is
+	// cleaned up by callers when the entire block is deleted.
+	if allocs, ok := c.allocationsByBlock[a.block]; ok {
+		delete(allocs, a.id())
+	}
+}
+
 func (c *IPAMController) Start(stop chan struct{}) {
 	go c.acceptScheduleRequests(stop)
 }
@@ -288,7 +343,7 @@ func (c *IPAMController) onUpdate(update bapi.Update) {
 	switch update.Key.(type) {
 	case model.ResourceKey:
 		switch update.KVPair.Key.(model.ResourceKey).Kind {
-		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindClusterInformation:
+		case internalapi.KindNode, apiv3.KindIPPool, apiv3.KindIPReservation, apiv3.KindClusterInformation:
 			c.syncerUpdates <- update.KVPair
 		}
 	case model.BlockKey:
@@ -408,6 +463,9 @@ func (c *IPAMController) handleUpdate(upd any) {
 			case apiv3.KindIPPool:
 				c.handlePoolUpdate(upd)
 				return
+			case apiv3.KindIPReservation:
+				c.handleIPReservationUpdate(upd)
+				return
 			case apiv3.KindClusterInformation:
 				c.handleClusterInformationUpdate(upd)
 				return
@@ -469,6 +527,18 @@ func (c *IPAMController) handlePoolUpdate(kvp model.KVPair) {
 	}
 }
 
+// handleIPReservationUpdate wraps up the logic to execute when receiving an
+// IPReservation update.  We track reservations only to report how much of each pool
+// they cover; see updateReservedMetrics.
+func (c *IPAMController) handleIPReservationUpdate(kvp model.KVPair) {
+	name := kvp.Key.(model.ResourceKey).Name
+	if kvp.Value != nil {
+		c.reservations[name] = kvp.Value.(*apiv3.IPReservation)
+	} else {
+		delete(c.reservations, name)
+	}
+}
+
 // handleClusterInformationUpdate wraps the logic to execute when receiving a clusterinformation update.
 func (c *IPAMController) handleClusterInformationUpdate(kvp model.KVPair) {
 	if kvp.Value != nil {
@@ -504,12 +574,16 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		if n, ok := c.nodesByBlock[blockCIDR]; ok {
 			delete(c.nodesByBlock, blockCIDR)
 			delete(c.blocksByNode[n], blockCIDR)
+			if len(c.blocksByNode[n]) == 0 {
+				delete(c.blocksByNode, n)
+			}
 		}
 	}
 
 	// Update allocations contributed from this block.
 	numAllocationsInBlock := 0
 	currentAllocations := map[string]bool{}
+	var earliestReleasedAt *metav1.Time
 	for ord, idx := range b.Allocations {
 		if idx == nil {
 			// Not allocated.
@@ -517,6 +591,12 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		}
 		numAllocationsInBlock++
 		attr := b.Attributes[*idx]
+
+		// Track the oldest cooldown IP in the block so the GC backstop knows when
+		// this block becomes a candidate for deallocation.
+		if attr.ReleasedAt != nil && (earliestReleasedAt == nil || attr.ReleasedAt.Before(earliestReleasedAt)) {
+			earliestReleasedAt = attr.ReleasedAt
+		}
 
 		// If there is no handle, then skip this IP. We need the handle
 		// in order to release the IP below.
@@ -536,21 +616,19 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 		currentAllocations[alloc.id()] = true
 
 		// Check if we already know about this allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
+		if existing, ok := c.allocationsByBlock[blockCIDR][alloc.id()]; ok {
+			// If the sequence number has changed for an existing allocation, it means
+			// it has been reallocated. Update the allocation in place and mark it as valid.
+			if existing.sequenceNumber != alloc.sequenceNumber {
+				existing.sequenceNumber = alloc.sequenceNumber
+				existing.attrs = alloc.attrs
+				existing.markValid()
+			}
 			continue
 		}
 
 		// This is a new allocation.
-		if _, ok := c.allocationsByBlock[blockCIDR]; !ok {
-			c.allocationsByBlock[blockCIDR] = map[string]*allocation{}
-		}
-		c.allocationsByBlock[blockCIDR][alloc.id()] = &alloc
-
-		// Update the allocations-by-node view.
-		if node := alloc.node(); node != "" {
-			c.allocationState.allocate(&alloc)
-		}
-		c.handleTracker.setAllocation(&alloc)
+		c.assignAllocation(blockCIDR, &alloc)
 		log.WithFields(alloc.fields()).Debug("New IP allocation")
 	}
 
@@ -571,19 +649,16 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 	// Remove any previously assigned allocations that have since been released.
 	for id, alloc := range c.allocationsByBlock[blockCIDR] {
 		if _, ok := currentAllocations[id]; !ok {
-			// Needs release.
-			c.handleTracker.removeAllocation(alloc)
-			delete(c.allocationsByBlock[blockCIDR], id)
-
-			// Also remove from the node view.
-			node := alloc.node()
-			if node != "" {
-				c.allocationState.release(alloc)
-			}
-
-			// And to be safe, remove from confirmed leaks just in case.
-			delete(c.confirmedLeaks, id)
+			c.releaseAllocation(alloc)
 		}
+	}
+
+	// Track whether this block has IPs in cooldown so the GC backstop can skip
+	// blocks that don't.
+	if earliestReleasedAt != nil {
+		c.coldBlocks[blockCIDR] = *earliestReleasedAt
+	} else {
+		delete(c.coldBlocks, blockCIDR)
 	}
 
 	c.poolManager.onBlockUpdated(blockCIDR)
@@ -595,25 +670,31 @@ func (c *IPAMController) onBlockUpdated(kvp model.KVPair) {
 func (c *IPAMController) onBlockDeleted(key model.BlockKey) {
 	blockCIDR := key.CIDR.String()
 	log.WithField("block", blockCIDR).Info("Received block delete")
+	c.forgetBlock(blockCIDR)
+}
 
-	// Remove allocations that were contributed by this block.
-	allocations := c.allocationsByBlock[blockCIDR]
-	for _, alloc := range allocations {
-		node := alloc.node()
-		if node != "" {
-			c.allocationState.release(alloc)
-		}
+// forgetBlock removes all cached state for a block. Every path that stops tracking a
+// block - a block delete from the datastore, or an affinity release of an empty block
+// in releaseUnusedBlocks - must funnel through here so the cache maps can't drift out
+// of sync.
+func (c *IPAMController) forgetBlock(blockCIDR string) {
+	// Release any allocations the block contributed.
+	for _, alloc := range c.allocationsByBlock[blockCIDR] {
+		c.releaseAllocation(alloc)
 	}
 	delete(c.allocationsByBlock, blockCIDR)
 
-	// Remove from raw block storage.
+	// Drop the block from its node, removing the node entry if it has no blocks left.
 	if n := c.nodesByBlock[blockCIDR]; n != "" {
-		// The block was assigned to a node, make sure to update internal cache.
 		delete(c.blocksByNode[n], blockCIDR)
+		if len(c.blocksByNode[n]) == 0 {
+			delete(c.blocksByNode, n)
+		}
 	}
 	delete(c.allBlocks, blockCIDR)
 	delete(c.nodesByBlock, blockCIDR)
 	delete(c.emptyBlocks, blockCIDR)
+	delete(c.coldBlocks, blockCIDR)
 
 	c.blockReleaseTracker.onBlockDeleted(blockCIDR)
 	c.poolManager.onBlockDeleted(blockCIDR)
@@ -630,7 +711,7 @@ func (c *IPAMController) onPoolUpdated(pool *apiv3.IPPool) {
 
 func (c *IPAMController) onPoolDeleted(poolName string) {
 	unregisterMetricVectorsForPool(poolName)
-	clearPoolSizeMetric(poolName)
+	clearPoolMetrics(poolName)
 
 	c.poolManager.onPoolDeleted(poolName)
 }
@@ -641,9 +722,9 @@ func (c *IPAMController) updateMetrics() {
 		return
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping metrics sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping metrics sync.")
 		return
 	}
 
@@ -717,7 +798,33 @@ func (c *IPAMController) updateMetrics() {
 	for node, num := range legacyBorrowedIPsByNode {
 		legacyBorrowedGauge.WithLabelValues(node).Set(float64(num))
 	}
+
+	c.updateReservedMetrics()
+
 	log.Debug("IPAM metrics updated")
+}
+
+// updateReservedMetrics publishes how much of each pool an IPReservation covers.
+// Unlike the counts above, this cannot be derived from the blocks we track: a
+// reservation makes addresses unassignable without allocating them, and it can cover
+// pool space that no block has been carved from yet.  The reservations come from the
+// syncer like everything else here, so this needs no datastore reads; the arithmetic
+// is the library's, so this agrees with what `calicoctl ipam show` reports.
+func (c *IPAMController) updateReservedMetrics() {
+	reservations := slices.Collect(maps.Values(c.reservations))
+	for poolName, pool := range c.poolManager.allPools {
+		_, poolCIDR, err := cnet.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to parse CIDR for IP Pool %s; skipping its reserved-IP metric", poolName)
+			continue
+		}
+		numReserved, err := ipam.NumReservedIPsInCIDR(*poolCIDR, reservations)
+		if err != nil {
+			log.WithError(err).Warnf("Unable to count reserved IPs in IP Pool %s", poolName)
+			continue
+		}
+		poolReservedGauge.With(prometheus.Labels{"ippool": poolName}).Set(float64(numReserved))
+	}
 }
 
 // releaseUnusedBlocks looks at known empty blocks, and releases their affinity
@@ -773,17 +880,11 @@ func (c *IPAMController) releaseUnusedBlocks() error {
 			continue
 		}
 
-		// Update internal state. We released affinity on an empty block, and so
-		// it will have been deleted. It's important that we update blocksByNode here
-		// in case there are other empty blocks allocated to the node so that we don't
+		// Update internal state. We released affinity on an empty block, and so it will
+		// have been deleted. Forgetting the block updates blocksByNode, which matters in
+		// case there are other empty blocks affine to the node, so that we don't
 		// accidentally release all of the node's blocks.
-		delete(c.emptyBlocks, blockCIDR)
-		delete(c.blocksByNode[node], blockCIDR)
-		delete(c.nodesByBlock, blockCIDR)
-		delete(c.allBlocks, blockCIDR)
-
-		c.blockReleaseTracker.onBlockDeleted(blockCIDR)
-		c.poolManager.onBlockDeleted(blockCIDR)
+		c.forgetBlock(blockCIDR)
 	}
 	return nil
 }
@@ -1162,9 +1263,9 @@ func (c *IPAMController) syncIPAM() error {
 		return nil
 	}
 
-	// Skip if not InSync yet.
+	// Skip if not currently InSync.
 	if c.syncStatus != bapi.InSync {
-		log.WithField("status", c.syncStatus).Debug("Have not yet received InSync notification, skipping IPAM sync.")
+		log.WithField("status", c.syncStatus).Debug("Syncer not currently InSync, skipping IPAM sync.")
 		return nil
 	}
 
@@ -1181,6 +1282,13 @@ func (c *IPAMController) syncIPAM() error {
 
 	// Release all confirmed leaks. Leaks are confirmed in checkAllocations() above.
 	err = c.garbageCollectKnownLeaks()
+	if err != nil {
+		return err
+	}
+
+	// Run GC on all known blocks to deallocate IPs that have been released more than
+	// MinIPReclaimAgeSeconds ago.
+	err = c.garbageCollectColdIPs()
 	if err != nil {
 		return err
 	}
@@ -1265,11 +1373,10 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 		}
 		logc := log.WithFields(a.fields())
 
-		// No longer a leak. Remove it here so we're not dependent on receiving
-		// the update from the syncer (which we will do eventually, this is just cleaner).
-		c.allocationState.release(a)
+		// No longer a leak. Update in-memory allocation tracking so we're not dependent on
+		// receiving the update from the syncer (which we will do eventually; this is just cleaner).
+		c.releaseAllocation(a)
 		c.incrementReclamationMetric(a.block, a.node())
-		delete(c.confirmedLeaks, a.id())
 
 		logc.Info("Successfully garbage collected leaked IP address")
 		delete(leaks, opt.Address)
@@ -1285,6 +1392,46 @@ func (c *IPAMController) garbageCollectKnownLeaks() error {
 	if err != nil {
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			log.WithError(err).Warn("Failed to garbage collect one or more leaked IP addresses")
+			return err
+		}
+	}
+	return nil
+}
+
+// garbageCollectColdIPs deallocates IPs whose cooldown has elapsed, writing back any
+// block that was modified. It is a backstop for blocks that see no further allocation
+// activity, since read-time GC only persists on write paths. Only blocks with IPs in
+// cooldown are visited, and only once their oldest cooldown IP has finished cooling
+// down, so the common case where nothing is cooling down does no work.
+func (c *IPAMController) garbageCollectColdIPs() error {
+	if len(c.coldBlocks) == 0 {
+		return nil
+	}
+	defer logIfSlow(time.Now(), "Block GC complete")
+
+	ctx, cancelCtx := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancelCtx()
+
+	ipamConfig, err := c.client.IPAM().GetIPAMConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	cooldown := time.Duration(ipamConfig.IPCooldownSeconds) * time.Second
+	now := time.Now()
+	for cidr, earliestReleasedAt := range c.coldBlocks {
+		if earliestReleasedAt.Add(cooldown).After(now) {
+			// The oldest cooldown IP in this block hasn't finished cooling down yet.
+			log.WithField("block", cidr).Debug("Block has IPs in cooldown but none are ready to deallocate yet")
+			continue
+		}
+		kvp, ok := c.allBlocks[cidr]
+		if !ok {
+			// coldBlocks should always be a subset of allBlocks; see assertConsistentState.
+			log.WithField("block", cidr).Warn("Block tracked as having cooldown IPs is missing from the block cache")
+			continue
+		}
+		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, ipamConfig, &kvp); err != nil {
 			return err
 		}
 	}
@@ -1526,8 +1673,9 @@ func publishPoolSizeMetric(pool *apiv3.IPPool) {
 	poolSizeGauge.With(prometheus.Labels{"ippool": pool.Name}).Set(poolSize)
 }
 
-func clearPoolSizeMetric(poolName string) {
+func clearPoolMetrics(poolName string) {
 	poolSizeGauge.Delete(prometheus.Labels{"ippool": poolName})
+	poolReservedGauge.Delete(prometheus.Labels{"ippool": poolName})
 }
 
 // When we stop tracking a node, clear counters to prevent accumulation of stale metrics.

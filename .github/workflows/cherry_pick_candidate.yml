@@ -1,0 +1,66 @@
+# Stage 2 of the cherry-pick-candidate auto-labeler. Triggered by
+# workflow_run when "Cherry-Pick Candidate (trigger)" completes.
+#
+# Asks the calico-backport-classifier agent whether the PR looks like a
+# backport candidate based on its title + body, and reconciles the
+# `cherry-pick-candidate` label:
+#   agent says backport, label absent       : add label
+#   agent says skip, label present (by bot) : remove label
+#   any non-bot action on the label         : leave it alone
+#
+# Trust model: stage 1 may execute fork-modified code from the PR head,
+# but it has zero permissions. Stage 2 runs from the base branch (trusted
+# workflow file) with contents:read + pull-requests:write + issues:write.
+# PR identity comes from GitHub-set workflow_run.head_sha, never from
+# artifact content. All logic lives in
+# .github/workflows/scripts/cherry_pick_candidate.js, loaded from the
+# trusted base-branch tree via actions/checkout.
+#
+# No-op until the BACKPORT_CLASSIFIER_AGENT_URL and
+# BACKPORT_CLASSIFIER_AGENT_TOKEN repo secrets are set: the script
+# short-circuits with a warning if either is missing.
+
+name: Cherry-Pick Candidate
+on:
+  workflow_run:
+    workflows: ["Cherry-Pick Candidate (trigger)"]
+    types: [completed]
+
+concurrency:
+  # Key per (fork owner, branch) so rapid edits to the same PR coalesce
+  # via cancel-in-progress and only the latest edited state runs to
+  # completion. Code pushes do not fire Stage 1 (synchronize is not in
+  # the trigger types), so this key is about user-driven title/body edits.
+  group: cherry-pick-candidate-${{ github.event.workflow_run.head_repository.owner.login }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      # pull-requests: write is required to add or remove labels on PRs.
+      # issues: write alone returns 403 against /issues/{n}/labels when
+      # the target is a PR. Do not tighten this back to read.
+      pull-requests: write
+      issues: write
+    env:
+      AGENT_URL: ${{ secrets.BACKPORT_CLASSIFIER_AGENT_URL }}
+      AGENT_TOKEN: ${{ secrets.BACKPORT_CLASSIFIER_AGENT_TOKEN }}
+    steps:
+      # workflow_run runs in the context of the base branch, so checkout
+      # without a `ref:` gets the trusted default-branch tree, not the
+      # fork PR's. persist-credentials:false drops the git token after
+      # this step (we only need it to read the .js file).
+      - name: Checkout workflow scripts
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Classify and reconcile label
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fn = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/scripts/cherry_pick_candidate.js`);
+            await fn({ github, context, core });

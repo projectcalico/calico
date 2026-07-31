@@ -45,11 +45,11 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 )
@@ -206,6 +206,16 @@ func cmdAdd(args *skel.CmdArgs) (err error) {
 	}
 	if conf.NumQueues <= 0 {
 		conf.NumQueues = 1
+	}
+
+	// Validate DeviceType. Reject unknown values rather than silently falling
+	// back so misconfigured CNI configs surface as a clear error.
+	switch conf.DeviceType {
+	case "", types.DeviceTypeVeth, types.DeviceTypeNetkit:
+		// OK.
+	default:
+		return fmt.Errorf("unknown device_type %q in CNI config (supported: %q, %q)",
+			conf.DeviceType, types.DeviceTypeVeth, types.DeviceTypeNetkit)
 	}
 
 	// Determine which node name to use.
@@ -720,7 +730,7 @@ func cmdDummyCheck(args *skel.CmdArgs) (err error) {
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("cni-plugin")
+	logrusr.ConfigureFormatter("cni-plugin")
 
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)

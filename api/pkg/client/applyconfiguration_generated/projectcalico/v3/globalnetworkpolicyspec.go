@@ -24,10 +24,10 @@ type GlobalNetworkPolicySpecApplyConfiguration struct {
 	// alphanumerical order based on the Policy "Name" within the tier.
 	Order *float64 `json:"order,omitempty"`
 	// The ordered set of ingress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Ingress []RuleApplyConfiguration `json:"ingress,omitempty"`
 	// The ordered set of egress rules.  Each rule contains a set of packet match criteria and
-	// a corresponding action to apply.
+	// a corresponding action to apply. Limited to 1024 rules per policy.
 	Egress []RuleApplyConfiguration `json:"egress,omitempty"`
 	// The selector is an expression used to pick out the endpoints that the policy should
 	// be applied to.
@@ -73,11 +73,14 @@ type GlobalNetworkPolicySpecApplyConfiguration struct {
 	// DoNotTrack indicates whether packets matched by the rules in this policy should go through
 	// the data plane's connection tracking, such as Linux conntrack.  If True, the rules in
 	// this policy are applied before any data plane connection tracking, and packets allowed by
-	// this policy are marked as not to be tracked.
+	// this policy are marked as not to be tracked. Requires ApplyOnForward to be true.
 	DoNotTrack *bool `json:"doNotTrack,omitempty"`
 	// PreDNAT indicates to apply the rules in this policy before any DNAT.
+	// Requires ApplyOnForward to be true. Cannot be used with DoNotTrack, and the
+	// policy must not contain egress rules.
 	PreDNAT *bool `json:"preDNAT,omitempty"`
 	// ApplyOnForward indicates to apply the rules in this policy on forward traffic.
+	// Must be set to true when DoNotTrack or PreDNAT is true.
 	ApplyOnForward *bool `json:"applyOnForward,omitempty"`
 	// ServiceAccountSelector is an optional field for an expression used to select a pod based on service accounts.
 	ServiceAccountSelector *string `json:"serviceAccountSelector,omitempty"`

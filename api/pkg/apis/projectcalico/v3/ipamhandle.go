@@ -29,10 +29,15 @@ type IPAMHandle struct {
 }
 
 // IPAMHandleSpec contains the specification for an IPAMHandle resource.
+// This resource is managed internally by Calico IPAM and should not be modified manually.
 type IPAMHandleSpec struct {
-	HandleID string         `json:"handleID"`
-	Block    map[string]int `json:"block"`
+	// HandleID is the unique identifier for this allocation handle.
+	HandleID string `json:"handleID"`
 
+	// Block maps block CIDRs to the number of allocations from that block held by this handle.
+	Block map[string]int `json:"block"`
+
+	// Deleted is an internal flag used to prevent races during handle cleanup. Should not be set manually.
 	// +optional
 	Deleted bool `json:"deleted"`
 }

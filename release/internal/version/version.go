@@ -258,7 +258,7 @@ func DetermineOperatorVersion(repoRoot string) (Version, error) {
 
 // VersionsFromManifests returns the versions of the product and operator from manifests.
 func VersionsFromManifests(repoRoot string) (Version, Version, error) {
-	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "ctl")
+	productVersion, err := versionFromManifest(repoRoot, "ocp/02-tigera-operator.yaml", "calico/calico")
 	if err != nil {
 		return "", "", err
 	}
@@ -294,6 +294,11 @@ func versionFromManifest(repoRoot, manifest, imgMatch string) (Version, error) {
 		if strings.Contains(i, imgMatch) {
 			splits := strings.SplitAfter(i, ":")
 			ver := splits[len(splits)-1]
+			// On the default branch the image is tagged "master", which is not a
+			// valid semver; treat it as the v0.0.0 dev version.
+			if ver == utils.DefaultBranch {
+				ver = "v0.0.0"
+			}
 			return New(ver), nil
 		}
 	}

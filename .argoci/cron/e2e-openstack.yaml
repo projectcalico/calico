@@ -1,0 +1,83 @@
+# Condensed ArgoCI e2e workflow; cc-argoci-handler expands it into a CronWorkflow at runtime.
+# Weekly Calico-for-OpenStack e2e tests (CORE-13115), maintained here by hand.
+#
+# Deployment is pure Banzai: the gcp-openstack provisioner stands up an
+# OpenStack (Caracal) cluster on GCE VMs and the packaged installer layers
+# Calico onto it.  banzai-core's defaults for this provisioner/installer pair
+# cover everything OpenStack-specific: GCP placement (europe-west3-c in the
+# openstack-calico-test VPC), Calico packages from ppa:project-calico/master,
+# calico/{ctl,node}:master images, and the test image
+# (gcr.io/unique-caldron-775/openstack-e2e:stable, built from
+# tigera/calico-test — the only remaining use of that repo's coding).
+# Release branches will need INSTALL_SOURCE / CALICOCTL_IMAGE /
+# CALICO_NODE_IMAGE overrides here once we publish packages and images from
+# release branches.
+#
+# Four jobs: {full-fv, multi-region} x {Ubuntu 24.04 Noble, 22.04 Jammy}.
+# There is no separate smoke job: smoke (a single mainline connectivity test)
+# is a strict subset of full-fv, so adds nothing on a weekly cadence.
+version: condensed
+generateName: e2e-openstack-
+# Sundays 17:00 UTC (the handler emits no CronWorkflow timezone, so cron
+# fields are UTC).
+schedule: 0 17 * * 0
+globalPrologue: |
+  cd "${CI_HOME}/${CI_GIT_DIR}"
+  export ARGO_WORKFLOW_NAME="{{workflow.name}}"
+  export ARGO_WORKFLOW_UID="{{workflow.uid}}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-openstack}"
+  export INSTALLER="${INSTALLER:-packaged}"
+  export PROVISIONER="${PROVISIONER:-gcp-openstack}"
+
+  # Run the whole pytest suite (banzai's default selects only the smoke
+  # subset).  The multi-region tests within it self-activate on the jobs
+  # whose cluster has a second region — see MULTI_REGION below.
+  export OPENSTACK_TEST_SPEC="${OPENSTACK_TEST_SPEC:-full-fv}"
+  source .argoci/scripts/global_prologue.sh
+globalEpilogue: |
+  source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
+defaults:
+  secretBundles:
+    - banzai-secrets
+steps:
+  # CLUSTER_IMAGE: empty selects the provisioner's default Ubuntu 24.04 Noble
+  # image (see banzai-core provisioners/gcp-openstack/terraform/variables.tf);
+  # the family reference below tracks the latest 22.04 Jammy image.  Both
+  # series run OpenStack Caracal — natively on Noble, via the Ubuntu Cloud
+  # Archive on Jammy (the install scripts pick this up from the OS codename
+  # automatically).
+  - name: full-fv
+    services:
+      - docker
+    matrix:
+      - name: caranoble
+        env:
+          - name: CLUSTER_IMAGE
+            value: ""
+      - name: carajammy
+        env:
+          - name: CLUSTER_IMAGE
+            value: projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts
+    commands: |
+      .argoci/scripts/body_standard.sh
+
+  # As above, plus a second OpenStack region (one more controller + compute);
+  # the full-fv suite's multi-region tests activate when the rendered test
+  # config shows two regions.
+  - name: multi-region
+    services:
+      - docker
+    env:
+      - name: MULTI_REGION
+        value: "true"
+    matrix:
+      - name: caranoble
+        env:
+          - name: CLUSTER_IMAGE
+            value: ""
+      - name: carajammy
+        env:
+          - name: CLUSTER_IMAGE
+            value: projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts
+    commands: |
+      .argoci/scripts/body_standard.sh

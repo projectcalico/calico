@@ -12,10 +12,10 @@ import (
 // with apply.
 //
 // BGPFilterCommunityMatch specifies community-based match criteria for a BGP filter rule.
-// Currently only a single community value is supported.  A MatchOperator field may be
+// Currently exactly one community value must be specified. A MatchOperator field may be
 // introduced in the future to support anyOf/allOf semantics with multiple values.
 type BGPFilterCommunityMatchApplyConfiguration struct {
-	// Values is a list of BGP community values to match against.
+	// Values is a list of BGP community values to match against. Exactly one value must be specified.
 	Values []projectcalicov3.BGPCommunityValue `json:"values,omitempty"`
 }
 

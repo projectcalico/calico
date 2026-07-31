@@ -241,8 +241,10 @@ type liveMigrationFSM struct {
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
 	migrationUID string
-	timer        *time.Timer
+	timerStopC   chan struct{}
+	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
+	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
 	ipamSwapOnce sync.Once
 }
@@ -350,10 +352,11 @@ func (f *liveMigrationFSM) startGARPDetection() {
 		return
 	}
 	f.pcapHandle = handle
+	f.garpStopC = make(chan struct{})
 	f.garpWG.Add(1)
 	go func() {
 		defer f.garpWG.Done()
-		detectGARP(f.logCtx, f.id, handle, f.monitor.garpC)
+		detectGARP(f.logCtx, f.id, handle, f.monitor.garpC, f.garpStopC)
 	}()
 }
 
@@ -362,26 +365,72 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 		if err := f.pcapHandle.Close(); err != nil {
 			f.logCtx.WithError(err).Debug("Error closing GARP detection handle")
 		}
+		// Closing garpStopC aborts any in-progress send to garpC.  This is
+		// essential to avoid a deadlock: garpC's only reader is the dataplane
+		// main loop, and stopGARPDetection itself runs on the main loop (via
+		// OnUpdate) when the FSM leaves the Target state.  If a GARP arrived
+		// just before the workload update that ends the Target state - e.g. a
+		// cutover RARP racing with the migration-complete update - then
+		// detectGARP would be blocked mid-send with no reader, and the Wait()
+		// below would block the main loop forever.
+		close(f.garpStopC)
 		// Wait for the detectGARP goroutine to exit.  Closing the handle causes
 		// packetSource.Packets() to return, so this should complete almost immediately.
 		f.garpWG.Wait()
 		f.pcapHandle = nil
+		f.garpStopC = nil
 	}
 }
 
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
-	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		f.monitor.timerC <- id
-	})
+
+	if f.timerStopC != nil {
+		// This shouldn't happen: the FSM never enters TimeWait twice without leaving it in
+		// between.  But an overwritten stop channel would leave the previous goroutine
+		// unstoppable and wedge a later Wait(), so stop the old one properly rather than
+		// leak it.
+		f.logCtx.Warn("Elevated routing timer already running; stopping it before restart")
+		f.stopElevatedRoutingTimer()
+	}
+
+	// Deliver the pop from a goroutine whose send stopElevatedRoutingTimer() can
+	// cancel and reap, so that a stale pop can never be delivered after TimeWait
+	// is exited and misattributed to a later TimeWait episode (see OnTimerPop).
+	stopC := make(chan struct{})
+	f.timerStopC = stopC
+	f.timerWG.Add(1)
+	go func() {
+		defer f.timerWG.Done()
+		fireC := time.After(f.monitor.convergenceTime)
+
+		// The send case is disabled (nil channel) until the timer fires.
+		var popC chan<- types.WorkloadEndpointID
+		for {
+			select {
+			case <-fireC:
+				popC = f.monitor.timerC
+			case popC <- id:
+				return
+			case <-stopC:
+				return
+			}
+		}
+	}()
 }
 
 func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
-	if f.timer != nil {
+	if f.timerStopC != nil {
 		f.logCtx.Debug("Stopping elevated routing timer")
-		f.timer.Stop()
-		f.timer = nil
+		close(f.timerStopC)
+
+		// Must wait for the goroutine to exit, to stop a just-cancelled timer from
+		// delivering a stale pop: with both stopC and a pop receiver ready, select
+		// picks at random.  Waiting here is what closes that race - we run on the
+		// main loop, timerC's only reader, so no receiver exists until we return.
+		f.timerWG.Wait()
+		f.timerStopC = nil
 	}
 }
 
@@ -391,10 +440,10 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputGARPDetected)
 }
 
-// OnTimerPop is called by the main loop when a timer fires for a workload.
-// The timer may fire just before stopElevatedRoutingTimer() is called, so we
-// guard against stale deliveries by checking the FSM still exists and is in
-// TimeWait before driving it.
+// OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
+// prevented at source: stopElevatedRoutingTimer() waits for the timer goroutine to exit before
+// returning, so a pop that does get through here was sent by a timer that had not been stopped.
+// The state check here is kept as cheap defence in depth.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
 	if !exists || fsm.currentState != liveMigrationStateTimeWait {
@@ -406,9 +455,10 @@ func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 
 // detectGARP reads packets from the given handle and sends the workload ID
 // to garpC when a GARP or RARP packet is detected.  It is a one-shot
-// goroutine: it returns after the first detection or when the handle is closed.
+// goroutine: it returns after the first detection, when the handle is closed,
+// or when stopC is closed.
 func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
-	handle garpHandle, garpC chan<- types.WorkloadEndpointID) {
+	handle garpHandle, garpC chan<- types.WorkloadEndpointID, stopC <-chan struct{}) {
 	// Note: handle is NOT defer-closed here. The FSM owns the handle lifecycle via
 	// stopGARPDetection(), which closes the handle and causes packetSource.Packets() to return,
 	// ending this goroutine.
@@ -416,7 +466,15 @@ func detectGARP(logCtx *logrus.Entry, id types.WorkloadEndpointID,
 	for packet := range packetSource.Packets() {
 		if isGARPOrRARP(packet) {
 			logCtx.Info("Detected GARP/RARP packet on workload interface")
-			garpC <- id
+			// garpC is unbuffered and its only reader is the dataplane main
+			// loop, which may currently be inside stopGARPDetection() waiting
+			// for this goroutine to exit; stopC guarantees this send cannot
+			// block forever in that case.
+			select {
+			case garpC <- id:
+			case <-stopC:
+				logCtx.Debug("GARP detection stopped while reporting detection")
+			}
 			return
 		}
 	}

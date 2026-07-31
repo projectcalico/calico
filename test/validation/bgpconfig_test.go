@@ -77,6 +77,43 @@ func TestBGPConfiguration_Validation(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "communities without prefixAdvertisements is rejected",
+			obj: &v3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
+				Spec: v3.BGPConfigurationSpec{
+					Communities: []v3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+				},
+			},
+			wantErr: "communities are defined but not used in prefixAdvertisements",
+		},
+		{
+			name: "communities with prefixAdvertisements is accepted",
+			obj: &v3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
+				Spec: v3.BGPConfigurationSpec{
+					Communities: []v3.Community{
+						{Name: "my-community", Value: "65001:100"},
+					},
+					PrefixAdvertisements: []v3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"my-community"}},
+					},
+				},
+			},
+		},
+		{
+			name: "prefixAdvertisement using inline community value is accepted",
+			obj: &v3.BGPConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("bgpconfig")},
+				Spec: v3.BGPConfigurationSpec{
+					PrefixAdvertisements: []v3.PrefixAdvertisement{
+						{CIDR: "10.0.0.0/24", Communities: []string{"65001:100"}},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
