@@ -214,11 +214,23 @@ variants exist for backward compatibility.
 `updateMetrics` recomputes from scratch every sync - one walk over all blocks, no incremental state. The full-recompute *is* the consistency check; switching to incremental updates
 without a separate consistency check loses the protection.
 
+`ipam_ippool_reserved` is the exception to that walk: reservations make addresses unassignable without allocating them, and can cover pool space no block has been carved from, so the
+number isn't in the block state the controller tracks. `IPReservation` is therefore a fourth kind on the controller's syncer, cached by name in `reservations`, and
+`updateReservedMetrics` counts the covered addresses per pool with `ipam.NumReservedIPsInCIDR` (see [ipam-core-library](./ipam-core-library.md#public-api-surface)). The arithmetic is
+the library's, so the gauge agrees with `calicoctl ipam show`; the input is the syncer's, so the sync loop makes no datastore request for it. Being per-pool rather than per-node, the
+gauge is labelled `ippool` only, like `ipam_ippool_size`. It may overlap `ipam_allocations_in_use`, so usable capacity is
+`ipam_ippool_size - ipam_allocations_in_use - ipam_ippool_reserved` only when no reserved address is also allocated.
+
+Watching `IPReservation` needs `watch` in the kube-controllers ClusterRole, in the chart **and** in tigera/operator. With only `list` granted the List still succeeds and the syncer
+still reaches in-sync, so the symptom is a hot re-list of `IPReservation`s rather than a stalled controller - easy to miss in review, noisy in production.
+
 **Review notes**
 
 - `ipam_allocations_gc_candidates > 0` for extended periods is the canonical "GC is stuck" signal. Alert on it.
 - `ipam_allocations_gc_reclamations` rate is the canonical "we have a real leak somewhere" signal. Alert on it.
 - Don't switch `updateMetrics` to incremental updates without a separate consistency check. The current full-recompute is the consistency check.
+- A metric is not a licence to add a datastore request to the sync loop. The loop shares a goroutine with leak GC, and past overload has clogged it; new inputs belong on the syncer.
+  `ipam_ippool_reserved` was caught doing a LIST of every block per sync in review (https://github.com/projectcalico/calico/pull/13331).
 - The in-memory state maps must agree at all times. `assertConsistentState` in `ipam_test.go` is the canonical invariant check; any new map mutation needs a test that exercises it.
   The v3.32 memory-leak family (https://github.com/projectcalico/calico/pull/12277, /12286, /12287, /12288) all came from "added to one path, forgot another."
 

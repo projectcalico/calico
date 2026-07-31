@@ -72,7 +72,6 @@ import (
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/linkaddrs"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -84,9 +83,9 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -430,7 +429,7 @@ type InternalDataplane struct {
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *common.Callbacks
 
-	loopSummarizer *logutils.Summarizer
+	loopSummarizer *logrusr.Summarizer
 
 	// Fields used to accumulate counts of messages of various types before we report them to
 	// prometheus.
@@ -539,7 +538,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceUpdates:                make(chan any, 100),
 		config:                      config,
 		applyThrottle:               throttle.New(10),
-		loopSummarizer:              logutils.NewSummarizer("dataplane reconciliation loops"),
+		loopSummarizer:              logrusr.NewSummarizer("dataplane reconciliation loops"),
 		actions:                     actionSet,
 		newMatch:                    newMatchFn,
 		nftablesEnabled:             nftablesEnabled,
@@ -1996,7 +1995,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		} else if d.config.hostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
-			log.WithFields(log.Fields{lclogutils.FieldForceFlush: true}).Info("Host MTU changed")
+			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
 			d.config.ConfigChangedRestartCallback()
 		}
 		time.Sleep(30 * time.Second)
