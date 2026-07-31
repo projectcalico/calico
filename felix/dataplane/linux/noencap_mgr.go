@@ -22,10 +22,10 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type noEncapManager struct {
@@ -36,14 +36,14 @@ type noEncapManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func newNoEncapManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *noEncapManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newNoEncapManagerWithSims(
@@ -59,7 +59,7 @@ func newNoEncapManagerWithSims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *noEncapManager {
 

@@ -42,7 +42,7 @@ import (
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -71,7 +71,7 @@ func expectNoError(err error) {
 // (status subresources, finalizer/deletion, informers) without needing a
 // full cluster.
 func init() {
-	logrus.SetFormatter(&logutils.Formatter{})
+	logrus.SetFormatter(&logrusr.Formatter{})
 	logrus.SetLevel(logrus.DebugLevel)
 }
 
