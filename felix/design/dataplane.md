@@ -316,6 +316,13 @@ why the identification mechanism differs per driver:
 - A change that makes a driver mutate the kernel before in-sync
   defeats the deferred-cleanup safety and risks deleting
   not-yet-seen state.
+- Among Felix's *own* producers, `(RouteClass, ifaceName)` is the
+  ownership key: `RouteTable.SetRoutes()` **replaces** the whole
+  desired set for that pair, so two managers that write to the same
+  pair silently delete each other's routes. Each independent producer
+  therefore needs its own class — which is why the same-subnet routes
+  (shared parent device) and the IPAM-block drop routes (shared
+  `InterfaceNone`) are split per encapsulation type.
 
 ### Fail closed while Felix isn't running
 
