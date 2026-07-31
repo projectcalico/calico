@@ -66,10 +66,14 @@ func (f *fakeQoSMap) BatchUpdate(ks, vs [][]byte, flags uint64) (int, error) {
 	return len(ks), nil
 }
 
+// seed populates the connlimit map with (maxConn, current) for the given
+// (ifindex, direction) pair. The scanner only touches the connlimit map;
+// packet-rate state lives in a sibling map (cali_qos) the scanner never
+// reads or writes.
 func (f *fakeQoSMap) seed(t *testing.T, ifindex uint32, direction uint16, maxConn, current uint32) {
 	t.Helper()
 	k := qos.NewKey(ifindex, direction, qos.IPFamilyV4).AsBytes()
-	v := qos.NewValue(100, 50, 25, 12345, maxConn, current).AsBytes()
+	v := qos.NewConnValue(maxConn, current).AsBytes()
 	f.contents[string(k)] = v[:]
 }
 
@@ -79,7 +83,7 @@ func (f *fakeQoSMap) currentCount(t *testing.T, ifindex uint32, direction uint16
 	if err != nil {
 		t.Fatalf("fake Get for (%d,%d) failed: %v", ifindex, direction, err)
 	}
-	return qos.ValueFromBytes(bytes).CurrentCount()
+	return qos.ConnValueFromBytes(bytes).CurrentCount()
 }
 
 // TestConnLimitScannerCheckNoPodsIsNoOp verifies that the scanner's Check
@@ -570,15 +574,17 @@ func TestConnLimitScannerBatchesActiveCountUpdates(t *testing.T) {
 		t.Errorf("expected batch flags=BPF_F_LOCK (0x%x), got 0x%x", unix.BPF_F_LOCK, m.lastBatchFlags)
 	}
 
-	// Packet-rate fields and max_connections must survive the recount.
+	// max_connections must survive the recount. Packet-rate state lives
+	// in a separate map (cali_qos) the scanner has no handle to; the
+	// connLimitQoSMap interface structurally precludes the scanner from
+	// touching it.
 	bytes, err := m.Get(qos.NewKey(ifA, 1, qos.IPFamilyV4).AsBytes())
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-	v := qos.ValueFromBytes(bytes)
-	if v.PacketRate() != 100 || v.PacketBurst() != 50 || v.MaxConnections() != 5 {
-		t.Errorf("packet-rate / max_connections fields not preserved: rate=%d burst=%d max=%d",
-			v.PacketRate(), v.PacketBurst(), v.MaxConnections())
+	v := qos.ConnValueFromBytes(bytes)
+	if v.MaxConnections() != 5 {
+		t.Errorf("max_connections not preserved: got %d, want 5", v.MaxConnections())
 	}
 }
 

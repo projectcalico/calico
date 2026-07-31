@@ -25,41 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docopt/docopt-go"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/shirou/gopsutil/v4/process"
 	log "github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 )
 
 // Status prints status of the node and returns error (if any)
-func Status(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> node status [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  Check the status of the Calico node instance.  This includes the status and
-  uptime of the node instance, and BGP peering states.
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	// Note: Intentionally not check version mismatch for this command
-
+func Status() error {
 	// Must run this command as root to be able to connect to BIRD sockets
 	enforceRoot()
 

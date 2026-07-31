@@ -25,6 +25,9 @@ An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 fo
 - **`SequenceNumber` is paired with per-ordinal `SequenceNumberForAllocation`.** Together they detect ABA on release; see [Sequence numbers](#sequence-numbers).
 - **`Affinity` is `host:<name>` or `virtual:<name>`.** `nil` means unaffine. `virtual:` is used by the LoadBalancer controller; `host:` is the standard pod/tunnel case.
 - **`Deleted` is a soft-delete marker.** Readers must filter; see [Soft vs hard delete](#soft-vs-hard-delete).
+- **`AllocationAttribute.ReleasedAt` records an IP in cooldown.** A released IP is detached from its workload (handle cleared) but not yet returned to `Unallocated`: its attribute
+  carries a `ReleasedAt` timestamp and the ordinal stays in `Allocations`. It becomes reusable only once it is deallocated, after `IPCooldownSeconds` have elapsed. The
+  released-vs-deallocated split is the cooldown mechanism; the semantics live in [ipam-core-library](./ipam-core-library.md#ip-release-and-cooldown).
 
 **Review notes**
 
@@ -32,6 +35,8 @@ An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 fo
 - The `Unallocated` queue cycling is load-bearing for IP-reuse delay. Code that punches the bitmap directly breaks reuse rate-limiting.
 - Don't mutate the in-memory `*model.AllocationBlock` before persisting. Persist via `updateBlock`, then update auxiliary state. See
   https://github.com/projectcalico/calico/pull/12697.
+- Both the v1 and v3 backends must round-trip `ReleasedAt`. If a conversion drops it, a released IP reloads with no timestamp, never deallocates, and leaks permanently on the
+  default v1 datastore. The cooldown default of 0 hides this in CI, so a round-trip test through the KDD v1 backend is required.
 
 ## BlockAffinity
 
@@ -78,7 +83,8 @@ the block syncer plus a handle-side scan rather than a watch. See https://github
 
 Both stored as CRDs alongside the other IPAM resources. [`ipam_config.go`](../../libcalico-go/lib/backend/k8s/resources/ipam_config.go) wraps the singleton `IPAMConfig`. Storage
 shape only - field semantics, defaults, and `StrictAffinity` / `MaxBlocksPerHost` / `AutoAllocateBlocks` interactions live in
-[`ipam-core-library.md`](./ipam-core-library.md#ipamconfig). `IPReservation` is read at allocation time and converted into an ordinal filter; never participates in CAS.
+[`ipam-core-library.md`](./ipam-core-library.md#ipamconfig). `IPReservation` is read at allocation time and converted into an ordinal filter, and again by `GetUtilization` so that
+the reporting surfaces don't count reserved addresses as free. kube-controllers watches it on its syncer instead, to keep the read off the IPAM sync loop. Never participates in CAS.
 
 **Review notes**
 

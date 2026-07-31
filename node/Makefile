@@ -119,11 +119,16 @@ MICROSOFT_SDN_GITHUB_RAW_URL := https://raw.githubusercontent.com/microsoft/SDN/
 
 # Variables used by the tests
 ST_TO_RUN?=tests/st/
-K8ST_TO_RUN?=tests/
 # Can exclude the slower tests with "-m 'not slow'"
 ST_OPTIONS?=
 
-K8ST_REPORT_FILENAME ?= k8s-tests.xml
+# JUnit report for the k8st suite. The Go test binary runs inside the
+# alpine-based calico/test container, which has no go toolchain or junit tool,
+# so it writes its `go test -v` output to K8ST_GO_REPORT_LOG and a second
+# go-build step converts that into the K8ST_GO_REPORT_FILENAME JUnit XML that CI
+# collects from report/*.xml.
+K8ST_GO_REPORT_LOG ?= k8s-go-tests.log
+K8ST_GO_REPORT_FILENAME ?= k8s-go-tests.xml
 
 # Filesystem of the node container that is checked in to this repository.
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f -not -path './filesystem/usr/lib/calico/bpf/*')
@@ -191,10 +196,6 @@ filesystem/usr/lib/calico/bpf: $(shell find ../felix/bpf-gpl -type f) $(shell fi
 	cp -r ../felix/bpf-gpl/bin/* $@
 	cp -r ../felix/bpf-apache/bin/* $@
 
-# We need CGO when compiling in Felix for BPF support.
-# Currently CGO can be enabled in ARM64 AMD64 and PPC64LE builds.
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64 ppc64le))
-CGO_ENABLED=1
 # Normalize userspace types to ensure consistency across architectures.
 ARCH_CGO_CFLAGS=
 ifeq ($(ARCH),ppc64le)
@@ -209,11 +210,6 @@ ifneq ($(CROSS_SYSROOT),)
 endif
 CGO_LDFLAGS="-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
 CGO_CFLAGS="-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
-else
-CGO_ENABLED=0
-CGO_LDFLAGS=""
-CGO_CFLAGS=""
-endif
 
 # The node image uses the combined calico binary built with CGO for BPF support.
 CMD_CALICO_BINDIR = ../cmd/calico/bin
@@ -233,12 +229,7 @@ $(WINDOWS_ARCHIVE_ROOT)/cni/calico.exe: $(WINDOWS_BINARY)
 	cp $(WINDOWS_BINARY) $@
 
 $(TOOLS_MOUNTNS_BINARY):
-ifeq ($(CGO_ENABLED),1)
 	$(call build_cgo_binary, ./cmd/mountns, $@)
-else
-	$(call build_binary, ./cmd/mountns, $@)
-endif
-
 
 ###############################################################################
 # Building the image
@@ -389,8 +380,13 @@ K8ST_GO_TO_RUN?=.
 bin/k8st.test:
 	$(DOCKER_GO_BUILD) sh -c 'CGO_ENABLED=0 go test -c -o $@ ./tests/k8st/tests'
 
+# Runs the k8st suite against the kind cluster. The suite has been fully ported
+# from pytest to Go, so this runs only the Go test binary; its exit code is the
+# suite's pass/fail.
 .PHONY: kind-k8st-run-test
 kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
+	mkdir -p report
+	rm -f report/$(K8ST_GO_REPORT_LOG) report/$(K8ST_GO_REPORT_FILENAME) report/.go-rc
 	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
@@ -399,17 +395,22 @@ kind-k8st-run-test: .calico_test.created $(KIND_KUBECONFIG) bin/k8st.test
 	    -v $(REPO_ROOT)/cmd/calico/bin/calico-$(ARCH):/usr/local/bin/calico \
 	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    -e KUBECONFIG=/root/.kube/config \
-	    -e PYTHONDONTWRITEBYTECODE=1 \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
 	    sh -c 'echo "container started.." && \
 	     cd /code/tests/k8st && \
-	     go_rc=0; py_rc=0; \
-	     /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)" || go_rc=$$?; \
-	     pytest $(K8ST_TO_RUN) -v --junit-xml="/code/report/$(K8ST_REPORT_FILENAME)" || py_rc=$$?; \
-	     echo "Go suite rc=$$go_rc, Python suite rc=$$py_rc"; \
-	     [ $$go_rc -eq 0 ] && [ $$py_rc -eq 0 ]'
+	     { /code/bin/k8st.test -test.v -test.run "$(K8ST_GO_TO_RUN)"; echo $$? > /code/report/.go-rc; } 2>&1 | tee /code/report/$(K8ST_GO_REPORT_LOG); \
+	     echo "Go suite rc=$$(cat /code/report/.go-rc)"'
+	# The Go tests are plain `go test` (not Ginkgo), so the binary emits no
+	# JUnit of its own. Convert its captured output into a JUnit report so CI
+	# collects it from report/*.xml. go-junit-report lives in the go-build
+	# image, not the alpine calico/test image, so this runs separately.
+	$(DOCKER_GO_BUILD) sh -c 'go-junit-report -package-name k8st-go < report/$(K8ST_GO_REPORT_LOG) > report/$(K8ST_GO_REPORT_FILENAME)' || true
+	# Propagate the real pass/fail of the Go suite.
+	@go_rc=$$(cat report/.go-rc 2>/dev/null || echo 1); \
+	  echo "Go suite rc=$$go_rc"; \
+	  [ "$$go_rc" -eq 0 ]
 
 ###############################################################################
 # CI/CD
@@ -532,7 +533,7 @@ $(WINDOWS_INSTALL_SCRIPT):
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
 WINDOWS_IMAGE_REQS := \
-	Dockerfile-windows \
+	Dockerfile.windows \
 	dist/LICENSE \
 	$(WINDOWS_BINARY) \
 	$(WINDOWS_ARCHIVE_ROOT)/libs/hns/hns.psm1 \

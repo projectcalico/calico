@@ -70,6 +70,7 @@ type CommonMaps struct {
 	ProfilingMap       maps.Map
 	CTLBProgramsMaps   []maps.Map
 	QoSMap             maps.MapWithUpdateWithFlags
+	QoSConnMap         maps.MapWithUpdateWithFlags
 }
 
 type Maps struct {
@@ -103,6 +104,7 @@ func getCommonMaps() *CommonMaps {
 		ProfilingMap:     profiling.Map(),
 		CTLBProgramsMaps: nat.ProgramsMaps(),
 		QoSMap:           qos.Map().(maps.MapWithUpdateWithFlags),
+		QoSConnMap:       qos.ConnMap().(maps.MapWithUpdateWithFlags),
 	}
 	jumpMaps := jump.Maps()
 	for _, jm := range jumpMaps {
@@ -207,6 +209,7 @@ func (c *CommonMaps) slice() []maps.Map {
 		c.XDPJumpMap,
 		c.ProfilingMap,
 		c.QoSMap,
+		c.QoSConnMap,
 	}
 	mapslice = append(mapslice, c.ProgramsMaps...)
 	mapslice = append(mapslice, c.NetkitProgramsMaps...)

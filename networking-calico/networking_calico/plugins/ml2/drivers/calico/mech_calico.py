@@ -25,24 +25,22 @@
 #
 # It is implemented as a Neutron/ML2 mechanism driver.
 import inspect
+import multiprocessing
 import os
 import threading
+import time
 
 import eventlet
 from eventlet.queue import PriorityQueue
-from eventlet.semaphore import Semaphore
 
-from neutron import wsgi
 from neutron.agent import rpc as agent_rpc
 from neutron.conf.agent import common as config
-from neutron.objects import ports as ports_object
 from neutron.objects.qos import policy as policy_object
 from neutron.plugins.ml2 import db as ml2_db
 from neutron.plugins.ml2.drivers import mech_agent
 
 from neutron_lib import constants
 from neutron_lib import context as ctx
-from neutron_lib import exceptions as n_exc
 from neutron_lib.agent import topics
 from neutron_lib.callbacks import events
 from neutron_lib.callbacks import registry
@@ -77,10 +75,16 @@ from networking_calico.plugins.ml2.drivers.calico.endpoints import (
     endpoint_name,
 )
 from networking_calico.plugins.ml2.drivers.calico.policy import PolicySyncer
-from networking_calico.plugins.ml2.drivers.calico.status import StatusWatcher
+from networking_calico.plugins.ml2.drivers.calico.status import (
+    AgentStatusWatcher,
+    EndpointStatusWatcher,
+)
 from networking_calico.plugins.ml2.drivers.calico.subnets import SubnetSyncer
 from networking_calico.plugins.ml2.drivers.calico.workers import (
     CalicoStartupResyncWorker,
+    CalicoManagerWorker,
+    CalicoAgentStatusWatcherWorker,
+    CalicoEndpointStatusWatcherWorker,
 )
 from networking_calico.resync import scope as resync
 
@@ -156,6 +160,29 @@ calico_opts = [
             "has no effect."
         ),
         help="Deprecated and unused.  Retained to avoid neutron.conf errors.",
+    ),
+    cfg.BoolOpt(
+        "fairy_gc_diagnostics",
+        default=False,
+        help=(
+            "DIAGNOSTIC: install SQLAlchemy event listeners that "
+            "capture a stack trace at every connection-pool checkout "
+            "and detect when a connection-checkin (typically fired by "
+            "GC of a session) is happening in the eventlet hub "
+            "greenlet -- a failure mode in which oslo.db's "
+            "_thread_yield listener calls time.sleep(0) -> "
+            "hub.switch() and deadlocks because the hub greenlet "
+            "cannot switch to itself.  When the in-hub case is "
+            "detected, the originating-checkout stack is logged at "
+            "WARNING so the leaking code path can be identified.  See "
+            "the module docstring in "
+            "networking_calico/plugins/ml2/drivers/calico/"
+            "fairy_gc_diagnostics.py for the full failure-mode "
+            "explanation.  Default off because the per-checkout stack "
+            "capture adds non-trivial overhead at high "
+            "connection-churn rates; enable when investigating a "
+            "suspected occurrence."
+        ),
     ),
     cfg.IntOpt(
         "startup_resync_inject_per_item_delay_ms",
@@ -337,6 +364,42 @@ class TrackTask(oslo_context.context.RequestContext):
         return d
 
 
+# Fallback tap-side MAC used when we can't parse the port's own MAC.  In normal
+# operation ``get_vif_details`` overrides this per-port with a value derived from the
+# port MAC -- see ``_tap_mac_for_port_mac``.
+DEFAULT_TAP_MAC = "00:61:fe:ed:ca:fe"
+
+
+def _tap_mac_for_port_mac(port_mac):
+    """Derive the host-side tap MAC that older libvirt would have set.
+
+    Older libvirt (before 9.5.0) did not have an explicit ``managed`` parameter for a
+    domain interface: it always accepted a tap device that had already been created
+    externally (as OpenStack does via Nova), and it always went on to set the MAC
+    address on that tap by replacing the leading octet with ``0xfe`` and keeping the
+    remaining five.  With OpenStack's default ``base_mac`` of ``fa:16:3e:xx:xx:xx`` this
+    maps VM MAC ``fa:16:3e:aa:bb:cc`` to tap MAC ``fe:16:3e:aa:bb:cc``.
+
+    libvirt 9.5.0 split those behaviours behind ``managed``: ``managed=yes`` (the new
+    default) creates the tap and errors out if one already exists, while ``managed=no``
+    accepts an externally-created tap but no longer sets its MAC.  OpenStack must use
+    ``managed=no`` because Nova creates the tap, and that side-effect leaves the tap MAC
+    at whatever Nova put in ``VIF_DETAILS_TAP_MAC_ADDRESS`` -- historically the static
+    value in ``DEFAULT_TAP_MAC``.  Across a live migration between a pre-9.5.0 source
+    and a post-9.5.0 destination that flips the on-wire tap MAC and the VM's ARP cache
+    goes stale until it re-ARPs, causing tens of seconds of packet loss.
+
+    Returns ``None`` on any parse failure so the caller can fall back to
+    ``DEFAULT_TAP_MAC``.
+    """
+    if not port_mac:
+        return None
+    parts = port_mac.split(":")
+    if len(parts) != 6 or any(len(p) != 2 for p in parts):
+        return None
+    return ":".join(["fe"] + parts[1:])
+
+
 class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     """Neutron/ML2 mechanism driver for Project Calico.
 
@@ -349,32 +412,23 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         super(CalicoMechanismDriver, self).__init__(
             AGENT_TYPE_FELIX,
             "tap",
-            {"port_filter": True, "mac_address": "00:61:fe:ed:ca:fe"},
+            {"port_filter": True, "mac_address": DEFAULT_TAP_MAC},
         )
         qos_driver.register(self)
-        # Lock to prevent concurrent initialisation.
-        self._init_lock = Semaphore()
         # Generally initialize attributes to nil values.  They get initialized
-        # properly, as needed, in _post_fork_init().
+        # properly, as needed, in post_fork_initialize().
         self.db = None
         self.elector = None
         self._agent_update_context = None
         self._etcd_watcher = None
         self._etcd_watcher_thread = None
         self._my_pid = None
-        self._epoch = 0
-        # Mapping from (hostname, port-id) to Calico's status for a port.  The
-        # hostname is included to disambiguate between multiple copies of a
-        # port, which may exist during a migration or a re-schedule.
-        self._port_status_cache = {}
-        # Queue used to fan out port status updates to worker threads.  Notes:
-        # * we don't recreate the queue in _post_fork_init() so that we can't
-        #   possibly lose updates that had already been queued.
-        # * the queue contains tuples (priority, <status key>); we use a
-        #   higher priority for events and a lower priority for snapshot
-        #   keys, so that current data skips the queue.
-        self._port_status_queue = PriorityQueue()
-        self._port_status_queue_too_long = False
+        # Variable shared across all processes that are forked for the
+        # current Neutron server. Tracks whether or not this Neutron server
+        # is the master for its OpenStack region.
+        # "d" = double. Used for storing time.time(). See
+        # https://docs.python.org/3/library/array.html#module-array
+        self._is_master = multiprocessing.Value("d", 0)
 
         # RPC client for fanning out agent state reports.
         self.state_report_rpc = None
@@ -383,6 +437,11 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # limiting.  Note: monotonic_time() uses its own epoch so it's only
         # safe to compare this with other values returned by monotonic_time().
         self._last_status_queue_log_time = monotonic_time()
+
+        # Flag for telling workers to stop. Only applicable to the
+        # calico worker processes and currently used for unit tests
+        # only.
+        self._stop_worker = False
 
         LOG.info("Created Calico mechanism driver %s", self)
 
@@ -399,6 +458,16 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()
+        if cfg.CONF.calico.fairy_gc_diagnostics:
+            # Install once in the parent process before workers are forked.
+            # The listeners attach to the SQLAlchemy Pool class; each forked
+            # worker inherits them as part of its post-fork memory image, so
+            # we do not need to re-install in each child.
+            from networking_calico.plugins.ml2.drivers.calico import (
+                fairy_gc_diagnostics,
+            )
+
+            fairy_gc_diagnostics.install()
         registry.subscribe(
             self.post_fork_initialize,
             resources.PROCESS,
@@ -410,17 +479,56 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         """Workers that neutron-server should fork on our behalf.
 
         Returns a list of ``neutron_lib.worker.BaseWorker`` instances, each of which
-        becomes one OS process.  Today we ask for a single worker that runs the
-        one-shot resync.
+        becomes one OS process.
 
-        ``[calico] startup_resync = never`` suppresses the worker entirely so the
-        operator can take responsibility for resync (typically by running
-        ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
-        one neutron-server in the deployment).
+        Mastership architecture
+        -----------------------
+        Three of the four workers run continuous loops where "who is doing this work
+        right now?" is decided dynamically by leader election against an etcd key (see
+        ``Elector`` in election.py):
+
+        * ``CalicoManagerWorker`` runs the elector itself, plus the periodic etcd
+          compaction loop (compaction is gated on ``is_master()``).
+
+        * ``CalicoAgentStatusWatcherWorker`` watches Felix uptime keys, gated on
+          ``is_master()``.
+
+        * ``CalicoEndpointStatusWatcherWorker`` watches per-port status keys, gated on
+          ``is_master()``.
+
+        Election is the right fit for these because failover matters: if the current
+        master process dies, another neutron-server should automatically pick up the
+        continuous work.
+
+        The fourth worker is different:
+
+        * ``CalicoStartupResyncWorker`` runs the one-shot Neutron-DB-to-etcd resync on
+          process start, then idles.  There is no continuous loop to fail over, the
+          resync runs exactly once per process lifetime, and we want each operator to
+          consciously decide whether their deployment topology requires a startup resync
+          at all.  The decision is therefore a static config switch (``[calico]
+          startup_resync = always|never``) rather than dynamic election.  ``[calico]
+          startup_resync = never`` suppresses the worker entirely so the operator can
+          take responsibility for resync themselves -- typically by running
+          ``calico-resync`` from a CD pipeline, or by leaving ``always`` set on exactly
+          one neutron-server in the deployment.
         """
-        if cfg.CONF.calico.startup_resync == "never":
-            return []
-        return [CalicoStartupResyncWorker()]
+        # CalicoManagerWorker gets a back-reference to the driver so its
+        # stop() can reach self.elector and step down cleanly on graceful
+        # shutdown -- otherwise the elector greenlet is killed without
+        # running its finally _attempt_step_down, the election key stays
+        # in etcd until the lease expires, and the next neutron-server
+        # restart has to wait out that TTL before anyone can win.
+        services = [
+            CalicoManagerWorker(driver=self),
+            CalicoAgentStatusWatcherWorker(),
+            CalicoEndpointStatusWatcherWorker(),
+        ]
+
+        if cfg.CONF.calico.startup_resync != "never":
+            services.append(CalicoStartupResyncWorker())
+
+        return services
 
     def post_fork_initialize(self, resource, event, trigger, payload=None):
         """Per-worker-process initialisation, fired by Neutron after fork.
@@ -431,8 +539,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         * ``CalicoStartupResyncWorker`` -> just the one-shot resync.
 
-        * ``neutron.wsgi.WorkerService`` -> connection state only, ``voting=False``.
-          Per PR #11580, API workers must never be elected master, because their
+        * ``neutron.wsgi.WorkerService`` -> indicates an API worker process.
+          Per PR #11580, API workers must never run master-only jobs, because their
           primary job is to serve API requests quickly: getting tied up running the
           master-only background threads (status watcher, port-status writers,
           periodic compaction) would hurt API response latency, and the resync work
@@ -442,135 +550,152 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
           elector and master-only background threads.
         """
         trigger_cls = _trigger_class(trigger)
-        if trigger_cls is CalicoStartupResyncWorker:
-            self._do_startup_resync()
-        elif trigger_cls is wsgi.WorkerService:
-            self._post_fork_init(voting=False)
-        else:
-            self._post_fork_init(voting=True)
 
-    @logging_exceptions(LOG)
-    def _post_fork_init(self, voting=False):
-        """_post_fork_init
+        # ResyncWorker is special-cased because the function can be called by CLI as
+        # well. Thus, all necessary init will happen in the _do_startup_resync
+        # function.
+        if trigger_cls is CalicoStartupResyncWorker:
+            self._init_start_calico_resource_syncer()
+            return
+
+        self._post_fork_init()
+
+        worker_mapping = {
+            CalicoManagerWorker: self._init_start_calico_manager,
+            CalicoAgentStatusWatcherWorker: self._init_start_agent_status_watcher,
+            CalicoEndpointStatusWatcherWorker: (
+                self._init_start_endpoint_status_watcher
+            ),
+        }
+
+        if trigger_cls in worker_mapping:
+            self._stop_worker = False
+            worker_mapping[trigger_cls]()
+
+        LOG.info(
+            "Calico mechanism driver initialisation done for class %s",
+            trigger_cls.__name__ if trigger_cls else trigger_cls,
+        )
+
+    def is_master(self):
+        """Check whether the current instance of neutron-server is the master.
+
+        In order for a neutron-server to be considered as a master, it needs
+        to aquire the election key and actively maintain it.
+        """
+        if self._is_master.value <= 0:
+            # We were not elected. We are not the master.
+            return False
+
+        # Else, let's check if we refresh the time within timeout.
+        time_since_last_refreshed = time.time() - self._is_master.value
+        refreshed_in_time = time_since_last_refreshed < MASTER_TIMEOUT
+
+        # If not, there is something wrong with elector!!
+        if not refreshed_in_time:
+            LOG.warning(
+                "The elector hasn't refreshed the lease in "
+                f"{time_since_last_refreshed}s."
+            )
+
+        return refreshed_in_time
+
+    def _post_fork_init(self):
+        """Common post fork initialization.
 
         Creates the connection state required for talking to the Neutron DB
-        and to etcd. This is a no-op if it has been executed before.
-
-        This is split out from __init__ to allow us to defer this
-        initialisation until after Neutron has forked off its worker
-        children.  If we initialise the DB and etcd connections before
-        the fork (as would happen in __init__()) then the workers
-        would share sockets incorrectly.
+        and to etcd.
         """
-        # The self._init_lock semaphore mediates if two or more eventlet threads call
-        # _post_fork_init at the same time, within the same Neutron server fork.  This
-        # shouldn't normally happen now that ``post_fork_initialize`` drives the call
-        # from a single AFTER_INIT event, but the lock is cheap insurance against future
-        # call sites.
-        with self._init_lock:
-            current_pid = os.getpid()
-            if self._my_pid == current_pid:
-                # We've initialised our PID and it hasn't changed since last
-                # time, nothing to do.
-                LOG.info("Calico state already initialised for PID %s", current_pid)
-                return
-            # else: either this is the first call or our PID has changed:
-            # (re)initialise.
-            TrackTask("POST_FORK_INIT")
+        # Init the DB.
+        self.db = None
+        self._get_db()
 
-            if self._my_pid is not None:
-                # This is unexpected but we can deal with it: Neutron should
-                # fork before we trigger the first call to _post_fork_init!().
-                LOG.warning(
-                    "PID changed from %s to %s; unexpected fork after "
-                    "initialisation?  Reinitialising Calico driver.",
-                    self._my_pid,
-                    current_pid,
-                )
-            else:
-                LOG.info(
-                    "Doing Calico mechanism driver initialisation in process %s",
-                    current_pid,
-                )
+        # Create syncers.
+        self.subnet_syncer = SubnetSyncer(self.db)
+        self.policy_syncer = PolicySyncer(self.db)
+        self.endpoint_syncer = WorkloadEndpointSyncer(self.db, self.policy_syncer)
 
-            # (Re)init the DB.
-            self.db = None
-            self._get_db()
+    def _init_start_calico_resource_syncer(self):
+        self.start_up_resync_thread = eventlet.spawn(self._do_startup_resync)
 
-            # Create syncers.
-            self.subnet_syncer = SubnetSyncer(self.db)
-            self.policy_syncer = PolicySyncer(self.db)
-            self.endpoint_syncer = WorkloadEndpointSyncer(self.db, self.policy_syncer)
+    def _init_start_calico_manager(self):
+        self.elector = Elector(
+            cfg.CONF.calico.elector_name,
+            datamodel_v2.neutron_election_key(calico_config.get_region_string()),
+            self._is_master,
+            old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+            interval=MASTER_REFRESH_INTERVAL,
+            ttl=MASTER_TIMEOUT,
+        )
 
-            # Admin context used by (only) the thread that updates Felix agent status.
-            self._agent_update_context = ctx.get_admin_context()
+        self.election_thread = self.elector.start()
 
-            # Get RPC connection for fanning out Felix state reports.
-            try:
-                state_report_topic = topics.REPORTS
-            except AttributeError:
-                # Older versions of OpenStack share the PLUGIN topic.
-                state_report_topic = topics.PLUGIN
-            self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
+        if cfg.CONF.calico.etcd_compaction_period_mins > 0:
+            self.periodic_compaction_thread = eventlet.spawn(
+                self.do_periodic_compaction
+            )
 
-            if voting:
-                # Elector, for performing leader election.
-                self.elector = Elector(
-                    cfg.CONF.calico.elector_name,
-                    datamodel_v2.neutron_election_key(
-                        calico_config.get_region_string()
-                    ),
-                    old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-                    interval=MASTER_REFRESH_INTERVAL,
-                    ttl=MASTER_TIMEOUT,
-                )
-                LOG.info(
-                    "PID %s: Initializing Calico Elector; "
-                    "this process WILL participate in leader election.",
-                    current_pid,
-                )
+    def _init_start_agent_status_watcher(self):
+        # Admin context used by (only) the thread that updates Felix agent
+        # status.
+        self._agent_update_context = ctx.get_admin_context()
 
-                # Start our long-running threads.  Just in case we ever get two same
-                # threads running, use an epoch counter to tell the old thread to die.
-                # We deliberately do this last, to ensure that all of the setup above is
-                # complete before we start running.
-                self._epoch += 1
-                if cfg.CONF.calico.etcd_compaction_period_mins > 0:
-                    eventlet.spawn(self.periodic_compaction_thread, self._epoch)
-                eventlet.spawn(self._status_updating_thread, self._epoch)
-                for _ in range(cfg.CONF.calico.num_port_status_threads):
-                    eventlet.spawn(self._loop_writing_port_statuses, self._epoch)
-                # Note, resync runs in a dedicated worker process spawned via
-                # ``get_workers``, not here.  See ``post_fork_initialize``.
-            else:
-                LOG.info(
-                    "PID %s: Not a voting participant; "
-                    "skipping elector and leader threads.",
-                    current_pid,
-                )
+        # Get RPC connection for fanning out Felix state reports.
+        try:
+            state_report_topic = topics.REPORTS
+        except AttributeError:
+            # Older versions of OpenStack share the PLUGIN topic.
+            state_report_topic = topics.PLUGIN
+        self.state_report_rpc = agent_rpc.PluginReportStateAPI(state_report_topic)
 
-            self._my_pid = current_pid
+        self.agent_status_watch_thread = eventlet.spawn(
+            self.watch_status_updates, AgentStatusWatcher
+        )
 
-            LOG.info(
-                "Calico mechanism driver initialisation done in process %s", current_pid
+    def _init_start_endpoint_status_watcher(self):
+        # Mapping from (hostname, port-id) to Calico's status for a port.  The
+        # hostname is included to disambiguate between multiple copies of a
+        # port, which may exist during a migration or a re-schedule.
+        self._port_status_cache = {}
+        # Queue used to fan out port status updates to worker threads.  Notes:
+        # * the queue contains tuples (priority, <status key>); we use a
+        #   higher priority for events and a lower priority for snapshot
+        #   keys, so that current data skips the queue.
+        self._port_status_queue = PriorityQueue()
+        self._port_status_queue_too_long = False
+
+        self.endpoint_status_watch_thread = eventlet.spawn(
+            self.watch_status_updates, EndpointStatusWatcher
+        )
+
+        self.port_status_update_threads = []
+        for _ in range(cfg.CONF.calico.num_port_status_threads):
+            self.port_status_update_threads.append(
+                eventlet.spawn(self._loop_writing_port_statuses)
             )
 
     @logging_exceptions(LOG)
-    def _status_updating_thread(self, expected_epoch):
-        """_status_updating_thread
+    def watch_status_updates(self, watcher):
+        """watch_status_updates
 
         This method acts as a status updates handler logic for the
         Calico mechanism driver. Watches for felix updates in etcd
         and passes info to Neutron database.
+
+        :param watcher: Watcher class to created to watch and update status.
         """
         TrackTask("STATUS_UPDATING")
-        LOG.info("Status updating thread started.")
-        while self._epoch == expected_epoch:
+        LOG.info("Status updating thread started for %s.", watcher.__name__)
+
+        while not self._stop_worker:
             # Only handle updates if we are the master node.
-            if self.elector.master():
+            if self.is_master():
                 if self._etcd_watcher is None:
-                    LOG.info("Became the master, starting StatusWatcher")
-                    self._etcd_watcher = StatusWatcher(self)
+                    LOG.info(
+                        "Became the master, starting %s",
+                        watcher.__name__,
+                    )
+                    self._etcd_watcher = watcher(self)
 
                     def start_etcd_watcher():
                         TrackTask("STATUS_ETCD_WATCHER")
@@ -583,21 +708,24 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                         self._etcd_watcher_thread,
                     )
                 elif not self._etcd_watcher_thread:
-                    LOG.error("StatusWatcher %s died", self._etcd_watcher)
+                    LOG.error(
+                        "StatusWatcher %s died: %s",
+                        self._etcd_watcher,
+                        watcher.__name__,
+                    )
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
             else:
                 if self._etcd_watcher is not None:
-                    LOG.warning("No longer master, stopping StatusWatcher")
+                    LOG.warning(
+                        "No longer master, stopping StatusWatcher: %s.",
+                        watcher.__name__,
+                    )
                     self._etcd_watcher.stop()
                     self._etcd_watcher = None
                 # Short sleep interval before we check if we've become
                 # the master.
             eventlet.sleep(MASTER_CHECK_INTERVAL_SECS)
-        else:
-            LOG.warning(
-                "Unexpected: epoch changed. Handling status updates thread exiting."
-            )
 
     def on_felix_alive(self, felix_hostname, new):
         LOG.info("Felix on host %s is alive; fanning out status report", felix_hostname)
@@ -705,12 +833,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 LOG.warning("Port status update queue back to normal: %s", qsize)
 
     @logging_exceptions(LOG)
-    def _loop_writing_port_statuses(self, expected_epoch):
+    def _loop_writing_port_statuses(self):
         TrackTask("PORT_STATUS_WRITE")
-        LOG.info("Port status write thread started epoch=%s", expected_epoch)
+        LOG.info("Port status write thread started")
         admin_context = ctx.get_admin_context()
         try:
-            while self._epoch == expected_epoch:
+            while not self._stop_worker:
                 # Wait for work to do.
                 _, port_status_key = self._port_status_queue.get()
                 # Actually do the update.  Catch all exceptions to avoid
@@ -856,6 +984,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
             return False
 
+    def get_vif_details(self, context, agent, segment):
+        # Nova reads ``vif_details['mac_address']`` at ``plug_tap`` time and sets that
+        # on the host-side tap interface.  Derive the value from the port's own MAC so
+        # it matches what older libvirt used to set implicitly; see
+        # ``_tap_mac_for_port_mac`` for the background.  Fall back to the base-class
+        # value (which is ``DEFAULT_TAP_MAC``) if we can't parse a port MAC.
+        details = dict(
+            super(CalicoMechanismDriver, self).get_vif_details(context, agent, segment)
+        )
+        port_mac = context.current.get("mac_address") if context.current else None
+        derived = _tap_mac_for_port_mac(port_mac)
+        if derived is not None:
+            details["mac_address"] = derived
+        return details
+
     def get_allowed_network_types(self, agent=None):
         return ("local", "flat")
 
@@ -914,7 +1057,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.info("Update %d port(s) for %s", len(ports), reason)
         for p in ports:
             if _port_is_endpoint_port(p):
-                self.endpoint_syncer.write_endpoint(p, plugin_context, must_update=True)
+                host = p.get("binding:host_id")
+                if host:
+                    self.endpoint_syncer.sync_wep(p, host, plugin_context)
 
     def handle_qos_policy_update(self, context, policy_id):
         TrackTask("HANDLE_QOS_POLICY_UPDATE")
@@ -922,31 +1067,30 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         # No outer writer/reader context here -- see the comment in
         # update_network_postcommit above for rationale.
+        #
+        # We use the OVO ``QosPolicy`` only to discover which networks and ports are
+        # bound to this policy (``get_bound_networks`` / ``get_bound_ports``).  For the
+        # port data itself we go through ``self.db.get_ports``, which returns API-flat
+        # dicts with ``binding:host_id`` as a top-level key.  ``Port.get_objects(...)
+        # .to_dict()`` would return the OVO native shape (``bindings: [ {host: ...}]``)
+        # which the downstream sync code -- and the rest of the driver -- does not
+        # understand.
         policy = policy_object.QosPolicy.get_policy_obj(context, policy_id)
 
-        # Find ports whose network use this QoS policy and that don't have a
-        # port-specific QoS policy.
+        # Ports whose network uses this QoS policy and that don't have a port-specific
+        # QoS policy.
         networks_ids = policy.get_bound_networks()
-        ports_with_net_policy = (
-            ports_object.Port.get_objects(context, network_id=networks_ids)
-            if networks_ids
-            else []
-        )
-        ports = [
-            port.to_dict()
-            for port in ports_with_net_policy
-            if port.qos_policy_id is None
-        ]
+        ports = []
+        if networks_ids:
+            network_ports = self.db.get_ports(
+                context, filters={"network_id": networks_ids}
+            )
+            ports = [p for p in network_ports if not p["qos_policy_id"]]
 
-        # Add the ports that directly use this QoS policy.
+        # Ports that directly use this QoS policy.
         port_ids = policy.get_bound_ports()
         if port_ids:
-            ports.extend(
-                [
-                    p.to_dict()
-                    for p in ports_object.Port.get_objects(context, id=port_ids)
-                ]
-            )
+            ports.extend(self.db.get_ports(context, filters={"id": port_ids}))
 
         self.update_existing_ports(ports, context, "network QoS policy rules changing")
 
@@ -958,37 +1102,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
     def create_subnet_postcommit(self, context):
         TrackTask("CREATE_SUBNET_POSTCOMMIT")
         LOG.info("CREATE_SUBNET_POSTCOMMIT: %s" % context)
-
-        # Re-read the subnet from the DB so we pick up the latest state, rather than the
-        # (potentially slightly stale) ``context.current`` snapshot taken in the
-        # precommit phase.  ``self.db.get_subnet`` is
-        # ``@retry_if_session_inactive``-decorated and manages its own reader
-        # transaction; we deliberately do NOT wrap it in our own writer/reader -- see
-        # update_network_postcommit for rationale.
-        subnet = context.current
-        plugin_context = context._plugin_context
-        subnet = self.db.get_subnet(plugin_context, subnet["id"])
-        if subnet["enable_dhcp"]:
-            self.subnet_syncer.write_subnet(subnet, context)
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     def update_subnet_postcommit(self, context):
         TrackTask("UPDATE_SUBNET_POSTCOMMIT")
         LOG.info("UPDATE_SUBNET_POSTCOMMIT: %s" % context)
-
-        # Re-read the subnet (see create_subnet_postcommit for the rationale behind the
-        # re-read and against wrapping in a writer context).
-        subnet = context.current
-        plugin_context = context._plugin_context
-        subnet = self.db.get_subnet(plugin_context, subnet["id"])
-        if subnet["enable_dhcp"]:
-            self.subnet_syncer.write_subnet(subnet, context)
-        else:
-            self.subnet_syncer.delete_subnet(subnet["id"])
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     def delete_subnet_postcommit(self, context):
         TrackTask("DELETE_SUBNET_POSTCOMMIT")
         LOG.info("DELETE_SUBNET_POSTCOMMIT: %s" % context)
-        self.subnet_syncer.delete_subnet(context.current["id"])
+        self.subnet_syncer.sync_subnet(context.current, context._plugin_context)
 
     # Idealised method forms.
     def create_port_postcommit(self, context):
@@ -1012,23 +1136,21 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # Ignore if the port binding VIF type is 'unbound'; then this port
-        # doesn't need to be networked yet.
+        # Ignore if the port binding VIF type is 'unbound'; then this port doesn't need
+        # to be networked yet.  ``sync_wep`` would correctly short-circuit here too (the
+        # re-read would say "absent" and the slot would not exist), but skipping saves
+        # the DB round-trip.
         if port["binding:vif_type"] == "unbound":
             LOG.info("Creating unbound port: no work required.")
             return
 
         plugin_context = context._plugin_context
-        self.endpoint_syncer.write_endpoint(port, plugin_context)
+        self.endpoint_syncer.sync_wep(port, port["binding:host_id"], plugin_context)
 
     def update_port_postcommit(self, context):
         """update_port_postcommit
 
-        Called after Neutron has committed a port update event to the
-        database.
-
-        This is a tricky event, because it can be called in a number of ways
-        during VM migration. We farm out to the appropriate method from here.
+        Called after Neutron has committed a port update event to the database.
         """
         TrackTask("UPDATE_PORT_POSTCOMMIT")
         LOG.info("UPDATE_PORT_POSTCOMMIT: %s", context)
@@ -1052,136 +1174,46 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         LOG.debug("Old = %r", original)
         LOG.debug("New = %r", port)
 
-        # Re-read the port to pick up the latest available data rather than relying on
-        # ``context._port`` which is a snapshot taken earlier in the API call.
-        # ``self.db.get_port`` is ``@db_api.retry_if_session_inactive``-decorated and
-        # manages its own reader transaction; we deliberately do NOT wrap this body in
-        # our own writer/reader context -- see ``create_port_postcommit`` for rationale
-        # and PR #12898 for the regression history.
+        # Sync every (port, host) WEP slot that could plausibly have changed: the old
+        # binding host, the new binding host, and any current/previous live-migration
+        # destination.  ``sync_wep`` is the single source of truth -- it re-reads the
+        # port from the Neutron DB, decides present-or-absent for the slot, and
+        # CAS-writes accordingly.  Same for ``sync_lm``.  This handles uniformly all the
+        # cases the previous if/elif tree enumerated individually: create on bind,
+        # delete on unbind, cold-migration cleanup, live-migration start, live-migration
+        # end (success or failure), and the rare migration-target-switch case.
         #
-        # The re-read is a best-effort hedge against two fast-paired updates to the same
-        # port being routed to different API workers and arriving at postcommit in the
-        # opposite order to the API call order.  If the second-in-time update has
-        # already committed to the Neutron DB by the time we get here, this re-read
-        # picks up both changes and we write a consistent superset to etcd.  If the
-        # other order obtains (we re-read before the other worker's DB commit, then race
-        # on the etcd write), the etcd state can transiently revert to the older
-        # update's view.  A writer transaction here would not help: a Neutron writer txn
-        # in our session does not row-lock the port and does not order against other
-        # workers' sessions or etcd writes, and the etcd write below is not CAS-guarded
-        # (``mod_revision`` is ``None`` in ``endpoints.write_endpoint`` for the dynamic
-        # path).  Persistent drift, if it happens, is repaired on the next
-        # neutron-server restart by the startup resync; there is no longer a periodic
-        # resync.  Tightening this -- e.g. CAS-against-mod_revision on dynamic writes
-        # with retry-on-conflict -- is a known follow-up.
+        # We deliberately do NOT take a writer/reader context here: each
+        # ``self.db.get_port`` inside the sync methods is
+        # ``@db_api.retry_if_session_inactive``-decorated and manages its own
+        # transaction.  See ``create_port_postcommit`` for rationale and PR #12898 for
+        # the regression history.
         plugin_context = context._plugin_context
+        old_host = original.get("binding:host_id")
+        new_host = port.get("binding:host_id")
+        old_migrating_to = original.get("binding:profile", {}).get("migrating_to")
+        new_migrating_to = port.get("binding:profile", {}).get("migrating_to")
 
-        # If the port was previously bound, the endpoint should already exist.
-        endpoint_should_already_exist = port_bound(original)
+        # Sync LMs first so that, on a fresh migration, Felix sees the LiveMigration
+        # before the destination WEP.  (At end-of-migration the order does not matter,
+        # and the loop is idempotent if no destination is in play.)  Use dict.fromkeys
+        # to dedupe while preserving order, so the new destination is written after any
+        # cleanup of an old one.
+        for dest_host in dict.fromkeys([old_migrating_to, new_migrating_to]):
+            if dest_host:
+                self.endpoint_syncer.sync_lm(port, dest_host, plugin_context)
 
-        # Detect live migration ending (migrating_to was set, now cleared).
-        orig_migrating_to = original.get("binding:profile", {}).get("migrating_to")
-        curr_migrating_to = port.get("binding:profile", {}).get("migrating_to")
-
-        if orig_migrating_to is not None and curr_migrating_to is None:
-            # Live migration ended — clean up LiveMigration resource
-            # and, if the migration failed, the destination WEP.
-            # Source WEP deletion for the success case is handled by
-            # the host-change block below, which covers both cold
-            # and live migration.
-            namespace = self.endpoint_syncer.namespace
-            dest_port = original.copy()
-            dest_port["binding:host_id"] = orig_migrating_to
-            dest_wep_name = endpoint_name(dest_port)
-            migration_uid = datamodel_v3.get_uid(
-                "LiveMigration", namespace, dest_wep_name
-            )
-            self.endpoint_syncer.delete_live_migration(dest_wep_name)
-
-            if port["binding:host_id"] == original["binding:host_id"]:
-                # Migration FAILED — host didn't change, delete
-                # destination WEP.
-                LOG.info(
-                    "Live migration %s: failed, port %s remains on %s",
-                    migration_uid,
-                    port["id"],
-                    port["binding:host_id"],
-                )
-                self.endpoint_syncer.delete_endpoint(dest_port)
-            else:
-                LOG.info(
-                    "Live migration %s: succeeded, port %s migrated from %s to %s",
-                    migration_uid,
-                    port["id"],
-                    original["binding:host_id"],
-                    port["binding:host_id"],
-                )
-
-        # Check for migration (cold or live) so that we can reliably
-        # delete the WorkloadEndpoint on the old host.
-        if original["binding:host_id"] != port["binding:host_id"]:
-            LOG.info(
-                "Migration, delete WorkloadEndpoint on old host %s",
-                original["binding:host_id"],
-            )
-            self.endpoint_syncer.delete_endpoint(original)
-            endpoint_should_already_exist = False
-
-        try:
-            port = self.db.get_port(plugin_context, port["id"])
-        except n_exc.PortNotFound:
-            LOG.info("Port no longer exists")
-            return
-
-        # Now, fork execution based on the type of update we're performing.
-        # There are a few:
-        # - a pre live-migration notice (binding profile has a migrating_to
-        #   key with the future nova-compute host as the value), where we
-        #   create a destination WEP and LiveMigration resource;
-        # - a port becoming bound (binding vif_type from unbound to bound);
-        # - a port becoming unbound (binding vif_type from bound to
-        #   unbound);
-        # - an update (port bound at all times);
-        # - a change to an unbound port (which we don't care about, because
-        #   we do nothing with unbound ports).
-        if port.get("binding:profile", {}).get("migrating_to") is not None:
-            dest_host = port["binding:profile"]["migrating_to"]
-
-            dest_port = port.copy()
-            dest_port["binding:host_id"] = dest_host
-
-            # Create LiveMigration resource BEFORE the destination
-            # WEP, so that Felix has the migration context before it
-            # sees the new endpoint.  (In etcd, write ordering is
-            # preserved per-client.)
-            migration_uid = self.endpoint_syncer.write_live_migration(port, dest_port)
-
-            # Create destination WEP after the LiveMigration resource.
-            # Skip DB re-read because this is a synthetic port dict
-            # with the destination host.
-            self.endpoint_syncer.write_endpoint(dest_port, plugin_context, reread=False)
-
-            LOG.info(
-                "Live migration %s: pre-migrate port %s from %s to %s",
-                migration_uid,
-                port["id"],
-                port["binding:host_id"],
-                dest_host,
-            )
-        elif port_bound(port):
-            if endpoint_should_already_exist:
-                LOG.info("Port update")
-                self.endpoint_syncer.write_endpoint(
-                    port, plugin_context, must_update=True
-                )
-            else:
-                LOG.info("Port becoming bound: create.")
-                self.endpoint_syncer.write_endpoint(port, plugin_context)
-        elif endpoint_should_already_exist:
-            LOG.info("Port becoming unbound: destroy.")
-            self.endpoint_syncer.delete_endpoint(original)
-        else:
-            LOG.info("Update on unbound port: no action")
+        # Sync for every host that might own a WEP slot for this port.  The same
+        # dedupe-preserve-order trick keeps ``new_host`` last so a stale slot at
+        # ``old_host`` (cold-migration) is cleared before the canonical WEP at the new
+        # host is written.  Truthy check (not ``is not None``) so an empty-string host
+        # -- typical for an unbound port -- doesn't fall through and incur a wasted DB
+        # re-read on a slot that cannot exist.
+        for host in dict.fromkeys(
+            [old_host, old_migrating_to, new_migrating_to, new_host]
+        ):
+            if host:
+                self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
     def update_floatingip(self, plugin_context):
         """update_floatingip
@@ -1195,7 +1227,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         # No outer writer/reader context here -- see create_port_postcommit for
         # rationale.
         port = self.db.get_port(plugin_context, plugin_context.fip_update_port_id)
-        self._update_port(plugin_context, port)
+
+        # Sync the WEP slot for this port at its current binding host.  ``sync_wep``
+        # will CAS-write or CAS-delete based on a re-read of the port from Neutron.
+        host = port.get("binding:host_id")
+        if host:
+            self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
     def delete_port_postcommit(self, context):
         """delete_port_postcommit
@@ -1203,7 +1240,10 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         Called after Neutron has committed a port deletion event to the
         database.
 
-        There's no database row for us to lock on here, so don't bother.
+        ``sync_wep`` and ``sync_lm`` re-read the port from the Neutron DB and find it
+        missing -- ``PortNotFound`` -- so they CAS-delete each slot at the observed
+        mod_revision (or no-op if the slot was never created).  We just enumerate the
+        slots that could plausibly have existed for this port.
         """
         TrackTask("DELETE_PORT_POSTCOMMIT")
         LOG.info("DELETE_PORT_POSTCOMMIT: %s", context)
@@ -1213,60 +1253,33 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         if not _port_is_endpoint_port(port):
             return
 
-        # If port is being deleted during live migration, clean up the
-        # destination WEP and LiveMigration resource too.
+        plugin_context = context._plugin_context
         migrating_to = port.get("binding:profile", {}).get("migrating_to")
-        if migrating_to is not None:
-            namespace = self.endpoint_syncer.namespace
-            dest_port = port.copy()
-            dest_port["binding:host_id"] = migrating_to
-            dest_wep_name = endpoint_name(dest_port)
-            migration_uid = datamodel_v3.get_uid(
-                "LiveMigration", namespace, dest_wep_name
-            )
-            LOG.info(
-                "Live migration %s: port %s deleted during migration, cleaning up",
-                migration_uid,
-                port["id"],
-            )
-            datamodel_v3.delete("LiveMigration", namespace, dest_wep_name)
-            self.endpoint_syncer.delete_endpoint(dest_port)
+        host = port.get("binding:host_id")
 
-        # Delete source WEP.
-        self.endpoint_syncer.delete_endpoint(port)
+        # If a live migration was in progress, sync the LiveMigration and dest WEP at
+        # the migration target (both will be CAS-deleted, since the port no longer
+        # exists in the DB).
+        if migrating_to:
+            self.endpoint_syncer.sync_lm(port, migrating_to, plugin_context)
+            self.endpoint_syncer.sync_wep(port, migrating_to, plugin_context)
 
-    def security_groups_rule_updated(self, context):
-        """Called whenever security group rules or membership change.
+        # Sync the source WEP slot.  Skipped if the port had no host binding (an unbound
+        # port never had a WEP).
+        if host:
+            self.endpoint_syncer.sync_wep(port, host, plugin_context)
 
-        When a security group rule is added, we need to do the following steps:
-
-        1. Reread the security rules from the Neutron DB.
-        2. Write the updated policy to etcd.
-        """
-        TrackTask("SECURITY_GROUPS_RULE_UPDATED")
-        LOG.info("SECURITY_GROUPS_RULE_UPDATED: %s", context)
+    def security_groups_updated(self, context):
+        """Called whenever security group rules, membership or existence change."""
+        TrackTask("SECURITY_GROUPS_UPDATED")
+        LOG.info("SECURITY_GROUPS_UPDATED: %s", context)
 
         # No outer writer/reader context here -- see create_port_postcommit for
-        # rationale.  ``write_sgs_to_etcd`` calls ``self.db.get_security_group_rules``,
+        # rationale.  ``sync_sgs_to_etcd`` calls ``self.db.get_security_group_rules``,
         # which is ``@retry_if_session_inactive``-decorated and triggers upstream
         # ``_ensure_default_security_group``'s race recovery when called without an
         # outer writer.
-        self.policy_syncer.write_sgs_to_etcd(context.sgids, context.plugin_context)
-
-    def _update_port(self, plugin_context, port):
-        """_update_port
-
-        This method assumes it's being called from within a database
-        transaction and does not take out another one.
-        """
-        LOG.info("Updating port %s", port)
-
-        if port_bound(port):
-            LOG.info("Port bound, attempting to update.")
-            self.endpoint_syncer.write_endpoint(port, plugin_context, must_update=True)
-        else:
-            LOG.info("Port unbound, attempting delete if needed.")
-            self.endpoint_syncer.delete_endpoint(port)
+        self.policy_syncer.sync_sgs_to_etcd(context.sgids, context.plugin_context)
 
     @logging_exceptions(LOG)
     def _do_startup_resync(self):
@@ -1308,7 +1321,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
                 result.to_dict(),
             )
 
-    def periodic_compaction_thread(self, launch_epoch):
+    def do_periodic_compaction(self):
         """Periodic etcd compaction logic.
 
         On a fixed interval, requests etcd compaction to prevent unbounded disk usage
@@ -1317,9 +1330,9 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
         TrackTask("COMPACTION")
         try:
             LOG.info("Periodic compaction thread started")
-            while self._epoch == launch_epoch:
+            while not self._stop_worker:
                 # Only do the compaction if we are the master node.
-                if self.elector.master():
+                if self.is_master():
                     LOG.info("I am master: doing periodic compaction")
 
                     try:
@@ -1370,11 +1383,6 @@ def port_status_change(port, original):
         return True
     else:
         return False
-
-
-def port_bound(port):
-    """Returns true if the port is bound."""
-    return port["binding:vif_type"] != "unbound"
 
 
 def felix_agent_state(hostname, start_flag=False):

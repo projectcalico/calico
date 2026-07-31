@@ -16,6 +16,16 @@ struct calico_qos_key {
 	__u16 family;  // 4=IPv4, 6=IPv6
 };
 
+/* Packet-rate state lives in cali_qos; connection-limit state lives in
+ * cali_qos_conn. They share the same key shape (ifindex, direction,
+ * family) but have disjoint values and disjoint writers. Splitting
+ * them avoids a lost-update race: the userspace ConnLimitScanner
+ * periodically writes current_count under BPF_F_LOCK, and if
+ * packet-rate state shared the same value the locked write would
+ * clobber the dataplane's running token-bucket state (the lock covers
+ * only the write, not the earlier unlocked read). See
+ * felix/bpf/conntrack/connlimit_scanner.go for the userspace side.
+ */
 struct calico_qos_val {
 	struct bpf_spin_lock lock;
 	// packet rate config
@@ -25,7 +35,10 @@ struct calico_qos_val {
 	__s16 packet_rate_tokens;
 	__s16 padding[3]; // alignment
 	__u64 packet_rate_last_update;
-	// connection limit
+};
+
+struct calico_qos_conn_val {
+	struct bpf_spin_lock lock;
 	__u32 max_connections; // 0 = no limit, >0 = limit
 	__u32 current_count;   // maintained by BPF (increment on SYN) and scanner (recount)
 };
@@ -36,6 +49,11 @@ struct calico_qos_val {
 CALI_MAP(cali_qos, 2,
 		BPF_MAP_TYPE_HASH,
 		struct calico_qos_key, struct calico_qos_val,
+		4*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
+
+CALI_MAP_V1(cali_qos_conn,
+		BPF_MAP_TYPE_HASH,
+		struct calico_qos_key, struct calico_qos_conn_val,
 		4*IFACE_STATE_MAP_SIZE, BPF_F_NO_PREALLOC)
 
 static CALI_BPF_INLINE int qos_enforce_packet_rate(struct cali_tc_ctx *ctx)
@@ -163,8 +181,8 @@ static CALI_BPF_INLINE bool qos_dscp_set(struct cali_tc_ctx *ctx, __s8 dscp)
 }
 
 /* qos_connlimit_check_and_increment atomically checks the connection limit for
- * the current interface and direction using the cali_qos map. If below the
- * limit, increments the counter and returns 0 (allow). If at or above the
+ * the current interface and direction using the cali_qos_conn map. If below
+ * the limit, increments the counter and returns 0 (allow). If at or above the
  * limit, returns -1 (reject). Returns 0 if no limit is configured for this
  * interface+direction (no map entry or max_connections <= 0).
  *
@@ -192,7 +210,7 @@ static CALI_BPF_INLINE int qos_connlimit_check_and_increment(struct cali_tc_ctx 
 #endif
 	};
 
-	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	struct calico_qos_conn_val *qos = cali_qos_conn_lookup_elem(&key);
 	if (!qos || qos->max_connections <= 0) {
 		return 0;
 	}
@@ -235,7 +253,7 @@ static CALI_BPF_INLINE void qos_connlimit_decrement(__u32 ifindex, __u16 directi
 		.family = family,
 	};
 
-	struct calico_qos_val *qos = cali_qos_lookup_elem(&key);
+	struct calico_qos_conn_val *qos = cali_qos_conn_lookup_elem(&key);
 	if (!qos || qos->max_connections <= 0) {
 		return;
 	}

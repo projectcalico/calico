@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,18 +16,22 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"sigs.k8s.io/knftables"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var expectedBaseChains = []string{
@@ -65,7 +69,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -158,6 +162,55 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(func() {
 			table.Apply()
 		}).To(Panic())
+	})
+
+	It("should not reload the dataplane on a no-op Apply()", func() {
+		// Drive to a settled, in-sync state. The first Apply() reads the dataplane
+		// once to learn what's there, then writes the base chains; after that the
+		// table is in sync.
+		table.Apply()
+		table.Apply()
+		listCalls := f.ListCallCount
+		Expect(listCalls).To(BeNumerically(">", 0))
+
+		// Further no-op Applies must not re-read the dataplane. A full re-read is
+		// O(total rules), so a sync that changed nothing - or only touched IP set
+		// members, which are programmed via the separate IPSets path - must not
+		// trigger one.
+		table.Apply()
+		table.Apply()
+		Expect(f.ListCallCount).To(Equal(listCalls))
+	})
+
+	It("should skip the resync when the object listing fails transiently", func() {
+		// Drive to a settled, in-sync state with one programmed rule.
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.DropAction{}},
+		})
+		table.Apply()
+		txCount := len(f.transactions)
+		Expect(txCount).To(BeNumerically(">", 0))
+
+		// Force a resync, but make the object listing fail transiently. We bail
+		// out rather than falling back to per-type List calls or treating the
+		// table as empty, so the only list call is the failed ListAll and no
+		// reprogramming transaction is issued.
+		table.InvalidateDataplaneCache("test")
+		listCalls := f.ListCallCount
+		f.ListAllError = errors.New("transient nft failure")
+		table.Apply()
+		Expect(f.ListAllError).To(BeNil(), "expected the resync to consume the injected error")
+		Expect(f.ListCallCount-listCalls).To(Equal(1), "should not fall back to extra List calls after a failed ListAll")
+		Expect(f.transactions).To(HaveLen(txCount), "transient list failure should not trigger reprogramming")
+
+		// Our rule should still be present in the dataplane.
+		rules, err := f.ListRules(context.TODO(), "filter-FORWARD")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "filter-FORWARD",
+			Rule:    "counter drop",
+			Comment: ptr("cali:DCGauXoHP5A9-AIO;"),
+		}))
 	})
 
 	Describe("after inserting a rule", func() {
@@ -873,7 +926,7 @@ var _ = Describe("Insert early rules", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -942,7 +995,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				Disabled:         true,
 			},
 			true,
@@ -1021,24 +1074,39 @@ var _ = Describe("Enabled table cache invalidation", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
 	})
 
-	It("should always invalidate cache after apply", func() {
-		// First Apply: programs base chains.
+	It("should not re-read the dataplane after a write", func() {
+		// Settle into an in-sync state: the first Apply programs the base chains and
+		// the initial sync reads the dataplane once; the second is a no-op.
 		table.Apply()
-
-		// Record list call count after first apply.
-		listCallsAfterFirstApply := f.ListCallCount
-
-		// Second Apply: cache should have been invalidated (enabled table always invalidates),
-		// so List should be called again to reload state.
 		table.Apply()
-		Expect(f.ListCallCount).To(BeNumerically(">", listCallsAfterFirstApply),
-			"Expected List to be called again because enabled table always invalidates cache after apply")
+		listCalls := f.ListCallCount
+
+		// Program a referenced policy chain. Because chains are rewritten wholesale
+		// (flush + re-add) rather than patched by rule handle, we don't need to read
+		// the dataplane back to recover handles - so a write must not trigger a reload.
+		table.UpdateChain(&generictables.Chain{
+			Name: "cali-pi-test",
+			Rules: []generictables.Rule{
+				{Match: nftables.Match(), Action: nftables.ReturnAction{}},
+			},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.JumpAction{Target: "cali-pi-test"}},
+		})
+		table.Apply()
+		Expect(f.ListCallCount).To(Equal(listCalls),
+			"a write should not trigger a dataplane reload now that chains are rewritten wholesale")
+
+		// The write must still have landed.
+		rules, err := f.ListRules(context.TODO(), "cali-pi-test")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(rules).To(HaveLen(1))
 	})
 })
 
@@ -1059,7 +1127,7 @@ var _ = Describe("ARP Table", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -1102,3 +1170,250 @@ var _ = Describe("ARP Table", func() {
 		Expect(chains).To(ContainElement("cali-arp-dispatch"))
 	})
 })
+
+var _ = Describe("Table with flowtable offload enabled", func() {
+	var table *nftables.NftablesTable
+	var f *fakeNFT
+	BeforeEach(func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					// Everything the flowtable specs program is treated as present by default;
+					// the prune spec overrides this with its own narrower lister.
+					return []string{"cali1234", "vxlan.calico", "eth0", "lo"}, nil
+				},
+			},
+			true,
+		)
+	})
+
+	// The FORWARD rule references the flowtable whenever offload is on, so it must be created even
+	// with no devices. Deleting it instead (the old behavior) failed the transaction.
+	It("should program the flowtable even when there are no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+	})
+
+	It("should attach the configured overlay and workload devices to the flowtable", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Devices are combined and sorted, so the workload interface sorts ahead of the tunnel.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+	})
+
+	It("should report the flowtable device count as a metric", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+	})
+
+	It("should attach external devices to the flowtable alongside overlay and workload devices", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		table.SetExternalDevices([]string{"eth0"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(3)))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, eth0, vxlan.calico }"))
+	})
+
+	// A full resync must re-assert the flowtable even with no devices, otherwise the always-present
+	// FORWARD rule would reference a flowtable that the resync failed to recreate.
+	It("should re-assert the flowtable on a resync with no devices", func() {
+		table.SetOverlayDevices(nil)
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// Simulate another process removing the flowtable behind our back.
+		tx := f.Fake().NewTransaction()
+		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+
+		// A resync should put it back, despite the empty device set.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+	})
+
+	// When offload is turned off, Felix restarts and comes up without ever enabling the flowtable.
+	// It must clean up the flowtable left behind by the previous run.
+	It("should delete a leftover flowtable when offload is disabled", func() {
+		// Offload is disabled here (no SetOverlayDevices call); this first Apply just creates the table.
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		// Simulate a flowtable left behind by a previous run that had offload enabled.
+		prio := knftables.FilterIngressPriority
+		tx := f.Fake().NewTransaction()
+		tx.Add(&knftables.Flowtable{Name: dataplanedefs.FlowtableName, Priority: &prio})
+		Expect(f.Fake().Run(context.TODO(), tx)).NotTo(HaveOccurred())
+		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
+
+		// The next resync should spot the stale flowtable and remove it.
+		table.InvalidateDataplaneCache("test")
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+		Expect(f.List(context.TODO(), "flowtable")).To(BeEmpty())
+	})
+
+	It("should prune flowtable devices that no longer exist in the kernel", func() {
+		// net.Interfaces() reports cali1234 and vxlan.calico exist, but not the dead veth.
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return []string{"cali1234", "vxlan.calico", "lo"}, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234", "caliDEAD"})
+
+		// Dropping a device asks for a prompt retry, in case it was on its way up rather than gone.
+		Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay))
+
+		// caliDEAD is dropped; only the surviving devices are programmed.
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(Equal(float64(1)))
+	})
+
+	// A failure to read the kernel's interfaces must not wipe offload from every device.
+	It("should keep the cached device list when listing interfaces fails", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return nil, errors.New("netlink is having a bad day")
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+
+		// Nothing was pruned, so there's nothing to retry for either.
+		Expect(table.Apply()).To(BeZero())
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { cali1234, vxlan.calico }"))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(BeZero())
+	})
+
+	// A device can be missing because it's still being created, not because it's gone. The desired
+	// list doesn't change when it finally appears, so without the retry the device would go
+	// unoffloaded until the next resync.
+	It("should re-assert the flowtable once a pruned device appears", func() {
+		present := []string{"vxlan.calico", "lo"}
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rules.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				ListInterfacesOverride: func() ([]string, error) {
+					return present, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"cali1234"})
+		Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay))
+		Expect(f.Fake().Dump()).To(ContainSubstring("devices = { vxlan.calico }"))
+
+		// The veth lands. Nothing tells the table about it, so the retry has to notice.
+		present = append(present, "cali1234")
+		Expect(table.Apply()).To(BeZero())
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableDevices())).To(Equal(float64(2)))
+		Expect(testutil.ToFloat64(table.GaugeNumFlowtableMissingDevices())).To(BeZero())
+
+		// knftables' fake ignores an "add flowtable" for a flowtable that already exists, where
+		// real nft treats it as create-or-update, so the device list in Dump() is stuck at what
+		// the first Apply wrote. Assert on what we asked nft to do instead.
+		Expect(flowtableDevicesProgrammed(f)).To(ContainElement("devices = { cali1234, vxlan.calico }"))
+	})
+
+	// A workload endpoint whose veth is gone for good would otherwise keep us re-asserting the
+	// flowtable every few seconds forever.
+	It("should stop retrying a pruned device that never appears", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		table.SetWorkloadInterfaces([]string{"caliGHOST"})
+
+		for i := 0; i < nftables.MaxFlowtablePruneRetries; i++ {
+			Expect(table.Apply()).To(Equal(nftables.FlowtablePruneRetryDelay), "expected a retry on attempt %d", i+1)
+		}
+		Expect(table.Apply()).To(BeZero())
+	})
+})
+
+// flowtableDevicesProgrammed returns the "devices = { ... }" clause of every "add flowtable"
+// operation the table has sent to nft, oldest first.
+func flowtableDevicesProgrammed(f *fakeNFT) []string {
+	var clauses []string
+	for _, tx := range f.Transactions() {
+		for _, line := range strings.Split(tx.String(), "\n") {
+			if !strings.Contains(line, "add flowtable") {
+				continue
+			}
+
+			start := strings.Index(line, "devices = {")
+			if start < 0 {
+				continue
+			}
+			end := strings.Index(line[start:], "}")
+			if end < 0 {
+				continue
+			}
+			clauses = append(clauses, line[start:start+end+1])
+		}
+	}
+	return clauses
+}

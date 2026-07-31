@@ -28,3 +28,5 @@ components:
     version: test-build
   istio-proxyv2:
     version: test-build
+  third-party-cni-plugins:
+    version: test-build

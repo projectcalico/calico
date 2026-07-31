@@ -15,14 +15,80 @@ package nftables
 
 import (
 	"context"
+	"io"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
+
+	"github.com/projectcalico/calico/felix/environment"
 )
 
 // NewNftablesDataplaneFn is a function type that creates a new nftables dataplane interface.
 type NewNftablesDataplaneFn func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error)
+
+// MinKernelVersionForNftables is the minimum kernel version required for the
+// native nftables dataplane. Calico's documented nftables requirement is
+// "Linux kernel version 5.13 or later with nft >= 1.0.1"
+// (https://docs.tigera.io/calico/latest/getting-started/kubernetes/nftables),
+// mirroring kube-proxy's nftables mode requirement
+// (https://kubernetes.io/docs/reference/networking/virtual-ips/#proxy-mode-nftables).
+// The nft half of the requirement is enforced by knftables itself, which
+// refuses to drive an nft binary older than v1.0.1. Older kernels (e.g.
+// RHEL 8's 4.18) cannot reliably run the nftables dataplane under churn.
+var MinKernelVersionForNftables = environment.MustParseVersion("5.13")
+
+// HostNftablesSupportedFn returns a function that reports whether this host
+// meets the minimum requirements for the native nftables dataplane:
+//
+//   - a usable nft binary of a supported version (knftables enforces >= v1.0.1), and
+//   - a kernel of at least MinKernelVersionForNftables.
+//
+// It is used to resolve NFTablesMode=Auto on hosts that run no kube-proxy,
+// where the kube-proxy-based detection gives no signal.
+// Both dependencies are injectable for testing; pass nil for the defaults.
+func HostNftablesSupportedFn(newDataplane NewNftablesDataplaneFn, getKernelVersion func() (*environment.Version, error)) func() bool {
+	if newDataplane == nil {
+		newDataplane = knftables.New
+	}
+	if getKernelVersion == nil {
+		getKernelVersion = func() (*environment.Version, error) {
+			reader, err := environment.GetKernelVersionReader()
+			if err != nil {
+				return nil, err
+			}
+			if closer, ok := reader.(io.Closer); ok {
+				defer closer.Close()
+			}
+			return environment.GetKernelVersion(reader)
+		}
+	}
+
+	return func() bool {
+		kernelVersion, err := getKernelVersion()
+		if err != nil {
+			log.WithError(err).Warn(
+				"Failed to determine kernel version; assuming this host does not support the nftables dataplane.")
+			return false
+		}
+		if kernelVersion.Compare(MinKernelVersionForNftables) < 0 {
+			log.WithFields(log.Fields{
+				"kernelVersion": kernelVersion,
+				"minVersion":    MinKernelVersionForNftables,
+			}).Info("Kernel is older than the minimum required for the nftables dataplane.")
+			return false
+		}
+		if _, err := newDataplane(knftables.IPv4Family, "calico"); err != nil {
+			// knftables validates that the nft binary is present and recent
+			// enough for it to drive.
+			log.WithError(err).Info("This host does not have a usable nft binary for the nftables dataplane.")
+			return false
+		}
+		log.WithField("kernelVersion", kernelVersion).Info(
+			"This host meets the minimum requirements for the nftables dataplane.")
+		return true
+	}
+}
 
 // KubeProxyNftablesEnabledFn returns a function that can be used to check if kube-proxy is running
 // in nftables mode. It does this by checking for the presence of the nftables chains that

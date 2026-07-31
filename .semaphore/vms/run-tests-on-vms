@@ -22,7 +22,11 @@ my_dir="$(dirname $0)"
 repo_dir="$my_dir/../.."
 vm_name_prefix=$1
 artifacts_dir="$repo_dir/artifacts"
-zone=${ZONE:-europe-west3-c}
+# We bulk-create the VMs across all the zones in a region (based on available
+# capacity) rather than pinning a single zone, so a single zone running out of
+# capacity no longer blocks the job.  REGION selects the region; the zone each
+# VM actually lands in is discovered after creation (see below).
+region=${REGION:-europe-west3}
 : "${VM_MACHINE_TYPE:=n4-standard-4}"
 : "${IMAGE_FAMILY:=ubuntu-minimal-2404-lts-amd64}"
 : "${MAX_RUN_DURATION:=4h}"
@@ -74,12 +78,17 @@ else
 fi
 
 # Do a bulk create; this is faster and it saves API quota.
-echo "Creating test VMs in bulk..."
+#
+# We pass --region (not --zone) with --target-distribution-shape=any so that
+# GCP spreads the VMs across the zones of the region according to available
+# capacity.  This avoids a single zone filling up and failing the whole job.
+echo "Creating test VMs in bulk across region ${region}..."
 gcloud --quiet compute instances bulk create \
        --service-account="semaphore-v2-gcr@unique-caldron-775.iam.gserviceaccount.com" \
        --scopes="https://www.googleapis.com/auth/cloud-platform" \
        --predefined-names="$names" \
-       --zone=${zone} \
+       --region=${region} \
+       --target-distribution-shape=any \
        --machine-type=${VM_MACHINE_TYPE} \
        --image-family=${IMAGE_FAMILY} \
        --image-project=ubuntu-os-cloud \
@@ -90,6 +99,31 @@ gcloud --quiet compute instances bulk create \
        --labels="${labels}" \
        --metadata-from-file startup-script="$my_dir/vm-bootstrap.sh" \
        --metadata block-project-ssh-keys=TRUE,ssh-keys="ubuntu:$(ssh-keygen -y -f $HOME/.ssh/id_rsa)",enable-guest-attributes=TRUE
+
+# Since the VMs are spread across the region's zones, we can no longer assume a
+# single zone for the downstream describe/ssh/delete commands.  Build a
+# name->zone map by listing the instances we just created, filtered by our
+# workflow-unique name prefix.  bulk create is synchronous, so the instances
+# already exist by the time it returns.
+echo "Discovering which zone each VM landed in..."
+declare -A vm_zone
+while IFS=, read -r name vm_z; do
+  [ -n "$name" ] || continue
+  vm_zone["$name"]="$vm_z"
+  echo "  $name -> $vm_z"
+done < <(gcloud --quiet compute instances list \
+              --filter="name~'^${vm_name_prefix}'" \
+              --format='csv[no-heading](name,zone.basename())')
+
+# Fail fast if any expected VM is missing from the map; the rest of the script
+# relies on knowing every VM's zone.
+for batch in "${batches[@]}"; do
+  vm_name="$vm_name_prefix$batch"
+  if [ -z "${vm_zone[$vm_name]:-}" ]; then
+    echo "ERROR: could not determine the zone of VM $vm_name after bulk create." 1>&2
+    exit 1
+  fi
+done
 
 ###### Configure VMs, run tests and shut them down ######
 
@@ -150,6 +184,16 @@ format_batch_for_log() {
 
 for batch in "${batches[@]}"; do
   vm_name="$vm_name_prefix$batch"
+  # Each VM may be in a different zone; look up the one it landed in.  Every
+  # downstream command in this iteration (vm-ip, on-test-vm, configure-test-vm,
+  # the delete, and the watchdog's serial/snapshot capture) uses $zone.  We also
+  # export ZONE: run_batch (sourced from batches.sh) shells out to
+  # 'gcloud get-serial-port-output --zone="${ZONE}"' to grab the serial console
+  # when a VM wedges, and it reads ZONE from the environment.  The backgrounded
+  # per-batch subshell below captures this value at fork time, so each batch
+  # sees its own VM's zone.
+  zone="${vm_zone[$vm_name]}"
+  export ZONE="$zone"
   vm_ip="$(env VM_NAME="$vm_name" ZONE="$zone" "$my_dir/vm-ip")"
   batch_formatted="$(format_batch_for_log "$batch")"
   log_file="$artifacts_dir/test-$batch_formatted.log"
@@ -171,7 +215,7 @@ for batch in "${batches[@]}"; do
 
     conf_log_file="$artifacts_dir/configure-vm-$batch_formatted.log"
     echo "$prefix Configuring test VM $vm_name. Redirecting log to $conf_log_file."
-    if "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
+    if env ZONE="$zone" "${my_dir}/configure-test-vm" "$vm_name" >& "$conf_log_file"; then
       echo "$prefix Configuration of VM $vm_name SUCCEEDED."
     else
       echo "$prefix Configuration of VM $vm_name FAILED.  Log file will be uploaded as artifact $conf_log_file. "

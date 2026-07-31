@@ -71,7 +71,7 @@ protobuf pkg/dataplane/grpc/proto/cnibackend.pb.go: pkg/dataplane/grpc/proto/cni
 # image. These must be added as reqs to 'image-windows' (originally defined in
 # lib.Makefile) on the specific package Makefile otherwise they are not correctly
 # recognized.
-WINDOWS_IMAGE_REQS := Dockerfile-windows build build-win-cni-bins bin/LICENSE
+WINDOWS_IMAGE_REQS := Dockerfile.windows build build-win-cni-bins bin/LICENSE
 image-windows: $(WINDOWS_IMAGE_REQS)
 
 bin/LICENSE: ../LICENSE.md

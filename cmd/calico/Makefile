@@ -15,7 +15,6 @@ LIBBPF_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/li
 BPFGPL_CONTAINER_PATH = /go/src/github.com/projectcalico/calico/felix/bpf-gpl/
 LIBBPF_A = $(REPO_ROOT)/felix/bpf-gpl/libbpf/src/$(ARCH)/libbpf.a
 
-ifeq ($(ARCH), $(filter $(ARCH),amd64 arm64))
 # When cross-compiling, force lld as the linker — GNU ld is single-target,
 # while lld natively links the cross-arch ELF objects produced by clang.
 # (The cross sysroot itself is already supplied via CC's --sysroot flag.)
@@ -23,9 +22,17 @@ CROSS_CGO_LDFLAGS=
 ifneq ($(CROSS_SYSROOT),)
 	CROSS_CGO_LDFLAGS=$(CROSS_LDFLAGS)
 endif
-CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
-CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH)"
+# Normalize userspace types to ensure consistency across architectures.
+# On ppc64le the kernel UAPI defines __u64 as `unsigned long` unless
+# __SANE_USERSPACE_TYPES__ is set, which makes cgo reject `C.ulonglong`
+# arguments to __u64 parameters (felix/bpf/maps/syscall.go). Matches the
+# same flag in felix/Makefile and node/Makefile.
+ARCH_CGO_CFLAGS=
+ifeq ($(ARCH),ppc64le)
+	ARCH_CGO_CFLAGS=-D__SANE_USERSPACE_TYPES__
 endif
+CGO_LDFLAGS = "-L$(LIBBPF_CONTAINER_PATH)/$(ARCH) $(CROSS_CGO_LDFLAGS) -lbpf -lelf -lz"
+CGO_CFLAGS = "-I$(LIBBPF_CONTAINER_PATH) -I$(BPFGPL_CONTAINER_PATH) $(ARCH_CGO_CFLAGS)"
 
 BINDIR = bin
 CONTAINER_MARKER = .image.created-$(ARCH)
@@ -49,11 +56,7 @@ $(BINDIR)/calico-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./, $@)
 
 $(BINDIR)/calico-cgo-$(ARCH): $(LIBBPF_A) $(SRC_FILES)
-ifeq ($(ARCH),$(filter $(ARCH),amd64 arm64))
 	$(call build_cgo_binary, ./, $@)
-else
-	$(call build_binary, ./, $@)
-endif
 
 # Race-enabled combined binary for Felix FV runs. The race detector requires
 # CGO so we always build with CGO_ENABLED=1 and pull in libbpf the same way

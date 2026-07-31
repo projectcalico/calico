@@ -27,12 +27,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	. "github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/testutils"
 	"github.com/projectcalico/calico/felix/timeshim/mocktime"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 const routePriorityForTest int = 48931
@@ -83,7 +83,7 @@ var _ = Describe("RouteTable v6", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -215,7 +215,7 @@ var _ = Describe("RouteTable", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithStaticARPEntries(true),
@@ -372,7 +372,7 @@ var _ = Describe("RouteTable", func() {
 					FelixRouteProtocol,
 					true,
 					0,
-					logutils.NewSummarizer("test"),
+					logrusr.NewSummarizer("test"),
 					dataplane,
 					WithTimeShim(t),
 					WithStaticARPEntries(true),
@@ -804,7 +804,7 @@ var _ = Describe("RouteTable", func() {
 					deviceRouteProtocol,
 					true,
 					0,
-					logutils.NewSummarizer("test"),
+					logrusr.NewSummarizer("test"),
 					dataplane,
 					WithTimeShim(t),
 					WithConntrackShim(dataplane),
@@ -1087,6 +1087,71 @@ var _ = Describe("RouteTable", func() {
 				// invalid.
 				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(BeZero(),
 					"Route should be removed when one interface deleted")
+			})
+			It("Should program MTU on a multi-path route and correct an incorrect MTU on resync", func() {
+				By("Creating interfaces")
+				addLink := dataplane.AddIface(6, "cali6", true, true)
+				addLink2 := dataplane.AddIface(7, "cali7", true, true)
+
+				By("Setting a multi-path route with MTU")
+				rt.SetRoutes(RouteClassLocalWorkload, InterfaceNone, []Target{{
+					Type: TargetTypeVXLAN,
+					RouteKey: RouteKey{
+						CIDR:     ip.MustParseCIDROrIP("10.0.0.0/24"),
+						Priority: routePriorityForTest,
+					},
+					MTU: 1400,
+					MultiPath: []NextHop{
+						{
+							IfaceName: addLink.LinkAttrs.Name,
+							Gw:        ip.FromString("10.0.0.6"),
+						},
+						{
+							IfaceName: addLink2.LinkAttrs.Name,
+							Gw:        ip.FromString("10.0.0.7"),
+						},
+					},
+				}})
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+
+				expectedRoute := netlink.Route{
+					Family:   unix.AF_INET,
+					Dst:      mustParseCIDR("10.0.0.0/24"),
+					Type:     syscall.RTN_UNICAST,
+					Protocol: deviceRouteProtocol,
+					Scope:    netlink.SCOPE_UNIVERSE,
+					Table:    unix.RT_TABLE_MAIN,
+					Flags:    syscall.RTNH_F_ONLINK,
+					MTU:      1400,
+					MultiPath: []*netlink.NexthopInfo{
+						{
+							LinkIndex: addLink.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.6").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+						{
+							LinkIndex: addLink2.LinkAttrs.Index,
+							Gw:        net.ParseIP("10.0.0.7").To4(),
+							Flags:     syscall.RTNH_F_ONLINK,
+						},
+					},
+					Priority: routePriorityForTest,
+				}
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+					"MTU should be programmed on the multi-path route")
+
+				By("Corrupting the MTU in the dataplane behind the RouteTable's back")
+				corrupted := expectedRoute
+				corrupted.MTU = 9000
+				dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")] = corrupted
+
+				By("Triggering a resync")
+				rt.QueueResync()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(dataplane.RouteKeyToRoute[mainRouteKey("10.0.0.0/24")]).To(Equal(expectedRoute),
+					"resync should have corrected the incorrect MTU on the multi-path route")
 			})
 			It("Should add multiple routes with a protocol", func() {
 				// Route that needs to be added
@@ -1835,7 +1900,7 @@ var _ = Describe("RouteTable with multiple priorities", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2343,7 +2408,7 @@ var _ = Describe("RouteTable (main table)", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2447,7 +2512,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 			FelixRouteProtocol,
 			true,
 			100,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithRouteCleanupGracePeriod(10*time.Second),
 			WithTimeShim(t),
@@ -2811,7 +2876,7 @@ var _ = Describe("Tests to verify ip version is policed", func() {
 				FelixRouteProtocol,
 				true,
 				100,
-				logutils.NewSummarizer("test"),
+				logrusr.NewSummarizer("test"),
 				dataplane,
 				WithTimeShim(t),
 				WithConntrackShim(dataplane),
@@ -2837,7 +2902,7 @@ var _ = Describe("RouteTable resync repair of externally modified routes", func(
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -2906,7 +2971,7 @@ var _ = Describe("RouteTable IPv6 multi-path routes", func() {
 			deviceRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
@@ -2960,7 +3025,7 @@ var _ = Describe("RouteTable grace-period bookkeeping", func() {
 			FelixRouteProtocol,
 			true,
 			0,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 			WithTimeShim(t),
 			WithConntrackShim(dataplane),
