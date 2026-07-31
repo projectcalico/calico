@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/docopt/docopt-go"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/text/cases"
@@ -32,8 +31,6 @@ import (
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/clientmgr"
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/constants"
-	"github.com/projectcalico/calico/calicoctl/calicoctl/util"
 	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -90,58 +87,15 @@ var namespacedResources map[string]struct{} = map[string]struct{}{
 	"networksets":     {},
 }
 
-func Export(args []string) error {
-	doc := `Usage:
-  <BINARY_NAME> datastore migrate export [--config=<CONFIG>] [--allow-version-mismatch]
-
-Options:
-  -h --help                    Show this screen.
-  -c --config=<CONFIG>         Path to the file containing connection
-                               configuration in YAML or JSON format.
-                               [default: ` + constants.DefaultConfigPath + `]
-     --allow-version-mismatch  Allow client and cluster versions mismatch.
-
-Description:
-  Export the contents of the etcdv3 datastore.  Resources will be exported
-  in yaml and json format. Save the results of this command to a file for
-  later use with the import command.
-
-  The following resources are exported:
-
-<RESOURCE_LIST>
-
-  The following resources are not exported:
-
-    - WorkloadEndpoints
-    - Profiles
-`
-	// Replace all instances of BINARY_NAME with the name of the binary.
-	name, _ := util.NameAndDescription()
-	doc = strings.ReplaceAll(doc, "<BINARY_NAME>", name)
-
-	// Replace <RESOURCE_LIST> with the list of resources that will be exported.
-	var resourceList strings.Builder
-	for _, r := range allV3Resources {
-		fmt.Fprintf(&resourceList, "    - %s\n", resourceDisplayMap[r])
-	}
-	doc = strings.Replace(doc, "<RESOURCE_LIST>", resourceList.String(), 1)
-
-	parsedArgs, err := docopt.ParseArgs(doc, args, "")
-	if err != nil {
-		return fmt.Errorf("invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand", strings.Join(args, " "))
-	}
-	if len(parsedArgs) == 0 {
-		return nil
-	}
-
-	err = common.CheckVersionMismatch(parsedArgs["--config"], parsedArgs["--allow-version-mismatch"])
-	if err != nil {
+// Export exports the contents of the etcdv3 datastore in yaml and json format
+// for later use with Import. WorkloadEndpoints and Profiles are not exported.
+func Export(config string, allowVersionMismatch bool) error {
+	if err := common.CheckVersionMismatch(config, allowVersionMismatch); err != nil {
 		return err
 	}
 
-	cf := parsedArgs["--config"].(string)
 	// Get the backend client.
-	client, err := clientmgr.NewClient(cf)
+	client, err := clientmgr.NewClient(config)
 	if err != nil {
 		return err
 	}
@@ -156,7 +110,7 @@ Description:
 	}
 
 	// Check that the datastore configured datastore is etcd
-	cfg, err := clientmgr.LoadClientConfig(cf)
+	cfg, err := clientmgr.LoadClientConfig(config)
 	if err != nil {
 		logrus.Info("Error loading config")
 		return err
@@ -173,7 +127,7 @@ Description:
 		mockArgs := map[string]any{
 			"<KIND>":   r,
 			"<NAME>":   []string{},
-			"--config": cf,
+			"--config": config,
 			"--export": true,
 			"--output": "yaml",
 			"get":      true,
@@ -329,7 +283,7 @@ Description:
 	mockArgs := map[string]any{
 		"<KIND>":   "clusterinfos",
 		"<NAME>":   "default",
-		"--config": cf,
+		"--config": config,
 		"--export": false,
 		"--output": "yaml",
 		"get":      true,
@@ -366,7 +320,7 @@ Description:
 	fmt.Print("===\n")
 
 	// Get the backend client.
-	client, err = clientmgr.NewClient(cf)
+	client, err = clientmgr.NewClient(config)
 	if err != nil {
 		return err
 	}

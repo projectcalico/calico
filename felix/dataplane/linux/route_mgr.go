@@ -30,10 +30,10 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type routeManager struct {
@@ -69,7 +69,7 @@ type routeManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
 	// run 2 instance of the vxlan manager, one for each ip version - like in
@@ -88,7 +88,7 @@ func newRouteManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
@@ -681,15 +681,17 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		return err
 	}
 
-	// Remove any addresses which we don't want, but never strip the kernel-managed IPv6 link-local
-	// address.
+	// Remove any addresses which we don't want.
 	addrPresent := false
 	for _, existing := range existingAddrs {
 		if desired != nil && reflect.DeepEqual(existing.IPNet, desired.IPNet) {
 			addrPresent = true
 			continue
 		}
-		if existing.IP.IsLinkLocalUnicast() {
+		// Never strip the kernel-managed IPv6 link-local address. Guard on the address being IPv6
+		// (To4() == nil), since IsLinkLocalUnicast() also matches IPv4 169.254.0.0/16, which we do
+		// want to remove when reconciling to "no address".
+		if existing.IP.To4() == nil && existing.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		m.logCtx.WithFields(logrus.Fields{

@@ -27,8 +27,11 @@ function git_auto_version {
         return
     fi
     # Get the last tag, and the number of commits since that tag.
+    # Note that we use `git rev-list --count` here, and not `git
+    # cherry`, because `git cherry` skips merge commits and so
+    # understates the count that `git describe` would report.
     last_tag=$(git_last_tag)
-    commits_since=$(git cherry -v "${last_tag}" | wc -l)
+    commits_since=$(git rev-list --count "${last_tag}..HEAD")
 
     # Generate corresponding PEP 440 version number.
     # Note that PEP 440 only allows [N!]N(.N)*[{a|b|rc}N][.postN][.devN]

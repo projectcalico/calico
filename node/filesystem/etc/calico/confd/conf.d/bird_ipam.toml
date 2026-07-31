@@ -2,10 +2,13 @@
 src = "bird_ipam.cfg.template"
 dest = "/etc/calico/confd/config/bird_ipam.cfg"
 prefix = "/calico"
+# Watch all hosts, not just the local one: the WireGuard peer kernel filter
+# rejects routes to any peer running WireGuard, so a remote node enabling
+# WireGuard must re-render this template.
 keys = [
     "/bgpconfig",
     "/v1/ipam/v4/pool",
-    "/bgp/v1/host//NODENAME",
+    "/bgp/v1/host",
     "/staticroutes",
     "/rejectcidrs",
 ]
