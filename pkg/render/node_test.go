@@ -198,7 +198,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -402,7 +402,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -556,6 +556,34 @@ var _ = Describe("Node rendering tests", func() {
 				verifyProbesAndLifecycle(ds, false, false)
 			})
 
+			It("should render a pinned CNI spec version in the CNI config", func() {
+				pinned := operatorv1.CNISpecVersion031
+				defaultInstance.CNI.SpecVersion = &pinned
+
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+
+				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
+				Expect(cniCmResource).ToNot(BeNil())
+				cniCm := cniCmResource.(*corev1.ConfigMap)
+				Expect(cniCm.Data["config"]).To(ContainSubstring(`"cniVersion": "0.3.1"`))
+			})
+
+			It("should render the Auto CNI spec version as 1.0.0", func() {
+				auto := operatorv1.CNISpecVersionAuto
+				defaultInstance.CNI.SpecVersion = &auto
+
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+
+				cniCmResource := rtest.GetResource(resources, "cni-config", "calico-system", "", "v1", "ConfigMap")
+				Expect(cniCmResource).ToNot(BeNil())
+				cniCm := cniCmResource.(*corev1.ConfigMap)
+				Expect(cniCm.Data["config"]).To(ContainSubstring(`"cniVersion": "1.0.0"`))
+			})
+
 			It("should properly render an explicitly configured MTU", func() {
 				mtu := int32(1450)
 				defaultInstance.FlexVolumePath = "/usr/libexec/kubernetes/kubelet-plugins/volume/exec/"
@@ -571,7 +599,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -808,7 +836,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -1214,7 +1242,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2225,7 +2253,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2295,7 +2323,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "container_settings": {
@@ -2358,7 +2386,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2406,7 +2434,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2475,7 +2503,7 @@ var _ = Describe("Node rendering tests", func() {
 
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2531,7 +2559,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2581,7 +2609,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2623,7 +2651,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(fmt.Sprintf(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
@@ -2761,7 +2789,7 @@ var _ = Describe("Node rendering tests", func() {
 				cniCm := cniCmResource.(*corev1.ConfigMap)
 				Expect(cniCm.Data["config"]).To(MatchJSON(`{
   "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
+  "cniVersion": "1.0.0",
   "plugins": [
     {
       "type": "calico",
