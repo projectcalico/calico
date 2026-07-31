@@ -462,11 +462,12 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Create MTU watcher.
         self.mtu_watcher = MTUWatcher(agent, self)
 
-        # Also watch the etcd subnet trees: both the new region-aware
-        # one, and the old pre-region one, so as to support a VM
-        # renewing its DHCP lease while an upgrade is still in
-        # progress.  When something in that subtree changes, the
-        # subnet watcher will tell _this_ watcher to resync.
+        # Also watch the etcd subnet trees: both the new region-aware one,
+        # and the old pre-region one, so as to support a VM renewing its DHCP
+        # lease while an upgrade is still in progress.  The subnet watchers
+        # just maintain a store of subnet data (CIDR, gateway, DNS and so
+        # on), which the endpoint processing in _this_ watcher consults; a
+        # subnet change on its own does not trigger any dnsmasq update.
         self.v1_subnet_watcher = SubnetWatcher(self, datamodel_v1.SUBNET_DIR)
         self.subnet_watcher = SubnetWatcher(
             self, datamodel_v2.subnet_dir(self.region_string)
@@ -827,6 +828,28 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
         )
         self.subnets_by_id = {}
 
+        # While a snapshot is being processed, the IDs of the subnets that we
+        # knew about before the snapshot began, minus those that the snapshot
+        # has (re)reported so far; see _pre_snapshot_hook.
+        self._possibly_stale_subnet_ids = set()
+
+    def _pre_snapshot_hook(self):
+        # Deletion events can be missed - for example when the deletion falls
+        # between one watch being cancelled and the next being created - so
+        # reconcile against each snapshot: note all the subnet IDs that we
+        # currently know about; on_subnet_set removes each ID that the
+        # snapshot reports, and _post_snapshot_hook then discards the
+        # leftovers, i.e. the subnets that no longer exist.  subnets_by_id
+        # itself continues to serve lookups throughout.
+        self._possibly_stale_subnet_ids = set(self.subnets_by_id.keys())
+        return None
+
+    def _post_snapshot_hook(self, _):
+        for subnet_id in self._possibly_stale_subnet_ids:
+            LOG.info("Subnet %s no longer exists; discarding", subnet_id)
+            self.subnets_by_id.pop(subnet_id, None)
+        self._possibly_stale_subnet_ids = set()
+
     def start(self):
         # Catch and report any exceptions that escape here.
         try:
@@ -847,6 +870,13 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
     def on_subnet_set(self, response, subnet_id):
         """Handler for subnet creations and updates."""
         LOG.debug("Subnet %s created or updated", subnet_id)
+
+        # This subnet's key is present, so snapshot reconciliation must not
+        # discard it - even if its data turns out to be invalid, in which
+        # case we hold on to any previously cached data for it, just as for
+        # an invalid update event on an established watch.
+        self._possibly_stale_subnet_ids.discard(subnet_id)
+
         subnet_data = etcdutils.safe_decode_json(response.value, "subnet")
 
         if subnet_data is None:
@@ -867,8 +897,8 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
     def on_subnet_del(self, response, subnet_id):
         """Handler for subnet deletions."""
         LOG.info("Subnet %s deleted", subnet_id)
-        if subnet_id in self.subnets_by_id:
-            del self.subnets_by_id[subnet_id]
+        self.subnets_by_id.pop(subnet_id, None)
+        self._possibly_stale_subnet_ids.discard(subnet_id)
         return
 
     def get_subnet_id_for_addr(self, ip_str, network_id):
