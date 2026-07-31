@@ -291,8 +291,12 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	// Check the valid suffix depending on IP version.
 	cidr, err := ip.CIDRFromString(msg.Dst)
 	if err != nil {
+		// CIDRFromString returns a nil CIDR on error, so we can't do anything
+		// useful with this route; treat it as not-a-local-block rather than
+		// dereferencing the nil below.
 		logrus.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
+		return false
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
 	// * If we have a /32 or /128 block then our blackhole route would stop the CNI plugin from
@@ -361,7 +365,10 @@ func (m *routeManager) CompleteDeferredWork() error {
 
 func (m *routeManager) OnParentDeviceUpdate(name string) {
 	if name == "" {
+		// Not a device we can program routes to; keep what we have rather than
+		// tearing down the same-subnet routes below.
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return
 	}
 	if name == m.parentDevice {
 		return

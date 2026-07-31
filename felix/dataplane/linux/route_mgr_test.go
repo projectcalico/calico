@@ -24,6 +24,7 @@ import (
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
@@ -79,6 +80,7 @@ var _ = Describe("Route manager", func() {
 		rt        *classAwareMockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 		dpConfig  Config
+		routeMgr  *routeManager
 	)
 
 	BeforeEach(func() {
@@ -96,6 +98,26 @@ var _ = Describe("Route manager", func() {
 			MaxIPSetSize:         5,
 			ProgramClusterRoutes: true,
 		}
+
+		routeMgr = newRouteManager(
+			rt,
+			routetable.RouteClassVXLANTunnel,
+			routetable.RouteClassVXLANSameSubnet,
+			proto.IPPoolType_VXLAN,
+			dataplanedefs.VXLANIfaceNameV4,
+			4,
+			1400,
+			dpConfig,
+			logutils.NewSummarizer("test"),
+			dataplane,
+		)
+		routeMgr.setTunnelRouteFunc(func(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
+			return &routetable.Target{
+				Type:     routetable.TargetTypeVXLAN,
+				RouteKey: routetable.RouteKey{CIDR: cidr},
+				GW:       ip.FromString("10.0.0.1"),
+			}
+		})
 	})
 
 	Describe("with VXLAN, IPIP and no-encap managers sharing one route table", func() {
@@ -183,23 +205,6 @@ var _ = Describe("Route manager", func() {
 	})
 
 	Describe("parent interface address updates", func() {
-		var routeMgr *routeManager
-
-		BeforeEach(func() {
-			routeMgr = newRouteManager(
-				rt,
-				routetable.RouteClassVXLANTunnel,
-				routetable.RouteClassVXLANSameSubnet,
-				proto.IPPoolType_VXLAN,
-				dataplanedefs.VXLANIfaceNameV4,
-				4,
-				1400,
-				dpConfig,
-				logutils.NewSummarizer("test"),
-				dataplane,
-			)
-		})
-
 		// The device-sync goroutine drains tunnelChangedC and takes
 		// parentDeviceLock itself, so updateParentIfaceAddr must not block while
 		// holding that lock: if it did, back-to-back updates from the dataplane
@@ -228,6 +233,68 @@ var _ = Describe("Route manager", func() {
 			routeMgr.updateParentIfaceAddr("172.0.0.2")
 			Expect(routeMgr.tunnelChangedC).To(Receive())
 			Expect(routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+		})
+	})
+
+	Describe("parent device updates", func() {
+		BeforeEach(func() {
+			routeMgr.OnParentDeviceUpdate("eth0")
+			routeMgr.OnUpdate(&proto.RouteUpdate{
+				Types:       proto.RouteType_REMOTE_WORKLOAD,
+				IpPoolType:  proto.IPPoolType_VXLAN,
+				Dst:         "10.0.1.0/26",
+				DstNodeName: "node2",
+				DstNodeIp:   "172.0.0.3",
+				SameSubnet:  true,
+			})
+			Expect(routeMgr.CompleteDeferredWork()).To(Succeed())
+			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
+				ConsistOf("10.0.1.0/26"))
+		})
+
+		// No caller has a use for an empty parent device name; treating it as a
+		// device change would tear down the same-subnet routes of the device we
+		// are actually using.
+		It("should ignore an empty parent device name", func() {
+			routeMgr.OnParentDeviceUpdate("")
+
+			Expect(routeMgr.parentDevice).To(Equal("eth0"))
+			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
+				ConsistOf("10.0.1.0/26"))
+		})
+
+		It("should move the same-subnet routes when the parent device changes", func() {
+			routeMgr.OnParentDeviceUpdate("eth1")
+			Expect(routeMgr.CompleteDeferredWork()).To(Succeed())
+
+			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(BeEmpty())
+			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth1")).To(
+				ConsistOf("10.0.1.0/26"))
+		})
+	})
+
+	Describe("local IPAM block classification", func() {
+		// CIDRFromString returns a nil CIDR alongside its error, so a route with
+		// an unparseable destination must not reach the CIDR-dependent checks.
+		It("should not panic on a route with an unparseable destination", func() {
+			Expect(routeMgr.routeIsLocalBlock(&proto.RouteUpdate{
+				Types:      proto.RouteType_LOCAL_WORKLOAD,
+				IpPoolType: proto.IPPoolType_VXLAN,
+				Dst:        "not-a-cidr",
+			})).To(BeFalse())
+		})
+
+		It("should treat a block CIDR as a local block but not an exact route", func() {
+			Expect(routeMgr.routeIsLocalBlock(&proto.RouteUpdate{
+				Types:      proto.RouteType_LOCAL_WORKLOAD,
+				IpPoolType: proto.IPPoolType_VXLAN,
+				Dst:        "10.0.1.0/26",
+			})).To(BeTrue())
+			Expect(routeMgr.routeIsLocalBlock(&proto.RouteUpdate{
+				Types:      proto.RouteType_LOCAL_WORKLOAD,
+				IpPoolType: proto.IPPoolType_VXLAN,
+				Dst:        "10.0.1.1/32",
+			})).To(BeFalse())
 		})
 	})
 })
