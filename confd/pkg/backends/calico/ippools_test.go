@@ -25,6 +25,7 @@ import (
 
 	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -81,8 +82,8 @@ func Test_processIPPoolsV4(t *testing.T) {
 		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { krt_tunnel=""; accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { krt_tunnel=""; accept; }`,
+		`  if (net ~ 10.14.0.0/16) then { accept; }`,
+		`  if (net ~ 10.15.0.0/16) then { accept; }`,
 		// IPv4 VXLAN Encapsulation cases.
 		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
@@ -124,7 +125,7 @@ func Test_processIPPoolsV4(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -177,7 +178,7 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if config.KernelFilterForIPPools != nil {
@@ -246,7 +247,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -268,7 +269,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 	}
 }
 
-func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv4 IPIP Encapsulation cases.
 		`  if (net ~ 10.10.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
@@ -314,17 +315,16 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -345,7 +345,7 @@ func Test_processIPPoolsV4_BGPDisabledWithinCluster(t *testing.T) {
 	}
 }
 
-func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
+func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	forKernelStatements := []string{
 		// IPv6 IPIP Encapsulation cases.
 		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
@@ -390,17 +390,16 @@ func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -419,6 +418,158 @@ func Test_processIPPoolsV6_BGPDisabledWithinCluster(t *testing.T) {
 	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
+	}
+}
+
+func Test_processWireguardPeerFilterV4(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4":        "10.0.0.1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v4": "192.168.1.1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v4": "192.168.1.2",
+
+		"/calico/bgp/v1/host/remote-nowg/ip_addr_v4": "10.0.0.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.2) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+func Test_processWireguardPeerFilterV6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v6":        "fd00::1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v6": "fd01::1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v6":        "fd00::2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v6": "fd01::2",
+
+		"/calico/bgp/v1/host/remote-nowg/ip_addr_v6": "fd00::3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 6)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = fd00::2) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+func Test_processWireguardPeerFilter_NoWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/remote-a/ip_addr_v4":   "10.0.0.2",
+		"/calico/bgp/v1/host/remote-b/ip_addr_v4":   "10.0.0.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	if len(config.WireguardPeerKernelFilter) != 0 {
+		t.Errorf("Expected empty WireguardPeerKernelFilter, got: %#v",
+			config.WireguardPeerKernelFilter)
+	}
+}
+
+func Test_processWireguardPeerFilter_AllWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4":        "10.0.0.1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v4": "192.168.1.1",
+
+		"/calico/bgp/v1/host/remote-a/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-a/wireguard_addr_v4": "192.168.1.2",
+
+		"/calico/bgp/v1/host/remote-b/ip_addr_v4":        "10.0.0.3",
+		"/calico/bgp/v1/host/remote-b/wireguard_addr_v4": "192.168.1.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.2) then { reject; } # WireGuard routes handled by Felix.`,
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.3) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+	slices.Sort(expected)
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+// Test_processWireguardPeerFilter_LocalNoWireguard covers a mixed cluster where
+// the local node isn't running WireGuard but a remote peer is. The local node
+// routes to that peer over the normal BGP path, so we must not reject BIRD's
+// kernel route for it.
+func Test_processWireguardPeerFilter_LocalNoWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4": "10.0.0.1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v4": "192.168.1.2",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	if len(config.WireguardPeerKernelFilter) != 0 {
+		t.Errorf("Expected empty WireguardPeerKernelFilter, got: %#v",
+			config.WireguardPeerKernelFilter)
 	}
 }
 

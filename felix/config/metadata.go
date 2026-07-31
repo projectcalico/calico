@@ -436,7 +436,7 @@ func groupForName(name string) string {
 func loadV3APIMetadata() (map[string]YAMLInfo, error) {
 	out := make(map[string]YAMLInfo)
 
-	// Some data we need to get from teh struct directly (namely, the Felix
+	// Some data we need to get from the struct directly (namely, the Felix
 	// parameter name mapping).
 	yamlNameToStructInfo := parseStruct()
 

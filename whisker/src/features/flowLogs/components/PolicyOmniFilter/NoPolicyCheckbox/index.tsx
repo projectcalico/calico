@@ -6,7 +6,8 @@ import {
     FieldGroup,
     FieldLabel,
 } from '@/components/common/shadcn/field';
-import { Badge } from '@chakra-ui/react';
+import { InfoOutlineIcon } from '@chakra-ui/icons';
+import { Badge, Tooltip } from '@chakra-ui/react';
 
 type NoPolicyCheckboxProps = {
     value: boolean;
@@ -24,24 +25,32 @@ const NoPolicyCheckbox = ({ value, onChange }: NoPolicyCheckboxProps) => (
                 />
             </div>
             <FieldContent>
-                <FieldLabel
-                    htmlFor='no-policy-checkbox-desc'
-                    className='cursor-pointer'
-                >
-                    Filter by{' '}
-                    <Badge
-                        fontWeight='medium'
-                        textTransform='none'
-                        fontSize='sm'
-                        variant='solid'
+                <div className='flex items-center gap-2'>
+                    <FieldLabel
+                        htmlFor='no-policy-checkbox-desc'
+                        className='cursor-pointer'
                     >
-                        No Policy
-                    </Badge>
-                </FieldLabel>
+                        Filter by{' '}
+                        <Badge
+                            fontWeight='medium'
+                            textTransform='none'
+                            fontSize='sm'
+                            variant='solid'
+                        >
+                            No Policy
+                        </Badge>
+                    </FieldLabel>
+                    <Tooltip label='Show flows where only default profile rules were evaluated, with no explicit policies applied.'>
+                        <InfoOutlineIcon
+                            color='experimental-token-fg-subtle'
+                            boxSize={3}
+                        />
+                    </Tooltip>
+                </div>
                 <FieldDescription>
                     {value
-                        ? 'Uncheck to add a new query.'
-                        : 'This filter will clear all existing queries.'}
+                        ? 'Uncheck to add a new filter.'
+                        : 'This filter will clear any existing filters.'}
                 </FieldDescription>
             </FieldContent>
         </Field>

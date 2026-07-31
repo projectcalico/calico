@@ -3305,6 +3305,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, k8s.BackendAPIGroup(&config.Spec))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
+			c.Env = append(os.Environ(), "CNI_COMMAND=VERSION")
 			stdin, err := c.StdinPipe()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -3342,6 +3343,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), testNodeName, k8s.BackendAPIGroup(&config.Spec))
 			pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 			c := exec.Command(pluginPath, "-t")
+			c.Env = append(os.Environ(), "CNI_COMMAND=VERSION")
 			stdin, err := c.StdinPipe()
 			Expect(err).ToNot(HaveOccurred())
 

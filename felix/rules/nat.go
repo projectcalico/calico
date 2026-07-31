@@ -54,12 +54,12 @@ func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol str
 
 func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action generictables.Action) generictables.Rule {
 	ipConf := r.ipSetConfig(ipVersion)
-	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllPools)
+	networkIPsSetName := ipConf.NameForMainIPSet(IPSetIDNetworkPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 
 	match := r.NewMatch().
 		SourceIPSet(masqIPsSetName).
-		NotDestIPSet(allIPsSetName)
+		NotDestIPSet(networkIPsSetName)
 
 	if r.NATOutgoingExclusions == string(apiv3.NATOutgoingExclusionsIPPoolsAndHostIPs) {
 		allHostsIPsSetName := ipConf.NameForMainIPSet(IPSetIDAllHostNets)

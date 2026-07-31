@@ -16,7 +16,7 @@ import (
 // GlobalNetworkSetApplyConfiguration represents a declarative configuration of the GlobalNetworkSet type for use
 // with apply.
 type GlobalNetworkSetApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *GlobalNetworkSetSpecApplyConfiguration `json:"spec,omitempty"`
 }

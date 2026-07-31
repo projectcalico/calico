@@ -18,7 +18,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -85,17 +86,27 @@ func e2eLatency(cmd *cobra.Command, args []string) {
 		log.WithError(err).Error("Failed to list network interfaces")
 	}
 
-	table := tablewriter.NewWriter(cmd.OutOrStdout())
-	table.SetHeader([]string{"IFACE", "INGRESS new", "#", "INGRESS est", "#", "EGRESS new", "#", "EGRESS est", "#"})
-
-	var rows [][]string
+	t := table.NewWriter()
+	t.SetOutputMirror(cmd.OutOrStdout())
+	t.AppendHeader(table.Row{"IFACE", "INGRESS new", "#", "INGRESS est", "#", "EGRESS new", "#", "EGRESS est", "#"})
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 1, AutoMerge: true},
+		{Number: 2, Align: text.AlignRight},
+		{Number: 3, Align: text.AlignRight},
+		{Number: 4, Align: text.AlignRight},
+		{Number: 5, Align: text.AlignRight},
+		{Number: 6, Align: text.AlignRight},
+		{Number: 7, Align: text.AlignRight},
+		{Number: 8, Align: text.AlignRight},
+		{Number: 9, Align: text.AlignRight},
+	})
 
 	for _, i := range ifaces {
 		k := profiling.Key{
 			Ifindex: i.Index,
 		}
 
-		r := []string{i.Name}
+		r := table.Row{i.Name}
 		hit := false
 
 		for kind := range 4 {
@@ -109,19 +120,16 @@ func e2eLatency(cmd *cobra.Command, args []string) {
 			hit = true
 
 			if v.Samples != 0 {
-				r = append(r, fmt.Sprintf("%.3f ns", float64(v.Time)/float64(v.Samples)), fmt.Sprintf("%d", v.Samples))
+				r = append(r, fmt.Sprintf("%.3f ns", float64(v.Time)/float64(v.Samples)), v.Samples)
 			} else {
 				r = append(r, "---", "0")
 			}
 		}
 
 		if hit {
-			rows = append(rows, r)
+			t.AppendRow(r)
 		}
 	}
 
-	table.AppendBulk(rows)
-	table.SetAutoMergeCells(true)
-	table.SetAutoMergeCellsByColumnIndex([]int{0})
-	table.Render()
+	t.Render()
 }

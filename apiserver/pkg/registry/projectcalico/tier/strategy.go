@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,9 +43,14 @@ func (apiServerStrategy) NamespaceScoped() bool {
 }
 
 func (apiServerStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+	tier := obj.(*calico.Tier)
+	tier.Status = calico.TierStatus{}
 }
 
 func (apiServerStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newTier := obj.(*calico.Tier)
+	oldTier := old.(*calico.Tier)
+	newTier.Status = oldTier.Status
 }
 
 func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
@@ -53,11 +58,11 @@ func (apiServerStrategy) Validate(ctx context.Context, obj runtime.Object) field
 	// return validation.ValidateTier(obj.(*calico.Tier))
 }
 
-func (apiServerStrategy) AllowCreateOnUpdate() bool {
+func (apiServerStrategy) AllowCreateOnUpdate(ctx context.Context) bool {
 	return false
 }
 
-func (apiServerStrategy) AllowUnconditionalUpdate() bool {
+func (apiServerStrategy) AllowUnconditionalUpdate(ctx context.Context) bool {
 	return false
 }
 
@@ -75,6 +80,25 @@ func (apiServerStrategy) Canonicalize(obj runtime.Object) {
 func (apiServerStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 	// return validation.ValidateTierUpdate(obj.(*calico.Tier), old.(*calico.Tier))
+}
+
+type apiServerStatusStrategy struct {
+	apiServerStrategy
+}
+
+func NewStatusStrategy(strategy apiServerStrategy) apiServerStatusStrategy {
+	return apiServerStatusStrategy{strategy}
+}
+
+func (apiServerStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	newTier := obj.(*calico.Tier)
+	oldTier := old.(*calico.Tier)
+	newTier.Spec = oldTier.Spec
+	newTier.Labels = oldTier.Labels
+}
+
+func (apiServerStatusStrategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+	return field.ErrorList{}
 }
 
 func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {

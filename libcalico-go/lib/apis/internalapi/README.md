@@ -1,6 +1,6 @@
 # libcalico-go/lib/apis/internalapi
 
-Internal Calico resource types that are not part of the public API (`api/pkg/apis/projectcalico/v3`).
+Internal Calico resource types that are not part of the public API (`api/apis/projectcalico/v3`).
 
 Contains types that are either stored in Kubernetes CRDs but not exposed to end users, and/or types that are used internally
 by Calico but are not backed by CRDs (i.e., WorkloadEndpoint which is stored in etcd mode, but backed by a Kubernetes Pod when using

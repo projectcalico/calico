@@ -1,4 +1,4 @@
-// Copyright (c) 2018,2020-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 var _ = Describe("profileDecoder", func() {
@@ -138,23 +137,7 @@ type passthruCallbackRecorder struct {
 	nsRemoves []types.NamespaceID
 }
 
-func (p *passthruCallbackRecorder) OnHostIPUpdate(hostname string, ip *net.IP) {
-	Fail("HostIPUpdate received")
-}
-
-func (p *passthruCallbackRecorder) OnHostIPRemove(hostname string) {
-	Fail("HostIPRemove received")
-}
-
-func (p *passthruCallbackRecorder) OnHostIPv6Update(hostname string, ip *net.IP) {
-	Fail("HostIPv6Update received")
-}
-
-func (p *passthruCallbackRecorder) OnHostIPv6Remove(hostname string) {
-	Fail("HostIPv6Remove received")
-}
-
-func (p *passthruCallbackRecorder) OnHostMetadataUpdate(hostname string, ip4 *net.IPNet, ip6 *net.IPNet, asnumber string, labels map[string]string) {
+func (p *passthruCallbackRecorder) OnHostMetadataUpdate(hostname string, info *calc.HostInfo) {
 	Fail("HostUpdate received")
 }
 

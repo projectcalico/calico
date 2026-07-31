@@ -15,8 +15,11 @@
 package validation_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,10 +31,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	sigsyaml "sigs.k8s.io/yaml"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
@@ -100,12 +103,25 @@ func installAdmissionPolicies(c client.Client) error {
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
-		obj := &unstructured.Unstructured{}
-		if err := sigsyaml.Unmarshal(data, &obj.Object); err != nil {
-			return fmt.Errorf("unmarshaling %s: %w", entry.Name(), err)
-		}
-		if err := c.Create(context.Background(), obj); err != nil {
-			return fmt.Errorf("creating %s: %w", entry.Name(), err)
+		// An admission file may contain multiple YAML documents (e.g. a policy
+		// and its binding), so decode and create each one. Installing only the
+		// first document would, for example, create a ValidatingAdmissionPolicy
+		// without its binding, leaving the policy unenforced.
+		dec := utilyaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+		for {
+			obj := &unstructured.Unstructured{}
+			if err := dec.Decode(&obj.Object); err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return fmt.Errorf("decoding %s: %w", entry.Name(), err)
+			}
+			if len(obj.Object) == 0 {
+				continue
+			}
+			if err := c.Create(context.Background(), obj); err != nil {
+				return fmt.Errorf("creating %s: %w", entry.Name(), err)
+			}
 		}
 	}
 	return nil

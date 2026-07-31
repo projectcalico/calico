@@ -32,10 +32,10 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 	. "github.com/projectcalico/calico/felix/labelindex"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	calinet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -914,7 +914,7 @@ var (
 )
 
 func TestNamedPortIndex(t *testing.T) {
-	logutils.ConfigureLoggingForTestingT(t)
+	logrusr.ConfigureLoggingForTestingT(t)
 	log.SetLevel(log.DebugLevel)
 
 	for _, state := range baseTests {
@@ -950,7 +950,7 @@ func TestNamedPortIndex(t *testing.T) {
 				}
 				t.Run(strings.Join(names, " THEN "),
 					func(t *testing.T) {
-						logutils.ConfigureLoggingForTestingT(t)
+						logrusr.ConfigureLoggingForTestingT(t)
 						RegisterTestingT(t)
 						idx := NewSelectorAndNamedPortIndex(false)
 						rec := newRecorder()
@@ -1426,6 +1426,53 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 			Expect(ok).To(BeFalse())
 			Expect(set).To(HaveLen(0))
 		})
+	})
+})
+
+// nftables interval sets reject overlapping members, so in nftables mode the calc graph
+// enables the overlap suppressor (suppressOverlaps=true) to coalesce overlapping CIDRs
+// before they reach the dataplane. Without it, Felix livelocks and panics (#12851).
+var _ = Describe("SelectorAndNamedPortIndex overlap suppression", func() {
+	// Three covering CIDRs: 12.0.0.0/8 covers 12.1.0.0/16 covers 12.1.2.142/32.
+	feedOverlappingNetworkSet := func(uut *SelectorAndNamedPortIndex) *testRecorder {
+		rec := newRecorder()
+		uut.OnMemberAdded = rec.OnMemberAdded
+		uut.OnMemberRemoved = rec.OnMemberRemoved
+		uut.OnUpdate(api.Update{
+			KVPair: model.KVPair{
+				Key: model.NetworkSetKey{Name: "netset-overlap"},
+				Value: &model.NetworkSet{
+					Nets: []calinet.IPNet{
+						calinet.MustParseNetwork("12.1.2.142/32"),
+						calinet.MustParseNetwork("12.1.0.0/16"),
+						calinet.MustParseNetwork("12.0.0.0/8"),
+					},
+					Labels: uniquelabels.Make(map[string]string{"a": "b"}),
+				},
+			},
+		})
+		s, err := selector.Parse("a == 'b'")
+		Expect(err).ToNot(HaveOccurred())
+		uut.UpdateIPSet("overlap", s, ipsetmember.ProtocolNone, "")
+		return rec
+	}
+
+	members := func(rec *testRecorder) []string {
+		var out []string
+		for m := range rec.ipsets["overlap"] {
+			out = append(out, m.ToProtobufFormat())
+		}
+		return out
+	}
+
+	It("coalesces overlapping CIDRs to the covering CIDR when enabled", func() {
+		rec := feedOverlappingNetworkSet(NewSelectorAndNamedPortIndex(true))
+		Expect(members(rec)).To(ConsistOf("12.0.0.0/8"))
+	})
+
+	It("keeps overlapping CIDRs when disabled", func() {
+		rec := feedOverlappingNetworkSet(NewSelectorAndNamedPortIndex(false))
+		Expect(members(rec)).To(ConsistOf("12.0.0.0/8", "12.1.0.0/16", "12.1.2.142/32"))
 	})
 })
 

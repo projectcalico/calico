@@ -31,7 +31,11 @@ import (
 
 const EPCompDataKindIstio = EndpointComputedDataKind("Istio")
 
-var istioSelector = fmt.Sprintf("%s%s == '%s' && %s != '%s' || %s == '%s'",
+// Scope to pod WorkloadEndpoints only — without this, NetworkSets in
+// ambient namespaces would also contribute CIDRs to all-istio-weps.
+var istioSelector = fmt.Sprintf("%s == '%s' && (%s%s == '%s' && %s != '%s' || %s == '%s')",
+	v3.LabelOrchestrator,
+	v3.OrchestratorKubernetes,
 	conversion.NamespaceLabelPrefix,
 	v3.LabelIstioDataplaneMode,
 	v3.LabelIstioDataplaneModeAmbient,
@@ -67,19 +71,12 @@ func NewIstioCalculator(
 	// IP set.  This will include local and remote endpoints.
 	ipSetCallbacks.OnIPSetAdded(rules.IPSetIDAllIstioWEPs, proto.IPSetUpdate_IP)
 	ipsetMemberIndex.UpdateIPSet(rules.IPSetIDAllIstioWEPs, sel, ipsetmember.ProtocolNone, "")
-	activeRulesCalc.AddExtraComputedSelector(istioSelector)
-	// Piggy-back on the active rules calculator's index of local endpoints
-	// to give us callbacks when a local endpoint is an Istio endpoint. (The
-	// index is expensive so we don't want a second copy here.)
-	activeRulesCalc.RegisterPolicyMatchListener(ic)
+	activeRulesCalc.AddExtraComputedSelector(istioSelector, ic)
 	return ic
 }
 
-func (ic *IstioCalculator) OnPolicyMatch(_ model.PolicyKey, _ model.EndpointKey)        {}
-func (ic *IstioCalculator) OnPolicyMatchStopped(_ model.PolicyKey, _ model.EndpointKey) {}
-
 func (ic *IstioCalculator) OnComputedSelectorMatch(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok && cs == istioSelector {
+	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		// Always pass a newly created or cloned `computedData` instance to the handler.
 		// This ensures the dataplane never receives a mutable object shared elsewhere.
 		ic.onEndpointComputedData(wepKey, EPCompDataKindIstio, &ComputedIstioEndpoint{})
@@ -87,7 +84,7 @@ func (ic *IstioCalculator) OnComputedSelectorMatch(cs string, epKey model.Endpoi
 }
 
 func (ic *IstioCalculator) OnComputedSelectorMatchStopped(cs string, epKey model.EndpointKey) {
-	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok && cs == istioSelector {
+	if wepKey, ok := epKey.(model.WorkloadEndpointKey); ok {
 		ic.onEndpointComputedData(wepKey, EPCompDataKindIstio, nil)
 	}
 }

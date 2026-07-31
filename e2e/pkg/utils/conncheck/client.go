@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,62 @@
 package conncheck
 
 import (
+	"context"
 	"fmt"
+	"io"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
+	e2epod "k8s.io/kubernetes/test/e2e/framework/pod"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
 )
 
-func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
+// Client is a traffic source for connection checks. The default implementation
+// is PodClient, a long-lived sleep pod running in the cluster; ExternalNodeClient
+// runs commands over SSH on a host outside the cluster.
+type Client interface {
+	// ID returns a unique identifier for the client. For pod-backed clients
+	// this is "<namespace>/<name>".
+	ID() string
+
+	// Name returns the human-readable name of the client.
+	Name() string
+
+	// Namespace returns the namespace the client lives in, or nil for
+	// non-cluster clients.
+	Namespace() *v1.Namespace
+
+	// Pod returns the underlying pod, or nil for non-pod clients.
+	Pod() *v1.Pod
+
+	// Deploy creates the underlying resources (e.g. a sleep pod). Called by
+	// ConnectionTester.Deploy. Safe to call multiple times; second call is a
+	// no-op if already deployed.
+	Deploy(ctx context.Context, f *framework.Framework) error
+
+	// Cleanup tears down the resources created by Deploy.
+	Cleanup(ctx context.Context, f *framework.Framework) error
+
+	// WaitReady waits for the client to be ready to send traffic.
+	WaitReady(ctx context.Context, f *framework.Framework) error
+
+	// Exec runs a one-shot shell command on the client and returns the
+	// combined output and an error if the command exited non-zero.
+	Exec(ctx context.Context, cmd string) (string, error)
+
+	// ExecStream runs a long-lived command, writing combined output to w.
+	// Used for continuous probes (ExpectContinuously). Returns a stop
+	// function that terminates the remote command and waits for the
+	// streaming goroutine to drain.
+	ExecStream(ctx context.Context, cmd []string, w io.Writer) (stop func() error, err error)
+}
+
+// NewClient builds a PodClient. Most tests should use this; for an external
+// host see NewExternalNodeClient.
+func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) Client {
 	if ns == nil {
 		msg := fmt.Sprintf("Namespace is required for client %s", id)
 		framework.Fail(msg, 1)
@@ -33,7 +80,7 @@ func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
 		framework.Fail(msg, 1)
 	}
 
-	c := &Client{
+	c := &PodClient{
 		name:      id,
 		namespace: ns,
 	}
@@ -43,7 +90,8 @@ func NewClient(id string, ns *v1.Namespace, opts ...ClientOption) *Client {
 	return c
 }
 
-type Client struct {
+// PodClient is a pod-backed Client.
+type PodClient struct {
 	name        string
 	namespace   *v1.Namespace
 	labels      map[string]string
@@ -53,7 +101,7 @@ type Client struct {
 
 // composedCustomizer returns a single customizer function that applies all
 // registered customizers in order, or nil if none are registered.
-func (c *Client) composedCustomizer() func(*v1.Pod) {
+func (c *PodClient) composedCustomizer() func(*v1.Pod) {
 	if len(c.customizers) == 0 {
 		return nil
 	}
@@ -64,15 +112,19 @@ func (c *Client) composedCustomizer() func(*v1.Pod) {
 	}
 }
 
-func (c *Client) ID() string {
+func (c *PodClient) ID() string {
 	return fmt.Sprintf("%s/%s", c.namespace.Name, c.name)
 }
 
-func (c *Client) Name() string {
+func (c *PodClient) Name() string {
 	return c.name
 }
 
-func (c *Client) Pod() *v1.Pod {
+func (c *PodClient) Namespace() *v1.Namespace {
+	return c.namespace
+}
+
+func (c *PodClient) Pod() *v1.Pod {
 	if c.pod == nil {
 		msg := fmt.Sprintf("No pod is running for client %s/%s", c.namespace.Name, c.name)
 		framework.Fail(msg, 1)
@@ -80,17 +132,68 @@ func (c *Client) Pod() *v1.Pod {
 	return c.pod
 }
 
-type ClientOption func(*Client) error
+func (c *PodClient) Deploy(ctx context.Context, f *framework.Framework) error {
+	if c.pod != nil {
+		return nil
+	}
+	pod, err := CreateClientPod(f, c.namespace, c.name, c.labels, c.composedCustomizer())
+	if err != nil {
+		return err
+	}
+	c.pod = pod
+	return nil
+}
+
+func (c *PodClient) WaitReady(ctx context.Context, f *framework.Framework) error {
+	if c.pod == nil {
+		return fmt.Errorf("PodClient %s/%s: WaitReady called before Deploy", c.namespace.Name, c.name)
+	}
+	if err := e2epod.WaitTimeoutForPodRunningInNamespace(ctx, f.ClientSet, c.pod.Name, c.pod.Namespace, podReadyTimeout(ctx)); err != nil {
+		return err
+	}
+	// Refresh the pod so callers see NodeName / PodIP.
+	p, err := f.ClientSet.CoreV1().Pods(c.namespace.Name).Get(ctx, c.pod.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	c.pod = p
+	return nil
+}
+
+func (c *PodClient) Cleanup(ctx context.Context, f *framework.Framework) error {
+	if c.pod == nil {
+		return nil
+	}
+	err := f.ClientSet.CoreV1().Pods(c.namespace.Name).Delete(ctx, c.pod.Name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	if err := e2epod.WaitForPodNotFoundInNamespace(ctx, f.ClientSet, c.pod.Name, c.pod.Namespace, deletionTimeout); err != nil {
+		return err
+	}
+	c.pod = nil
+	return nil
+}
+
+func (c *PodClient) Exec(ctx context.Context, cmd string) (string, error) {
+	return execShellInPod(c.Pod(), cmd)
+}
+
+func (c *PodClient) ExecStream(ctx context.Context, cmd []string, w io.Writer) (stop func() error, err error) {
+	return execStreamInPod(ctx, c.Pod(), cmd, w)
+}
+
+type ClientOption func(*PodClient) error
 
 func WithClientLabels(labels map[string]string) ClientOption {
-	return func(c *Client) error {
+	return func(c *PodClient) error {
 		c.labels = labels
 		return nil
 	}
 }
 
 func WithClientCustomizer(customizer func(pod *v1.Pod)) ClientOption {
-	return func(c *Client) error {
+	return func(c *PodClient) error {
 		c.customizers = append(c.customizers, customizer)
 		return nil
 	}

@@ -113,15 +113,23 @@ func (m *resourceMatcher) NegatedFailureMessage(actual any) (message string) {
 	return
 }
 
-// TestResourceWatch is a test helper used to validate a set of events are received
-// from a watcher.  The caller creates a watch.Interface from the resource-specific
-// client and passes that to TestResourceWatch to create a TestResourceWatchInterface.
-func NewTestResourceWatch(datastoreType apiconfig.DatastoreType, w watch.Interface) TestResourceWatchInterface {
+// NewTestResourceWatch is a test helper used to validate a set of events are
+// received from a watcher. The caller creates a watch.Interface from the
+// resource-specific client and passes that in to get a TestResourceWatchInterface.
+// Any names passed in ignoredNames are filtered out of the received events, which
+// is useful for watches that return a snapshot of resources the caller does not
+// control - for example the built-in tiers, which always exist and cannot be deleted.
+func NewTestResourceWatch(datastoreType apiconfig.DatastoreType, w watch.Interface, ignoredNames ...string) TestResourceWatchInterface {
+	ignored := map[string]bool{}
+	for _, n := range ignoredNames {
+		ignored[n] = true
+	}
 	tw := &testResourceWatcher{
 		datastoreType: datastoreType,
 		watch:         w,
 		events:        []watch.Event{},
 		watchClosedCh: make(chan struct{}),
+		ignoredNames:  ignored,
 	}
 	go tw.run()
 	return tw
@@ -154,6 +162,10 @@ type testResourceWatcher struct {
 	watchClosedCh chan struct{}
 	closing       bool
 	lock          sync.Mutex
+
+	// ignoredNames are resource names whose events are dropped before they reach
+	// the events list, so they don't count towards the expected event set.
+	ignoredNames map[string]bool
 }
 
 // run is the main loop that consumes and stores the watch events.
@@ -161,6 +173,9 @@ func (t *testResourceWatcher) run() {
 	for {
 		select {
 		case event := <-t.watch.ResultChan():
+			if t.ignored(event) {
+				continue
+			}
 			t.lock.Lock()
 			t.events = append(t.events, event)
 			t.lock.Unlock()
@@ -169,6 +184,22 @@ func (t *testResourceWatcher) run() {
 			return
 		}
 	}
+}
+
+// ignored reports whether the event is for a resource the caller asked to skip.
+func (t *testResourceWatcher) ignored(e watch.Event) bool {
+	if len(t.ignoredNames) == 0 {
+		return false
+	}
+	obj := e.Object
+	if obj == nil {
+		obj = e.Previous
+	}
+	accessor, ok := obj.(v1.ObjectMetaAccessor)
+	if !ok {
+		return false
+	}
+	return t.ignoredNames[accessor.GetObjectMeta().GetName()]
 }
 
 // Stop closes down the Watcher and the main watch loop.

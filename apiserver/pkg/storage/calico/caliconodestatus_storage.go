@@ -20,6 +20,17 @@ import (
 // NewCalicoNodeStatusStorage creates a new libcalico-based storage.Interface implementation for CalicoNodeStatus
 func NewCalicoNodeStatusStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	c := CreateClientFromConfig()
+	return newCalicoNodeStatusStorage(opts, c, false)
+}
+
+// NewCalicoNodeStatusStatusStorage creates a storage that uses the UpdateStatus
+// method for writes, ensuring the status subresource is used when persisting changes.
+func NewCalicoNodeStatusStatusStorage(opts Options) (registry.DryRunnableStorage, factory.DestroyFunc) {
+	c := CreateClientFromConfig()
+	return newCalicoNodeStatusStorage(opts, c, true)
+}
+
+func newCalicoNodeStatusStorage(opts Options, c clientv3.Interface, forStatus bool) (registry.DryRunnableStorage, factory.DestroyFunc) {
 	createFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.CalicoNodeStatus)
@@ -28,6 +39,9 @@ func NewCalicoNodeStatusStorage(opts Options) (registry.DryRunnableStorage, fact
 	updateFn := func(ctx context.Context, c clientv3.Interface, obj resourceObject, opts clientOpts) (resourceObject, error) {
 		oso := opts.(options.SetOptions)
 		res := obj.(*api.CalicoNodeStatus)
+		if forStatus {
+			return c.CalicoNodeStatus().UpdateStatus(ctx, res, oso)
+		}
 		return c.CalicoNodeStatus().Update(ctx, res, oso)
 	}
 	getFn := func(ctx context.Context, c clientv3.Interface, ns string, name string, opts clientOpts) (resourceObject, error) {
@@ -78,6 +92,7 @@ func (gc CalicoNodeStatusConverter) convertToLibcalico(aapiObj runtime.Object) r
 	lcgCalicoNodeStatus.Kind = api.KindCalicoNodeStatus
 	lcgCalicoNodeStatus.APIVersion = api.GroupVersionCurrent
 	lcgCalicoNodeStatus.Spec = aapiCalicoNodeStatus.Spec
+	lcgCalicoNodeStatus.Status = aapiCalicoNodeStatus.Status
 	return lcgCalicoNodeStatus
 }
 

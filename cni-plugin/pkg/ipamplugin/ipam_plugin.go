@@ -43,20 +43,20 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/upgrade"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam/vmipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func Main(version string) {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("ipam")
+	logrusr.ConfigureFormatter("ipam")
 
 	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
@@ -244,6 +244,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 			HandleID: &handleID,
 			Hostname: nodename,
 			Attrs:    attrs,
+			// A specific-IP request (the ipAddrs annotation) is a workload
+			// allocation, same as the auto-assign path below; declare it so
+			// IPAM enforces the pool's AllowedUses.
+			IntendedUse: v3.IPPoolAllowedUseWorkload,
 		}
 
 		// For VMI pods with persistence enabled, limit the IPs per handle so that parallel calls for the same VM don't over-allocate (instead one will fail and then the retry will go through the IP persistence path).
@@ -818,6 +822,11 @@ func cmdDel(args *skel.CmdArgs) error {
 				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 					// IP was already released by someone else, treat as no attributes remaining.
 					logger.WithField("ip", ip).Info("IP already released during cleanup, skipping")
+					continue
+				}
+				if _, ok := err.(cerrors.ErrorIPInCooldown); ok {
+					// IP was already released, and is in cooldown.
+					logger.WithField("ip", ip).Info("IP already released during cleanup and in cooldown, skipping")
 					continue
 				}
 				logger.WithError(err).WithField("ip", ip).Error("Failed to get assignment attributes for post-cleanup check")

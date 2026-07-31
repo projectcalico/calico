@@ -236,6 +236,15 @@ rules:
       - watch
   - apiGroups:
       - apps
+    resources:
+      # The status manager reads ReplicaSets to find a Deployment's active revision.
+      - replicasets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
     resourceNames:
       - tigera-operator
     resources:
@@ -408,9 +417,13 @@ rules:
     resources:
       - mutatingwebhookconfigurations
     resourceNames:
+      - envoy-gateway-topology-injector.calico-system
+      # New install lives in calico-system; the .tigera-gateway entry is kept so the
+      # operator can also delete the legacy webhook on upgrade from 3.x.
       - envoy-gateway-topology-injector.tigera-gateway
     verbs:
       - update
+      - delete
   - apiGroups:
       - admissionregistration.k8s.io
     resources:
@@ -476,6 +489,20 @@ rules:
       - get
       - list
       - watch
+  # The operator manages ValidatingAdmissionPolicy resources protecting built-in
+  # Calico tiers (e.g. protect-builtin-tiers) when serving v3 CRDs (k8s 1.30+).
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingadmissionpolicies
+      - validatingadmissionpolicybindings
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
   # Add the appropriate pod security policy permissions
   - apiGroups:
       - policy
@@ -496,12 +523,13 @@ rules:
       - create
       - update
       - delete
-  # The operator needs to manage NetworkPolicies and GlobalNetworkPolicies via the projectcalico.org API group.
+  # The operator needs to manage NetworkPolicies, GlobalNetworkPolicies, and NetworkSets via the projectcalico.org API group.
   - apiGroups:
       - projectcalico.org
     resources:
       - networkpolicies
       - globalnetworkpolicies
+      - networksets
     verbs:
       - get
       - list
@@ -575,7 +603,7 @@ rules:
       - tlsroutes.gateway.networking.k8s.io
       - udproutes.gateway.networking.k8s.io
       - xbackendtrafficpolicies.gateway.networking.x-k8s.io
-      - xlistenersets.gateway.networking.x-k8s.io
+      - listenersets.gateway.networking.k8s.io
       - xmeshes.gateway.networking.x-k8s.io
       - backends.gateway.envoyproxy.io
       - backendtrafficpolicies.gateway.envoyproxy.io
@@ -626,6 +654,16 @@ rules:
       - update
     resourceNames:
       - tigera-gateway-api-gateway-helm-certgen
+  # 4. The operator needs to be able to read Gateway resources to determine namespaces to apply
+  # CIG resources to.
+  - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - gateways
+    verbs:
+      - list
+      - get
+      - watch
   # For monitoring KubeVirt live migration.  The operator does not do this itself, but needs to
   # be able to assign this RBAC to Typha and calico-node.
   - apiGroups:
@@ -739,6 +777,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds=true
+            - -zap-devel=false
           volumeMounts:
             - name: var-lib-calico
               readOnly: true

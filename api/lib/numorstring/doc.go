@@ -18,5 +18,6 @@ format may be represented by either a number or a string.
 */
 
 // +k8s:openapi-gen=true
+// +k8s:openapi-model-package=com.github.projectcalico.api.v3.lib.numorstring
 
 package numorstring

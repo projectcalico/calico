@@ -111,26 +111,36 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 			return out
 		}, "10s", "200ms").Should(And(
 			ContainSubstring("Policy: GlobalNetworkPolicy policy-tcp"),
-			ContainSubstring("IP sets: src="),
+			ContainSubstring("Match: proto=tcp"),
 		))
 
 		outStr := out
 		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: allow"))
-		// The source selector matches w[1], so the resolved IP set should
-		// contain w[1]'s IP.  If resolution fails (e.g. map not available)
-		// it falls back to a hex ID, so accept either form.
-		ipSetFound := false
+		// The plain (non-asm) dump should surface the rule's match criteria
+		// (protocol, nets and ports) on a single positive "Match:" line.  The
+		// source selector matches w[1], so its IP set is folded into the src
+		// token; the open brace below is intentional (the resolved member or
+		// a hex-ID fallback follows the literal nets).
+		Expect(outStr).To(ContainSubstring("Match: proto=tcp"))
+		Expect(outStr).To(ContainSubstring("src={11.0.0.8/32,10.0.0.8/32"))
+		Expect(outStr).To(ContainSubstring("dst={12.0.0.8/32,13.0.0.8/32}"))
+		Expect(outStr).To(ContainSubstring("sports={8055,100-105}"))
+		Expect(outStr).To(ContainSubstring("dports={9055,200-205}"))
+		// The folded source IP set should resolve to w[1]'s IP within the src
+		// token.  If resolution fails (e.g. map not available) it falls back to
+		// a hex ID, so accept either form.
+		matchFound := false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
-			if strings.Contains(tmp, "IP sets: src=") {
-				log.WithField("line", tmp).Info("Examining line for IP set")
+			if strings.Contains(tmp, "Match: proto=tcp") {
+				log.WithField("line", tmp).Info("Examining Match line for resolved IP set")
 				Expect(tmp).To(SatisfyAny(
 					ContainSubstring(w[1].IP),
-					MatchRegexp(`0x[0-9a-fA-F]+`),
-				), "Resolved IP set should contain workload IP %s or hex ID fallback", w[1].IP)
-				ipSetFound = true
+					MatchRegexp(`src=\{[^}]*0x[0-9a-fA-F]+`),
+				), "src token should include resolved IP set member %s or hex ID fallback", w[1].IP)
+				matchFound = true
 			}
 		}
-		Expect(ipSetFound).To(BeTrue(), fmt.Sprintf("IP set was missing in output: %q", out))
+		Expect(matchFound).To(BeTrue(), fmt.Sprintf("Match line was missing in output: %q", out))
 		// check ingress policy dump with eBPF assembler code
 		Eventually(func() string {
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "ingress", "-a")
@@ -149,6 +159,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(outStr).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
+		// The asm (-a) dump shows the per-criterion match comments inline, so
+		// the summary "Match:" line is intentionally omitted there.
+		Expect(outStr).NotTo(ContainSubstring("Match: "))
 
 		// check egress policy dump with eBPF assembler code
 		out = ""
@@ -160,20 +173,30 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 
 		outStr = string(out)
 		Expect(outStr).To(ContainSubstring("Rule: policy-tcp  Action: deny"))
-		// The egress rule has NotSelector on w[1], so the resolved IP set
-		// should contain w[1]'s IP.  Accept hex fallback too.
-		ipSetFound = false
+		// The plain (non-asm) dump should surface the egress rule's match
+		// criteria, including the negated protocol/nets/ports.  The !dst brace
+		// is left open below because the NotSelector IP set is folded into the
+		// !dst token after the literal nets.
+		Expect(outStr).To(ContainSubstring("proto=udp"))
+		Expect(outStr).To(ContainSubstring("!proto=tcp"))
+		Expect(outStr).To(ContainSubstring("!src={11.0.0.8/32,10.0.0.8/32}"))
+		Expect(outStr).To(ContainSubstring("!dst={12.0.0.8/32,13.0.0.8/32"))
+		Expect(outStr).To(ContainSubstring("!sports={8055,100-105}"))
+		Expect(outStr).To(ContainSubstring("!dports={9055,200-205}"))
+		// The egress rule has NotSelector on w[1], so the folded IP set should
+		// resolve to w[1]'s IP within the !dst token.  Accept hex fallback too.
+		matchFound = false
 		for tmp := range strings.SplitSeq(outStr, "\n") {
-			if strings.Contains(tmp, "IP sets: !dst=") {
-				log.WithField("line", tmp).Info("Examining line for IP set")
+			if strings.Contains(tmp, "Match: proto=udp") {
+				log.WithField("line", tmp).Info("Examining Match line for resolved IP set")
 				Expect(tmp).To(SatisfyAny(
 					ContainSubstring(w[1].IP),
-					MatchRegexp(`0x[0-9a-fA-F]+`),
-				), "Resolved IP set should contain workload IP %s or hex ID fallback", w[1].IP)
-				ipSetFound = true
+					MatchRegexp(`!dst=\{[^}]*0x[0-9a-fA-F]+`),
+				), "!dst token should include resolved IP set member %s or hex ID fallback", w[1].IP)
+				matchFound = true
 			}
 		}
-		Expect(ipSetFound).To(BeTrue())
+		Expect(matchFound).To(BeTrue())
 
 		Eventually(func() string {
 			out, err = tc.Felixes[0].ExecOutput("calico-bpf", "policy", "dump", w[0].InterfaceName, "egress", "-a")
@@ -192,6 +215,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(outStr).To(ContainSubstring("If dest in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If source port is within any of {8055,100-105}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If dest port is within any of {9055,200-205}, skip to next rule"))
+		Expect(outStr).NotTo(ContainSubstring("Match: "))
 
 		// Test calico-bpf policy dump all with eBPF assembler code
 		out = ""
@@ -213,6 +237,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ Felix bpf test policy dump"
 		Expect(outStr).To(ContainSubstring("If dest not in {12.0.0.8/32,13.0.0.8/32}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If source port is not within any of {8055,100-105}, skip to next rule"))
 		Expect(outStr).To(ContainSubstring("If dest port is not within any of {9055,200-205}, skip to next rule"))
+		Expect(outStr).NotTo(ContainSubstring("Match: "))
 	})
 
 	It("should dump policy debug information with ICMP", func() {

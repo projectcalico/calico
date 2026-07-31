@@ -74,6 +74,7 @@ const defaultProps = {
     filterKey: FilterKey.policyKind as any,
     value: null as any,
     onChange: jest.fn(),
+    placeholder: 'Select...',
 };
 
 describe('<PolicySelect />', () => {

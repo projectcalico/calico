@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,17 +29,27 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/mock"
 	"github.com/projectcalico/calico/felix/dispatcher"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
-var testIP = mustParseIP("10.0.0.1")
-var testIP2 = mustParseIP("10.0.0.2")
-var testIPAs6 = net.IP{IP: testIP.To16()}
-var testIPAs4 = net.IP{IP: testIP.To4()}
-var udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
-var tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
+var (
+	testIP  = mustParseIP("10.0.0.1")
+	udpPort = proto.ServicePort{Port: 123, Protocol: "UDP"}
+	tcpPort = proto.ServicePort{Port: 321, Protocol: "TCP"}
+)
+
+func nodeWithBGPv4(name, cidr string) *internalapi.Node {
+	n := internalapi.NewNode()
+	n.Name = name
+	n.Spec.BGP = &internalapi.NodeBGPSpec{IPv4Address: cidr}
+	return n
+}
+
+func nodeKey(name string) model.ResourceKey {
+	return model.ResourceKey{Kind: internalapi.KindNode, Name: name}
+}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input any, expUpdate any, expRemove any) {
@@ -108,7 +118,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		Expect(err).To(BeNil())
 	},
 	Entry("IPPool",
-		model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
+		model.IPPoolKey{CIDR: mustParsePrefix("10.0.0.0/16")},
 		&model.IPPool{
 			CIDR: mustParseNet("10.0.0.0/16"),
 		},
@@ -123,7 +133,7 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 			Id: "10.0.0.0-16",
 		}),
 	Entry("IPPool masquerade",
-		model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
+		model.IPPoolKey{CIDR: mustParsePrefix("10.0.0.0/16")},
 		&model.IPPool{
 			CIDR:       mustParseNet("10.0.0.0/16"),
 			Masquerade: true,
@@ -138,12 +148,12 @@ var _ = DescribeTable("Calculation graph pass-through tests",
 		&proto.IPAMPoolRemove{
 			Id: "10.0.0.0-16",
 		}),
-	Entry("HostIP",
-		model.HostIPKey{Hostname: "foo"},
-		&testIP,
+	Entry("Node",
+		nodeKey("foo"),
+		nodeWithBGPv4("foo", "10.0.0.1/32"),
 		&proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		},
 		&proto.HostMetadataRemove{
 			Hostname: "foo",
@@ -249,87 +259,87 @@ var _ = Describe("Host IP duplicate squashing test", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs4,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(1))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 	It("should pass on genuine changes", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
+			UpdateType: api.UpdateTypeKVUpdated,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIP2,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.2/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(2))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.2",
+			Ipv4Addr: "10.0.0.2/32",
 		})).To(BeTrue())
 	})
 	It("should pass on delete and recreate", func() {
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
+			},
+		})
+		eb.Flush()
+		cg.OnUpdate(api.Update{
+			UpdateType: api.UpdateTypeKVDeleted,
+			KVPair: model.KVPair{
+				Key: nodeKey("foo"),
 			},
 		})
 		eb.Flush()
 		cg.OnUpdate(api.Update{
 			UpdateType: api.UpdateTypeKVNew,
 			KVPair: model.KVPair{
-				Key: model.HostIPKey{Hostname: "foo"},
-			},
-		})
-		eb.Flush()
-		cg.OnUpdate(api.Update{
-			UpdateType: api.UpdateTypeKVNew,
-			KVPair: model.KVPair{
-				Key:   model.HostIPKey{Hostname: "foo"},
-				Value: &testIPAs6,
+				Key:   nodeKey("foo"),
+				Value: nodeWithBGPv4("foo", "10.0.0.1/32"),
 			},
 		})
 		eb.Flush()
 		Expect(messagesReceived).To(HaveLen(3))
 		Expect(googleproto.Equal(messagesReceived[0].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[1].(*proto.HostMetadataRemove), &proto.HostMetadataRemove{
 			Hostname: "foo",
 		})).To(BeTrue())
 		Expect(googleproto.Equal(messagesReceived[2].(*proto.HostMetadataUpdate), &proto.HostMetadataUpdate{
 			Hostname: "foo",
-			Ipv4Addr: "10.0.0.1",
+			Ipv4Addr: "10.0.0.1/32",
 		})).To(BeTrue())
 	})
 })

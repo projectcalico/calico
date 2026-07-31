@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net/netip"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
 )
 
@@ -50,7 +50,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affinity k8s backend tests", testut
 		kvp := model.KVPair{
 			Key: model.BlockAffinityKey{
 				Host:         "my-host",
-				CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+				CIDR:         netip.MustParsePrefix("192.168.1.0/24"),
 				AffinityType: string(ipam.AffinityTypeHost),
 			},
 			Value: &model.BlockAffinity{
@@ -224,7 +224,7 @@ var _ = Describe("BlockAffinityClient tests with fake REST client", func() {
 			kvp := &model.KVPair{
 				Key: model.BlockAffinityKey{
 					Host:         "my-host",
-					CIDR:         net.MustParseCIDR("192.168.1.0/24"),
+					CIDR:         netip.MustParsePrefix("192.168.1.0/24"),
 					AffinityType: string(ipam.AffinityTypeHost),
 				},
 				Value: &model.BlockAffinity{State: model.StateConfirmed},

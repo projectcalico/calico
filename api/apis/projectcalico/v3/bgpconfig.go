@@ -85,17 +85,17 @@ type BGPConfigurationSpec struct {
 
 	// ServiceLoadBalancerIPs are the CIDR blocks for Kubernetes Service LoadBalancer IPs.
 	// Kubernetes Service status.LoadBalancer.Ingress IPs will only be advertised if they are within one of these blocks.
-	// +listType=set
+	// +listType=atomic
 	ServiceLoadBalancerIPs []ServiceLoadBalancerIPBlock `json:"serviceLoadBalancerIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_loadbalancer_ips"`
 
 	// ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
 	// Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
-	// +listType=set
+	// +listType=atomic
 	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_external_ips"`
 
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
-	// +listType=set
+	// +listType=atomic
 	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
 
 	// ServiceLoadBalancerAggregation controls how LoadBalancer service IPs are advertised.
@@ -107,12 +107,12 @@ type BGPConfigurationSpec struct {
 
 	// Communities is a list of BGP community values and their arbitrary names for tagging routes.
 	// +kubebuilder:validation:MaxItems=500
-	// +listType=set
+	// +listType=atomic
 	Communities []Community `json:"communities,omitempty" validate:"omitempty,dive" confignamev1:"communities"`
 
 	// PrefixAdvertisements contains per-prefix advertisement configuration.
 	// +kubebuilder:validation:MaxItems=500
-	// +listType=set
+	// +listType=atomic
 	PrefixAdvertisements []PrefixAdvertisement `json:"prefixAdvertisements,omitempty" validate:"omitempty,dive" confignamev1:"prefix_advertisements"`
 
 	// ListenPort is the port where BGP protocol should listen. Defaults to 179

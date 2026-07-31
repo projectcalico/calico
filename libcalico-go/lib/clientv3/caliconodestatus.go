@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 type CalicoNodeStatusInterface interface {
 	Create(ctx context.Context, res *apiv3.CalicoNodeStatus, opts options.SetOptions) (*apiv3.CalicoNodeStatus, error)
 	Update(ctx context.Context, res *apiv3.CalicoNodeStatus, opts options.SetOptions) (*apiv3.CalicoNodeStatus, error)
+	UpdateStatus(ctx context.Context, res *apiv3.CalicoNodeStatus, opts options.SetOptions) (*apiv3.CalicoNodeStatus, error)
 	Delete(ctx context.Context, name string, opts options.DeleteOptions) (*apiv3.CalicoNodeStatus, error)
 	Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.CalicoNodeStatus, error)
 	List(ctx context.Context, opts options.ListOptions) (*apiv3.CalicoNodeStatusList, error)
@@ -61,6 +62,16 @@ func (r calicoNodeStatus) Update(ctx context.Context, res *apiv3.CalicoNodeStatu
 	}
 
 	out, err := r.client.resources.Update(ctx, opts, apiv3.KindCalicoNodeStatus, res)
+	if out != nil {
+		return out.(*apiv3.CalicoNodeStatus), err
+	}
+	return nil, err
+}
+
+// UpdateStatus takes the representation of a CalicoNodeStatus and updates its status.
+// Returns the stored representation of the CalicoNodeStatus, and an error, if there is any.
+func (r calicoNodeStatus) UpdateStatus(ctx context.Context, res *apiv3.CalicoNodeStatus, opts options.SetOptions) (*apiv3.CalicoNodeStatus, error) {
+	out, err := r.client.resources.UpdateStatus(ctx, opts, apiv3.KindCalicoNodeStatus, res)
 	if out != nil {
 		return out.(*apiv3.CalicoNodeStatus), err
 	}

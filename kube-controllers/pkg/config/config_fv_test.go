@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("KubeControllersConfiguration FV tests", func() {
+var _ = Describe("KubeControllersConfiguration FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		uut               *containers.Container
@@ -44,7 +44,7 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		c = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -73,13 +73,20 @@ var _ = Describe("KubeControllersConfiguration FV tests", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = c.Close()
 		controllerManager.Stop()
-		uut.Stop()
 		apiserver.Stop()
 		etcd.Stop()
 		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		if uut != nil {
+			uut.Stop()
+			uut = nil
+		}
+		_, _ = c.KubeControllersConfiguration().Delete(context.Background(), "default", options.DeleteOptions{})
 	})
 
 	Context("with no KubeControllersConfig at start of day", func() {

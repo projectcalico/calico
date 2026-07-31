@@ -6,4 +6,4 @@ Defines resource structs (BGPPeer, HostEndpoint, Policy, IPPool, Profile, Node, 
 and the `CalicoAPIConfig` for datastore connection configuration. Used by the v1 validator
 (`libcalico-go/lib/validator/v1`), the etcd backend, calicoctl's resource loader, and test utilities.
 
-This is not the current API. The public Calico API is defined in `api/pkg/apis/projectcalico/v3/`.
+This is not the current API. The public Calico API is defined in `api/apis/projectcalico/v3/`.

@@ -1,0 +1,6 @@
+# Overlay for values.yaml. Layered on top via a second `helm -f` flag by the
+# Felix-routing CI job. Keep this file minimal - add only the fields that
+# need to differ from the base values.yaml.
+installation:
+  calicoNetwork:
+    clusterRoutingMode: "Felix"

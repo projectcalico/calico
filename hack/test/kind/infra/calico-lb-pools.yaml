@@ -1,0 +1,47 @@
+# Calico-native LoadBalancer IP pools for kind clusters.
+#
+# Replaces the legacy metallb-config.yaml "default" IPAddressPool that
+# previously assigned LoadBalancer IPs out of these same CIDRs. The
+# IPAM authority now lives with kube-controllers' loadbalancer
+# controller (kube-controllers/pkg/controllers/loadbalancer), which
+# honours `projectcalico.org/loadBalancerIPs` annotations and assigns
+# from any IPPool with `allowedUses: ["LoadBalancer"]`.
+#
+# BGP advertisement of these IPs still happens via Calico confd, gated
+# on each test's BGPConfiguration.serviceLoadBalancerIPs allow-list and
+# on having an endpoint on the local node — see
+# confd/pkg/backends/calico/routes.go:setRouteForSvc.
+#
+# These ranges are NOT routable from the kind docker bridge / host; the
+# gateway-conformance L2 pool in e2e/cmd/gateway/manifests/metallb-pool.yaml
+# is what makes LB IPs reachable from the host runner. No Calico component
+# announces LB IPs via ARP/gratuitous-ARP today.
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: lb-pool-v4
+spec:
+  cidr: 80.15.0.0/24
+  allowedUses:
+    - LoadBalancer
+  nodeSelector: all()
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: false
+  disabled: false
+  assignmentMode: Automatic
+---
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: lb-pool-v6
+spec:
+  cidr: fdff::/64
+  allowedUses:
+    - LoadBalancer
+  nodeSelector: all()
+  ipipMode: Never
+  vxlanMode: Never
+  natOutgoing: false
+  disabled: false
+  assignmentMode: Automatic

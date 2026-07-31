@@ -455,6 +455,17 @@ var _ = Describe("Calico IPAM Tests", func() {
 				Expect(exitCode).Should(BeNumerically(">", 0))
 			})
 		})
+		Context("Pass an IP from a pool that disallows the workload use", func() {
+			It("should reject the assignment", func() {
+				// The ipAddrs path requests IntendedUse: Workload, so an IP that
+				// falls in a pool not marked for workloads must be rejected rather
+				// than silently assigned.
+				testutils.MustCreateNewIPPoolAllowedUses(calicoClient, "10.123.0.0/16",
+					[]apiv3.IPPoolAllowedUse{apiv3.IPPoolAllowedUseTunnel})
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "ADD", "IP=10.123.0.5", cid, cniVersion)
+				Expect(exitCode).Should(BeNumerically(">", 0))
+			})
+		})
 	})
 
 	Describe("Run IPAM DEL", func() {

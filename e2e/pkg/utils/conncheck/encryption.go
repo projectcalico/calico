@@ -25,21 +25,21 @@ import (
 // ExpectEncrypted verifies that TCP traffic from the client to the target is encrypted.
 // It uses tcpdump to capture packets and asserts that no plaintext HTTP patterns are visible.
 // The client pod must have NET_RAW and NET_ADMIN capabilities (use WithCapture() client option).
-func (c *connectionTester) ExpectEncrypted(client *Client, target Target) {
+func (c *connectionTester) ExpectEncrypted(client Client, target Target) {
 	c.verifyEncryption(client, target, true)
 }
 
 // ExpectPlaintext verifies that TCP traffic from the client to the target is NOT encrypted.
 // It uses tcpdump to capture packets and asserts that plaintext HTTP patterns are visible.
 // The client pod must have NET_RAW and NET_ADMIN capabilities (use WithCapture() client option).
-func (c *connectionTester) ExpectPlaintext(client *Client, target Target) {
+func (c *connectionTester) ExpectPlaintext(client Client, target Target) {
 	c.verifyEncryption(client, target, false)
 }
 
 // TODO: Hook encryption verification into the Execute() parallel loop so that multiple
 // encryption checks can run concurrently alongside connectivity checks. Currently these
 // run serially per client/target pair.
-func (c *connectionTester) verifyEncryption(client *Client, target Target, expectEncrypted bool) {
+func (c *connectionTester) verifyEncryption(client Client, target Target, expectEncrypted bool) {
 	pod := client.Pod()
 	dest := target.Destination()
 

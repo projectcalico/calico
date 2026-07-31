@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
-var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
+var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -52,9 +52,11 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		bc                backend.Client
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		kconfigfile       string
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -63,8 +65,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 
 		// Write out a kubeconfig file
 		var err error
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
@@ -84,11 +85,8 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
-		type accessor interface {
-			Backend() backend.Client
-		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
-		bc = calicoClient.(accessor).Backend()
+		bc = calicoClient.(backend.BackendAccessor).Backend()
 
 		// In KDD mode, we only support the node controller right now.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")
@@ -97,12 +95,17 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, bc, testutils.CleanupOptions{})
 	})
 
 	Context("Mainline FV tests", func() {
@@ -404,7 +407,7 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", func() {
 	})
 })
 
-var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
+var _ = Describe("Calico node controller FV tests (etcd mode)", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -412,12 +415,13 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		calicoClient      client.Interface
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
+		removeKubeconfig  func()
 	)
 
 	const kNodeName = "k8snodename"
 	const cNodeName = "caliconodename"
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, etcd.IP, "")
@@ -426,8 +430,8 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Run the controller.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.EtcdV3, etcd.IP, kconfigfile, "")
@@ -450,12 +454,17 @@ var _ = Describe("Calico node controller FV tests (etcd mode)", func() {
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
+	})
+
+	AfterEach(func() {
+		testutils.CleanupAllResources(context.Background(), k8sClient, calicoClient, nil, testutils.CleanupOptions{KeepDefaultConfigs: true})
 	})
 
 	Context("Node FV tests", func() {

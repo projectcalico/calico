@@ -16,7 +16,7 @@ import (
 // BGPConfigurationApplyConfiguration represents a declarative configuration of the BGPConfiguration type for use
 // with apply.
 type BGPConfigurationApplyConfiguration struct {
-	v1.TypeMetaApplyConfiguration    `json:",inline"`
+	v1.TypeMetaApplyConfiguration    `json:""`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
 	Spec                             *BGPConfigurationSpecApplyConfiguration `json:"spec,omitempty"`
 }

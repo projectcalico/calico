@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -34,6 +34,13 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
+
+// checkReadiness runs `calico health --type=readiness` inside the given container
+// and returns the exit status — nil when the controller reports ready.
+func checkReadiness(containerName string) error {
+	return exec.Command("docker", "exec", containerName,
+		"/usr/bin/calico", "health", "--port=9099", "--type=readiness").Run()
+}
 
 var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 	var (
@@ -101,63 +108,40 @@ var _ = Describe("[etcd] kube-controllers health check FV tests", func() {
 
 	Context("Healthcheck FV tests", func() {
 		It("should pass health check", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
 			By("Waiting for the controller to be ready")
-			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return strings.TrimSpace(string(stdoutStderr))
-			}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 		})
 
 		It("should fail health check if apiserver is not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping the apiserver")
 			apiserver.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error reaching apiserver"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 
 		It("should fail health check if etcd not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping etcd")
 			etcd.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error verifying datastore"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 	})
 })
@@ -234,6 +218,20 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		return nil
 	}
 
+	// getFromContainerNS runs an HTTP GET from inside the kube-controllers
+	// network namespace.  This is needed for endpoints that bind to loopback
+	// only (e.g. the pprof debug server), which are not reachable from the host.
+	getFromContainerNS := func(url string) error {
+		cmd := exec.Command("docker", "run", "--rm",
+			"--network=container:"+kubectrls.Name,
+			os.Getenv("KUBE_IMAGE"), "wget", "-q", "-O", "/dev/null", "-T", "2", url)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("wget %q failed: %v: %s", url, err, string(out))
+		}
+		return nil
+	}
+
 	It("should not expose pprof endpoints on the prometheus port", func() {
 		// By checking that prometheus metrics are available on the default port.
 		metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
@@ -242,9 +240,14 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		// By checking that pprof endpoints are not available on the prometheus port.
 		Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
 
-		// By checking that pprof endpoints are available on the pprof port.
+		// pprof binds to loopback only, so it must be queried from inside the
+		// container's network namespace.
+		Expect(getFromContainerNS("http://127.0.0.1:9095/debug/pprof/profile?seconds=1")).To(Succeed())
+
+		// Confirm that the pprof port is NOT reachable from outside the
+		// container (i.e. not bound to 0.0.0.0).
 		pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
-		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).To(Succeed())
+		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
 	})
 })
 
@@ -320,42 +323,25 @@ var _ = Describe("[kdd] kube-controllers health check FV tests", func() {
 
 	Context("Healthcheck FV tests", func() {
 		It("should pass health check", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-
 			By("Waiting for the controller to be ready")
-			Eventually(func() string {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return strings.TrimSpace(string(stdoutStderr))
-			}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 		})
 
 		It("should fail health check if apiserver is not running", func() {
-			By("Waiting for an initial readiness report")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
+			By("Waiting for the controller to be ready")
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 20*time.Second, 500*time.Millisecond).Should(Succeed())
 
 			By("Stopping the apiserver")
 			apiserver.Stop()
 
 			By("Waiting for the readiness to change")
-			Eventually(func() []byte {
-				cmd := exec.Command("docker", "exec", kubeControllers.Name, "/usr/bin/check-status", "-r")
-				stdoutStderr, _ := cmd.CombinedOutput()
-
-				return stdoutStderr
-			}, 60*time.Second, 500*time.Millisecond).Should(ContainSubstring("Error"))
+			Eventually(func() error {
+				return checkReadiness(kubeControllers.Name)
+			}, 60*time.Second, 500*time.Millisecond).ShouldNot(Succeed())
 		})
 	})
 })
