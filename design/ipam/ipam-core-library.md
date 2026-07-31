@@ -19,6 +19,15 @@ The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
+- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, mirroring the `filterPoolsByUse` filter `AutoAssign` applies. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
+- **`GetUtilization`** reports `Capacity`, `InUse`, `Reserved` and `Available` per pool and per block. `InUse` (allocated) and `Reserved` (covered by an `IPReservation`) overlap when an
+  address was allocated before it was reserved, so `Capacity` is not their sum plus `Available`; `Available` counts addresses that are neither, and is the only one of the four that
+  answers "how many can still be handed out". Consumers must read it rather than deriving it. Pool-level counts span the whole pool CIDR, including space no block covers yet - a
+  reservation over unblocked space is still unassignable - so they are computed as a set operation (pool minus reservations minus blocks, via `go4.org/netipx`) rather than summed
+  from the blocks. Reservations may overlap and nest arbitrarily, which is why a set is needed and not a sum over CIDRs.
+- **`NumReservedIPsInCIDR`** is the pool-level reserved count on its own, for callers that already hold the `IPReservation`s and would rather not pay for a list of every allocation
+  block. kube-controllers uses it for `ipam_ippool_reserved` from syncer-fed reservations (see [ipam-gc](./ipam-gc.md#metrics)). It takes the resources, not CIDRs, so that a variant
+  can take a second kind of reserving resource without reshaping its callers.
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
@@ -31,6 +40,10 @@ here. A few methods carry design-relevant constraints worth calling out:
 - Don't leak `crd.projectcalico.org/v1` types through new public APIs. The `lib/v3` -> `lib/internalapi` rename (https://github.com/projectcalico/calico/pull/11870) exists to keep
   that boundary clean.
 - `AutoAssign` returning block-masked CIDRs is load-bearing for the CNI plugin's routing. Don't quietly switch to `/32`.
+- Anything that makes an address unassignable has to be discounted by `GetUtilization` as well as by the allocation path, or the reporting surfaces over-count free addresses. The
+  two must be fed from the same set of reserved CIDRs: allocation and the per-block counts share the `addrFilter`, and the pool-level counts use the same CIDRs as a set.
+- There is one implementation of the reserved-set arithmetic, in [`reserved.go`](../../libcalico-go/lib/ipam/reserved.go). `GetUtilization` and `NumReservedIPsInCIDR` are both thin
+  callers of it. Don't grow a second copy in a consumer - a reporting surface that disagrees with `calicoctl ipam show` is worse than no surface.
 
 ## AutoAssign and host affinity
 
