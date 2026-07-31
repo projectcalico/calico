@@ -165,9 +165,9 @@ and it is important not to conflate them:
   *not* tunneled — and would leave the node un-encapsulated with a
   pod-CIDR source, which a source-checking fabric (e.g. GCP) drops.
   The flag is set at conntrack creation on the overlay tunnel-ingress
-  programs — `from_vxlan` (`CALI_F_VXLAN`) for VXLAN, and `from_l3`
-  (`CALI_F_L3_DEV`) for the IPIP tunnel device, which is an L3 device
-  the kernel decaps onto. Gating on those compile flags scopes the flag
+  programs — `from_vxlan` (`CALI_F_INGRESS && CALI_F_VXLAN`) for VXLAN,
+  and `from_l3` (`CALI_F_L3_INGRESS`) for the IPIP tunnel device, which
+  is an L3 device the kernel decaps onto. Gating on those flags scopes the flag
   to overlay ingress and excludes `tunnel=none` (host→pod arrives on the
   main host endpoint, with no tunnel to re-encapsulate into). It is
   further gated on HostAddress mode (absent tunnel IP) and a remote-host

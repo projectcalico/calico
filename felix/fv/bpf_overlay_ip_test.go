@@ -159,11 +159,10 @@ func describeBPFOverlayTests(tunnel, hostSourceIP string) bool {
 			cc.CheckConnectivity(conntrackChecks(tc.Felixes)...)
 		})
 
-		itTunnelAddr := It
-		if hostSourceIP != "TunnelAddress" {
-			itTunnelAddr = PIt
-		}
-		itTunnelAddr("should use the host IP, not the tunnel IP, as the overlay underlay source", func() {
+		It("should use the host IP, not the tunnel IP, as the overlay underlay source", func() {
+			if hostSourceIP != "TunnelAddress" {
+				Skip("tunnel-IP-as-source check only applies to TunnelAddress mode")
+			}
 			// The outer (underlay) source of encapsulated host-networked traffic must be
 			// the node's own IP.  The overlay tunnel-device IP is not underlay-routable; a
 			// fabric that checks source addresses (e.g. GCP) drops packets carrying it.
@@ -208,11 +207,10 @@ func describeBPFOverlayTests(tunnel, hostSourceIP string) bool {
 				fmt.Sprintf("overlay outer source must never be the tunnel IP %s", tunnelAddr))
 		})
 
-		itHostAddr := It
-		if hostSourceIP != "HostAddress" {
-			itHostAddr = PIt
-		}
-		itHostAddr("should re-encapsulate a workload's reply to a host-networked client", func() {
+		It("should re-encapsulate a workload's reply to a host-networked client", func() {
+			if hostSourceIP != "HostAddress" {
+				Skip("reply re-encap check only applies to HostAddress mode")
+			}
 			// In HostAddress mode the tunnel device has no IP, so a host-networked client's
 			// encapsulated request carries the node IP as its inner source.  The workload's
 			// reply therefore targets a bare node IP, which has no overlay route: without
