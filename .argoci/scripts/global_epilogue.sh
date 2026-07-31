@@ -25,6 +25,20 @@ if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
   gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true
+
+  # Per-test diags, where the suite collects them (openstack-e2e does, into
+  # ${REPORT_DIR}/diags/) — distinct from the bz cluster diags above.
+  if [[ -d "${REPORT_DIR}/diags" ]]; then
+    gsutil -m cp -r "${REPORT_DIR}/diags" "${ARTIFACT_DEST}/" || true
+  fi
+fi
+
+# Suites that emit a tree of JUnit files rather than a single junit.xml (e.g.
+# openstack-e2e writes one xmlrunner file per test class under results/) get
+# them merged into ${REPORT_DIR}/junit.xml, so the publish below uploads one
+# test report that the ArgoCI viewer renders with collapsible suites.
+if [[ ! -f "${REPORT_DIR}/junit.xml" && -d "${REPORT_DIR}" ]]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/merge_junit.py" "${REPORT_DIR}" "${REPORT_DIR}/junit.xml" || true
 fi
 
 # Publish JUnit + logs.

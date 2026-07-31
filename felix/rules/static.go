@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -609,6 +609,20 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
 	rules := []generictables.Rule{}
 
+	if r.nft && r.NFTablesFlowTableOffload {
+		// Offload established flows here, ahead of the dispatch jumps below. Two things pin the
+		// spot: the per-workload dispatch chains terminally accept established traffic (so a rule
+		// after them never runs), and the kernel only allows flow offload in chains reached from
+		// the forward hook, which rules out those shared per-workload chains.
+		rules = append(rules,
+			generictables.Rule{
+				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
+				Action:  r.FlowOffload(),
+				Comment: []string{"Offload established Calico flows."},
+			},
+		)
+	}
+
 	// Rules for filter forward chains dispatches the packet to our dispatch chains if it is going
 	// to/from an interface that we're responsible for.  Note: the dispatch chains represent "allow"
 	// by returning to this chain for further processing; this is required to handle traffic that
@@ -673,8 +687,10 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 // StaticFilterForwardAppendRules returns rules which should be statically appended to the end of the filter
 // table's forward chain.
 func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.Rule {
-	return []generictables.Rule{
-		{
+	var rules []generictables.Rule
+
+	rules = append(rules,
+		generictables.Rule{
 			Match:   r.NewMatch().MarkSingleBitSet(r.MarkAccept),
 			Action:  r.filterAllowAction,
 			Comment: []string{"Policy explicitly accepted packet."},
@@ -682,10 +698,12 @@ func (r *DefaultRuleRenderer) StaticFilterForwardAppendRules() []generictables.R
 
 		// Set IptablesMarkAccept bit here, to indicate to our mangle-POSTROUTING chain that this is
 		// forwarded traffic and should not be subject to normal host endpoint policy.
-		{
+		generictables.Rule{
 			Action: r.SetMark(r.MarkAccept),
 		},
-	}
+	)
+
+	return rules
 }
 
 func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*generictables.Chain {
@@ -918,6 +936,16 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		}, rules...)
 	}
 
+	// If a masquerade below picks the VXLAN port as the source port, replies come back
+	// with that as their dest port and get caught by our "Drop VXLAN packets from
+	// non-allowed hosts" filter rule. When VXLAN is enabled, build a source port range
+	// that excludes the VXLAN port and apply it to the UDP masquerade below.
+	// See https://github.com/projectcalico/calico/issues/12244.
+	masqToPorts := ""
+	if (ipVersion == 4 && r.VXLANEnabled) || (ipVersion == 6 && r.VXLANEnabledV6) {
+		masqToPorts = masqPortRangeExcluding(r.VXLANPort)
+	}
+
 	var tunnelIfaces []string
 
 	if !r.BPFEnabled || r.BPFOverlayIPOnDevice {
@@ -961,19 +989,29 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		// Other remote sources will only reach the tunnel if they're being NATted
 		// already (for example, a Kubernetes "NodePort").  The kernel will then
 		// choose the correct source on its own.
+		//
+		// Both rules below share the same match: packets going out the tunnel
+		// (OutInterface) whose source is not the tunnel's own address (NotSrcAddrType,
+		// limited to the output interface) but is some local IP on the box (SrcAddrType).
+		// Matching on address type rather than the specific IP keeps the rule static.
+		if masqToPorts != "" {
+			// Only UDP can hit the drop rule, so only UDP needs its source port
+			// constrained; the rule below masquerades everything else normally. A
+			// separate rule is needed regardless, since --to-ports is only valid on a
+			// rule that also matches a protocol.
+			rules = append(rules, generictables.Rule{
+				Match: r.NewMatch().
+					ProtocolNum(ProtoUDP).
+					OutInterface(tunnel).
+					NotSrcAddrType(generictables.AddrTypeLocal, true).
+					SrcAddrType(generictables.AddrTypeLocal, false),
+				Action: r.Masq(masqToPorts),
+			})
+		}
 		rules = append(rules, generictables.Rule{
 			Match: r.NewMatch().
-				// Only match packets going out the tunnel.
 				OutInterface(tunnel).
-				// Match packets that don't have the correct source address.  This
-				// matches local addresses (i.e. ones assigned to this host)
-				// limiting the match to the output interface (which we matched
-				// above as the tunnel).  Avoiding embedding the IP address lets
-				// us use a static rule, which is easier to manage.
 				NotSrcAddrType(generictables.AddrTypeLocal, true).
-				// Only match if the IP is also some local IP on the box.  This
-				// prevents us from matching packets from workloads, which are
-				// remote as far as the routing table is concerned.
 				SrcAddrType(generictables.AddrTypeLocal, false),
 			Action: r.Masq(""),
 		})
@@ -982,6 +1020,21 @@ func (r *DefaultRuleRenderer) StaticNATPostroutingChains(ipVersion uint8) []*gen
 		Name:  ChainNATPostrouting,
 		Rules: rules,
 	}}
+}
+
+// masqPortRangeExcluding returns a masquerade "--to-ports" range that excludes the given
+// port. iptables and nftables only accept a single contiguous range, so we can't punch a
+// hole in the middle; instead we take whichever side of the port is wider, with a floor of
+// 1024 to stay off privileged ports. Returns "" (no restriction) for an out-of-range port.
+func masqPortRangeExcluding(port int) string {
+	if port <= 0 || port > 65535 {
+		return ""
+	}
+	const lo, hi = 1024, 65535
+	if port-lo >= hi-port {
+		return fmt.Sprintf("%d-%d", lo, port-1)
+	}
+	return fmt.Sprintf("%d-%d", port+1, hi)
 }
 
 func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generictables.Chain {

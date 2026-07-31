@@ -165,7 +165,7 @@ echo "Set ipv6 address on each node"
 # The suffix is derived from the node's name, NOT iteration order: kind names
 # workers "<name>-worker", "<name>-worker2", "<name>-worker3", ... so the bare
 # worker is ::1 and "-worker<N>" is ::<N>; the control-plane is ::8. This must
-# stay in lockstep with ipv6_map in node/tests/k8st/utils/utils.py, which the
+# stay in lockstep with ipv6Map in node/tests/k8st/utils/utils.go, which the
 # k8st BGP tests use to peer to a specific node's address. `kind get nodes`
 # order is not guaranteed, so a running counter would assign the wrong address
 # to a node and break that peering.
@@ -301,7 +301,7 @@ done
 # each assign from their own pool and overwrite each other's status.
 # Gateway API conformance services are unclassified and need metallb's
 # L2 pool, so we want Calico to leave them alone; node k8st BGP tests
-# now set loadBalancerClass=calico explicitly (see test_base.py).
+# now set loadBalancerClass=calico explicitly (see bgp_advert_test.go).
 for attempt in $(seq 1 12); do
   if ${kubectl} patch kubecontrollersconfiguration default --type=merge \
        --patch '{"spec":{"controllers":{"loadBalancer":{"assignIPs":"RequestedServicesOnly"}}}}'; then

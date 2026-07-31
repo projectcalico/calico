@@ -36,10 +36,10 @@ import (
 	"github.com/projectcalico/calico/goldmane/pkg/internal/utils"
 	"github.com/projectcalico/calico/goldmane/pkg/server"
 	"github.com/projectcalico/calico/goldmane/pkg/storage"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/lib/std/time"
 	"github.com/projectcalico/calico/libcalico-go/lib/debugserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 type Config struct {
@@ -127,7 +127,7 @@ func Run(ctx context.Context, cfg Config) {
 	// the default URL has no credentials, but user-supplied values could.
 	sanitized := cfg
 	if sanitized.PushURL != "" {
-		sanitized.PushURL = logutils.RedactURL(sanitized.PushURL)
+		sanitized.PushURL = logrusr.RedactURL(sanitized.PushURL)
 	}
 	logrus.WithField("cfg", sanitized).Info("Loaded configuration")
 	defer logrus.Warn("Shutting down")

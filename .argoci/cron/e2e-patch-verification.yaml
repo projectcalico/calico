@@ -24,6 +24,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CNI_PLUGIN
         value: Calico
@@ -50,6 +51,7 @@ steps:
   - name: manifests-flannel-migration
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_NODE_INSTANCE_TYPE
         value: t3.large
@@ -84,6 +86,7 @@ steps:
   - name: manifests-canal
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ubuntu-2204-lts
@@ -110,6 +113,7 @@ steps:
   - name: manifests-canal-migration
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CALICO_MANIFEST
         value: manifests/flannel-migration/calico.yaml
@@ -138,6 +142,7 @@ steps:
   - name: manifests-calico-etcd
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ubuntu-2404-lts-amd64
@@ -170,6 +175,7 @@ steps:
   - name: manifests-operator-migration
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ubuntu-2404-lts-amd64
@@ -202,6 +208,7 @@ steps:
   - name: operator-helmerator-aks-w-aks-cni-overlay
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AZ_CREATE_MODE
         value: AKS
@@ -224,6 +231,7 @@ steps:
   - name: operator-helmerator-eks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_NODE_INSTANCE_TYPE
         value: t3.large
@@ -258,6 +266,7 @@ steps:
   - name: operator-helmerator-eks-w-aws-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: AWS_K8S_CNI_VERSION
         value: NA
@@ -284,6 +293,7 @@ steps:
   - name: operator-helmerator-windows-aws-kubeadm-containerd
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CNI_PLUGIN
         value: Calico
@@ -310,6 +320,7 @@ steps:
   - name: operator-helmerator-windows-aws-kubeadm-docker
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: jammy-22.04
@@ -340,6 +351,7 @@ steps:
   - name: operator-helmerator-rke2
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
         value: ubuntu-2204-lts
@@ -364,6 +376,7 @@ steps:
   - name: kubevirt-e2e-tests
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/gcp-kubevirt.yaml
@@ -380,6 +393,7 @@ steps:
   - name: openshift
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: DATAPLANE
         value: CalicoBPF

@@ -510,10 +510,29 @@ func (e *bgpFilterEnv) updatePeer(t *testing.T, ctx context.Context, g *WithT, p
 // "bird6") and birdCmd the matching client ("birdcl" or "birdcl6").
 func (e *bgpFilterEnv) addExternalStaticRoute(t *testing.T, container, birdDir, birdCmd, route, via string) {
 	t.Helper()
+	g := NewWithT(t)
 	conf := fmt.Sprintf("protocol static static1 {\n    route %s via %s;\n    export all;\n}", route, via)
-	utils.MustRun(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/%s/static-route.conf'\n%s\nEOF\n",
-		container, birdDir, conf))
-	utils.MustRun(t, fmt.Sprintf("docker exec %s %s configure", container, birdCmd))
+
+	// Write the config and reconfigure BIRD, verifying it actually accepted the
+	// new config: `birdcl configure` exits 0 even when it rejects the config
+	// (e.g. a truncated write), silently keeping the old config, which would
+	// otherwise surface only as an opaque timeout in the route assertions.
+	g.Eventually(func() error {
+		if _, err := utils.Run(t, fmt.Sprintf("cat <<'EOF' | docker exec -i %s sh -c 'cat > /etc/%s/static-route.conf'\n%s\nEOF\n",
+			container, birdDir, conf), utils.RunOptions{AllowFail: true, SuppressErrLog: true}); err != nil {
+			return err
+		}
+		out, err := utils.Run(t, fmt.Sprintf("docker exec %s %s configure", container, birdCmd),
+			utils.RunOptions{AllowFail: true, SuppressErrLog: true})
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(out, "Reconfigur") {
+			return fmt.Errorf("%s configure did not accept static-route.conf on %s:\n%s", birdCmd, container, out)
+		}
+		return nil
+	}, 30*time.Second, time.Second).Should(Succeed(), "adding external static route %s via %s on %s", route, via, container)
+
 	t.Cleanup(func() {
 		_, _ = utils.Run(t, fmt.Sprintf("docker exec %s sh -c 'rm /etc/%s/static-route.conf; %s configure'",
 			container, birdDir, birdCmd), utils.RunOptions{AllowFail: true})
