@@ -21,7 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/kelseyhightower/envconfig"
-	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
 )

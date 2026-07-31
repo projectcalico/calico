@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	calicoapi "github.com/projectcalico/api"
+	calicoapi "github.com/projectcalico/api/v3"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
 )

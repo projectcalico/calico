@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"

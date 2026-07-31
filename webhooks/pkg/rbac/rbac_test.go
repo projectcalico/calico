@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	fakecalicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/fake"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	fakecalicoclient "github.com/projectcalico/api/v3/client/clientset_generated/clientset/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/admission/v1"

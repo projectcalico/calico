@@ -676,9 +676,9 @@ bin/calico-felix.exe: $(SRC_FILES)
 	@echo Building felix for Windows...
 	$(call build_windows_binary, "$(PACKAGE_NAME)/cmd/calico-felix", $@)
 
-CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/pkg/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
+CONFIG_PARAM_DEPS := cmd/calico-felix-docgen/*.go config/*.go ../api/apis/projectcalico/v3/felixconfig.go ../libcalico-go/config/*.go ../$(CALICO_CRD_PATH)crd.projectcalico.org_felixconfigurations.yaml
 
-../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/pkg/apis/projectcalico/v3/felixconfig.go
+../libcalico-go/config/crd/crd.projectcalico.org_felixconfigurations.yaml ../api/config/crd/crd.projectcalico.org_felixconfigurations.yaml: ../api/apis/projectcalico/v3/felixconfig.go
 	$(MAKE) -C ../libcalico-go gen-crds
 
 docs/config-params.json: $(CONFIG_PARAM_DEPS)

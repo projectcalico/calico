@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
 

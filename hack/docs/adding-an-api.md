@@ -28,7 +28,7 @@ For most cases, a new API field on an existing API is all that is needed. To add
 
 ## Coding a new Calico API
 
-1. Add the new structure to the [api/pkg/apis/projectcalico/v3][v3] in its own go file.
+1. Add the new structure to the [api/apis/projectcalico/v3][v3] in its own go file.
 
    - Include kubebuilder [validation and defaulting][kubebuilder] where appropriate.
 
@@ -48,6 +48,6 @@ For most cases, a new API field on an existing API is all that is needed. To add
 [api-conventions]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
 [felixsyncer]: https://github.com/projectcalico/calico/blob/master/libcalico-go/lib/backend/syncersv1/felixsyncer/felixsyncerv1.go
 [bgpsyncer]: https://github.com/projectcalico/calico/blob/master/libcalico-go/lib/backend/syncersv1/bgpsyncer/bgpsyncer.go
-[v3]: https://github.com/projectcalico/calico/tree/master/api/pkg/apis/projectcalico/v3
+[v3]: https://github.com/projectcalico/calico/tree/master/api/apis/projectcalico/v3
 [validation]: https://github.com/projectcalico/calico/tree/master/libcalico-go/lib/validator/v3
 [kubebuilder]: https://book.kubebuilder.io/reference/markers/crd-validation.html

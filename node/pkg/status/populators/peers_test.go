@@ -17,7 +17,7 @@ package populator
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 )
 
 var _ = Describe("Test BIRD BGP peer Scanner", func() {

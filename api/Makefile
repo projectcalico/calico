@@ -9,12 +9,12 @@ else
 include ./metadata.mk
 endif
 
-PACKAGE_NAME    ?= github.com/projectcalico/api
+PACKAGE_NAME    ?= github.com/projectcalico/api/v3
 LOCAL_CHECKS     = lint-cache-dir check-copyright
 
 BINDIR ?= bin
 BUILD_DIR ?= build
-TOP_SRC_DIRS = pkg
+TOP_SRC_DIRS = apis client lib defaults openapi
 KIND_CONFIG = $(KIND_DIR)/kind-single.config
 
 ##############################################################################
@@ -64,7 +64,7 @@ build: gen-files examples
 gen-files .generate_files: lint-cache-dir clean-generated
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./pkg/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./apis/... output:crd:dir=config/crd/'
 	# Remove the first yaml separator line.
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find ./config/crd -name "*.yaml" | xargs sed -i 1d'
 	# Run prettier to fix indentation
@@ -106,7 +106,7 @@ clean-generated:
 	find $(TOP_SRC_DIRS) -name zz_generated* -exec rm {} \;
 	# rollback changes to the generated clientset directories
 	# find $(TOP_SRC_DIRS) -type d -name *_generated -exec rm -rf {} \;
-	rm -rf pkg/client/clientset_generated pkg/client/informers_generated pkg/client/listers_generated pkg/client/applyconfiguration_generated pkg/openapi
+	rm -rf client/clientset_generated client/informers_generated client/listers_generated client/applyconfiguration_generated openapi
 
 clean-bin:
 	rm -rf $(BINDIR) \

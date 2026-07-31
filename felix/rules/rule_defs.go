@@ -19,7 +19,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"

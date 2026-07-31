@@ -25,15 +25,15 @@ HEADER="${REPO_ROOT}/hack/boilerplate/boilerplate.go.txt"
 defaulter-gen \
 	--v 1 --logtostderr \
 	--go-header-file "${HEADER}" \
-	--extra-peer-dirs "${PACKAGE_NAME}/pkg/apis/projectcalico/v3" \
+	--extra-peer-dirs "${PACKAGE_NAME}/apis/projectcalico/v3" \
 	--output-file zz_generated.defaults.go \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3"
+	"${PACKAGE_NAME}/apis/projectcalico/v3"
 
 deepcopy-gen \
 	--v 1 --logtostderr \
 	--go-header-file "${HEADER}" \
 	--output-file zz_generated.deepcopy.go \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3"
+	"${PACKAGE_NAME}/apis/projectcalico/v3"
 
 ###############################################################################
 # OpenAPI
@@ -47,10 +47,10 @@ openapi-gen \
 	--v 1 --logtostderr \
 	--go-header-file "${HEADER}" \
 	--output-dir /tmp/openapi-gen-model-names \
-	--output-pkg "${PACKAGE_NAME}/pkg/openapi" \
+	--output-pkg "${PACKAGE_NAME}/openapi" \
 	--output-model-name-file zz_generated.model_name.go \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3" \
-	"${PACKAGE_NAME}/pkg/lib/numorstring"
+	"${PACKAGE_NAME}/apis/projectcalico/v3" \
+	"${PACKAGE_NAME}/lib/numorstring"
 
 # Generate the OpenAPI definitions. Must run before client-gen, which uses the
 # output for --openapi-schema. Fail on any new API rule violations in Calico
@@ -58,16 +58,16 @@ openapi-gen \
 openapi-gen \
 	--v 1 --logtostderr \
 	--go-header-file "${HEADER}" \
-	--output-dir "${REPO_ROOT}/pkg/openapi" \
-	--output-pkg "${PACKAGE_NAME}/pkg/openapi" \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3" \
+	--output-dir "${REPO_ROOT}/openapi" \
+	--output-pkg "${PACKAGE_NAME}/openapi" \
+	"${PACKAGE_NAME}/apis/projectcalico/v3" \
 	"k8s.io/api/core/v1" \
 	"k8s.io/api/networking/v1" \
 	"k8s.io/apimachinery/pkg/apis/meta/v1" \
 	"k8s.io/apimachinery/pkg/runtime" \
 	"k8s.io/apimachinery/pkg/util/intstr" \
 	"k8s.io/apimachinery/pkg/version" \
-	"${PACKAGE_NAME}/pkg/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log
+	"${PACKAGE_NAME}/lib/numorstring" 2>&1 | tee /tmp/openapi-gen.log
 grep "API rule violation" /tmp/openapi-gen.log | grep "projectcalico" > /tmp/openapi-violations.log || true
 if [ -s /tmp/openapi-violations.log ]; then
 	grep -v -F -f "${REPO_ROOT}/hack/openapi-violations-known.list" /tmp/openapi-violations.log > /tmp/openapi-new-violations.log || true
@@ -82,8 +82,8 @@ fi
 ###############################################################################
 # Clientset, listers, and informers
 ###############################################################################
-APPLY_CONFIG_PKG="${PACKAGE_NAME}/pkg/client/applyconfiguration_generated"
-APPLY_CONFIG_DIR="${REPO_ROOT}/pkg/client/applyconfiguration_generated"
+APPLY_CONFIG_PKG="${PACKAGE_NAME}/client/applyconfiguration_generated"
+APPLY_CONFIG_DIR="${REPO_ROOT}/client/applyconfiguration_generated"
 
 # Generate the OpenAPI schema JSON for applyconfiguration-gen. This populates
 # the structured-merge-diff type information in internal/internal.go, which is
@@ -99,37 +99,37 @@ applyconfiguration-gen \
 	--openapi-schema "${OPENAPI_SCHEMA}" \
 	--output-dir "${APPLY_CONFIG_DIR}" \
 	--output-pkg "${APPLY_CONFIG_PKG}" \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3"
+	"${PACKAGE_NAME}/apis/projectcalico/v3"
 
 # Patch applyconfiguration-gen bugs (see patches/0002-* and patches/0003-*).
 patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0002-Fix-duplicate-ensureProtoPort-method-in-FelixConfigurationSpec.patch"
 patch -p2 -d "${REPO_ROOT}" < "${REPO_ROOT}/patches/0003-Fix-pointer-slice-append-in-IPAMBlockSpec-Allocations.patch"
 
-# Generate the versioned clientset (pkg/client/clientset_generated/clientset).
+# Generate the versioned clientset (client/clientset_generated/clientset).
 client-gen \
 	--go-header-file "${HEADER}" \
-	--input-base "${PACKAGE_NAME}/pkg/apis/" \
+	--input-base "${PACKAGE_NAME}/apis/" \
 	--input "projectcalico/v3" \
-	--output-dir "${REPO_ROOT}/pkg/client/clientset_generated" \
-	--clientset-path "${PACKAGE_NAME}/pkg/client/clientset_generated/" \
+	--output-dir "${REPO_ROOT}/client/clientset_generated" \
+	--clientset-path "${PACKAGE_NAME}/client/clientset_generated/" \
 	--clientset-name "clientset" \
 	--apply-configuration-package "${APPLY_CONFIG_PKG}"
 
 # Generate listers.
 lister-gen \
 	--go-header-file "${HEADER}" \
-	--output-dir "${REPO_ROOT}/pkg/client/listers_generated" \
-	--output-pkg "${PACKAGE_NAME}/pkg/client/listers_generated" \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3"
+	--output-dir "${REPO_ROOT}/client/listers_generated" \
+	--output-pkg "${PACKAGE_NAME}/client/listers_generated" \
+	"${PACKAGE_NAME}/apis/projectcalico/v3"
 
 # Generate informers.
 informer-gen \
 	--go-header-file "${HEADER}" \
-	--versioned-clientset-package "${PACKAGE_NAME}/pkg/client/clientset_generated/clientset" \
-	--listers-package "${PACKAGE_NAME}/pkg/client/listers_generated" \
-	--output-dir "${REPO_ROOT}/pkg/client/informers_generated" \
-	--output-pkg "${PACKAGE_NAME}/pkg/client/informers_generated" \
-	"${PACKAGE_NAME}/pkg/apis/projectcalico/v3"
+	--versioned-clientset-package "${PACKAGE_NAME}/client/clientset_generated/clientset" \
+	--listers-package "${PACKAGE_NAME}/client/listers_generated" \
+	--output-dir "${REPO_ROOT}/client/informers_generated" \
+	--output-pkg "${PACKAGE_NAME}/client/informers_generated" \
+	"${PACKAGE_NAME}/apis/projectcalico/v3"
 
 # Patch the informer-gen bug (see patches/0004-*): the WithInformerName(gvr)
 # resource name is built with a naive plural that doesn't match the real API

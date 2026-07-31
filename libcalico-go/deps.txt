@@ -59,6 +59,7 @@ github.com/onsi/ginkgo/v2 v2.32.0
 github.com/onsi/gomega v1.42.0
 github.com/openshift/custom-resource-status v1.1.2
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+github.com/projectcalico/api v0.0.0-20260303210141-543421943355
 github.com/projectcalico/calico
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2

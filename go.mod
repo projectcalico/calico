@@ -63,7 +63,7 @@ require (
 	github.com/onsi/gomega v1.42.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
-	github.com/projectcalico/api v0.0.0-20260303210141-543421943355
+	github.com/projectcalico/api/v3 v3.32.0
 	github.com/projectcalico/calico/lib/datastructures v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/logrusr v0.0.0-00010101000000-000000000000
@@ -407,7 +407,7 @@ require (
 )
 
 replace (
-	github.com/projectcalico/api => ./api
+	github.com/projectcalico/api/v3 => ./api
 	github.com/projectcalico/calico/lib/datastructures => ./lib/datastructures
 	github.com/projectcalico/calico/lib/httpmachinery => ./lib/httpmachinery
 	github.com/projectcalico/calico/lib/logrusr => ./lib/logrusr

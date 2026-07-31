@@ -81,6 +81,7 @@ github.com/openshift/custom-resource-status v1.1.2
 github.com/patrickmn/go-cache v2.1.0+incompatible
 github.com/peterbourgon/diskv v2.0.1+incompatible
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+github.com/projectcalico/api v0.0.0-20260303210141-543421943355
 github.com/projectcalico/calico
 github.com/prometheus/client_golang v1.23.2
 github.com/prometheus/client_model v0.6.2
@@ -165,19 +166,19 @@ sigs.k8s.io/randfill v1.0.0
 sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 sigs.k8s.io/yaml v1.6.0
 
-local:api/pkg/apis/projectcalico/v3
-local:api/pkg/client/applyconfiguration_generated/internal
-local:api/pkg/client/applyconfiguration_generated/projectcalico/v3
-local:api/pkg/client/clientset_generated/clientset
-local:api/pkg/client/clientset_generated/clientset/scheme
-local:api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3
-local:api/pkg/client/informers_generated/externalversions
-local:api/pkg/client/informers_generated/externalversions/internalinterfaces
-local:api/pkg/client/informers_generated/externalversions/projectcalico
-local:api/pkg/client/informers_generated/externalversions/projectcalico/v3
-local:api/pkg/client/listers_generated/projectcalico/v3
-local:api/pkg/defaults
-local:api/pkg/lib/numorstring
+local:api/apis/projectcalico/v3
+local:api/client/applyconfiguration_generated/internal
+local:api/client/applyconfiguration_generated/projectcalico/v3
+local:api/client/clientset_generated/clientset
+local:api/client/clientset_generated/clientset/scheme
+local:api/client/clientset_generated/clientset/typed/projectcalico/v3
+local:api/client/informers_generated/externalversions
+local:api/client/informers_generated/externalversions/internalinterfaces
+local:api/client/informers_generated/externalversions/projectcalico
+local:api/client/informers_generated/externalversions/projectcalico/v3
+local:api/client/listers_generated/projectcalico/v3
+local:api/defaults
+local:api/lib/numorstring
 local:crypto/pkg/tls
 local:felix/ip
 local:kube-controllers/cmd/check-status

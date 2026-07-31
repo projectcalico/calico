@@ -20,7 +20,7 @@
 package internalapi
 
 import (
-	numorstring "github.com/projectcalico/api/pkg/lib/numorstring"
+	numorstring "github.com/projectcalico/api/v3/lib/numorstring"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 

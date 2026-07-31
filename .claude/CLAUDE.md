@@ -59,7 +59,7 @@ make generate        # Everything: APIs, protobuf, manifests, CI config. Runs fi
 make gen-deps-files  # After adding imports to a component — deps.txt drives downstream CI triggers.
 ```
 
-**After modifying API types** (e.g. `api/pkg/apis/projectcalico/v3/felixconfig.go`),
+**After modifying API types** (e.g. `api/apis/projectcalico/v3/felixconfig.go`),
 run `make generate` — it regenerates OpenAPI specs, CRDs, deep copy, Felix
 config docs, and manifests. See also `hack/docs/adding-an-api.md`.
 
