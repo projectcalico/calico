@@ -18,7 +18,7 @@ This is the main **Project Calico** repository - an open-source container networ
 - **Docker** - Required for all builds (validated: Docker Engine 28.0.4+)
 - **Make** - Primary build orchestration
 - **git** - Repository management
-- **Linux** - Required build environment (Ubuntu 16.04+ recommended)
+- **Linux** - Required build environment (Ubuntu 24.04+ recommended)
 
 ### Core Build Commands
 

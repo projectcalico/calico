@@ -19,6 +19,15 @@ The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib
 here. A few methods carry design-relevant constraints worth calling out:
 
 - **`AutoAssign`** returns block-masked CIDRs, not `/32` (or `/128`). Callers narrow at the boundary. This is load-bearing for the CNI plugin's per-block route programming.
+- **`AssignIP`** enforces the target pool's `allowedUses` when `AssignIPArgs.IntendedUse` is non-empty: it fails if the pool containing the requested IP does not permit that use, mirroring the `filterPoolsByUse` filter `AutoAssign` applies. Callers that leave `IntendedUse` empty are exempt (back-compat). This closes a gap where a specific-IP request (e.g. the CNI `ipAddrs` annotation) could draw from a pool not sanctioned for its use.
+- **`GetUtilization`** reports `Capacity`, `InUse`, `Reserved` and `Available` per pool and per block. `InUse` (allocated) and `Reserved` (covered by an `IPReservation`) overlap when an
+  address was allocated before it was reserved, so `Capacity` is not their sum plus `Available`; `Available` counts addresses that are neither, and is the only one of the four that
+  answers "how many can still be handed out". Consumers must read it rather than deriving it. Pool-level counts span the whole pool CIDR, including space no block covers yet - a
+  reservation over unblocked space is still unassignable - so they are computed as a set operation (pool minus reservations minus blocks, via `go4.org/netipx`) rather than summed
+  from the blocks. Reservations may overlap and nest arbitrarily, which is why a set is needed and not a sum over CIDRs.
+- **`NumReservedIPsInCIDR`** is the pool-level reserved count on its own, for callers that already hold the `IPReservation`s and would rather not pay for a list of every allocation
+  block. kube-controllers uses it for `ipam_ippool_reserved` from syncer-fed reservations (see [ipam-gc](./ipam-gc.md#metrics)). It takes the resources, not CIDRs, so that a variant
+  can take a second kind of reserving resource without reshaping its callers.
 - **`ReleaseIPs`** takes `ReleaseOptions` with a sequence number; every release path must plumb it through (see [CAS retry and sequence numbers](#cas-retry-and-sequence-numbers)).
 - **`SetOwnerAttributes`** is KubeVirt-only and swaps owner attributes under preconditions, without releasing and re-allocating. Felix's live-migration monitor is the only non-CNI
   caller.
@@ -31,6 +40,10 @@ here. A few methods carry design-relevant constraints worth calling out:
 - Don't leak `crd.projectcalico.org/v1` types through new public APIs. The `lib/v3` -> `lib/internalapi` rename (https://github.com/projectcalico/calico/pull/11870) exists to keep
   that boundary clean.
 - `AutoAssign` returning block-masked CIDRs is load-bearing for the CNI plugin's routing. Don't quietly switch to `/32`.
+- Anything that makes an address unassignable has to be discounted by `GetUtilization` as well as by the allocation path, or the reporting surfaces over-count free addresses. The
+  two must be fed from the same set of reserved CIDRs: allocation and the per-block counts share the `addrFilter`, and the pool-level counts use the same CIDRs as a set.
+- There is one implementation of the reserved-set arithmetic, in [`reserved.go`](../../libcalico-go/lib/ipam/reserved.go). `GetUtilization` and `NumReservedIPsInCIDR` are both thin
+  callers of it. Don't grow a second copy in a consumer - a reporting surface that disagrees with `calicoctl ipam show` is worse than no surface.
 
 ## AutoAssign and host affinity
 
@@ -93,6 +106,30 @@ Block release is parallelised per block via a semaphore sized at `GOMAXPROCS`.
   (relevant to https://github.com/projectcalico/calico/issues/12638).
 - Older blocks may not have per-ordinal sequence numbers. New code must tolerate the absent case (default + heal-forward), not crash.
 
+## IP release and cooldown
+
+Releasing an IP and freeing it for reuse are two distinct steps, separated by a configurable cooldown. This sits on top of the `Unallocated` FIFO queue: the queue cycles freed
+ordinals so the longest-idle IP is reused first, and the cooldown adds a wall-clock floor on how soon any released IP can come back.
+
+- **Release marks the IP, it does not free it.** `release` / `releaseByHandle` ([`ipam_block.go`](../../libcalico-go/lib/ipam/ipam_block.go)) clear the handle association and stamp
+  the allocation's `ReleasedAt` with the current time. The ordinal stays in `Allocations` - the IP is no longer tied to a workload, but it is not yet available for reallocation. An
+  IP in this state is "in cooldown".
+- **`garbageCollect` deallocates IPs whose cooldown has elapsed.** It moves an ordinal to `Unallocated`, clears its sequence number, and prunes the now-unreferenced attribute, but
+  only once `ReleasedAt` is older than `IPCooldownSeconds`. With `IPCooldownSeconds=0` the IP is deallocated on the next GC pass. This is the only place ordinals move to
+  `Unallocated`.
+- **GC runs implicitly on every read by the IPAM client.** `blockFromBackend` calls `garbageCollect` whenever a block is loaded. On write paths (`AutoAssign`, `release`,
+  `releaseByHandle`, `SetOwnerAttributes`) the reclamation folds into the same CAS write, so a new allocation can reuse IPs that finished cooling down in one transaction. On
+  read-only paths the GC'd view is computed and then discarded - the caller sees cooled-down IPs as not-yet-reusable, but nothing is persisted.
+- **Blocks with no write activity need a backstop.** Because read-only GC doesn't persist, a block that sees no further allocation or release never gets rewritten, so its
+  cooled-down IPs would never be deallocated. The kube-controllers GC closes that gap; see [ipam-gc](./ipam-gc.md#cold-ip-garbage-collection).
+
+**Review notes**
+
+- Release and deallocation are distinct states. Code that counts "allocated" IPs has to decide whether cooldown counts as allocated, released, or its own state - don't silently fold
+  it into one. `calicoctl ipam check` treats it as its own state.
+- A release call against an IP already in cooldown is not an error - it's already released. Don't return an error for the idempotent case.
+- The cooldown floor is on top of the `Unallocated` FIFO, not a replacement for it. Both exist; don't remove the queue cycling thinking the timestamp covers it.
+
 ## Handle IDs
 
 A handle ID is an opaque string from the library's point of view, but its **format is a convention every IPAM caller has to follow** because `calicoctl datastore migrate` parses
@@ -141,6 +178,7 @@ Fields:
 | `MaxBlocksPerHost` | Per-host cap on the number of affine blocks. 0 means default (20). Once a host hits the cap, `allowNewClaim` is forced false; existing blocks still fill. |
 | `AutoAllocateBlocks` | When false, `AutoAssign` will never claim a new block - only allocate from blocks the host already owns. |
 | `KubeVirtVMAddressPersistence` | Default for whether KubeVirt VM addresses survive VM restart / migration. Auto-detection is on by default. |
+| `IPCooldownSeconds` | Minimum age of a released IP before it can be reused. Release stamps the IP's `ReleasedAt`; `garbageCollect` only deallocates it once this many seconds have passed. 0 deallocates on the next GC pass. Capped at 1200. See [IP release and cooldown](#ip-release-and-cooldown). |
 
 **Review notes**
 

@@ -25,8 +25,8 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("Table with an empty dataplane (nft)", func() {
@@ -57,7 +57,7 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 				NowOverride:           dataplane.Now,
 				BackendMode:           "legacy",
 				LookPathOverride:      testutils.LookPathAll,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 
@@ -94,7 +94,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -178,7 +178,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					InsertMode:            "unknown",
 					BackendMode:           dataplaneMode,
 					LookPathOverride:      testutils.LookPathAll,
-					OpRecorder:            logutils.NewSummarizer("test loop"),
+					OpRecorder:            logrusr.NewSummarizer("test loop"),
 				},
 			)
 		}).To(Panic())
@@ -1210,7 +1210,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			NowOverride:           dataplane.Now,
 			BackendMode:           dataplaneMode,
 			LookPathOverride:      testutils.LookPathNoLegacy,
-			OpRecorder:            logutils.NewSummarizer("test loop"),
+			OpRecorder:            logrusr.NewSummarizer("test loop"),
 		}
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
@@ -1487,7 +1487,7 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				InsertMode:               insertMode,
 				BackendMode:              dataplaneMode,
 				LookPathOverride:         testutils.LookPathNoLegacy,
-				OpRecorder:               logutils.NewSummarizer("test loop"),
+				OpRecorder:               logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
@@ -1907,7 +1907,7 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 		table.InsertOrAppendRules("FORWARD", []generictables.Rule{
@@ -1974,7 +1974,7 @@ func describeInsertEarlyRules(dataplaneMode string) {
 				NowOverride:           dataplane.Now,
 				BackendMode:           dataplaneMode,
 				LookPathOverride:      testutils.LookPathNoLegacy,
-				OpRecorder:            logutils.NewSummarizer("test loop"),
+				OpRecorder:            logrusr.NewSummarizer("test loop"),
 			},
 		)
 	})
