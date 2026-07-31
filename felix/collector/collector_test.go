@@ -18,7 +18,6 @@ package collector
 
 import (
 	"fmt"
-	"maps"
 	net2 "net"
 	"slices"
 	"testing"
@@ -688,14 +687,9 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				// epStats and its Data are owned by the collector goroutine, so read on-loop.
 				Consistently(func() [2]int {
-					var lens [2]int
-					c.runOnLoop(func() {
-						data := c.epStats[*t]
-						lens = [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-					})
-					return lens
+					data := c.epStatsSnapshot()[*t]
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
 				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when source endpoint is marked for deletion")
 			})
@@ -729,14 +723,9 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				// epStats and its Data are owned by the collector goroutine, so read on-loop.
 				Consistently(func() [2]int {
-					var lens [2]int
-					c.runOnLoop(func() {
-						data := c.epStats[*t]
-						lens = [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-					})
-					return lens
+					data := c.epStatsSnapshot()[*t]
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
 				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when destination endpoint is marked for deletion")
 			})
@@ -770,14 +759,9 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits are not processed.  The RuleHits are applied after the
 				// epStats entry is inserted, so keep checking rather than sampling immediately.
-				// epStats and its Data are owned by the collector goroutine, so read on-loop.
 				Consistently(func() [2]int {
-					var lens [2]int
-					c.runOnLoop(func() {
-						data := c.epStats[*t]
-						lens = [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
-					})
-					return lens
+					data := c.epStatsSnapshot()[*t]
+					return [2]int{len(data.IngressRuleTrace.Path()), len(data.EgressRuleTrace.Path())}
 				}, "500ms", "100ms").Should(Equal([2]int{0, 0}),
 					"Ingress/EgressRuleTrace Paths should stay empty when remote source endpoint is marked for deletion")
 			})
@@ -809,11 +793,7 @@ var _ = Describe("NFLOG Datasource", func() {
 
 				// Verify that RuleHits were processed (Path should NOT be empty)
 				Eventually(func() int {
-					var pathLen int
-					c.runOnLoop(func() {
-						pathLen = len(c.epStats[*t].IngressRuleTrace.Path())
-					})
-					return pathLen
+					return len(c.epStatsSnapshot()[*t].IngressRuleTrace.Path())
 				}, "500ms", "50ms").Should(BeNumerically(">", 0), "IngressRuleTrace Path should NOT be empty when endpoints are active")
 			})
 		})
@@ -1121,28 +1101,16 @@ func countersOfCtEntry(e nfnetlink.CtEntry) ctCounters {
 
 func countersOfData(c *collector, t tuple.Tuple) func() (ctCounters, error) {
 	return func() (ctCounters, error) {
-		// epStats and the Data within it are owned by the collector goroutine,
-		// so read the counters on that goroutine.
-		var (
-			cs ctCounters
-			ok bool
-		)
-		c.runOnLoop(func() {
-			var data *Data
-			if data, ok = c.epStats[t]; !ok {
-				return
-			}
-			cs = ctCounters{
-				Packets:        data.ConntrackPacketsCounter(),
-				Bytes:          data.ConntrackBytesCounter(),
-				PacketsReverse: data.ConntrackPacketsCounterReverse(),
-				BytesReverse:   data.ConntrackBytesCounterReverse(),
-			}
-		})
+		data, ok := c.epStatsSnapshot()[t]
 		if !ok {
 			return ctCounters{}, fmt.Errorf("no epStats entry for tuple %v", &t)
 		}
-		return cs, nil
+		return ctCounters{
+			Packets:        data.ConntrackPacketsCounter(),
+			Bytes:          data.ConntrackBytesCounter(),
+			PacketsReverse: data.ConntrackPacketsCounterReverse(),
+			BytesReverse:   data.ConntrackBytesCounterReverse(),
+		}, nil
 	}
 }
 
@@ -1154,15 +1122,14 @@ func countersOfData(c *collector, t tuple.Tuple) func() (ctCounters, error) {
 // afterwards.  Asserting on those fields immediately after the entry appears
 // is therefore racy; the counters are written last, so once they match, the
 // whole update has been applied.
+// The returned Data is a clone, so its fields can be read directly.
 func eventuallyExpectCtStats(c *collector, t tuple.Tuple, e nfnetlink.CtEntry) *Data {
 	GinkgoHelper()
 	Eventually(countersOfData(c, t), "2s", "100ms").Should(Equal(countersOfCtEntry(e)))
 	var data *Data
 	c.runOnLoop(func() {
-		data = c.epStats[t]
+		data = c.epStats[t].clone()
 	})
-	// NOTE: the returned *Data is owned by the collector goroutine; callers must
-	// read its fields via c.runOnLoop, not directly.
 	return data
 }
 
@@ -1272,13 +1239,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Flag the data as reported, swap local endpoints from mock data and send in CT entry again.
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				data.Reported = true
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
+			c.runOnLoop(func() { c.epStats[*t].Reported = true })
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
@@ -1286,14 +1249,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all since
 			// the endpoint should not be changing for a constant connection.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(newSrc).To(Equal(oldSrc))
-			Expect(newDest).To(Equal(oldDest))
+			data := c.epStatsSnapshot()[*t]
+			Expect(data.SrcEp).To(Equal(oldSrc))
+			Expect(data.DstEp).To(Equal(oldDest))
 		})
 		It("should handle destination changing on next conntrack update for unreported flow", func() {
 			t := tuple.New(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
@@ -1303,27 +1261,19 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. swap local endpoints from mock data and send in packetinfo entry again.
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(inCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			// The endpoint swap is applied on the collector goroutine, so poll DstEp on-loop.
+			// The endpoint swap is applied on the collector goroutine, so keep polling for it.
 			Eventually(func() calc.EndpointData {
-				var dstEp calc.EndpointData
-				c.runOnLoop(func() { dstEp = c.epStats[*t].DstEp })
-				return dstEp
+				return c.epStatsSnapshot()[*t].DstEp
 			}, "2s", "100ms").ShouldNot(Equal(oldDest))
-			var srcEp calc.EndpointData
-			c.runOnLoop(func() { srcEp = c.epStats[*t].SrcEp })
-			Expect(srcEp).To(Equal(oldSrc))
+			Expect(c.epStatsSnapshot()[*t].SrcEp).To(Equal(oldSrc))
 		})
 		It("should handle destination becoming non-local by removing entry on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirIngress, ingressPktAllow[ingressPktAllowNflogTuple])
@@ -1344,6 +1294,8 @@ var _ = Describe("Conntrack Datasource", func() {
 			// This is a reported flow but we are going through packet processing still. It should be expired and
 			// removed.
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").ShouldNot(HaveKey(*t))
+			// The entry has been removed from epStats, so a snapshot cannot reach it; read the
+			// Data the collector goroutine still owns on-loop.
 			var reported bool
 			c.runOnLoop(func() { reported = data.Reported })
 			Expect(reported).To(BeFalse())
@@ -1356,29 +1308,18 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. Remove endpoints from mock data and send in packetinfo entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 			lm.SetMockData(epMapDelete, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
 
 			// This is an unreported flow but we are going through packet processing still. However, since the endpoint
 			// data has been removed assume it has just been deleted and don't downgrade our endpoint data.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
-			Expect(newSrc).To(Equal(oldSrc))
-			Expect(newDest).To(Equal(oldDest))
+			after := c.epStatsSnapshot()[*t]
+			Expect(after.Reported).To(BeFalse())
+			Expect(after.SrcEp).To(Equal(oldSrc))
+			Expect(after.DstEp).To(Equal(oldDest))
 		})
 		It("should handle destination changing on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirIngress, ingressPktAllow[ingressPktAllowNflogTuple])
@@ -1388,14 +1329,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Flag the data as reported, swap local endpoints from mock data and send in packetinfo entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				data.Reported = true
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
+			c.runOnLoop(func() { c.epStats[*t].Reported = true })
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
@@ -1403,14 +1339,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// This is a reported flow but we are going through packet processing still. It should be expired and
 			// the endpoints updated.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
+			after := c.epStatsSnapshot()[*t]
+			newSrc, newDest := after.SrcEp, after.DstEp
+			Expect(after.Reported).To(BeFalse())
 			Expect(newSrc).To(Equal(oldSrc))
 			Expect(newDest).NotTo(Equal(oldDest))
 		})
@@ -1422,27 +1353,17 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported, swap local endpoints from mock data and send in CT entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
+			after := c.epStatsSnapshot()[*t]
+			newSrc, newDest := after.SrcEp, after.DstEp
+			Expect(after.Reported).To(BeFalse())
 			Expect(newSrc).To(Equal(oldSrc))
 			Expect(newDest).NotTo(Equal(oldDest))
 		})
@@ -1454,12 +1375,10 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
-			eventuallyExpectCtStats(c, *t, outCtEntry)
+			data := eventuallyExpectCtStats(c, *t, outCtEntry)
 
-			var natOutgoingPort int
-			c.runOnLoop(func() { natOutgoingPort = c.epStats[*t].NatOutgoingPort })
 			// Not SNAT'd so natOutgoingPort should not be set.
-			Expect(natOutgoingPort).Should(Equal(0))
+			Expect(data.NatOutgoingPort).Should(Equal(0))
 		})
 		It("should create a single entry with outbound direction for SNAT'd packet with nat outgoing port set", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
@@ -1467,11 +1386,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntryWithSNAT, 0)}
 
-			eventuallyExpectCtStats(c, *t, outCtEntryWithSNAT)
+			data := eventuallyExpectCtStats(c, *t, outCtEntryWithSNAT)
 
-			var natOutgoingPort int
-			c.runOnLoop(func() { natOutgoingPort = c.epStats[*t].NatOutgoingPort })
-			Expect(natOutgoingPort).Should(Equal(nodeSrcPort))
+			Expect(data.NatOutgoingPort).Should(Equal(nodeSrcPort))
 		})
 		It("should create a single entry with outbound direction for SNAT'd packet sent to self without nat outgoing port set", func() {
 			t := tuple.New(localIp1, localIp1, proto_tcp, srcPort, srcPort2)
@@ -1479,11 +1396,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// will call handlerInfo from c.Start() in BeforeEach
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntrySNATToServiceToSelf, 0)}
 
-			eventuallyExpectCtStats(c, *t, outCtEntrySNATToServiceToSelf)
+			data := eventuallyExpectCtStats(c, *t, outCtEntrySNATToServiceToSelf)
 
-			var natOutgoingPort int
-			c.runOnLoop(func() { natOutgoingPort = c.epStats[*t].NatOutgoingPort })
-			Expect(natOutgoingPort).Should(Equal(0))
+			Expect(data.NatOutgoingPort).Should(Equal(0))
 		})
 		It("should handle source becoming non-local by removing entry on next conntrack update for reported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
@@ -1526,13 +1441,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Flag the data as reported, swap local endpoints from mock data and send in CT entry again.
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				data.Reported = true
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
+			c.runOnLoop(func() { c.epStats[*t].Reported = true })
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
@@ -1540,14 +1451,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// This is a reported flow, and is a conntrack update - this should not impact the stored data at all since
 			// the endpoint should not be changing for a constant connection.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(newSrc).To(Equal(oldSrc))
-			Expect(newDest).To(Equal(oldDest))
+			after := c.epStatsSnapshot()[*t]
+			Expect(after.SrcEp).To(Equal(oldSrc))
+			Expect(after.DstEp).To(Equal(oldDest))
 		})
 		It("should handle source changing on next conntrack update for unreported flow", func() {
 			t := tuple.New(localIp1, remoteIp1, proto_tcp, srcPort, dstPort)
@@ -1557,27 +1463,19 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. swap local endpoints from mock data and send in packetinfo entry again.
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			ciReaderSenderChan <- []clttypes.ConntrackInfo{convertCtEntry(outCtEntry, 0)}
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			// The endpoint swap is applied on the collector goroutine, so poll SrcEp on-loop.
+			// The endpoint swap is applied on the collector goroutine, so keep polling for it.
 			Eventually(func() calc.EndpointData {
-				var srcEp calc.EndpointData
-				c.runOnLoop(func() { srcEp = c.epStats[*t].SrcEp })
-				return srcEp
+				return c.epStatsSnapshot()[*t].SrcEp
 			}, "2s", "100ms").ShouldNot(Equal(oldSrc))
-			var dstEp calc.EndpointData
-			c.runOnLoop(func() { dstEp = c.epStats[*t].DstEp })
-			Expect(dstEp).To(Equal(oldDest))
+			Expect(c.epStatsSnapshot()[*t].DstEp).To(Equal(oldDest))
 		})
 		It("should handle source becoming non-local by removing entry on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirEgress, egressPktAllow[egressPktAllowNflogTuple])
@@ -1610,29 +1508,18 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported. Remove endpoints from mock data and send in packetinfo entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 			lm.SetMockData(epMapDelete, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
 
 			// This is an unreported flow but we are going through packet processing still. However, since the endpoint
 			// data has been removed assume it has just been deleted and don't downgrade our endpoint data.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
-			Expect(newSrc).To(Equal(oldSrc))
-			Expect(newDest).To(Equal(oldDest))
+			after := c.epStatsSnapshot()[*t]
+			Expect(after.Reported).To(BeFalse())
+			Expect(after.SrcEp).To(Equal(oldSrc))
+			Expect(after.DstEp).To(Equal(oldDest))
 		})
 		It("should handle source changing on next packetinfo update for reported flow", func() {
 			pktinfo := nflogReader.ConvertNflogPkt(rules.RuleDirEgress, egressPktAllow[egressPktAllowNflogTuple])
@@ -1642,14 +1529,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Flag the data as reported, swap local endpoints from mock data and send in packetinfo entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				data.Reported = true
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
+			c.runOnLoop(func() { c.epStats[*t].Reported = true })
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
@@ -1657,14 +1539,9 @@ var _ = Describe("Conntrack Datasource", func() {
 			// This is a reported flow but we are going through packet processing still. It should be expired and
 			// the endpoints updated.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
+			after := c.epStatsSnapshot()[*t]
+			newSrc, newDest := after.SrcEp, after.DstEp
+			Expect(after.Reported).To(BeFalse())
 			Expect(newSrc).NotTo(Equal(oldSrc))
 			Expect(newDest).To(Equal(oldDest))
 		})
@@ -1676,27 +1553,17 @@ var _ = Describe("Conntrack Datasource", func() {
 			Eventually(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
 
 			// Data is not reported, swap local endpoints from mock data and send in CT entry again.
-			var data *Data
-			var oldSrc, oldDest calc.EndpointData
-			c.runOnLoop(func() {
-				data = c.epStats[*t]
-				oldSrc = data.SrcEp
-				oldDest = data.DstEp
-			})
+			before := c.epStatsSnapshot()[*t]
+			oldSrc, oldDest := before.SrcEp, before.DstEp
 
 			lm.SetMockData(epMapSwapLocal, nil, nil, nil)
 			c.runOnLoop(func() { c.applyPacketInfo(pktinfo) })
 
 			// This is an unreported flow, and is a conntrack update. We can update the endpoint.
 			Consistently(c.epStatsSnapshot, "500ms", "100ms").Should(HaveKey(*t))
-			var reported bool
-			var newSrc, newDest calc.EndpointData
-			c.runOnLoop(func() {
-				reported = data.Reported
-				newSrc = data.SrcEp
-				newDest = data.DstEp
-			})
-			Expect(reported).To(BeFalse())
+			after := c.epStatsSnapshot()[*t]
+			newSrc, newDest := after.SrcEp, after.DstEp
+			Expect(after.Reported).To(BeFalse())
 			Expect(newSrc).NotTo(Equal(oldSrc))
 			Expect(newDest).To(Equal(oldDest))
 		})
@@ -1836,13 +1703,8 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// Flagging as expired will attempt to expire the data when NFLOGs and service info are gathered.
 			By("flagging the data as expired")
-			var isDNAT bool
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				data.Expired = true
-				isDNAT = data.IsDNAT
-			})
-			Expect(isDNAT).Should(BeTrue())
+			c.runOnLoop(func() { c.epStats[*t].Expired = true })
+			Expect(c.epStatsSnapshot()[*t].IsDNAT).Should(BeTrue())
 
 			By("handling nflog updates for destination matching on policy - all policy info is now gathered, but no service")
 			c.runOnLoop(func() {
@@ -1883,13 +1745,8 @@ var _ = Describe("Conntrack Datasource", func() {
 
 			// Flagging as expired will attempt to expire the data when NFLOGs and service info are gathered.
 			By("flagging the data as expired")
-			var isDNAT bool
-			c.runOnLoop(func() {
-				data := c.epStats[*t]
-				data.Expired = true
-				isDNAT = data.IsDNAT
-			})
-			Expect(isDNAT).Should(BeTrue())
+			c.runOnLoop(func() { c.epStats[*t].Expired = true })
+			Expect(c.epStatsSnapshot()[*t].IsDNAT).Should(BeTrue())
 
 			By("handling ingree nflog updates for destination matching on policy - all policy info is now gathered, but no service")
 			c.runOnLoop(func() {
@@ -2111,9 +1968,12 @@ func (mr *mockReporter) Start() error {
 
 // runOnLoop runs fn on the collector's own goroutine and blocks until it
 // returns. The collector goroutine owns epStats and the Data values it holds
-// with no locking, so this is the only race-free way for a test to read or
-// mutate that state. The collector must have been Start()ed and not yet
-// Stop()ped.
+// with no locking, so anything that mutates that state, or that calls a
+// collector method which touches it, has to run here. The collector must have
+// been Start()ed and not yet Stop()ped.
+//
+// To *read* that state, prefer epStatsSnapshot: it hands back clones, which a
+// test can then read directly.
 //
 // Do not run Gomega assertions inside fn: a failed assertion panics, and on the
 // collector goroutine Ginkgo cannot attribute the panic to the running spec.
@@ -2127,16 +1987,43 @@ func (c *collector) runOnLoop(fn func()) {
 	<-done
 }
 
-// epStatsSnapshot returns a shallow clone of epStats, taken on the collector's
-// goroutine, so it is safe to poll with Eventually/Consistently and the HaveKey
-// matcher. The *Data values are still owned by the collector goroutine; read
-// their fields via runOnLoop, not through the returned map.
+// epStatsSnapshot returns a clone of epStats, taken on the collector's goroutine,
+// so it is safe both to poll with Eventually/Consistently and to read the Data
+// fields of directly. The Data values are cloned too, so nothing in the returned
+// map is shared with the collector.
+//
+// Writes still have to go through runOnLoop: mutating a clone changes nothing.
 func (c *collector) epStatsSnapshot() map[tuple.Tuple]*Data {
-	var snapshot map[tuple.Tuple]*Data
+	snapshot := map[tuple.Tuple]*Data{}
 	c.runOnLoop(func() {
-		snapshot = maps.Clone(c.epStats)
+		for t, data := range c.epStats {
+			snapshot[t] = data.clone()
+		}
 	})
 	return snapshot
+}
+
+// clone returns a copy of d that shares no mutable state with the original, so a
+// test can read it while the collector goroutine keeps running. The *calc.RuleID
+// and EndpointData values it points to are treated as immutable once published,
+// so they are shared rather than copied.
+func (d *Data) clone() *Data {
+	clone := *d
+	clone.IngressRuleTrace = d.IngressRuleTrace.clone()
+	clone.EgressRuleTrace = d.EgressRuleTrace.clone()
+	clone.IngressPendingRuleIDs = slices.Clone(d.IngressPendingRuleIDs)
+	clone.EgressPendingRuleIDs = slices.Clone(d.EgressPendingRuleIDs)
+	return &clone
+}
+
+// clone returns a copy of t that shares no backing array with the original. Note
+// that t.path usually aliases t.pathArray, so copying the struct alone would
+// leave the copy's path pointing back into the original's array.
+func (t *RuleTrace) clone() RuleTrace {
+	clone := *t
+	clone.path = slices.Clone(t.path)
+	clone.rulesToReport = slices.Clone(t.rulesToReport)
+	return clone
 }
 
 func (mr *mockReporter) Report(u any) error {
