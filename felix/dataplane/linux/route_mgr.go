@@ -38,11 +38,12 @@ import (
 
 type routeManager struct {
 	// Our dependencies.
-	routeTable           routetable.Interface
-	routeClassTunnel     routetable.RouteClass
-	routeClassSameSubnet routetable.RouteClass
-	ipVersion            uint8
-	ippoolType           proto.IPPoolType
+	routeTable              routetable.Interface
+	routeClassTunnel        routetable.RouteClass
+	routeClassSameSubnet    routetable.RouteClass
+	routeClassIPAMBlockDrop routetable.RouteClass
+	ipVersion               uint8
+	ippoolType              proto.IPPoolType
 
 	// Device information
 	parentDevice     string
@@ -92,25 +93,50 @@ func newRouteManager(
 	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
-		hostname:             dpConfig.Hostname,
-		routeTable:           mainRouteTable,
-		routeClassTunnel:     routeClassTunnel,
-		routeClassSameSubnet: routeClassSameSubnet,
-		routesByDest:         map[string]*proto.RouteUpdate{},
-		localIPAMBlocks:      map[string]*proto.RouteUpdate{},
-		tunnelChangedC:       make(chan struct{}, 1),
-		tunnelDevice:         tunnelDevice,
-		tunnelDeviceMTU:      mtu,
-		ipVersion:            ipVersion,
-		ippoolType:           ippoolType,
-		dpConfig:             dpConfig,
-		nlHandle:             nlHandle,
-		routeProtocol:        calculateRouteProtocol(dpConfig),
-		opRecorder:           opRecorder,
+		hostname:                dpConfig.Hostname,
+		routeTable:              mainRouteTable,
+		routeClassTunnel:        routeClassTunnel,
+		routeClassSameSubnet:    routeClassSameSubnet,
+		routeClassIPAMBlockDrop: ipamBlockDropRouteClass(ippoolType),
+		routesByDest:            map[string]*proto.RouteUpdate{},
+		localIPAMBlocks:         map[string]*proto.RouteUpdate{},
+		tunnelChangedC:          make(chan struct{}, 1),
+		tunnelDevice:            tunnelDevice,
+		tunnelDeviceMTU:         mtu,
+		ipVersion:               ipVersion,
+		ippoolType:              ippoolType,
+		dpConfig:                dpConfig,
+		nlHandle:                nlHandle,
+		routeProtocol:           calculateRouteProtocol(dpConfig),
+		opRecorder:              opRecorder,
 		logCtx: logrus.WithFields(logrus.Fields{
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
+	}
+}
+
+// ipamBlockDropRouteClass returns the route class to use for the "drop" routes that
+// cover this manager's local IPAM blocks.  Each encapsulation type gets its own class:
+// the blackhole routes all hang off the InterfaceNone pseudo-interface, and the
+// RouteTable keys its desired state on (class, interface), so sharing a class between
+// the managers would make each manager's SetRoutes() call delete the blackhole routes
+// belonging to the other managers that share the same RouteTable.
+func ipamBlockDropRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
+	switch ippoolType {
+	case proto.IPPoolType_VXLAN:
+		return routetable.RouteClassIPAMBlockDropVXLAN
+	case proto.IPPoolType_IPIP:
+		return routetable.RouteClassIPAMBlockDropIPIP
+	case proto.IPPoolType_NO_ENCAP:
+		return routetable.RouteClassIPAMBlockDropNoEncap
+	default:
+		// Only the three managers above program IPAM block routes; if a new
+		// pool type turns up it needs its own class, otherwise it would share
+		// (and so clobber) the no-encap manager's routes.
+		logrus.WithField("ippoolType", ippoolType).Error(
+			"Unexpected IP pool type for IPAM block drop routes; blackhole routes may be missing.")
+		return routetable.RouteClassIPAMBlockDropNoEncap
 	}
 }
 
@@ -216,9 +242,21 @@ func (m *routeManager) triggerRouteUpdate() {
 
 func (m *routeManager) updateParentIfaceAddr(addr string) {
 	m.parentDeviceLock.Lock()
-	defer m.parentDeviceLock.Unlock()
 	m.parentDeviceAddr = addr
-	m.tunnelChangedC <- struct{}{}
+	m.parentDeviceLock.Unlock()
+
+	// Kick the device-sync goroutine so that it picks up the new address without
+	// waiting for its next poll.  The kick must not block: the channel is only
+	// drained by that goroutine, which takes parentDeviceLock itself (via
+	// parentIfaceAddr), so a blocking send would deadlock the dataplane main loop
+	// against it once the channel's single buffer slot is full.  Dropping the kick
+	// is safe because a kick is already pending and the goroutine always re-reads
+	// the latest address.
+	select {
+	case m.tunnelChangedC <- struct{}{}:
+	default:
+		m.logCtx.Debug("Tunnel-changed kick already pending, not sending another.")
+	}
 }
 
 func (m *routeManager) parentIfaceAddr() string {
@@ -253,8 +291,12 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	// Check the valid suffix depending on IP version.
 	cidr, err := ip.CIDRFromString(msg.Dst)
 	if err != nil {
+		// CIDRFromString returns a nil CIDR on error, so we can't do anything
+		// useful with this route; treat it as not-a-local-block rather than
+		// dereferencing the nil below.
 		logrus.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
+		return false
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
 	// * If we have a /32 or /128 block then our blackhole route would stop the CNI plugin from
@@ -323,7 +365,10 @@ func (m *routeManager) CompleteDeferredWork() error {
 
 func (m *routeManager) OnParentDeviceUpdate(name string) {
 	if name == "" {
+		// Not a device we can program routes to; keep what we have rather than
+		// tearing down the same-subnet routes below.
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return
 	}
 	if name == m.parentDevice {
 		return
@@ -370,7 +415,7 @@ func (m *routeManager) updateRoutes() {
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("routes", bhRoutes).Debug("Route manager setting blackhole routes")
-	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
+	m.routeTable.SetRoutes(m.routeClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentDevice != "" {
 		m.logCtx.WithFields(logrus.Fields{
