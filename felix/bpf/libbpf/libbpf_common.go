@@ -51,6 +51,7 @@ type TcGlobalData struct {
 	IstioDSCP     int8
 	MaglevLUTSize uint32
 	IPFragTimeout uint32
+	HostIfindex   uint32
 }
 
 type XDPGlobalData struct {

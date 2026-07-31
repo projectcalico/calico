@@ -30,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -200,7 +199,7 @@ var _ = describe.CalicoDescribe(
 
 		var (
 			cli         ctrlclient.Client
-			dp          clusterDataplane
+			dp          utils.ClusterDataplane
 			encapIface  string
 			nodeNames   []string
 			nodeIPs     []string
@@ -215,20 +214,17 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-			Expect(err).NotTo(HaveOccurred())
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
 			allNames := nodesInfo.GetNames()
-			Expect(len(allNames)).To(BeNumerically(">=", 2),
-				"HEP datapath tests require at least 2 schedulable worker nodes, found %d", len(allNames))
+			allIPs := nodesInfo.GetIPv4s()
+			Expect(len(allIPs)).To(BeNumerically(">=", 2),
+				"HEP datapath tests require at least 2 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:2]
-			nodeIPs = nodesInfo.GetIPv4s()[:2]
+			nodeIPs = allIPs[:2]
 			calicoNames = nodesInfo.GetCalicoNames()[:2]
 			logrus.Infof("HEP nodes: %v IPs: %v calico: %v", nodeNames, nodeIPs, calicoNames)
 
-			dp = detectDataplane(cli, f.ClientSet)
+			dp = utils.DetectDataplane(cli, f.ClientSet)
 			encapIface = detectEncapInterface(cli)
 			logrus.Infof("Encap interface: %q", encapIface)
 		})
@@ -254,7 +250,7 @@ var _ = describe.CalicoDescribe(
 				// before routing, so traffic arrives on the host interface directly
 				// rather than via the tunnel device.
 				if s.accessType == "nodePort" && s.srcPod == 2 && s.policyDirection == "ingress" &&
-					(dp.Calico == dataplaneIptables || dp.Calico == dataplaneNftables) {
+					(dp.Calico == utils.DataplaneIptables || dp.Calico == utils.DataplaneNftables) {
 					return ""
 				}
 				if encapIface != "" {

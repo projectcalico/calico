@@ -16,6 +16,7 @@ package calc_test
 
 import (
 	net2 "net"
+	"net/netip"
 
 	log "github.com/sirupsen/logrus"
 
@@ -41,4 +42,8 @@ func mustParseNet(n string) net.IPNet {
 func mustParseIP(s string) net.IP {
 	ip := net2.ParseIP(s)
 	return net.IP{IP: ip}
+}
+
+func mustParsePrefix(s string) netip.Prefix {
+	return netip.MustParsePrefix(s)
 }

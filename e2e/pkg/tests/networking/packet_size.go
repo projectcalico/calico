@@ -15,7 +15,6 @@
 package networking
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -38,9 +37,6 @@ import (
 const (
 	// The PacketSizeServer defaults to port 5000.
 	packetServerPort = 5000
-
-	// Default MTU for Calico clusters.
-	defaultMTU = 1410
 )
 
 const (
@@ -92,12 +88,24 @@ func generatePacketLengths(mtu int) (getLengths, postLengths, udpLengths []int) 
 }
 
 // withPacketSizeServer is a conncheck server pod customizer that replaces the
-// default image with the PacketSizeServer. See images.PacketSizeServer for the
-// endpoints the server exposes.
+// default image with the multi-mode rapidclient image run as the packet-size
+// server. See images.RapidClientImage for the endpoints the server exposes and
+// the side-load/pull-policy contract.
 func withPacketSizeServer(pod *v1.Pod) {
+	image, preloaded := images.RapidClientImage()
 	for i := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Image = images.PacketSizeServer
+		pod.Spec.Containers[i].Image = image
 		pod.Spec.Containers[i].Args = nil
+		// When the image was side-loaded into the nodes' containerd (PR CI on
+		// gcp-kubeadm), it is not in any registry — pin to the loaded copy and
+		// fail loudly if it is somehow absent rather than pulling a stale one.
+		if preloaded {
+			pod.Spec.Containers[i].ImagePullPolicy = v1.PullNever
+		}
+		// The rapidclient image is multi-mode; MODE=server selects the HTTP/UDP
+		// dataplane server.
+		pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env,
+			v1.EnvVar{Name: "MODE", Value: "server"})
 		if pod.Spec.Containers[i].ReadinessProbe != nil && pod.Spec.Containers[i].ReadinessProbe.HTTPGet != nil {
 			pod.Spec.Containers[i].ReadinessProbe.HTTPGet.Path = "/length/1"
 		}
@@ -112,77 +120,80 @@ var _ = describe.CalicoDescribe(
 	func() {
 		f := utils.NewDefaultFramework("packet-size")
 
-		getLengths, postLengths, udpLengths := generatePacketLengths(defaultMTU)
+		runPacketTest := func(clientType, targetType int, sameNode bool) {
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 2, false)
+			nodeNames := nodesInfo.GetNames()
+			nodeIPs := nodesInfo.GetIPv4s()
+			Expect(nodeIPs).NotTo(BeEmpty(),
+				"packet size tests require a node with an IPv4 address")
+
+			// Sample packet sizes densely around the cluster's effective pod MTU.
+			// The MTU is derived from the Installation status so the test tracks
+			// whatever encapsulation / WireGuard config is in use.
+			mtu := utils.ExpectedPodMTU(f)
+			Expect(mtu).NotTo(BeNil(), "could not detect pod MTU from Installation status")
+			getLengths, postLengths, udpLengths := generatePacketLengths(int(*mtu))
+
+			var serverNode string
+			if sameNode {
+				serverNode = nodeNames[0]
+			} else {
+				serverNode = nodeNames[1]
+			}
+
+			ct := conncheck.NewConnectionTester(f)
+
+			serverName := utils.GenerateRandomName("pkt-srv")
+			server := conncheck.NewServer(serverName, f.Namespace,
+				conncheck.WithPorts(packetServerPort),
+				conncheck.WithNodePortService(),
+				conncheck.WithServerPodCustomizer(conncheck.WithNodeName(serverNode)),
+				conncheck.WithServerPodCustomizer(withPacketSizeServer),
+				conncheck.WithServerSvcCustomizer(func(svc *v1.Service) {
+					// Add a UDP port alongside the TCP port for UDP echo testing.
+					svc.Spec.Ports = append(svc.Spec.Ports, v1.ServicePort{
+						Name:     "udp",
+						Port:     int32(packetServerPort),
+						Protocol: v1.ProtocolUDP,
+					})
+				}),
+			)
+			ct.AddServer(server)
+
+			if clientType == pktClientExt {
+				extClient := externalnode.NewClient()
+				Expect(extClient).NotTo(BeNil(),
+					"external node tests require EXT_IP, EXT_KEY, EXT_USER to be configured")
+				ct.Deploy()
+				DeferCleanup(ct.Stop)
+
+				// External client uses SSH — build targets and test via ext client helpers.
+				target := packetBaseTarget(server, nodeIPs, targetType)
+				packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
+			} else {
+				clientName := utils.GenerateRandomName("pkt-client")
+				clientOpts := []conncheck.ClientOption{
+					conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
+					conncheck.WithClientCustomizer(withCurlClient),
+				}
+				if clientType == pktClientHost {
+					clientOpts = append(clientOpts, conncheck.WithClientCustomizer(func(pod *v1.Pod) {
+						pod.Spec.HostNetwork = true
+					}))
+				}
+				client := conncheck.NewClient(clientName, f.Namespace, clientOpts...)
+				ct.AddClient(client)
+				ct.Deploy()
+				DeferCleanup(ct.Stop)
+
+				baseTarget := packetBaseTarget(server, nodeIPs, targetType)
+				packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
+			}
+		}
 
 		Context("with different packet sizes", func() {
 			DescribeTable("using UDP and TCP",
-				func(clientType, targetType int, sameNode bool) {
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-					defer cancel()
-					nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-					Expect(err).NotTo(HaveOccurred())
-					nodesInfo := utils.GetNodesInfo(f, nodes, false)
-					nodeNames := nodesInfo.GetNames()
-					nodeIPs := nodesInfo.GetIPv4s()
-					Expect(len(nodeNames)).To(BeNumerically(">=", 2),
-						"packet size tests require at least 2 schedulable worker nodes")
-
-					var serverNode string
-					if sameNode {
-						serverNode = nodeNames[0]
-					} else {
-						serverNode = nodeNames[1]
-					}
-
-					ct := conncheck.NewConnectionTester(f)
-
-					serverName := utils.GenerateRandomName("pkt-srv")
-					server := conncheck.NewServer(serverName, f.Namespace,
-						conncheck.WithPorts(packetServerPort),
-						conncheck.WithNodePortService(),
-						conncheck.WithServerPodCustomizer(conncheck.WithNodeName(serverNode)),
-						conncheck.WithServerPodCustomizer(withPacketSizeServer),
-						conncheck.WithServerSvcCustomizer(func(svc *v1.Service) {
-							// Add a UDP port alongside the TCP port for UDP echo testing.
-							svc.Spec.Ports = append(svc.Spec.Ports, v1.ServicePort{
-								Name:     "udp",
-								Port:     int32(packetServerPort),
-								Protocol: v1.ProtocolUDP,
-							})
-						}),
-					)
-					ct.AddServer(server)
-
-					if clientType == pktClientExt {
-						extClient := externalnode.NewClient()
-						Expect(extClient).NotTo(BeNil(),
-							"external node tests require EXT_IP, EXT_KEY, EXT_USER to be configured")
-						ct.Deploy()
-						DeferCleanup(ct.Stop)
-
-						// External client uses SSH — build targets and test via ext client helpers.
-						target := packetBaseTarget(server, nodeIPs, targetType)
-						packetTestExternal(extClient, target, getLengths, postLengths, udpLengths)
-					} else {
-						clientName := utils.GenerateRandomName("pkt-client")
-						clientOpts := []conncheck.ClientOption{
-							conncheck.WithClientCustomizer(conncheck.WithNodeName(nodeNames[0])),
-							conncheck.WithClientCustomizer(withCurlClient),
-						}
-						if clientType == pktClientHost {
-							clientOpts = append(clientOpts, conncheck.WithClientCustomizer(func(pod *v1.Pod) {
-								pod.Spec.HostNetwork = true
-							}))
-						}
-						client := conncheck.NewClient(clientName, f.Namespace, clientOpts...)
-						ct.AddClient(client)
-						ct.Deploy()
-						DeferCleanup(ct.Stop)
-
-						baseTarget := packetBaseTarget(server, nodeIPs, targetType)
-						packetTestViaConncheck(ct, client, baseTarget, getLengths, postLengths, udpLengths)
-					}
-				},
+				runPacketTest,
 				Entry("pod to pod, same node", pktClientPod, pktTargetPod, true),
 				Entry("pod to service, same node", pktClientPod, pktTargetService, true),
 				Entry("pod to nodeport, same node", pktClientPod, pktTargetNodePort, true),
@@ -192,8 +203,17 @@ var _ = describe.CalicoDescribe(
 				Entry("host to pod, different nodes", pktClientHost, pktTargetPod, false),
 				Entry("host to service, different nodes", pktClientHost, pktTargetService, false),
 				Entry("host to nodeport, different nodes", pktClientHost, pktTargetNodePort, false),
-				Entry("external to nodeport", pktClientExt, pktTargetNodePort, false),
 			)
+
+			// External-client entry is gated by the ExternalNode label so pipelines
+			// without EXT_IP/EXT_KEY/EXT_USER configured filter it out rather than
+			// failing hard.
+			framework.Context("external client", describe.WithExternalNode(), func() {
+				DescribeTable("using UDP and TCP",
+					runPacketTest,
+					Entry("external to nodeport", pktClientExt, pktTargetNodePort, false),
+				)
+			})
 		})
 	},
 )
@@ -201,7 +221,7 @@ var _ = describe.CalicoDescribe(
 // packetBaseTarget returns a base target for the given target type. Callers add
 // protocol-specific options (WithHTTP for GET/POST, WithUDP for UDP) on top.
 type packetTarget struct {
-	server    *conncheck.Server
+	server    conncheck.Server
 	nodeIPs   []string
 	typ       int
 	podIP     string
@@ -210,7 +230,7 @@ type packetTarget struct {
 	clusterIP string
 }
 
-func packetBaseTarget(server *conncheck.Server, nodeIPs []string, targetType int) packetTarget {
+func packetBaseTarget(server conncheck.Server, nodeIPs []string, targetType int) packetTarget {
 	return packetTarget{
 		server:    server,
 		nodeIPs:   nodeIPs,
@@ -257,7 +277,7 @@ func (t packetTarget) makeTargetMultiOpt(opts ...conncheck.TargetOption) connche
 }
 
 // packetTestViaConncheck runs GET, POST, and UDP packet size tests using conncheck.
-func packetTestViaConncheck(ct conncheck.ConnectionTester, client *conncheck.Client, base packetTarget, getLengths, postLengths, udpLengths []int) {
+func packetTestViaConncheck(ct conncheck.ConnectionTester, client conncheck.Client, base packetTarget, getLengths, postLengths, udpLengths []int) {
 	for _, length := range getLengths {
 		By(fmt.Sprintf("Testing GET with payload length %d", length), func() {
 			target := base.getTarget(length)
@@ -328,7 +348,7 @@ func packetTestExternal(ext *externalnode.Client, base packetTarget, getLengths,
 				if err != nil {
 					return fmt.Errorf("GET failed: %w", err)
 				}
-				data, _, parseErr := packetSplitCurlOutput(out)
+				data, parseErr := packetSplitCurlOutput(out)
 				if parseErr != nil {
 					return parseErr
 				}
@@ -349,7 +369,7 @@ func packetTestExternal(ext *externalnode.Client, base packetTarget, getLengths,
 				if err != nil {
 					return fmt.Errorf("POST failed: %w", err)
 				}
-				data, _, parseErr := packetSplitCurlOutput(out)
+				data, parseErr := packetSplitCurlOutput(out)
 				if parseErr != nil {
 					return parseErr
 				}
@@ -384,19 +404,14 @@ func packetTestExternal(ext *externalnode.Client, base packetTarget, getLengths,
 	}
 }
 
-// packetSplitCurlOutput splits curl output (with -w "\n%{time_total}") into
-// the response body and elapsed time.
-func packetSplitCurlOutput(stdout string) (string, float64, error) {
+// packetSplitCurlOutput returns the response body from curl output invoked
+// with -w "\n%{time_total}". The trailing elapsed-time line is discarded.
+func packetSplitCurlOutput(stdout string) (string, error) {
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
 	if len(lines) < 2 {
-		return "", 0, fmt.Errorf("expected 2+ lines in curl output, got %d: %q", len(lines), stdout)
+		return "", fmt.Errorf("expected 2+ lines in curl output, got %d: %q", len(lines), stdout)
 	}
-	data := strings.Join(lines[:len(lines)-1], "\n")
-	elapsed, err := strconv.ParseFloat(strings.TrimSpace(lines[len(lines)-1]), 64)
-	if err != nil {
-		return data, 0, fmt.Errorf("could not parse elapsed time %q: %w", lines[len(lines)-1], err)
-	}
-	return data, elapsed, nil
+	return strings.Join(lines[:len(lines)-1], "\n"), nil
 }
 
 // generateUDPPayload creates a predictable string of the given length.

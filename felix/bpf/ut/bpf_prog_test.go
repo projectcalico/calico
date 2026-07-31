@@ -63,14 +63,14 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var canTestMarks bool
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))
@@ -83,6 +83,7 @@ func init() {
 const (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
+	testWGPort        = uint16(5666)
 	testMaglevLUTSize = uint32(31)
 )
 
@@ -96,14 +97,12 @@ var (
 			}},
 		}},
 	}
-	node1ip    = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
-	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
-	node2ip    = net.IPv4(10, 10, 0, 2).To4()
-	node3ip    = net.IPv4(10, 10, 0, 3).To4()
-	node3tunIP = net.IPv4(11, 11, 0, 3).To4()
-	intfIP     = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR  = net.IPNet{
+	node1ip   = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
+	node2ip   = net.IPv4(10, 10, 0, 2).To4()
+	node3ip   = net.IPv4(10, 10, 0, 3).To4()
+	intfIP    = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -116,14 +115,12 @@ var (
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 
-	node1ipV6    = net.ParseIP("abcd::ffff:0a0a:0001").To16()
-	node1ip2V6   = net.ParseIP("abcd::ffff:0a0a:0201").To16()
-	node1tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0001").To16()
-	node2ipV6    = net.ParseIP("abcd::ffff:0a0a:0002").To16()
-	node3ipV6    = net.ParseIP("abcd::ffff:0a0a:0004").To16()
-	node3tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0004").To16()
-	intfIPV6     = net.ParseIP("abcd::ffff:0a0a:0003").To16()
-	node1CIDRV6  = net.IPNet{
+	node1ipV6   = net.ParseIP("abcd::ffff:0a0a:0001").To16()
+	node1ip2V6  = net.ParseIP("abcd::ffff:0a0a:0201").To16()
+	node2ipV6   = net.ParseIP("abcd::ffff:0a0a:0002").To16()
+	node3ipV6   = net.ParseIP("abcd::ffff:0a0a:0004").To16()
+	intfIPV6    = net.ParseIP("abcd::ffff:0a0a:0003").To16()
+	node1CIDRV6 = net.IPNet{
 		IP:   node1ipV6,
 		Mask: net.CIDRMask(128, 128),
 	}
@@ -623,7 +620,7 @@ var (
 	policyJumpMap                                                                                                                                            []maps.Map
 	ringBufMap, ringBufDropsMap                                                                                                                              maps.Map
 	profilingMap, ipfragsMapTmp                                                                                                                              maps.Map
-	qosMap                                                                                                                                                   maps.Map
+	qosMap, qosConnMap                                                                                                                                       maps.Map
 	ctlbProgsMap                                                                                                                                             []maps.Map
 	progMap                                                                                                                                                  []maps.Map
 	allMaps                                                                                                                                                  []maps.Map
@@ -662,18 +659,19 @@ func initMapsOnce() {
 		ctlbProgsMap = nat.ProgramsMaps()
 		progMap = hook.NewProgramsMaps()
 		qosMap = qos.Map()
+		qosConnMap = qos.ConnMap()
 		maglevMap = nat.MaglevMap()
 		maglevMapV6 = nat.MaglevMapV6()
 		allowSourcesMap = allowsources.Map()
 		allowSourcesMapV6 = allowsources.MapV6()
 
-		ringBufMap = ringbuf.Map("rb_evnt", 1024*1024)
+		ringBufMap = ringbuf.Map("rb_evnt", rbSize)
 		ringBufDropsMap = ringbuf.DropsMap()
 
 		allMaps = []maps.Map{natMap, natBEMap, natMapV6, natBEMapV6, ctMap, ctMapV6, ctCleanupMap, ctCleanupMapV6, rtMap, rtMapV6, ipsMap, ipsMapV6,
 			stateMap, testStateMap, affinityMap, affinityMapV6, arpMap, arpMapV6, fsafeMap, fsafeMapV6,
 			countersMap, ipfragsMap, ipfragsMapTmp, ipfragsFwdMap, ifstateMap, profilingMap,
-			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, maglevMap, maglevMapV6,
+			policyJumpMap[0], policyJumpMap[1], policyJumpMapXDP, ctlbProgsMap[0], ctlbProgsMap[1], ctlbProgsMap[2], qosMap, qosConnMap, maglevMap, maglevMapV6,
 			allowSourcesMap, allowSourcesMapV6, ringBufMap, ringBufDropsMap}
 		for _, m := range allMaps {
 			err := m.EnsureExists()
@@ -683,6 +681,49 @@ func initMapsOnce() {
 		}
 
 	})
+}
+
+// rbSize is the size in bytes of the shared cali_rb_evnt ring buffer map.
+// Must be a power of two and a multiple of the page size (the kernel ring buffer ABI requirement).
+const rbSize = 1024 * 1024
+
+// newTestRingBuf opens a reader on the shared cali_rb_evnt ring buffer used
+// by all BPF UT programs and drains any events left over from earlier tests,
+// so rb.Next() only observes events produced after this call. The reader is
+// closed automatically at the end of the test via t.Cleanup, even if an
+// assertion fails partway through.
+//
+// Prefer this helper over calling ringbuf.New directly — the ring buffer map
+// is pinned and shared across tests, so a naked reader can pick up stray
+// records (EVENT_LOST_EVENTS markers, kprobe stats, etc.) and mis-parse them.
+func newTestRingBuf(t *testing.T) *ringbuf.RingBuffer {
+	rb, err := ringbuf.New(ringBufMap, rbSize)
+	Expect(err).NotTo(HaveOccurred())
+	t.Cleanup(func() { _ = rb.Close() })
+	if n := rb.Drain(); n > 0 {
+		t.Logf("newTestRingBuf: drained %d stale event(s) from cali_rb_evnt — an earlier test likely left records unread", n)
+	}
+	return rb
+}
+
+// ringBufNextWithTimeout reads the next event from rb, failing the test after
+// 5s rather than blocking on epoll indefinitely. Use this instead of rb.Next()
+// directly so a silent BPF-side regression surfaces as a clear timeout instead
+// of a hung test.
+func ringBufNextWithTimeout(t *testing.T, rb *ringbuf.RingBuffer) ringbuf.Event {
+	t.Helper()
+	var (
+		evt ringbuf.Event
+		err error
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		evt, err = rb.Next()
+	}()
+	Eventually(done, "5s").Should(BeClosed(), "timed out waiting for ring buffer event")
+	Expect(err).NotTo(HaveOccurred())
+	return evt
 }
 
 func cleanupMap(m maps.Map) {
@@ -855,6 +896,7 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					IfaceName:     setLogPrefix(ifaceLog),
 					MaglevLUTSize: testMaglevLUTSize,
 					IPFragTimeout: topts.ipfragTimeout,
+					WgPort:        topts.wgPort,
 				}
 				if topts.flowLogsEnabled {
 					globals.Flags |= libbpf.GlobalsFlowLogsEnabled
@@ -871,8 +913,20 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
+				if topts.ingressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+				}
+
+				if topts.egressQoSConnLimit {
+					globals.Flags |= libbpf.GlobalsEgressConnLimitConfigured
+				}
+
 				if topts.workloadSrcSpoofingConfigured {
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
+				}
+
+				if topts.redirectPeer {
+					globals.Flags |= libbpf.GlobalsRedirectPeer
 				}
 
 				globals.DSCP = -1
@@ -883,7 +937,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				globals.IstioDSCP = topts.istioDSCP
 
 				if topts.ipv6 {
-					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
 					copy(globals.IntfIPv6[:], intfIPV6.To16())
 
@@ -895,7 +948,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				} else {
 					copy(globals.HostIPv4[0:4], hostIP)
 					copy(globals.IntfIPv4[0:4], intfIP)
-					copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
 					for i := range tcdefs.ProgIndexEnd {
 						globals.Jumps[i] = uint32(i)
@@ -1017,11 +1069,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				MaglevLUTSize: testMaglevLUTSize,
 			}
 			if topts.ipv6 {
-				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 				copy(globals.HostIPv6[:], hostIP.To16())
 				copy(globals.IntfIPv6[:], intfIPV6.To16())
 			} else {
-				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 				copy(globals.HostIPv4[0:4], hostIP.To4())
 				copy(globals.IntfIPv4[0:4], intfIP.To4())
 			}
@@ -1256,10 +1306,14 @@ type testOpts struct {
 	natOutExcludeHosts            bool
 	ingressQoSPacketRate          bool
 	egressQoSPacketRate           bool
+	ingressQoSConnLimit           bool
+	egressQoSConnLimit            bool
 	dscp                          int8
 	istioDSCP                     int8
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
+	wgPort                        uint16
+	redirectPeer                  bool
 }
 
 type testOption func(opts *testOpts)
@@ -1333,6 +1387,18 @@ func withEgressQoSPacketRate() testOption {
 	}
 }
 
+func withEgressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.egressQoSConnLimit = true
+	}
+}
+
+func withIngressQoSConnLimit() testOption {
+	return func(o *testOpts) {
+		o.ingressQoSConnLimit = true
+	}
+}
+
 func withEgressDSCP(value int8) testOption {
 	return func(o *testOpts) {
 		o.dscp = value
@@ -1366,6 +1432,18 @@ func withIstioDSCP(value uint8) testOption {
 func withIPFragTimeout(timeout uint32) testOption {
 	return func(o *testOpts) {
 		o.ipfragTimeout = timeout
+	}
+}
+
+func withWgPort(port uint16) testOption {
+	return func(o *testOpts) {
+		o.wgPort = port
+	}
+}
+
+func withRedirectPeer() testOption {
+	return func(o *testOpts) {
+		o.redirectPeer = true
 	}
 }
 
@@ -2165,6 +2243,7 @@ func resetBPFMaps() {
 	resetMap(natMap)
 	resetMap(natBEMap)
 	resetMap(qosMap)
+	resetMap(qosConnMap)
 	resetMap(maglevMap)
 }
 

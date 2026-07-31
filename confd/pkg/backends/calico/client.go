@@ -33,7 +33,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
+	"github.com/projectcalico/calico/confd/pkg/backends"
+	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -74,15 +75,6 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
-var sensitiveValues = map[string]any{
-	"/calico/bgp/v1/global/node_mesh_password": nil,
-}
-
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() api.Client
-}
-
 func NewRouteIndex() *RouteIndex {
 	return &RouteIndex{
 		programmedRoutes:       make(map[string]bool),
@@ -117,7 +109,11 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 	}
 
 	// Extract the backend client from the v3 client.
-	bc := cc.(backendClientAccessor).Backend()
+	bc := cc.(api.BackendAccessor).Backend()
+
+	// The node label manager tracks node labels for components to use when calculating
+	// node selectors, etc.
+	nodeLabelMgr := newNodeLabelManager()
 
 	// Create the client.  Initialize the cache revision to 1 so that the watcher
 	// code can handle the first iteration by always rendering.
@@ -128,7 +124,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 		cacheRevision:           1,
 		revisionsByPrefix:       make(map[string]uint64),
 		nodeMeshEnabled:         nodeMeshEnabled,
-		nodeLabelManager:        newNodeLabelManager(),
+		nodeLabelManager:        nodeLabelMgr,
 		bgpPeers:                make(map[string]*apiv3.BGPPeer),
 		sourceReady:             make(map[string]bool),
 		nodeListenPorts:         make(map[string]uint16),
@@ -309,7 +305,7 @@ type client struct {
 	// The BGP syncer.
 	syncer           api.Syncer
 	nodeV1Processor  watchersyncer.SyncerUpdateProcessor
-	nodeLabelManager nodeLabelManager
+	nodeLabelManager *nodeLabelManager
 	bgpPeers         map[string]*apiv3.BGPPeer
 	globalListenPort uint16
 	nodeListenPorts  map[string]uint16
@@ -367,7 +363,7 @@ type client struct {
 	k8sClient kubernetes.Interface
 
 	// Subcomponent for accessing and watching secrets (that hold BGP passwords).
-	secretWatcher *secretWatcher
+	secretWatcher secretWatcherInterface
 
 	// Subcomponent for accessing and watching local BGP peers.
 	localBGPPeerWatcher *LocalBGPPeerWatcher
@@ -408,9 +404,9 @@ func (c *client) SetPrefixes(keys []string) error {
 }
 
 // OnStatusUpdated is called from the BGP syncer to indicate that the sync status is updated.
-// This client handles InSync and WaitForDatastore statuses. When we receive InSync, we unblock GetValues calls.
-// When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
-// GetValues calls.
+// When we receive InSync, we unblock GetValues calls.
+// When we receive WaitForDatastore or ResyncInProgress, we reset the client's syncer status which blocks
+// GetValues calls until the syncer is back in sync.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	select {
 	case c.syncerC <- status:
@@ -423,7 +419,7 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 	switch status {
 	case api.InSync:
 		c.OnSyncChange(SourceSyncer, true)
-	case api.WaitForDatastore:
+	case api.WaitForDatastore, api.ResyncInProgress:
 		c.OnSyncChange(SourceSyncer, false)
 	}
 }
@@ -487,27 +483,6 @@ func (c *client) inSync() bool {
 	return c.sourceReady[SourceSyncer] && c.sourceReady[SourceRouteGenerator] && c.sourceReady[SourceLocalBGPPeerWatcher]
 }
 
-type bgpPeer struct {
-	PeerIP          cnet.IP              `json:"ip"`
-	ASNum           numorstring.ASNumber `json:"as_num,string"`
-	LocalASNum      numorstring.ASNumber `json:"local_as_num,string"`
-	RRClusterID     string               `json:"rr_cluster_id"`
-	Password        *string              `json:"password"`
-	SourceAddr      string               `json:"source_addr"`
-	Port            uint16               `json:"port"`
-	KeepNextHop     bool                 `json:"keep_next_hop"`
-	RestartTime     string               `json:"restart_time"`
-	KeepaliveTime   string               `json:"keepalive_time"`
-	CalicoNode      bool                 `json:"calico_node"`
-	NumAllowLocalAS int32                `json:"num_allow_local_as"`
-	TTLSecurity     uint8                `json:"ttl_security"`
-	ReachableBy     string               `json:"reachable_by"`
-	Filters         []string             `json:"filters"`
-	PassiveMode     bool                 `json:"passive_mode"`
-	LocalBGPPeer    bool                 `json:"local_bgp_peer"`
-	NextHopMode     string               `json:"next_hop_mode"`
-}
-
 type bgpPrefix struct {
 	CIDR        string   `json:"cidr"`
 	Communities []string `json:"communities"`
@@ -533,7 +508,7 @@ func (c *client) updatePeersV1() {
 	peersV1 := make(map[string]string)
 
 	// Common subroutine for emitting both global and node-specific peerings.
-	emit := func(key model.Key, peer *bgpPeer) {
+	emit := func(key model.Key, peer *backends.BGPPeer) {
 		log.WithFields(log.Fields{"key": key, "peer": peer}).Debug("Maybe emit peering")
 
 		// Compute etcd v1 path for this peering key.
@@ -593,7 +568,7 @@ func (c *client) updatePeersV1() {
 			}
 			log.Debugf("Local nodes %#v", localNodeNames)
 
-			var peers []*bgpPeer
+			var peers []*backends.BGPPeer
 			if (v3res.Spec.LocalWorkloadSelector != "") && (c.localBGPPeerWatcher != nil) {
 				// Get active local BGP Peers.
 				log.Infof("Process on local workload bgp peer %s", v3res.Name)
@@ -667,7 +642,7 @@ func (c *client) updatePeersV1() {
 				}
 
 				keepOriginalNextHop, nextHopMode := getNextHopMode(v3res)
-				peers = append(peers, &bgpPeer{
+				peers = append(peers, &backends.BGPPeer{
 					PeerIP:          *ip,
 					ASNum:           v3res.Spec.ASNumber,
 					LocalASNum:      localASN,
@@ -693,12 +668,12 @@ func (c *client) updatePeersV1() {
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
-					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
+					key := model.GlobalBGPPeerKey{PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
 						log.Debugf("Local node name: %#v", localNodeName)
-						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 						emit(key, peer)
 					}
 				}
@@ -758,7 +733,7 @@ func (c *client) updatePeersV1() {
 			continue
 		}
 
-		var peers []*bgpPeer
+		var peers []*backends.BGPPeer
 		for _, peerNodeName := range peerNodeNames {
 			peers = append(peers, c.nodeAsBGPPeers(peerNodeName, includeV4, includeV6, v3res)...)
 		}
@@ -770,7 +745,7 @@ func (c *client) updatePeersV1() {
 
 		for _, peer := range peers {
 			for _, localNodeName := range localNodeNames {
-				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 				emit(key, peer)
 			}
 		}
@@ -883,7 +858,7 @@ func (c *client) globalAS() string {
 	return c.cache[asKey]
 }
 
-func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
+func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v3Peer *apiv3.BGPPeer) (peers []*backends.BGPPeer) {
 	versions := map[string]string{
 		"IPv4": localBGPPeerData.ipv4,
 		"IPv6": localBGPPeerData.ipv6,
@@ -892,7 +867,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 	workloadName := localBGPPeerData.name
 
 	for version, ipStr := range versions {
-		peer := &bgpPeer{}
+		peer := &backends.BGPPeer{}
 		if ipStr == "" {
 			continue
 		}
@@ -915,7 +890,7 @@ func (c *client) localBGPPeerDataAsBGPPeers(localBGPPeerData localBGPPeerData, v
 	return
 }
 
-func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*bgpPeer) {
+func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3.BGPPeer) (peers []*backends.BGPPeer) {
 	ipv4Str, ipv6Str, asNum, rrClusterID := c.nodeToBGPFields(nodeName)
 	versions := map[string]string{}
 	if v4 {
@@ -925,7 +900,7 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 		versions["IPv6"] = ipv6Str
 	}
 	for version, ipStr := range versions {
-		peer := &bgpPeer{}
+		peer := &backends.BGPPeer{}
 		if ipStr == "" {
 			log.Debugf("No %v for node %v", version, nodeName)
 			continue
@@ -941,11 +916,11 @@ func (c *client) nodeAsBGPPeers(nodeName string, v4 bool, v6 bool, v3Peer *apiv3
 			peer.TTLSecurity = *v3Peer.Spec.TTLSecurity
 		}
 
+		peer.Filters = v3Peer.Spec.Filters
+
 		if v3Peer.Spec.ReachableBy != "" {
 			peer.ReachableBy = v3Peer.Spec.ReachableBy
 		}
-
-		peer.Filters = v3Peer.Spec.Filters
 
 		// If peer node has listenPort set in BGPConfiguration, use that.
 		if port, ok := c.nodeListenPorts[nodeName]; ok {
@@ -995,13 +970,20 @@ func (c *client) OnUpdates(updates []api.Update) {
 	}
 }
 
-func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
+func (c *client) onUpdates(updates []api.Update, triggered bool) {
 	// Update our cache from the updates.
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
 	// Indicate that our cache has been updated.
 	c.incrementCacheRevision()
+
+	// If triggered (by c.recheckPeerConfig), force recomputation of the set of BGP peers, and
+	// of the details that go into their rendering.
+	needUpdatePeersV1 := triggered
+	if triggered {
+		c.keyUpdated("/calico/bgpconfig")
+	}
 
 	// Track whether these updates require BGP peerings to be recomputed.
 	needUpdatePeersReasons := []string{}
@@ -1164,10 +1146,8 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 		log.Info("Recompute BGP peerings: " + strings.Join(needUpdatePeersReasons, "; "))
 		c.updatePeersV1()
 
-		// Also update BGP config passwords before removing old watched secrets
-		if c.globalBGPConfig != nil {
-			c.getNodeMeshPasswordKVPair(c.globalBGPConfig, model.GlobalBGPConfigKey{})
-		}
+		// Re-reference the BGPConfiguration mesh password, if any.
+		c.getNodeMeshPassword(c.globalBGPConfig)
 
 		// Clean up any secrets that are no longer of interest.
 		if c.secretWatcher != nil {
@@ -1191,29 +1171,16 @@ func (c *client) onUpdates(updates []api.Update, needUpdatePeersV1 bool) {
 			}
 		}
 
-		// Update external IP CIDRs. In v1 format, they are a single comma-separated
-		// string. If the string isn't empty, split on the comma and pass a list of strings
-		// to the route generator.  An empty string indicates a withdrawal of that set of
-		// service IPs.
-		var externalIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
-			externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
-		}
-		c.onExternalIPsUpdate(externalIPs)
+		// Update external IP CIDRs.
+		c.onExternalIPsUpdate(getServiceExternalIPs(c.globalBGPConfig))
 
-		// Same for cluster CIDRs.
-		var clusterIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
-			clusterIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
+		// Same for cluster CIDRs - except those can be overridden by an env var, so only
+		// process cluster IPs in BGPConfiguration if that env var is not set.
+		if len(os.Getenv(envAdvertiseClusterIPs)) == 0 {
+			c.onClusterIPsUpdate(getServiceClusterIPs(c.globalBGPConfig))
 		}
-		c.onClusterIPsUpdate(clusterIPs)
-
 		// Same for loadbalancer CIDRs.
-		var loadBalancerIPs []string
-		if len(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"]) > 0 {
-			loadBalancerIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_loadbalancer_ips"], ",")
-		}
-		c.onLoadBalancerIPsUpdate(loadBalancerIPs)
+		c.onLoadBalancerIPsUpdate(getServiceLoadBalancerIPs(c.globalBGPConfig))
 
 		if c.rg != nil {
 			// Trigger the route generator to recheck and advertise or withdraw
@@ -1231,17 +1198,9 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 	if resName == globalConfigName {
 		c.getPrefixAdvertisementsKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getListenPortKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
-		c.getBindModeKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
 		c.getASNumberKVPair(v3res, model.GlobalBGPConfigKey{}, updatePeersV1, updateReasons)
-		c.getServiceExternalIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
-		c.getServiceClusterIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
-		c.getServiceLoadBalancerIPsKVPair(v3res, model.GlobalBGPConfigKey{}, svcAdvertisement)
 		c.getNodeToNodeMeshKVPair(v3res, model.GlobalBGPConfigKey{})
 		c.getLogSeverityKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getNodeMeshRestartTimeKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getNodeMeshPasswordKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getIgnoredInterfacesKVPair(v3res, model.GlobalBGPConfigKey{})
-		c.getProgramClusterRoutesKVPair(v3res, model.GlobalBGPConfigKey{})
 
 		// Update service load balancer aggregation setting
 		if v3res != nil && v3res.Spec.ServiceLoadBalancerAggregation != nil {
@@ -1250,6 +1209,16 @@ func (c *client) updateBGPConfigCache(resName string, v3res *apiv3.BGPConfigurat
 			// Default to enabled if not specified or if v3res is nil
 			c.serviceLoadBalancerAggregation = apiv3.ServiceLoadBalancerAggregationEnabled
 		}
+
+		// BGPConfiguration changes should not be very frequent, but they often impact
+		// GetBirdBGPConfig when they do occur, so flag that templates should be processed
+		// again.  Note, BGPConfiguration changes do not generally affect the _set_ of BGP
+		// peers, so do not always require setting updatePeersV1 and updateReasons.
+		c.keyUpdated("/calico/bgpconfig")
+
+		// Some of the previous per-field logic above used to set svcAdvertisement
+		// unconditionally.  It's equivalent to set it unconditionally here.
+		*svcAdvertisement = true
 
 		// Cache the updated BGP configuration
 		c.globalBGPConfig = v3res
@@ -1374,18 +1343,6 @@ func (c *client) getListenPortKVPair(v3res *apiv3.BGPConfiguration, key any, upd
 	*updatePeersV1 = true
 }
 
-func (c *client) getBindModeKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
-	bindMode := getBGPConfigKey("bind_mode", key)
-	if v3res != nil && v3res.Spec.BindMode != nil {
-		*updateReasons = append(*updateReasons, "bindMode updated.")
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(bindMode, string(*v3res.Spec.BindMode)))
-	} else {
-		*updateReasons = append(*updateReasons, "bindMode deleted.")
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(bindMode))
-	}
-	*updatePeersV1 = true
-}
-
 func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updatePeersV1 *bool, updateReasons *[]string) {
 	asNumberKey := getBGPConfigKey("as_num", key)
 	if v3res != nil && v3res.Spec.ASNumber != nil {
@@ -1398,13 +1355,8 @@ func (c *client) getASNumberKVPair(v3res *apiv3.BGPConfiguration, key any, updat
 	*updatePeersV1 = true
 }
 
-func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcExternalIPKey := getBGPConfigKey("svc_external_ips", key)
-
-	if v3res != nil && v3res.Spec.ServiceExternalIPs != nil && len(v3res.Spec.ServiceExternalIPs) != 0 {
-		// We wrap each Service external IP in a ServiceExternalIPBlock struct to
-		// achieve the desired API structure, unpack that.
-		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceExternalIPs))
+func getServiceExternalIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
 		for _, ipBlock := range v3res.Spec.ServiceExternalIPs {
 			if ipBlock.CIDR == "" {
 				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
@@ -1412,18 +1364,12 @@ func (c *client) getServiceExternalIPsKVPair(v3res *apiv3.BGPConfiguration, key 
 			}
 			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcExternalIPKey, strings.Join(ipCidrs, ",")))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcExternalIPKey))
 	}
-	*svcAdvertisement = true
+	return
 }
 
-func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcLoadBalancerIPKey := getBGPConfigKey("svc_loadbalancer_ips", key)
-
-	if v3res != nil && v3res.Spec.ServiceLoadBalancerIPs != nil && len(v3res.Spec.ServiceLoadBalancerIPs) != 0 {
-		ipCidrs := make([]string, 0, len(v3res.Spec.ServiceLoadBalancerIPs))
+func getServiceLoadBalancerIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
 		for _, ipBlock := range v3res.Spec.ServiceLoadBalancerIPs {
 			if ipBlock.CIDR == "" {
 				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
@@ -1431,39 +1377,21 @@ func (c *client) getServiceLoadBalancerIPsKVPair(v3res *apiv3.BGPConfiguration, 
 			}
 			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcLoadBalancerIPKey, strings.Join(ipCidrs, ",")))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcLoadBalancerIPKey))
 	}
-	*svcAdvertisement = true
+	return
 }
 
-func (c *client) getServiceClusterIPsKVPair(v3res *apiv3.BGPConfiguration, key any, svcAdvertisement *bool) {
-	svcInternalIPKey := getBGPConfigKey("svc_cluster_ips", key)
-
-	if len(os.Getenv(envAdvertiseClusterIPs)) != 0 {
-		// ClusterIPs are configurable through an environment variable. If specified,
-		// that variable takes precedence over datastore config, so we should ignore the update.
-		// Setting Spec.ServiceClusterIPs to nil, so we keep using the cache value set during startup.
-		log.Infof("Ignoring serviceClusterIPs update due to environment variable %s", envAdvertiseClusterIPs)
-	} else {
-		if v3res != nil && v3res.Spec.ServiceClusterIPs != nil && len(v3res.Spec.ServiceClusterIPs) != 0 {
-			// We wrap each Service Cluster IP in a ServiceClusterIPBlock to
-			// achieve the desired API structure. This unpacks that.
-			ipCidrs := make([]string, 0, len(v3res.Spec.ServiceClusterIPs))
-			for _, ipBlock := range v3res.Spec.ServiceClusterIPs {
-				if ipBlock.CIDR == "" {
-					// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
-					continue
-				}
-				ipCidrs = append(ipCidrs, ipBlock.CIDR)
+func getServiceClusterIPs(v3res *apiv3.BGPConfiguration) (ipCidrs []string) {
+	if v3res != nil {
+		for _, ipBlock := range v3res.Spec.ServiceClusterIPs {
+			if ipBlock.CIDR == "" {
+				// The CRD allows CIDR to be optional so we just ignore empty CIDRs.
+				continue
 			}
-			c.updateCache(api.UpdateTypeKVUpdated, getKVPair(svcInternalIPKey, strings.Join(ipCidrs, ",")))
-		} else {
-			c.updateCache(api.UpdateTypeKVDeleted, getKVPair(svcInternalIPKey))
+			ipCidrs = append(ipCidrs, ipBlock.CIDR)
 		}
-		*svcAdvertisement = true
 	}
+	return
 }
 
 func (c *client) getNodeToNodeMeshKVPair(v3res *apiv3.BGPConfiguration, key any) {
@@ -1499,53 +1427,18 @@ func (c *client) getLogSeverityKVPair(v3res *apiv3.BGPConfiguration, key any) {
 	}
 }
 
-func (c *client) getNodeMeshRestartTimeKVPair(v3res *apiv3.BGPConfiguration, key any) {
-	meshRestartKey := getBGPConfigKey("node_mesh_restart_time", key)
-
-	if v3res != nil && v3res.Spec.NodeMeshMaxRestartTime != nil {
-		restartTime := *v3res.Spec.NodeMeshMaxRestartTime
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshRestartKey, fmt.Sprintf("%v", int(math.Round(restartTime.Seconds())))))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshRestartKey))
-	}
-}
-
-func (c *client) getNodeMeshPasswordKVPair(v3res *apiv3.BGPConfiguration, key any) {
-	meshPasswordKey := getBGPConfigKey("node_mesh_password", key)
-
+func (c *client) getNodeMeshPassword(v3res *apiv3.BGPConfiguration) (password string) {
 	if c.secretWatcher != nil && v3res != nil && v3res.Spec.NodeMeshPassword != nil && v3res.Spec.NodeMeshPassword.SecretKeyRef != nil {
-		password, err := c.secretWatcher.GetSecret(
+		var err error
+		password, err = c.secretWatcher.GetSecret(
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Name,
 			v3res.Spec.NodeMeshPassword.SecretKeyRef.Key,
 		)
 		if err != nil {
 			log.WithError(err).Warningf("Can't read password referenced by BGP Configuration %v in secret %s:%s", v3res.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Name, v3res.Spec.NodeMeshPassword.SecretKeyRef.Key)
-			// Secret or key not available, treat as a delete.
-			c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshPasswordKey))
-			return
 		}
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(meshPasswordKey, password))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(meshPasswordKey))
 	}
-}
-
-func (c *client) getIgnoredInterfacesKVPair(v3res *apiv3.BGPConfiguration, key any) {
-	ignoredIfacesKey := getBGPConfigKey("ignored_interfaces", key)
-	if v3res != nil && v3res.Spec.IgnoredInterfaces != nil {
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(ignoredIfacesKey, strings.Join(v3res.Spec.IgnoredInterfaces, ",")))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(ignoredIfacesKey))
-	}
-}
-
-func (c *client) getProgramClusterRoutesKVPair(v3res *apiv3.BGPConfiguration, key any) {
-	programClusterRoutesKey := getBGPConfigKey("program_cluster_routes", key)
-	if v3res != nil && v3res.Spec.ProgramClusterRoutes != nil {
-		c.updateCache(api.UpdateTypeKVUpdated, getKVPair(programClusterRoutesKey, *v3res.Spec.ProgramClusterRoutes))
-	} else {
-		c.updateCache(api.UpdateTypeKVDeleted, getKVPair(programClusterRoutesKey))
-	}
+	return
 }
 
 func getNodeName(nodeName string) string {
@@ -1811,9 +1704,6 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 	}
 
 	logVal := c.cache[k]
-	if c.isSensitive(k) {
-		logVal = "redacted"
-	}
 	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, logVal)
 	if c.syncedOnce {
 		c.keyUpdated(k)
@@ -1831,7 +1721,10 @@ func isValidCommunity(communityValue string) bool {
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
 // We use this purely for logging.
 func (c *client) ParseFailed(rawKey string, rawValue string) {
-	log.Errorf("Unable to parse datastore entry Key=%s; Value=%s", rawKey, rawValue)
+	// Do not log the raw value — future keys may carry credentials.
+	// The key and length are sufficient to alert; the actual value can be
+	// retrieved directly from the datastore when debugging.
+	log.Errorf("Unable to parse datastore entry Key=%s; ValueLen=%d", rawKey, len(rawValue))
 }
 
 // GetValue gets a single value from the cache
@@ -1875,6 +1768,13 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 	log.Debugf("Returning %d results", len(values))
 
 	return values, nil
+}
+
+func (c *client) getBGPConfig() *apiv3.BGPConfiguration {
+	c.waitForSync.Wait()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+	return c.globalBGPConfig
 }
 
 // WatchPrefix is called from confd.  It blocks waiting for updates to the data which have any
@@ -1985,13 +1885,13 @@ func (c *client) keyUpdated(key string) {
 
 func (c *client) updateLogLevel() {
 	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
-		logutils.SetLevel(envLevel)
+		config.SetLogLevel(envLevel)
 	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
-		logutils.SetLevel(nodeLevel)
+		config.SetLogLevel(nodeLevel)
 	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
-		logutils.SetLevel(globalLogLevel)
+		config.SetLogLevel(globalLogLevel)
 	} else {
-		logutils.SetLevel("info")
+		config.SetLogLevel("info")
 	}
 }
 
@@ -2061,7 +1961,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	c.onNewUpdates()
 }
 
-func (c *client) setPeerConfigFieldsFromV3Resource(peers []*bgpPeer, v3res *apiv3.BGPPeer) {
+func (c *client) setPeerConfigFieldsFromV3Resource(peers []*backends.BGPPeer, v3res *apiv3.BGPPeer) {
 	// Get the password, if one is configured
 	password := c.getPassword(v3res)
 
@@ -2096,13 +1996,4 @@ func filterNonSingleIPsFromCIDRs(ipCidrs []string) []string {
 		}
 	}
 	return nonSingleIPs
-}
-
-// Checks whether or not a key references sensitive information (like a BGP password) so that
-// logging output for the field can be redacted.
-func (c *client) isSensitive(path string) bool {
-	if _, ok := sensitiveValues[path]; ok {
-		return true
-	}
-	return false
 }

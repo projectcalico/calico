@@ -46,6 +46,8 @@ var (
 	//go:embed templates/release-note.md.gotmpl
 	releaseNoteTemplate string
 	repos               = []string{utils.CalicoRepoName, utils.BirdRepoName}
+	newlinePattern      = regexp.MustCompile(`\r\n|[\r\n\v\f\x{0085}\x{2028}\x{2029}]`)
+	releaseNotePattern  = regexp.MustCompile("(?s)```release-note\\s(.*?)\\s```")
 )
 
 type issueState string
@@ -109,19 +111,21 @@ func prIssuesByRepo(client *github.Client, owner, repo string, opts *github.Issu
 
 // extractReleaseNoteFromIssue extracts release notes from an issue.
 // It looks for the release note block in the issue body and returns the content
-// between the start and end markers.
+// between the start and end markers. To make RNs more readable, replace newlines
+// with spaces rather than breaking it into multiple RNs (in case someone word-wraps
+// their RNs).
 func extractReleaseNoteFromIssue(issue *github.Issue) ([]string, error) {
 	body := issue.GetBody()
-	pattern := "\\`\\`\\`release-note\\r?\\n(.*)\\r?\\n\\`\\`\\`"
-	re := regexp.MustCompile(pattern)
-	matches := re.FindAllStringSubmatch(body, -1)
+	matches := releaseNotePattern.FindAllStringSubmatch(body, -1)
 	if len(matches) == 0 {
 		return []string{issue.GetTitle()}, fmt.Errorf("no release notes found")
 	}
 	var notes []string
 	for _, match := range matches {
 		if len(match) > 1 {
-			notes = append(notes, match[1])
+			releaseNoteText := strings.TrimSpace(match[1])
+			releaseNoteText = newlinePattern.ReplaceAllString(releaseNoteText, " ")
+			notes = append(notes, releaseNoteText)
 		}
 	}
 	return notes, nil

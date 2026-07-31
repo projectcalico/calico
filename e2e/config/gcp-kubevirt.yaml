@@ -1,0 +1,20 @@
+# gcp-kubevirt.yaml - GCP kubeadm with KubeVirt VMs.
+#
+# Referenced by KubeVirt e2e blocks in the per-dataplane and release
+# pipelines (iptables.yml, bpf.yml, nftables.yml, patch-verification.yml,
+# upgrade.yml, certification.yml). Runs Feature:KubeVirt tests on a GCP
+# kubeadm cluster with nested virtualization and KubeVirt.
+
+include:
+  - Feature:KubeVirt
+
+exclude:
+  labels:
+    - label: Slow
+      reason: "long-running tests not suitable for CI"
+
+    - label: Disruptive
+      reason: "breaks cluster state for other parallel tests"
+
+    - label: RequiresMockVirt
+      reason: "requires mock virtualization, not real KubeVirt"

@@ -95,7 +95,8 @@ type DatastoreMigration struct {
 	// Spec defines the desired migration behavior.
 	Spec DatastoreMigrationSpec `json:"spec"`
 	// Status reports the observed state of the migration.
-	Status DatastoreMigrationStatus `json:"status"`
+	// +optional
+	Status DatastoreMigrationStatus `json:"status,omitempty"`
 }
 
 // DatastoreMigrationList contains a list of DatastoreMigration resources.

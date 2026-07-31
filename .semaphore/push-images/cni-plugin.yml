@@ -24,15 +24,12 @@ global_job_config:
       - export BRANCH_NAME=$SEMAPHORE_GIT_BRANCH
       - ssh-add ~/.ssh/id_rsa
 blocks:
-  - name: Publish cni-plugin images and multi-arch manifests
+  - name: Publish cni-plugin images
     dependencies: []
     skip:
       when: "branch !~ '.+'"
     task:
       jobs:
-        - name: Linux multi-arch
-          commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin cd push-manifests-with-tag CONFIRM=true; fi
         - name: Windows
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C cni-plugin release-windows CONFIRM=true; fi

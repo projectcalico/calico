@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/jedib0t/go-pretty/v6/table"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 )
@@ -370,23 +370,15 @@ func (b BirdRoutes) Show() {
 
 // printRoutes prints out the slice of route in table format.
 func printRoutes(routes []route, out io.Writer) {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader([]string{"Destination", "Gateway", "Iface", "LearnedFrom", "primary"})
-
+	t := table.NewWriter()
+	t.SetOutputMirror(out)
+	t.AppendHeader(table.Row{"Destination", "Gateway", "Iface", "LearnedFrom", "primary"})
 	for _, r := range routes {
 		var primary string
 		if r.primary {
 			primary = "*"
 		}
-		row := []string{
-			r.dest,
-			r.gateway,
-			r.iface,
-			r.learnedFrom,
-			primary,
-		}
-		table.Append(row)
+		t.AppendRow(table.Row{r.dest, r.gateway, r.iface, r.learnedFrom, primary})
 	}
-
-	table.Render()
+	t.Render()
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -155,7 +155,7 @@ type AutoHostEndpointConfig struct {
 
 	// Templates contains definition for creating AutoHostEndpoints
 	// +listType=atomic
-	Templates []Template `json:"templates,omitempty" validate:"omitempty"`
+	Templates []Template `json:"templates,omitempty" validate:"omitempty,dive"`
 }
 
 // DefaultHostEndpointMode controls whether a default host endpoint is created for each node.
@@ -184,6 +184,9 @@ type Template struct {
 
 	// Labels adds the specified labels to the generated AutoHostEndpoint, labels from node with the same name will be overwritten by values from the template label
 	Labels map[string]string `json:"labels,omitempty" validate:"omitempty,labels"`
+
+	// Annotations adds the specified annotations to the generated AutoHostEndpoint.
+	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// NodeSelector allows the AutoHostEndpoint to be created only for specific nodes
 	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`

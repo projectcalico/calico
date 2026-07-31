@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,8 +69,12 @@ func NewController(
 	// Configure events for new IP pools.
 	poolHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
-			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool deletion")
-			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
+			pool, ok := poolFromDeleteObj(obj)
+			if !ok {
+				return
+			}
+			logrus.WithField("name", pool.Name).Info("Handling pool deletion")
+			if err := c.Reconcile(pool); err != nil {
 				logrus.WithError(err).Error("Error handling pool deletion")
 			}
 		},
@@ -95,7 +99,10 @@ func NewController(
 	// deleting IP pools when blocks are deleted, to ensure we can finalize the pool.
 	blockHandlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj any) {
-			block := obj.(*v3.IPAMBlock)
+			block, ok := blockFromDeleteObj(obj)
+			if !ok {
+				return
+			}
 
 			// Find any pools that might be associated with this block and trigger a reconcile.
 			for _, i := range poolInformer.GetIndexer().List() {
@@ -474,4 +481,43 @@ func setConditionOnPool(p *v3.IPPool, condition metav1.Condition) bool {
 	condition.LastTransitionTime = metav1.Now()
 	p.Status.Conditions = append(p.Status.Conditions, condition)
 	return true
+}
+
+// poolFromDeleteObj extracts an *v3.IPPool from an informer delete event
+// object, unwrapping cache.DeletedFinalStateUnknown if present. Returns
+// ok=false (and logs) when the object isn't an IPPool so callers can skip
+// the delete instead of panicking.
+func poolFromDeleteObj(obj any) (*v3.IPPool, bool) {
+	if pool, ok := obj.(*v3.IPPool); ok {
+		return pool, true
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in IPPool delete event")
+		return nil, false
+	}
+	pool, ok := tombstone.Obj.(*v3.IPPool)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-IPPool object")
+		return nil, false
+	}
+	return pool, true
+}
+
+// blockFromDeleteObj is the IPAMBlock counterpart to poolFromDeleteObj.
+func blockFromDeleteObj(obj any) (*v3.IPAMBlock, bool) {
+	if block, ok := obj.(*v3.IPAMBlock); ok {
+		return block, true
+	}
+	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in IPAMBlock delete event")
+		return nil, false
+	}
+	block, ok := tombstone.Obj.(*v3.IPAMBlock)
+	if !ok {
+		logrus.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-IPAMBlock object")
+		return nil, false
+	}
+	return block, true
 }

@@ -1,0 +1,52 @@
+# BPF-dataplane overlay for values.yaml. Layered on top via a second `helm -f`
+# flag by the E2E BPF CI job. Keep this file minimal - add only the fields that
+# need to differ from the base values.yaml.
+#
+# bpfNetworkBootstrap and kubeProxyManagement both default to Disabled in the
+# operator, so they must be set explicitly. They live here (not in values.yaml)
+# because bpfNetworkBootstrap=Enabled is only valid when linuxDataplane is BPF -
+# the operator rejects it otherwise, which would break the iptables-based
+# BIRD/Felix-routing e2e jobs that share values.yaml.
+installation:
+  calicoNetwork:
+    linuxDataplane: BPF
+    # Bootstrap API-server access via the kubernetes Service/EndpointSlices,
+    # since kube-proxy is disabled and the BPF dataplane isn't programming
+    # service NAT yet at start-of-day.
+    bpfNetworkBootstrap: Enabled
+    # Let the operator disable the kube-proxy DaemonSet (Calico's BPF dataplane
+    # replaces it).
+    kubeProxyManagement: Enabled
+    # The base values.yaml leaves ipPool encapsulation unset, so the operator
+    # defaults the v4 pool to IPIP - which BPF doesn't manage (tunl0 is not a BPF
+    # data interface). Pin the v4 pool to VXLAN (Always, not CrossSubnet): all
+    # kind nodes share one subnet, so CrossSubnet would route pod traffic
+    # directly over eth0 and never use vxlan.calico. Host-endpoint e2e tests bind
+    # the HEP to the encap device for host-originated traffic, so the traffic
+    # must actually traverse vxlan.calico (which BPF manages) for policy to apply.
+    # Always also matches the GCP BPF e2e job's VXLAN cluster. Helm replaces list
+    # values, so both pools are restated here (keep in sync with values.yaml).
+    ipPools:
+    - cidr: 192.168.0.0/16
+      encapsulation: VXLAN
+      natOutgoing: Enabled
+    - cidr: fd00:10:244::/64
+      encapsulation: None
+
+  # On kernel 5.11+ BPF map memory is charged to the container's memory cgroup.
+  # The base values.yaml caps calico-node at 512Mi (fine for iptables/nftables),
+  # but the BPF dataplane's map set (NAT, conntrack, etc.) pushes past it and the
+  # container is OOMKilled while loading maps. Raise the limit for BPF.
+  calicoNodeDaemonSet:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: calico-node
+            resources:
+              requests:
+                cpu: 100m
+                memory: 512Mi
+              limits:
+                cpu: 500m
+                memory: 1Gi

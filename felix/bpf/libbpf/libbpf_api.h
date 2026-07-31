@@ -150,7 +150,7 @@ void bpf_tc_program_attach(struct bpf_object *obj, char *secName, int ifIndex, b
 
 struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
 {
-	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach); 
+	DECLARE_LIBBPF_OPTS(bpf_tcx_opts, attach);
 	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
 	if (!prog) {
 		errno = ENOENT;
@@ -163,6 +163,23 @@ struct bpf_link* bpf_tcx_program_attach(struct bpf_object *obj, char *secName, i
         }
         set_errno(err);
         return link;
+}
+
+struct bpf_link* bpf_netkit_program_attach(struct bpf_object *obj, char *secName, int ifIndex)
+{
+	DECLARE_LIBBPF_OPTS(bpf_netkit_opts, attach);
+	struct bpf_program *prog = bpf_object__find_program_by_name(obj, secName);
+	if (!prog) {
+		errno = ENOENT;
+		return NULL;
+	}
+	struct bpf_link *link = bpf_program__attach_netkit(prog, ifIndex, &attach);
+	int err = libbpf_get_error(link);
+	if (err) {
+		link = NULL;
+	}
+	set_errno(err);
+	return link;
 }
 
 void bpf_tc_program_detach(int ifindex, int handle, int pref, bool ingress)
@@ -241,13 +258,13 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			char* intf_ip,
 			char* host_ip6,
 			char* intf_ip6,
+			char* host_tunnel_ip,
+			char* host_tunnel_ip6,
 			uint ext_to_svc_mark,
 			ushort tmtu,
 			ushort vxlanPort,
 			ushort psnat_start,
 			ushort psnat_len,
-			char* host_tunnel_ip,
-			char* host_tunnel_ip6,
 			uint flags,
 			ushort wg_port,
 			ushort wg6_port,
@@ -261,7 +278,8 @@ void bpf_tc_set_globals(struct bpf_map *map,
 			short dscp,
 			short istio_dscp,
 			uint maglev_lut_size,
-			uint ipfrag_timeout)
+			uint ipfrag_timeout,
+			uint host_ifindex)
 {
 	struct cali_tc_global_data v4 = {
 		.tunnel_mtu = tmtu,
@@ -280,6 +298,7 @@ void bpf_tc_set_globals(struct bpf_map *map,
 		.istio_dscp = istio_dscp,
 		.maglev_lut_size = maglev_lut_size,
 		.ipfrag_timeout = ipfrag_timeout,
+		.host_ifindex = host_ifindex,
 	};
 
 	strncpy((char *)v4.iface_name, iface_name, sizeof(v4.iface_name));
@@ -336,6 +355,18 @@ void bpf_ct_cleanup_set_globals(
 		.udp_timeout = udp_timeout,
 		.generic_timeout = generic_timeout,
 		.icmp_timeout = icmp_timeout,
+	};
+
+	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));
+}
+
+// bpf_set_prog_flags sets the per-object load-time feature flags in the
+// program's .rodata.prog_flags section (see struct prog_flags). Kept
+// separate from the main globals so it does not perturb their layout.
+void bpf_set_prog_flags(struct bpf_map *map, uint8_t no_trace_printk)
+{
+	struct prog_flags data = {
+		.no_trace_printk = no_trace_printk,
 	};
 
 	set_errno(bpf_map__set_initial_value(map, (void*)(&data), sizeof(data)));

@@ -25,6 +25,7 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/confd/pkg/backends/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/encap"
@@ -124,7 +125,7 @@ func Test_processIPPoolsV4(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -177,7 +178,7 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if config.KernelFilterForIPPools != nil {
@@ -246,7 +247,7 @@ func Test_processIPPoolsV6(t *testing.T) {
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -314,17 +315,16 @@ func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
 	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 4)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
@@ -390,17 +390,16 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
 
 	c := newTestClient(cache, nil)
-	programClusterRoutes := "Disabled"
 	c.globalBGPConfig = &v3.BGPConfiguration{
 		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: &programClusterRoutes,
+			ProgramClusterRoutes: ptr.To("Disabled"),
 		},
 	}
 	config := &types.BirdBGPConfig{
 		NodeName: NodeName,
 	}
 
-	err := c.processIPPools(config, 6)
+	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
 	require.NoError(t, err)
 
 	expected := filterExpectedStatements(forKernelStatements, "reject")
@@ -419,6 +418,158 @@ func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
 	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
 		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
 			config.BGPExportFilterForEnabledIPPools, expected)
+	}
+}
+
+func Test_processWireguardPeerFilterV4(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4":        "10.0.0.1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v4": "192.168.1.1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v4": "192.168.1.2",
+
+		"/calico/bgp/v1/host/remote-nowg/ip_addr_v4": "10.0.0.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.2) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+func Test_processWireguardPeerFilterV6(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v6":        "fd00::1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v6": "fd01::1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v6":        "fd00::2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v6": "fd01::2",
+
+		"/calico/bgp/v1/host/remote-nowg/ip_addr_v6": "fd00::3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 6)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = fd00::2) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+func Test_processWireguardPeerFilter_NoWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/host/remote-a/ip_addr_v4":   "10.0.0.2",
+		"/calico/bgp/v1/host/remote-b/ip_addr_v4":   "10.0.0.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	if len(config.WireguardPeerKernelFilter) != 0 {
+		t.Errorf("Expected empty WireguardPeerKernelFilter, got: %#v",
+			config.WireguardPeerKernelFilter)
+	}
+}
+
+func Test_processWireguardPeerFilter_AllWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4":        "10.0.0.1",
+		"/calico/bgp/v1/host/local-node/wireguard_addr_v4": "192.168.1.1",
+
+		"/calico/bgp/v1/host/remote-a/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-a/wireguard_addr_v4": "192.168.1.2",
+
+		"/calico/bgp/v1/host/remote-b/ip_addr_v4":        "10.0.0.3",
+		"/calico/bgp/v1/host/remote-b/wireguard_addr_v4": "192.168.1.3",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	expected := []string{
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.2) then { reject; } # WireGuard routes handled by Felix.`,
+		`  if (defined(bgp_next_hop) && bgp_next_hop = 10.0.0.3) then { reject; } # WireGuard routes handled by Felix.`,
+	}
+	slices.Sort(expected)
+
+	if !reflect.DeepEqual(config.WireguardPeerKernelFilter, expected) {
+		t.Errorf("WireguardPeerKernelFilter mismatch:\n  got:  %#v\n  want: %#v",
+			config.WireguardPeerKernelFilter, expected)
+	}
+}
+
+// Test_processWireguardPeerFilter_LocalNoWireguard covers a mixed cluster where
+// the local node isn't running WireGuard but a remote peer is. The local node
+// routes to that peer over the normal BGP path, so we must not reject BIRD's
+// kernel route for it.
+func Test_processWireguardPeerFilter_LocalNoWireguard(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "local-node"
+	defer func() {
+		NodeName = originalNodeName
+	}()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/local-node/ip_addr_v4": "10.0.0.1",
+
+		"/calico/bgp/v1/host/remote-wg/ip_addr_v4":        "10.0.0.2",
+		"/calico/bgp/v1/host/remote-wg/wireguard_addr_v4": "192.168.1.2",
+	}
+
+	c := newTestClient(cache, nil)
+	config := &types.BirdBGPConfig{NodeName: NodeName}
+
+	c.processWireguardPeerFilter(config, 4)
+
+	if len(config.WireguardPeerKernelFilter) != 0 {
+		t.Errorf("Expected empty WireguardPeerKernelFilter, got: %#v",
+			config.WireguardPeerKernelFilter)
 	}
 }
 
@@ -458,129 +609,4 @@ func filterExpectedStatements(statements []string, filterAction string) (filtere
 		}
 	}
 	return
-}
-
-// programClusterRoutesCacheKey is the confd cache key that mirrors
-// BGPConfiguration.Spec.ProgramClusterRoutes into BIRD config.
-const programClusterRoutesCacheKey = "/calico/bgp/v1/global/program_cluster_routes"
-
-func strPtr(s string) *string { return &s }
-
-func TestGetProgramClusterRoutesKVPair(t *testing.T) {
-	// Initially, set ProgramClusterRoutes to Enabled.
-	c := &client{cache: make(map[string]string)}
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Switch ProgramClusterRoutes to Disabled.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Disabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Disabled", c.cache[programClusterRoutesCacheKey])
-
-	// Switch ProgramClusterRoutes to Enabled.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Unsetting ProgramClusterRoutes.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: nil,
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.GlobalBGPConfigKey{})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestGetProgramClusterRoutesKVPair_NilResourceDeletesCacheEntry(t *testing.T) {
-	c := &client{cache: map[string]string{
-		programClusterRoutesCacheKey: "Disabled",
-	}}
-	c.getProgramClusterRoutesKVPair(nil, model.GlobalBGPConfigKey{})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-// ProgramClusterRoutes is intentionally wired as global-only in
-// updateBGPConfigCache (client.go): the per-node branch does not call
-// getProgramClusterRoutesKVPair. This test pins that behavior — if per-node
-// support is ever added, this test should be updated along with the call site.
-func TestGetProgramClusterRoutesKVPair_PerNodeKeyDoesNotWriteGlobal(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.getProgramClusterRoutesKVPair(res, model.NodeBGPConfigKey{Nodename: "nodeX"})
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestUpdateBGPConfigCache_ProgramClusterRoutes_UpdateThenDelete(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	var (
-		svcAdvertisement bool
-		updatePeersV1    bool
-		updateReasons    []string
-	)
-
-	// First: set ProgramClusterRoutes=Disabled and confirm cache is populated
-	// via the full updateBGPConfigCache entrypoint (exercises wiring at
-	// client.go's global branch).
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Disabled"),
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.Equal(t, "Disabled", c.cache[programClusterRoutesCacheKey])
-
-	// Second: set ProgramClusterRoutes=Enabled and confirm cache is populated
-	// via the full updateBGPConfigCache entrypoint (exercises wiring at
-	// client.go's global branch).
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.Equal(t, "Enabled", c.cache[programClusterRoutesCacheKey])
-
-	// Finally: clear the field and confirm the cache entry is removed.
-	res = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: nil,
-		},
-	}
-	c.updateBGPConfigCache("default", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
-}
-
-func TestUpdateBGPConfigCache_ProgramClusterRoutes_PerNodeResourceNameSkipsGlobalKey(t *testing.T) {
-	c := &client{cache: make(map[string]string)}
-	var (
-		svcAdvertisement bool
-		updatePeersV1    bool
-		updateReasons    []string
-	)
-
-	res := &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: strPtr("Enabled"),
-		},
-	}
-	c.updateBGPConfigCache("node.nodeX", res, &svcAdvertisement, &updatePeersV1, &updateReasons)
-	require.NotContains(t, c.cache, programClusterRoutesCacheKey)
 }

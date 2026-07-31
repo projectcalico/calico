@@ -216,12 +216,13 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
 		return &model.KVPair{
 			Key: model.BlockKey{
-				CIDR: *cidr,
+				CIDR: model.PrefixFromIPNet(*cidr),
 			},
 			Value: &model.AllocationBlock{
 				CIDR:                        *cidr,
@@ -253,12 +254,13 @@ func (c *ipamBlockClient) IPAMBlockV3toV1(kvpv3 *model.KVPair) (*model.KVPair, e
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
 		return &model.KVPair{
 			Key: model.BlockKey{
-				CIDR: *cidr,
+				CIDR: model.PrefixFromIPNet(*cidr),
 			},
 			Value: &model.AllocationBlock{
 				CIDR:                        *cidr,
@@ -291,6 +293,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -336,6 +339,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 				HandleID:            a.HandleID,
 				ActiveOwnerAttrs:    a.ActiveOwnerAttrs,
 				AlternateOwnerAttrs: a.AlternateOwnerAttrs,
+				ReleasedAt:          a.ReleasedAt,
 			})
 		}
 
@@ -373,7 +377,7 @@ func (c *ipamBlockClient) IPAMBlockV1toV3(kvpv1 *model.KVPair) *model.KVPair {
 }
 
 func parseKey(k model.Key) (name, cidr string) {
-	cidr = fmt.Sprintf("%s", k.(model.BlockKey).CIDR)
-	name = names.CIDRToName(k.(model.BlockKey).CIDR)
+	cidr = k.(model.BlockKey).CIDR.Masked().String()
+	name = names.CIDRToName(model.IPNetFromPrefix(k.(model.BlockKey).CIDR))
 	return
 }

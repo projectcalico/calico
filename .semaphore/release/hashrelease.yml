@@ -29,6 +29,7 @@ global_job_config:
 
   prologue:
     commands:
+      - sudo rm -rf ~/.phpbrew ~/.kerl ~/.sbt ~/.nvm ~/.npm ~/.kiex /usr/local/golang/ /usr/lib/jvm /opt/* /opt/az
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
       # Checkout the code and unshallow it.
@@ -66,4 +67,9 @@ blocks:
       prologue:
         commands:
           - export GITHUB_TOKEN=${MARVIN_GITHUB_TOKEN}
+          - export LOGS_DIR=${SEMAPHORE_GIT_DIR}/release/_logs
           - cd release
+      epilogue:
+        always:
+          commands:
+            - artifact push job ${LOGS_DIR} --destination semaphore/hashrelease-logs || true

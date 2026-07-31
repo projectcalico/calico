@@ -11,11 +11,11 @@ import {
     QueryPage,
     FlowsFilterValue,
 } from '@/types/api';
-import { FilterHintValues, ReporterLabels } from '@/types/render';
+import { ReporterLabels } from '@/types/render';
 import { PolicyFilter } from '@/features/flowLogs/components/PolicyOmniFilter';
+import { UrlFilterKey } from '@/hooks/useFlowLogsUrlFilters';
 
 export enum FilterKey {
-    // policy = 'policy',
     source_name = 'source_name',
     source_namespace = 'source_namespace',
     dest_name = 'dest_name',
@@ -157,29 +157,35 @@ export const transformToPolicyFilterToRequest = (values: PolicyFilter[]) =>
     });
 
 export const transformToFlowsFilterQuery = (
-    omniFilterValues: FilterHintValues,
+    omniFilterValues: SelectedOmniFilterValues,
     listFilterId?: DataListOmniFilterParam,
     searchInput?: string,
 ) => {
     const filterHintsQuery: FlowsFilter = Object.keys(omniFilterValues).reduce(
         (acc, filterKey) => {
             if (
-                omniFilterValues[filterKey as FilterHintKey] === undefined ||
-                omniFilterValues[filterKey as FilterHintKey].length === 0
+                omniFilterValues[filterKey as SelectedOmniFilterValuesKey] ===
+                    undefined ||
+                omniFilterValues[filterKey as SelectedOmniFilterValuesKey]
+                    ?.length === 0
             ) {
                 return acc;
             }
 
-            const filterId = filterKey as FilterKey;
-            const key = OmniFilterProperties[filterId].filterHintsKey;
+            const filterId = filterKey as SelectedOmniFilterValuesKey;
+            const key =
+                OmniFilterProperties[filterId as OmniFilterParam]
+                    .filterHintsKey;
             return listFilterId === filterId
                 ? acc
                 : {
                       ...acc,
                       [key]: OmniFilterProperties[
-                          filterId
+                          filterId as OmniFilterParam
                       ]?.transformToFilterHintRequest?.(
-                          omniFilterValues[filterId as FilterHintKey],
+                          omniFilterValues[
+                              filterId as SelectedOmniFilterValuesKey
+                          ]!,
                       ),
                   };
         },
@@ -427,6 +433,14 @@ export type ListOmniFilterData = {
 export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
 
 export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
+
+export type SelectedOmniFilterValues = Partial<
+    Record<Exclude<UrlFilterKey, 'policy'>, string[]>
+> & {
+    policy?: PolicyFilter[];
+};
+
+export type SelectedOmniFilterValuesKey = keyof SelectedOmniFilterValues;
 
 export type SelectedOmniFilterOptions = Record<
     DataListOmniFilterParam,

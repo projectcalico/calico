@@ -1,0 +1,19 @@
+# Stage 1 of the cherry-pick-candidate auto-labeler. Fires on PR open,
+# reopen, and title/body edits with zero permissions and no logic. Sole
+# purpose: fire a workflow_run event so the trusted stage 2
+# (cherry_pick_candidate.yml) can do the real work from the base branch
+# with the privileged token.
+
+name: Cherry-Pick Candidate (trigger)
+on:
+  pull_request:
+    types: [opened, reopened, edited]
+
+permissions: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - run: echo "Triggers Cherry-Pick Candidate via workflow_run."

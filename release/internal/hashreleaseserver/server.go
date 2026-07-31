@@ -67,6 +67,10 @@ type Hashrelease struct {
 	Latest bool `yaml:"latest,omitempty"`
 
 	ImageScanResultURL string `yaml:"iss_url,omitempty"`
+
+	// UploadExcludes are regex patterns (matched against the source-relative
+	// path) for artifacts under Source that must not be uploaded to the server.
+	UploadExcludes []string `yaml:"-"`
 }
 
 func (h *Hashrelease) URL() string {
@@ -118,6 +122,9 @@ func publishFiles(h *Hashrelease, cfg *Config) error {
 		"storage", "rsync",
 		h.Source, fmt.Sprintf("gs://%s/%s", cfg.BucketName, h.Name),
 		"--recursive", "--delete-unmatched-destination-objects",
+	}
+	for _, e := range h.UploadExcludes {
+		args = append(args, "--exclude="+e)
 	}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		args = append(args, "--verbosity=debug")

@@ -360,15 +360,18 @@ function create-branch-and-pr() {
         exit 1
       fi
 
-      # If there are conflicts, prompt user to resolve them in another window and continue
+      # If there are conflicts, prompt user to resolve them in another window and continue.
+      # Unmerged paths show up in `git status --porcelain` with one of the XY codes
+      # DD, AU, UD, UA, DU, AA, UU (see git-status(1)) -- not just entries starting with
+      # "U", which misses e.g. delete/modify conflicts (reported as "DU").
       conflicts=false
-      while unmerged=$(git status --porcelain | grep ^U) && [[ -n ${unmerged} ]] \
+      while unmerged=$(git status --porcelain | grep -E '^(DD|AU|UD|UA|DU|AA|UU) ') && [[ -n ${unmerged} ]] \
         || [[ -e "${REBASEMAGIC}" ]]; do
         conflicts=true # <-- We should have detected conflicts once
         echo
         echo "+++ Conflicts detected:"
         echo
-        (git status --porcelain | grep ^U) || echo "!!! None. Did you '${add_cmd_msg}'?"
+        (git status --porcelain | grep -E '^(DD|AU|UD|UA|DU|AA|UU) ') || echo "!!! None. Did you '${add_cmd_msg}'?"
         echo
         echo "+++ Please resolve the conflicts in another window (and remember to '${add_cmd_msg}')"
         read -p "+++ Proceed (anything but 'y' aborts the cherry-pick)? [y/n] " -r

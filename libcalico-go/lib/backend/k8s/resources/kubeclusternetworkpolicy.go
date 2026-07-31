@@ -99,13 +99,9 @@ func (c *clusterNetworkPolicyClient) List(ctx context.Context, list model.ListIn
 		// Silently ignore rule conversion errors. We don't expect any conversion errors
 		// since the data given to us here is validated by the Kubernetes API. The conversion
 		// code ignores any rules that it cannot parse, and we will pass the valid ones to Felix.
-		var e *cerrors.ErrorClusterNetworkPolicyConversion
+		var e cerrors.ErrorClusterNetworkPolicyConversion
 		if err != nil && !errors.As(err, &e) {
 			return nil, err
-		}
-		// Skip malformed policies that returned a nil-Value tombstone KVPair.
-		if kvp == nil || kvp.Value == nil {
-			return nil, nil
 		}
 		return []*model.KVPair{kvp}, nil
 	}

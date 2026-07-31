@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
+	"github.com/projectcalico/calico/felix/fv/infrastructure/bpfpolprog"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -94,9 +95,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 		// This test does take some time to converge, make sure that we wait for
 		// convergence before doing policy tests.
 		const expectedNumberOfPolicySubprogs = 5
-		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress", 4), "240s", "1s").Should(
+		Eventually(bpfpolprog.NumContiguousPolProgramsFn(tc.Felixes[0], w[0].InterfaceName, "ingress", 4), "240s", "1s").Should(
 			BeNumerically(">", expectedNumberOfPolicySubprogs))
-		Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
+		Eventually(bpfpolprog.NumContiguousPolProgramsFn(tc.Felixes[0], w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
 			BeNumerically(">", expectedNumberOfPolicySubprogs))
 
 		// The network sets use IPs from outside the IP pool so we get no
@@ -136,9 +137,9 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 			w[1].ConfigureInInfra(infra)
 
 			const expectedNumberOfPolicySubprogs = 2
-			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[0].InterfaceName, "ingress", 4), "60s", "1s").Should(
+			Eventually(bpfpolprog.NumContiguousPolProgramsFn(tc.Felixes[0], w[0].InterfaceName, "ingress", 4), "60s", "1s").Should(
 				BeNumerically(">=", expectedNumberOfPolicySubprogs))
-			Eventually(tc.Felixes[0].BPFNumContiguousPolProgramsFn(w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
+			Eventually(bpfpolprog.NumContiguousPolProgramsFn(tc.Felixes[0], w[1].InterfaceName, "ingress", 4), "20s", "1s").Should(
 				BeNumerically(">=", expectedNumberOfPolicySubprogs))
 			addW0NetSet(numSets)
 
@@ -156,17 +157,17 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 			// Remove one EP.
 			w[0].RemoveFromInfra(infra)
 			// After removing workload, we get a dummy "drop all" policy program.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(1),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(1),
 				"w[0] ingress policy programs not cleaned up after removing ep?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(1),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(1),
 				"w[0] egress policy programs not cleaned up after removing ep?")
 
 			// Stop it, should get full cleanup now.
 			w[0].Stop()
 			w[0] = nil // Prevent second call to Stop in AfterEach.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs not cleaned up?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
 				"w[0] egress policy programs not cleaned up?")
 		})
 
@@ -178,16 +179,16 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ BPF policy scale tests", []
 				w[0] = nil
 			}()
 			// After stopping workload, interface is gone and programs get cleaned up.
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxIngress, "ingress"), "60s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs not cleaned up?")
-			Eventually(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
+			Eventually(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxEgress, "egress"), "60s", "1s").Should(Equal(0),
 				"w[0] egress policy programs not cleaned up?")
 
 			// Remove should have no further effect.
 			w[0].RemoveFromInfra(infra)
-			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxIngress, "ingress"), "10s", "1s").Should(Equal(0),
+			Consistently(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxIngress, "ingress"), "10s", "1s").Should(Equal(0),
 				"w[0] ingress policy programs came back?")
-			Consistently(tc.Felixes[0].BPFNumPolProgramsTotalByEntryPointFn(w0PolIdxEgress, "egress"), "10s", "1s").Should(Equal(0),
+			Consistently(bpfpolprog.NumPolProgramsTotalByEntryPointFn(tc.Felixes[0], w0PolIdxEgress, "egress"), "10s", "1s").Should(Equal(0),
 				"w[0] egress policy programs came back?")
 		})
 	})

@@ -29,7 +29,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
-	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	"github.com/projectcalico/calico/e2e/pkg/describe"
 	"github.com/projectcalico/calico/e2e/pkg/utils"
@@ -274,32 +273,25 @@ var _ = describe.CalicoDescribe(
 			nodeNames []string
 			nodeIPs   []string
 			tunnelIPs []string
-			dp        clusterDataplane
+			dp        utils.ClusterDataplane
 		)
 
 		BeforeEach(func() {
 			cli, err := client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-
-			// Request more nodes than we need so we can filter out the control
-			// plane and still have 3 workers.
-			nodes, err := e2enode.GetBoundedReadySchedulableNodes(ctx, f.ClientSet, 6)
-			Expect(err).NotTo(HaveOccurred())
-			nodesInfo := utils.GetNodesInfo(f, nodes, false)
+			nodesInfo := utils.AwaitReadySchedulableNodesInfo(f, 3, false)
 			allNames := nodesInfo.GetNames()
 			allIPs := nodesInfo.GetIPv4s()
 			allTunnelIPs := nodesInfo.GetTunnelIPs()
-			Expect(len(allNames)).To(BeNumerically(">=", 3),
-				"workload ingress tests require at least 3 schedulable worker nodes, found %d", len(allNames))
+			Expect(len(allIPs)).To(BeNumerically(">=", 3),
+				"workload ingress tests require at least 3 nodes with IPv4 addresses, found %d", len(allIPs))
 			nodeNames = allNames[:3]
 			nodeIPs = allIPs[:3]
 			tunnelIPs = allTunnelIPs[:3]
 			logrus.Infof("Nodes: %v IPs: %v tunnelIPs: %v", nodeNames, nodeIPs, tunnelIPs)
 
-			dp = detectDataplane(cli, f.ClientSet)
+			dp = utils.DetectDataplane(cli, f.ClientSet)
 			logrus.Infof("Cluster dataplane: calico=%s BPF=%v IPVS=%v VPP=%v",
 				dp.Calico, dp.IsBPF(), dp.IsIPVS(), dp.IsVPP())
 		})
@@ -367,7 +359,7 @@ var _ = describe.CalicoDescribe(
 		// buildTarget returns the connection target for the given scenario, using the
 		// already-deployed server. All targets use HTTP GET /clientip so that
 		// checkConnection can verify SNAT behavior from the response body.
-		buildTarget := func(s ingressScenario, server *conncheck.Server) conncheck.Target {
+		buildTarget := func(s ingressScenario, server conncheck.Server) conncheck.Target {
 			clientIPOpt := conncheck.WithHTTP("GET", "/clientip", nil)
 			switch s.dest {
 			case "clusterIP":
