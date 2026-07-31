@@ -21,6 +21,18 @@
 
 // Connection tracking.
 
+/* Is this packet the initial SYN of a TCP connection, as opposed to a SYN-ACK?
+ *
+ * CT_RES_SYN is set by calico_ct_lookup() from the packet's own flags, and only
+ * when the lookup hits, so this answers "SYN on a flow we already track" - which
+ * is what the paths that force policy or withhold the bypass mark care about.
+ */
+static CALI_BPF_INLINE bool is_tcp_syn(struct cali_tc_ctx *ctx)
+{
+	return ctx->state->ip_proto == IPPROTO_TCP &&
+		ct_result_is_syn(ctx->state->ct_result.rc);
+}
+
 #define PSNAT_RETRIES	3
 
 static CALI_BPF_INLINE int psnat_get_port(struct cali_tc_ctx *ctx)

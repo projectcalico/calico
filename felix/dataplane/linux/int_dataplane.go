@@ -71,7 +71,6 @@ import (
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/linkaddrs"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -83,9 +82,9 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -227,6 +226,7 @@ type Config struct {
 	BPFCTLBLogFilter                   string
 	BPFExtToServiceConnmark            int
 	BPFDataIfacePattern                *regexp.Regexp
+	NFTablesFlowTableDataIfacePattern  *regexp.Regexp
 	BPFL3IfacePattern                  *regexp.Regexp
 	XDPEnabled                         bool
 	XDPAllowGeneric                    bool
@@ -427,7 +427,7 @@ type InternalDataplane struct {
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *common.Callbacks
 
-	loopSummarizer *logutils.Summarizer
+	loopSummarizer *logrusr.Summarizer
 
 	// Fields used to accumulate counts of messages of various types before we report them to
 	// prometheus.
@@ -476,6 +476,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled, nil)
 
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
+		// module but isn't autoloaded, this lets detection succeed. Kernels that have it built in
+		// or genuinely lack it are unaffected and fall through to the probe result.
+		mp := newModProbe(moduleFlowTable, newRealCmd)
+		out, err := mp.Exec()
+		log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleFlowTable)
+
+		if !nftables.DetectFlowOffloadSupported(config.NewNftablesDataplane) {
+			log.Warn("NFTables flowtable offload is enabled but the kernel does not support it (nf_flow_table unavailable); disabling offload.")
+			config.RulesConfig.NFTablesFlowTableOffload = false
+		}
+	}
+
 	ruleRenderer := config.RuleRendererOverride
 	if ruleRenderer == nil {
 		ruleRenderer = rules.NewRenderer(config.RulesConfig, nftablesEnabled)
@@ -522,7 +536,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceUpdates:                make(chan any, 100),
 		config:                      config,
 		applyThrottle:               throttle.New(10),
-		loopSummarizer:              logutils.NewSummarizer("dataplane reconciliation loops"),
+		loopSummarizer:              logrusr.NewSummarizer("dataplane reconciliation loops"),
 		actions:                     actionSet,
 		newMatch:                    newMatchFn,
 		nftablesEnabled:             nftablesEnabled,
@@ -1168,8 +1182,32 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	var filterMaps nftables.MapsDataplane
+	var flowtableHandlerV4 nftables.FlowTableHandler
+	var flowtableTargets []flowtableTarget
 	if nftablesEnabled {
 		filterMaps = filterTableV4.(nftables.MapsDataplane)
+
+		if config.RulesConfig.NFTablesFlowTableOffload {
+			flowtableHandlerV4 = nftablesV4RootTable
+
+			// The overlay/tunnel devices are created asynchronously after Felix starts, so the
+			// flowtable manager gates them on interface-monitor events rather than programming
+			// them up front.
+			var overlayDevicesV4 []string
+			if config.RulesConfig.VXLANEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.VXLANIfaceNameV4)
+			}
+			if config.RulesConfig.IPIPEnabled {
+				overlayDevicesV4 = append(overlayDevicesV4, dataplanedefs.IPIPIfaceName)
+			}
+			if config.RulesConfig.WireguardEnabled && len(config.RulesConfig.WireguardInterfaceName) > 0 {
+				overlayDevicesV4 = append(overlayDevicesV4, config.RulesConfig.WireguardInterfaceName)
+			}
+			flowtableTargets = append(flowtableTargets, flowtableTarget{
+				handler:        nftablesV4RootTable,
+				overlayDevices: overlayDevicesV4,
+			})
+		}
 	}
 
 	// If the NFTablesSupported feature is enabled, create nftables ARP table for proxy ARP
@@ -1229,6 +1267,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 		string(defaultRPFilter),
 		filterMaps,
+		flowtableHandlerV4,
 		bpfEndpointManager,
 		callbacks,
 		linkAddrsManagerV4,
@@ -1417,8 +1456,25 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		var filterMapsV6 nftables.MapsDataplane
+		var flowtableHandlerV6 nftables.FlowTableHandler
 		if nftablesEnabled {
 			filterMapsV6 = filterTableV6.(nftables.MapsDataplane)
+
+			if config.RulesConfig.NFTablesFlowTableOffload {
+				flowtableHandlerV6 = nftablesV6RootTable
+
+				var overlayDevicesV6 []string
+				if config.RulesConfig.VXLANEnabledV6 {
+					overlayDevicesV6 = append(overlayDevicesV6, dataplanedefs.VXLANIfaceNameV6)
+				}
+				if config.RulesConfig.WireguardEnabledV6 && len(config.RulesConfig.WireguardInterfaceNameV6) > 0 {
+					overlayDevicesV6 = append(overlayDevicesV6, config.RulesConfig.WireguardInterfaceNameV6)
+				}
+				flowtableTargets = append(flowtableTargets, flowtableTarget{
+					handler:        nftablesV6RootTable,
+					overlayDevices: overlayDevicesV6,
+				})
+			}
 		}
 
 		var linkAddrsManagerV6 linkaddrs.Interface
@@ -1452,6 +1508,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
 			"",
 			filterMapsV6,
+			flowtableHandlerV6,
 			nil,
 			callbacks,
 			linkAddrsManagerV6,
@@ -1503,6 +1560,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.allTables = append(dp.allTables, dp.natTables...)
 		dp.allTables = append(dp.allTables, dp.filterTables...)
 		dp.allTables = append(dp.allTables, dp.rawTables...)
+	}
+
+	if config.RulesConfig.NFTablesFlowTableOffload && len(flowtableTargets) > 0 {
+		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
 	// Include cleanup tables in allTables so that they are cleaned up.
@@ -1935,7 +1996,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		} else if d.config.hostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
-			log.WithFields(log.Fields{lclogutils.FieldForceFlush: true}).Info("Host MTU changed")
+			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
 			d.config.ConfigChangedRestartCallback()
 		}
 		time.Sleep(30 * time.Second)

@@ -1,0 +1,444 @@
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package logrusr is Calico's shared logrus toolkit.  It provides the
+// standard Calico log formatter, the fan-out BackgroundHook + Destination
+// pipeline (screen / file / syslog with drop-tracking), the caller-
+// stamping hook that makes wrapper types report user code as the caller,
+// a rate-limited logger, a Summarizer for periodic op-count logging, and
+// helpers for redacting sensitive URLs and query parameters.
+//
+// The package depends only on the standard library and logrus; metrics
+// hooks are exposed via a small Counter interface (matched by
+// prometheus.Counter) so callers can wire Prometheus if they want it,
+// but the package itself does not depend on Prometheus.
+package logrusr
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+)
+
+// Packages whose frames we skip when reporting a log line's caller.
+// logrus's own getCaller only skips itself, which means wrapper types in
+// this package (RateLimitedLogger, the log.Logger adapter, Summarizer)
+// and in lib/std/log (the slog-shaped facade) would otherwise be reported
+// as the caller instead of the user code.
+const (
+	logrusPackage  = "github.com/sirupsen/logrus."
+	logrusrPackage = "github.com/projectcalico/calico/lib/logrusr."
+	stdlogPackage  = "github.com/projectcalico/calico/lib/std/log."
+	maxCallerDepth = 32
+)
+
+const (
+	// FieldForceFlush is a field name used to signal to the BackgroundHook that it should flush the log after this
+	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
+	FieldForceFlush = "__flush__"
+
+	// FileNameUnknown is the string used in logs if the filename/line number
+	// cannot be determined.
+	FileNameUnknown = "<nil>"
+)
+
+// We don't call logrus.SetReportCaller: logrus's own caller detection
+// only skips its own frames, so wrapper types in this package
+// (RateLimitedLogger, the log.Logger adapter, Summarizer) and the
+// slog-shaped facade in lib/std/log would be reported as the caller
+// instead of the user code.  ConfigureFormatter installs a caller-
+// stamping hook that walks the stack once per log line, skipping
+// those wrapper packages, and memoises the result on entry.Caller so
+// downstream hooks and Format() are O(1).
+
+// FilterLevels returns all the logrus.Level values <= maxLevel.
+func FilterLevels(maxLevel log.Level) []log.Level {
+	levels := []log.Level{}
+	for _, l := range log.AllLevels {
+		if l <= maxLevel {
+			levels = append(levels, l)
+		}
+	}
+	return levels
+}
+
+func ConfigureFormatter(componentName string) {
+	formatter := &Formatter{Component: componentName}
+	formatter.init()
+	log.SetFormatter(formatter)
+	installCallerHookOnce()
+}
+
+// callerHook stamps entry.Caller with the first non-logrus / non-logrusr
+// / non-lib-std-log frame it finds on the stack.  logrus dups the entry
+// once before firing any hooks, so we can safely mutate it here without
+// racing other goroutines that may be re-using the original entry.
+//
+// Downstream hooks and Formatter.Format short-circuit on entry.Caller
+// being non-nil, so the walk happens once per emission regardless of how
+// many hooks are in play.
+type callerHook struct{}
+
+func (callerHook) Levels() []log.Level { return log.AllLevels }
+
+func (callerHook) Fire(entry *log.Entry) error {
+	if entry.Caller != nil {
+		return nil
+	}
+	file, line := lookupCaller()
+	entry.Caller = &runtime.Frame{File: file, Line: line}
+	return nil
+}
+
+var callerHookInstalled sync.Once
+
+func installCallerHookOnce() {
+	callerHookInstalled.Do(func() {
+		log.AddHook(callerHook{})
+	})
+}
+
+// InstallCallerHook attaches the caller-stamping hook to a specific
+// logrus.Logger — the same hook ConfigureFormatter installs on the
+// standard logger.  Use this for logrus.Logger instances that don't
+// share the standard logger's hook chain (e.g. per-test loggers or
+// stand-alone loggers wired into custom destinations).
+func InstallCallerHook(logger *log.Logger) {
+	logger.AddHook(callerHook{})
+}
+
+// ConfigureEarlyLoggingFromEnv installs the Calico logrus formatter, sets
+// stdout as the log destination, and picks an initial log level from
+// environment variables named after the component:
+//
+//	${COMPONENT}_EARLYLOGSEVERITYSCREEN — early-only override
+//	${COMPONENT}_LOGSEVERITYSCREEN     — normal setting
+//
+// The component name is upper-cased for the env-var lookup and passed
+// verbatim as the log prefix.  If neither variable is set (or the value
+// fails to parse), the level defaults to Error.  The full configuration
+// picked up from the component's own config loader will typically override
+// this level later at startup.
+func ConfigureEarlyLoggingFromEnv(componentName string) {
+	log.SetOutput(os.Stdout)
+	ConfigureFormatter(componentName)
+
+	prefix := strings.ToUpper(componentName) + "_"
+	// Try the early-only override first; fall back to the normal setting.
+	rawLogLevel := os.Getenv(prefix + "EARLYLOGSEVERITYSCREEN")
+	if rawLogLevel == "" {
+		rawLogLevel = os.Getenv(prefix + "LOGSEVERITYSCREEN")
+	}
+
+	logLevelScreen := log.ErrorLevel
+	if rawLogLevel != "" {
+		parsedLevel, err := log.ParseLevel(rawLogLevel)
+		if err == nil {
+			logLevelScreen = parsedLevel
+		} else {
+			log.WithError(err).Error("Failed to parse early log level, defaulting to error.")
+		}
+	}
+	log.SetLevel(logLevelScreen)
+	log.Infof("Early screen log level set to %v", logLevelScreen)
+}
+
+// Formatter is our custom log formatter designed to balance ease of machine processing
+// with human readability.  Logs include:
+//   - A sortable millisecond timestamp, for scanning and correlating logs
+//   - The log level, near the beginning of the line, to aid in visual scanning
+//   - The PID of the process to make it easier to spot log discontinuities (If
+//     you are looking at two disjoint chunks of log, were they written by the
+//     same process?  Was there a restart in-between?)
+//   - The file name and line number, as essential context
+//   - The message!
+//   - Log fields appended in sorted order
+//
+// Example:
+//
+//	2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
+//	interface because it is oper down. ifaceName="cali1234"
+type Formatter struct {
+	// If specified, prepends the component to the file name. This is useful for when
+	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
+	// which component sourced the log.
+	Component string
+
+	initOnce                sync.Once
+	preComputedInfixByLevel []string
+}
+
+var maxLevel = log.Level(len(log.AllLevels))
+
+func (f *Formatter) init() {
+	f.initOnce.Do(func() {
+		f.preComputedInfixByLevel = make([]string, len(log.AllLevels))
+		for _, level := range log.AllLevels {
+			var buf bytes.Buffer
+			f.computeInfix(&buf, level)
+			f.preComputedInfixByLevel[level] = buf.String()
+		}
+	})
+}
+
+const TimeFormat = "2006-01-02 15:04:05.000"
+const timeFormatLen = len(TimeFormat)
+
+func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
+	f.init()
+
+	b := entry.Buffer
+	if b == nil {
+		b = &bytes.Buffer{}
+	}
+
+	fileName, lineNo := GetFileInfo(entry)
+
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	AppendTime(b, entry.Time)
+	f.writeInfix(b, entry.Level)
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
+	} else {
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
+	}
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
+	return b.Bytes(), nil
+}
+
+func (f *Formatter) writeInfix(b *bytes.Buffer, level log.Level) {
+	if level >= maxLevel {
+		// Slow path for unknown log levels — computeInfix writes
+		// directly to b; preComputedInfixByLevel has no entry for this
+		// level, so indexing into it would panic.
+		f.computeInfix(b, level)
+		return
+	}
+	_, _ = b.WriteString(f.preComputedInfixByLevel[level])
+}
+
+func (f *Formatter) computeInfix(b *bytes.Buffer, level log.Level) {
+	_, _ = fmt.Fprintf(b, " [%s][%d] ", strings.ToUpper(level.String()), os.Getpid())
+	if f.Component != "" {
+		_, _ = fmt.Fprintf(b, "%s/", f.Component)
+	}
+}
+
+// AppendTime appends a time to the buffer in our format
+// "2006-01-02 15:04:05.000".
+func AppendTime(b *bytes.Buffer, t time.Time) {
+	// Want "2006-01-02 15:04:05.000" but the formatter has an optimised
+	// impl of RFC3339Nano, which we can easily tweak into our format.
+	b.Grow(timeFormatLen)
+	buf := b.AvailableBuffer()
+	buf = t.AppendFormat(buf, time.RFC3339Nano)
+	buf = buf[:timeFormatLen]
+	const tPos = len("2006-01-02T") - 1
+	buf[tPos] = ' '
+	const dotPos = len("2006-01-02T15:04:05.") - 1
+
+	// RFC3339Nano truncates the fractional seconds if zero, put the dot in
+	// place if it isn't already and overwrite any non-digit characters with
+	// zeros to replace the timezone or 'Z' that RFC3339Nano might have added.
+	overwrite := false
+	if buf[dotPos] != '.' {
+		buf[dotPos] = '.'
+		overwrite = true
+	}
+	for i := dotPos + 1; i < len(buf); i++ {
+		if overwrite || buf[i] < '0' || buf[i] > '9' {
+			buf[i] = '0'
+			overwrite = true
+		}
+	}
+	_, _ = b.Write(buf)
+}
+
+var preComputedInfixByLevelSyslog = make([]string, len(log.AllLevels))
+
+func init() {
+	for _, level := range log.AllLevels {
+		preComputedInfixByLevelSyslog[level] = strings.ToUpper(level.String()) + " "
+	}
+}
+
+// FormatForSyslog formats logs in a way tailored for syslog.  It avoids logging information that is
+// already included in the syslog metadata such as timestamp and PID.  The log level _is_ included
+// because syslog doesn't seem to output it by default and it's very useful.
+//
+//	INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
+//	ifaceName="cali1234"
+func FormatForSyslog(entry *log.Entry) string {
+	b := entry.Buffer
+	if b == nil {
+		b = &bytes.Buffer{}
+	}
+
+	fileName, lineNo := GetFileInfo(entry)
+
+	b.Grow(timeFormatLen + 32 + len(fileName) + len(entry.Message) + len(entry.Data)*32)
+	if entry.Level < maxLevel {
+		b.WriteString(preComputedInfixByLevelSyslog[entry.Level])
+	} else {
+		b.WriteString(strings.ToUpper(entry.Level.String()))
+		b.WriteByte(' ')
+	}
+	b.WriteString(fileName)
+	b.WriteByte(' ')
+	if lineNo == 0 {
+		b.WriteString(FileNameUnknown)
+	} else {
+		buf := b.AvailableBuffer()
+		buf = strconv.AppendInt(buf, int64(lineNo), 10)
+		_, _ = b.Write(buf)
+	}
+	b.WriteString(": ")
+	b.WriteString(entry.Message)
+	appendKVsAndNewLine(b, entry.Data)
+
+	return b.String()
+}
+
+// pcsPool re-uses program-counter buffers across log emissions so the
+// caller walk allocates once per goroutine, not once per line.
+var pcsPool = sync.Pool{
+	New: func() any {
+		pcs := make([]uintptr, maxCallerDepth)
+		return &pcs
+	},
+}
+
+// GetFileInfo returns the base file name and line number for the log
+// entry, using entry.Caller if it has already been populated (typically
+// by callerHook installed via ConfigureFormatter) and falling back to
+// a fresh stack walk otherwise.
+func GetFileInfo(entry *log.Entry) (string, int) {
+	if entry.Caller != nil {
+		return path.Base(entry.Caller.File), entry.Caller.Line
+	}
+	return lookupCaller()
+}
+
+// lookupCaller walks the stack and returns the first frame whose
+// function is not in logrus, lib/logrusr or lib/std/log — i.e. the
+// user code that actually issued the log call.
+func lookupCaller() (string, int) {
+	pcsPtr := pcsPool.Get().(*[]uintptr)
+	defer pcsPool.Put(pcsPtr)
+	pcs := *pcsPtr
+
+	// Skip runtime.Callers itself and lookupCaller.
+	n := runtime.Callers(2, pcs)
+	if n == 0 {
+		return FileNameUnknown, 0
+	}
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		fn := frame.Function
+		if !strings.HasPrefix(fn, logrusPackage) &&
+			!strings.HasPrefix(fn, logrusrPackage) &&
+			!strings.HasPrefix(fn, stdlogPackage) {
+			return path.Base(frame.File), frame.Line
+		}
+		if !more {
+			break
+		}
+	}
+	return FileNameUnknown, 0
+}
+
+// appendKVsAndNewLine writes the entry's KV pairs to the end of the buffer,
+// followed by a newline.  Entries are written in sorted order.
+func appendKVsAndNewLine(b *bytes.Buffer, data log.Fields) {
+	if len(data) == 0 {
+		b.WriteByte('\n')
+		return
+	}
+
+	// Sort the keys for consistent output.
+	var keys []string
+	const arrSize = 16
+	if len(data) < arrSize {
+		// Optimisation: avoid an allocation if the number of keys is small.
+		// make(...) always spills to the heap if the slice size is not known at
+		// compile time.
+		var dataArr [arrSize]string
+		keys = dataArr[:0]
+	} else {
+		keys = make([]string, 0, len(data))
+	}
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		if key == FieldForceFlush {
+			continue
+		}
+		var value = data[key]
+		b.WriteByte(' ')
+		b.WriteString(key)
+		b.WriteByte('=')
+
+		switch value := value.(type) {
+		case string:
+			buf := b.AvailableBuffer()
+			buf = strconv.AppendQuote(buf, value)
+			b.Write(buf)
+		case *string:
+			if value == nil {
+				b.WriteString("<nil>")
+			} else {
+				b.WriteByte('*')
+				buf := b.AvailableBuffer()
+				buf = strconv.AppendQuote(buf, *value)
+				b.Write(buf)
+			}
+		case error:
+			b.WriteString(value.Error())
+		case fmt.Stringer:
+			// Trust the value's String() method.
+			b.WriteString(value.String())
+		default:
+			// No string method, use %#v to get a more thorough dump.
+			_, _ = fmt.Fprintf(b, "%#v", value)
+		}
+	}
+	b.WriteByte('\n')
+}
+
+// NullWriter is a dummy writer that always succeeds and does nothing.
+type NullWriter struct{}
+
+func (w *NullWriter) Write(p []byte) (int, error) {
+	return len(p), nil
+}
