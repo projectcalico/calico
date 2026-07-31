@@ -25,7 +25,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
-	"github.com/projectcalico/calico/typha/pkg/syncclient"
 )
 
 // DedupeBuffer buffer implements the syncer callbacks API on its
@@ -45,20 +44,21 @@ type DedupeBuffer struct {
 	lock sync.Mutex
 	cond *sync.Cond
 
-	// keyToPendingUpdate holds an entry for each updateWithStringKey in the
-	// pendingUpdates queue
-	keyToPendingUpdate    map[string]*list.Element
+	// keyToPendingUpdate holds an entry for each updateWithKey in the
+	// pendingUpdates queue.  model.Key is an interface, but all concrete
+	// key types are Go-comparable so they are safe to use as map keys.
+	keyToPendingUpdate    map[model.Key]*list.Element
 	peakPendingUpdatesLen int
 
 	// liveResourceKeys Contains an entry for every key that we have sent to
 	// the consumer and that we have not subsequently sent a deletion for.
-	liveResourceKeys              set.Set[string]
-	liveKeysNotSeenSinceReconnect set.Set[string]
+	liveResourceKeys              set.Set[model.Key]
+	liveKeysNotSeenSinceReconnect set.Set[model.Key]
 	resyncStart                   time.Time
 	// pendingUpdates is the queue of updates that we want to send to the
 	// consumer.  We use a linked list so that we can remove items from
 	// the middle if they are deleted before making it off the queue.
-	pendingUpdates list.List // Mix of api.SyncStatus and updateWithStringKey.
+	pendingUpdates list.List // Mix of api.SyncStatus and updateWithKey.
 
 	mostRecentStatusReceived api.SyncStatus
 	stopped                  bool
@@ -66,8 +66,8 @@ type DedupeBuffer struct {
 
 func New() *DedupeBuffer {
 	d := &DedupeBuffer{
-		keyToPendingUpdate: map[string]*list.Element{},
-		liveResourceKeys:   set.New[string](),
+		keyToPendingUpdate: map[model.Key]*list.Element{},
+		liveResourceKeys:   set.New[model.Key](),
 	}
 	d.cond = sync.NewCond(&d.lock)
 	return d
@@ -137,15 +137,6 @@ func (d *DedupeBuffer) OnStatusUpdated(status api.SyncStatus) {
 // deduplicate in-flight updates to the same keys.  It should only block for
 // short periods even if the downstream sink blocks for a long time.
 func (d *DedupeBuffer) OnUpdates(updates []api.Update) {
-	d.OnUpdatesKeysKnown(updates, nil)
-}
-
-// OnUpdatesKeysKnown is like OnUpdates, but it allows for the pre-serialised
-// keys of the KV pairs to be passed in.  If an entry in keys is "" or if keys
-// is shorter than updates the key will be computed.
-//
-// The updates and keys slices are not retained.
-func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
 	if debug {
 		log.WithField("numUpdates", len(updates)).Debug("Updates received")
@@ -159,29 +150,12 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	}
 
 	queueWasEmpty := d.pendingUpdates.Len() == 0
-	for i, u := range updates {
-		var key string
-		if i < len(keys) {
-			// Have a cached key.
-			key = keys[i]
-		}
-		if key == "" {
-			// No key provided, calculate it.
-			var err error
-			key, err = model.KeyToDefaultPath(u.Key)
-			if err != nil {
-				// Shouldn't happen, we get our keys from Typha which has already
-				// encoded them once!
-				log.WithError(err).WithField("key", u.Key).Error(
-					"Failed to generate default path for key.  Will skip this update.")
-				continue
-			}
-		}
+	for _, u := range updates {
 		if d.liveKeysNotSeenSinceReconnect != nil {
-			d.liveKeysNotSeenSinceReconnect.Discard(key)
+			d.liveKeysNotSeenSinceReconnect.Discard(u.Key)
 		}
 
-		d.queueUpdate(key, u)
+		d.queueUpdate(u.Key, u)
 	}
 	queueNowEmpty := d.pendingUpdates.Len() == 0
 	if queueWasEmpty && !queueNowEmpty {
@@ -193,7 +167,7 @@ func (d *DedupeBuffer) OnUpdatesKeysKnown(updates []api.Update, keys []string) {
 	}
 }
 
-func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
+func (d *DedupeBuffer) queueUpdate(key model.Key, u api.Update) {
 	debug := log.IsLevelEnabled(log.DebugLevel)
 
 	if u.Value != nil {
@@ -225,9 +199,9 @@ func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
 				log.WithField("key", key).Debug("Key updated before being sent.")
 			}
 
-			usk := element.Value.(updateWithStringKey)
-			usk.update = u
-			element.Value = usk
+			uwk := element.Value.(updateWithKey)
+			uwk.update = u
+			element.Value = uwk
 		}
 	} else {
 		// No in-flight entry for this key.  Add to queue and record that
@@ -235,7 +209,7 @@ func (d *DedupeBuffer) queueUpdate(key string, u api.Update) {
 		if debug {
 			log.WithField("key", key).Debug("No in flight value for key, adding to queue.")
 		}
-		element = d.pendingUpdates.PushBack(updateWithStringKey{
+		element = d.pendingUpdates.PushBack(updateWithKey{
 			key:    key,
 			update: u,
 		})
@@ -259,8 +233,8 @@ func (d *DedupeBuffer) Stop() {
 	d.cond.Signal()
 }
 
-type updateWithStringKey struct {
-	key    string
+type updateWithKey struct {
+	key    model.Key
 	update api.Update
 }
 
@@ -305,7 +279,7 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 		first := d.pendingUpdates.Front()
 		buf = append(buf, first.Value)
 		d.pendingUpdates.Remove(first)
-		if u, ok := first.Value.(updateWithStringKey); ok {
+		if u, ok := first.Value.(updateWithKey); ok {
 			key := u.key
 			delete(d.keyToPendingUpdate, key)
 			if len(d.keyToPendingUpdate) == 0 && d.peakPendingUpdatesLen > 100 {
@@ -313,7 +287,7 @@ func (d *DedupeBuffer) pullNextBatch(buf []any, batchSize int) []any {
 				// https://github.com/golang/go/issues/20135
 				// Opportunistically free the map when it's empty. This can
 				// free a good amount of RAM after loading a large snapshot.
-				d.keyToPendingUpdate = map[string]*list.Element{}
+				d.keyToPendingUpdate = map[model.Key]*list.Element{}
 				d.peakPendingUpdatesLen = 0
 			}
 			// Update liveResourceKeys now, before we drop the lock.  Once we drop
@@ -340,7 +314,7 @@ func (d *DedupeBuffer) dropLockAndSendBatch(sink api.SyncerCallbacks, buf []any)
 	updates := make([]api.Update, 0, len(buf))
 	for _, msg := range buf {
 		switch msg := msg.(type) {
-		case updateWithStringKey:
+		case updateWithKey:
 			updates = append(updates, msg.update)
 		case api.SyncStatus:
 			if len(updates) > 0 {
@@ -382,15 +356,9 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 		"resources not seen during the resync.",
 		d.liveKeysNotSeenSinceReconnect.Len())
 	for key := range d.liveKeysNotSeenSinceReconnect.All() {
-		parsedKey := model.KeyFromDefaultPath(key)
-		if parsedKey == nil {
-			// Not clear how this could happen since these keys came from the
-			// set that we'd already parsed and passed downstream!
-			log.WithField("key", key).Panic("Failed to parse key during reconnection to Typha.")
-		}
 		d.queueUpdate(key, api.Update{
 			KVPair: model.KVPair{
-				Key:   parsedKey,
+				Key:   key,
 				Value: nil,
 			},
 			UpdateType: api.UpdateTypeKVDeleted,
@@ -399,4 +367,3 @@ func (d *DedupeBuffer) onInSyncAfterReconnection() {
 }
 
 var _ api.SyncerCallbacks = (*DedupeBuffer)(nil)
-var _ syncclient.RestartAwareCallbacks = (*DedupeBuffer)(nil)

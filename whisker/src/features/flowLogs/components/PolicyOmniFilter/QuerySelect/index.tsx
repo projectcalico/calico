@@ -9,6 +9,7 @@ type QuerySelectProps = {
     value: OmniFilterOption | null | undefined;
     onChange: (value: OmniFilterOption | null) => void;
     showSearch?: boolean;
+    placeholder: string;
 };
 
 const QuerySelect = ({
@@ -17,6 +18,7 @@ const QuerySelect = ({
     value,
     onChange,
     showSearch = true,
+    placeholder,
 }: QuerySelectProps) => (
     <div className='flex justify-between items-center'>
         <Text className='flex-1' size='sm'>
@@ -28,6 +30,7 @@ const QuerySelect = ({
                 value={value}
                 onChange={onChange}
                 showSearch={showSearch}
+                placeholder={placeholder}
             />
         </div>
     </div>

@@ -27,6 +27,7 @@ import (
 	gpath "path"
 
 	"github.com/sirupsen/logrus"
+	"k8s.io/apiserver/pkg/admission/plugin/policy/mutating"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
@@ -43,11 +44,23 @@ func PrepareServer(opts *CalicoServerOptions) (*apiserver.ProjectCalicoServer, e
 		opts.StopCh = make(chan struct{})
 	}
 
+	// MAP plugin hard-coded disable — enabling here would break on k8s < 1.36
+	// (v1.MutatingAdmissionPolicy doesn't exist on the cluster). As a result,
+	// user-defined MAPs against projectcalico.org/v3 won't fire here. To use
+	// MAP, Calico should be installed without calico-apiserver, where
+	// kube-apiserver serves v3 as CRDs and enforces MAPs directly.
+	disabledPlugins := []string{mutating.PluginName}
 	klog.Infof("Enabling ValidatingAdmissionPolicy: %v", opts.EnableValidatingAdmissionPolicy)
 	if !opts.EnableValidatingAdmissionPolicy {
-		opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
-		opts.RecommendedOptions.Admission.DisablePlugins = []string{validating.PluginName}
+		disabledPlugins = append(disabledPlugins, validating.PluginName)
 	}
+	if opts.RecommendedOptions.Admission == nil {
+		opts.RecommendedOptions.Admission = options.NewAdmissionOptions()
+	}
+	opts.RecommendedOptions.Admission.DisablePlugins = append(
+		opts.RecommendedOptions.Admission.DisablePlugins, disabledPlugins...,
+	)
+
 	config, err := opts.Config()
 	if err != nil {
 		return nil, err

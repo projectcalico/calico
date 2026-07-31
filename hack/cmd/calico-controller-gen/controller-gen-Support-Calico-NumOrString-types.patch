@@ -1,0 +1,73 @@
+From 04b22b775295f07a67d35ec86cceae0436e72021 Mon Sep 17 00:00:00 2001
+From: Jiawei Huang <jiawei@tigera.io>
+Date: Fri, 6 Dec 2024 15:35:46 -0800
+Subject: [PATCH] Support Calico NumOrString types
+
+---
+ pkg/crd/known_types.go | 43 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 43 insertions(+)
+
+diff --git a/pkg/crd/known_types.go b/pkg/crd/known_types.go
+index fd2a663..e40fa52 100644
+--- a/pkg/crd/known_types.go
++++ b/pkg/crd/known_types.go
+@@ -21,6 +21,43 @@ import (
+ 	"sigs.k8s.io/controller-tools/pkg/loader"
+ )
+ 
++// Custom logic for numOrString types.
++var numOrString = func(p *Parser, pkg *loader.Package) {
++	p.Schemata[TypeIdent{Name: "NumOrString", Package: pkg}] = apiext.JSONSchemaProps{
++		XIntOrString: true,
++		AnyOf: []apiext.JSONSchemaProps{
++			{Type: "integer"},
++			{Type: "string"},
++		},
++		Pattern: "^.*",
++	}
++	p.Schemata[TypeIdent{Name: "Protocol", Package: pkg}] = apiext.JSONSchemaProps{
++		XIntOrString: true,
++		AnyOf: []apiext.JSONSchemaProps{
++			{Type: "integer"},
++			{Type: "string"},
++		},
++		Pattern: "^.*",
++	}
++	p.Schemata[TypeIdent{Name: "Port", Package: pkg}] = apiext.JSONSchemaProps{
++		XIntOrString: true,
++		AnyOf: []apiext.JSONSchemaProps{
++			{Type: "integer"},
++			{Type: "string"},
++		},
++		Pattern: "^.*",
++	}
++	p.Schemata[TypeIdent{Name: "DSCP", Package: pkg}] = apiext.JSONSchemaProps{
++		XIntOrString: true,
++		AnyOf: []apiext.JSONSchemaProps{
++			{Type: "integer"},
++			{Type: "string"},
++		},
++		Pattern: "^.*",
++	}
++	p.AddPackage(pkg) // get the rest of the types
++}
++
+ // KnownPackages overrides types in some comment packages that have custom validation
+ // but don't have validation markers on them (since they're from core Kubernetes).
+ var KnownPackages = map[string]PackageOverride{
+@@ -49,6 +86,12 @@ var KnownPackages = map[string]PackageOverride{
+ 		p.AddPackage(pkg) // get the rest of the types
+ 	},
+ 
++	// numorstring could come from different places. It was moved to the api repository
++	// around the time of Calico v3.20.
++	"github.com/projectcalico/libcalico-go/lib/numorstring": numOrString,
++	"github.com/projectcalico/api/pkg/lib/numorstring":      numOrString,
++	"github.com/tigera/api/pkg/lib/numorstring":             numOrString,
++
+ 	"k8s.io/apimachinery/pkg/api/resource": func(p *Parser, pkg *loader.Package) {
+ 		p.Schemata[TypeIdent{Name: "Quantity", Package: pkg}] = apiext.JSONSchemaProps{
+ 			// TODO(directxman12): regexp validation for this (or get kube to support it as a format value)
+-- 
+2.43.0
+

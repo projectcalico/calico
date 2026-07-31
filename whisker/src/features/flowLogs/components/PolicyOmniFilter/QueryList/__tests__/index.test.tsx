@@ -62,7 +62,7 @@ describe('<QueryList />', () => {
         expect(screen.getByTestId('query-select-name')).toBeInTheDocument();
     });
 
-    it('renders multiple queries with "or" separator between them', () => {
+    it('renders multiple queries with "OR" separator between them', () => {
         render(
             <QueryList
                 {...defaultProps}
@@ -84,10 +84,10 @@ describe('<QueryList />', () => {
         );
 
         expect(screen.getAllByTestId('accordion-item')).toHaveLength(2);
-        expect(screen.getByText('or')).toBeInTheDocument();
+        expect(screen.getByText('OR')).toBeInTheDocument();
     });
 
-    it('does not render "or" separator after the last query', () => {
+    it('does not render "OR" separator after the last query', () => {
         render(
             <QueryList
                 {...defaultProps}
@@ -102,27 +102,27 @@ describe('<QueryList />', () => {
             />,
         );
 
-        expect(screen.queryByText('or')).not.toBeInTheDocument();
+        expect(screen.queryByText('OR')).not.toBeInTheDocument();
     });
 
-    it('adds a new empty query when "Add Query" is clicked', () => {
+    it('adds a new empty query when "Add Filter" is clicked', () => {
         render(<QueryList {...defaultProps} />);
 
-        fireEvent.click(screen.getByText('+ Add Query'));
+        fireEvent.click(screen.getByText('+ Add Filter'));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith([{}, {}]);
     });
 
-    it('disables "Add Query" button when there are 5 queries', () => {
+    it('disables "Add Filter" button when there are 5 queries', () => {
         render(<QueryList {...defaultProps} queries={[{}, {}, {}, {}, {}]} />);
 
-        expect(screen.getByText('+ Add Query')).toBeDisabled();
+        expect(screen.getByText('+ Add Filter')).toBeDisabled();
     });
 
-    it('does not disable "Add Query" button when there are fewer than 5 queries', () => {
+    it('does not disable "Add Filter" button when there are fewer than 5 queries', () => {
         render(<QueryList {...defaultProps} queries={[{}, {}, {}]} />);
 
-        expect(screen.getByText('+ Add Query')).not.toBeDisabled();
+        expect(screen.getByText('+ Add Filter')).not.toBeDisabled();
     });
 
     it('removes a query when the delete button is clicked', () => {

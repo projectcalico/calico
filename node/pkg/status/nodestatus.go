@@ -59,7 +59,7 @@ func RunWithContext(ctx context.Context) error {
 		log.Debug("Using typha syncclient")
 	} else {
 		log.Debug("Using local syncer")
-		syncer := nodestatussyncer.New(c.(backendClientAccessor).Backend(), r)
+		syncer := nodestatussyncer.New(c.(bapi.BackendAccessor).Backend(), r)
 		syncer.Start()
 	}
 
@@ -136,8 +136,8 @@ type NodeStatusReporter struct {
 	// Channel to indicate node status reporter routine is not needed anymore.
 	done chan struct{}
 
-	// Flag to show we are in-sync.
-	inSync bool
+	// Flag indicating the initial sync has completed; once set, never cleared.
+	initialSyncCompleted bool
 }
 
 // NewNodeStatusReporter creates a node status reporter.
@@ -178,11 +178,8 @@ func (r *NodeStatusReporter) Stop() {
 // Run is the main reconciliation loop, it loops until done.
 // Here the logic for handling syncer updates is
 //   - If we get a value update, cache it to pendingUpdates.
-//   - If we get a inSync message, set inSync to true.
-//     We don't need to worry about any status message after inSync message,
-//     getting a non-in sync status after an in-sync isn't important here, there's no real impact.
-//     It'd just mean that we've got slightly old data.
-//   - After handling syncer event, process pendingUpdates if we are in-sync.
+//   - If we get an InSync message, latch initialSyncCompleted to true.
+//   - After handling syncer event, process pendingUpdates if the initial sync has completed.
 func (r *NodeStatusReporter) Run() {
 	// Loop forever, updating whenever we get a kick. The first kick will happen as soon as the syncer is in sync.
 	for {
@@ -193,7 +190,7 @@ func (r *NodeStatusReporter) Run() {
 				r.onUpdates(event)
 			case bapi.SyncStatus:
 				if event == bapi.InSync {
-					r.inSync = true
+					r.initialSyncCompleted = true
 				}
 			default:
 				log.Panicf("Unknown type %T in syncer channel", event)
@@ -203,7 +200,7 @@ func (r *NodeStatusReporter) Run() {
 			return
 		}
 
-		if r.inSync {
+		if r.initialSyncCompleted {
 			r.processPendingUpdates()
 		}
 	}
@@ -295,9 +292,4 @@ func (r *NodeStatusReporter) processPendingUpdates() {
 		}
 		delete(r.pendingUpdates, name)
 	}
-}
-
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() bapi.Client
 }

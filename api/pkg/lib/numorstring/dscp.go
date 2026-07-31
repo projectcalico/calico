@@ -69,9 +69,6 @@ var (
 	}
 )
 
-// +kubebuilder:validation:Type=integer
-// +kubebuilder:validation:XIntOrString
-// +kubebuilder:validation:Pattern=`^.*`
 type DSCP Uint8OrString
 
 // DSCPFromInt creates a DSCP struct from an integer value.

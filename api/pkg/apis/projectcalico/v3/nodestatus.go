@@ -159,7 +159,7 @@ type CalicoNodePeer struct {
 	PeerIP string `json:"peerIP,omitempty" validate:"omitempty,ip"`
 
 	// Type indicates whether this peer is configured via the node-to-node mesh,
-	// or via en explicit global or per-node BGPPeer object.
+	// or via an explicit global or per-node BGPPeer object.
 	Type BGPPeerType `json:"type,omitempty"`
 
 	// State is the BGP session state.

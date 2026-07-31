@@ -30,6 +30,7 @@ import (
 // #cgo amd64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/amd64 -lbpf -lelf -lz
 // #cgo arm64 LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/arm64 -lbpf -lelf -lz
 // #cgo ppc64le LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/ppc64le -lbpf -lelf -lz
+// #cgo s390x LDFLAGS: -L${SRCDIR}/../../bpf-gpl/libbpf/src/s390x -lbpf -lelf -lz
 // #include "libbpf_api.h"
 import "C"
 
@@ -306,6 +307,22 @@ func (o *Obj) AttachTCX(secName, ifName string) (*Link, error) {
 	return &Link{link: link}, nil
 }
 
+func (o *Obj) AttachNetkit(secName, ifName string) (*Link, error) {
+	cSecName := C.CString(secName)
+	cIfName := C.CString(ifName)
+	defer C.free(unsafe.Pointer(cSecName))
+	defer C.free(unsafe.Pointer(cIfName))
+	ifIndex, err := C.if_nametoindex(cIfName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ifindex for %s: %w", ifName, err)
+	}
+	link, err := C.bpf_netkit_program_attach(o.obj, cSecName, C.int(ifIndex))
+	if err != nil {
+		return nil, fmt.Errorf("error attaching netkit program: %w", err)
+	}
+	return &Link{link: link}, nil
+}
+
 func (o *Obj) AttachXDP(ifName, progName string, oldID int, mode uint) (int, error) {
 	cProgName := C.CString(progName)
 	cIfName := C.CString(ifName)
@@ -547,10 +564,15 @@ const (
 	GlobalsEgressPacketRateConfigured    uint32 = C.CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED
 	GlobalsWorkloadSrcSpoofingConfigured uint32 = C.CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED
 	GlobalsUDPGSOLinearize               uint32 = C.CALI_GLOBALS_UDP_GSO_LINEARIZE
+	GlobalsIngressConnLimitConfigured    uint32 = C.CALI_GLOBALS_INGRESS_CONN_LIMIT_CONFIGURED
+	GlobalsEgressConnLimitConfigured     uint32 = C.CALI_GLOBALS_EGRESS_CONN_LIMIT_CONFIGURED
 
 	AttachTypeTcxIngress uint32 = C.BPF_TCX_INGRESS
 	AttachTypeTcxEgress  uint32 = C.BPF_TCX_EGRESS
 	AttachTypeXDP        uint32 = C.BPF_XDP
+
+	AttachTypeNetkitPrimary uint32 = C.BPF_NETKIT_PRIMARY
+	AttachTypeNetkitPeer    uint32 = C.BPF_NETKIT_PEER
 )
 
 func (t *TcGlobalData) Set(m *Map) error {
@@ -575,13 +597,13 @@ func (t *TcGlobalData) Set(m *Map) error {
 		(*C.char)(unsafe.Pointer(&t.IntfIPv4[0])),
 		(*C.char)(unsafe.Pointer(&t.HostIPv6[0])),
 		(*C.char)(unsafe.Pointer(&t.IntfIPv6[0])),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv4[0])),
+		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv6[0])),
 		C.uint(t.ExtToSvcMark),
 		C.ushort(t.Tmtu),
 		C.ushort(t.VxlanPort),
 		C.ushort(t.PSNatStart),
 		C.ushort(t.PSNatLen),
-		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv4[0])),
-		(*C.char)(unsafe.Pointer(&t.HostTunnelIPv6[0])),
 		C.uint(t.Flags),
 		C.ushort(t.WgPort),
 		C.ushort(t.Wg6Port),
@@ -596,6 +618,7 @@ func (t *TcGlobalData) Set(m *Map) error {
 		C.short(t.IstioDSCP),
 		C.uint(t.MaglevLUTSize),
 		C.uint(t.IPFragTimeout),
+		C.uint(t.HostIfindex),
 	)
 
 	return err
@@ -621,6 +644,19 @@ func (c *CTCleanupGlobalData) Set(m *Map) error {
 func (c *CTLBGlobalData) Set(m *Map) error {
 	udpNotSeen := c.UDPNotSeen / time.Second // Convert to seconds
 	_, err := C.bpf_ctlb_set_globals(m.bpfMap, C.uint(udpNotSeen), C.bool(c.ExcludeUDP))
+
+	return err
+}
+
+// SetProgFlags writes the per-object load-time feature flags into the
+// program's .rodata.prog_flags section before load (see struct
+// prog_flags in globals.h).
+func (m *Map) SetProgFlags(noTracePrintk bool) error {
+	var noTrace C.uint8_t
+	if noTracePrintk {
+		noTrace = 1
+	}
+	_, err := C.bpf_set_prog_flags(m.bpfMap, noTrace)
 
 	return err
 }

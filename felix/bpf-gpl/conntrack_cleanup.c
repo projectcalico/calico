@@ -41,6 +41,10 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 	if (!value->rev_key.protocol) {
 		actual_ct_value = cali_ct_lookup_elem(key);
 		if (actual_ct_value && (actual_ct_value->last_seen == value->last_seen)) {
+			// Decrement the per-pod connlimit counter if this entry
+			// carried one of the CONNLIMIT_* flags and the packet
+			// path didn't already decrement.
+			qos_connlimit_decrement_for_ct(actual_ct_value);
 			if (!cali_ct_delete_elem(key)) {
 				ictx->num_cleaned++;
 			}
@@ -58,6 +62,8 @@ static long process_ccq_entry(void *map, struct calico_ct_key *key, struct cali_
 		}
 		struct calico_ct_value *rev_ct_value = cali_ct_lookup_elem(rev_key);
 		if (rev_ct_value && (rev_ct_value->last_seen == value->rev_last_seen)) {
+			// The reverse leg holds the connlimit flags + ifindex.
+			qos_connlimit_decrement_for_ct(rev_ct_value);
 			if (!cali_ct_delete_elem(rev_key)) {
 				ictx->num_cleaned++;
 			}

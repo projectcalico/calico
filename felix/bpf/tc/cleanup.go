@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path"
 	"slices"
 	"strings"
 
@@ -26,10 +27,12 @@ import (
 
 	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/bpfdefs"
+	"github.com/projectcalico/calico/felix/bpf/libbpf"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-// CleanUpProgramsAndPins makes a best effort to remove all our TC BPF programs.
+// CleanUpProgramsAndPins makes a best effort to remove all of our BPF programs
+// and pinned state, covering legacy TC (clsact), TCX, and netkit attachments.
 func CleanUpProgramsAndPins() {
 	log.Debug("Trying to clean up any left-over BPF state from a previous run.")
 	bpftool := exec.Command("bpftool", "map", "list", "--json")
@@ -102,8 +105,9 @@ func CleanUpProgramsAndPins() {
 		}
 		link, err := netlink.LinkByIndex(qdisc.Attrs().LinkIndex)
 		if err != nil {
-			log.WithError(err).WithField("iface", link.Attrs().Name).Info(
-				"Failed to remove BPF qdisc from interface, maybe interface is gone?")
+			log.WithError(err).WithField("linkIndex", qdisc.Attrs().LinkIndex).Info(
+				"Failed to look up link for BPF qdisc cleanup; skipping")
+			continue
 		}
 		for _, parent := range []uint32{netlink.HANDLE_MIN_INGRESS, netlink.HANDLE_MIN_EGRESS} {
 			filters, err := netlink.FilterList(link, parent)
@@ -127,7 +131,46 @@ func CleanUpProgramsAndPins() {
 			}
 		}
 	}
-	// Remove all tcx pins
-	os.RemoveAll(bpfdefs.TcxPinDir)
+	// Detach and unpin any tcx and netkit links.  Removing the pin alone is
+	// usually enough — once the last reference goes away the kernel detaches —
+	// but explicitly calling Detach() makes the cleanup synchronous so the
+	// program is gone from the interface by the time we return.
+	detachAndRemoveLinkPins(bpfdefs.TcxPinDir)
+	detachAndRemoveLinkPins(bpfdefs.NetkitPinDir)
 	bpf.CleanUpCalicoPins(bpfdefs.DefaultBPFfsPath)
+}
+
+func detachAndRemoveLinkPins(pinDir string) {
+	entries, err := os.ReadDir(pinDir)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.WithError(err).WithField("dir", pinDir).Info("Failed to list link pin dir for cleanup")
+		}
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		pinPath := path.Join(pinDir, e.Name())
+		link, err := libbpf.OpenLink(pinPath)
+		if err != nil {
+			log.WithError(err).WithField("pin", pinPath).Info(
+				"Failed to open link pin; falling back to pin removal only")
+		} else {
+			if err := link.Detach(); err != nil {
+				log.WithError(err).WithField("pin", pinPath).Info(
+					"Failed to detach link; pin removal will let the kernel reap it")
+			}
+			if err := link.Close(); err != nil {
+				log.WithError(err).WithField("pin", pinPath).Debug("Failed to close link handle")
+			}
+		}
+		if err := os.Remove(pinPath); err != nil && !os.IsNotExist(err) {
+			log.WithError(err).WithField("pin", pinPath).Info("Failed to remove link pin")
+		}
+	}
+	if err := os.Remove(pinDir); err != nil && !os.IsNotExist(err) {
+		log.WithError(err).WithField("dir", pinDir).Debug("Failed to remove link pin dir")
+	}
 }

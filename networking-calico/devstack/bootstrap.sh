@@ -113,6 +113,12 @@ cd devstack-bootstrap
 sudo apt-get update
 sudo apt-get -y install git
 
+# crudini is used by resync_concurrency_test.py's `startup` scenario to
+# set/unset [calico] startup_resync_inject_per_item_delay_ms in neutron.conf
+# across a neutron-server restart.  Install it now so the test can use it
+# without needing a separate sudo block later.
+sudo apt-get -y install crudini
+
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
 sudo sysctl -w net.ipv6.conf.all.forwarding=1
@@ -155,10 +161,6 @@ SCENARIO_IMAGE_TYPE=ignore
 GIT_BASE=https://github.com
 
 LIBVIRT_TYPE=qemu
-
-# Disable ongoing resync.  In principle this isn't needed; disable it in order to build evidence to
-# confirm that.
-CALICO_RESYNC_INTERVAL_SECS=0
 
 EOF
 
@@ -225,12 +227,56 @@ echo "Running QoS responsiveness tests..."
 cd /opt/stack/devstack
 . openrc admin admin
 
-# Install required Python packages for QoS tests
-sudo pip install openstacksdk etcd3
+# Install required Python packages for QoS tests.
+sudo pip install openstacksdk etcd3 pymysql
 
 export ETCD_HOST=${SERVICE_HOST}
 python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
 EOF
+
+# Run resync concurrency test.  Prints one RESYNC_CONCURRENCY_RESULT
+# line per scenario.  Non-zero exit (any scenario over the 2x ratio
+# gate) propagates out of the heredoc and fails the bootstrap, so
+# regressions block CI.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+
+export ETCD_HOST=${SERVICE_HOST}
+export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
+python3 ../calico/networking-calico/devstack/resync_concurrency_test.py
+EOF
+
+# Run resync scale benchmark.  Prints one RESYNC_SCALE_RESULT line per
+# scale; grep for that to extract the numbers.
+sudo -u stack -H -E bash -x <<'EOF'
+cd /opt/stack/devstack
+. openrc admin admin
+
+export ETCD_HOST=${SERVICE_HOST}
+
+# calico-resync is installed alongside calico-dhcp-agent under
+# ${DEVSTACK_VENV:-/usr/local}/bin, which is not necessarily on the
+# stack user's PATH under sudo.  Pass the absolute path explicitly.
+export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
+
+# Override via RESYNC_SCALES if a Semaphore run is too slow for the
+# default 100,1000,3000 ladder.  The test drops per-iteration JSON
+# files under artifacts/perf/benchmark_data_neutron_resync/; the
+# send-perf-results call below picks them up.
+mkdir -p /home/semaphore/calico/artifacts/perf
+export RESYNC_PERF_ARTIFACTS_DIR=/home/semaphore/calico/artifacts/perf
+python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
+EOF
+
+# Publish perf measurements to Lens.  No-op unless ELASTICSEARCH_URL +
+# credentials are wired in via Semaphore secrets; see hack/perf/README.md.
+(
+  cd /home/semaphore/calico && \
+  go run ./hack/perf/cmd/send-perf-results \
+     --dir artifacts/perf \
+     --templates hack/perf/index-templates
+) || true
 
 # Run Tempest tests
 sudo -u stack -H -E bash -x <<'EOF'
@@ -248,4 +294,91 @@ else
     cd /opt/stack/tempest
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
+EOF
+
+# Scan the Neutron server log for issues that should not appear in a
+# healthy run.  This is a guard against regressions of code-quality
+# fixes we have specifically landed in the Calico driver, plus a
+# generic check for ERROR-level entries and tracebacks from the
+# driver namespace.  Runs last so all the other tests have already
+# exercised the driver paths first.
+sudo -u stack -H -E bash <<'EOF'
+# Strict mode: the outer script's `set -ex` does not propagate into this
+# fresh bash invocation, so re-enable it here.  Without `-e`, a failure
+# of `mktemp` or `journalctl` itself (e.g. service rename, permission
+# change) would leave LOG empty, none of the greps below would match,
+# and the script would fall through to the final "PASSED" echo --
+# silently turning the check into a no-op.
+set -e
+# (deliberately *not* `pipefail`: the `grep | head -N` lines below would
+# SIGPIPE grep when head closes its end after N matches, which under
+# pipefail would abort the loop before all forbidden patterns have been
+# checked.)
+LOG=$(mktemp)
+trap 'rm -f "${LOG}"' EXIT
+sudo journalctl -u devstack@q-svc --no-pager > "${LOG}"
+# Defence-in-depth against a journalctl that exits 0 but emits nothing
+# (e.g. unit not found on a future devstack version): treat that as a
+# check failure rather than an implicit PASS.
+if [ ! -s "${LOG}" ]; then
+  echo "FAIL: q-svc journal capture produced no output"
+  exit 1
+fi
+
+# Patterns that should NEVER appear in a healthy run.  Each is
+# something we have specifically fixed in driver code; reappearance
+# is a regression we want to catch in CI.
+FORBIDDEN_PATTERNS=(
+  # CI-1895 / SQLAlchemy transaction hygiene -- the _txn_from_context
+  # migration and CONTEXT_*.using wraps around raw context.session
+  # queries removed these.  Reappearance means a code path is making
+  # ORM queries outside a transaction again.
+  "ORM session: SQL execution without transaction in progress"
+
+  # Fairy-GC race (PR 13015 root-cause fix + fairy_gc_diagnostics
+  # safety net).  Reappearance means a session is being leaked to GC
+  # again -- see
+  # networking_calico/plugins/ml2/drivers/calico/fairy_gc_diagnostics.py
+  # for the full diagnosis.
+  "Exception ignored in: <function _ConnectionRecord.checkout"
+  "_thread_yield"
+)
+
+bad=0
+for pattern in "${FORBIDDEN_PATTERNS[@]}"; do
+  if grep -F -q -- "${pattern}" "${LOG}"; then
+    echo "FAIL: forbidden pattern found in neutron-server log: ${pattern}"
+    grep -F -n -- "${pattern}" "${LOG}" | head -5
+    echo
+    bad=1
+  fi
+done
+
+# ERROR-level entries from any networking_calico module.  The
+# oslo_log format places the logger name after the level word, so
+# "ERROR networking_calico" matches our logger names without false-
+# positives from other modules that happen to mention us.
+if grep -E -q "ERROR networking_calico" "${LOG}"; then
+  echo "FAIL: ERROR-level entries from networking_calico:"
+  grep -E -n "ERROR networking_calico" "${LOG}" | head -20
+  echo
+  bad=1
+fi
+
+# Python tracebacks that mention networking_calico source files.
+# A traceback frame is rendered as: File "/path/to/file.py", line N
+if grep -E -q 'File ".*networking_calico' "${LOG}"; then
+  echo "FAIL: Python tracebacks referencing networking_calico:"
+  grep -E -B 5 -A 2 'File ".*networking_calico' "${LOG}" | head -80
+  echo
+  bad=1
+fi
+
+if [ ${bad} -ne 0 ]; then
+  echo "============================================================"
+  echo "Neutron server log check FAILED -- see above."
+  echo "============================================================"
+  exit 1
+fi
+echo "Neutron server log check PASSED."
 EOF
