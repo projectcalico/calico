@@ -92,6 +92,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.31
 	go.etcd.io/etcd/client/v3 v3.7.0
 	go.yaml.in/yaml/v3 v3.0.4
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
 	golang.org/x/oauth2 v0.36.0
@@ -264,7 +265,7 @@ require (
 	github.com/gonvenience/text v1.0.7 // indirect
 	github.com/gonvenience/wrap v1.1.2 // indirect
 	github.com/gonvenience/ytbx v1.4.4 // indirect
-	github.com/google/cel-go v0.27.0 // indirect
+	github.com/google/cel-go v0.29.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
@@ -436,7 +437,7 @@ replace (
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.37.0-beta.0
 	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
 	// exist; pin to the pseudo-version used by the rest of our k8s dependencies.
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.37.0-beta.0
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.37.0-beta.0
 	k8s.io/kubectl => k8s.io/kubectl v0.37.0-beta.0

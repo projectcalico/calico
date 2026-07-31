@@ -319,6 +319,13 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 #   DOCKER_CPUSET_CPUS=0-3  Pin container to specific cores (true affinity).
 #   GOMAXPROCS=N            Cap goroutine parallelism inside each go invocation
 #                           (linker, vet, etc.); complements -p=N from GOFLAGS.
+#   DOCKER_MEMORY=8g        Hard cap on container memory. The kernel OOM-kills
+#                           the container at this limit, so a runaway compile or
+#                           link fails the build ("signal: killed") rather than
+#                           driving the whole host into swap thrash.
+#   DOCKER_MEMORY_SWAP=8g   Cap on memory+swap combined (requires DOCKER_MEMORY).
+#                           Must be >= DOCKER_MEMORY or -1; defaults to DOCKER_MEMORY
+#                           (denies container swap entirely, keeps it off host swap).
 ifneq ($(DOCKER_CPUS),)
 EXTRA_DOCKER_ARGS += --cpus=$(DOCKER_CPUS)
 endif
@@ -327,6 +334,9 @@ EXTRA_DOCKER_ARGS += --cpuset-cpus=$(DOCKER_CPUSET_CPUS)
 endif
 ifneq ($(GOMAXPROCS),)
 EXTRA_DOCKER_ARGS += -e GOMAXPROCS=$(GOMAXPROCS)
+endif
+ifneq ($(DOCKER_MEMORY),)
+EXTRA_DOCKER_ARGS += --memory=$(DOCKER_MEMORY) --memory-swap=$(if $(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY_SWAP),$(DOCKER_MEMORY))
 endif
 
 # Define go architecture flags
