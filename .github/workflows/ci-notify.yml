@@ -37,9 +37,13 @@ on:
   #
   # A schedule is repository-level: nothing to approve, and it still gets the
   # secrets and the working `contents: write` the dedup marker needs. Cost is
-  # latency — a cycle, plus whatever delay GitHub adds to scheduled runs.
+  # latency: a cycle, plus GitHub's own delay in starting scheduled runs, which
+  # on this repo measures 31-46 minutes (sampled from sync-operator-crds.yml,
+  # whose hourly cron starts at :31 to :46). A finer cron buys nothing against
+  # a delay that size — GitHub drops schedule slots it cannot start — so this
+  # is hourly, and an approval DM should be expected within roughly two hours.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 * * * *"
   # Manual test path: simulate a finished-CI status (or an approval) for a
   # given PR, so the full chain (resolve -> opt-in lookup -> DM) can be
   # exercised on demand without waiting for real CI. Dispatchable only once
@@ -491,9 +495,13 @@ jobs:
 
           # Ignore approvals older than this. Without it, deploying this
           # workflow — or recovering from an outage — would DM about every
-          # already-approved open PR at once. A cycle is 15 minutes, so this
-          # tolerates several missed cycles without ever mass-notifying.
-          CUTOFF=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # already-approved open PR at once.
+          # It has to comfortably exceed one cycle plus GitHub's start delay
+          # plus a dropped slot, or an approval ages out before any poll sees
+          # it and its DM is lost silently: hourly cron + up to ~46 minutes of
+          # delay puts two consecutive polls as much as ~2h45m apart, so 2
+          # hours (the value while the cron was */15) would now drop DMs.
+          CUTOFF=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
 
           for LOGIN in $LOGINS; do
             # review:approved is GitHub's own review-decision filter, so this
