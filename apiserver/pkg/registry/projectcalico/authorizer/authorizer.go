@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 package authorizer
 
@@ -57,6 +57,7 @@ func (a *authorizer) AuthorizeTierOperation(
 	// - <tier>.*           (wildcard syntax for any Calico policy within a tier; covers both name styles)
 	// - <tier>.<policy>    (old-style: tier-prefixed policy name)
 	// - <policy>           (new-style: bare policy name)
+	// - *                  (wildcard syntax for any Calico policy in any tier the user can GET)
 	// *and* has GET access for the tier.
 	//
 	// The per-policy check uses attributes.GetName() verbatim — whatever the client sent in the
@@ -66,7 +67,7 @@ func (a *authorizer) AuthorizeTierOperation(
 	// The tier.* wildcard check covers both access styles without ambiguity.
 	// These requests can be performed in parallel.
 	wg := sync.WaitGroup{}
-	wg.Add(3)
+	wg.Add(4)
 
 	// Query GET access for the tier.
 	var decisionGetTier k8sauth.Decision
@@ -94,8 +95,8 @@ func (a *authorizer) AuthorizeTierOperation(
 		}
 	}()
 
-	// Query required access to the tiered policy resource or tier wildcard resource.
-	var decisionPolicy, decisionTierWildcard k8sauth.Decision
+	// Query required access to the tiered policy resource or either wildcard resource.
+	var decisionPolicy, decisionTierWildcard, decisionBareWildcard k8sauth.Decision
 	var pathPrefix string
 	tierScopedResource := "tier." + attributes.GetResource()
 	if attributes.GetNamespace() == "" {
@@ -153,13 +154,39 @@ func (a *authorizer) AuthorizeTierOperation(
 			logrus.Errorf("Error authorizing tier wildcard request: %v", err)
 		}
 	}()
+	go func() {
+		defer wg.Done()
+		attrs := k8sauth.AttributesRecord{
+			User:            attributes.GetUser(),
+			Verb:            attributes.GetVerb(),
+			Namespace:       attributes.GetNamespace(),
+			APIGroup:        attributes.GetAPIGroup(),
+			APIVersion:      attributes.GetAPIVersion(),
+			Resource:        tierScopedResource,
+			Subresource:     attributes.GetSubresource(),
+			Name:            "*",
+			ResourceRequest: true,
+			Path:            pathPrefix + "/*",
+		}
+
+		logrus.Trace("Checking authorization using tier scoped resource type (bare name wildcard match)")
+		logAuthorizerAttributes(attrs)
+		var authzErr error
+		decisionBareWildcard, _, authzErr = a.Authorize(ctx, attrs)
+		if authzErr != nil {
+			logrus.Errorf("Error authorizing bare name wildcard request: %v", authzErr)
+		}
+	}()
 
 	// Wait for the requests to complete.
 	wg.Wait()
 
-	// If the user has GET access to the tier and either the policy match or tier wildcard match are authorized
+	// If the user has GET access to the tier and any of the policy name or wildcard matches are authorized
 	// then allow the request.
-	if decisionGetTier == k8sauth.DecisionAllow && (decisionPolicy == k8sauth.DecisionAllow || decisionTierWildcard == k8sauth.DecisionAllow) {
+	policyAllowed := decisionPolicy == k8sauth.DecisionAllow ||
+		decisionTierWildcard == k8sauth.DecisionAllow ||
+		decisionBareWildcard == k8sauth.DecisionAllow
+	if decisionGetTier == k8sauth.DecisionAllow && policyAllowed {
 		logrus.Trace("Operation allowed")
 		return nil
 	}
