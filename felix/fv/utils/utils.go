@@ -246,6 +246,18 @@ func NFTSetNameForSelector(ipVersion int, rawSelector string) string {
 	return nftables.LegalizeSetName(base)
 }
 
+func IPSetName(ipSetID string, ipVersion uint8) string {
+	ipFamily := ipsets.IPFamilyV4
+	if ipVersion == 6 {
+		ipFamily = ipsets.IPFamilyV6
+	}
+	return ipsets.NewIPVersionConfig(ipFamily, rules.IPSetNamePrefix, nil, nil).NameForMainIPSet(ipSetID)
+}
+
+func NFTSetName(ipSetID string, ipVersion uint8) string {
+	return "@" + IPSetName(ipSetID, ipVersion)
+}
+
 // HasSyscallConn represents objects that can return a syscall.RawConn
 type HasSyscallConn interface {
 	SyscallConn() (syscall.RawConn, error)

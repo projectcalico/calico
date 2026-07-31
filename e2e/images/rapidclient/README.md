@@ -1,4 +1,31 @@
-# RapidClient
+# rapidclient
+
+A multi-mode e2e test utility image. The mode is selected by the `MODE`
+environment variable; an unset `MODE` defaults to `client` (the original
+behaviour). See [DESIGN.md](DESIGN.md) for the full contract and rationale.
+
+## Modes
+
+| `MODE` | Purpose |
+|---|---|
+| `client` (default) | HTTP client that forces source-port reuse — for Maglev / load-balancer tests. Configured via flags (below). |
+| `server` | HTTP + UDP "dataplane server" for packet-size tests (ports the former `k8s-e2e-dataplane-server` flask image). Configured via the `PORT` env (default 5000). |
+
+### `server` mode
+
+Listens for TCP HTTP and UDP echo on the same port (`PORT`, default 5000),
+dual-stack:
+
+- `GET /length/{N}` — response body of exactly `N` whitespace-free bytes.
+- `POST /post` — returns the number of bytes received (GET returns help text).
+- `GET /` — static sanity string.
+- UDP — echoes each datagram back verbatim.
+
+```bash
+docker run --rm -e MODE=server -p 5000:5000 quay.io/tigeradev/rapidclient
+```
+
+## `client` mode
 
 A simple HTTP client tool that forces source port reuse by bypassing TIME_WAIT state, designed for testing Maglev consistent hashing and load balancer behavior.
 
@@ -83,6 +110,22 @@ $ ./rapidclient -url "http://10.96.0.1:8080/shell?cmd=hostname" -v
 Status: 200 OK
 Response: {"output":"backend-pod-5\n"}
 ```
+
+## How the e2e tests get this image
+
+The tests reference the image via `images.RapidClientImage()`
+(`e2e/pkg/utils/images/images.go`), which is env-driven:
+
+- **PR CI on gcp-kubeadm:** PR builds have no registry push credential, so
+  `.semaphore/end-to-end/scripts/phases/load_images.sh` builds this image from the
+  PR source and imports it straight into each node's containerd (and the external
+  node's docker), then exports `RAPIDCLIENT_TAG` (e.g. `pr-13105`). The tests pin
+  that tag with `ImagePullPolicy: Never`.
+- **Everything else** (other providers, scheduled runs, local dev): `RAPIDCLIENT_TAG`
+  is unset and the tests use the published `quay.io/tigeradev/rapidclient:latest`.
+  If you change this image and want a non-gcp-kubeadm run to use your build, publish
+  it (post-merge `push-images/e2e-test.yml` promotion) or set `RAPIDCLIENT_TAG`
+  yourself to a tag the cluster can pull.
 
 ## Integration with Tests
 

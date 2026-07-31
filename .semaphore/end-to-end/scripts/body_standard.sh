@@ -47,4 +47,8 @@ fi
 echo "[INFO] Test logs will be available here after the run: ${SEMAPHORE_ORGANIZATION_URL}/artifacts/jobs/${SEMAPHORE_JOB_ID}?path=semaphore%2Flogs"
 echo "[INFO] Alternatively, you can view logs while job is running using 'sem attach ${SEMAPHORE_JOB_ID}' and then 'tail -f ${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log'"
 
+# Side-load PR-built helper images (rapidclient) onto the nodes before testing;
+# no-op except on the local-binary gcp-kubeadm PR path. See load_images.sh.
+source "${PHASES}/load_images.sh"
+
 source "${PHASES}/run_tests.sh"

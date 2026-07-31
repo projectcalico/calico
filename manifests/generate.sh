@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 export LC_ALL=C
 
 # Filter out Helm symlink warnings (walk.go).  The charts/calico directory
@@ -109,11 +111,18 @@ done
 # Maintain legacy operator-crds.yaml for a while.
 cp v1_crd_projectcalico_org.yaml operator-crds.yaml
 
+# The DatastoreMigration CRD is installed as its own step in the CRD migration
+# procedure, separately from the v3 CRD bundle, so publish it as a standalone
+# manifest rather than folding it into a chart.
+cp ../kube-controllers/pkg/controllers/migration/crd/migration.projectcalico.org_datastoremigrations.yaml \
+	migration.projectcalico.org_datastoremigrations.yaml
+
 echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > v3_projectcalico_org.yaml
 for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
 	${HELM} template \
 		--show-only templates/$FILE \
 		--set version=$CALICO_VERSION \
+		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
 		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
 done
 for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
@@ -136,6 +145,7 @@ for FILE in $VALUES_FILES; do
 	${HELM} -n kube-system template \
 		../charts/calico \
 		--set version=$CALICO_VERSION \
+		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
 		-f ../charts/values/$FILE > $FILE
 done
 

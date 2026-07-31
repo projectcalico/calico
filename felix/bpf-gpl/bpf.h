@@ -210,7 +210,7 @@ enum calico_skb_mark {
 	/* The NAT_OUT bit is used by programs that are towards the host namespace to tell iptables to
 	 * do SNAT for this flow.  Subsequent packets will also be allowed to fall through to the host
 	 * netns. */
-	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_BYPASS  | 0x00800000,
+	CALI_SKB_MARK_NAT_OUT                = CALI_SKB_MARK_SEEN  | 0x00800000,
 	/* CALI_SKB_MARK_MASQ enforces MASQ on the connection. */
 	CALI_SKB_MARK_MASQ                   = CALI_SKB_MARK_BYPASS  | 0x00600000,
 	/* CALI_SKB_MARK_SKIP_FIB is used for packets that should pass through host IP stack. */
@@ -343,6 +343,8 @@ extern const volatile struct cali_tc_preamble_globals __globals;
 #define INGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_PACKET_RATE_CONFIGURED)
 #define EGRESS_PACKET_RATE_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_PACKET_RATE_CONFIGURED)
 #define WORKLOAD_SRC_SPOOFING_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_WORKLOAD_SRC_SPOOFING_CONFIGURED)
+#define INGRESS_CONN_LIMIT_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_INGRESS_CONN_LIMIT_CONFIGURED)
+#define EGRESS_CONN_LIMIT_CONFIGURED (GLOBAL_FLAGS & CALI_GLOBALS_EGRESS_CONN_LIMIT_CONFIGURED)
 
 #define MAP_VERSIONED(name, ver) name##ver
 #define map_symbol(name, ver)  MAP_VERSIONED(name, ver)

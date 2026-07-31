@@ -1,0 +1,349 @@
+From 6fd1799ec1843790b6690a0a9f45196f18c28102 Mon Sep 17 00:00:00 2001
+From: Seth Malaki <seth@tigera.io>
+Date: Fri, 17 Jul 2026 12:00:00 +0100
+Subject: [PATCH] provider/kubernetes: skip absent optional Gateway API CRD
+ watches
+
+Envoy Gateway unconditionally establishes watches (and reconcile-time
+List calls) for ListenerSet, TLSRoute and BackendTLSPolicy. Those types
+are in the gateway.networking.k8s.io v1 standard channel now, but a
+cluster can still lack them when it ships an older standard bundle.
+OpenShift is one example: it installs a fixed standard-channel set and
+blocks anyone else from adding the rest. When one of these CRDs is
+missing the manager fails its cache sync and the controller crash-loops
+with `no matches for kind "..."`.
+
+Guard the three watches with a CRD existence check and a skip log, and
+guard the matching processing and predicate paths, mirroring what is
+already done for EnvoyProxy, TCPRoute and UDPRoute. The offline provider
+continues to assume all CRDs exist. When a CRD is present behaviour is
+unchanged; when it is absent the controller starts and serves the CRDs
+that do exist.
+---
+ internal/provider/kubernetes/controller.go    | 151 +++++++++++-------
+ .../provider/kubernetes/controller_offline.go |   3 +
+ internal/provider/kubernetes/predicates.go    |  52 +++---
+ 3 files changed, 125 insertions(+), 81 deletions(-)
+
+diff --git a/internal/provider/kubernetes/controller.go b/internal/provider/kubernetes/controller.go
+index 625079f..078b879 100644
+--- a/internal/provider/kubernetes/controller.go
++++ b/internal/provider/kubernetes/controller.go
+@@ -81,15 +81,18 @@ type gatewayAPIReconciler struct {
+ 	gatewayNamespaceMode bool
+ 
+ 	backendCRDExists       bool
++	btlsCRDExists          bool
+ 	btpCRDExists           bool
+ 	ctpCRDExists           bool
+ 	eepCRDExists           bool
+ 	epCRDExists            bool
+ 	eppCRDExists           bool
+ 	hrfCRDExists           bool
++	listenerSetCRDExists   bool
+ 	serviceImportCRDExists bool
+ 	spCRDExists            bool
+ 	tcpRouteCRDExists      bool
++	tlsRouteCRDExists      bool
+ 	udpRouteCRDExists      bool
+ 
+ 	clusterTrustBundleExits bool
+@@ -492,12 +495,14 @@ func (r *gatewayAPIReconciler) Reconcile(ctx context.Context, _ reconcile.Reques
+ 		}
+ 
+ 		// Add all BackendTLSPolies to the resourceTree
+-		if err = r.processBackendTLSPolicies(ctx, gwcResource, gwcResourceMapping); err != nil {
+-			if isTransientError(err) {
+-				gcLogger.Error(err, "transient error processing BackendTLSPolicies")
+-				return reconcile.Result{}, err
++		if r.btlsCRDExists {
++			if err = r.processBackendTLSPolicies(ctx, gwcResource, gwcResourceMapping); err != nil {
++				if isTransientError(err) {
++					gcLogger.Error(err, "transient error processing BackendTLSPolicies")
++					return reconcile.Result{}, err
++				}
++				gcLogger.Error(err, "failed to process BackendTLSPolicies for GatewayClass")
+ 			}
+-			gcLogger.Error(err, "failed to process BackendTLSPolicies for GatewayClass")
+ 		}
+ 
+ 		if r.eepCRDExists {
+@@ -1858,18 +1863,22 @@ func (r *gatewayAPIReconciler) processGateways(ctx context.Context, managedGC *g
+ 		gtwNamespacedName := utils.NamespacedName(gtw).String()
+ 
+ 		// ListenerSet Processing (must be done before route processing)
+-		if err := r.processListenerSets(ctx, gtwNamespacedName, resourceMap, resourceTree); err != nil {
+-			if isTransientError(err) {
+-				return err
++		if r.listenerSetCRDExists {
++			if err := r.processListenerSets(ctx, gtwNamespacedName, resourceMap, resourceTree); err != nil {
++				if isTransientError(err) {
++					return err
++				}
++				r.log.Error(err, "failed to process ListenerSets for gateway", "namespace", gtw.Namespace, "name", gtw.Name)
+ 			}
+-			r.log.Error(err, "failed to process ListenerSets for gateway", "namespace", gtw.Namespace, "name", gtw.Name)
+ 		}
+ 
+ 		// Route Processing
+ 
+ 		// Get TLSRoute objects and check if it exists.
+-		if err := r.processTLSRoutes(ctx, gtwNamespacedName, resourceMap, resourceTree); err != nil {
+-			return err
++		if r.tlsRouteCRDExists {
++			if err := r.processTLSRoutes(ctx, gtwNamespacedName, resourceMap, resourceTree); err != nil {
++				return err
++			}
+ 		}
+ 
+ 		// Get HTTPRoute objects and check if it exists.
+@@ -2281,25 +2290,33 @@ func (r *gatewayAPIReconciler) watchResources(ctx context.Context, mgr manager.M
+ 		return err
+ 	}
+ 
+-	xlsPredicates := []predicate.TypedPredicate[*gwapiv1.ListenerSet]{
+-		predicate.TypedGenerationChangedPredicate[*gwapiv1.ListenerSet]{},
+-	}
+-	if r.namespaceLabel != nil {
+-		xlsPredicates = append(xlsPredicates, predicate.NewTypedPredicateFuncs(func(obj *gwapiv1.ListenerSet) bool {
+-			return r.hasMatchingNamespaceLabels(obj)
+-		}))
+-	}
+-
+-	if err := c.Watch(
+-		source.Kind(mgr.GetCache(), &gwapiv1.ListenerSet{},
+-			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *gwapiv1.ListenerSet) []reconcile.Request {
+-				return r.enqueueClass(ctx, obj)
+-			}),
+-			xlsPredicates...)); err != nil {
++	r.listenerSetCRDExists, err = checkCRD(resource.KindListenerSet, gwapiv1.GroupVersion.String())
++	if err != nil {
+ 		return err
+ 	}
+-	if err := addListenerSetIndexers(ctx, mgr); err != nil {
+-		return err
++	if !r.listenerSetCRDExists {
++		r.log.Info("ListenerSet CRD not found, skipping ListenerSet watch")
++	} else {
++		xlsPredicates := []predicate.TypedPredicate[*gwapiv1.ListenerSet]{
++			predicate.TypedGenerationChangedPredicate[*gwapiv1.ListenerSet]{},
++		}
++		if r.namespaceLabel != nil {
++			xlsPredicates = append(xlsPredicates, predicate.NewTypedPredicateFuncs(func(obj *gwapiv1.ListenerSet) bool {
++				return r.hasMatchingNamespaceLabels(obj)
++			}))
++		}
++
++		if err := c.Watch(
++			source.Kind(mgr.GetCache(), &gwapiv1.ListenerSet{},
++				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, obj *gwapiv1.ListenerSet) []reconcile.Request {
++					return r.enqueueClass(ctx, obj)
++				}),
++				xlsPredicates...)); err != nil {
++			return err
++		}
++		if err := addListenerSetIndexers(ctx, mgr); err != nil {
++			return err
++		}
+ 	}
+ 
+ 	// Watch HTTPRoute CRUDs and process affected Gateways.
+@@ -2341,22 +2358,30 @@ func (r *gatewayAPIReconciler) watchResources(ctx context.Context, mgr manager.M
+ 	}
+ 
+ 	// Watch TLSRoute CRUDs and process affected Gateways.
+-	tlsrPredicates := commonPredicates[*gwapiv1.TLSRoute]()
+-	if r.namespaceLabel != nil {
+-		tlsrPredicates = append(tlsrPredicates, predicate.NewTypedPredicateFuncs(func(route *gwapiv1.TLSRoute) bool {
+-			return r.hasMatchingNamespaceLabels(route)
+-		}))
+-	}
+-	if err := c.Watch(
+-		source.Kind(mgr.GetCache(), &gwapiv1.TLSRoute{},
+-			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, route *gwapiv1.TLSRoute) []reconcile.Request {
+-				return r.enqueueClass(ctx, route)
+-			}),
+-			tlsrPredicates...)); err != nil {
++	r.tlsRouteCRDExists, err = checkCRD(resource.KindTLSRoute, gwapiv1.GroupVersion.String())
++	if err != nil {
+ 		return err
+ 	}
+-	if err := addTLSRouteIndexers(ctx, mgr); err != nil {
+-		return err
++	if !r.tlsRouteCRDExists {
++		r.log.Info("TLSRoute CRD not found, skipping TLSRoute watch")
++	} else {
++		tlsrPredicates := commonPredicates[*gwapiv1.TLSRoute]()
++		if r.namespaceLabel != nil {
++			tlsrPredicates = append(tlsrPredicates, predicate.NewTypedPredicateFuncs(func(route *gwapiv1.TLSRoute) bool {
++				return r.hasMatchingNamespaceLabels(route)
++			}))
++		}
++		if err := c.Watch(
++			source.Kind(mgr.GetCache(), &gwapiv1.TLSRoute{},
++				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, route *gwapiv1.TLSRoute) []reconcile.Request {
++					return r.enqueueClass(ctx, route)
++				}),
++				tlsrPredicates...)); err != nil {
++			return err
++		}
++		if err := addTLSRouteIndexers(ctx, mgr); err != nil {
++			return err
++		}
+ 	}
+ 
+ 	r.udpRouteCRDExists, err = checkCRD(resource.KindUDPRoute, gwapiv1a2.GroupVersion.String())
+@@ -2754,26 +2779,34 @@ func (r *gatewayAPIReconciler) watchResources(ctx context.Context, mgr manager.M
+ 	}
+ 
+ 	// Watch BackendTLSPolicy
+-	btlsPredicates := []predicate.TypedPredicate[*gwapiv1.BackendTLSPolicy]{
+-		predicate.TypedGenerationChangedPredicate[*gwapiv1.BackendTLSPolicy]{},
+-	}
+-	if r.namespaceLabel != nil {
+-		btlsPredicates = append(btlsPredicates, predicate.NewTypedPredicateFuncs(func(btp *gwapiv1.BackendTLSPolicy) bool {
+-			return r.hasMatchingNamespaceLabels(btp)
+-		}))
+-	}
+-
+-	if err := c.Watch(
+-		source.Kind(mgr.GetCache(), &gwapiv1.BackendTLSPolicy{},
+-			handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, btp *gwapiv1.BackendTLSPolicy) []reconcile.Request {
+-				return r.enqueueClass(ctx, btp)
+-			}),
+-			btlsPredicates...)); err != nil {
++	r.btlsCRDExists, err = checkCRD(resource.KindBackendTLSPolicy, gwapiv1.GroupVersion.String())
++	if err != nil {
+ 		return err
+ 	}
++	if !r.btlsCRDExists {
++		r.log.Info("BackendTLSPolicy CRD not found, skipping BackendTLSPolicy watch")
++	} else {
++		btlsPredicates := []predicate.TypedPredicate[*gwapiv1.BackendTLSPolicy]{
++			predicate.TypedGenerationChangedPredicate[*gwapiv1.BackendTLSPolicy]{},
++		}
++		if r.namespaceLabel != nil {
++			btlsPredicates = append(btlsPredicates, predicate.NewTypedPredicateFuncs(func(btp *gwapiv1.BackendTLSPolicy) bool {
++				return r.hasMatchingNamespaceLabels(btp)
++			}))
++		}
+ 
+-	if err := addBtlsIndexers(ctx, mgr); err != nil {
+-		return err
++		if err := c.Watch(
++			source.Kind(mgr.GetCache(), &gwapiv1.BackendTLSPolicy{},
++				handler.TypedEnqueueRequestsFromMapFunc(func(ctx context.Context, btp *gwapiv1.BackendTLSPolicy) []reconcile.Request {
++					return r.enqueueClass(ctx, btp)
++				}),
++				btlsPredicates...)); err != nil {
++			return err
++		}
++
++		if err := addBtlsIndexers(ctx, mgr); err != nil {
++			return err
++		}
+ 	}
+ 
+ 	r.eepCRDExists, err = checkCRD(resource.KindEnvoyExtensionPolicy, egv1a1.GroupVersion.String())
+diff --git a/internal/provider/kubernetes/controller_offline.go b/internal/provider/kubernetes/controller_offline.go
+index f3bcdf1..941d213 100644
+--- a/internal/provider/kubernetes/controller_offline.go
++++ b/internal/provider/kubernetes/controller_offline.go
+@@ -113,6 +113,9 @@ func NewOfflineGatewayAPIController(
+ 		tcpRouteCRDExists:      true,
+ 		udpRouteCRDExists:      true,
+ 		backendCRDExists:       true,
++		btlsCRDExists:          true,
++		listenerSetCRDExists:   true,
++		tlsRouteCRDExists:      true,
+ 	}
+ 
+ 	r.log.Info("created offline gatewayapi controller")
+diff --git a/internal/provider/kubernetes/predicates.go b/internal/provider/kubernetes/predicates.go
+index 0921164..645c69e 100644
+--- a/internal/provider/kubernetes/predicates.go
++++ b/internal/provider/kubernetes/predicates.go
+@@ -174,8 +174,10 @@ func (r *gatewayAPIReconciler) validateSecretForReconcile(secret *corev1.Secret)
+ 		}
+ 	}
+ 
+-	if r.isBackendTLSPolicyReferencingSecret(&nsName) {
+-		return true
++	if r.btlsCRDExists {
++		if r.isBackendTLSPolicyReferencingSecret(&nsName) {
++			return true
++		}
+ 	}
+ 
+ 	if r.hrfCRDExists {
+@@ -216,8 +218,10 @@ func (r *gatewayAPIReconciler) validateClusterTrustBundleForReconcile(ctb *certi
+ 		}
+ 	}
+ 
+-	if r.isBackendTLSPolicyReferencingClusterTrustBundle(ctb) {
+-		return true
++	if r.btlsCRDExists {
++		if r.isBackendTLSPolicyReferencingClusterTrustBundle(ctb) {
++			return true
++		}
+ 	}
+ 
+ 	if r.ctpCRDExists {
+@@ -554,15 +558,17 @@ func (r *gatewayAPIReconciler) isRouteReferencingBackend(nsName *types.Namespace
+ 		return true
+ 	}
+ 
+-	tlsRouteList := &gwapiv1.TLSRouteList{}
+-	if err := r.client.List(ctx, tlsRouteList, &client.ListOptions{
+-		FieldSelector: fields.OneTermEqualSelector(backendTLSRouteIndex, nsName.String()),
+-	}); err != nil && !kerrors.IsNotFound(err) {
+-		r.log.Error(err, "failed to find associated TLSRoutes")
+-		return false
+-	}
+-	if len(tlsRouteList.Items) > 0 {
+-		return true
++	if r.tlsRouteCRDExists {
++		tlsRouteList := &gwapiv1.TLSRouteList{}
++		if err := r.client.List(ctx, tlsRouteList, &client.ListOptions{
++			FieldSelector: fields.OneTermEqualSelector(backendTLSRouteIndex, nsName.String()),
++		}); err != nil && !kerrors.IsNotFound(err) {
++			r.log.Error(err, "failed to find associated TLSRoutes")
++			return false
++		}
++		if len(tlsRouteList.Items) > 0 {
++			return true
++		}
+ 	}
+ 
+ 	if r.tcpRouteCRDExists {
+@@ -853,16 +859,18 @@ func (r *gatewayAPIReconciler) validateConfigMapForReconcile(obj client.Object)
+ 		}
+ 	}
+ 
+-	btlsList := &gwapiv1.BackendTLSPolicyList{}
+-	if err := r.client.List(context.Background(), btlsList, &client.ListOptions{
+-		FieldSelector: fields.OneTermEqualSelector(configMapBtlsIndex, utils.NamespacedName(configMap).String()),
+-	}); err != nil {
+-		r.log.Error(err, "unable to find associated BackendTLSPolicy")
+-		return false
+-	}
++	if r.btlsCRDExists {
++		btlsList := &gwapiv1.BackendTLSPolicyList{}
++		if err := r.client.List(context.Background(), btlsList, &client.ListOptions{
++			FieldSelector: fields.OneTermEqualSelector(configMapBtlsIndex, utils.NamespacedName(configMap).String()),
++		}); err != nil {
++			r.log.Error(err, "unable to find associated BackendTLSPolicy")
++			return false
++		}
+ 
+-	if len(btlsList.Items) > 0 {
+-		return true
++		if len(btlsList.Items) > 0 {
++			return true
++		}
+ 	}
+ 
+ 	if r.btpCRDExists {
+-- 
+2.50.1 (Apple Git-155)
+

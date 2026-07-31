@@ -26,3 +26,6 @@ testfile.yaml
 report/*.xml
 Makefile.common*
 config
+/rpm/calicoctl.spec
+/debian/changelog
+debian/files

@@ -14,6 +14,7 @@ import (
 	projectcalicov3 "github.com/projectcalico/api/pkg/client/listers_generated/projectcalico/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -34,48 +35,61 @@ type bGPPeerInformer struct {
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredBGPPeerInformer(client, resyncPeriod, indexers, nil)
+	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
 }
 
 // NewFilteredBGPPeerInformer constructs a new informer for BGPPeer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
 func NewFilteredBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return cache.NewSharedIndexInformer(
+	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewBGPPeerInformerWithOptions constructs a new informer for BGPPeer type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewBGPPeerInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "bgppeers"}
+	identifier := options.InformerName.WithResource(gvr)
+	tweakListOptions := options.TweakListOptions
+	return cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
-			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
+			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BGPPeers().List(context.Background(), options)
+				return client.ProjectcalicoV3().BGPPeers().List(context.Background(), opts)
 			},
-			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
+			WatchFunc: func(opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BGPPeers().Watch(context.Background(), options)
+				return client.ProjectcalicoV3().BGPPeers().Watch(context.Background(), opts)
 			},
-			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
+			ListWithContextFunc: func(ctx context.Context, opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BGPPeers().List(ctx, options)
+				return client.ProjectcalicoV3().BGPPeers().List(ctx, opts)
 			},
-			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
+			WatchFuncWithContext: func(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
-					tweakListOptions(&options)
+					tweakListOptions(&opts)
 				}
-				return client.ProjectcalicoV3().BGPPeers().Watch(ctx, options)
+				return client.ProjectcalicoV3().BGPPeers().Watch(ctx, opts)
 			},
 		}, client),
 		&apisprojectcalicov3.BGPPeer{},
-		resyncPeriod,
-		indexers,
+		cache.SharedIndexInformerOptions{
+			ResyncPeriod: options.ResyncPeriod,
+			Indexers:     options.Indexers,
+			Identifier:   identifier,
+		},
 	)
 }
 
 func (f *bGPPeerInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredBGPPeerInformer(client, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *bGPPeerInformer) Informer() cache.SharedIndexInformer {

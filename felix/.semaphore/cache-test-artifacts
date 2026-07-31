@@ -35,10 +35,10 @@ cd ../..
 # Future work: Split UT and FV artifacts so we can be even more selective.
 # Excluding Typha binaries because we only need the image.
 tar -czf /tmp/working-copy.tgz \
-  --exclude=.go-pkg-cache \
-  --exclude=calico/typha/bin \
-  --exclude=calico/typha/docker-image/bin \
-  --exclude=artifacts \
+  --exclude=${CALICO_DIR_NAME}/.go-pkg-cache \
+  --exclude=${CALICO_DIR_NAME}/typha/bin \
+  --exclude=${CALICO_DIR_NAME}/typha/docker-image/bin \
+  --exclude=${CALICO_DIR_NAME}/artifacts \
   ${CALICO_DIR_NAME}
 gcloud storage cp /tmp/working-copy.tgz /tmp/calico-felix-test.tar "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/"
 wait

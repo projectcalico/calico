@@ -54,6 +54,10 @@ blocks:
           env_vars:
             - name: PROVISIONER
               value: gcp-kubeadm
+            - name: GOOGLE_REGION
+              value: us-central1 # Needed for arm machines
+            - name: GOOGLE_ZONE
+              value: us-central1-a # Needed for arm machines
             - name: GOOGLE_MACHINE_TYPE
               value: t2a-standard-2
             - name: K8S_VERSION
@@ -696,6 +700,26 @@ blocks:
               value: "US"
       secrets:
         - name: dynamo-read-creds
+
+  - name: KubeVirt e2e tests
+    dependencies: []
+    task:
+      jobs:
+        - name: KubeVirt IP persistence and live migration
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable-1.35"
+      env_vars:
+        - name: PROVISIONER
+          value: "gcp-kubeadm"
+        - name: NUM_KUBEVIRT_VMS
+          value: "2"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/gcp-kubevirt.yaml"
 
 promotions:
   - name: Cleanup jobs

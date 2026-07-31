@@ -32,6 +32,6 @@ for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
 done
 
 tar -czf /tmp/working-copy.tgz \
-  --exclude=artifacts \
+  --exclude=${CALICO_DIR_NAME}/artifacts \
   ${CALICO_DIR_NAME}
 gcloud storage cp /tmp/working-copy.tgz "${GCS_WORKFLOW_DIR}/node/fv-artifacts/"

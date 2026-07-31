@@ -22,10 +22,10 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type noEncapManager struct {
@@ -36,14 +36,14 @@ type noEncapManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func newNoEncapManager(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *noEncapManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newNoEncapManagerWithSims(
@@ -59,8 +59,8 @@ func newNoEncapManagerWithSims(
 	mainRouteTable routetable.Interface,
 	ipVersion uint8,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	opRecorder logrusr.OpRecorder,
+	nlHandle netlinkshim.Interface,
 ) *noEncapManager {
 
 	m := &noEncapManager{
@@ -91,7 +91,7 @@ func newNoEncapManagerWithSims(
 
 func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
+	case *proto.HostMetadataUpdate:
 		if msg.Hostname != m.hostname {
 			break
 		}
@@ -106,11 +106,11 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 			m.logCtx.WithFields(logrus.Fields{
 				"hostname":  msg.Hostname,
 				"ipVersion": m.ipVersion,
-			}).Debug("Ignoring HostMetadataV4V6Update with no address for this IP version")
+			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
 			return
 		}
 		m.routesNeedUpdate(addrStr)
-	case *proto.HostMetadataV4V6Remove:
+	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routesNeedUpdate("")

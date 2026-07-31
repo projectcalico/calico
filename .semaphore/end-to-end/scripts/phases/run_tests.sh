@@ -52,12 +52,62 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # there's no reason to drag in the build toolchain -- use the
   # official golang image (debian-bookworm base, glibc-compatible
   # with the binary, ~800MB vs ~2GB).
+  # The e2e binary is CGO-linked against libbpf and dynamically depends on
+  # libelf and libz at runtime; the test scripts also call uuidgen. The
+  # calico/go-build image already has these; the upstream golang:bookworm
+  # image does not, so install them on the fly when using that path.
+  PRE_RUN=":"
   if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
-    GO_BUILD_VER=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2)
+    GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
     RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
   else
-    GO_VERSION=$(grep '^GO_BUILD_VER=' ./metadata.mk | cut -d= -f2 | cut -d- -f1)
+    GO_VERSION=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_VERSION)' print)
     RUN_IMAGE="golang:${GO_VERSION}-bookworm"
+    PRE_RUN="apt-get update -qq && apt-get install -y --no-install-recommends libelf1 zlib1g uuid-runtime"
+  fi
+
+  # The upstream k8s e2e framework shells out to `kubectl` for any
+  # exec-into-pod step (RunHostCmd, etc.), so kubectl must be on PATH inside
+  # the runner. Fetch a K8S_VERSION-pinned binary via the repo's `make
+  # kubectl` target; it lands in hack/test/kind/ which is bind-mounted into
+  # the container, and we prepend that to PATH inside the bash -c below.
+  make kubectl
+
+  # EKS kubeconfigs exec aws-iam-authenticator (PATH lookup), which the stock
+  # golang image lacks, so client-go fails before any tests run. The aws-eks
+  # provisioner installs it on the host; bind-mount it when present (no-op otherwise).
+  auth_mount=()
+  if [[ -x "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator" ]]; then
+    auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
+  fi
+
+  # Some provisioners (notably OpenShift) taint control-plane nodes
+  # NoSchedule. The k8s e2e framework waits for *all* nodes to be schedulable
+  # (--allowed-not-ready-nodes 0) and otherwise hangs until the 30m
+  # SynchronizedBeforeSuite timeout, so untaint them first — matching what the
+  # legacy `bz tests` runner did. Harmless (`|| true`) on clusters with no such
+  # taint. Run on the host (API is reachable here; install used it).
+  for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
+    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" || true
+  done
+
+  # Private clusters (e.g. private AKS) have no public API endpoint; the API is
+  # reachable only through a SOCKS proxy over an SSH tunnel to an in-VNet host.
+  # banzai-core persists that tunnel command (incl. its SSH key) to Taskvars.yml
+  # and the kubeconfig points at the proxy (proxy-url: socks5://localhost:<port>).
+  # The legacy `bz tests` runner opened the tunnel around the test; this runner
+  # bypasses `bz tests`, so open it here for the run and close it after. With
+  # --net=host the container reaches the host's proxy port. No-op (TUNNEL_CMD
+  # empty) for public clusters. `|| true` keeps the read safe under `set -e`.
+  TUNNEL_CMD="$(grep -E '^MASTER_TUNNEL_COMMAND:' "$(dirname "${BZ_LOCAL_DIR}")/Taskvars.yml" 2>/dev/null | sed -E 's/^MASTER_TUNNEL_COMMAND:[[:space:]]*//' || true)"
+  # Only teardown a tunnel this script started; a pre-existing one is someone
+  # else's to manage. The command is a foreground `ssh -qN` (no -f), so the
+  # backgrounded job is the ssh process itself and $! is the PID to kill.
+  TUNNEL_PID=""
+  if [[ -n "${TUNNEL_CMD}" ]] && ! pgrep -fx "${TUNNEL_CMD}" >/dev/null 2>&1; then
+    echo "[INFO] opening SOCKS tunnel for private-cluster API access"
+    ${TUNNEL_CMD} &
+    TUNNEL_PID=$!
   fi
 
   # Capture the exit code so the JUnit copy below runs even when tests fail
@@ -70,17 +120,24 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
+    "${auth_mount[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
     -v "$(pwd)"/.go-pkg-cache:/go-cache:rw \
     -v "${BZ_LOCAL_DIR}/kubeconfig:/kubeconfig:ro" \
     -w /go/src/github.com/projectcalico/calico \
     "${RUN_IMAGE}" \
-    make e2e-run \
-      KUBECONFIG=/kubeconfig \
-      E2E_TEST_CONFIG="${E2E_TEST_CONFIG}" \
-      E2E_OUTPUT_DIR=report \
-      E2E_JUNIT_REPORT=junit.xml \
+    bash -c "${PRE_RUN} && \
+      export PATH=/go/src/github.com/projectcalico/calico/hack/test/kind:\$PATH && \
+      git config --global --add safe.directory '*' && \
+      make e2e-run \
+        KUBECONFIG=/kubeconfig \
+        E2E_TEST_CONFIG='${E2E_TEST_CONFIG}' \
+        E2E_OUTPUT_DIR=report \
+        E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+
+  # Close the SOCKS tunnel only if we opened it (no-op otherwise).
+  [[ -n "${TUNNEL_PID}" ]] && kill "${TUNNEL_PID}" >/dev/null 2>&1 || true
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"

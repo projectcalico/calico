@@ -3081,6 +3081,31 @@ spec:
                     - name
                     - namespace
                   type: object
+                extensions:
+                  description: |-
+                    Extensions enables and configures Tigera-built add-ons that sit on top of the
+                    Gateway API data plane.  Each add-on is opt-in: an unset Extensions, an unset
+                    add-on field, and an empty add-on object all leave the add-on disabled.
+                  properties:
+                    waf:
+                      description: |-
+                        WAF enables and configures the Tigera Web Application Firewall (Coraza WASM
+                        when WAF.State is nil, and when WAF.State is "Disabled", the operator does
+                        not render the WAF env vars or RBAC on calico-kube-controllers.  Set
+                        WAF.State = "Enabled" to turn the feature on.  See design
+                        `tigera/designs#25` (PMREQ-384) for the full surface.
+                      properties:
+                        state:
+                          description: |-
+                            State turns the WAF Gateway API add-on on or off.  Default (nil or
+                            "Disabled") means the operator does not render the WAF surface on
+                            calico-kube-controllers.  Set to "Enabled" to opt in.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
+                  type: object
                 gatewayCertgenJob:
                   description: Allows customization of the gateway certgen job.
                   properties:
@@ -7281,6 +7306,30 @@ spec:
                                 items:
                                   type: string
                                 type: array
+                              patch:
+                                description: |-
+                                  Patch allows the Service for a gateway to be patched in ways that aren't more explicitly
+                                  supported by the fields above.  For example, the following YAML could be used to set the
+                                  Service's healthCheckNodePort:
+                                    patch:
+                                      type: StrategicMerge
+                                      value:
+                                        spec:
+                                          healthCheckNodePort: 12345
+                                properties:
+                                  type:
+                                    description: |-
+                                      Type is the type of merge operation to perform
+                                      By default, StrategicMerge is used as the patch type.
+                                    type: string
+                                  value:
+                                    description:
+                                      Object contains the raw configuration
+                                      for merged object
+                                    x-kubernetes-preserve-unknown-fields: true
+                                required:
+                                  - value
+                                type: object
                             type: object
                         type: object
                       name:
@@ -11863,6 +11912,21 @@ spec:
                         - VPP
                         - Nftables
                       type: string
+                    linuxPodInterfaceType:
+                      description: |-
+                        LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                        creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                        plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                        falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                        dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                        improved throughput and tail-latency under contention; for non-BPF dataplanes
+                        it is functionally equivalent to veth. Only valid when using the Calico CNI
+                        plugin.
+                        Default: Veth
+                      enum:
+                        - Veth
+                        - Netkit
+                      type: string
                     linuxPolicySetupTimeoutSeconds:
                       description: |-
                         LinuxPolicySetupTimeoutSeconds delays new pods from running containers
@@ -13279,9 +13343,10 @@ spec:
                                       name:
                                         description: |-
                                           Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                          Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                          Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                         enum:
                                           - install-cni
+                                          - cni-plugins
                                           - hostpath-init
                                           - flexvol-driver
                                           - ebpf-bootstrap
@@ -16085,6 +16150,22 @@ spec:
                         * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                         * Otherwise, this field defaults to "/etc/cni/net.d".
                       type: string
+                    installMode:
+                      description: |-
+                        InstallMode controls which CNI plugin binaries the operator installs onto each node
+                        when CNI.Type is Calico.
+                        * All (default): the operator runs a cni-plugins init container that stages upstream
+                          CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                          volume, and the install-cni init container copies them onto the host alongside
+                          Calico's own binaries.
+                        * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                          installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                          certain managed node images).
+                        Default: All
+                      enum:
+                        - All
+                        - CalicoOnly
+                      type: string
                     ipam:
                       description: |-
                         IPAM specifies the pod IP address management that will be used in the Calico or
@@ -16110,6 +16191,21 @@ spec:
                       required:
                         - type
                       type: object
+                    specVersion:
+                      description: |-
+                        SpecVersion configures the CNI specification version declared in the
+                        CNI configuration ("cniVersion") that the operator generates. Auto
+                        (the default) lets the operator choose an appropriate version, which
+                        may increase across operator upgrades. Pin an explicit version if a
+                        chained CNI plugin or container runtime in your environment requires
+                        one. Only relevant when using the Calico CNI plugin.
+                        Default: Auto
+                      enum:
+                        - Auto
+                        - 0.3.1
+                        - 0.4.0
+                        - 1.0.0
+                      type: string
                     type:
                       description: |-
                         Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -17525,9 +17621,8 @@ spec:
                   type: object
                 fipsMode:
                   description: |-
-                    FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                    Only supported for Variant=Calico.
-                    Default: Disabled
+                    Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                    installation degraded.
                   enum:
                     - Enabled
                     - Disabled
@@ -17559,6 +17654,17 @@ spec:
                     Image format:
                        `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                     This option allows configuring the `<imagePrefix>` portion of the above format.
+                  type: string
+                imagePullPolicy:
+                  description: |-
+                    ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                    that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                    This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                    must not be re-pulled from a remote registry.
+                  enum:
+                    - Always
+                    - IfNotPresent
+                    - Never
                   type: string
                 imagePullSecrets:
                   description: |-
@@ -17634,6 +17740,23 @@ spec:
                             - Debug
                           type: string
                       type: object
+                  type: object
+                networkPolicy:
+                  description: |-
+                    NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                    it installs to protect the Calico components it manages.
+                  properties:
+                    managePolicies:
+                      default: Enabled
+                      description: |-
+                        ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                        GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                        Disabled, the operator stops creating or updating these policies and deletes any it has
+                        already created, leaving policy management to the user. Defaults to Enabled.
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
                   type: object
                 nodeMetricsPort:
                   description: |-
@@ -19568,6 +19691,69 @@ spec:
                     prometheus metrics on. By default, metrics are not enabled.
                   format: int32
                   type: integer
+                typhaPodDisruptionBudget:
+                  description: |-
+                    TyphaPodDisruptionBudget configures the PodDisruptionBudget for the calico-typha
+                    Deployment. Fields left unset fall back to the operator's defaults. The PDB's
+                    selector is managed by the operator and cannot be overridden.
+                  properties:
+                    metadata:
+                      description:
+                        Metadata is a subset of a Kubernetes object's metadata
+                        that is added to the PodDisruptionBudget.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Annotations is a map of arbitrary non-identifying metadata. Each of these
+                            key/value pairs are added to the object's annotations provided the key does not
+                            already exist in the object's annotations.
+                          type: object
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: |-
+                            Labels is a map of string keys and values that may match replicaset and
+                            service selectors. Each of these key/value pairs are added to the
+                            object's labels provided the key does not already exist in the object's labels.
+                          type: object
+                      type: object
+                    spec:
+                      description: Spec is the specification of the PodDisruptionBudget.
+                      properties:
+                        maxUnavailable:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          description: |-
+                            MaxUnavailable is the maximum number of pods (as an integer or percentage) that
+                            can be unavailable during a disruption. Mutually exclusive with MinAvailable.
+                            If neither MinAvailable nor MaxUnavailable is set, the operator applies its
+                            default (MaxUnavailable=1 for calico-typha).
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          description: |-
+                            MinAvailable is the minimum number of pods (as an integer or percentage) that
+                            must remain available during a disruption. Mutually exclusive with MaxUnavailable.
+                          x-kubernetes-int-or-string: true
+                        unhealthyPodEvictionPolicy:
+                          description: |-
+                            UnhealthyPodEvictionPolicy defines when unhealthy pods should be considered
+                            for eviction. Defaults to IfHealthyBudget (the Kubernetes default) when unset.
+                            See https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy.
+                          enum:
+                            - IfHealthyBudget
+                            - AlwaysAllow
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                        - message: minAvailable and maxUnavailable are mutually exclusive
+                          rule: "!(has(self.minAvailable) && has(self.maxUnavailable))"
+                  type: object
                 variant:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
@@ -21085,6 +21271,21 @@ spec:
                             - VPP
                             - Nftables
                           type: string
+                        linuxPodInterfaceType:
+                          description: |-
+                            LinuxPodInterfaceType selects the virtual device type the Calico CNI plugin
+                            creates for each pod's interface on Linux nodes. When set to Netkit, the CNI
+                            plugin creates a netkit L2 pair on kernels that support it (Linux 6.7+) and
+                            falls back to a veth pair on older kernels. Netkit is recommended for the BPF
+                            dataplane, where it allows BPF programs to attach via BPF_NETKIT_PRIMARY for
+                            improved throughput and tail-latency under contention; for non-BPF dataplanes
+                            it is functionally equivalent to veth. Only valid when using the Calico CNI
+                            plugin.
+                            Default: Veth
+                          enum:
+                            - Veth
+                            - Netkit
+                          type: string
                         linuxPolicySetupTimeoutSeconds:
                           description: |-
                             LinuxPolicySetupTimeoutSeconds delays new pods from running containers
@@ -22528,9 +22729,10 @@ spec:
                                           name:
                                             description: |-
                                               Name is an enum which identifies the calico-node DaemonSet init container by name.
-                                              Supported values are: install-cni, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
+                                              Supported values are: install-cni, cni-plugins, hostpath-init, flexvol-driver, ebpf-bootstrap, node-certs-key-cert-provisioner, calico-node-prometheus-server-tls-key-cert-provisioner, mount-bpffs (deprecated, replaced by ebpf-bootstrap)
                                             enum:
                                               - install-cni
+                                              - cni-plugins
                                               - hostpath-init
                                               - flexvol-driver
                                               - ebpf-bootstrap
@@ -25380,6 +25582,22 @@ spec:
                             * For KubernetesProvider OpenShift, this field defaults to "/var/run/multus/cni/net.d".
                             * Otherwise, this field defaults to "/etc/cni/net.d".
                           type: string
+                        installMode:
+                          description: |-
+                            InstallMode controls which CNI plugin binaries the operator installs onto each node
+                            when CNI.Type is Calico.
+                            * All (default): the operator runs a cni-plugins init container that stages upstream
+                              CNI plugin binaries (host-local, portmap, loopback, tuning, flannel) into a shared
+                              volume, and the install-cni init container copies them onto the host alongside
+                              Calico's own binaries.
+                            * CalicoOnly: skip the cni-plugins init container. Only Calico's own binaries are
+                              installed. Use this when the host already provides the upstream plugins (e.g. kind,
+                              certain managed node images).
+                            Default: All
+                          enum:
+                            - All
+                            - CalicoOnly
+                          type: string
                         ipam:
                           description: |-
                             IPAM specifies the pod IP address management that will be used in the Calico or
@@ -25405,6 +25623,21 @@ spec:
                           required:
                             - type
                           type: object
+                        specVersion:
+                          description: |-
+                            SpecVersion configures the CNI specification version declared in the
+                            CNI configuration ("cniVersion") that the operator generates. Auto
+                            (the default) lets the operator choose an appropriate version, which
+                            may increase across operator upgrades. Pin an explicit version if a
+                            chained CNI plugin or container runtime in your environment requires
+                            one. Only relevant when using the Calico CNI plugin.
+                            Default: Auto
+                          enum:
+                            - Auto
+                            - 0.3.1
+                            - 0.4.0
+                            - 1.0.0
+                          type: string
                         type:
                           description: |-
                             Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -26850,9 +27083,8 @@ spec:
                       type: object
                     fipsMode:
                       description: |-
-                        FIPSMode uses images and features only that are using FIPS 140-2 validated cryptographic modules and standards.
-                        Only supported for Variant=Calico.
-                        Default: Disabled
+                        Deprecated. FIPS mode is no longer supported. Setting fipsMode to Enabled marks the
+                        installation degraded.
                       enum:
                         - Enabled
                         - Disabled
@@ -26884,6 +27116,17 @@ spec:
                         Image format:
                            `<registry><imagePath>/<imagePrefix><imageName>:<image-tag>`
                         This option allows configuring the `<imagePrefix>` portion of the above format.
+                      type: string
+                    imagePullPolicy:
+                      description: |-
+                        ImagePullPolicy is the pull policy applied to containers in pods rendered by the operator
+                        that do not explicitly set their own pull policy. If unset, defaults to IfNotPresent.
+                        This is useful in air-gapped environments where images are pre-loaded onto nodes and
+                        must not be re-pulled from a remote registry.
+                      enum:
+                        - Always
+                        - IfNotPresent
+                        - Never
                       type: string
                     imagePullSecrets:
                       description: |-
@@ -26961,6 +27204,23 @@ spec:
                                 - Debug
                               type: string
                           type: object
+                      type: object
+                    networkPolicy:
+                      description: |-
+                        NetworkPolicy configures how the operator manages the NetworkPolicies and GlobalNetworkPolicies
+                        it installs to protect the Calico components it manages.
+                      properties:
+                        managePolicies:
+                          default: Enabled
+                          description: |-
+                            ManagePolicies controls whether the operator creates and reconciles the NetworkPolicies and
+                            GlobalNetworkPolicies it uses to protect the Calico components it installs. When set to
+                            Disabled, the operator stops creating or updating these policies and deletes any it has
+                            already created, leaving policy management to the user. Defaults to Enabled.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
                       type: object
                     nodeMetricsPort:
                       description: |-
@@ -28920,6 +29180,69 @@ spec:
                         serves prometheus metrics on. By default, metrics are not enabled.
                       format: int32
                       type: integer
+                    typhaPodDisruptionBudget:
+                      description: |-
+                        TyphaPodDisruptionBudget configures the PodDisruptionBudget for the calico-typha
+                        Deployment. Fields left unset fall back to the operator's defaults. The PDB's
+                        selector is managed by the operator and cannot be overridden.
+                      properties:
+                        metadata:
+                          description:
+                            Metadata is a subset of a Kubernetes object's
+                            metadata that is added to the PodDisruptionBudget.
+                          properties:
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Annotations is a map of arbitrary non-identifying metadata. Each of these
+                                key/value pairs are added to the object's annotations provided the key does not
+                                already exist in the object's annotations.
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                Labels is a map of string keys and values that may match replicaset and
+                                service selectors. Each of these key/value pairs are added to the
+                                object's labels provided the key does not already exist in the object's labels.
+                              type: object
+                          type: object
+                        spec:
+                          description: Spec is the specification of the PodDisruptionBudget.
+                          properties:
+                            maxUnavailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: |-
+                                MaxUnavailable is the maximum number of pods (as an integer or percentage) that
+                                can be unavailable during a disruption. Mutually exclusive with MinAvailable.
+                                If neither MinAvailable nor MaxUnavailable is set, the operator applies its
+                                default (MaxUnavailable=1 for calico-typha).
+                              x-kubernetes-int-or-string: true
+                            minAvailable:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              description: |-
+                                MinAvailable is the minimum number of pods (as an integer or percentage) that
+                                must remain available during a disruption. Mutually exclusive with MaxUnavailable.
+                              x-kubernetes-int-or-string: true
+                            unhealthyPodEvictionPolicy:
+                              description: |-
+                                UnhealthyPodEvictionPolicy defines when unhealthy pods should be considered
+                                for eviction. Defaults to IfHealthyBudget (the Kubernetes default) when unset.
+                                See https://kubernetes.io/docs/tasks/run-application/configure-pdb/#unhealthy-pod-eviction-policy.
+                              enum:
+                                - IfHealthyBudget
+                                - AlwaysAllow
+                              type: string
+                          type: object
+                          x-kubernetes-validations:
+                            - message: minAvailable and maxUnavailable are mutually exclusive
+                              rule: "!(has(self.minAvailable) && has(self.maxUnavailable))"
+                      type: object
                     variant:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.
@@ -31323,6 +31646,18 @@ spec:
                           type: object
                       type: object
                   type: object
+                waypointLogging:
+                  description: |-
+                    WaypointLogging controls whether L7 logging is enabled on every Gateway
+                    using the istio-waypoint GatewayClass. When Enabled (the default), the
+                    operator injects an l7-collector sidecar into each waypoint pod via
+                    class-level defaults. When Disabled, no sidecar is injected and the
+                    associated EnvoyFilters are not created. Allowed values are Enabled or
+                    Disabled.
+                  enum:
+                    - Enabled
+                    - Disabled
+                  type: string
                 ztunnel:
                   description:
                     ZTunnelDaemonset defines the resource requirements for
@@ -34653,7 +34988,6 @@ spec:
     listKind: BGPConfigurationList
     plural: bgpconfigurations
     singular: bgpconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -34722,7 +35056,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 ignoredInterfaces:
                   description:
                     IgnoredInterfaces indicates the network interfaces that
@@ -34844,7 +35178,7 @@ spec:
                     x-kubernetes-map-type: atomic
                   maxItems: 500
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
@@ -34870,7 +35204,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceExternalIPs:
                   description: |-
                     ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
@@ -34886,7 +35220,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
                 serviceLoadBalancerAggregation:
                   default: Enabled
                   description: |-
@@ -34913,7 +35247,7 @@ spec:
                     type: object
                     x-kubernetes-map-type: atomic
                   type: array
-                  x-kubernetes-list-type: set
+                  x-kubernetes-list-type: atomic
               type: object
               x-kubernetes-validations:
                 - message:
@@ -34953,7 +35287,6 @@ spec:
     listKind: BGPFilterList
     plural: bgpfilters
     singular: bgpfilter
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -35853,7 +36186,6 @@ spec:
     listKind: BGPPeerList
     plural: bgppeers
     singular: bgppeer
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36102,7 +36434,6 @@ spec:
     listKind: BlockAffinityList
     plural: blockaffinities
     singular: blockaffinity
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36169,7 +36500,6 @@ spec:
     listKind: CalicoNodeStatusList
     plural: caliconodestatuses
     singular: caliconodestatus
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36512,7 +36842,6 @@ spec:
     listKind: ClusterInformationList
     plural: clusterinformations
     singular: clusterinformation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -36584,7 +36913,6 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -37009,6 +37337,18 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
+                bpfOverlayHostSourceIP:
+                  description: |-
+                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
+                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
+                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
+                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
+                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
+                    device IP.  [Default: TunnelAddress]
+                  enum:
+                    - TunnelAddress
+                    - HostAddress
+                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -37435,7 +37775,9 @@ spec:
                     IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   description: |-
@@ -37502,12 +37844,14 @@ spec:
                     - Disabled
                   type: string
                 istioDSCPMark:
+                  anyOf:
+                    - type: integer
+                    - type: string
                   description: |-
                     IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
                     SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
                     with other Istio installation. [Default: 23]
                   pattern: ^.*
-                  type: integer
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
@@ -37527,6 +37871,26 @@ spec:
                     VM live migration completes.  This allows routes to converge across the cluster before
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
+                  type: string
+                localSubnetL2Reachability:
+                  description: |-
+                    LocalSubnetL2Reachability controls whether Felix automatically responds to
+                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
+                    selected LoadBalancer VIPs that fall within the same subnet as the host
+                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
+                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - PodsAndLoadBalancers
+                  type: string
+                localSubnetL2ReachabilityRefreshInterval:
+                  description: |-
+                    LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
+                    (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
+                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
+                    forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
+                    to disable periodic re-announcement, leaving only the one-shot announce when an
+                    IP is added. [Default: 120s]
                   type: string
                 logActionRateLimit:
                   description: |-
@@ -37653,6 +38017,25 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
+                nftablesFlowTableDataIfacePattern:
+                  description: |-
+                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
+                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
+                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
+                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
+                    is not Disabled. [Default: ""]
+                  type: string
+                nftablesFlowTableOffload:
+                  default: Disabled
+                  description: |-
+                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
+                    for improved forwarding performance. When set to "All", established connections accepted by
+                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
+                    nftables mode is active. [Default: Disabled]
+                  enum:
+                    - All
+                    - Disabled
+                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -37665,13 +38048,16 @@ spec:
                     NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int32
+                  format: int64
+                  maximum: 4294967295
+                  minimum: 0
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description:
-                    "NFTablesMode configures nftables support in Felix. [Default:
-                    Auto]"
+                  description: |-
+                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
+                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
+                    [Default: Auto]
                   enum:
                     - Disabled
                     - Enabled
@@ -37738,7 +38124,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
+                    This determines how the server validates client certificates. Default is "NoClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -38056,7 +38442,6 @@ spec:
     listKind: GlobalNetworkPolicyList
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39358,7 +39743,6 @@ spec:
     listKind: GlobalNetworkSetList
     plural: globalnetworksets
     singular: globalnetworkset
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39417,7 +39801,6 @@ spec:
     listKind: HostEndpointList
     plural: hostendpoints
     singular: hostendpoint
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39544,7 +39927,6 @@ spec:
     listKind: IPAMBlockList
     plural: ipamblocks
     singular: ipamblock
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39587,10 +39969,8 @@ spec:
                     For non-nil entries at index i, the index is the ordinal of the allocation within this block
                     and the value is the index of the associated attributes in the Attributes array.
                   items:
-                    type: integer
-                    # TODO: This nullable is manually added in. We should update controller-gen
-                    # to handle []*int properly itself.
                     nullable: true
+                    type: integer
                   type: array
                 attributes:
                   description: |-
@@ -39608,6 +39988,13 @@ spec:
                         type: object
                       handle_id:
                         description: HandleID is the primary identifier for the allocation.
+                        type: string
+                      releasedAt:
+                        description: |-
+                          ReleasedAt is the time this allocation was released, and is set during the allocation's
+                          "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+                          from `Allocated` to `Unallocated`).
+                        format: date-time
                         type: string
                       secondary:
                         additionalProperties:
@@ -39682,7 +40069,6 @@ spec:
     listKind: IPAMConfigList
     plural: ipamconfigs
     singular: ipamconfig
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39713,6 +40099,14 @@ spec:
               properties:
                 autoAllocateBlocks:
                   type: boolean
+                ipCooldownSeconds:
+                  description: |-
+                    IPCooldownSeconds is the minimum age of a released IP in a block before it is re-used.
+                    If set to zero, IPs can be re-used immediately (but are still handled with a FIFO queue to
+                    minimize immediate reuse).
+                  maximum: 1200
+                  minimum: 0
+                  type: integer
                 kubeVirtVMAddressPersistence:
                   description: |-
                     KubeVirtVMAddressPersistence controls whether KubeVirt VirtualMachine workloads
@@ -39760,7 +40154,6 @@ spec:
     listKind: IPAMHandleList
     plural: ipamhandles
     singular: ipamhandle
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -39819,7 +40212,6 @@ spec:
     listKind: IPPoolList
     plural: ippools
     singular: ippool
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40079,7 +40471,6 @@ spec:
     listKind: IPReservationList
     plural: ipreservations
     singular: ipreservation
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40112,8 +40503,8 @@ spec:
                   description: |-
                     ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
                     Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -40136,7 +40527,6 @@ spec:
     listKind: KubeControllersConfigurationList
     plural: kubecontrollersconfigurations
     singular: kubecontrollersconfiguration
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -40238,6 +40628,13 @@ spec:
                                 AutoHostEndpoints
                               items:
                                 properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    description:
+                                      Annotations adds the specified annotations
+                                      to the generated AutoHostEndpoint.
+                                    type: object
                                   generateName:
                                     description:
                                       GenerateName is appended to the end
@@ -40467,6 +40864,13 @@ spec:
                                     AutoHostEndpoints
                                   items:
                                     properties:
+                                      annotations:
+                                        additionalProperties:
+                                          type: string
+                                        description:
+                                          Annotations adds the specified
+                                          annotations to the generated AutoHostEndpoint.
+                                        type: object
                                       generateName:
                                         description:
                                           GenerateName is appended to the
@@ -40629,7 +41033,6 @@ spec:
     listKind: NetworkPolicyList
     plural: networkpolicies
     singular: networkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -41882,7 +42285,6 @@ spec:
     listKind: NetworkSetList
     plural: networksets
     singular: networkset
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -41939,7 +42341,6 @@ spec:
     listKind: StagedGlobalNetworkPolicyList
     plural: stagedglobalnetworkpolicies
     singular: stagedglobalnetworkpolicy
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -43251,7 +43652,6 @@ spec:
     listKind: StagedKubernetesNetworkPolicyList
     plural: stagedkubernetesnetworkpolicies
     singular: stagedkubernetesnetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -43783,7 +44183,6 @@ spec:
     listKind: StagedNetworkPolicyList
     plural: stagednetworkpolicies
     singular: stagednetworkpolicy
-  preserveUnknownFields: false
   scope: Namespaced
   versions:
     - name: v1
@@ -45047,7 +45446,6 @@ spec:
     listKind: TierList
     plural: tiers
     singular: tier
-  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1

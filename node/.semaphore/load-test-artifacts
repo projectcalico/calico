@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 Tigera, Inc. All rights reserved.
+# Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,15 +22,38 @@ set -ex
 ARCH=${ARCH:-amd64}
 REPO_ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 
-# Load any pre-built images that were cached by the Prerequisites build blocks.
-for item in calico-image:cmd/calico node-image:node whisker-image:whisker; do
+# image-ref strings must match exactly what the .image.created-* recipes in
+# lib.Makefile write, so hack/image-exists can re-find them in the daemon.
+# Item format: "<tarball-prefix>:<marker-dir>:<image-ref>".
+loaded_any=0
+for item in \
+    calico-image:cmd/calico:calico:latest-${ARCH} \
+    node-image:node:node:latest-${ARCH} \
+    whisker-image:whisker:whisker:latest-${ARCH}; do
   tarball="${item%%:*}.tar.zst"
-  marker_dir="${item#*:}"
+  rest="${item#*:}"
+  marker_dir="${rest%%:*}"
+  image_ref="${rest#*:}"
   if [ -f "/tmp/${tarball}" ]; then
     echo "Loading cached ${tarball}..."
     zstd -dc "/tmp/${tarball}" | docker load
     mkdir -p "${REPO_ROOT}/${marker_dir}"
-    touch "${REPO_ROOT}/${marker_dir}/.image.created-${ARCH}"
+    # Write the image ref so hack/image-exists treats the stamp as
+    # backed by a concrete image (not just a touched empty file), and
+    # so a pruned image forces a rebuild via MISSING-IMAGE.
+    echo "${image_ref}" > "${REPO_ROOT}/${marker_dir}/.image.created-${ARCH}"
     rm -f "/tmp/${tarball}"
+    loaded_any=1
   fi
 done
+
+# Stub LIBBPF_MARKER so kind-build-images doesn't drag the cached node/cmd/calico
+# image stamps back out-of-date by rebuilding libbpf.a (whose freshly-built mtime
+# would be newer than the stamps). Only relevant when at least one image was
+# loaded — otherwise let the normal build path produce the real artifact.
+if [ "${loaded_any}" = 1 ]; then
+  libbpf_stub="${REPO_ROOT}/felix/bpf-gpl/libbpf/src/${ARCH}/libbpf.a"
+  mkdir -p "$(dirname "${libbpf_stub}")"
+  : > "${libbpf_stub}"
+  touch -d '2000-01-01' "${libbpf_stub}"
+fi

@@ -956,10 +956,16 @@ func (c *Container) NumIPSets() int {
 }
 
 // NumTCBPFProgs Returns the number of TC BPF programs attached to the given interface.  Only direct-action
-// programs are listed (i.e. the type that we use).
+// programs are listed (i.e. the type that we use). In netkit mode, workload
+// interfaces (cali*) are netkit-attached rather than TC-attached, so fall
+// through to the bpftool path which surfaces both attach types.
 func (c *Container) NumTCBPFProgs(ifaceName string) int {
 	var total int
-	if strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc" {
+	useTC := strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE")) == "tc"
+	if strings.ToLower(os.Getenv("FELIX_FV_NETKIT")) == "enabled" && strings.HasPrefix(ifaceName, "cali") {
+		useTC = false
+	}
+	if useTC {
 		for _, dir := range []string{"ingress", "egress"} {
 			out, err := c.ExecOutput("tc", "filter", "show", "dev", ifaceName, dir)
 			Expect(err).NotTo(HaveOccurred())

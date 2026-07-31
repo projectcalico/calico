@@ -66,17 +66,41 @@ spec:
       set -eu -o pipefail
       echo "Installing containerd..."
 
+      # Wait for cloud-init to fully finish before touching apt — on first
+      # boot, cloud-init / unattended-upgrades hold /var/lib/dpkg/lock-frontend
+      # and trip an apt lock-timeout that aborts the rest of this script.
+      cloud-init status --wait || true
+
+      # Stop and mask the apt timers and unattended-upgrades so they cannot
+      # re-acquire the dpkg lock mid-install. Lenient: missing units on
+      # leaner images must not abort set -e.
+      systemctl stop apt-daily.service apt-daily-upgrade.service unattended-upgrades.service 2>/dev/null || true
+      systemctl mask apt-daily.timer apt-daily-upgrade.timer unattended-upgrades.service 2>/dev/null || true
+
+      # Retry apt phases. Azure CustomScript extensions do not auto-retry,
+      # and set -e makes a single transient apt/network failure terminal.
+      apt_retry() {
+        local n=3 i
+        for i in $(seq 1 $n); do
+          if "$@"; then return 0; fi
+          echo "Command failed (attempt $i/$n): $* - retrying in 20s..."
+          sleep 20
+        done
+        echo "Command failed after $n attempts: $*"
+        return 1
+      }
+
       # Update package list
-      apt-get -o DPkg::Lock::Timeout=60 update
+      apt_retry apt-get -o DPkg::Lock::Timeout=180 update
 
       # Install prerequisites
-      apt-get -o DPkg::Lock::Timeout=60 install -y apt-transport-https ca-certificates curl gnupg lsb-release
+      apt_retry apt-get -o DPkg::Lock::Timeout=180 install -y apt-transport-https ca-certificates curl gnupg lsb-release
 
       # Install containerd from the Docker repo
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --batch --yes --no-tty --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
       echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-      apt-get -o DPkg::Lock::Timeout=60 update
-      apt-get -o DPkg::Lock::Timeout=60 install -y containerd.io
+      apt_retry apt-get -o DPkg::Lock::Timeout=180 update
+      apt_retry apt-get -o DPkg::Lock::Timeout=180 install -y containerd.io
 
       # Configure containerd for Kubernetes
       mkdir -p /etc/containerd

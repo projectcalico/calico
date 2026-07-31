@@ -78,17 +78,14 @@ func LoadClientConfig(cf string) (*apiconfig.CalicoAPIConfig, error) {
 	return apiconfig.LoadClientConfig(cf)
 }
 
-func GetClients(cf string) (kubeClient *kubernetes.Clientset, calicoClient client.Interface, bc bapi.Client, err error) {
+func GetClients(cf string) (kubeClient kubernetes.Interface, calicoClient client.Interface, bc bapi.Client, err error) {
 	calicoClient, err = NewClient(cf)
 	if err != nil {
 		return
 	}
 
 	// Get the backend client.
-	type accessor interface {
-		Backend() bapi.Client
-	}
-	bc = calicoClient.(accessor).Backend()
+	bc = calicoClient.(bapi.BackendAccessor).Backend()
 
 	// Get a kube-client. If this is a kdd cluster, we can pull this from the backend.
 	// Otherwise, we need to build one ourselves.

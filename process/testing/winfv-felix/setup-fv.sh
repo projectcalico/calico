@@ -33,8 +33,6 @@ cd "${SCRIPT_DIR}"
 
 : "${KUBECONFIG:=${ASO_DIR}/kubeconfig}"
 
-GIT_VERSION=$(git describe --tags --dirty --long --always --abbrev=12)
-
 function upload_fv_scripts() {
   mkdir -p ./windows
   ${GOMPLATE} --file ./run-fv-felix.ps1 --out ./windows/run-fv.ps1
@@ -46,32 +44,6 @@ function upload_fv_scripts() {
 
   ${ASO_DIR}/scp-to-windows.sh 0 $CALICO_HOME/felix/fv/win-fv.exe 'c:\k\win-fv.exe'
   echo "Copied win-fv.exe to Windows node"
-}
-
-function upload_calico_images(){
-  make -C "$CALICO_HOME/node" image-windows WINDOWS_IMAGE=node-windows
-  make -C "$CALICO_HOME/cni-plugin" image-windows WINDOWS_IMAGE=cni-windows
-
-  if [[ $WINDOWS_SERVER_VERSION == "windows-2022" ]]; then
-    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2022.tar"
-    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2022.tar"
-  else # $WINDOWS_SERVER_VERSION == "windows-2019"
-    CALICO_NODE_IMAGE="node-windows-$GIT_VERSION-ltsc2019.tar"
-    CALICO_CNI_IMAGE="cni-windows-$GIT_VERSION-ltsc2019.tar"
-  fi
-
-  ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/node/dist/windows/${CALICO_NODE_IMAGE}" 'c:\calico-node-windows.tar'
-  ${ASO_DIR}/scp-to-windows.sh 0 "${CALICO_HOME}/cni-plugin/dist/windows/${CALICO_CNI_IMAGE}" 'c:\calico-cni-plugin-windows.tar'
-
-  #Import images from locally built images
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/node-windows c:\calico-node-windows.tar --all-platforms'
-  ${WINDOWS_CONNECT_COMMAND} 'c:\bin\ctr.exe --namespace k8s.io images import --base-name calico/cni-windows c:\calico-cni-plugin-windows.tar --all-platforms'
-
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" annotate ds -n calico-system calico-node-windows unsupported.operator.tigera.io/ignore="true"
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" patch ds -n calico-system calico-node-windows --patch-file "${SCRIPT_DIR}/calico-node-windows.yaml"
-
-  echo "Waiting for calico-node-windows to be ready after image replacement..."
-  ${KUBECTL} --kubeconfig="${KUBECONFIG}" rollout status ds -n calico-system calico-node-windows --timeout=600s
 }
 
 function start_test_infra(){
@@ -132,7 +104,7 @@ function get_logs(){
   echo "================ calico-node (linux) ================"
   cat ./pod-logs/linux-calico-node.log || true
 
-  # Pull Windows-side service logs from the VM. When calico-node.exe crashes
+  # Pull Windows-side service logs from the VM. When calico.exe crashes
   # before Kubernetes can capture container logs (e.g., bad argv parsing), the
   # only trace lives in CalicoWindows/logs on the host.
   echo "================ Windows node CalicoWindows logs ================"
@@ -140,14 +112,37 @@ function get_logs(){
   # the ssh command is handed to cmd.exe on the Windows side, which treats
   # `|` as its own pipe separator before powershell ever sees it.
   ${WINDOWS_CONNECT_COMMAND} 'foreach ($f in (Get-ChildItem c:\CalicoWindows\logs -Recurse -File -ErrorAction SilentlyContinue)) { Write-Host "---- $($f.FullName) ----"; Get-Content $f.FullName -Tail 500 -ErrorAction SilentlyContinue }' || echo "Failed to fetch Windows service logs"
+
+  # Felix on Windows logs only to stdout (LogSeverityFile is "none" under HPC),
+  # so its Debug-level stream is at the mercy of containerd log rotation: the
+  # `kubectl logs` above returns only the most recent rotated segment, which is
+  # far too small to span a whole spec. Pull the full set of on-disk container
+  # log files for the felix container straight from the node instead - kubelet
+  # keeps several rotations, which is enough to cover the test window. A tree of
+  # the pod-log root goes in first so a wrong glob is self-diagnosing.
+  #
+  # No pipes in the remote command: ssh hands it to cmd.exe, which eats a `|`
+  # before powershell sees it (same gotcha as the CalicoWindows block above).
+  ${WINDOWS_CONNECT_COMMAND} 'Write-Host "== pod-log tree =="; foreach ($f in (Get-ChildItem C:\var\log\pods -Recurse -File -ErrorAction SilentlyContinue)) { Write-Host $f.FullName }; Write-Host "== felix logs =="; foreach ($f in (Get-ChildItem C:\var\log\pods\*calico-node-windows*\felix\* -File -ErrorAction SilentlyContinue)) { Write-Host "---- $($f.FullName) ----"; Get-Content $f.FullName -ErrorAction SilentlyContinue }' > ./pod-logs/win-felix-full.log 2>&1 || echo "Failed to fetch full Windows felix log"
+  # The full log is large, so don't echo it to the job log (it's uploaded as an
+  # artifact). Surface just the DNS-cache save lines, which are what we usually
+  # need: whether SaveMappingsV1 ran, the file path it used, and any save error.
+  echo "================ Windows felix DNS-cache save lines ================"
+  local dns_lines
+  dns_lines=$(grep -aE "Saving DNS mappings|Finished saving DNS mappings|Failed to save mappings|felix-dns-cache" ./pod-logs/win-felix-full.log || true)
+  if [[ -n "${dns_lines}" ]]; then
+    echo "${dns_lines}" | tr -d '\r'
+  else
+    echo "No DNS-cache save lines found in felix log"
+  fi
 }
 
 # Main execution
-# Always collect pod logs on exit so failures during image rollout or test
-# infrastructure setup don't leave us without diagnostic data.
+# Always collect pod logs on exit so failures during test infrastructure setup
+# don't leave us without diagnostic data. Component images are imported and
+# Calico installed before this script runs (see run-win-fv.sh).
 trap get_logs EXIT
 
 upload_fv_scripts
-upload_calico_images
 start_test_infra
 run_windows_fv

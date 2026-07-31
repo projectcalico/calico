@@ -138,10 +138,10 @@ function wait_pod_ready() {
       ${kubectl} get po -o wide $args || true
       sleep 1
     done;
-    ${kubectl} wait pod --for=condition=Ready --timeout=300s $args
+    ${kubectl} wait pod --for=condition=Ready --timeout=600s $args
   ) & pid=$!
   # Start a second background process that implements the actual timeout.
-  ( sleep 300; kill $pid ) 2>/dev/null & watchdog=$!
+  ( sleep 600; kill $pid ) 2>/dev/null & watchdog=$!
   set +e
 
   wait $pid 2>/dev/null
@@ -150,7 +150,7 @@ function wait_pod_ready() {
   wait $watchdog 2>/dev/null
 
   if [ $rc -ne 0 ]; then
-    echo "Pod $args failed to become ready within 300s"
+    echo "Pod $args failed to become ready within 10m"
   fi
 
   set -e
@@ -158,10 +158,26 @@ function wait_pod_ready() {
 }
 
 echo "Set ipv6 address on each node"
-docker exec kind-control-plane ip -6 addr replace 2001:20::8/64 dev eth0
-docker exec kind-worker ip -6 addr replace 2001:20::1/64 dev eth0
-docker exec kind-worker2 ip -6 addr replace 2001:20::2/64 dev eth0
-docker exec kind-worker3 ip -6 addr replace 2001:20::3/64 dev eth0
+# Iterate over the actual node containers for this KIND_NAME rather than
+# hardcoding kind-* names, so the script works for clusters with a non-default
+# name or a different worker count.
+#
+# The suffix is derived from the node's name, NOT iteration order: kind names
+# workers "<name>-worker", "<name>-worker2", "<name>-worker3", ... so the bare
+# worker is ::1 and "-worker<N>" is ::<N>; the control-plane is ::8. This must
+# stay in lockstep with ipv6Map in node/tests/k8st/utils/utils.go, which the
+# k8st BGP tests use to peer to a specific node's address. `kind get nodes`
+# order is not guaranteed, so a running counter would assign the wrong address
+# to a node and break that peering.
+for node in $(${KIND} get nodes --name "${KIND_NAME}"); do
+  case "${node}" in
+    *-control-plane) suffix=8 ;;
+    *-worker)        suffix=1 ;;
+    *-worker*)       suffix="${node##*-worker}" ;;
+    *)               continue ;;
+  esac
+  docker exec "${node}" ip -6 addr replace "2001:20::${suffix}/64" dev eth0
+done
 
 echo
 
@@ -182,19 +198,49 @@ done
 echo "Helm values files: ${VALUES_FILE} ${EXTRA_VALUES_FILES:-}"
 ${HELM} install calico ${CHART} "${helm_values_args[@]}" -n tigera-operator --create-namespace
 
+# Wait for calico-node to be Ready before deploying anything else: until it is,
+# nodes stay NotReady (unschedulable) and CNI ADD fails, so add-on pods can't
+# get a sandbox. In particular this keeps the metallb rollout-status wait below
+# from racing the dataplane bring-up and timing out -- the BPF dataplane takes
+# longer to come up than that rollout timeout allows.
+echo "Wait for calico-node to be Ready before deploying add-ons"
+wait_pod_ready -l k8s-app=calico-node -n calico-system
+
 echo "Install calicoctl as a pod"
 ${kubectl} apply -f ${INFRA_DIR}/calicoctl.yaml
 echo
 
-echo "Install MetalLB controller for allocating LoadBalancer IPs"
+echo "Install MetalLB controller (L2-only) for Gateway API conformance"
+# We ship a stripped metallb v0.14.9 manifest (BGP-mode CRDs and webhooks
+# removed). The remaining install provides IPAddressPool + L2Advertisement,
+# which Gateway API conformance uses to make LB IPs reachable from the host
+# runner via ARP on the kind docker bridge. Calico has no L2 announce path
+# of its own today (see confd/pkg/backends/calico/routes.go and the
+# loadbalancer controller in kube-controllers).
 ${kubectl} create ns metallb-system || true
 ${kubectl} apply -f ${INFRA_DIR}/metallb.yaml
-${kubectl} apply -f ${INFRA_DIR}/metallb-config.yaml
+${kubectl} -n metallb-system rollout status deploy/controller --timeout=2m
+${kubectl} wait --for=condition=Established --timeout=2m \
+  crd/ipaddresspools.metallb.io crd/l2advertisements.metallb.io
 
 # Wait for ALL tigerastatus resources to become Available. This ensures every
 # component the operator manages is fully ready before tests begin.
-echo "Wait for all TigeraStatus resources to become Available"
-for attempt in $(seq 1 120); do
+#
+# Callers that handle component readiness themselves can skip this wait by
+# setting KIND_SKIP_TIGERASTATUS_WAIT=true.
+if [ "${KIND_SKIP_TIGERASTATUS_WAIT:-false}" = "true" ]; then
+  echo "KIND_SKIP_TIGERASTATUS_WAIT=true - skipping TigeraStatus wait"
+  exit 0
+fi
+# Components can take a while to settle on a cold boot, especially in CI. Wait
+# generously - this is a ceiling, not a fixed sleep, so a healthy cluster still
+# exits as soon as every TigeraStatus is Available. Override with
+# TIGERASTATUS_WAIT_TIMEOUT (seconds).
+ts_timeout=${TIGERASTATUS_WAIT_TIMEOUT:-1200}
+ts_interval=5
+ts_attempts=$(( ts_timeout / ts_interval ))
+echo "Wait for all TigeraStatus resources to become Available (up to ${ts_timeout}s)"
+for attempt in $(seq 1 ${ts_attempts}); do
   # Get all tigerastatus resources and check if any are not Available.
   not_ready=$(${kubectl} get tigerastatus -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.conditions[?(@.type=="Available")]}{.status}{end}{"\n"}{end}' 2>/dev/null \
     | grep -v "True$" || true)
@@ -209,8 +255,8 @@ for attempt in $(seq 1 120); do
     fi
   fi
 
-  if [ "$attempt" -eq 120 ]; then
-    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after 600s"
+  if [ "$attempt" -eq "${ts_attempts}" ]; then
+    echo "FAIL: Timed out waiting for all TigeraStatus to become Available after ${ts_timeout}s"
     ${kubectl} get tigerastatus 2>&1 || true
     echo "Not ready:"
     echo "$not_ready"
@@ -224,7 +270,7 @@ for attempt in $(seq 1 120); do
     ${kubectl} annotate installation default --overwrite triggerReconcile=$(date +%s) 2>/dev/null || true
   fi
 
-  sleep 5
+  sleep ${ts_interval}
 done
 
 echo "Wait for Calico to be ready..."
@@ -233,3 +279,34 @@ wait_pod_ready calicoctl -n kube-system
 wait_pod_ready -l k8s-app -n calico-system
 
 echo "Calico is running."
+
+# Apply Calico-native LoadBalancer IP pools (80.15.0.0/24 + fdff::/64).
+# These replace the legacy metallb default BGP pool; kube-controllers'
+# loadbalancer controller now does the IPAM, and confd handles BGP
+# advertisement based on each test's BGPConfiguration.
+echo "Applying Calico LoadBalancer IP pools"
+for attempt in $(seq 1 12); do
+  if ${kubectl} apply -f ${INFRA_DIR}/calico-lb-pools.yaml; then
+    break
+  fi
+  echo "calico-lb-pools.yaml apply failed (attempt $attempt/12) — retrying in 5s..."
+  sleep 5
+done
+
+# Switch Calico's loadbalancer controller to RequestedServicesOnly so it
+# only claims Services that explicitly opt in via
+# spec.loadBalancerClass=calico or one of the projectcalico.org/* LB
+# annotations. The default AllServices mode races metallb's
+# ServiceReconciler over unclassified LB Services -- the controllers
+# each assign from their own pool and overwrite each other's status.
+# Gateway API conformance services are unclassified and need metallb's
+# L2 pool, so we want Calico to leave them alone; node k8st BGP tests
+# now set loadBalancerClass=calico explicitly (see bgp_advert_test.go).
+for attempt in $(seq 1 12); do
+  if ${kubectl} patch kubecontrollersconfiguration default --type=merge \
+       --patch '{"spec":{"controllers":{"loadBalancer":{"assignIPs":"RequestedServicesOnly"}}}}'; then
+    break
+  fi
+  echo "kubecontrollersconfiguration patch failed (attempt $attempt/12) — retrying in 5s..."
+  sleep 5
+done

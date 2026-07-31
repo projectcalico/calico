@@ -36,6 +36,20 @@ Description: Project Calico networking for OpenStack/Neutron.
  .
  This package provides the Calico DHCP agent.
 
+Package: calico-resync
+Architecture: all
+Depends:
+ networking-calico (= ${binary:Version})
+Description: Project Calico networking for OpenStack/Neutron.
+ Project Calico is an open source solution for virtual networking in
+ cloud data centers. It uses IP routing to provide connectivity
+ between the workloads in a data center that provide or use IP-based
+ services - whether VMs, containers or bare metal appliances; and
+ iptables, to impose any desired fine-grained security policy between
+ those workloads.
+ .
+ This package provides the calico-resync CLI tool.
+
 Package: calico-control
 Architecture: all
 Depends:

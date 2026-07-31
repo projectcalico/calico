@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ var _ = Describe("BPF kube-proxy", func() {
 		k8s := fake.NewClientset(testSvc, testSvcEps)
 		p, _ = proxy.StartKubeProxy(k8s, "test-node", maps, proxy.WithImmediateSync(), proxy.WithMaglevLUTSize(maglevLUTSize))
 		// Unblock start(), which blocks on the initial host metadata update.
-		p.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "dummy"})
+		p.OnUpdate(&proto.HostMetadataUpdate{Hostname: "dummy"})
 		Expect(p.CompleteDeferredWork()).To(Succeed())
 	})
 
@@ -251,7 +251,7 @@ var _ = Describe("BPF kube-proxy bootstrap window — regression #12192", func()
 		// In the bootstrap window with the buggy code, the proxy is
 		// already constructed and informers are syncing — they'll
 		// trigger an Apply on the stub Syncer that erases the marker.
-		p.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "test-node"})
+		p.OnUpdate(&proto.HostMetadataUpdate{Hostname: "test-node"})
 		Expect(p.CompleteDeferredWork()).To(Succeed())
 
 		// The marker must survive the bootstrap window. With

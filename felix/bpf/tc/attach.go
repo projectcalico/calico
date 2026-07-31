@@ -75,6 +75,8 @@ type AttachPoint struct {
 	AttachType                    apiv3.BPFAttachOption
 	IngressPacketRateConfigured   bool
 	EgressPacketRateConfigured    bool
+	IngressConnLimitConfigured    bool
+	EgressConnLimitConfigured     bool
 	WorkloadSrcSpoofingConfigured bool
 	UDPGSOLinearize               bool
 	DSCP                          int8
@@ -208,7 +210,11 @@ func (ap *AttachPoint) AttachProgram() error {
 	// only need to load and configure the preamble that will pass the
 	// configuration further to the selected set of programs.
 
-	binaryToLoad := path.Join(bpfdefs.ObjectDir, fmt.Sprintf("tc_preamble_%s.o", ap.Hook))
+	preambleName := fmt.Sprintf("tc_preamble_%s", ap.Hook)
+	if ap.NoTracePrintk {
+		preambleName += "_notrace"
+	}
+	binaryToLoad := path.Join(bpfdefs.ObjectDir, preambleName+".o")
 	if ap.IsNetkit() {
 		err := ap.attachNetkitProgram(binaryToLoad)
 		if err != nil {
@@ -590,6 +596,14 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 	}
 
+	if ap.IngressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsIngressConnLimitConfigured
+	}
+
+	if ap.EgressConnLimitConfigured {
+		globalData.Flags |= libbpf.GlobalsEgressConnLimitConfigured
+	}
+
 	switch ap.RPFEnforceOption {
 	case tcdefs.RPFEnforceOptionStrict:
 		globalData.Flags |= libbpf.GlobalsRPFOptionEnabled
@@ -622,11 +636,12 @@ func (ap *AttachPoint) Configure() *libbpf.TcGlobalData {
 		globalData.Flags |= libbpf.GlobalsUDPGSOLinearize
 	}
 
-	globalData.HostTunnelIPv4 = globalData.HostIPv4
-	globalData.HostTunnelIPv6 = globalData.HostIPv6
-
-	copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
-	copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	if ap.HostTunnelIPv4 != nil {
+		copy(globalData.HostTunnelIPv4[0:4], ap.HostTunnelIPv4.To4())
+	}
+	if ap.HostTunnelIPv6 != nil {
+		copy(globalData.HostTunnelIPv6[:], ap.HostTunnelIPv6.To16())
+	}
 
 	for i := range len(globalData.Jumps) {
 		globalData.Jumps[i] = 0xffffffff   /* uint32(-1) */

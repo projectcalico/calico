@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -39,7 +38,6 @@ const (
 	isGlobalBgpConfig
 	isNodeBgpConfig
 
-	hostIPMarker    = "*HOSTIP*"
 	nodeMarker      = "*NODEMARKER*"
 	wireguardMarker = "*WIREGUARDMARKER*"
 )
@@ -152,7 +150,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing invalid Key on ProcessDeleted")
 		_, err := cc.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: net.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 			},
 		})
 		Expect(err).To(HaveOccurred())
@@ -160,7 +158,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		By("Testing invalid Key on Process")
 		_, err = cc.Process(&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
-				PeerIP: net.MustParseIP("1.2.3.4"),
+				PeerIP: model.AddrFromIP(net.MustParseIP("1.2.3.4")),
 			},
 			Value: apiv3.NewFelixConfiguration(),
 		})
@@ -207,14 +205,14 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		duration3 := metav1.Duration{Duration: time.Duration(0)}
 		duration4 := metav1.Duration{Duration: time.Duration(0.1 * float64(time.Second))}
 		bool1 := false
-		uint1 := uint32(1313)
+		int1 := int64(1313)
 		res.Spec.RouteRefreshInterval = &duration1
 		res.Spec.IptablesLockProbeInterval = &duration2
 		res.Spec.EndpointReportingDelay = &duration3
 		res.Spec.IpsetsRefreshInterval = &duration4
 		res.Spec.InterfacePrefix = "califoobar"
 		res.Spec.IPIPEnabled = &bool1
-		res.Spec.IptablesMarkMask = &uint1
+		res.Spec.IptablesMarkMask = &int1
 		res.Spec.FailsafeInboundHostPorts = &[]apiv3.ProtoPort{}
 		res.Spec.FailsafeOutboundHostPorts = &[]apiv3.ProtoPort{
 			{
@@ -236,7 +234,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
 		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		res.Spec.RouteTableRanges = &apiv3.RouteTableRanges{{Min: 43, Max: 211}}
-		res.Spec.NftablesMarkMask = &uint1
+		res.Spec.NftablesMarkMask = &int1
 		res.Spec.NftablesRefreshInterval = &duration4
 		res.Spec.NftablesFilterDenyAction = "Accept"
 		res.Spec.NftablesFilterAllowAction = "Drop"
@@ -445,13 +443,6 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 				node := kt.Hostname
 				ExpectWithOffset(1, node).To(Equal("mynode"))
 				name = kt.Name
-			case model.HostIPKey:
-				// Although the HostIPKey is not in the same key space as the HostConfig, we
-				// special case this to make this test reusable for more tests.
-				node := kt.Hostname
-				ExpectWithOffset(1, node).To(Equal("mynode"))
-				name = hostIPMarker
-				logrus.Warnf("IP in key: %s", kvp.Value)
 			case model.ResourceKey:
 				node := kt.Name
 				ExpectWithOffset(1, node).To(Equal("mynode"))

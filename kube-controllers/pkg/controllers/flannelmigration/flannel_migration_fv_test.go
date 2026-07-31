@@ -110,11 +110,8 @@ var _ = Describe("flannel-migration-controller FV test", Ordered, ContinueOnFail
 		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
-		type accessor interface {
-			Backend() backend.Client
-		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
-		bc = calicoClient.(accessor).Backend()
+		bc = calicoClient.(backend.BackendAccessor).Backend()
 
 		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
@@ -336,7 +333,8 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 		var blocks []*net.IPNet
 		for _, o := range datastoreObjs.KVPairs {
 			k := o.Key.(model.BlockAffinityKey)
-			cidr := net.IPNet{IP: k.CIDR.IP, Mask: k.CIDR.Mask}
+			kCIDR := model.IPNetFromPrefix(k.CIDR)
+			cidr := net.IPNet(kCIDR.IPNet)
 			blocks = append(blocks, &cidr)
 		}
 		Expect(len(blocks)).To(Equal(4))

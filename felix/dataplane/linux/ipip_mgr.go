@@ -22,11 +22,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // ipipManager takes care of the configuration of the IPIP tunnel device, and programming IPIP routes by using
@@ -50,7 +51,7 @@ type ipipManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 func newIPIPManager(
@@ -59,7 +60,7 @@ func newIPIPManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *ipipManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
 	return newIPIPManagerWithShims(
@@ -79,10 +80,9 @@ func newIPIPManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	opRecorder logrusr.OpRecorder,
+	nlHandle netlinkshim.Interface,
 ) *ipipManager {
-
 	if ipVersion != 4 {
 		logrus.Errorf("IPIP manager only supports IPv4")
 		return nil
@@ -122,7 +122,7 @@ func newIPIPManagerWithShims(
 
 func (m *ipipManager) OnUpdate(protoBufMsg any) {
 	switch msg := protoBufMsg.(type) {
-	case *proto.HostMetadataV4V6Update:
+	case *proto.HostMetadataUpdate:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host update/create")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr(msg.Ipv4Addr)
@@ -136,7 +136,7 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 			m.activeHostnameToIP[msg.Hostname] = msg.Ipv4Addr
 		}
 		m.maybeUpdateRoutes()
-	case *proto.HostMetadataV4V6Remove:
+	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
 		if msg.Hostname == m.hostname {
 			m.routeMgr.updateParentIfaceAddr("")
@@ -199,10 +199,67 @@ func (m *ipipManager) device(_ netlink.Link) (netlink.Link, string, error) {
 	ipip := &netlink.Iptun{
 		LinkAttrs: la,
 	}
-	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 
+	if m.dpConfig.BPFEnabled && !m.dpConfig.BPFOverlayIPOnDevice {
+		// BPF dataplane handles encap/decap and source IP selection itself,
+		// so it doesn't need an IP assigned to the tunnel device.
+		return ipip, "", nil
+	}
+
+	address := m.dpConfig.RulesConfig.IPIPTunnelAddress
 	if len(address) == 0 {
 		return nil, "", fmt.Errorf("address is not set")
 	}
 	return ipip, address.String(), nil
+}
+
+func cleanUpIPIPAddrs() {
+	// If IPIP is not enabled, check to see if there is are addresses in the IPIP device and delete them if there are.
+	logrus.Debug("Checking if we need to clean up the IPIP device")
+
+	var errFound bool
+
+cleanupRetry:
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName(dataplanedefs.IPIPIfaceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				logrus.Debug("IPIP disabled and no IPIP device found")
+				return
+			}
+			logrus.WithError(err).Warn("IPIP disabled and failed to query IPIP device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		addrs, err := netlink.AddrList(link, netlink.FAMILY_V4)
+		if err != nil {
+			logrus.WithError(err).Warn("IPIP disabled and failed to list addresses, will be unable to remove any old addresses from the device should they exist.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		for _, oldAddr := range addrs {
+			if err := netlink.AddrDel(link, &oldAddr); err != nil {
+				logrus.WithError(err).Errorf("IPIP disabled and failed to delete unwanted IPIP address %s.", oldAddr.IPNet)
+				errFound = true
+
+				// Sleep for 1 second before retrying
+				time.Sleep(1 * time.Second)
+				continue cleanupRetry
+			}
+		}
+	}
+	if errFound {
+		logrus.Warnf("Giving up trying to clean up IPIP addresses after retrying %v times", maxCleanupRetries)
+	}
 }

@@ -34,7 +34,7 @@ import (
 	"go.etcd.io/etcd/client/pkg/v3/fileutil"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/cni"
@@ -114,7 +114,7 @@ func loadConfig() config {
 
 func Install(version string) error {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("cni-installer")
+	logrusr.ConfigureFormatter("cni-installer")
 
 	// Clean up any existing binaries / config / assets.
 	if err := os.RemoveAll(winutils.GetHostPath("/host/etc/cni/net.d/calico-tls")); err != nil && !os.IsNotExist(err) {
@@ -269,6 +269,34 @@ func Install(version string) error {
 		// Print version number if it was successfully installed
 		if calicoBinaryOK {
 			logrus.Infof("CNI plugin version: %s", version)
+		}
+	}
+
+	// If no candidate directory was writeable but the user opted out of binary
+	// updates (UPDATE_CNI_BINARIES=false) and the calico binaries are already on
+	// the host, treat that as success. This covers read-only systems that bake
+	// the CNI binaries into the OS image. See projectcalico/calico#7486.
+	if !binsWritten && !c.UpdateCNIBinaries {
+		// Require both binaries this installer owns: calico provides the CNI
+		// plugin, calico-ipam the IPAM plugin. Auxiliary plugins (portmap etc.)
+		// come from the host image and are its responsibility to bake in.
+		requiredBins := []string{"calico", "calico-ipam"}
+		if runtime.GOOS == "windows" {
+			requiredBins = []string{"calico.exe", "calico-ipam.exe"}
+		}
+		for _, d := range dirs {
+			allPresent := true
+			for _, name := range requiredBins {
+				if !fileExists(fmt.Sprintf("%s/%s", d, name)) {
+					allPresent = false
+					break
+				}
+			}
+			if allPresent {
+				logrus.Infof("No writeable CNI bin directory found but %v already exist at %s and UPDATE_CNI_BINARIES=false; continuing", requiredBins, d)
+				binsWritten = true
+				break
+			}
 		}
 	}
 

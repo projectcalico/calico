@@ -50,10 +50,10 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func newBPFTestEpMgr(
@@ -84,7 +84,7 @@ func newBPFTestEpMgr(
 		generictables.NewNoopTable(),
 		generictables.NewNoopTable(),
 		nil,
-		logutils.NewSummarizer("test"),
+		logrusr.NewSummarizer("test"),
 		&routetable.DummyTable{},
 		&routetable.DummyTable{},
 		calc.NewLookupsCache(),
@@ -157,7 +157,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		}
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -184,38 +184,55 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 			ToHostDrop: false,
 			DSR:        false,
 		}))
-		Expect(atIng).NotTo(HaveKey(hook.AttachType{
+		// IPv6 host attach is present whenever IPv6 is enabled, regardless
+		// of whether a v6 host IP has been provided yet. Programs attach
+		// with HOST_IPv6=0; the few BPF features that need a real host IP
+		// (VXLAN return-path encap) drop with the DroppedNoHostIP counter
+		// until the host IP becomes known.
+		v6HostIng := hook.AttachType{
 			Hook:       hook.Ingress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
-		Expect(atEg).NotTo(HaveKey(hook.AttachType{
+		}
+		v6HostEg := hook.AttachType{
 			Hook:       hook.Egress,
 			Family:     6,
 			Type:       tcdefs.EpTypeHost,
 			LogLevel:   loglevel,
 			ToHostDrop: false,
 			DSR:        false,
-		}))
+		}
+		if ipv6Enabled {
+			Expect(atIng).To(HaveKey(v6HostIng))
+			Expect(atEg).To(HaveKey(v6HostEg))
+		} else {
+			Expect(atIng).NotTo(HaveKey(v6HostIng))
+			Expect(atEg).NotTo(HaveKey(v6HostEg))
+		}
 
 		ifstateMap := ifstateMapDump(commonMaps.IfStateMap)
 		Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(host1.Attrs().Index))))
+		// When IPv6 is enabled, BPF programs attach for both v4 and v6
+		// regardless of whether v6 host IP has arrived yet (the v6 globals
+		// just hold HOST_IP=0), so both ready flags are set.
+		expectedReady := ifstate.FlgIPv4Ready
 		if ipv6Enabled {
+			expectedReady |= ifstate.FlgIPv6Ready
 			Expect(ifstateMap).To(HaveKey(ifstate.NewKey(uint32(workload0.Attrs().Index))))
 			workloadep0State := ifstateMap[ifstate.NewKey(uint32(workload0.Attrs().Index))]
-			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | ifstate.FlgIPv4Ready))
+			Expect(workloadep0State.Flags()).To(Equal(ifstate.FlgWEP | expectedReady))
 		}
 
 		hostep1State = ifstateMap[ifstate.NewKey(uint32(host1.Attrs().Index))]
-		Expect(hostep1State.Flags()).To(Equal(ifstate.FlgIPv4Ready | ifstate.FlgHEP))
+		Expect(hostep1State.Flags()).To(Equal(expectedReady | ifstate.FlgHEP))
 
 		if ipv6Enabled {
 			// IPv6 address update
 			bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1::4"))
-			bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv6Addr: "1::4"})
+			bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv6Addr: "1::4"})
 			err = bpfEpMgr.CompleteDeferredWork()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -667,12 +684,19 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
-		// We got no new updates, we still have the same programs attached
+		// Even without HostMetadata yet, the new manager re-attaches
+		// programs (with HOST_IP=0) so that a Felix restart with a
+		// missing/cleared Node IP doesn't leave interfaces unprogrammed.
+		// The pinned attach IDs differ from the pre-restart ones.
 		attached2, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(attached2).To(Equal(attached))
+		for _, iface := range []string{"hostep2", "workloadep2"} {
+			Expect(attached2).To(HaveKey(iface))
+			Expect(attached[iface].Ingress).NotTo(Equal(attached2[iface].Ingress))
+			Expect(attached[iface].Egress).NotTo(Equal(attached2[iface].Egress))
+		}
 
-		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
@@ -700,12 +724,16 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 
 		attachedNew, err := bpf.ListCalicoAttached()
 		Expect(err).NotTo(HaveOccurred())
-		// All programs are replaced by now
+		// HostMetadataUpdate triggers another re-attach so programs pick
+		// up the real HOST_IP. attachedNew differs from both the
+		// pre-restart attach IDs and the post-restart HOST_IP=0 attach IDs.
 		// XXX down infaces are not removed yet
 		for _, iface := range []string{"hostep2", "workloadep2"} {
 			Expect(attachedNew).To(HaveKey(iface))
 			Expect(attached[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
 			Expect(attached[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
+			Expect(attached2[iface].Ingress).NotTo(Equal(attachedNew[iface].Ingress))
+			Expect(attached2[iface].Egress).NotTo(Equal(attachedNew[iface].Egress))
 		}
 	})
 
@@ -756,7 +784,7 @@ func runAttachTest(t *testing.T, ipv6Enabled bool) {
 		Expect(pmIng).To(HaveLen(0))
 		Expect(pmEgr).To(HaveLen(0))
 
-		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep2", ifacemonitor.StateUp, workload2.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep2", "1.6.6.1"))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep2", ifacemonitor.StateUp, host2.Attrs().Index))
@@ -817,7 +845,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	workload1 := createVethName("workloadep1")
 	defer deleteLink(workload1)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, workload1.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -847,7 +875,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 
 	// Verify that QoS map state is correctly created
 	qosMap := commonMaps.QoSMap
-	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1)
+	qosKey1 := qos.NewKey(uint32(workload1.Attrs().Index), 1, qos.IPFamilyV4)
 	qosValBytes1, err := qosMap.Get(qosKey1.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal1 := qos.ValueFromBytes(qosValBytes1)
@@ -856,7 +884,7 @@ func TestAttachWithMultipleWorkloadUpdate(t *testing.T) {
 	Expect(qosVal1.PacketRateTokens()).To(Equal(int16(-1)))
 	Expect(qosVal1.PacketRateLastUpdate()).To(Equal(uint64(0)))
 
-	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0)
+	qosKey2 := qos.NewKey(uint32(workload1.Attrs().Index), 0, qos.IPFamilyV4)
 	qosValBytes2, err := qosMap.Get(qosKey2.AsBytes())
 	Expect(err).NotTo(HaveOccurred())
 	qosVal2 := qos.ValueFromBytes(qosValBytes2)
@@ -998,7 +1026,7 @@ func TestRepeatedAttach(t *testing.T) {
 		regexp.MustCompile("^workloadep[123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep1", ifacemonitor.StateUp, iface.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep1", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1148,7 +1176,7 @@ func TestAttachInterfaceRecreate(t *testing.T) {
 		}
 	}()
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1242,7 +1270,7 @@ func TestAttachTcx(t *testing.T) {
 	workload0 := createVethName("workloadep0")
 	defer deleteLink(workload0)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1282,7 +1310,7 @@ func TestAttachTcx(t *testing.T) {
 		regexp.MustCompile("^workloadep[0123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1311,7 +1339,7 @@ func TestAttachTcx(t *testing.T) {
 		regexp.MustCompile("^workloadep[0123]"),
 	)
 	Expect(err).NotTo(HaveOccurred())
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1374,7 +1402,7 @@ func TestAttachNetkit(t *testing.T) {
 	workload0 := createNetkitName("workloadep0")
 	defer deleteLink(workload0)
 
-	bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+	bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 	bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 	bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("workloadep0", "1.6.6.6"))
 	bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1455,7 +1483,7 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1485,7 +1513,7 @@ func TestLogFilters(t *testing.T) {
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("hostep1", ifacemonitor.StateUp, host1.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceStateUpdate("workloadep0", ifacemonitor.StateUp, workload0.Attrs().Index))
 		bpfEpMgr.OnUpdate(linux.NewIfaceAddrsUpdate("hostep1", "1.2.3.4"))
-		bpfEpMgr.OnUpdate(&proto.HostMetadataV4V6Update{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
+		bpfEpMgr.OnUpdate(&proto.HostMetadataUpdate{Hostname: "uthost", Ipv4Addr: "1.2.3.4"})
 		err = bpfEpMgr.CompleteDeferredWork()
 		Expect(err).NotTo(HaveOccurred())
 
