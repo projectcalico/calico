@@ -498,8 +498,11 @@ jobs:
           for LOGIN in $LOGINS; do
             # review:approved is GitHub's own review-decision filter, so this
             # returns only PRs that currently carry an approval.
-            PRS=$(gh api "search/issues?q=repo:$REPO+is:pr+is:open+review:approved+author:$LOGIN&per_page=50" \
-                    --jq '.items[].number' 2>/dev/null) || true
+            # --paginate is safe with this filter: it applies --jq per page,
+            # and one number per line concatenates into the list we want.
+            # An index-into-array filter would not — see the reviews call below.
+            PRS=$(gh api "search/issues?q=repo:$REPO+is:pr+is:open+review:approved+author:$LOGIN&per_page=100" \
+                    --paginate --jq '.items[].number' 2>/dev/null) || true
             for PR in $PRS; do
               # The approval that matters is the most recent one from someone
               # with write access; author_association comes from the same call.
@@ -533,7 +536,14 @@ jobs:
               fi
 
               echo "PR #$PR approved by $RLOGIN (review $RID) — dispatching notify"
-              gh workflow run ci-notify.yml -f pr_number="$PR" -f state=approved \
-                || echo "::warning::dispatch failed for PR #$PR — marker already claimed, so no retry"
+              if ! gh workflow run ci-notify.yml -f pr_number="$PR" -f state=approved; then
+                # Release the claim, or a transient dispatch failure would
+                # suppress this approval's DM for good: every later cycle would
+                # find the marker and skip. Same reasoning as "Release dedup
+                # marker if send failed" in the notify job.
+                echo "::warning::dispatch failed for PR #$PR — releasing $REF so the next cycle retries"
+                gh api "repos/$REPO/git/$REF" --method DELETE >/dev/null 2>&1 \
+                  || echo "::notice::could not release $REF — this approval will not be retried"
+              fi
             done
           done
