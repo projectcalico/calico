@@ -23,68 +23,25 @@ import (
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
-	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
-
-// classAwareMockRouteTable models the part of RouteTable's contract that matters
-// here: the desired state is keyed on (route class, interface name) and SetRoutes
-// _replaces_ the whole set of targets for that key.  (mockRouteTable, used by the
-// other manager tests, is keyed on interface name alone so it can't distinguish
-// between managers that write to the same pseudo-interface.)
-type classAwareMockRouteTable struct {
-	routes map[routetable.RouteClass]map[string][]routetable.Target
-}
-
-func newClassAwareMockRouteTable() *classAwareMockRouteTable {
-	return &classAwareMockRouteTable{
-		routes: map[routetable.RouteClass]map[string][]routetable.Target{},
-	}
-}
-
-func (t *classAwareMockRouteTable) SetRoutes(class routetable.RouteClass, ifaceName string, targets []routetable.Target) {
-	if t.routes[class] == nil {
-		t.routes[class] = map[string][]routetable.Target{}
-	}
-	t.routes[class][ifaceName] = targets
-}
-
-func (t *classAwareMockRouteTable) cidrsForClass(class routetable.RouteClass, ifaceName string) []string {
-	var cidrs []string
-	for _, target := range t.routes[class][ifaceName] {
-		cidrs = append(cidrs, target.CIDR.String())
-	}
-	return cidrs
-}
-
-func (t *classAwareMockRouteTable) RouteRemove(routetable.RouteClass, string, routetable.RouteKey) {}
-func (t *classAwareMockRouteTable) RouteUpdate(routetable.RouteClass, string, routetable.Target)   {}
-func (t *classAwareMockRouteTable) OnIfaceStateChanged(string, int, ifacemonitor.State)            {}
-func (t *classAwareMockRouteTable) QueueResync()                                                   {}
-func (t *classAwareMockRouteTable) QueueResyncIface(string)                                        {}
-func (t *classAwareMockRouteTable) Index() int                                                     { return 0 }
-func (t *classAwareMockRouteTable) Apply() error                                                   { return nil }
-
-func (t *classAwareMockRouteTable) ReadRoutesFromKernel(string) ([]routetable.Target, error) {
-	return nil, nil
-}
-
-var _ routetable.Interface = (*classAwareMockRouteTable)(nil)
 
 var _ = Describe("Route manager", func() {
 	var (
-		rt        *classAwareMockRouteTable
+		rt        *mockRouteTable
 		dataplane *mocknetlink.MockNetlinkDataplane
 		dpConfig  Config
 		routeMgr  *routeManager
 	)
 
 	BeforeEach(func() {
-		rt = newClassAwareMockRouteTable()
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
 
 		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
@@ -108,7 +65,7 @@ var _ = Describe("Route manager", func() {
 			4,
 			1400,
 			dpConfig,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			dataplane,
 		)
 		routeMgr.setTunnelRouteFunc(func(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
@@ -143,7 +100,7 @@ var _ = Describe("Route manager", func() {
 				4,
 				1400,
 				dpConfig,
-				logutils.NewSummarizer("test"),
+				logrusr.NewSummarizer("test"),
 				dataplane,
 			)
 			ipipMgr := newIPIPManagerWithShims(
@@ -152,14 +109,14 @@ var _ = Describe("Route manager", func() {
 				4,
 				1400,
 				dpConfig,
-				logutils.NewSummarizer("test"),
+				logrusr.NewSummarizer("test"),
 				dataplane,
 			)
 			noEncapMgr := newNoEncapManagerWithSims(
 				rt,
 				4,
 				dpConfig,
-				logutils.NewSummarizer("test"),
+				logrusr.NewSummarizer("test"),
 				dataplane,
 			)
 			managers = []Manager{vxlanMgr, ipipMgr, noEncapMgr}
