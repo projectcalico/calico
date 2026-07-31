@@ -238,6 +238,27 @@ func (b allocationBlock) NumFreeAddresses(reservations addrFilter) int {
 	return len(b.Unallocated)
 }
 
+// NumReservedAddresses counts the addresses in the block that the filter covers,
+// whether or not they are also allocated.  Where NumFreeAddresses answers "how
+// many can still be handed out", this answers "how many are off limits", so the
+// two overlap by any address that was allocated before it became reserved.
+func (b allocationBlock) NumReservedAddresses(reservations addrFilter) int {
+	if reservations.MatchesWholeCIDR(&b.CIDR) {
+		return b.NumAddresses()
+	}
+	if !reservations.MatchesSome(&b.CIDR) {
+		return 0
+	}
+	// Slow path: only some of the block is reserved, so count address by address.
+	numReserved := 0
+	for ord := 0; ord < b.NumAddresses(); ord++ {
+		if reservations.MatchesIP(b.CIDR.NthIP(ord)) {
+			numReserved++
+		}
+	}
+	return numReserved
+}
+
 // empty returns true if the block has released all of its assignable addresses,
 // and returns false if any assignable addresses are in use.
 func (b allocationBlock) empty() bool {
