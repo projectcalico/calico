@@ -23,6 +23,7 @@ from networking_calico import datamodel_v1
 from networking_calico import datamodel_v2
 from networking_calico import etcdv3
 from networking_calico.common import config as calico_config
+from networking_calico.plugins.ml2.drivers.calico.syncer import MAX_CAS_ATTEMPTS
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
 
@@ -80,6 +81,8 @@ class SubnetSyncer(ResourceSyncer):
             if len(subnets) != 1:
                 raise ResourceGone()
             subnet = subnets[0]
+        if not subnet["enable_dhcp"]:
+            raise ResourceGone()
         return json.dumps(subnet_etcd_data(subnet))
 
     def create_in_etcd(self, key, value):
@@ -92,23 +95,71 @@ class SubnetSyncer(ResourceSyncer):
         return etcdv3.delete(key, mod_revision=mod_revision)
 
     @etcdv3.logging_exceptions
-    def write_subnet(self, subnet, context):
-        """Write data to etcd to describe a DHCP-enabled subnet."""
-        LOG.info("Write subnet %s %s to etcd", subnet["id"], subnet["cidr"])
-        write_data = self.neutron_to_etcd_write_data("", subnet, context, reread=False)
-        return self.update_in_etcd(
-            datamodel_v2.key_for_subnet(subnet["id"], self.region_string), write_data
-        )
+    def sync_subnet(self, subnet, context):
+        """Sync data in etcd to describe a Neutron subnet.
 
-    @etcdv3.logging_exceptions
-    def delete_subnet(self, subnet_id):
-        """Delete data from etcd for a subnet that is no longer wanted."""
-        LOG.info("Deleting subnet %s", subnet_id)
-        # Delete the etcd key for this subnet.
+        Uses CAS-against-mod_revision with retry so a concurrent dynamic write to the
+        same subnet key cannot get overwritten by a later out-of-order write from
+        another worker.  See ``sync_wep`` in endpoints.py for the same retry pattern on
+        a Calico v3 resource; this implementation is inlined because Subnet data is
+        stored as JSON-as-string (not as a Calico v3 resource) and so uses ``etcdv3``
+        directly rather than ``datamodel_v3``.
+        """
+        # ``cidr`` is here only for log context; some delete-path callers (or future
+        # Neutron versions) may hand us a minimal subnet dict, so look it up defensively
+        # rather than risk a KeyError that would mask the actual CAS-delete work below.
+        LOG.info(
+            "Sync subnet %s %s to etcd", subnet["id"], subnet.get("cidr", "<unknown>")
+        )
+        subnet_id = subnet["id"]
         key = datamodel_v2.key_for_subnet(subnet_id, self.region_string)
-        if not self.delete_from_etcd(key):
-            # Already gone, treat as success.
-            LOG.debug("Key %s, which we were deleting, disappeared", key)
+        for attempt in range(MAX_CAS_ATTEMPTS):
+            try:
+                _, mod_revision = etcdv3.get(key)
+            except etcdv3.KeyNotFound:
+                mod_revision = 0
+            try:
+                # Re-read the subnet from the Neutron DB so that we can be sure of
+                # writing subnet data (if necessary) that post-dates what we just read
+                # from etcd.
+                write_data = self.neutron_to_etcd_write_data(
+                    "", subnet, context, reread=True
+                )
+            except ResourceGone:
+                # The DB re-read says this subnet should not be in Calico (either gone
+                # entirely, or enable_dhcp is now False).  Either drop the etcd entry
+                # via CAS at the mod_revision we just read, or -- if no entry was
+                # there -- we are done.  CAS on the delete is essential: an
+                # unconditional delete would clobber a re-create that landed between
+                # our etcd read and our delete.  On CAS failure, fall through to the
+                # next loop iteration and re-evaluate from scratch.
+                LOG.info("Subnet %s should not exist in Calico datastore", subnet_id)
+                if mod_revision == 0:
+                    return
+                if self.delete_from_etcd(key, mod_revision=mod_revision):
+                    return
+                LOG.debug(
+                    "Subnet delete CAS retry %d/%d for %s",
+                    attempt + 1,
+                    MAX_CAS_ATTEMPTS,
+                    subnet_id,
+                )
+                continue
+            if self.update_in_etcd(key, write_data, mod_revision=mod_revision):
+                return
+            LOG.debug(
+                "Subnet CAS retry %d/%d for %s",
+                attempt + 1,
+                MAX_CAS_ATTEMPTS,
+                subnet_id,
+            )
+        LOG.warning(
+            "Subnet CAS exhausted %d retries for %s; relying on startup"
+            " resync to repair any drift",
+            MAX_CAS_ATTEMPTS,
+            subnet_id,
+        )
+        return
 
 
 def subnet_etcd_data(subnet):

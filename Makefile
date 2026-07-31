@@ -50,6 +50,9 @@ clean:
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
 	$(MAKE) -C third_party/cni-plugins clean
+	$(MAKE) -C third_party/envoy-gateway clean
+	$(MAKE) -C third_party/envoy-proxy clean
+	$(MAKE) -C third_party/envoy-ratelimit clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -239,12 +242,25 @@ push-chart: bin/helm
 # using a local kind cluster.
 ###############################################################################
 E2E_PROCS ?= 4
+E2E_TIMEOUT ?= 90m
 E2E_TEST_CONFIG ?= e2e/config/kind.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
+
+# rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
+# can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
+# source and loads it straight into the kind nodes + external node; pods then pin this
+# exact tag with ImagePullPolicy=Never (see images.RapidClientImage / packet_size.go).
+# This mirrors the gcp-kubeadm side-load in .semaphore/.../load_images.sh (pr-<N>).
+# ?= so the gcp path's own RAPIDCLIENT_TAG wins if it ever runs through here; exported
+# so the ginkgo e2e process (which reads os.Getenv) inherits it across the sub-make.
+RAPIDCLIENT_TAG ?= kind-e2e
+export RAPIDCLIENT_TAG
+RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
+EXTERNAL_NODE_NAME ?= kind-external-node
 
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
@@ -266,6 +282,49 @@ e2e-test:
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
+## Create a kind cluster with the BPF dataplane plus an external node, and run
+## the sig-calico BPF e2e tests (including the ExternalNode specs).
+## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support
+## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
+## control-plane nodeSelector still matches.
+e2e-test-bpf:
+	$(MAKE) -C e2e build
+	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
+	$(MAKE) kind-load-rapidclient KIND_NAME=kind
+	$(KIND_DIR)/external-node.sh up
+	$(MAKE) external-node-load-rapidclient
+	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
+	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
+	# not trip over unrelated agent keys.
+	EXT_USER=ubuntu \
+	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
+	EXT_KEY=$(KIND_DIR)/external-node-key \
+	SSH_AUTH_SOCK= \
+	$(MAKE) e2e-run \
+		KIND_NAME=kind \
+		KUBECONFIG=$(KIND_KUBECONFIG) \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+
+## Build the rapidclient helper image from PR source and load it into the kind
+## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
+## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
+## is loaded directly with `kind load` to match the containerd-import + PullNever
+## model that images.RapidClientImage()/packet_size.go already use for gcp.
+.PHONY: kind-load-rapidclient
+kind-load-rapidclient:
+	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
+	$(KIND) load docker-image $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) --name $(KIND_NAME)
+
+## Load the (already-built) rapidclient image into the external node's inner docker
+## daemon, for the ExternalNode packet-size spec and maglev's `docker run`. The node
+## is a dind container, so we `docker exec` its dockerd directly as root (no sudo /
+## ssh, unlike the gcp external node in load_images.sh). Run after kind-load-rapidclient
+## (builds the host image) and external-node.sh up (creates the container).
+.PHONY: external-node-load-rapidclient
+external-node-load-rapidclient:
+	docker save $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) | docker exec -i $(EXTERNAL_NODE_NAME) docker load
+
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
@@ -277,7 +336,7 @@ e2e-test-clusternetworkpolicy:
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:

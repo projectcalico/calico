@@ -341,6 +341,24 @@ func (f *Felix) Stop() {
 		_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	}
 	f.FlowServerStop()
+
+	// Quiesce the neighbour tables before we free this container's network
+	// devices.  This works around a kernel use-after-free panic (observed on
+	// 6.17.0-1020-gcp) that reboots the test VM during teardown and flakes the
+	// FV suite.  When an unresolved ARP/ND neighbour times out, the kernel's
+	// neigh_invalidate() generates an ICMP "destination unreachable" for every
+	// packet still queued behind that neighbour
+	// (neigh_timer_handler -> arp_error_report -> ipv4_link_failure ->
+	// __icmp_send).  If the input device of a queued packet has already been
+	// torn down, __icmp_send -> icmp_route_lookup -> l3mdev_master_ifindex_rcu
+	// -> netdev_master_upper_dev_get_rcu dereferences the freed netdevice and
+	// panics in interrupt context.  Removing this container frees its veth (the
+	// docker0-bridged host side and the in-container side), so flushing the
+	// neighbour entries first drops any queued packets and cancels the
+	// retransmit timers, ensuring no timer can fire against a device we are
+	// about to free.  Best effort: teardown must not fail if these don't run.
+	f.drainNeighbours()
+
 	f.Container.Stop()
 
 	if ginkgo.CurrentSpecReport().Failed() {
@@ -348,6 +366,26 @@ func (f *Felix) Stop() {
 	} else {
 		Expect(f.DataRaces()).To(BeEmpty(), "Test PASSED but data races were detected in the logs at teardown.")
 	}
+}
+
+// drainNeighbours flushes neighbour (ARP/ND) state that could otherwise
+// outlive this container's network devices.  See the call site in Stop() for
+// the kernel panic this avoids.
+//
+// On the host we flush only the entries for this container's own addresses
+// (rather than the whole table) so that batches running in parallel on the
+// same host - as `make fv` does locally - are not disturbed.  Inside the
+// container, which is about to be destroyed, we flush everything.  All calls
+// are best effort.
+func (f *Felix) drainNeighbours() {
+	if f.IP != "" {
+		_ = utils.RunMayFail("ip", "neigh", "flush", "to", f.IP)
+	}
+	if f.IPv6 != "" {
+		_ = utils.RunMayFail("ip", "-6", "neigh", "flush", "to", f.IPv6)
+	}
+	f.ExecBestEffort("ip", "neigh", "flush", "all")
+	f.ExecBestEffort("ip", "-6", "neigh", "flush", "all")
 }
 
 func (f *Felix) Restart() {

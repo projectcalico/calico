@@ -128,6 +128,7 @@ func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
 	return BlockKey{CIDR: prefix.Masked()}
 }
 
+// +k8s:deepcopy-gen=true
 type AllocationBlock struct {
 	// The block's CIDR.
 	CIDR net.IPNet `json:"cidr"`
@@ -196,6 +197,13 @@ func (b *AllocationBlock) MarkDeleted() {
 
 func (b *AllocationBlock) IsDeleted() bool {
 	return b.Deleted
+}
+
+// Clone returns a copy of this block that can be modified without affecting
+// the original. It delegates to the generated DeepCopy so new fields are
+// handled automatically rather than silently dropped.
+func (b *AllocationBlock) Clone() *AllocationBlock {
+	return b.DeepCopy()
 }
 
 func (b *AllocationBlock) Host() string {
@@ -271,6 +279,7 @@ func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
 	return b.CIDR.NthIP(ord)
 }
 
+// +k8s:deepcopy-gen=true
 type AllocationAttribute struct {
 	// HandleID is the primary identifier for the allocation.
 	HandleID *string `json:"handle_id,omitempty"`
@@ -279,4 +288,12 @@ type AllocationAttribute struct {
 	// AlternateOwnerAttrs contains attributes of the previous or potential owner
 	// (used during live migration to track the source or target pod).
 	AlternateOwnerAttrs map[string]string `json:"alternateOwnerAttrs,omitempty"`
+	// ReleasedAt is the time this allocation was released, and is set during the allocation's
+	// "cooldown" phase. After `IPCooldownSeconds` have elapsed, the IP is deallocated (moved
+	// from `Allocated` to `Unallocated`).
+	ReleasedAt *metav1.Time `json:"releasedAt,omitempty"`
+}
+
+func (a AllocationAttribute) Clone() AllocationAttribute {
+	return *a.DeepCopy()
 }

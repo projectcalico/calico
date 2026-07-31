@@ -35,10 +35,10 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/netlinkshim/handlemgr"
 	"github.com/projectcalico/calico/felix/timeshim"
+	"github.com/projectcalico/calico/lib/logrusr"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -171,7 +171,7 @@ type RouteTable struct {
 
 	nl *handlemgr.HandleManager
 
-	opReporter       logutils.OpRecorder
+	opReporter       logrusr.OpRecorder
 	livenessCallback func()
 
 	// The route deletion grace period.
@@ -265,7 +265,7 @@ func New(
 	defaultRouteProtocol netlink.RouteProtocol,
 	removeExternalRoutes bool,
 	tableIndex int,
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 	featureDetector environment.FeatureDetectorIface,
 	opts ...Opt,
 ) *RouteTable {
@@ -776,6 +776,7 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 		Src:      src,
 		OnLink:   bestTarget.Flags()&unix.RTNH_F_ONLINK != 0,
 		Protocol: proto,
+		MTU:      bestTarget.MTU,
 	}
 	if len(bestTarget.MultiPath) > 0 {
 		// Note: GW/Ifindex deliberately left unset; the kernel reports
@@ -794,7 +795,6 @@ func (r *RouteTable) recalculateDesiredKernelRoute(routeKey RouteKey) {
 	} else {
 		kernRoute.GW = bestTarget.GW
 		kernRoute.Ifindex = bestIfaceIdx
-		kernRoute.MTU = bestTarget.MTU
 	}
 	if log.IsLevelEnabled(log.DebugLevel) && !reflect.DeepEqual(oldDesiredRoute, kernRoute) {
 		r.logCxt.WithFields(log.Fields{

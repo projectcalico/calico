@@ -23,6 +23,7 @@ BINDIR?=bin
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/internalapi/zz_generated.deepcopy.go, $(wildcard ./lib/apis/internalapi/*.go))
+MODEL_SRCS := $(filter-out ./lib/backend/model/zz_generated.deepcopy.go, $(wildcard ./lib/backend/model/*.go))
 
 .PHONY: clean
 clean:
@@ -35,6 +36,7 @@ clean:
 GENERATED_FILES:=./lib/apis/internalapi/zz_generated.deepcopy.go \
 	./lib/apis/internalapi/generated.openapi.go \
 	./lib/apis/v1/generated.openapi.go \
+	./lib/backend/model/zz_generated.deepcopy.go \
 	./lib/selector/tokenizer/kind_string.go
 
 .PHONY: gen-files
@@ -49,7 +51,7 @@ gen-crds:
 	rm -rf config/crd
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
-	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1,deprecatedV1beta1CompatibilityPreserveUnknownFields=false paths=./lib/apis/... output:crd:dir=config/crd/'
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./lib/apis/... output:crd:dir=config/crd/'
 	rm -f config/crd/_.yaml
 	rm -f config/crd/_nodes.yaml
 	# Remove the first yaml separator line.
@@ -65,6 +67,13 @@ gen-crds:
 		--go-header-file "./docs/boilerplate.go.txt" \
 		--output-file zz_generated.deepcopy.go \
 		"$(PACKAGE_NAME)/lib/apis/internalapi"'
+
+./lib/backend/model/zz_generated.deepcopy.go: $(MODEL_SRCS)
+	$(DOCKER_GO_BUILD) sh -c 'deepcopy-gen \
+		--v 1 --logtostderr \
+		--go-header-file "./docs/boilerplate.go.txt" \
+		--output-file zz_generated.deepcopy.go \
+		"$(PACKAGE_NAME)/lib/backend/model"'
 
 # Generate OpenAPI spec
 ./lib/apis/internalapi/generated.openapi.go: $(APIS_SRCS)

@@ -84,6 +84,22 @@ type (
 	ndpConnFactory   func(ifaceName string) (ndpConn, net.HardwareAddr, error)
 )
 
+// tickerShim is the minimal slice of *time.Ticker the periodic re-announce loop
+// uses, abstracted so unit tests can drive ticks by hand rather than waiting on
+// a real wall-clock interval (which flakes under load).
+type tickerShim interface {
+	Chan() <-chan time.Time
+	Stop()
+}
+
+// newTickerFunc constructs a tickerShim for the given interval.
+type newTickerFunc func(time.Duration) tickerShim
+
+// realTicker adapts *time.Ticker to tickerShim.
+type realTicker struct{ *time.Ticker }
+
+func (t realTicker) Chan() <-chan time.Time { return t.C }
+
 // proxyNeighManager automatically responds to ARP (IPv4) and NDP (IPv6) requests for
 // pod and LoadBalancer IPs that fall within the same L2 subnet as a host interface.
 // It listens on raw sockets and responds directly in userspace.
@@ -124,6 +140,11 @@ type proxyNeighManager struct {
 
 	arpFactory arpClientFactory
 	ndpFactory ndpConnFactory
+
+	// newTicker constructs the ticker that drives periodic re-announcement.
+	// Real time in production; overridden by unit tests to fire ticks
+	// deterministically.
+	newTicker newTickerFunc
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -169,7 +190,7 @@ func newProxyNeighManager(dpConfig Config, ipVersion uint8) *proxyNeighManager {
 			if err != nil {
 				return nil, nil, err
 			}
-			conn, _, err := ndp.Listen(ifi, ndp.Unspecified)
+			conn, _, err := ndp.Listen(ifi, ndp.LinkLocal)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -234,6 +255,7 @@ func newProxyNeighManagerWithShims(
 		nlHandle:         nl,
 		arpFactory:       af,
 		ndpFactory:       nf,
+		newTicker:        func(d time.Duration) tickerShim { return realTicker{time.NewTicker(d)} },
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -524,6 +546,7 @@ func (m *proxyNeighManager) startListener(ifaceName string) error {
 		ifaceName:        ifaceName,
 		readTimeout:      m.readTimeout,
 		announceInterval: m.announceInterval,
+		newTicker:        m.newTicker,
 		reconcile:        make(chan struct{}, 1),
 		announced:        set.New[string](),
 		done:             make(chan struct{}),
@@ -590,6 +613,9 @@ type ifaceListener struct {
 	// Zero or negative disables periodic re-announcement (only the initial
 	// announce on add fires).
 	announceInterval time.Duration
+
+	// newTicker constructs the re-announce ticker; injectable so tests drive it.
+	newTicker newTickerFunc
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -782,10 +808,13 @@ func (l *ifaceListener) runNDPListener() {
 		// If the NS source is the unspecified address (::), this is a
 		// Duplicate Address Detection probe (RFC 4862). We can't unicast
 		// back to ::, so reply to the all-nodes multicast address and
-		// clear the Solicited flag (RFC 4861 §4.4).
+		// clear the Solicited flag (RFC 4861 §4.4). The socket tags the
+		// source with the interface zone (e.g. ::%eth0) and
+		// netip.Addr.IsUnspecified is zone-sensitive, so strip the zone
+		// before the test.
 		dst := srcAddr
 		solicited := true
-		if !srcAddr.IsValid() || srcAddr.IsUnspecified() {
+		if src := srcAddr.WithZone(""); !src.IsValid() || src.IsUnspecified() {
 			dst = netip.MustParseAddr(ipv6AllNodesMulticast)
 			solicited = false
 		}
@@ -822,9 +851,9 @@ func (l *ifaceListener) runListener(proto string, setDeadline func(time.Time) er
 	// forwarding tables stay warm even when the desired set is unchanged.
 	var refreshC <-chan time.Time
 	if l.announceInterval > 0 {
-		ticker := time.NewTicker(l.announceInterval)
+		ticker := l.newTicker(l.announceInterval)
 		defer ticker.Stop()
-		refreshC = ticker.C
+		refreshC = ticker.Chan()
 	}
 
 	logCtx := logrus.WithFields(logrus.Fields{"iface": l.ifaceName, "proto": proto})

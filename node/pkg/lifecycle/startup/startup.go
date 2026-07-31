@@ -971,7 +971,6 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	if ipv4PoolEnabled {
 		ipv4IpipModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 		ipv4VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
-		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
 
 		ipv4BlockSizeEnvVar = os.Getenv("CALICO_IPV4POOL_BLOCK_SIZE")
 		if ipv4BlockSizeEnvVar != "" {
@@ -1005,6 +1004,8 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	}
 
 	if ipv6PoolEnabled {
+		ipv6VXLANModeEnvVar = strings.ToLower(os.Getenv("CALICO_IPV6POOL_VXLAN"))
+
 		ipv6BlockSizeEnvVar = os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
 		if ipv6BlockSizeEnvVar != "" {
 			ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)

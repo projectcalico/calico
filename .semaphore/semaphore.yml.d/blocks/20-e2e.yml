@@ -43,6 +43,9 @@
             value: "projectcalico.org/v3"
           - name: E2E_TEST_CONFIG
             value: "e2e/config/kind-felix-routing.yaml"
+      - name: "E2E tests: sig-calico (dataplane: BPF)"
+        commands:
+          - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
     epilogue:
       always:
         commands:
