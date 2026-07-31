@@ -49,13 +49,13 @@ github.com/google/btree v1.1.3
 github.com/google/cel-go v0.29.0
 github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
+github.com/google/nftables v0.3.0
 github.com/google/uuid v1.6.0
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 github.com/jedib0t/go-pretty/v6 v6.8.1
 github.com/jinzhu/copier v0.4.0
 github.com/joho/godotenv v1.5.1
-github.com/josharian/native v1.1.0
 github.com/json-iterator/go v1.1.12
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 github.com/kelseyhightower/envconfig v1.4.0
@@ -64,7 +64,7 @@ github.com/leodido/go-urn v1.4.0
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
 github.com/mattn/go-runewidth v0.0.19
 github.com/mdlayher/genetlink v1.3.2
-github.com/mdlayher/netlink v1.7.2
+github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 github.com/mitchellh/go-wordwrap v1.0.1

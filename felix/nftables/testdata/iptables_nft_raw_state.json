@@ -1,0 +1,97 @@
+{
+  "chains": [
+    {
+      "name": "PREROUTING"
+    },
+    {
+      "name": "OUTPUT"
+    },
+    {
+      "name": "cali-OUTPUT"
+    },
+    {
+      "name": "cali-PREROUTING"
+    },
+    {
+      "name": "cali-from-host-endpoint"
+    },
+    {
+      "name": "cali-rpf-skip"
+    },
+    {
+      "name": "cali-to-host-endpoint"
+    }
+  ],
+  "rules": [
+    {
+      "chain": "PREROUTING",
+      "handle": 8,
+      "comment": "cali:6gwbT8clXdHdC1b1",
+      "jumpTarget": "cali-PREROUTING"
+    },
+    {
+      "chain": "OUTPUT",
+      "handle": 9,
+      "comment": "cali:tVnHkvAo15HuiPy0",
+      "jumpTarget": "cali-OUTPUT"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 10,
+      "comment": "cali:clI8WObfCl4yhr60"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 11,
+      "comment": "cali:ZbkN6P8OdRcBRPpU",
+      "jumpTarget": "cali-to-host-endpoint"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 12,
+      "comment": "cali:ry5_UEpt1OaPPCxO"
+    },
+    {
+      "chain": "cali-OUTPUT",
+      "handle": 13,
+      "comment": "cali:MGhICIksKDnYMIkW"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 14,
+      "comment": "cali:DQ6LK2guiBRMyrLK"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 15,
+      "comment": "cali:sIsu2aAqNN6K3YYn"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 16,
+      "comment": "cali:W0qKAga6QivxLxL1"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 17,
+      "comment": "cali:QOYCZUivPyJL6Dp1",
+      "jumpTarget": "cali-rpf-skip"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 18,
+      "comment": "cali:uvipz_NmQPrGYnTB"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 19,
+      "comment": "cali:pj4jqF0K2OCNLmzX",
+      "jumpTarget": "cali-from-host-endpoint"
+    },
+    {
+      "chain": "cali-PREROUTING",
+      "handle": 20,
+      "comment": "cali:Jefg6QI5khJcHnVl"
+    }
+  ]
+}
