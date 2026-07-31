@@ -201,6 +201,7 @@ local:kube-controllers/pkg/converter
 local:kube-controllers/pkg/discovery
 local:kube-controllers/pkg/kubecontrollers
 local:kube-controllers/pkg/status
+local:lib/logrusr
 local:lib/std/chanutil
 local:lib/std/log
 local:lib/std/time
@@ -225,8 +226,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/kubevirt
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net
@@ -242,4 +241,4 @@ local:libcalico-go/lib/winutils
 local:pkg/buildinfo
 local:pkg/cmdwrapper
 local:typha/pkg/config
-local:typha/pkg/logutils
+local:typha/pkg/logging
