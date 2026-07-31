@@ -73,15 +73,27 @@ var _ = Describe("IPIPManager", func() {
 		)
 	})
 
-	It("should report whether the parent device actually changed", func() {
-		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
-		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeFalse())
-		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("bond0")).To(BeTrue())
+	It("should mark the dataplane dirty when the parent device changes", func() {
+		dp := &InternalDataplane{}
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
 	})
 
 	It("should leave the parent device alone when handed an empty name", func() {
-		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")).To(BeTrue())
-		Expect(ipipMgr.routeMgr.OnParentDeviceUpdate("")).To(BeFalse())
+		dp := &InternalDataplane{}
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
 		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
 	})
 
