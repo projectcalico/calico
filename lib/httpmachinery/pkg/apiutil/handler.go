@@ -47,11 +47,10 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/codec"
 	apicontext "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
 // listOrStreamHandler is a handler that responds with either a json list or a server side event stream.
@@ -92,7 +91,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 
 	rsp := l.f(ctx, *params)
 	if err := rsp.ResponseWriter().WriteResponse(ctx, rsp.Status(), w); err != nil {
-		logrus.WithError(err).Error("failed to write response")
+		log.Error("failed to write response", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "Internal Server Error")
 	}
 }
@@ -100,7 +99,7 @@ func (l genericHandler[RequestParams, Body]) ServeHTTP(cfg RouterConfig, w http.
 func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterConfig, w http.ResponseWriter, req *http.Request) *RequestParams {
 	params, err := codec.DecodeAndValidateRequestParams[RequestParams](ctx, cfg.URLVars, req)
 	if err != nil {
-		ctx.Logger().WithError(err).Debug("Failed to decode request params.")
+		ctx.Logger().Debug("Failed to decode request params.", "error", err)
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return nil
 	}
@@ -111,7 +110,7 @@ func parseRequestParams[RequestParams any](ctx apicontext.Context, cfg RouterCon
 func writeJSONResponse(w http.ResponseWriter, src any) {
 	w.Header().Set(header.ContentType, header.ApplicationJSON)
 	if err := json.NewEncoder(w).Encode(src); err != nil {
-		logrus.WithError(err).Error("Failed to encode response.")
+		log.Error("Failed to encode response.", "error", err)
 	}
 }
 

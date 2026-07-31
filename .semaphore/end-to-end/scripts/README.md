@@ -20,6 +20,7 @@ sourced individually when reproducing part of a CI run locally.
 | `phases/install.sh` | `bz install` (install Calico on the provisioned cluster) |
 | `phases/configure.sh` | Post-install env setup: PATH, external-node creds, IPAM pool, failsafe ports |
 | `phases/migrate.sh` | Optional operator migration, AKS migration, `bz upgrade` |
+| `phases/load_images.sh` | Side-load PR-built helper images (rapidclient) onto nodes; no-op except on the local-binary gcp-kubeadm PR path |
 | `phases/run_tests.sh` | Acquire and run the e2e binary (local build, hashrelease download, or `bz tests` fallback) |
 | `phases/hcp.sh` | Hosted control plane flow (separate provision + test tooling) |
 

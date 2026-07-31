@@ -28,11 +28,7 @@ sub-build-%:
 	$(MAKE) build ARCH=$*
 
 bin/confd-$(ARCH): $(SRC_FILES)
-ifeq ($(FIPS),true)
-	$(call build_cgo_boring_binary, $(PACKAGE_NAME), $@)
-else
 	$(call build_binary, $(PACKAGE_NAME), $@)
-endif
 	ln -sf confd-$(ARCH) bin/confd
 
 ###############################################################################

@@ -3,6 +3,7 @@
 package externalnode
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -187,6 +188,77 @@ func (e *Client) RunIperfCmd(iperfCmd string, timeoutSecs int) string {
 	Expect(err).NotTo(HaveOccurred())
 
 	return output
+}
+
+func joinArgs(parts ...string) string {
+	return strings.Join(parts, " ")
+}
+
+// RunContainer launches a container by name on the external node. flags carry
+// extra `docker run` options (e.g. -d, --privileged, --network host); args are
+// appended after the image and become the container command. Returns the raw
+// `docker run` stdout (typically the container ID for detached runs).
+//
+// For one-shot probes, prefer RunContainerOnce (which sets --rm).
+func (e *Client) RunContainer(name, image string, flags []string, args ...string) (string, error) {
+	cmd := "sudo docker run " + joinArgs(flags...) + " --name " + name + " " + image
+	if len(args) > 0 {
+		cmd = cmd + " " + joinArgs(args...)
+	}
+	return e.Exec("/bin/sh", "-c", cmd)
+}
+
+// RunContainerOnce runs an unnamed container with --rm semantics: exec,
+// capture stdout, container is removed on exit. Useful for one-shot probes
+// where the caller only cares about the captured output.
+func (e *Client) RunContainerOnce(image string, flags []string, args ...string) (string, error) {
+	cmd := "sudo docker run --rm " + joinArgs(flags...) + " " + image
+	if len(args) > 0 {
+		cmd = cmd + " " + joinArgs(args...)
+	}
+	return e.Exec("/bin/sh", "-c", cmd)
+}
+
+// RemoveContainer force-removes a container by name. Tolerates a missing
+// container so cleanup paths never fail on a re-run.
+func (e *Client) RemoveContainer(name string) error {
+	_, err := e.Exec("/bin/sh", "-c", fmt.Sprintf("sudo docker rm -f %s 2>/dev/null", name))
+	return err
+}
+
+// IsContainerRunning reports whether the named container exists and is in the
+// Running state. Wrap in Eventually for readiness polling.
+func (e *Client) IsContainerRunning(name string) (bool, error) {
+	out, err := e.Exec("/bin/sh", "-c",
+		fmt.Sprintf("sudo docker inspect -f '{{.State.Running}}' %s 2>&1", name))
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) == "true", nil
+}
+
+// RunInContainer executes args inside an already-running named container via
+// `docker exec`. Returns the command's stdout.
+func (e *Client) RunInContainer(name string, args ...string) (string, error) {
+	cmd := "sudo docker exec " + name + " " + joinArgs(args...)
+	return e.Exec("/bin/sh", "-c", cmd)
+}
+
+// WriteFileInContainer writes contents to path inside the named container,
+// using base64 to safely transport binary or multi-line data over docker exec
+// stdin without shell-quoting hazards.
+func (e *Client) WriteFileInContainer(name, path string, contents []byte) error {
+	encoded := base64.StdEncoding.EncodeToString(contents)
+	cmd := fmt.Sprintf("echo %s | base64 -d | sudo docker exec -i %s tee %s > /dev/null",
+		encoded, name, path)
+	_, err := e.Exec("/bin/sh", "-c", cmd)
+	return err
+}
+
+// ContainerLogs returns the container runtime's captured stdout/stderr for
+// the named container.
+func (e *Client) ContainerLogs(name string) (string, error) {
+	return e.Exec("/bin/sh", "-c", fmt.Sprintf("sudo docker logs %s 2>/dev/null", name))
 }
 
 func (e *Client) TestCalicoServiceReady(service string) error {

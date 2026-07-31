@@ -1097,8 +1097,8 @@ func TestMatchNets(t *testing.T) {
 			dstFlow := &mocks.Flow{}
 			dstFlow.On("GetDestIP").Return(dstIP)
 
-			srcResult := matchSrcNet(&proto.Rule{SrcNet: tc.nets}, &requestCache{srcFlow, nil})
-			dstResult := matchDstNet(&proto.Rule{DstNet: tc.nets}, &requestCache{dstFlow, nil})
+			srcResult := matchSrcNet(&proto.Rule{SrcNet: tc.nets}, &requestCache{Flow: srcFlow})
+			dstResult := matchDstNet(&proto.Rule{DstNet: tc.nets}, &requestCache{Flow: dstFlow})
 
 			Expect(srcResult).To(Equal(tc.srcResult), "Test case: %s", tc.title)
 			Expect(dstResult).To(Equal(tc.dstResult), "Test case: %s", tc.title)
@@ -1221,7 +1221,7 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 			fl.On("GetDestPort").Return(tc.destPort)
 			fl.On("GetProtocol").Return(tc.proto)
 
-			req := &requestCache{fl, store}
+			req := &requestCache{Flow: fl, store: store}
 			Expect(matchDstIPPortSetIds(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
 		})
 	}

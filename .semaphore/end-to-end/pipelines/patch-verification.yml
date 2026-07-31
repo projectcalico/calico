@@ -498,6 +498,28 @@ blocks:
             # - name: ENABLE_NODE_LOCAL_DNS_CACHE # nodelocaldns - doesn't appear to work with RKE2
             #   value: "true"
 
+  - name: "KubeVirt e2e tests"
+    dependencies: []
+    task:
+      jobs:
+        - name: KubeVirt IP persistence and live migration
+          execution_time_limit:
+            hours: 4
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            - name: K8S_VERSION
+              value: "stable-1.35"
+      env_vars:
+        - name: PROVISIONER
+          value: "gcp-kubeadm"
+        - name: INSTALLER
+          value: "operator"
+        - name: NUM_KUBEVIRT_VMS
+          value: "2"
+        - name: E2E_TEST_CONFIG
+          value: "e2e/config/gcp-kubevirt.yaml"
+
   # operator, calicocni, 4.18, amd64, bpf, ipv4, openshift, RHCOS, kdd, n/a, no-kube-proxy, autohep
   # Openshift needs f1-standard-2 (more disk) so it lives in its own block.
   - name: "Openshift"

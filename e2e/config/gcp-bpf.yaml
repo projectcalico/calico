@@ -32,3 +32,9 @@ exclude:
 
     - label: RequiresXtables
       reason: "requires iptables or nftables dataplane, but this cluster uses BPF"
+
+    - label: RequiresCalicoAPIServer
+      reason: "this job runs with USE_API_SERVER=false (v3 CRD mode, no aggregated Calico API server)"
+
+    - label: Feature:KubeVirt
+      reason: "e2e infra integration with Banzai not ready, currently run manually"

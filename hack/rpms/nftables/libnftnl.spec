@@ -7,7 +7,7 @@ Name:           libnftnl
 Version:        1.2.8
 Release:        1.tigera%{?dist}
 Summary:        Library for low-level interaction with nftables Netlink's API
-License:        LGPL-2.1-or-later
+License:        GPL-2.0-or-later
 URL:            https://netfilter.org/projects/libnftnl/
 Source0:        https://netfilter.org/projects/libnftnl/files/libnftnl-%{version}.tar.xz
 

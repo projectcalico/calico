@@ -21,17 +21,18 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/header"
+	"github.com/projectcalico/calico/lib/std/log"
 )
 
-// Key is used to ensure we don't have collisions with existing keys.
-type Key string
+// ctxKey is an unexported type used to namespace this package's context
+// keys so they cannot collide with keys defined in other packages.
+type ctxKey int
 
 const (
-	ctxRequestIdKey Key = "requestId"
-	ctxLoggerKey    Key = "logger"
+	ctxRequestIdKey ctxKey = iota
+	ctxLoggerKey
 )
 
 // Context wraps context.Context, providing convenience methods for accessing the values that must be set in the context.
@@ -39,7 +40,7 @@ const (
 // without going through this package, and the constructors ensure that these values are set properly.
 type Context interface {
 	context.Context
-	Logger() *logrus.Entry
+	Logger() log.Logger
 	RequestID() string
 }
 
@@ -53,8 +54,7 @@ func NewRequestContext(req *http.Request) Context {
 		requestID = uuid.New().String()
 	}
 
-	logger := logrus.NewEntry(logrus.StandardLogger())
-	logger = logger.WithField("requestID", requestID)
+	logger := log.With("requestID", requestID)
 
 	ctx := context.WithValue(req.Context(), ctxRequestIdKey, requestID)
 	ctx = context.WithValue(ctx, ctxLoggerKey, logger)
@@ -62,14 +62,14 @@ func NewRequestContext(req *http.Request) Context {
 	return &requestContext{Context: ctx}
 }
 
-func (ctx *requestContext) Logger() *logrus.Entry {
+func (ctx *requestContext) Logger() log.Logger {
 	// We don't validate the type since it should be impossible to get a requestContext without this set properly. If
 	// it's not set, we want to panic since this is a developer error.
-	return ctx.Value(ctxLoggerKey).(*logrus.Entry)
+	return ctx.Value(ctxLoggerKey).(log.Logger)
 }
 
 func (ctx *requestContext) RequestID() string {
 	// We don't validate the type since it should be impossible to get a requestContext without this set properly. If
 	// it's not set, we want to panic since this is a developer error.
-	return ctx.Context.Value(ctxRequestIdKey).(string)
+	return ctx.Value(ctxRequestIdKey).(string)
 }

@@ -49,8 +49,7 @@ manifest_dir="${SCRIPT_DIR}/../manifests"
 
 manifest_images_raw=$(
   grep -rhoE 'image:\s*["'\''"]?[a-z0-9./_-]+:[a-zA-Z0-9._-]+' "$manifest_dir" \
-  | sed -E 's/image:\s*["'\''"]?//' \
-  | grep -v -- '-fips'
+  | sed -E 's/image:\s*["'\''"]?//'
 )
 
 # Step 1.1: Normalize and adjust image paths
@@ -84,7 +83,7 @@ manifest_images=$(
 )
 
 count=$(echo "$manifest_images" | wc -l)
-echo "Total unique images (excluding -fips): ${count}"
+echo "Total unique images: ${count}"
 
 #########################################
 # Step 2: Check availability with retries

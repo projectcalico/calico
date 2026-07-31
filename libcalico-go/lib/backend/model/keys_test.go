@@ -15,6 +15,7 @@
 package model
 
 import (
+	"net/netip"
 	"reflect"
 	"testing"
 
@@ -22,8 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 )
 
 // interestingPaths contains seed data for the KeyFromDefaultPath fuzzer.
@@ -114,6 +113,13 @@ func FuzzKeyFromDefaultPath(f *testing.F) {
 			// and consistent in some areas of escaping.
 			return
 		}
+
+		// All Key implementations must be comparable so they can be used as
+		// Go map keys and compared with ==.
+		if !reflect.TypeOf(newKey).Comparable() {
+			t.Fatalf("Key type %T is not comparable", newKey)
+		}
+
 		// If the old can parse it the new should parse it too (and get the same Key).
 		if !safeKeysEqual(oldKey, newKey) {
 			t.Fatalf("%q -> (new output) %v != (old output) %v", path, newKey, oldKey)
@@ -150,10 +156,6 @@ func safeKeysEqual(a, b Key) bool {
 		return false
 	}
 
-	// Due to an unfortunate historical mistake some of our keys embed non-comparable types net.IP and friends.
-	if !reflect.ValueOf(a).Type().Comparable() || !reflect.ValueOf(b).Type().Comparable() {
-		return reflect.DeepEqual(a, b)
-	}
 	return a == b
 }
 
@@ -283,7 +285,7 @@ var _ = DescribeTable(
 	Entry(
 		"IP pool",
 		"/calico/v1/ipam/v4/pool/10.0.0.0-8",
-		IPPoolKey{CIDR: mustParseCIDR("10.0.0.0/8")},
+		IPPoolKey{CIDR: netip.MustParsePrefix("10.0.0.0/8")},
 		false,
 	),
 	Entry(
@@ -520,7 +522,7 @@ var _ = DescribeTable(
 	Entry(
 		"Block affinity claims with confirmed state",
 		BlockAffinityKey{
-			CIDR: mustParseCIDR("172.29.128.64/26"),
+			CIDR: netip.MustParsePrefix("172.29.128.64/26").Masked(),
 			Host: "happyhost.io",
 		},
 		`{"state":"confirmed"}`,
@@ -529,7 +531,7 @@ var _ = DescribeTable(
 	Entry(
 		"Block affinity claims with pending state",
 		BlockAffinityKey{
-			CIDR: mustParseCIDR("172.29.128.0/26"),
+			CIDR: netip.MustParsePrefix("172.29.128.0/26"),
 			Host: "slightlyhappyhost.io",
 		},
 		`{"state":"pending"}`,
@@ -538,7 +540,7 @@ var _ = DescribeTable(
 	Entry(
 		"Block affinity claims with pending-deletion state",
 		BlockAffinityKey{
-			CIDR: mustParseCIDR("172.29.128.192/26"),
+			CIDR: netip.MustParsePrefix("172.29.128.192/26").Masked(),
 			Host: "notsohappyhost.io",
 		},
 		`{"state":"pendingDeletion"}`,
@@ -547,7 +549,7 @@ var _ = DescribeTable(
 	Entry(
 		"Pre-3.0.7 style block affinity claims with no state i.e. empty string in value",
 		BlockAffinityKey{
-			CIDR: mustParseCIDR("172.29.128.128/26"),
+			CIDR: netip.MustParsePrefix("172.29.128.128/26").Masked(),
 			Host: "oldhost.io",
 		},
 		``,
@@ -556,7 +558,7 @@ var _ = DescribeTable(
 	Entry(
 		"Block affinity claims with empty state {} in value",
 		BlockAffinityKey{
-			CIDR: mustParseCIDR("172.29.128.128/26"),
+			CIDR: netip.MustParsePrefix("172.29.128.128/26").Masked(),
 			Host: "oldhost.io",
 		},
 		`{}`,
@@ -636,14 +638,6 @@ var _ = DescribeTable(
 		},
 	),
 )
-
-func mustParseCIDR(s string) net.IPNet {
-	_, ipNet, err := net.ParseCIDR(s)
-	if err != nil {
-		panic(err)
-	}
-	return *ipNet
-}
 
 var (
 	benchResult any

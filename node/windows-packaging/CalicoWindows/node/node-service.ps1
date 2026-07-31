@@ -20,13 +20,13 @@ ipmo .\libs\hns\hns.psm1 -Force -DisableNameChecking
 
 function Get-TokenRefresherPid()
 {
-    return $(Get-WmiObject Win32_Process -Filter "name = 'calico-node.exe'" | Select-Object CommandLine, ProcessId | Where-Object -Property CommandLine -match ".*calico-node.exe.*monitor-token.*").ProcessId
+    return $(Get-WmiObject Win32_Process -Filter "name = 'calico.exe'" | Select-Object CommandLine, ProcessId | Where-Object -Property CommandLine -match ".*calico.exe.*monitor-token.*").ProcessId
 }
 
 function Start-TokenRefresher()
 {
     Write-Host "Starting Calico token refresher..."
-    Start-Process -NoNewWindow .\calico-node.exe -ArgumentList "node","monitor-token"
+    Start-Process -NoNewWindow .\calico.exe -ArgumentList "component","node","monitor-token"
     Write-Host "Calico token refresher running on PID" $(Get-TokenRefresherPid)
 }
 
@@ -185,7 +185,7 @@ while ($True)
 {
     try
     {
-        # Run calico-node.exe if kubelet starts/restarts
+        # Run calico.exe if kubelet starts/restarts
         $currentKubeletPid = (Get-Process -Name kubelet -ErrorAction Stop).id
         if ($currentKubeletPid -NE $kubeletPid)
         {
@@ -193,7 +193,7 @@ while ($True)
             $kubeletPid = $currentKubeletPid
             while ($true)
             {
-                .\calico-node.exe node startup --complete-startup
+                .\calico.exe component node startup --complete-startup
                 if ($LastExitCode -EQ 0)
                 {
                     Write-Host "Calico node initialisation succeeded; monitoring kubelet for restarts..."

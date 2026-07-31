@@ -36,6 +36,7 @@ import (
 
 // Define the nodeService as per the CSI spec.
 type nodeService struct {
+	csi.UnimplementedNodeServer
 	config *ConfigurationOptions
 }
 

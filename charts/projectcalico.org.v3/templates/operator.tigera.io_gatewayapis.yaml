@@ -83,6 +83,31 @@ spec:
                     - name
                     - namespace
                   type: object
+                extensions:
+                  description: |-
+                    Extensions enables and configures Tigera-built add-ons that sit on top of the
+                    Gateway API data plane.  Each add-on is opt-in: an unset Extensions, an unset
+                    add-on field, and an empty add-on object all leave the add-on disabled.
+                  properties:
+                    waf:
+                      description: |-
+                        WAF enables and configures the Tigera Web Application Firewall (Coraza WASM
+                        when WAF.State is nil, and when WAF.State is "Disabled", the operator does
+                        not render the WAF env vars or RBAC on calico-kube-controllers.  Set
+                        WAF.State = "Enabled" to turn the feature on.  See design
+                        `tigera/designs#25` (PMREQ-384) for the full surface.
+                      properties:
+                        state:
+                          description: |-
+                            State turns the WAF Gateway API add-on on or off.  Default (nil or
+                            "Disabled") means the operator does not render the WAF surface on
+                            calico-kube-controllers.  Set to "Enabled" to opt in.
+                          enum:
+                            - Enabled
+                            - Disabled
+                          type: string
+                      type: object
+                  type: object
                 gatewayCertgenJob:
                   description: Allows customization of the gateway certgen job.
                   properties:

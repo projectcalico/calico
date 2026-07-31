@@ -49,6 +49,10 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
+	$(MAKE) -C third_party/envoy-gateway clean
+	$(MAKE) -C third_party/envoy-proxy clean
+	$(MAKE) -C third_party/envoy-ratelimit clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -100,6 +104,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
@@ -141,6 +146,13 @@ $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
 
+# bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
+# Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
+# that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
+# can run it without the go-build container.
+bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ ./hack/perf/cmd/send-perf-results"
+
 CHART_DESTINATION ?= ./bin
 
 # Build helm charts.
@@ -181,16 +193,18 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 #   make image                                              # build + tag as calico/<name>:<version>
 #   make push DEV_IMAGE_PATH=myuser DEV_IMAGE_TAG=latest    # build + tag + push to myuser/<name>:latest
 #
-# Component images are independent targets, so `make -jN` builds them in
-# parallel (e.g., `make -j4 push DEV_IMAGE_PATH=myuser`).
+# Component images are independent targets and build in parallel up to
+# NUM_BUILD_JOBS (default 4 to keep memory usage sane on a workstation;
+# raise via NUM_BUILD_JOBS=8 etc. for a bigger machine).
 #
 # To force a full rebuild, remove the stamp directory:
 #   rm -rf .dev-stamps && make push ...
 ###############################################################################
 
 .PHONY: image
-## Build all component images and tag for dev registry. Supports make -jN for parallel builds.
-image: $(KIND_IMAGE_MARKERS)
+## Build all component images and tag for dev registry.
+image:
+	$(MAKE) -j$(NUM_BUILD_JOBS) $(KIND_IMAGE_MARKERS)
 	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
 	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
@@ -228,6 +242,7 @@ push-chart: bin/helm
 # using a local kind cluster.
 ###############################################################################
 E2E_PROCS ?= 4
+E2E_TIMEOUT ?= 90m
 E2E_TEST_CONFIG ?= e2e/config/kind.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
@@ -235,10 +250,22 @@ K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamed
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
+# rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
+# can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
+# source and loads it straight into the kind nodes + external node; pods then pin this
+# exact tag with ImagePullPolicy=Never (see images.RapidClientImage / packet_size.go).
+# This mirrors the gcp-kubeadm side-load in .semaphore/.../load_images.sh (pr-<N>).
+# ?= so the gcp path's own RAPIDCLIENT_TAG wins if it ever runs through here; exported
+# so the ginkgo e2e process (which reads os.Getenv) inherits it across the sub-make.
+RAPIDCLIENT_TAG ?= kind-e2e
+export RAPIDCLIENT_TAG
+RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
+EXTERNAL_NODE_NAME ?= kind-external-node
+
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
 kind-up:
-	$(MAKE) -j$$(nproc) kind-build-images
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
@@ -255,6 +282,49 @@ e2e-test:
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
+## Create a kind cluster with the BPF dataplane plus an external node, and run
+## the sig-calico BPF e2e tests (including the ExternalNode specs).
+## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support
+## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
+## control-plane nodeSelector still matches.
+e2e-test-bpf:
+	$(MAKE) -C e2e build
+	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
+	$(MAKE) kind-load-rapidclient KIND_NAME=kind
+	$(KIND_DIR)/external-node.sh up
+	$(MAKE) external-node-load-rapidclient
+	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
+	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
+	# not trip over unrelated agent keys.
+	EXT_USER=ubuntu \
+	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
+	EXT_KEY=$(KIND_DIR)/external-node-key \
+	SSH_AUTH_SOCK= \
+	$(MAKE) e2e-run \
+		KIND_NAME=kind \
+		KUBECONFIG=$(KIND_KUBECONFIG) \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+
+## Build the rapidclient helper image from PR source and load it into the kind
+## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
+## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
+## is loaded directly with `kind load` to match the containerd-import + PullNever
+## model that images.RapidClientImage()/packet_size.go already use for gcp.
+.PHONY: kind-load-rapidclient
+kind-load-rapidclient:
+	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
+	$(KIND) load docker-image $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) --name $(KIND_NAME)
+
+## Load the (already-built) rapidclient image into the external node's inner docker
+## daemon, for the ExternalNode packet-size spec and maglev's `docker run`. The node
+## is a dind container, so we `docker exec` its dockerd directly as root (no sudo /
+## ssh, unlike the gcp external node in load_images.sh). Run after kind-load-rapidclient
+## (builds the host image) and external-node.sh up (creates the container).
+.PHONY: external-node-load-rapidclient
+external-node-load-rapidclient:
+	docker save $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) | docker exec -i $(EXTERNAL_NODE_NAME) docker load
+
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
@@ -266,7 +336,7 @@ e2e-test-clusternetworkpolicy:
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) $(if $(LABEL_FILTER),--label-filter=$(LABEL_FILTER)) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) $(if $(LABEL_FILTER),--label-filter=$(LABEL_FILTER)) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:
@@ -301,7 +371,7 @@ GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance
 GATEWAY_CONFORMANCE_ORG ?= projectcalico
 GATEWAY_CONFORMANCE_PROJECT ?= calico
 GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
-GATEWAY_CONFORMANCE_CONTACT ?= https://github.com/projectcalico/calico/blob/master/CODE-OF-CONDUCT.md
+GATEWAY_CONFORMANCE_CONTACT ?= https://www.tigera.io/contact/
 GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
 GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
 GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml

@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/confd/pkg/backends"
-	logutils "github.com/projectcalico/calico/confd/pkg/log"
+	"github.com/projectcalico/calico/confd/pkg/config"
 	"github.com/projectcalico/calico/confd/pkg/resource/template"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
@@ -75,11 +75,6 @@ var (
 	largeCommunity          = regexp.MustCompile(`^(\d+):(\d+):(\d+)$`)
 )
 
-// backendClientAccessor is an interface to access the backend client from the main v2 client.
-type backendClientAccessor interface {
-	Backend() api.Client
-}
-
 func NewRouteIndex() *RouteIndex {
 	return &RouteIndex{
 		programmedRoutes:       make(map[string]bool),
@@ -114,7 +109,7 @@ func NewCalicoClient(cc clientv3.Interface, k8sClient kubernetes.Interface, data
 	}
 
 	// Extract the backend client from the v3 client.
-	bc := cc.(backendClientAccessor).Backend()
+	bc := cc.(api.BackendAccessor).Backend()
 
 	// The node label manager tracks node labels for components to use when calculating
 	// node selectors, etc.
@@ -409,9 +404,9 @@ func (c *client) SetPrefixes(keys []string) error {
 }
 
 // OnStatusUpdated is called from the BGP syncer to indicate that the sync status is updated.
-// This client handles InSync and WaitForDatastore statuses. When we receive InSync, we unblock GetValues calls.
-// When we receive WaitForDatastore and are already InSync, we reset the client's syncer status which blocks
-// GetValues calls.
+// When we receive InSync, we unblock GetValues calls.
+// When we receive WaitForDatastore or ResyncInProgress, we reset the client's syncer status which blocks
+// GetValues calls until the syncer is back in sync.
 func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	select {
 	case c.syncerC <- status:
@@ -424,7 +419,7 @@ func (c *client) onStatusUpdated(status api.SyncStatus) {
 	switch status {
 	case api.InSync:
 		c.OnSyncChange(SourceSyncer, true)
-	case api.WaitForDatastore:
+	case api.WaitForDatastore, api.ResyncInProgress:
 		c.OnSyncChange(SourceSyncer, false)
 	}
 }
@@ -673,12 +668,12 @@ func (c *client) updatePeersV1() {
 			for _, peer := range peers {
 				log.Debugf("Peer: %#v", peer)
 				if globalPass {
-					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP, Port: peer.Port}
+					key := model.GlobalBGPPeerKey{PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 					emit(key, peer)
 				} else {
 					for _, localNodeName := range localNodeNames {
 						log.Debugf("Local node name: %#v", localNodeName)
-						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 						emit(key, peer)
 					}
 				}
@@ -750,7 +745,7 @@ func (c *client) updatePeersV1() {
 
 		for _, peer := range peers {
 			for _, localNodeName := range localNodeNames {
-				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP, Port: peer.Port}
+				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: model.AddrFromIP(peer.PeerIP), Port: peer.Port}
 				emit(key, peer)
 			}
 		}
@@ -1890,13 +1885,13 @@ func (c *client) keyUpdated(key string) {
 
 func (c *client) updateLogLevel() {
 	if envLevel := os.Getenv("BGP_LOGSEVERITYSCREEN"); envLevel != "" {
-		logutils.SetLevel(envLevel)
+		config.SetLogLevel(envLevel)
 	} else if nodeLevel := c.cache[c.nodeLogKey]; nodeLevel != "" {
-		logutils.SetLevel(nodeLevel)
+		config.SetLogLevel(nodeLevel)
 	} else if globalLogLevel := c.cache[globalLogging]; globalLogLevel != "" {
-		logutils.SetLevel(globalLogLevel)
+		config.SetLogLevel(globalLogLevel)
 	} else {
-		logutils.SetLevel("info")
+		config.SetLogLevel("info")
 	}
 }
 

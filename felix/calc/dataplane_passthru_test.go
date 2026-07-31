@@ -121,7 +121,7 @@ var _ = Describe("DataplanePassthru host metadata sourcing", func() {
 
 	BeforeEach(func() {
 		recorder = &hostMetaRecorder{}
-		passthru = NewDataplanePassthru(recorder, true)
+		passthru = NewDataplanePassthru(recorder)
 	})
 
 	It("uses BGP IPv4 when supplied", func() {
@@ -223,22 +223,6 @@ var _ = Describe("DataplanePassthru host metadata sourcing", func() {
 		Expect(recorder.updates[0].ip6Addr).To(Equal("fd00::99/64"))
 	})
 
-	It("does not populate IPv6 from Addresses when ipv6Support is off", func() {
-		passthru = NewDataplanePassthru(recorder, false)
-		passthru.OnUpdate(nodeUpdate(host, &internalapi.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: host},
-			Spec: internalapi.NodeSpec{
-				Addresses: []internalapi.NodeAddress{
-					{Address: "10.0.0.5", Type: internalapi.InternalIP},
-					{Address: "fd00::99", Type: internalapi.InternalIP},
-				},
-			},
-		}))
-		Expect(recorder.updates).To(HaveLen(1))
-		Expect(recorder.updates[0].ip4Addr).To(Equal("10.0.0.5/32"))
-		Expect(recorder.updates[0].ip6Addr).To(BeEmpty())
-	})
-
 	It("ignores Addresses without a recognised Type", func() {
 		// Mirrors FindNodeAddress's behaviour: addresses with empty Type are
 		// not used by the Internal/External fallback path.
@@ -274,6 +258,27 @@ var _ = Describe("DataplanePassthru host metadata sourcing", func() {
 			Spec:       internalapi.NodeSpec{BGP: &internalapi.NodeBGPSpec{}},
 		}))
 		Expect(recorder.removes).To(Equal([]string{host}))
+	})
+
+	It("does not treat a tunnel-address-only BGP spec as a delete; falls back to InternalIP", func() {
+		// On clusters with no Calico BGP node IP (e.g. GKE), IPAM still assigns an
+		// IPIP tunnel address, so libcalico produces a non-nil BGP spec whose only
+		// populated field is IPv4IPIPTunnelAddr. This must NOT be mistaken for an
+		// empty/deleted node: the InternalIP fallback still has to supply the host
+		// IP, otherwise the BPF dataplane never learns it and calico-node stays
+		// NotReady (BPFHostIP "Host IP not yet known"). Regression test.
+		passthru.OnUpdate(nodeUpdate(host, &internalapi.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: host},
+			Spec: internalapi.NodeSpec{
+				BGP: &internalapi.NodeBGPSpec{IPv4IPIPTunnelAddr: "10.96.2.1"},
+				Addresses: []internalapi.NodeAddress{
+					{Address: "10.95.141.117", Type: internalapi.InternalIP},
+				},
+			},
+		}))
+		Expect(recorder.removes).To(BeEmpty())
+		Expect(recorder.updates).To(HaveLen(1))
+		Expect(recorder.updates[0].ip4Addr).To(Equal("10.95.141.117/32"))
 	})
 
 	It("propagates BGP ASN even when no IP is supplied (using fallback for IPv4)", func() {

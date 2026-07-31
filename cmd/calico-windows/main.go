@@ -61,14 +61,29 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 
-	nodeCmd := node.NewCommand()
-	nodeCmd.AddCommand(node.NewFelixCommand())
-	nodeCmd.AddCommand(node.NewConfdCommand())
+	cmd.AddCommand(
+		newComponentCommand(),
+		newVersionCommand(),
+	)
+
+	return cmd
+}
+
+// newComponentCommand mirrors the "component" parent in cmd/calico so the
+// operator drives the Windows binary the same way it drives the Linux one
+// (for example "calico.exe component cni install" and
+// "component node health"). The in-image service scripts use the same syntax.
+func newComponentCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "component",
+		Short: "Run Calico components (internal use by the operator)",
+	}
 
 	cmd.AddCommand(
-		nodeCmd,
+		node.NewFelixCommand(),
+		node.NewConfdCommand(),
 		newCNICommand(),
-		newVersionCommand(),
+		node.NewCommand(),
 	)
 
 	return cmd

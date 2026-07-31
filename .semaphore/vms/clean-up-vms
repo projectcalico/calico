@@ -28,17 +28,37 @@ gcp_secret_key=${GCP_SECRET_KEY:-$HOME/secrets/secret.google-service-account-key
 gcloud config set project $project
 gcloud auth activate-service-account --key-file=$gcp_secret_key
 
+# The test VMs are spread across the zones of a region (see run-tests-on-vms),
+# so we list project-wide by name prefix and delete each instance in whichever
+# zone it ended up in.  This is zone-agnostic, so it also reclaims any leaked
+# VMs regardless of where they landed.
 while true; do
   gcloud --quiet compute instances list \
         "--filter=name~'${vm_prefix}.*'" \
-        --zones=${ZONE} \
-        --format='table[no-heading](name)' > instance-list
-  instances="$(cat instance-list)"
-  if [ "${instances}" = "" ]; then
+        --format='csv[no-heading](name,zone.basename())' > instance-list
+  if [ ! -s instance-list ]; then
     echo "All instances deleted"
     break
   fi
-  echo "Instances to delete: $instances"
-  gcloud --quiet beta compute instances delete ${instances} --zone=${ZONE} --no-graceful-shutdown
+  echo "Instances to delete:"
+  cat instance-list
+
+  # Group the instances by zone so we can delete each zone's VMs in a single
+  # 'gcloud delete' call.  A single delete with multiple names tears them down
+  # in parallel, which is much faster than one call per VM -- but gcloud
+  # requires every name in a call to share a --zone, hence the per-zone grouping.
+  declare -A zone_names=()
+  while IFS=, read -r name zone; do
+    [ -n "$name" ] || continue
+    zone_names["$zone"]+=" $name"
+  done < instance-list
+
+  for zone in "${!zone_names[@]}"; do
+    # Best-effort: don't let one failed delete (an instance vanished between list
+    # and delete, or a transient API error) abort the whole sweep under 'set -e'
+    # and leak the rest.  Anything still present is retried on the next pass.
+    gcloud --quiet beta compute instances delete ${zone_names[$zone]} --zone="$zone" --no-graceful-shutdown \
+      || echo "WARNING: failed to delete one or more instances in $zone; will retry."
+  done
   sleep 1
 done

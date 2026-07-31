@@ -89,7 +89,7 @@ var (
 	ipPoolCIDR = calinet.MustParseCIDR("10.0.1.0/24")
 	ipPool1    = api.Update{
 		KVPair: model.KVPair{
-			Key: model.IPPoolKey{CIDR: ipPoolCIDR},
+			Key: model.IPPoolKey{CIDR: model.PrefixFromIPNet(ipPoolCIDR)},
 			Value: &model.IPPool{
 				CIDR:          ipPoolCIDR,
 				IPIPInterface: "tunl0",
@@ -145,7 +145,7 @@ var (
 	blockAffCIDR = calinet.MustParseCIDR("10.0.1.0/26")
 	blockAff1    = api.Update{
 		KVPair: model.KVPair{
-			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, AffinityType: model.IPAMAffinityTypeHost, Host: "node1"},
+			Key:      model.BlockAffinityKey{CIDR: model.PrefixFromIPNet(blockAffCIDR), AffinityType: model.IPAMAffinityTypeHost, Host: "node1"},
 			Value:    &model.BlockAffinity{State: model.StateConfirmed},
 			Revision: "1239",
 		},
@@ -896,8 +896,12 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 		h.Config.PingInterval = 10000 * time.Second
 		h.Config.PongTimeout = 50000 * time.Second
 
-		// Short timeouts so we can hit them quickly.
-		h.Config.MaxFallBehind = time.Second
+		// Short timeouts so we can hit them quickly.  MaxFallBehind is kept
+		// comfortably below the 1s spacing the tests use between breadcrumbs:
+		// the "grace used" check fires on crumbAge > MaxFallBehind, and a
+		// crumbAge manufactured to equal MaxFallBehind is a boundary coin-flip
+		// (a breadcrumb gap measured at 999.95ms once flaked the grace test).
+		h.Config.MaxFallBehind = 500 * time.Millisecond
 		h.Config.NewClientFallBehindGracePeriod = time.Second
 
 		// The snapshot is >10MB; set the write buffer to something much less than that since these
@@ -957,10 +961,11 @@ var _ = Describe("With an in-process Server with short grace period", func() {
 			origGaugeValue, err := getPerSyncerCounter(syncproto.SyncerTypeFelix, "typha_connections_grace_used")
 			Expect(err).NotTo(HaveOccurred())
 
-			// Make the client block after it reads the first update.  This means the server will have started
-			// streaming the snapshot but it shouldn't be able to finish streaming the snapshot.  Blocking for
-			// >1s wastes the MaxFallBehind timeout so this client will need to rely on the
-			// NewClientFallBehindGracePeriod, which should kick in only once we've finished reading the snapshot.
+			// Make the client block after it reads the first update, so it can't promptly finish reading
+			// the snapshot.  By the time it does and the server starts streaming deltas, the breadcrumb the
+			// client is on is more than MaxFallBehind old (the server's crumbAge > MaxFallBehind check).
+			// Rather than being cut off immediately, the client then relies on the
+			// NewClientFallBehindGracePeriod to catch up.
 			recorder.BlockAfterNUpdates(1, 2500*time.Millisecond)
 
 			client := syncclient.New(
