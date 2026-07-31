@@ -24,7 +24,7 @@ import (
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -62,7 +62,7 @@ type bpfIPSets struct {
 	dirtyIPSetIDs   set.Set[uint64]
 	resyncScheduled bool
 
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 
 	lg *log.Entry
 
@@ -75,7 +75,7 @@ func NewBPFIPSets(
 	ipSetsMap maps.Map,
 	entryFromBytes func([]byte) IPSetEntryInterface,
 	protoIPSetMemberToBPFEntry func(uint64, string) IPSetEntryInterface,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 ) *bpfIPSets {
 	return &bpfIPSets{
 		IPVersionConfig:            ipVersionConfig,

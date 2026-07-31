@@ -31,20 +31,20 @@ import (
 
 	ipamcmd "github.com/projectcalico/calico/calicoctl/calicoctl/commands/ipam"
 	. "github.com/projectcalico/calico/calicoctl/tests/fv/utils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
 
 func init() {
 	// Set up logging formatting.
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 }
 
 func TestIPAM(t *testing.T) {

@@ -92,6 +92,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.31
 	go.etcd.io/etcd/client/v3 v3.7.0
 	go.yaml.in/yaml/v3 v3.0.4
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
 	golang.org/x/oauth2 v0.36.0

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package logutils
+package logrusr
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ import (
 func BenchmarkLogWithOurFormat(b *testing.B) {
 	logger := logrus.New()
 	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
+	InstallCallerHook(logger)
 	logger.SetOutput(&NullWriter{})
 
 	b.ResetTimer()
@@ -37,7 +37,7 @@ func BenchmarkLogWithOurFormat(b *testing.B) {
 func BenchmarkLogWithOurFormatFixedFields(b *testing.B) {
 	logger := logrus.New()
 	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
+	InstallCallerHook(logger)
 	logger.SetOutput(&NullWriter{})
 
 	b.ResetTimer()
@@ -58,7 +58,7 @@ func BenchmarkLogWithOurFormatFixedFields(b *testing.B) {
 func BenchmarkLogWithFieldOurFormat(b *testing.B) {
 	logger := logrus.New()
 	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
+	InstallCallerHook(logger)
 	logger.SetOutput(&NullWriter{})
 
 	b.ResetTimer()
@@ -79,7 +79,7 @@ func BenchmarkLogWithFieldOurFormat(b *testing.B) {
 func BenchmarkLogWithFieldsOurFormat(b *testing.B) {
 	logger := logrus.New()
 	logger.SetFormatter(&Formatter{})
-	logger.SetReportCaller(true)
+	InstallCallerHook(logger)
 	logger.SetOutput(&NullWriter{})
 
 	b.ResetTimer()
