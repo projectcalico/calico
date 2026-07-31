@@ -424,6 +424,23 @@ per-packet forwarding does not revisit the affinity map. The affinity
 map's `last_used` is updated opportunistically on new-flow backend
 resolution; flow-lifetime fast-path packets are not affected.
 
+### Enforced affinity for unconnected UDP
+
+An *unconnected* UDP socket has no connect() for the CTLB to hook, so
+every `sendmsg` runs backend selection afresh. Without affinity,
+consecutive datagrams from one socket would land on different backends.
+The CTLB therefore enforces affinity for unconnected UDP on **every** UDP
+service, whether or not it asks for `sessionAffinity: ClientIP`
+(`connect.h`, passing `CTLB_UDP_NOT_SEEN_TIMEO` as
+`affinity_always_timeo` to `calico_nat_lookup`). The timeout is the
+`UDPTimeout` BPF conntrack timeout, and the entry's timestamp is
+refreshed on each use, so the affinity lasts as long as the socket keeps
+sending.
+
+These entries live in the same affinity map as the `sessionAffinity`
+ones, and `affinity_always_timeo` takes precedence over the service's own
+timeout on this path.
+
 ### Applicability
 
 - Works for both the TC path and the CTLB path: CTLB's connect-time
@@ -450,6 +467,13 @@ resolution; flow-lifetime fast-path packets are not affected.
 - An affinity entry that points at a backend that no longer exists
   must be treated as a miss, not as a drop. A change that tightens
   the "is backend still valid" check must preserve that.
+- The BPF programs never delete affinity entries; the syncer's
+  `cleanupSticky()` is the only reclaim path, and it runs on every
+  sync. Its notion of which frontends may hold entries, and for how
+  long, must therefore cover **every** writer — including the CTLB's
+  enforced UDP affinity, which has no `sessionAffinity` on the service
+  to key off. An entry the syncer does not recognise is deleted on the
+  next sync, which silently un-pins a live client.
 
 
 
