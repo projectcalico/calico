@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Load pre-built Docker images from GCS cache, if available.
+# Load pre-built Docker images from the S3 cache, if available.
 # Touch marker files so Make skips rebuilding.
 
 set -euo pipefail
@@ -10,17 +10,17 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 
 load_image() {
     local name=$1
-    local gcs_path=$2
+    local s3_path=$2
     local marker=$3
 
-    if ! gcloud storage cp "${GCS_WORKFLOW_DIR}/${gcs_path}" "/tmp/${gcs_path}" 2>/dev/null; then
+    if ! "${REPO_ROOT}/.semaphore/s3-cmd" cp "${S3_WORKFLOW_DIR}/${s3_path}" "/tmp/${s3_path}" 2>/dev/null; then
         echo "No cached ${name} image found, will build from source."
         return
     fi
 
     echo "Loading cached ${name} image..."
-    local tar_path="/tmp/${gcs_path%.zst}"
-    zstd -d --rm -o "${tar_path}" "/tmp/${gcs_path}"
+    local tar_path="/tmp/${s3_path%.zst}"
+    zstd -d --rm -o "${tar_path}" "/tmp/${s3_path}"
     docker load -i "${tar_path}"
     rm -f "${tar_path}"
 

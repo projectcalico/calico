@@ -9,21 +9,14 @@ execution_time_limit:
 global_job_config:
   secrets:
     - name: docker
-    - name: google-service-account-for-gce
-  env_vars:
-    - name: GOOGLE_PROJECT
-      value: unique-caldron-775
-    - name: GCS_BUILD_CACHE_BUCKET
-      value: calico-transient-build-artifacts-europe-west3
+    # S3 object-storage credentials for the .semaphore/s3-cmd download below.
+    - name: go-build-cache-hetzner-s3-credentials
   prologue:
     commands:
       - checkout
       - retry git fetch --unshallow
-      - export GCS_WORKFLOW_DIR=gs://$GCS_BUILD_CACHE_BUCKET/workflow/${SEMAPHORE_WORKFLOW_ID}
-      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
-      - sudo apt-get install -y zstd || true
-      - gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
-      - gcloud config set project ${GOOGLE_PROJECT}
+      - export S3_WORKFLOW_DIR=s3://$CALICO_S3_BUCKET/$CALICO_S3_KEY_PREFIX/workflow/${SEMAPHORE_WORKFLOW_ID}
+      - sudo apt-get install -y zstd s3cmd || true
       - mkdir -p logs
       - export BUILD_LOG="logs/push-nft-rpms-${ARCH}.log"
   epilogue:

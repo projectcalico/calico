@@ -13,22 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script is run locally to push artifacts to our sub-directory in GCS.
-# The counterpart to this script is load-test-artifacts, which runs on the test
-# VM.  It can assume that the artifacts have been downloaded to /tmp.
+# This script is run locally to push the FV test artifacts to our sub-directory
+# in GCS. The counterpart to this script is load-test-artifacts, which runs on
+# the test VM.  It can assume that the artifacts have been downloaded to /tmp.
+#
+# fv-artifacts are published to GCS (GCS_WORKFLOW_DIR) rather than the S3 build
+# cache so the in-cloud GCP test VMs fetch them without cross-cloud egress. The
+# source calico image, however, lives on S3 (S3_WORKFLOW_DIR), published there
+# by the "Build: calico image" prerequisite block, so this script bridges the
+# two backends: `s3-cmd` (S3) to fetch, `gcloud storage` (GCS) to publish.
 
 set -e
 set -x
+
+# Resolve the s3-cmd wrapper before we cd out of the component directory.
+S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.semaphore/s3-cmd"
 
 artifact push job bin &
 docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 
 # The combined calico image (which provides Typha and other components used by
-# the FVs) is already published to ${GCS_WORKFLOW_DIR}/calico-image.tar.zst by
-# the "Build: calico image" prerequisite block. Server-side copy it into this
-# component's fv-artifacts directory so the test VM sees it alongside the
-# working copy and felix-test image.
-gcloud storage cp "${GCS_WORKFLOW_DIR}/calico-image.tar.zst" "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
+# the FVs) is published to ${S3_WORKFLOW_DIR}/calico-image.tar.zst on S3 by the
+# "Build: calico image" prerequisite block. Fetch it from S3 and re-upload it
+# into this component's GCS fv-artifacts directory so the test VM sees it
+# alongside the working copy and felix-test image.
+"$S3_CMD" cp "${S3_WORKFLOW_DIR}/calico-image.tar.zst" /tmp/calico-image.tar.zst
+gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 
 cd ../..
 
