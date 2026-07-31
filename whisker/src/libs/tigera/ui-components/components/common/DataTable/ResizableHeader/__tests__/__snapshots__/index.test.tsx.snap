@@ -3,16 +3,16 @@
 exports[`<ResizableBody/> can render sort disabled columns 1`] = `
 <DocumentFragment>
   <div
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   >
     <div
       class="css-1wzx962"
     >
       <div
-        class="css-1jbx7hn"
+        class="css-v1zmmc"
       >
         <div
-          class="css-ah6f5b"
+          class="css-10exwmj"
           data-testid="column-header"
         >
           <span />
@@ -70,23 +70,22 @@ exports[`<ResizableBody/> can render sort disabled columns 1`] = `
 exports[`<ResizableBody/> it renders 1`] = `
 <DocumentFragment>
   <div
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   >
     <div
       class="css-1wzx962"
     >
       <div
-        class="css-1jbx7hn"
+        class="css-v1zmmc"
       >
         <div
-          class="css-ah6f5b"
+          class="css-10exwmj"
           data-testid="column-header"
         >
           <span />
           <svg
-            class="chakra-icon css-162s3ve"
+            class="chakra-icon css-hm6bcl"
             focusable="false"
-            style="margin-left: 4px; transform: scaleY(1);"
             viewBox="0 0 12 11"
           >
             <path
@@ -147,23 +146,22 @@ exports[`<ResizableBody/> it renders 1`] = `
 exports[`<ResizableBody/> it renders and sorting ascending works 1`] = `
 <DocumentFragment>
   <div
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   >
     <div
       class="css-1wzx962"
     >
       <div
-        class="css-1jbx7hn"
+        class="css-v1zmmc"
       >
         <div
-          class="css-ah6f5b"
+          class="css-10exwmj"
           data-testid="column-header"
         >
           <span />
           <svg
-            class="chakra-icon css-1a3akiy"
+            class="chakra-icon css-ib4rse"
             focusable="false"
-            style="margin-left: 4px;"
             viewBox="0 0 30 24"
           >
             <path
@@ -224,23 +222,22 @@ exports[`<ResizableBody/> it renders and sorting ascending works 1`] = `
 exports[`<ResizableBody/> it renders and sorting desc works 1`] = `
 <DocumentFragment>
   <div
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   >
     <div
       class="css-1wzx962"
     >
       <div
-        class="css-1jbx7hn"
+        class="css-v1zmmc"
       >
         <div
-          class="css-ah6f5b"
+          class="css-10exwmj"
           data-testid="column-header"
         >
           <span />
           <svg
-            class="chakra-icon css-1a3akiy"
+            class="chakra-icon css-ib4rse"
             focusable="false"
-            style="margin-left: 4px;"
             viewBox="0 0 12 11"
           >
             <path
@@ -301,23 +298,22 @@ exports[`<ResizableBody/> it renders and sorting desc works 1`] = `
 exports[`<ResizableBody/> it renders as fixed header and resizing works 1`] = `
 <DocumentFragment>
   <div
-    class="chakra-table css-1e8m6zn"
+    class="chakra-table css-g4mtfn"
   >
     <div
       class="css-kqwrs4"
     >
       <div
-        class="css-1jbx7hn"
+        class="css-v1zmmc"
       >
         <div
-          class="css-z4yjoo"
+          class="css-1y2z2ar"
           data-testid="column-header"
         >
           <span />
           <svg
-            class="chakra-icon css-162s3ve"
+            class="chakra-icon css-hm6bcl"
             focusable="false"
-            style="margin-left: 4px; transform: scaleY(1);"
             viewBox="0 0 12 11"
           >
             <path

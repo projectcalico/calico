@@ -21,9 +21,11 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -102,6 +104,15 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := corev1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := rbacv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	// KubeVirt VM/VMI/VMIM types: register so KubeVirt e2e tests share this
+	// client instead of a parallel typed clientset.
+	if err := kubevirtv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

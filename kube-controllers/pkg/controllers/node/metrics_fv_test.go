@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
-var _ = Describe("kube-controllers metrics FV tests", func() {
+var _ = Describe("kube-controllers metrics FV tests", Ordered, ContinueOnFailure, func() {
 	var (
 		etcd              *containers.Container
 		kubeControllers   *containers.Container
@@ -53,9 +53,10 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		k8sClient         *kubernetes.Clientset
 		controllerManager *containers.Container
 		v3CRDs            bool
+		removeKubeconfig  func()
 	)
 
-	BeforeEach(func() {
+	BeforeAll(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -63,8 +64,8 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		apiserver = testutils.RunK8sApiserver(etcd.IP)
 
 		// Write out a kubeconfig file
-		kconfigfile, cancel := testutils.BuildKubeconfig(apiserver.IP)
-		defer cancel()
+		var kconfigfile string
+		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		var err error
 		k8sClient, err = testutils.GetK8sClient(kconfigfile)
@@ -120,11 +121,8 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		}, 15*time.Second, 3*time.Second).ShouldNot(HaveOccurred())
 
 		// Make a Calico client and backend client.
-		type accessor interface {
-			Backend() backend.Client
-		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
-		bc = calicoClient.(accessor).Backend()
+		bc = calicoClient.(backend.BackendAccessor).Backend()
 
 		// Shorten the leak grace period for testing, allowing reclamations to happen quickly.
 		kcc := api.NewKubeControllersConfiguration()
@@ -160,12 +158,13 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 		}, 10*time.Second, 1*time.Second).ShouldNot(BeNil())
 	})
 
-	AfterEach(func() {
+	AfterAll(func() {
 		_ = calicoClient.Close()
 		controllerManager.Stop()
 		kubeControllers.Stop()
 		apiserver.Stop()
 		etcd.Stop()
+		removeKubeconfig()
 	})
 
 	It("should export metrics for IPAM state", func() {
@@ -188,6 +187,10 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 				`ipam_ippool_size{ippool="test-ippool-1"} 256`,
 				`ipam_ippool_size{ippool="test-ippool-2"} 65536`,
 				`ipam_ippool_size{ippool="test-ippool-3"} 256`,
+				// No IPReservations yet, so nothing is reserved.
+				`ipam_ippool_reserved{ippool="test-ippool-1"} 0`,
+				`ipam_ippool_reserved{ippool="test-ippool-2"} 0`,
+				`ipam_ippool_reserved{ippool="test-ippool-3"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-a"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-b"} 0`,
 				`ipam_allocations_in_use{ippool="test-ippool-1",node="node-c"} 0`,
@@ -638,6 +641,46 @@ var _ = Describe("kube-controllers metrics FV tests", func() {
 			return nil
 		}, time.Second*10, 500*time.Millisecond).Should(BeNil())
 	})
+
+	It("should export the reserved-IP metric for an IPReservation", func() {
+		poolName := "test-ippool-reserved"
+		createIPPool(poolName, "10.17.0.0/24", calicoClient)
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{
+				fmt.Sprintf(`ipam_ippool_size{ippool=%q} 256`, poolName),
+				fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 0`, poolName),
+			},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+
+		// The reservation is the only thing that changes from here, so the metric
+		// updating proves the controller watches IPReservations.  It covers pool
+		// space that no block has been carved from, which is the case the metric
+		// cannot get from the controller's block state.
+		reservationName := "test-reservation"
+		createIPReservation(reservationName, []string{"10.17.0.0/28"}, calicoClient)
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 16`, poolName)},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+
+		// And deleting it frees the addresses again.
+		_, err := calicoClient.IPReservations().Delete(context.Background(), reservationName, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		validateExpectedAndUnexpectedMetrics(
+			[]string{fmt.Sprintf(`ipam_ippool_reserved{ippool=%q} 0`, poolName)},
+			nil,
+			kubeControllers.IP,
+			30*time.Second, 1*time.Second,
+		)
+	})
 })
 
 // getMetrics hits the provided prometheus metrics URL and returns the response body
@@ -674,6 +717,14 @@ func createIPPool(name string, cidr string, calicoClient client.Interface) {
 	p.Spec.NodeSelector = "all()"
 	p.Spec.Disabled = false
 	_, err := calicoClient.IPPools().Create(context.Background(), p, options.SetOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+}
+
+func createIPReservation(name string, cidrs []string, calicoClient client.Interface) {
+	r := api.NewIPReservation()
+	r.Name = name
+	r.Spec.ReservedCIDRs = cidrs
+	_, err := calicoClient.IPReservations().Create(context.Background(), r, options.SetOptions{})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 }
 

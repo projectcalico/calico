@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/arp"
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
 	v4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
@@ -2035,6 +2037,7 @@ func TestNATAffinity(t *testing.T) {
 		Expect(aff).To(HaveKey(affKey))
 		affEntry = aff[affKey]
 		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
+		expectRecentKTime(affEntry.Timestamp())
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
@@ -2115,6 +2118,80 @@ func TestNATAffinity(t *testing.T) {
 	})
 	expectMark(tcdefs.MarkSeen)
 	resetCTMap(ctMap)
+}
+
+// expectRecentKTime checks that a timestamp written by the BPF dataplane with
+// bpf_ktime_get_ns parses as a monotonic time in the recent past. It guards
+// against the Go parsing disagreeing with the C struct layout.
+func expectRecentKTime(ts time.Duration) {
+	now := time.Duration(bpf.KTimeNanos())
+	ExpectWithOffset(1, ts).To(BeNumerically(">", 0))
+	ExpectWithOffset(1, ts).To(BeNumerically("<=", now))
+	ExpectWithOffset(1, now-ts).To(BeNumerically("<", time.Minute))
+}
+
+func TestNATAffinityV6(t *testing.T) {
+	RegisterTestingT(t)
+
+	cleanUpMaps()
+	defer cleanUpMaps()
+
+	bpfIfaceName = "AFF6"
+	defer func() { bpfIfaceName = "" }()
+
+	_, ipv6, l4, _, pktBytes, err := testPacketUDPDefaultNPV6(node1ipV6)
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	hostIP = node1ipV6
+
+	// The test packet carries a hop-by-hop extension header, so
+	// ipv6.NextHeader is not the L4 protocol.
+	natKey := nat.NewNATKeyV6(ipv6.DstIP, uint16(udp.DstPort), uint8(layers.IPProtocolUDP))
+	err = natMapV6.Update(
+		natKey.AsBytes(),
+		nat.NewNATValueV6(0, 1, 0, 60 /* seconds */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.ParseIP("abcd::ffff:0808:0808")
+	natPort := uint16(666)
+
+	err = natBEMapV6.Update(
+		nat.NewNATBackendKeyV6(0, 0).AsBytes(),
+		nat.NewNATBackendValueV6(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMapV6.Update(rtKey, rtVal)
+	Expect(err).NotTo(HaveOccurred())
+
+	resetCTMapV6(ctMapV6)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+
+		aff, err := nat.LoadAffinityMapV6(affinityMapV6)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+
+		affKey := nat.NewAffinityKeyV6(ipv6.SrcIP, natKey)
+		Expect(aff).To(HaveKey(affKey))
+
+		affEntry := aff[affKey]
+		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValueV6(natIP, natPort)))
+		// The entry was written by the BPF program; this verifies that the
+		// Go representation matches the C struct layout, including the
+		// padding that aligns the 64-bit timestamp.
+		expectRecentKTime(affEntry.Timestamp())
+	}, withIPv6())
+	expectMark(tcdefs.MarkSeen)
 }
 
 func TestNATNodePortIngressDSR(t *testing.T) {
@@ -3858,4 +3935,148 @@ func TestNATOutExcludeHosts(t *testing.T) {
 		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
 	}, withNATOutExcludeHosts())
 	expectMark(tcdefs.MarkSeen)
+}
+
+func TestNATNodePortFragments(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetCTMap(ctMap)
+
+	bpfIfaceName = "SFrg"
+	defer func() { bpfIfaceName = "" }()
+
+	data := make([]byte, 2000)
+
+	for i := 0; i < 1000; i++ {
+		data[i*2] = byte(uint16(i) >> 8)
+		data[i*2+1] = byte(uint16(i) & 0xff)
+	}
+
+	ipv4 := *ipv4Default
+	ipv4.Id = 0x1234
+	ipv4.Length = 20 + 8 + 2000
+	ipv4.Flags = 0
+	ipv4.DstIP = node1ip
+	udp := *udpDefault
+	udp.Length = 8 + 2000
+
+	dataLen := 1600
+	dataOffset := 0
+
+	ipv4.Flags = layers.IPv4MoreFragments
+	ipv4.FragOffset = 0
+	ipv4.Length = 1500
+
+	payload := gopacket.Payload(data[dataOffset : dataOffset+dataLen])
+	_ = udp.SetNetworkLayerForChecksum(&ipv4)
+
+	pkt0 := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pkt0, gopacket.SerializeOptions{ComputeChecksums: true}, ethDefault, &ipv4, &udp, payload)
+	Expect(err).NotTo(HaveOccurred())
+
+	dataOffset = dataLen
+	dataLen = 192
+
+	ipv4.FragOffset = uint16((8 + dataOffset) / 8)
+	ipv4.Length = uint16(20 + dataLen)
+	payload1 := gopacket.Payload(data[dataOffset : dataOffset+dataLen])
+
+	pkt1 := gopacket.NewSerializeBuffer()
+	err = gopacket.SerializeLayers(pkt1, gopacket.SerializeOptions{ComputeChecksums: true}, ethDefault, &ipv4, payload1)
+	Expect(err).NotTo(HaveOccurred())
+
+	natMap := nat.FrontendMap()
+	err = natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap()
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	// local workload
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0 /* count */, 1 /* local */, 1, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+
+	var recvPkt []byte
+
+	hostIP = node1ip
+	skbMark = 0
+
+	// Setup routing
+	rtMap := routes.Map()
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+	// backend it is a local workload
+	resetRTMap(rtMap)
+	beV4CIDR := ip.CIDRFromNetIP(natIP).(ip.V4CIDR)
+	bertKey := routes.NewKey(beV4CIDR).AsBytes()
+	bertVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, 1).AsBytes()
+	err = rtMap.Update(bertKey, bertVal)
+	Expect(err).NotTo(HaveOccurred())
+	dumpRTMap(rtMap)
+
+	// Arriving at node
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt0.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+
+		Expect(ipv4R.Flags & layers.IPv4MoreFragments).To(Equal(layers.IPv4MoreFragments))
+		Expect(ipv4R.FragOffset).To(Equal(uint16(0)))
+
+		udpR := &layers.UDP{}
+		err = udpR.DecodeFromBytes(ipv4R.Payload, gopacket.NilDecodeFeedback)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(udpR.SrcPort).To(Equal(layers.UDPPort(udp.SrcPort)))
+		Expect(udpR.DstPort).To(Equal(layers.UDPPort(natPort)))
+
+		recvPkt = res.dataOut
+		_ = recvPkt
+	})
+
+	dumpCTMap(ctMap)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_host_ep", nil, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt1.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+
+		Expect(ipv4R.Payload).To(BeEquivalentTo(payload1))
+	})
 }

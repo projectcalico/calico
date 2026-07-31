@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -163,6 +163,17 @@ var _ = testutils.E2eDatastoreDescribe("IPAMConfiguration tests", testutils.Data
 			},
 		}, options.SetOptions{})
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal("error with field MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"), err.Error())
+		Expect(err.Error()).To(ContainSubstring("MaxBlocksPerHost = '-1' (must be greater than or equal to 0)"), err.Error())
+	})
+
+	It("should reject IPCooldownSeconds less than zero", func() {
+		_, err := c.IPAMConfiguration().Create(ctx, &v3.IPAMConfiguration{
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Spec: v3.IPAMConfigurationSpec{
+				IPCooldownSeconds: -1,
+			},
+		}, options.SetOptions{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("spec.ipCooldownSeconds in body should be greater than or equal to 0"), err.Error())
 	})
 })

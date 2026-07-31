@@ -22,7 +22,7 @@
 #include "arp.h"
 #include "conntrack_types.h"
 #include "nat_types.h"
-#include "perf_types.h"
+#include "events_type.h"
 #include "reasons.h"
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
@@ -55,7 +55,7 @@ struct fwd {
 // - the Go version of the struct in bpf/state/map.go
 // - the event handling logic in bpf/events/collector_policy_listener.go.
 struct cali_tc_state {
-	struct perf_event_header eventhdr;
+	struct event_header eventhdr;
 	/* Initial IP read from the packet, updated to host's IP when doing NAT encap/ICMP error.
 	 * updated when doing CALI_CT_ESTABLISHED_SNAT handling. Used for FIB lookup. */
 	DECLARE_IP_ADDR(ip_src);
@@ -171,6 +171,8 @@ enum cali_state_flags {
 	CALI_ST_SET_DSCP   = 0x2000,
 	/* CALI_ST_FIRST_FRAG is set if this packet is the first fragment of a fragmented IP packet */
 	CALI_ST_FIRST_FRAG        = 0x4000,
+	/* CALI_ST_NO_L4_NAT is set to skip L4 NAT even if there is a NAT - typically IP fragment */
+	CALI_ST_NO_L4_NAT	  = 0x8000,
 };
 
 struct cali_tc_ctx {
@@ -205,14 +207,21 @@ struct cali_tc_ctx {
 				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "State map lookup failed: DROP");	\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
-			void * counters = counters_get(skb->ifindex);		\
-			if (!counters) {					\
-				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters for %d: DROP", skb->ifindex);		\
-				bpf_exit(TC_ACT_SHOT);				\
-			}							\
 			struct cali_tc_globals *gl = state_get_globals_tc();	\
 			if (!gl) {						\
 				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no globals: DROP");		\
+				bpf_exit(TC_ACT_SHOT);				\
+			}							\
+			/* Use host_ifindex from globals for the counters lookup.  \
+			 * For netkit, skb->ifindex is the peer ifindex which      \
+			 * differs from the primary (host-side) ifindex that the   \
+			 * maps are keyed by. host_ifindex is always the primary.  \
+			 */							\
+			__u32 __ifindex = gl->data.host_ifindex ?		\
+				gl->data.host_ifindex : skb->ifindex;		\
+			void * counters = counters_get(__ifindex);		\
+			if (!counters) {					\
+				CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, "no counters for %d: DROP", __ifindex);	\
 				bpf_exit(TC_ACT_SHOT);				\
 			}							\
 			struct pkt_scratch *scratch = (void *)(gl->__scratch); 	\

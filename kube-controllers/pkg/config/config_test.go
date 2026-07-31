@@ -1,4 +1,4 @@
-// Copyright (c) 2017 - 2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -176,8 +176,16 @@ var _ = Describe("Config", func() {
 						Node: &v3.NodeControllerConfig{
 							ReconcilerPeriod: nil,
 							SyncLabels:       v3.Disabled,
-							HostEndpoint:     &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
-							LeakGracePeriod:  &v1.Duration{Duration: 20 * time.Minute},
+							HostEndpoint: &v3.AutoHostEndpointConfig{
+								AutoCreate:                v3.Enabled,
+								CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+								Templates: []v3.Template{{
+									GenerateName: "template",
+									Labels:       map[string]string{"template-label": "template-value"},
+									Annotations:  map[string]string{"template.projectcalico.org/annotation": "annotation-value"},
+								}},
+							},
+							LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
 						},
 						Policy: &v3.PolicyControllerConfig{
 							ReconcilerPeriod: &v1.Duration{Duration: time.Second * 30},
@@ -216,8 +224,16 @@ var _ = Describe("Config", func() {
 
 				rc := cfg.Controllers
 				Expect(rc.Node).To(Equal(&v3.NodeControllerConfig{
-					SyncLabels:      v3.Disabled,
-					HostEndpoint:    &v3.AutoHostEndpointConfig{AutoCreate: v3.Enabled, CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled},
+					SyncLabels: v3.Disabled,
+					HostEndpoint: &v3.AutoHostEndpointConfig{
+						AutoCreate:                v3.Enabled,
+						CreateDefaultHostEndpoint: v3.DefaultHostEndpointsEnabled,
+						Templates: []v3.Template{{
+							GenerateName: "template",
+							Labels:       map[string]string{"template-label": "template-value"},
+							Annotations:  map[string]string{"template.projectcalico.org/annotation": "annotation-value"},
+						}},
+					},
 					LeakGracePeriod: &v1.Duration{Duration: 20 * time.Minute},
 				}))
 				Expect(rc.Policy).To(Equal(&v3.PolicyControllerConfig{

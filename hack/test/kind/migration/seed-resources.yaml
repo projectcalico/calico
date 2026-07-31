@@ -1,0 +1,122 @@
+# Test resources for migration testing. These are applied via the Calico apiserver
+# (which stores them in v1 CRDs). The migration controller should copy them to v3 CRDs.
+#
+# Resources cover the main types handled by the migration controller:
+# - Tiers (custom, beyond the auto-created "default")
+# - GlobalNetworkPolicy (in default tier — tests "default." prefix stripping)
+# - GlobalNetworkPolicy (in custom tier — tests non-default tier handling)
+# - NetworkPolicy (namespaced, default tier)
+# - HostEndpoint
+# - GlobalNetworkSet
+# - NetworkSet (namespaced)
+# - BGPPeer
+
+---
+apiVersion: projectcalico.org/v3
+kind: Tier
+metadata:
+  name: security
+spec:
+  order: 200
+
+---
+# Default-tier GNP. The apiserver stores this as "default.test-deny-all" in the
+# v1 CRD. The migration controller should strip the prefix and create "test-deny-all"
+# in the v3 CRD.
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: test-deny-all
+spec:
+  tier: default
+  order: 1000
+  selector: migration-test == 'true'
+  types:
+  - Ingress
+  - Egress
+
+---
+# Security-tier GNP. Stored as "security.test-allow-dns" in v1 CRD.
+# Non-default tier names should be preserved as-is.
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: security.test-allow-dns
+spec:
+  tier: security
+  order: 100
+  selector: migration-test == 'true'
+  types:
+  - Egress
+  egress:
+  - action: Allow
+    protocol: UDP
+    destination:
+      ports:
+      - 53
+
+---
+# Namespaced NetworkPolicy in default tier.
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: test-allow-web
+  namespace: migration-test
+spec:
+  tier: default
+  order: 500
+  selector: app == 'web'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    protocol: TCP
+    destination:
+      ports:
+      - 80
+      - 443
+
+---
+apiVersion: projectcalico.org/v3
+kind: HostEndpoint
+metadata:
+  name: test-hep
+  labels:
+    migration-test: "true"
+spec:
+  node: kind-worker
+  interfaceName: eth0
+  expectedIPs:
+  - 10.0.0.1
+
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkSet
+metadata:
+  name: test-external-ips
+  labels:
+    migration-test: "true"
+spec:
+  nets:
+  - 198.51.100.0/24
+  - 203.0.113.0/24
+
+---
+# Namespaced NetworkSet.
+apiVersion: projectcalico.org/v3
+kind: NetworkSet
+metadata:
+  name: test-trusted-ips
+  namespace: migration-test
+spec:
+  nets:
+  - 10.0.0.0/8
+
+---
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: test-peer
+spec:
+  peerIP: 10.0.0.100
+  asNumber: 64512

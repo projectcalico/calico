@@ -98,10 +98,23 @@ func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 	defer p.wg.Done()
 	var revision uint64
 	for {
+		// Exit if the stop channel has been closed.
+		select {
+		case <-p.stopChan:
+			return
+		default:
+		}
+
 		// Watch from the last revision that we updated the templates with.  This will exit it the
 		// data in the datastore for the requested prefixes has had updates since that revision.
 		key, err := t.storeClient.WatchPrefix(t.Prefix, t.ExpandedKeys, revision, p.stopChan)
 		if err != nil {
+			// If we're shutting down, exit cleanly instead of retrying.
+			select {
+			case <-p.stopChan:
+				return
+			default:
+			}
 			p.errChan <- err
 			// Prevent backend errors from consuming all resources.
 			time.Sleep(time.Second * 2)

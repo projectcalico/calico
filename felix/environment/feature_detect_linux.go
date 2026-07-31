@@ -140,6 +140,7 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 		KernelSideRouteFiltering: netlinkSupportsStrict,
 		NFLogSize:                kerV.Compare(v4Dot8Dot0) >= 0,
 		KernelHasUDPGSOFix:       kerV.Compare(v6Dot16Dot0) >= 0,
+		NFTablesSupported:        true,
 	}
 
 	for k, v := range d.featureOverride {

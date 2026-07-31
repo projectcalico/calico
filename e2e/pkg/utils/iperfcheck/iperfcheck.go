@@ -320,6 +320,11 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 	for attempt := range cfg.retries {
 		logrus.Infof("iperf3 attempt %d of %d", attempt+1, cfg.retries)
 
+		// Kill any leftover iperf3 server from a previous failed attempt before
+		// starting a new one, otherwise the port will already be in use.
+		killCmd := fmt.Sprintf("pkill -f 'iperf3.*-p %d' 2>/dev/null; sleep 0.5", cfg.port)
+		_, _ = execInPod(server.pod, 5*time.Second, "sh", "-c", killCmd)
+
 		// Start a one-shot iperf3 server in daemon mode.
 		serverCmd := fmt.Sprintf("iperf3 -s -1 -D -p %d", cfg.port)
 		_, err := execInPod(server.pod, defaultExecTimeout, "sh", "-c", serverCmd)
@@ -330,11 +335,28 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 			continue
 		}
 
-		// Give the daemon a moment to bind.
-		time.Sleep(500 * time.Millisecond)
+		// Wait for the server daemon to start listening before running the client.
+		// The iperf3 image is minimal (no ss/netstat), so check /proc/net/tcp
+		// and /proc/net/tcp6 for the listening port in hex. iperf3 typically
+		// binds on IPv6 with dual-stack, so both files need to be checked.
+		portHex := fmt.Sprintf("%04X", cfg.port)
+		waitCmd := fmt.Sprintf(
+			"for i in $(seq 1 10); do "+
+				"(grep -q ':%s .* 0A' /proc/net/tcp 2>/dev/null || grep -q ':%s .* 0A' /proc/net/tcp6 2>/dev/null) && exit 0; "+
+				"sleep 0.5; done; exit 1",
+			portHex, portHex,
+		)
+		_, err = execInPod(server.pod, 10*time.Second, "sh", "-c", waitCmd)
+		if err != nil {
+			lastErr = fmt.Errorf("iperf3 server not listening on port %d: %w", cfg.port, err)
+			logrus.WithError(lastErr).Warn("iperf3 server readiness check failed, retrying")
+			time.Sleep(cfg.retryInterval)
+			continue
+		}
 
-		// Run the iperf3 client.
-		clientCmd := fmt.Sprintf("iperf3 -c %s -p %d -t %d -O %d -J",
+		// Run the iperf3 client. Use --connect-timeout so a failed TCP control
+		// connection fails fast instead of burning the full exec timeout.
+		clientCmd := fmt.Sprintf("iperf3 -c %s -p %d -t %d -O %d -J --connect-timeout 5000",
 			serverIP, cfg.port, cfg.duration, cfg.omitSeconds)
 		if cfg.reverse {
 			clientCmd += " -R"
@@ -350,7 +372,7 @@ func (t *IperfTester) MeasureBandwidth(client, server *Peer, opts ...MeasureOpti
 		}
 
 		// Timeout = duration + omit + buffer.
-		timeout := time.Duration(cfg.duration+cfg.omitSeconds+10) * time.Second
+		timeout := time.Duration(cfg.duration+cfg.omitSeconds+15) * time.Second
 		out, err := execInPod(client.pod, timeout, "sh", "-c", clientCmd)
 		if err != nil {
 			lastErr = fmt.Errorf("iperf3 client exec failed: %w", err)

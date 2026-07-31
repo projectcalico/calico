@@ -97,10 +97,8 @@ func (s *BPFProgCleaner) ensureBPFExpiryProgram() (*libbpf.Obj, error) {
 		return s.bpfExpiryProgram, nil
 	}
 
-	// Load the BPF program.  We only build the co-re version because CT cleanup
-	// needs a newer than co-re.
 	binaryToLoad := path.Join(bpfdefs.ObjectDir,
-		fmt.Sprintf("conntrack_cleanup_%s_co-re_v%d.o", s.logLevel, s.ipVersion))
+		fmt.Sprintf("conntrack_cleanup_%s_v%d.o", s.logLevel, s.ipVersion))
 
 	ctCleanupData := &libbpf.CTCleanupGlobalData{
 		CreationGracePeriod: s.timeouts.CreationGracePeriod,

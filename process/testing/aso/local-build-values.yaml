@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Helm values for the win-fv-felix local-build install. We install the operator
+# only; the Installation and APIServer CRs come from OSS/custom-resources.yaml
+# (applied by install-calico.sh), matching the existing win-fv flow. Component
+# images are ctr-imported onto the nodes at docker.io/calico/<name>:test-build,
+# and the Installation sets imagePullPolicy: IfNotPresent so kubelet uses them
+# instead of attempting a registry pull.
+
+# Let install-calico.sh apply custom-resources.yaml; the chart installs the
+# operator only and doesn't render any CRs.
+installation:
+  enabled: false
+apiServer:
+  enabled: false
+goldmane:
+  enabled: false
+whisker:
+  enabled: false
+
+# Operator image built in-job by build-operator.sh and imported onto the Linux
+# node as calico/operator:<tag>. install-calico.sh overrides version with
+# DEV_IMAGE_TAG (test-build by default) so it tracks the imported images.
+tigeraOperator:
+  image: calico/operator
+  version: test-build
+  registry: docker.io
+  imagePullPolicy: IfNotPresent
+
+# CRDs are created explicitly before the helm install (see install-calico.sh).
+manageCRDs: false

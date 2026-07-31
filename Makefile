@@ -33,6 +33,7 @@ endif
 	xargs -I {} sh -c 'if ! grep -q "Copyright (c)" "{}"; then sed "s/YEAR/'$$YEAR'/g" hack/copyright.template | (cat -; echo; cat "{}") > temp && mv temp "{}"; fi'
 
 clean:
+	rm -rf .dev-stamps/
 	$(MAKE) -C api clean
 	$(MAKE) -C apiserver clean
 	$(MAKE) -C app-policy clean
@@ -40,6 +41,7 @@ clean:
 	$(MAKE) -C cni-plugin clean
 	$(MAKE) -C confd clean
 	$(MAKE) -C felix clean
+	$(MAKE) -C cmd/calico clean
 	$(MAKE) -C kube-controllers clean
 	$(MAKE) -C libcalico-go clean
 	$(MAKE) -C node clean
@@ -47,6 +49,10 @@ clean:
 	$(MAKE) -C key-cert-provisioner clean
 	$(MAKE) -C typha clean
 	$(MAKE) -C release clean
+	$(MAKE) -C third_party/cni-plugins clean
+	$(MAKE) -C third_party/envoy-gateway clean
+	$(MAKE) -C third_party/envoy-proxy clean
+	$(MAKE) -C third_party/envoy-ratelimit clean
 	rm -rf ./bin .stamp.*
 
 check-go-mod:
@@ -68,6 +74,9 @@ check-images-availability: bin/crane bin/yq
 
 check-language:
 	./hack/check-language.sh
+
+check-mockery-config:
+	./hack/check-mockery-config.sh
 
 check-ginkgo-v2:
 	./hack/check-ginkgo-v2.sh
@@ -95,6 +104,7 @@ generate:
 	$(MAKE) -C libcalico-go gen-files
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
+	$(MAKE) -C kube-controllers gen-files
 	$(MAKE) get-operator-crds
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
@@ -121,13 +131,13 @@ gen-semaphore-yaml:
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
 	                          go run ./hack/cmd/deps $(DEPS_ARGS) generate-semaphore-yamls"
 
-GO_DIRS=$(shell find -name '*.go' | grep -v -e './lib/' -e './pkg/' | grep -o --perl '^./\K[^/]+' | sort -u)
+GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
 gen-deps-files:
-	$(MAKE) -j $(DEP_FILES)
+	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
-$(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/*
+$(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
 	@{ \
 	  echo "!!! GENERATED FILE, DO NOT EDIT !!!" && \
 	  echo "Run 'make gen-deps-files' to regenerate." && \
@@ -135,6 +145,13 @@ $(DEP_FILES): go.mod go.sum $(shell find . -name '*.go') Makefile hack/cmd/deps/
 	  grep '^go' go.mod && \
 	  $(DOCKER_GO_BUILD) sh -c "go run ./hack/cmd/deps combined $(patsubst %/,%,$(dir $@))"; \
 	} > $@
+
+# bin/send-perf-results is the tool that pushes hack/perf JSON docs to the Lens
+# Elasticsearch cluster (see hack/perf/README.md). Built statically so CI jobs
+# that produce perf artifacts on the host (e.g. the nftables dataplane benchmark)
+# can run it without the go-build container.
+bin/send-perf-results: $(shell find ./hack/perf -name '*.go')
+	$(DOCKER_GO_BUILD) sh -c "CGO_ENABLED=0 go build -o $@ ./hack/perf/cmd/send-perf-results"
 
 CHART_DESTINATION ?= ./bin
 
@@ -164,66 +181,269 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 	--version $(GIT_VERSION) \
 	--app-version $(GIT_VERSION)
 
-# Build all Calico images for the current architecture.
+###############################################################################
+# Build & push workflow — build all images, tag with a custom tag, and
+# optionally push to a remote registry.
+#
+# Images are only re-tagged / re-pushed when their docker image ID changes,
+# and the operator is only rebuilt when its inputs change. This makes repeated
+# runs fast when only one component has been modified.
+#
+# Usage:
+#   make image                                              # build + tag as calico/<name>:<version>
+#   make push DEV_IMAGE_PATH=myuser DEV_IMAGE_TAG=latest    # build + tag + push to myuser/<name>:latest
+#
+# Component images are independent targets and build in parallel up to
+# NUM_BUILD_JOBS (default 4 to keep memory usage sane on a workstation;
+# raise via NUM_BUILD_JOBS=8 etc. for a bigger machine).
+#
+# To force a full rebuild, remove the stamp directory:
+#   rm -rf .dev-stamps && make push ...
+###############################################################################
+
+.PHONY: image
+## Build all component images and tag for dev registry.
 image:
-	$(MAKE) -C pod2daemon image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C key-cert-provisioner image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C calicoctl image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C cni-plugin image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C apiserver image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C kube-controllers image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C app-policy image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C typha image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
-	$(MAKE) -C node image IMAGETAG=$(GIT_VERSION) VALIDARCHES=$(ARCH)
+	$(MAKE) -j$(NUM_BUILD_JOBS) $(KIND_IMAGE_MARKERS)
+	@CALICO_IMAGES="$(KIND_CALICO_IMAGES)" \
+	  DEV_IMAGE_PREFIX="$(DEV_IMAGE_PREFIX)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  ARCH="$(ARCH)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --tag
+	@STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
+	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
+	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
+	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
+	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --operator
+	@echo "image complete"
+
+.PHONY: push
+## Push all tagged images to the remote registry.
+push: image
+	@DEV_IMAGES="$(DEV_CALICO_IMAGES) $(DEV_OPERATOR_IMAGE)" \
+	  STAMP_DIR="$(DEV_STAMP_DIR)" \
+	  $(REPO_ROOT)/hack/dev-build.sh --push
+
+.PHONY: push-chart
+## Package the tigera-operator helm chart with custom image refs and push to OCI registry.
+push-chart: bin/helm
+	@TAG="$(DEV_IMAGE_TAG)" \
+	  REGISTRY="$(DEV_IMAGE_REGISTRY)" \
+	  IMAGE_PATH="$(DEV_IMAGE_PATH)" \
+	  HELM="$(REPO_ROOT)/bin/helm" \
+	  $(REPO_ROOT)/.github/scripts/package-helm-chart.sh
 
 ###############################################################################
 # Run local e2e smoke test against the checked-out code
 # using a local kind cluster.
 ###############################################################################
-E2E_FOCUS ?= "sig-network.*Conformance|sig-calico.*Conformance|BGP"
-E2E_SKIP ?= ""
 E2E_PROCS ?= 4
-K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy"
+E2E_TIMEOUT ?= 90m
+E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+E2E_OUTPUT_DIR ?= report
+E2E_JUNIT_REPORT ?= e2e_conformance.xml
+K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
 CLUSTER_ROUTING ?= BIRD
 
+# rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
+# can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
+# source and loads it straight into the kind nodes + external node; pods then pin this
+# exact tag with ImagePullPolicy=Never (see images.RapidClientImage / packet_size.go).
+# This mirrors the gcp-kubeadm side-load in .semaphore/.../load_images.sh (pr-<N>).
+# ?= so the gcp path's own RAPIDCLIENT_TAG wins if it ever runs through here; exported
+# so the ginkgo e2e process (which reads os.Getenv) inherits it across the sub-make.
+RAPIDCLIENT_TAG ?= kind-e2e
+export RAPIDCLIENT_TAG
+RAPIDCLIENT_IMAGE := quay.io/tigeradev/rapidclient
+EXTERNAL_NODE_NAME ?= kind-external-node
+
 ## Build all test images, create a kind cluster, and deploy Calico on it.
 .PHONY: kind-up
-kind-up: kind-build-images
+kind-up:
+	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) kind-cluster-create CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	$(MAKE) kind-deploy
 
-## Create a kind cluster and run all e2e tests.
+## Build images, create a kind cluster with v1 CRDs, deploy Calico, and run the
+## v1-to-v3 migration test.
+.PHONY: kind-migration-test
+kind-migration-test:
+	KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 $(MAKE) kind-up
+	$(REPO_ROOT)/hack/test/kind/migration/run_test.sh
+
+## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
-	$(MAKE) e2e-run-test
-	$(MAKE) e2e-run-cnp-test
+	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+
+## Create a kind cluster with the BPF dataplane plus an external node, and run
+## the sig-calico BPF e2e tests (including the ExternalNode specs).
+## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support
+## ipvs kube-proxy) while keeping the cluster named "kind" so values.yaml's
+## control-plane nodeSelector still matches.
+e2e-test-bpf:
+	$(MAKE) -C e2e build
+	$(MAKE) kind-up KIND_NAME=kind KIND_CONFIG=$(KIND_DIR)/kind-bpf.config EXTRA_VALUES_FILES=$(KIND_INFRA_DIR)/values-bpf.yaml
+	$(MAKE) kind-load-rapidclient KIND_NAME=kind
+	$(KIND_DIR)/external-node.sh up
+	$(MAKE) external-node-load-rapidclient
+	# EXT_* / SSH_AUTH_SOCK are passed as environment (the e2e binary reads them
+	# via os.Getenv); KIND_NAME/KUBECONFIG/E2E_TEST_CONFIG are make variables.
+	# SSH_AUTH_SOCK is cleared so the framework's ssh uses only EXT_KEY and does
+	# not trip over unrelated agent keys.
+	EXT_USER=ubuntu \
+	EXT_IP="$$(cat $(KIND_DIR)/external-node-ip)" \
+	EXT_KEY=$(KIND_DIR)/external-node-key \
+	SSH_AUTH_SOCK= \
+	$(MAKE) e2e-run \
+		KIND_NAME=kind \
+		KUBECONFIG=$(KIND_KUBECONFIG) \
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+
+## Build the rapidclient helper image from PR source and load it into the kind
+## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
+## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
+## is loaded directly with `kind load` to match the containerd-import + PullNever
+## model that images.RapidClientImage()/packet_size.go already use for gcp.
+.PHONY: kind-load-rapidclient
+kind-load-rapidclient:
+	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
+	$(KIND) load docker-image $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) --name $(KIND_NAME)
+
+## Load the (already-built) rapidclient image into the external node's inner docker
+## daemon, for the ExternalNode packet-size spec and maglev's `docker run`. The node
+## is a dind container, so we `docker exec` its dockerd directly as root (no sudo /
+## ssh, unlike the gcp external node in load_images.sh). Run after kind-load-rapidclient
+## (builds the host image) and external-node.sh up (creates the container).
+.PHONY: external-node-load-rapidclient
+external-node-load-rapidclient:
+	docker save $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) | docker exec -i $(EXTERNAL_NODE_NAME) docker load
 
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
 	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
-	$(MAKE) e2e-run-cnp-test
+	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
-## Run the general e2e tests against a pre-existing kind cluster.
-e2e-run-test:
-	mkdir -p report
-	KUBECONFIG=$(KIND_KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) -focus=$(E2E_FOCUS) -skip=$(E2E_SKIP) --junit-report=e2e_conformance.xml --output-dir=report/ ./e2e/bin/k8s/e2e.test
+## Run the general e2e tests against the cluster at $KUBECONFIG.
+## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
+e2e-run:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
+	mkdir -p $(E2E_OUTPUT_DIR)
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- --calico.test-config=$(abspath $(E2E_TEST_CONFIG))
 
-## Run the ClusterNetworkPolicy specific e2e tests against a pre-existing kind cluster.
-e2e-run-cnp-test:
-	KUBECONFIG=$(KIND_KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
+## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
+e2e-run-cnp:
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-cnp: KUBECONFIG must be set"; exit 1; fi
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/clusternetworkpolicy/e2e.test \
 	  -exempt-features=$(K8S_NETPOL_UNSUPPORTED_FEATURES) \
 	  -supported-features=$(K8S_NETPOL_SUPPORTED_FEATURES)
+
+###############################################################################
+# Gateway API conformance
+#
+# Runs the upstream sigs.k8s.io/gateway-api conformance suite against
+# Calico's Envoy-Gateway-based implementation on the cluster at $KUBECONFIG,
+# and emits a ConformanceReport YAML.
+#
+# Caller must set KUBECONFIG (e.g. $(KIND_KUBECONFIG)). Everything else
+# is inferred from git: GATEWAY_CONFORMANCE_VERSION defaults to
+# `git describe --tags --always --dirty`, which produces a useful
+# identifier on every build (a clean tag for release builds, a
+# describe-style ref for branch/PR builds). Whether to submit the
+# resulting report upstream is a separate decision and is not gated
+# here.
+#
+# The default GATEWAY_CLASS_NAME ("tigera-gateway-class") matches what the
+# tigera-operator provisions when the GatewayAPI CR omits gatewayClasses.
+###############################################################################
+GATEWAY_CONFORMANCE_VERSION ?= $(shell git -C $(REPO_ROOT) describe --tags --always --dirty 2>/dev/null)
+GATEWAY_CLASS_NAME ?= tigera-gateway-class
+GATEWAY_CONFORMANCE_PROFILES ?= GATEWAY-HTTP
+GATEWAY_CONFORMANCE_MODE ?= default
+GATEWAY_CONFORMANCE_REPORT ?= $(REPO_ROOT)/$(E2E_OUTPUT_DIR)/gateway-conformance-report.yaml
+GATEWAY_CONFORMANCE_ORG ?= projectcalico
+GATEWAY_CONFORMANCE_PROJECT ?= calico
+GATEWAY_CONFORMANCE_URL ?= https://github.com/projectcalico/calico
+GATEWAY_CONFORMANCE_CONTACT ?= https://www.tigera.io/contact/
+GATEWAY_API_CR ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/gatewayapi.yaml
+GATEWAY_ENVOY_PROXY ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/envoyproxy.yaml
+GATEWAY_METALLB_POOL ?= $(REPO_ROOT)/e2e/cmd/gateway/manifests/metallb-pool.yaml
+# Name of the docker network kind binds to. The kind default is "kind".
+GATEWAY_KIND_DOCKER_NETWORK ?= kind
+# Envoy Gateway deliberately leaves GatewayClass .status.supportedFeatures empty
+# (the field is experimental and datatype-unstable upstream; see EG's
+# internal/gatewayapi/status/gatewayclass.go). With empty status the conformance
+# suite's auto-inference returns no features and refuses to run. Default to the
+# curated envoy-gateway set (see e2e/cmd/gateway/e2e_test.go::envoyGatewayCuratedSet)
+# -- Calico ships stock unpatched Envoy Gateway so its feature surface matches
+# upstream's. Override GATEWAY_CONFORMANCE_CURATED to "" and set the individual
+# flags below for ad-hoc / debugging runs.
+GATEWAY_CONFORMANCE_CURATED ?= envoy-gateway
+GATEWAY_CONFORMANCE_ALL_FEATURES ?= false
+GATEWAY_CONFORMANCE_SUPPORTED_FEATURES ?=
+GATEWAY_CONFORMANCE_EXEMPT_FEATURES ?=
+
+## Apply the GatewayAPI operator CR and wait for the default GatewayClass to be Accepted.
+GATEWAY_SETUP_CRD_TIMEOUT ?= 300
+GATEWAY_SETUP_GWC_TIMEOUT ?= 5m
+
+.PHONY: e2e-gateway-setup
+e2e-gateway-setup:
+	KUBECONFIG=$(KUBECONFIG) \
+	GATEWAY_API_CR=$(GATEWAY_API_CR) \
+	GATEWAY_ENVOY_PROXY=$(GATEWAY_ENVOY_PROXY) \
+	GATEWAY_METALLB_POOL=$(GATEWAY_METALLB_POOL) \
+	GATEWAY_CLASS_NAME=$(GATEWAY_CLASS_NAME) \
+	GATEWAY_KIND_DOCKER_NETWORK=$(GATEWAY_KIND_DOCKER_NETWORK) \
+	GATEWAY_SETUP_CRD_TIMEOUT=$(GATEWAY_SETUP_CRD_TIMEOUT) \
+	GATEWAY_SETUP_GWC_TIMEOUT=$(GATEWAY_SETUP_GWC_TIMEOUT) \
+	$(REPO_ROOT)/hack/test/kind/gateway-setup.sh
+
+## Run the Gateway API conformance suite.
+e2e-run-gateway-conformance: e2e-gateway-setup
+	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run-gateway-conformance: KUBECONFIG must be set"; exit 1; fi
+	mkdir -p $(dir $(GATEWAY_CONFORMANCE_REPORT))
+	KUBECONFIG=$(KUBECONFIG) ./e2e/bin/gateway/e2e.test \
+	  -gateway-class='$(GATEWAY_CLASS_NAME)' \
+	  -curated='$(GATEWAY_CONFORMANCE_CURATED)' \
+	  -conformance-profiles='$(GATEWAY_CONFORMANCE_PROFILES)' \
+	  -mode='$(GATEWAY_CONFORMANCE_MODE)' \
+	  -all-features='$(GATEWAY_CONFORMANCE_ALL_FEATURES)' \
+	  -supported-features='$(GATEWAY_CONFORMANCE_SUPPORTED_FEATURES)' \
+	  -exempt-features='$(GATEWAY_CONFORMANCE_EXEMPT_FEATURES)' \
+	  -organization='$(GATEWAY_CONFORMANCE_ORG)' \
+	  -project='$(GATEWAY_CONFORMANCE_PROJECT)' \
+	  -url='$(GATEWAY_CONFORMANCE_URL)' \
+	  -contact='$(GATEWAY_CONFORMANCE_CONTACT)' \
+	  -version='$(GATEWAY_CONFORMANCE_VERSION)' \
+	  -report-output='$(GATEWAY_CONFORMANCE_REPORT)' \
+	  -test.v -test.timeout=60m
+
+## End-to-end: build, kind-up, deploy Envoy Gateway, run conformance, emit report.
+.PHONY: e2e-test-gateway-conformance
+e2e-test-gateway-conformance:
+	$(MAKE) -C e2e bin/gateway/e2e.test
+	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) e2e-run-gateway-conformance KUBECONFIG=$(KIND_KUBECONFIG)
 
 ###############################################################################
 # Release logic below
 ###############################################################################
 .PHONY: release release-publish create-release-branch release-test build-openstack publish-openstack release-notes
 # Build the release tool.
-release/bin/release: $(shell find ./release -type f -name '*.go')
+release/bin/release: $(shell find ./release -type f -name '*.go') metadata.mk
 	$(MAKE) -C release
+
+# Prepare for a release (update version references, charts, manifests).
+release-prep: release/bin/release bin/gh
+	@release/bin/release release prep
 
 # Install ghr for publishing to github.
 bin/ghr:
@@ -231,10 +451,11 @@ bin/ghr:
 
 # Install GitHub CLI
 bin/gh:
-	curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
-	tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
-	chmod +x $@
-	rm bin/gh.tgz
+	@mkdir -p bin
+	@curl -sSL --retry 5 -o bin/gh.tgz https://github.com/cli/cli/releases/download/v$(GITHUB_CLI_VERSION)/gh_$(GITHUB_CLI_VERSION)_linux_amd64.tar.gz
+	@tar -zxvf bin/gh.tgz -C bin/ gh_$(GITHUB_CLI_VERSION)_linux_amd64/bin/gh --strip-components=2
+	@chmod +x $@
+	@rm bin/gh.tgz
 
 # Build a release.
 release: release/bin/release
@@ -310,5 +531,5 @@ update-pins: update-go-build-pin update-calico-base-pin
 bin/gotestsum:
 	@GOBIN=$(REPO_ROOT)/bin go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 
-postrelease-checks: release/bin/release bin/gotestsum
+postrelease-checks release-validate: release/bin/release bin/gotestsum
 	@release/bin/release release validate

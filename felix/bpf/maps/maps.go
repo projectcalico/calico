@@ -329,7 +329,7 @@ func MapDeleteKeyCmd(m Map, key []byte) ([]string, error) {
 	return nil, fmt.Errorf("unrecognized map type %T", m)
 }
 
-var ErrNotSupported = fmt.Errorf("prog_array iteration not supported")
+var ErrNotSupported = fmt.Errorf("map iteration not supported for this map type")
 
 // Iter iterates over the map, passing each key/value pair to the provided callback function.  Warning:
 // The key and value are owned by the iterator and will be clobbered by the next iteration so they must not be
@@ -338,6 +338,11 @@ func (b *PinnedMap) Iter(f IterCallback) error {
 	if b.Type == "prog_array" {
 		// We currently have a bug in iteration of program array maps;
 		// the C code tight loops due to the empty slots.
+		return ErrNotSupported
+	}
+	if b.Type == "ringbuf" {
+		// Ring buffer maps don't have key/value entries and don't
+		// support bpf_map_get_next_key.
 		return ErrNotSupported
 	}
 	valueSize := b.ValueSize

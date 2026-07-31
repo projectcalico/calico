@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeIPReservations implements IPReservationInterface
 type fakeIPReservations struct {
-	*gentype.FakeClientWithList[*v3.IPReservation, *v3.IPReservationList]
+	*gentype.FakeClientWithListAndApply[*v3.IPReservation, *v3.IPReservationList, *projectcalicov3.IPReservationApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeIPReservations(fake *FakeProjectcalicoV3) projectcalicov3.IPReservationInterface {
+func newFakeIPReservations(fake *FakeProjectcalicoV3) typedprojectcalicov3.IPReservationInterface {
 	return &fakeIPReservations{
-		gentype.NewFakeClientWithList[*v3.IPReservation, *v3.IPReservationList](
+		gentype.NewFakeClientWithListAndApply[*v3.IPReservation, *v3.IPReservationList, *projectcalicov3.IPReservationApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("ipreservations"),

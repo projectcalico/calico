@@ -39,13 +39,18 @@ func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr cnet.IP) (
 		log.Errorf("Error reading pool for %s", addr.String())
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("No valid IPPool")}
 	}
+	cfg, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		log.Errorf("Error getting IPAM Config: %v", err)
+		return nil, err
+	}
 	blockCIDR := getBlockCIDRForAddress(addr, pool)
 	obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 	if err != nil {
 		log.Errorf("Error reading block %s: %v", blockCIDR, err)
 		return nil, err
 	}
-	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+	block := blockFromBackend(cfg, obj.Value.(*model.AllocationBlock))
 	return block.allocationAttributesForIP(addr)
 }
 
@@ -116,6 +121,12 @@ func (c ipamClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID
 		return fmt.Errorf("the provided IP address %s is not in a configured pool", ip)
 	}
 
+	cfg, err := c.GetIPAMConfig(ctx)
+	if err != nil {
+		log.Errorf("Error getting IPAM Config: %v", err)
+		return err
+	}
+
 	blockCIDR := getBlockCIDRForAddress(ip, pool)
 	logCtx.Debugf("IP %s is in block '%s'", ip, blockCIDR)
 
@@ -126,7 +137,7 @@ func (c ipamClient) SetOwnerAttributes(ctx context.Context, ip cnet.IP, handleID
 			return err
 		}
 
-		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		block := blockFromBackend(cfg, obj.Value.(*model.AllocationBlock))
 		err = block.setOwnerAttributes(ip, handleID, updates, preconditions)
 		if err != nil {
 			logCtx.WithError(err).Error("Failed to set owner attributes")

@@ -17,6 +17,7 @@ import CheckboxLoadingSkeleton, {
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/components/CheckboxLoadingSkeleton/styles';
 import ReorderableCheckList from './ReorderableCheckList';
 import Tooltip from './Tooltip';
+import Radio from './Radio';
 
 export {
     Link,
@@ -37,4 +38,5 @@ export {
     CheckboxListLoadingSkeleton,
     ReorderableCheckList,
     Tooltip,
+    Radio,
 };

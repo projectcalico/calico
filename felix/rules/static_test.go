@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
+	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 )
@@ -43,14 +44,14 @@ var _ = Describe("Static", func() {
 		It("should generate expected cali-POSTROUTING chain in the mangle table", func() {
 			expRules := []generictables.Rule{}
 			if !rr.BPFEnabled {
-				allPoolSetName := fmt.Sprintf("cali%v0all-ipam-pools", ipVersion)
-				thisHostSetName := fmt.Sprintf("cali%v0this-host", ipVersion)
-				dscpSetName := fmt.Sprintf("cali%v0dscp-src-net", ipVersion)
+				networkPoolSetName := ipSetName(IPSetIDNetworkPools, ipVersion)
+				thisHostSetName := ipSetName(IPSetIDThisHostIPs, ipVersion)
+				dscpSetName := ipSetName(IPSetIDDSCPEndpoints, ipVersion)
 				expRules = append(expRules, generictables.Rule{
 					// DSCP rule.
 					Match: iptables.Match().
 						SourceIPSet(dscpSetName).
-						NotDestIPSet(allPoolSetName).
+						NotDestIPSet(networkPoolSetName).
 						NotDestIPSet(thisHostSetName),
 					Action:  iptables.JumpAction{Target: ChainEgressDSCP},
 					Comment: []string{"set dscp for traffic leaving cluster."},
@@ -200,7 +201,7 @@ var _ = Describe("Static", func() {
 				Describe(fmt.Sprintf("IPv%d", ipVersion), func() {
 					// Capture current value of ipVersion.
 					ipVersion := ipVersion
-					ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
+					ipSetThisHost := ipSetName(IPSetIDThisHostIPs, ipVersion)
 
 					var portRanges []*proto.PortRange
 					portRange := &proto.PortRange{
@@ -730,7 +731,7 @@ var _ = Describe("Static", func() {
 					{
 						Match: iptables.Match().
 							ProtocolNum(4).
-							SourceIPSet("cali40all-hosts-net").
+							SourceIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							DestAddrType("LOCAL"),
 
 						Action:  iptables.AcceptAction{},
@@ -781,7 +782,7 @@ var _ = Describe("Static", func() {
 					{
 						Match: iptables.Match().
 							ProtocolNum(4).
-							SourceIPSet("cali40all-hosts-net").
+							SourceIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							DestAddrType("LOCAL"),
 
 						Action:  iptables.AcceptAction{},
@@ -900,7 +901,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: iptables.Match().ProtocolNum(4).
-							DestIPSet("cali40all-hosts-net").
+							DestIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							SrcAddrType(generictables.AddrTypeLocal, false),
 						Action:  iptables.AcceptAction{},
 						Comment: []string{"Allow IPIP packets to other Calico hosts"},
@@ -935,7 +936,7 @@ var _ = Describe("Static", func() {
 					// Auto-allow IPIP traffic to other Calico hosts.
 					{
 						Match: iptables.Match().ProtocolNum(4).
-							DestIPSet("cali40all-hosts-net").
+							DestIPSet(ipSetName(IPSetIDAllHostNets, 4)).
 							SrcAddrType(generictables.AddrTypeLocal, false),
 						Action:  iptables.AcceptAction{},
 						Comment: []string{"Allow IPIP packets to other Calico hosts"},
@@ -1064,6 +1065,7 @@ var _ = Describe("Static", func() {
 			Describe("with IPv4 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabled = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(4, kubeIPVSEnabled)
@@ -1075,6 +1077,14 @@ var _ = Describe("Static", func() {
 							Rules: []generictables.Rule{
 								{Action: iptables.JumpAction{Target: "cali-fip-snat"}},
 								{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
+								{
+									Match: iptables.Match().
+										ProtocolNum(ProtoUDP).
+										OutInterface(dataplanedefs.IPIPIfaceName).
+										NotSrcAddrType(generictables.AddrTypeLocal, true).
+										SrcAddrType(generictables.AddrTypeLocal, false),
+									Action: iptables.MasqAction{ToPorts: "4790-65535"},
+								},
 								{
 									Match: iptables.Match().
 										OutInterface(dataplanedefs.IPIPIfaceName).
@@ -1166,10 +1176,26 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.IPIPIfaceName).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
 											OutInterface(dataplanedefs.IPIPIfaceName).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
 										Action: iptables.MasqAction{},
+									},
+									{
+										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV4).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
 									},
 									{
 										Match: iptables.Match().
@@ -1182,12 +1208,27 @@ var _ = Describe("Static", func() {
 							},
 						}))
 					})
+
+					Describe("with a high custom VXLAN port", func() {
+						BeforeEach(func() {
+							conf.VXLANPort = 60000
+						})
+
+						It("IPv4: Should masquerade UDP to the wider range below the VXLAN port", func() {
+							chains := rr.StaticNATPostroutingChains(4)
+							// Rules[2] is the UDP masquerade with the port range excluding the
+							// custom VXLAN port; Rules[3] is the catch-all with no range.
+							Expect(chains[0].Rules[2].Action).To(Equal(iptables.MasqAction{ToPorts: "1024-59999"}))
+							Expect(chains[0].Rules[3].Action).To(Equal(iptables.MasqAction{}))
+						})
+					})
 				})
 			})
 
 			Describe("with IPv6 VXLAN enabled", func() {
 				BeforeEach(func() {
 					conf.VXLANEnabledV6 = true
+					conf.VXLANPort = 4789
 				})
 
 				checkManglePostrouting(6, kubeIPVSEnabled)
@@ -1260,6 +1301,14 @@ var _ = Describe("Static", func() {
 									{Action: iptables.JumpAction{Target: "cali-nat-outgoing"}},
 									{
 										Match: iptables.Match().
+											ProtocolNum(ProtoUDP).
+											OutInterface(dataplanedefs.VXLANIfaceNameV6).
+											NotSrcAddrType(generictables.AddrTypeLocal, true).
+											SrcAddrType(generictables.AddrTypeLocal, false),
+										Action: iptables.MasqAction{ToPorts: "4790-65535"},
+									},
+									{
+										Match: iptables.Match().
 											OutInterface(dataplanedefs.VXLANIfaceNameV6).
 											NotSrcAddrType(generictables.AddrTypeLocal, true).
 											SrcAddrType(generictables.AddrTypeLocal, false),
@@ -1315,7 +1364,7 @@ var _ = Describe("Static", func() {
 		})
 		for _, ipVersion := range []uint8{4, 6} {
 			// Capture current value of ipVersion.
-			ipSetThisHost := fmt.Sprintf("cali%d0this-host", ipVersion)
+			ipSetThisHost := ipSetName(IPSetIDThisHostIPs, ipVersion)
 
 			portRanges1 := []*proto.PortRange{
 				{First: 30030, Last: 30040},
@@ -1877,12 +1926,7 @@ var _ = Describe("Static", func() {
 					Expect(chain).NotTo(BeNil())
 					Expect(chain.Name).To(Equal("cali-POSTROUTING"))
 
-					var expectedMeshIPSet string
-					if ipVersion == 4 {
-						expectedMeshIPSet = "cali40all-istio-weps"
-					} else {
-						expectedMeshIPSet = "cali60all-istio-weps"
-					}
+					expectedMeshIPSet := ipSetName(IPSetIDAllIstioWEPs, ipVersion)
 
 					// Look for the Istio DSCP marking rule
 					found := false
@@ -1947,7 +1991,7 @@ var _ = Describe("Static", func() {
 				Comment: []string{"MarkSeenMASQ Mark"},
 			},
 			{
-				Match:   iptables.Match().MarkMatchesWithMask(0x3800000, 0x3f00000),
+				Match:   iptables.Match().MarkMatchesWithMask(0x1800000, 0x1f00000),
 				Action:  iptables.ReturnAction{},
 				Comment: []string{"MarkSeenNATOutgoing Mark"},
 			},
@@ -2032,6 +2076,75 @@ var _ = Describe("Static", func() {
 		})
 	})
 })
+
+var _ = Describe("Flowtable offload", func() {
+	config := Config{
+		IPSetConfigV4:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:       ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		MarkAccept:          0x8,
+		MarkPass:            0x10,
+		MarkScratch0:        0x20,
+		MarkScratch1:        0x40,
+		MarkDrop:            0x80,
+		MarkEndpoint:        0xff00,
+		MarkNonCaliEndpoint: 0x0100,
+		FilterDenyAction:    "DROP",
+		VXLANPort:           4789,
+		VXLANVNI:            4096,
+
+		WorkloadIfacePrefixes: []string{"cali"},
+
+		NFTablesFlowTableOffload: true,
+	}
+	renderer := NewRenderer(config, true).(*DefaultRuleRenderer)
+
+	offloadRule := generictables.Rule{
+		Match:   nftables.Match().ConntrackState("RELATED,ESTABLISHED"),
+		Action:  nftables.FlowOffloadAction{},
+		Comment: []string{"Offload established Calico flows."},
+	}
+
+	It("should offload established flows at the top of the forward chain, ahead of the workload dispatch jump", func() {
+		chains := renderer.StaticFilterForwardChains()
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).To(ContainElement(offloadRule))
+
+		offloadIdx := indexOfRuleWithAction(chain.Rules, offloadRule.Action)
+		dispatchIdx := indexOfJumpTo(chain.Rules, ChainFromWorkloadDispatch)
+		Expect(dispatchIdx).To(BeNumerically(">=", 0), "expected a jump to the workload dispatch chain")
+		Expect(offloadIdx).To(BeNumerically("<", dispatchIdx), "offload rule must precede the workload dispatch jump")
+	})
+
+	It("should not offload flows when flow table offload is disabled", func() {
+		disabledConfig := config
+		disabledConfig.NFTablesFlowTableOffload = false
+		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
+
+		chains := disabledRenderer.StaticFilterForwardChains()
+		chain := findChain(chains, ChainFilterForward)
+		Expect(chain).NotTo(BeNil())
+		Expect(chain.Rules).NotTo(ContainElement(offloadRule))
+	})
+})
+
+func indexOfRuleWithAction(rules []generictables.Rule, action generictables.Action) int {
+	for i, r := range rules {
+		if r.Action == action {
+			return i
+		}
+	}
+	return -1
+}
+
+func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
+	for i, r := range rules {
+		if jump, ok := r.Action.(*nftables.JumpAction); ok && jump.Target == chainName {
+			return i
+		}
+	}
+	return -1
+}
 
 func findChain(chains []*generictables.Chain, name string) *generictables.Chain {
 	for _, chain := range chains {

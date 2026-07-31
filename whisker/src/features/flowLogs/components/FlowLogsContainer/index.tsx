@@ -2,13 +2,11 @@ import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/Da
 import { ApiError } from '@/types/api';
 import { FlowLog } from '@/types/render';
 import React from 'react';
-import { useOutletContext } from 'react-router-dom';
 import FlowLogsList from '../FlowLogsList';
 import { TableSkeleton } from '@/libs/tigera/ui-components/components/common';
 import { useFlowLogsHeightOffset } from '../../hooks';
 
-export type FlowLogsContext = {
-    view: 'all' | 'denied';
+export type FlowLogsContainerProps = {
     flowLogs: FlowLog[];
     error: ApiError | null;
     onRowClicked: (row: VirtualizedRow) => void;
@@ -16,18 +14,19 @@ export type FlowLogsContext = {
     isFetching: boolean;
     maxStartTime: number;
     totalItems: number;
+    hasActiveFilters: boolean;
 };
 
-const FlowLogsContainer: React.FC = () => {
-    const {
-        flowLogs,
-        error,
-        onRowClicked,
-        onSortClicked,
-        isFetching,
-        maxStartTime,
-        totalItems,
-    } = useOutletContext<FlowLogsContext>();
+const FlowLogsContainer: React.FC<FlowLogsContainerProps> = ({
+    flowLogs,
+    error,
+    onRowClicked,
+    onSortClicked,
+    isFetching,
+    maxStartTime,
+    totalItems,
+    hasActiveFilters,
+}) => {
     const heightOffset = useFlowLogsHeightOffset();
 
     return isFetching ? (
@@ -45,6 +44,7 @@ const FlowLogsContainer: React.FC = () => {
             maxStartTime={maxStartTime}
             heightOffset={heightOffset}
             totalItems={totalItems}
+            hasActiveFilters={hasActiveFilters}
         />
     );
 };

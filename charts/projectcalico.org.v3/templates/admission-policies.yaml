@@ -1,0 +1,12 @@
+{{- $apiVersion := "admissionregistration.k8s.io/v1beta1" -}}
+{{- if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1/MutatingAdmissionPolicy" -}}
+{{- $apiVersion = "admissionregistration.k8s.io/v1" -}}
+{{- else if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1beta1/MutatingAdmissionPolicy" -}}
+{{- $apiVersion = "admissionregistration.k8s.io/v1beta1" -}}
+{{- else if .Capabilities.APIVersions.Has "admissionregistration.k8s.io/v1alpha1/MutatingAdmissionPolicy" -}}
+{{- $apiVersion = "admissionregistration.k8s.io/v1alpha1" -}}
+{{- end }}
+{{ range $path, $_ := .Files.Glob "admission/*" }}
+---
+{{ $.Files.Get $path | replace "admissionregistration.k8s.io/v1beta1" $apiVersion }}
+{{- end }}

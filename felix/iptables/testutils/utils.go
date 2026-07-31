@@ -468,14 +468,14 @@ func (d *saveCmd) Output() ([]byte, error) {
 	var buf bytes.Buffer
 
 	buf.WriteString(d.Dataplane.Prologue)
-	buf.WriteString(fmt.Sprintf("*%s\n", d.Dataplane.Table))
+	fmt.Fprintf(&buf, "*%s\n", d.Dataplane.Table)
 	for chainName := range d.Dataplane.Chains {
-		buf.WriteString(fmt.Sprintf(":%s - [123:456]\n", chainName))
+		fmt.Fprintf(&buf, ":%s - [123:456]\n", chainName)
 	}
 
 	for chainName, chain := range d.Dataplane.Chains {
 		for _, rule := range chain {
-			buf.WriteString(fmt.Sprintf("-A %s %s\n", chainName, rule))
+			fmt.Fprintf(&buf, "-A %s %s\n", chainName, rule)
 		}
 	}
 	buf.WriteString("COMMIT\n")

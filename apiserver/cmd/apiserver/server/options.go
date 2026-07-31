@@ -194,6 +194,7 @@ func (o *CalicoServerOptions) Config() (*apiserver.Config, error) {
 		kubeClient,
 		dynamicClient,
 		o.RecommendedOptions.FeatureGate,
+		serverConfig.EffectiveVersion,
 		initializers...); err != nil {
 		return nil, err
 	}

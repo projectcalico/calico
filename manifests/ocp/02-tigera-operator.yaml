@@ -39,6 +39,7 @@ spec:
           args:
             # Configure tigera-operator to manage installation of the necessary CRDs.
             - -manage-crds=true
+            - -zap-devel=false
           volumeMounts:
             - name: var-lib-calico
               readOnly: true
@@ -84,12 +85,12 @@ spec:
                 optional: true
         # Install any v3 API resources provided in the calico-resources ConfigMap.
         - name: create-initial-resources
-          image: quay.io/calico/ctl:master
+          image: quay.io/calico/calico:master
           env:
             - name: DATASTORE_TYPE
               value: kubernetes
           command:
-            - calicoctl
+            - /usr/bin/calicoctl
           args:
             - --allow-version-mismatch
             - create

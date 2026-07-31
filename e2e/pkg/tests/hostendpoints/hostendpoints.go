@@ -107,8 +107,8 @@ var _ = describe.CalicoDescribe(
 		}
 
 		var checker conncheck.ConnectionTester
-		var hepServer1 *conncheck.Server
-		var client1 *conncheck.Client
+		var hepServer1 conncheck.Server
+		var client1 conncheck.Client
 		var hep *v3.HostEndpoint
 
 		BeforeEach(func() {
@@ -260,7 +260,7 @@ var _ = describe.CalicoDescribe(
 							Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 							Destination: v3.EntityRule{
 								Ports: []numorstring.Port{
-									numorstring.NamedPort("hepport"),
+									numorstring.Port{PortName: "hepport"},
 								},
 							},
 						},
@@ -336,7 +336,7 @@ var _ = describe.CalicoDescribe(
 								Protocol: &numorstring.Protocol{Type: numorstring.NumOrStringString, StrVal: "TCP"},
 								Destination: v3.EntityRule{
 									Ports: []numorstring.Port{
-										numorstring.NamedPort("hepport"),
+										numorstring.Port{PortName: "hepport"},
 									},
 								},
 							},
@@ -369,8 +369,20 @@ var _ = describe.CalicoDescribe(
 					}
 				}
 
+				// Wrap the external node as a conncheck Client so the probes
+				// go through the standard ConnectionTester machinery.
+				ext := conncheck.NewExternalNodeClient("ext", extClient)
+				checker.AddClient(ext)
+
+				// Target the server's host IP + ports directly. The server pod is host-networked,
+				// so traffic from the external node hits the HEP-protected node on these ports.
+				serverHostIP := hepServer1.Pod().Status.HostIP
+				Expect(serverHostIP).NotTo(BeEmpty(), "server pod must have a host IP")
+				target1 := conncheck.NewTarget(serverHostIP, conncheck.TypePodIP, conncheck.TCP).Port(hepPort1)
+				target2 := conncheck.NewTarget(serverHostIP, conncheck.TypePodIP, conncheck.TCP).Port(hepPort2)
+
 				// create a networkpolicy that allows all incoming connections.
-				// assert client can ping hep
+				// assert external node can reach the hep.
 				allowIngressPolicy := &v3.GlobalNetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: fmt.Sprintf("%s-allow-all", hepPolicyName),
@@ -394,35 +406,41 @@ var _ = describe.CalicoDescribe(
 					Expect(err).NotTo(HaveOccurred())
 				}()
 
-				By("asserting connections work now from an external node", func() {
-					checker.ResetExpectations()
-					checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort1))
-					checker.ExpectSuccess(client1, hepServer1.ServiceDomain().Port(hepPort2))
+				By("asserting connections work now from the external node", func() {
+					checker.ExpectSuccess(ext, target1, target2)
 					checker.Execute()
+					checker.ResetExpectations()
 				})
 
 				// We need to enable generic XDP to test XDP in Iptables mode, otherwise the raw table
 				// is used to implement doNotTrack GNP with deny action (because the interfaces used in e2e testing
 				// may not support XDP offload or driver modes)
-				felixConfig := v3.NewFelixConfiguration()
-				err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
-				Expect(err).NotTo(HaveOccurred())
-
-				genericXDP := felixConfig.Spec.GenericXDPEnabled
-				if genericXDP == nil || !*genericXDP {
-					By("enabling generic XDP")
-					felixConfig.Spec.GenericXDPEnabled = ptr.To(true)
-					err = cli.Update(context.Background(), felixConfig)
+				//
+				// The BPF dataplane does NOT use this mechanism: it enforces the doNotTrack
+				// policy with its own XDP program regardless of GenericXDPEnabled. So skip the
+				// toggle under BPF - it is a no-op there, and flipping GenericXDPEnabled
+				// restarts Felix, which would race with the connectivity assertion below.
+				if utils.DetectCalicoDataplane(cli) != utils.DataplaneBPF {
+					felixConfig := v3.NewFelixConfiguration()
+					err := cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
 					Expect(err).NotTo(HaveOccurred())
 
-					defer func() {
-						By("restoring generic XDP setting")
-						err = cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
-						Expect(err).NotTo(HaveOccurred())
-						felixConfig.Spec.GenericXDPEnabled = genericXDP
+					genericXDP := felixConfig.Spec.GenericXDPEnabled
+					if genericXDP == nil || !*genericXDP {
+						By("enabling generic XDP")
+						felixConfig.Spec.GenericXDPEnabled = ptr.To(true)
 						err = cli.Update(context.Background(), felixConfig)
 						Expect(err).NotTo(HaveOccurred())
-					}()
+
+						defer func() {
+							By("restoring generic XDP setting")
+							err = cli.Get(context.Background(), types.NamespacedName{Name: "default"}, felixConfig)
+							Expect(err).NotTo(HaveOccurred())
+							felixConfig.Spec.GenericXDPEnabled = genericXDP
+							err = cli.Update(context.Background(), felixConfig)
+							Expect(err).NotTo(HaveOccurred())
+						}()
+					}
 				}
 
 				// The GlobalNetworkSet needed to list the source addresses needed by the following GNP
@@ -475,10 +493,9 @@ var _ = describe.CalicoDescribe(
 				}()
 
 				By(fmt.Sprintf("asserting that none of the ports (tcp %d, %d) are accessible from the external node", hepPort1, hepPort2), func() {
-					checker.ResetExpectations()
-					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort1))
-					checker.ExpectFailure(client1, hepServer1.ServiceDomain().Port(hepPort2))
+					checker.ExpectFailure(ext, target1, target2)
 					checker.Execute()
+					checker.ResetExpectations()
 				})
 			})
 		})

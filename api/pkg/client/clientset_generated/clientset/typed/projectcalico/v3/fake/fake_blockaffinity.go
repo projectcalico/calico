@@ -6,19 +6,20 @@ package fake
 
 import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	projectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
+	projectcalicov3 "github.com/projectcalico/api/pkg/client/applyconfiguration_generated/projectcalico/v3"
+	typedprojectcalicov3 "github.com/projectcalico/api/pkg/client/clientset_generated/clientset/typed/projectcalico/v3"
 	gentype "k8s.io/client-go/gentype"
 )
 
 // fakeBlockAffinities implements BlockAffinityInterface
 type fakeBlockAffinities struct {
-	*gentype.FakeClientWithList[*v3.BlockAffinity, *v3.BlockAffinityList]
+	*gentype.FakeClientWithListAndApply[*v3.BlockAffinity, *v3.BlockAffinityList, *projectcalicov3.BlockAffinityApplyConfiguration]
 	Fake *FakeProjectcalicoV3
 }
 
-func newFakeBlockAffinities(fake *FakeProjectcalicoV3) projectcalicov3.BlockAffinityInterface {
+func newFakeBlockAffinities(fake *FakeProjectcalicoV3) typedprojectcalicov3.BlockAffinityInterface {
 	return &fakeBlockAffinities{
-		gentype.NewFakeClientWithList[*v3.BlockAffinity, *v3.BlockAffinityList](
+		gentype.NewFakeClientWithListAndApply[*v3.BlockAffinity, *v3.BlockAffinityList, *projectcalicov3.BlockAffinityApplyConfiguration](
 			fake.Fake,
 			"",
 			v3.SchemeGroupVersion.WithResource("blockaffinities"),

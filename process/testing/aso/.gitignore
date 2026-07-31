@@ -12,6 +12,7 @@ OSS/manifests/
 kind-kubeconfig
 kubeadm-config.yaml
 kubeconfig
+kube-proxy-windows.yaml
 operator-crds.yaml
 password.txt
 scp-from-windows.sh

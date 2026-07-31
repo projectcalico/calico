@@ -70,6 +70,15 @@ func (e ErrorResourceDoesNotExist) Unwrap() error {
 	return e.Err
 }
 
+// Error indicating an IP is in its cooldown period.
+type ErrorIPInCooldown struct {
+	IP string
+}
+
+func (e ErrorIPInCooldown) Error() string {
+	return fmt.Sprintf("address %s is in cooldown", e.IP)
+}
+
 // Error indicating an operation is not supported.
 type ErrorOperationNotSupported struct {
 	Operation  string

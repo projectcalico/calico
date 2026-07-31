@@ -184,9 +184,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
 )
 
 // Source code for the Sequence diagram above (http://textart.io/sequence).
@@ -312,7 +312,7 @@ func (m MsgKVs) String() string {
 	var b strings.Builder
 	const limit = 10
 	b.WriteString("syncproto.MsgKVs{Num:")
-	b.WriteString(fmt.Sprint(len(m.KVs)))
+	fmt.Fprint(&b, len(m.KVs))
 	b.WriteString(",KVs:[]{")
 	for i, kv := range m.KVs {
 		if i > 0 {
@@ -390,7 +390,7 @@ type SerializedUpdate struct {
 
 var ErrBadKey = errors.New("unable to parse key")
 
-var kvRLL = logutils.NewRateLimitedLogger()
+var kvRLL = logrusr.NewRateLimitedLogger()
 
 func (s SerializedUpdate) ToUpdate() (api.Update, error) {
 	// Parse the key.

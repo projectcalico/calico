@@ -24,6 +24,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
@@ -32,10 +33,17 @@ const (
 	DefaultImage               = registry.TigeraOperatorImage
 	DefaultOrg                 = utils.TigeraOrg
 	DefaultRepoName            = "operator"
-	DefaultBranchName          = utils.DefaultBranch
 	DefaultReleaseBranchPrefix = "release"
+	DefaultBranch              = "master"
+	DefaultDevTagSuffix        = "0.dev"
 	DefaultRegistry            = "quay.io"
 )
+
+func Organization() string {
+	return utils.FirstNonEmpty(defaults.OperatorOrganization(), DefaultOrg)
+}
+func Repo() string   { return utils.FirstNonEmpty(defaults.OperatorRepo(), DefaultRepoName) }
+func Branch() string { return utils.FirstNonEmpty(defaults.OperatorBranch(), DefaultBranch) }
 
 var (
 	defaultProductEnvPrefix = "CALICO"
@@ -55,7 +63,12 @@ type OperatorManager struct {
 	// calicoDir is the absolute path to the root directory of the calico repository
 	calicoDir string
 
+	// calicoVersion is the version of calico to use for the operator. This is only used for hashreleases.
 	calicoVersion string
+
+	// pinnedComponentsFile is the path to the file containing the pinned components for the operator.
+	// This is used for hashreleases and supersedes using calicoVersion.
+	pinnedComponentsFile string
 
 	// image is the name of the operator image (e.g. tigera/operator)
 	image string
@@ -115,12 +128,15 @@ func (o *OperatorManager) Build() error {
 	if err != nil {
 		return err
 	}
-	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
-	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = o.productRegistry
+	logFields[fmt.Sprintf("%s_registry", strings.ToLower(defaultProductEnvPrefix))] = r
+	logFields[fmt.Sprintf("%s_image_path", strings.ToLower(defaultProductEnvPrefix))] = i
 	env = append(env, fmt.Sprintf("%s_REGISTRY=%s", defaultProductEnvPrefix, r))
 	env = append(env, fmt.Sprintf("%s_IMAGE_PATH=%s", defaultProductEnvPrefix, i))
 	if o.isHashRelease {
-		if o.calicoVersion != "" {
+		if o.pinnedComponentsFile != "" {
+			env = append(env, fmt.Sprintf("%s_VERSIONS=%s", defaultProductEnvPrefix, o.pinnedComponentsFile))
+			logFields["pinned_components_file"] = o.pinnedComponentsFile
+		} else if o.calicoVersion != "" {
 			env = append(env, fmt.Sprintf("%s_VERSION=%s", defaultProductEnvPrefix, o.calicoVersion))
 			logFields["calico_version"] = o.calicoVersion
 		}
@@ -200,8 +216,13 @@ func (o *OperatorManager) PreBuildValidation() error {
 	if dirty {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them"))
 	}
-	if o.isHashRelease && (o.calicoVersion == "" || o.calicoDir == "") {
-		errStack = errors.Join(errStack, errors.New("hashrelease requires calico version and directory to be specified"))
+	if o.isHashRelease {
+		if o.calicoVersion == "" && o.pinnedComponentsFile == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires either a calico version or the pinned components file to be specified"))
+		}
+		if o.calicoDir == "" {
+			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
+		}
 	}
 	if !o.validateBranch {
 		return errStack
@@ -213,7 +234,7 @@ func (o *OperatorManager) PreBuildValidation() error {
 	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
 	re := regexp.MustCompile(match)
 	if !re.MatchString(branch) {
-		errStack = errors.Join(errStack, fmt.Errorf("not on a release branch"))
+		errStack = errors.Join(errStack, fmt.Errorf("operator checkout is not on a release branch"))
 	}
 	return errStack
 }

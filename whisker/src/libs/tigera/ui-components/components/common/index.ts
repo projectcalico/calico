@@ -5,7 +5,7 @@ import OmniFilterList from './OmniFilterList';
 import StatusIndicator from './StatusIndicator';
 import TableSkeleton from './TableSkeleton';
 import TabTitle from './TabTitle';
-
+import { Text } from './text';
 export * as DataTable from './DataTable';
 
 export {
@@ -16,4 +16,5 @@ export {
     TabTitle,
     OmniFilter,
     OmniFilterList,
+    Text,
 };

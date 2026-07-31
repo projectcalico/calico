@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,16 +25,15 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	bpfutils "github.com/projectcalico/calico/felix/bpf/utils"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type vxlanManager struct {
@@ -67,7 +66,7 @@ type vxlanManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 }
 
 type vxlanMgrOption func(m *vxlanManager)
@@ -90,7 +89,7 @@ func newVXLANManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	nlHandle, _ := netlinkshim.NewRealNetlink()
@@ -116,8 +115,8 @@ func newVXLANManagerWithShims(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
-	nlHandle netlinkHandle,
+	opRecorder logrusr.OpRecorder,
+	nlHandle netlinkshim.Interface,
 	opts ...vxlanMgrOption,
 ) *vxlanManager {
 	m := &vxlanManager{
@@ -265,7 +264,7 @@ func (m *vxlanManager) updateNeighborsAndAllowedSources() {
 }
 
 func (m *vxlanManager) tunnelRoute(cidr ip.CIDR, r *proto.RouteUpdate) *routetable.Target {
-	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) {
+	if isRemoteTunnelRoute(r, proto.IPPoolType_VXLAN) || isBorrowedRoute(r, proto.IPPoolType_VXLAN) {
 		// We treat remote tunnel routes as directly connected. They don't have a gateway of
 		// the VTEP because they ARE the VTEP!
 		return &routetable.Target{
@@ -332,8 +331,13 @@ func (m *vxlanManager) device(parent netlink.Link) (netlink.Link, string, error)
 		Port:      m.vxlanPort,
 	}
 
-	if m.dpConfig.BPFEnabled && bpfutils.BTFEnabled {
+	if m.dpConfig.BPFEnabled {
 		vxlan.FlowBased = true
+		if !m.dpConfig.BPFOverlayIPOnDevice {
+			// BPF dataplane handles encap/decap and source IP selection itself,
+			// so it doesn't need an IP assigned to the overlay device.
+			addr = ""
+		}
 	} else {
 		vxlan.VxlanId = m.vxlanID
 		vxlan.VtepDevIndex = parent.Attrs().Index
@@ -403,5 +407,42 @@ func parseMacForIPVersion(vtep *proto.VXLANTunnelEndpointUpdate, ipVersion uint8
 		return net.ParseMAC(vtep.MacV6)
 	default:
 		return nil, fmt.Errorf("invalid IP version")
+	}
+}
+
+func cleanUpVXLANDevice(deviceName string) {
+	// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+	logrus.Debug("Checking if we need to clean up the VXLAN device")
+
+	var errFound bool
+	for i := 0; i <= maxCleanupRetries; i++ {
+		errFound = false
+		if i > 0 {
+			logrus.Debugf("Retrying %v/%v times", i, maxCleanupRetries)
+		}
+		link, err := netlink.LinkByName(deviceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); ok {
+				logrus.Debug("VXLAN disabled and no VXLAN device found")
+				return
+			}
+			logrus.WithError(err).Warn("VXLAN disabled and failed to query VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if err = netlink.LinkDel(link); err != nil {
+			logrus.WithError(err).Error("VXLAN disabled and failed to delete unwanted VXLAN device.")
+			errFound = true
+
+			// Sleep for 1 second before retrying
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
+	if errFound {
+		logrus.Warnf("Giving up trying to clean up VXLAN device after retrying %v times", maxCleanupRetries)
 	}
 }
