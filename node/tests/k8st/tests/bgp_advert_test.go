@@ -147,6 +147,19 @@ type bgpAdvertEnv struct {
 	ips            []string
 	externalNodeIP string
 
+	// getExternalNodeRoutes returns the external BGP node's routing table for the address
+	// family under test: utils.ExternalNodeRoutes (IPv4) or
+	// utils.ExternalNodeRoutesV6 (IPv6). The route-assertion helpers consult it
+	// so the same logic serves both families.
+	getExternalNodeRoutes func(testing.TB) string
+
+	// ecmpParentAttrs is the text `ip route` prints between "proto bird" and the
+	// newline before the first nexthop on the parent line of a multipath route.
+	// It is family-specific: IPv4 (`ip r`) prints just a trailing space, whereas
+	// IPv6 (`ip -6 r`) prints " metric 1024 pref medium". assertEcmpRoutes splices
+	// it into the match block.
+	ecmpParentAttrs string
+
 	// ns is the namespace the current subtest deploys into. startTest assigns
 	// it a fresh random name per subtest so concurrent or repeated runs against
 	// the same cluster do not collide.
@@ -168,7 +181,7 @@ func TestBGPAdvert(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	// Establish the BGPPeer from the cluster nodes to the external node, with a
 	// password sourced from the shared Secret.
@@ -210,7 +223,7 @@ func TestBGPAdvertRR(t *testing.T) {
 	externalIP := utils.StartExternalNodeWithBGP(t, utils.ExternalNodeName, birdConf, "")
 	t.Cleanup(func() { utils.RemoveExternalNode(t, utils.ExternalNodeName) })
 
-	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP}
+	env := &bgpAdvertEnv{cli: cli, nodes: nodes, ips: ips, externalNodeIP: externalIP, getExternalNodeRoutes: utils.ExternalNodeRoutes, ecmpParentAttrs: " "}
 
 	createBGPSecret(t, cli)
 	peer := &v3.BGPPeer{
@@ -274,7 +287,7 @@ func (e *bgpAdvertEnv) testClusterIPAdvertisement(t *testing.T) {
 	})
 
 	// Assert that a route to the service IP range is present.
-	assertRouteContains(t, "10.96.0.0/12")
+	e.assertRouteContains(t, "10.96.0.0/12")
 
 	// Create both a Local and a Cluster type NodePort service with one replica.
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
@@ -294,19 +307,19 @@ func (e *bgpAdvertEnv) testClusterIPAdvertisement(t *testing.T) {
 	curlRetry(t, clusterSvcIP)
 
 	// The local clusterIP is advertised; the cluster clusterIP is not.
-	assertRouteContains(t, localSvcIP)
-	assertRouteNotContains(t, clusterSvcIP)
+	e.assertRouteContains(t, localSvcIP)
+	e.assertRouteNotContains(t, clusterSvcIP)
 
 	// Scale the local service to 4 replicas and assert ECMP routing.
 	utils.ScaleDeployment(t, localSvc, e.ns, 4)
 	utils.WaitForDeployment(t, localSvc, e.ns)
-	assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Delete both services; the clusterIP is no longer advertised.
 	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
 	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
-	assertRouteNotContains(t, localSvcIP)
+	e.assertRouteNotContains(t, localSvcIP)
 }
 
 func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
@@ -319,7 +332,7 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	})
 
 	clusterCIDR := "10.96.0.0/12"
-	assertRouteContains(t, clusterCIDR)
+	e.assertRouteContains(t, clusterCIDR)
 
 	localSvc, clusterSvc := "nginx-local", "nginx-cluster"
 	utils.Deploy(t, utils.NginxImage, localSvc, e.ns, 80, utils.DeployOptions{})
@@ -336,8 +349,8 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 	curlRetry(t, localSvcIP)
 	curlRetry(t, clusterSvcIP)
 
-	assertRouteContains(t, localSvcIP)
-	assertRouteNotContains(t, clusterSvcIP)
+	e.assertRouteContains(t, localSvcIP)
+	e.assertRouteNotContains(t, clusterSvcIP)
 
 	curlRetry(t, localSvcIP)
 	curlRetry(t, clusterSvcIP)
@@ -348,19 +361,19 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 
 	// Local service is advertised only from nodes that can run pods; the
 	// cluster CIDR is advertised from all nodes.
-	assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
-	assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Exclude node-1 from service advertisement. Routes from it are withdrawn.
 	labelNode(t, e.nodes[1], "node.kubernetes.io/exclude-from-external-load-balancers", "true")
 
-	assertEcmpRoutes(t, localSvcIP, []string{e.ips[2], e.ips[3]})
-	assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcIP, []string{e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[2], e.ips[3]})
 
 	// Same for the external IP CIDR.
 	externalIPCIDR := "175.200.0.0/16"
-	assertEcmpRoutes(t, externalIPCIDR, []string{e.ips[0], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, externalIPCIDR, []string{e.ips[0], e.ips[2], e.ips[3]})
 
 	// Still reachable through other nodes.
 	curlRetry(t, localSvcIP)
@@ -368,31 +381,31 @@ func (e *bgpAdvertEnv) testNodeExclusion(t *testing.T) {
 
 	// Delete the local service; it is no longer advertised.
 	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
-	assertRouteNotContains(t, localSvcIP)
+	e.assertRouteNotContains(t, localSvcIP)
 
 	// Re-create the local service; advertised from the correct nodes only.
 	utils.CreateService(t, localSvc, localSvc, e.ns, 80, utils.DeployOptions{})
 	utils.WaitUntilExists(t, localSvc, "svc", e.ns)
 	localSvcIP = utils.GetSvcClusterIP(t, localSvc, e.ns)
-	assertEcmpRoutes(t, localSvcIP, []string{e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcIP, []string{e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Add an external IP and assert it follows the same advertisement rules.
 	localSvcExternalIP := "175.200.1.1"
 	utils.AddSvcExternalIPs(t, localSvc, e.ns, []string{localSvcExternalIP})
-	assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[2], e.ips[3]})
 
 	// Re-enable the excluded node; it advertises service routes again.
 	labelNode(t, e.nodes[1], "node.kubernetes.io/exclude-from-external-load-balancers", "false")
-	assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
-	assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[1], e.ips[2], e.ips[3]})
-	assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, clusterCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 	curlRetry(t, localSvcIP)
 
 	// Delete both services; the clusterIP is no longer advertised.
 	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
 	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
-	assertRouteNotContains(t, localSvcIP)
+	e.assertRouteNotContains(t, localSvcIP)
 }
 
 func (e *bgpAdvertEnv) testExternalIPAdvertisement(t *testing.T) {
@@ -420,8 +433,8 @@ func (e *bgpAdvertEnv) testExternalIPAdvertisement(t *testing.T) {
 	utils.WaitForDeployment(t, clusterSvc, e.ns)
 
 	// clusterIPs are not advertised (no serviceClusterIPs configured).
-	assertRouteNotContains(t, localSvcIP)
-	assertRouteNotContains(t, clusterSvcIP)
+	e.assertRouteNotContains(t, localSvcIP)
+	e.assertRouteNotContains(t, clusterSvcIP)
 
 	// Network policy that only accepts traffic from the external node.
 	createExternalNodeIngressPolicy(t, e.ns, e.externalNodeIP)
@@ -439,18 +452,18 @@ func (e *bgpAdvertEnv) testExternalIPAdvertisement(t *testing.T) {
 	// The external IP of the local service is advertised but not the cluster one.
 	localSvcExternalIPsRoute := fmt.Sprintf("%s via %s", localSvcExternalIP, localSvcHostIP)
 	clusterSvcExternalIPsRoute := fmt.Sprintf("%s via %s", clusterSvcExternalIP, clusterSvcHostIP)
-	assertRouteContains(t, localSvcExternalIPsRoute)
-	assertRouteNotContains(t, clusterSvcExternalIPsRoute)
+	e.assertRouteContains(t, localSvcExternalIPsRoute)
+	e.assertRouteNotContains(t, clusterSvcExternalIPsRoute)
 
 	// Scale the local service to 4 replicas; expect ECMP routes for its ext IP.
 	utils.ScaleDeployment(t, localSvc, e.ns, 4)
 	utils.WaitForDeployment(t, localSvc, e.ns)
-	assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localSvcExternalIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 
 	// Delete both services; the external IP is no longer advertised.
 	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
 	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
-	assertRouteNotContains(t, localSvcExternalIPsRoute)
+	e.assertRouteNotContains(t, localSvcExternalIPsRoute)
 }
 
 func (e *bgpAdvertEnv) testFullyQualifiedServiceIPs(t *testing.T) {
@@ -474,7 +487,7 @@ func (e *bgpAdvertEnv) testFullyQualifiedServiceIPs(t *testing.T) {
 	utils.WaitUntilExists(t, svcName, "svc", e.ns)
 	utils.WaitForDeployment(t, svcName, e.ns)
 
-	assertEcmpRoutes(t, extIP, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, extIP, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 }
 
 func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
@@ -510,37 +523,37 @@ func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
 	// LB IP of the local service is advertised but not the cluster service's.
 	localSvcLBRoute := fmt.Sprintf("%s via %s", localLBIP, localSvcHostIP)
 	clusterSvcLBRoute := fmt.Sprintf("%s via %s", clusterLBIP, clusterSvcHostIP)
-	assertRouteContains(t, localSvcLBRoute)
-	assertRouteNotContains(t, clusterSvcLBRoute)
+	e.assertRouteContains(t, localSvcLBRoute)
+	e.assertRouteNotContains(t, clusterSvcLBRoute)
 
 	// The full range is advertised from each node.
 	lbCIDR := "80.15.0.0/24"
-	assertEcmpRoutes(t, lbCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, lbCIDR, []string{e.ips[0], e.ips[1], e.ips[2], e.ips[3]})
 
 	// Scale the local service to 4 replicas; expect ECMP for its LB IP.
 	utils.ScaleDeployment(t, localSvc, e.ns, 4)
 	utils.WaitForDeployment(t, localSvc, e.ns)
-	assertEcmpRoutes(t, localLBIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertEcmpRoutes(t, localLBIP, []string{e.ips[1], e.ips[2], e.ips[3]})
 
 	// Disable LoadBalancer advertisement; routes are withdrawn.
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{})
-	assertRouteNotContains(t, localLBIP)
-	assertRouteNotContains(t, lbCIDR)
+	e.assertRouteNotContains(t, localLBIP)
+	e.assertRouteNotContains(t, lbCIDR)
 
 	// Mismatched CIDR; routes stay withdrawn.
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{
 		ServiceLoadBalancerIPs: []v3.ServiceLoadBalancerIPBlock{{CIDR: "90.15.0.0/24"}},
 	})
-	assertRouteNotContains(t, localLBIP)
-	assertRouteNotContains(t, lbCIDR)
+	e.assertRouteNotContains(t, localLBIP)
+	e.assertRouteNotContains(t, lbCIDR)
 
 	// Reapply the correct configuration; routes come back.
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{
 		ServiceLoadBalancerIPs: []v3.ServiceLoadBalancerIPBlock{{CIDR: "80.15.0.0/24"}},
 	})
-	assertEcmpRoutes(t, localLBIP, []string{e.ips[1], e.ips[2], e.ips[3]})
-	assertRouteContains(t, lbCIDR)
-	assertRouteNotContains(t, clusterSvcLBRoute)
+	e.assertEcmpRoutes(t, localLBIP, []string{e.ips[1], e.ips[2], e.ips[3]})
+	e.assertRouteContains(t, lbCIDR)
+	e.assertRouteNotContains(t, clusterSvcLBRoute)
 
 	// Services should be reachable from the external node.
 	curlRetry(t, localLBIP)
@@ -549,7 +562,7 @@ func (e *bgpAdvertEnv) testLoadBalancerIPAdvertisement(t *testing.T) {
 	// Delete both services; the LB IP is no longer advertised.
 	utils.DeleteAndConfirm(t, localSvc, "svc", e.ns)
 	utils.DeleteAndConfirm(t, clusterSvc, "svc", e.ns)
-	assertRouteNotContains(t, localLBIP)
+	e.assertRouteNotContains(t, localLBIP)
 }
 
 func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
@@ -559,7 +572,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{
 		ServiceClusterIPs: []v3.ServiceClusterIPBlock{{CIDR: "10.96.0.0/12"}},
 	})
-	assertRouteContains(t, "10.96.0.0/12")
+	e.assertRouteContains(t, "10.96.0.0/12")
 
 	// Create a local service and deployment.
 	localSvc := "nginx-local"
@@ -581,7 +594,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	// enough that they're programmed by the time we've queried them all.
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		routes := utils.ExternalNodeRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if !strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s not yet advertised", cip)
@@ -594,7 +607,7 @@ func (e *bgpAdvertEnv) testManyServices(t *testing.T) {
 	utils.ScaleDeployment(t, localSvc, e.ns, 0)
 	utils.WaitForDeployment(t, localSvc, e.ns)
 	g.Eventually(func() error {
-		routes := utils.ExternalNodeRoutes(t)
+		routes := e.getExternalNodeRoutes(t)
 		for _, cip := range clusterIPs {
 			if strings.Contains(routes, cip) {
 				return fmt.Errorf("route for %s still advertised", cip)
@@ -612,7 +625,7 @@ func (e *bgpAdvertEnv) testBGPFilterIPAdvertisement(t *testing.T) {
 	e.setBGPConfig(t, v3.BGPConfigurationSpec{
 		ServiceClusterIPs: []v3.ServiceClusterIPBlock{{CIDR: "10.96.0.0/12"}},
 	})
-	assertRouteContains(t, "10.96.0.0/12")
+	e.assertRouteContains(t, "10.96.0.0/12")
 
 	// Create a Local type NodePort service with a single replica.
 	localSvc := "nginx-local"
@@ -623,7 +636,7 @@ func (e *bgpAdvertEnv) testBGPFilterIPAdvertisement(t *testing.T) {
 	utils.WaitForDeployment(t, localSvc, e.ns)
 
 	curlRetry(t, localSvcIP)
-	assertRouteContains(t, localSvcIP)
+	e.assertRouteContains(t, localSvcIP)
 
 	// Create an export BGP filter that rejects the service IP range.
 	filterName := "test-filter-export-1"
@@ -648,8 +661,8 @@ func (e *bgpAdvertEnv) testBGPFilterIPAdvertisement(t *testing.T) {
 	t.Cleanup(func() { setPeerFilters(t, e.cli, extPeerName, nil) })
 
 	// The clusterIP and the service IP range are no longer advertised.
-	assertRouteNotContains(t, localSvcIP)
-	assertRouteNotContains(t, "10.96.0.0/12")
+	e.assertRouteNotContains(t, localSvcIP)
+	e.assertRouteNotContains(t, "10.96.0.0/12")
 }
 
 // ----------------------------------------------------------------------------
@@ -684,8 +697,8 @@ func (e *bgpAdvertEnv) testRR(t *testing.T) {
 
 	clusterIP := svc.Spec.ClusterIP
 	externalIP := svc.Spec.ExternalIPs[0]
-	assertRouteContains(t, clusterIP)
-	assertRouteContains(t, externalIP)
+	e.assertRouteContains(t, clusterIP)
+	e.assertRouteContains(t, externalIP)
 }
 
 func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
@@ -718,8 +731,8 @@ func (e *bgpAdvertEnv) testSingleIPLBRR(t *testing.T) {
 
 	clusterIP := svc.Spec.ClusterIP
 	loadBalancerIP := svc.Spec.LoadBalancerIP
-	assertRouteContains(t, clusterIP)
-	assertRouteContains(t, loadBalancerIP)
+	e.assertRouteContains(t, clusterIP)
+	e.assertRouteContains(t, loadBalancerIP)
 }
 
 // createRRWorkload deploys the nginx-rr Deployment pinned to node-1 and a
@@ -891,6 +904,10 @@ func createExternalNodeIngressPolicy(t *testing.T, nsName, externalIP string) {
 	g := NewWithT(t)
 	tcp := corev1.ProtocolTCP
 	port80 := intstr.FromInt32(80)
+	mask := "/32"
+	if strings.Contains(externalIP, ":") {
+		mask = "/128"
+	}
 	policy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "allow-tcp-80-ex", Namespace: nsName},
 		Spec: networkingv1.NetworkPolicySpec{
@@ -898,7 +915,7 @@ func createExternalNodeIngressPolicy(t *testing.T, nsName, externalIP string) {
 			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
 			Ingress: []networkingv1.NetworkPolicyIngressRule{{
 				From: []networkingv1.NetworkPolicyPeer{{
-					IPBlock: &networkingv1.IPBlock{CIDR: externalIP + "/32"},
+					IPBlock: &networkingv1.IPBlock{CIDR: externalIP + mask},
 				}},
 				Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcp, Port: &port80}},
 			}},
@@ -979,11 +996,11 @@ func mapField(m map[string]any, key string) map[string]any {
 
 // assertRouteContains retries until the external node's route table contains
 // substr.
-func assertRouteContains(t *testing.T, substr string) {
+func (e *bgpAdvertEnv) assertRouteContains(t *testing.T, substr string) {
 	t.Helper()
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := utils.ExternalNodeRoutes(t); !strings.Contains(routes, substr) {
+		if routes := e.getExternalNodeRoutes(t); !strings.Contains(routes, substr) {
 			return fmt.Errorf("route table does not contain %q:\n%s", substr, routes)
 		}
 		return nil
@@ -992,11 +1009,11 @@ func assertRouteContains(t *testing.T, substr string) {
 
 // assertRouteNotContains retries until the external node's route table no longer
 // contains substr.
-func assertRouteNotContains(t *testing.T, substr string) {
+func (e *bgpAdvertEnv) assertRouteNotContains(t *testing.T, substr string) {
 	t.Helper()
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := utils.ExternalNodeRoutes(t); strings.Contains(routes, substr) {
+		if routes := e.getExternalNodeRoutes(t); strings.Contains(routes, substr) {
 			return fmt.Errorf("route table still contains %q:\n%s", substr, routes)
 		}
 		return nil
@@ -1006,17 +1023,17 @@ func assertRouteNotContains(t *testing.T, substr string) {
 // assertEcmpRoutes retries until the external node's route table contains the
 // ECMP route block for dst with exactly the given next-hop IPs. Mirrors
 // _TestBGPAdvert.assert_ecmp_routes.
-func assertEcmpRoutes(t *testing.T, dst string, via []string) {
+func (e *bgpAdvertEnv) assertEcmpRoutes(t *testing.T, dst string, via []string) {
 	t.Helper()
 	sorted := append([]string(nil), via...)
 	sort.Strings(sorted)
-	match := dst + " proto bird "
+	match := dst + " proto bird" + e.ecmpParentAttrs
 	for _, ip := range sorted {
 		match += fmt.Sprintf("\n\tnexthop via %s dev eth0 weight 1 ", ip)
 	}
 	g := NewWithT(t)
 	g.Eventually(func() error {
-		if routes := utils.ExternalNodeRoutes(t); !strings.Contains(routes, match) {
+		if routes := e.getExternalNodeRoutes(t); !strings.Contains(routes, match) {
 			return fmt.Errorf("ECMP route block not found:\n%s\nin:\n%s", match, routes)
 		}
 		return nil

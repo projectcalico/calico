@@ -200,6 +200,14 @@ func cidrsOverlap(a, b ip.CIDR) bool {
 	return b.Contains(a.Addr())
 }
 
+// Transactions returns a copy of the transactions Run has seen, for test assertions.
+func (f *fakeNFT) Transactions() []knftables.Transaction {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	return append([]knftables.Transaction(nil), f.transactions...)
+}
+
 func (f *fakeNFT) preRun(tx *knftables.Transaction) {
 	f.lock.Lock()
 	defer f.lock.Unlock()

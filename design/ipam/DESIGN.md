@@ -25,7 +25,7 @@ IPAM state is stored as four CRDs, plus `IPReservation` for carve-outs:
 | `IPAMBlock` | Contiguous slice of a pool (default /26 IPv4, /122 IPv6). Holds the ordinal bitmap, per-allocation attributes, and per-ordinal sequence numbers. |
 | `BlockAffinity` | Per-host (or per-virtual-owner) claim on a block. State machine: `pending` -> `confirmed` -> `pendingDeletion`. |
 | `IPAMHandle` | Secondary index keyed by handle ID, so `ReleaseByHandle` doesn't scan blocks. Also enforces per-handle allocation caps (KubeVirt VM persistence). |
-| `IPAMConfig` / `IPAMConfiguration` | Singleton. Holds `StrictAffinity`, `MaxBlocksPerHost`, `AutoAllocateBlocks`, `KubeVirtVMAddressPersistence`. The v1 name is `IPAMConfig`; the v3 name is `IPAMConfiguration`. |
+| `IPAMConfig` / `IPAMConfiguration` | Singleton. Holds `StrictAffinity`, `MaxBlocksPerHost`, `AutoAllocateBlocks`, `KubeVirtVMAddressPersistence`, `IPCooldownSeconds`. The v1 name is `IPAMConfig`; the v3 name is `IPAMConfiguration`. |
 | `IPReservation` | Carve-outs from the pool (tunnel addresses, externally-managed IPs). Filtered at block-skip and ordinal-skip granularity. |
 
 The IPAM CRDs exist on both `crd.projectcalico.org/v1` and `projectcalico.org/v3`. The two groups are not symmetric - they differ in field shape, naming (`IPAMConfig` vs

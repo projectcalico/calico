@@ -26,6 +26,7 @@ steps:
   - name: nftables-mode-arm64-wg
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_WIREGUARD
         value: "true"
@@ -57,6 +58,7 @@ steps:
   - name: nftables-talos-nftables-talos
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENCAPSULATION_TYPE
         value: VXLAN
@@ -72,6 +74,7 @@ steps:
   - name: nftables-talos-native-v3-crds-gcp
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: CLUSTER_ROUTING_MODE
         value: Felix
@@ -93,6 +96,7 @@ steps:
   - name: nftables-talos-native-v3-crds-aws
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_VERSION
         value: stable-3
@@ -105,6 +109,7 @@ steps:
   - name: nftables-mode-eks-eks-w-aws-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: K8S_VERSION
         value: stable-1
@@ -120,6 +125,7 @@ steps:
   - name: nftables-mode-eks-eks-w-calico-cni
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: INSTALLER
         value: helmerator
@@ -144,6 +150,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
@@ -167,6 +174,7 @@ steps:
     jobSize: large
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: ENABLE_DUAL_STACK
         value: "true"
@@ -185,6 +193,7 @@ steps:
   - name: kubevirt-e2e-tests
     services:
       - docker
+      - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/gcp-kubevirt.yaml
