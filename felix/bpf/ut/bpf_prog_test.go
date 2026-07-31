@@ -832,6 +832,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsEgressPacketRateConfigured
 				}
 
+				if topts.redirectPeer {
+					globals.Flags |= libbpf.GlobalsRedirectPeer
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -1211,6 +1215,7 @@ type testOpts struct {
 	ingressQoSPacketRate bool
 	egressQoSPacketRate  bool
 	dscp                 int8
+	redirectPeer         bool
 }
 
 type testOption func(opts *testOpts)
@@ -1299,6 +1304,12 @@ func withObjName(name string) testOption {
 func withDescription(desc string) testOption {
 	return func(o *testOpts) {
 		o.description = desc
+	}
+}
+
+func withRedirectPeer() testOption {
+	return func(o *testOpts) {
+		o.redirectPeer = true
 	}
 }
 
