@@ -117,7 +117,8 @@ k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 k8s.io/utils v0.0.0-20260626114624-be93311217bd
-kubevirt.io/api v1.8.3
+kubevirt.io/api v1.9.0
+kubevirt.io/client-go v1.9.0-beta.0.0.20260731113834-b7f13e6a8fd7
 kubevirt.io/containerized-data-importer-api v1.64.0
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
