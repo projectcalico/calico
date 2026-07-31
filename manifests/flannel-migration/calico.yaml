@@ -59,7 +59,7 @@ data:
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
+      "cniVersion": "1.0.0",
       "plugins": [
         {
           "type": "calico",
@@ -3629,8 +3629,8 @@ spec:
             spec:
               properties:
                 reservedCIDRs:
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set

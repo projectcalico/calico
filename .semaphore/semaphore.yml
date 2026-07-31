@@ -330,7 +330,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/controllers/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:

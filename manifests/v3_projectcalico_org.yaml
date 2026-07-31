@@ -36317,8 +36317,8 @@ spec:
             spec:
               properties:
                 reservedCIDRs:
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
