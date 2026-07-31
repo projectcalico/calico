@@ -29,9 +29,9 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var expectedBaseChains = []string{
@@ -69,7 +69,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -926,7 +926,7 @@ var _ = Describe("Insert early rules", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -995,7 +995,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				Disabled:         true,
 			},
 			true,
@@ -1074,7 +1074,7 @@ var _ = Describe("Enabled table cache invalidation", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -1127,7 +1127,7 @@ var _ = Describe("ARP Table", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 			},
 			true,
 		)
@@ -1187,7 +1187,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				ListInterfacesOverride: func() ([]string, error) {
 					// Everything the flowtable specs program is treated as present by default;
 					// the prune spec overrides this with its own narrower lister.
@@ -1287,7 +1287,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				ListInterfacesOverride: func() ([]string, error) {
 					return []string{"cali1234", "vxlan.calico", "lo"}, nil
 				},
@@ -1321,7 +1321,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				ListInterfacesOverride: func() ([]string, error) {
 					return nil, errors.New("netlink is having a bad day")
 				},
@@ -1356,7 +1356,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
 				LookPathOverride: testutils.LookPathNoLegacy,
-				OpRecorder:       logutils.NewSummarizer("test loop"),
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				ListInterfacesOverride: func() ([]string, error) {
 					return present, nil
 				},
