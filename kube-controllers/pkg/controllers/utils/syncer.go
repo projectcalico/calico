@@ -49,6 +49,9 @@ func NewDataFeed(c client.Interface, dataStore string) *DataFeed {
 			ListInterface: model.BlockListOptions{},
 		},
 		{
+			ListInterface: model.IPAMHandleListOptions{},
+		},
+		{
 			ListInterface: model.ResourceListOptions{Kind: apiv3.KindIPPool},
 		},
 		{

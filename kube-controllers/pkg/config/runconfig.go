@@ -83,6 +83,14 @@ type NodeControllerConfig struct {
 	// The grace period used by the controller to determine if an IP address is leaked.
 	// Set to 0 to disable IP address garbage collection.
 	LeakGracePeriod *v1.Duration
+
+	// IPAMHandleGCEnabled controls whether the IPAM handle reconciler runs as
+	// part of the IPAM GC loop. When true, the controller compares each
+	// IPAMHandle against block reality and repairs handles that have been
+	// divergent for several consecutive cycles. Defaults to true; can be
+	// disabled via the DISABLE_IPAM_HANDLE_GC env var as an emergency
+	// off-switch.
+	IPAMHandleGCEnabled bool
 }
 
 type AutoHostEndpointConfig struct {
@@ -383,6 +391,13 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 		if apiCfg.Controllers.Node != nil {
 			rc.Node.LeakGracePeriod = apiCfg.Controllers.Node.LeakGracePeriod
 			status.RunningConfig.Controllers.Node.LeakGracePeriod = apiCfg.Controllers.Node.LeakGracePeriod
+		}
+
+		// IPAM handle GC is on by default; allow operators to disable it via env
+		// var as an emergency off-switch (no API field yet).
+		rc.Node.IPAMHandleGCEnabled = true
+		if v, _ := strconv.ParseBool(os.Getenv("DISABLE_IPAM_HANDLE_GC")); v {
+			rc.Node.IPAMHandleGCEnabled = false
 		}
 
 		if envCfg.DatastoreType != "kubernetes" {
