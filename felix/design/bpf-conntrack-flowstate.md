@@ -90,6 +90,18 @@ bpfnat feature is enabled; per-interface sysctls are set to loose
 (`2`) on interfaces where Calico forwards packets that may appear
 misrouted to the kernel. BPF does the real check.
 
+Loose is not relaxed enough on a device with **no IPv4 address**: the
+kernel's `__fib_validate_source()` short-circuits on such devices
+(`no_addr`) and drops any packet whose source does not route back out
+that device, for *any* non-zero `rp_filter` — the loose-mode fallback
+lookup is never reached. This bites the overlay device in
+`BPFOverlayHostSourceIP=HostAddress` mode (the tunnel deliberately has
+no IP): replies of host-networked connections to remote service
+backends are reverse-NATted on tunnel ingress, so they enter the stack
+with the service IP as source, which routes via `bpfin.cali`, not the
+tunnel. Felix therefore sets `rp_filter = 0` (like on the bpfnat veths)
+on IPIP/VXLAN devices in that mode.
+
 ### Review notes for this section
 
 - A change that makes a new interface type Calico-managed must decide
