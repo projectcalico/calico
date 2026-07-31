@@ -15,6 +15,9 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -132,4 +135,55 @@ func cmdStrs(cmds []common.Cmd) []string {
 		out[i] = c.CmdStr
 	}
 	return out
+}
+
+// wrapBase64 inserts a newline every n characters, mimicking how the
+// "gzip-base64" dump format wraps its base64 output so it survives kubectl
+// exec.
+func wrapBase64(s string, n int) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i += n {
+		end := i + n
+		if end > len(s) {
+			end = len(s)
+		}
+		b.WriteString(s[i:end])
+		b.WriteByte('\n')
+	}
+	return b.String()
+}
+
+func TestDecodeBase64Gzip(t *testing.T) {
+	RegisterTestingT(t)
+
+	// A representative NDJSON snapshot, large enough to span multiple wrapped
+	// base64 lines.
+	payload := strings.Repeat(`{"section":"felix","kv":{"key":"/calico/v1/Ready","value":true}}`+"\n", 50)
+
+	// Encode the same way "calico typha client dump --format=gzip-base64" does:
+	// gzip then base64, wrapped into short lines.
+	var gzBuf bytes.Buffer
+	gw := gzip.NewWriter(&gzBuf)
+	_, err := gw.Write([]byte(payload))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(gw.Close()).NotTo(HaveOccurred())
+	wire := wrapBase64(base64.StdEncoding.EncodeToString(gzBuf.Bytes()), 100)
+
+	// Confirm every wire line is short enough to survive kubectl exec.
+	for _, line := range strings.Split(strings.TrimRight(wire, "\n"), "\n") {
+		Expect(len(line)).To(BeNumerically("<=", 100))
+	}
+
+	var out bytes.Buffer
+	Expect(decodeBase64Gzip(strings.NewReader(wire), &out)).NotTo(HaveOccurred())
+	Expect(out.String()).To(Equal(payload))
+}
+
+func TestDecodeBase64GzipRejectsNonGzip(t *testing.T) {
+	RegisterTestingT(t)
+
+	// Empty / non-gzip input (e.g. an older Typha image that doesn't know the
+	// command) must surface an error rather than producing a corrupt file.
+	var out bytes.Buffer
+	Expect(decodeBase64Gzip(strings.NewReader(""), &out)).To(HaveOccurred())
 }

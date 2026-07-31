@@ -38,3 +38,6 @@ exclude:
 
     - label: Feature:KubeVirt
       reason: "e2e infra integration with Banzai not ready, currently run manually"
+
+    - label: RequiresTypha
+      reason: "this job installs Calico from released quay.io images (USE_PRIVATE_REGISTRY, PRIVATE_REGISTRY=quay.io/), not the PR build, so the deployed Typha lacks PR-only diagnostics such as 'calico component typha client dump'"

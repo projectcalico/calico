@@ -17,6 +17,26 @@ COPY ${BIN_DIR}/calico-${TARGETARCH} /shim/usr/bin/calico
 RUN ln -s calico /shim/usr/bin/calicoctl && \
     ln -s calico /shim/usr/bin/calico-ipam
 
+# Pre-create a writable runtime directory for Calico's unix domain sockets
+# (e.g. Typha's diagnostics socket at /var/run/calico/typha.sock). The image
+# runs as uid 10001 (see USER in the final stage) with all capabilities
+# dropped, so it cannot create this directory itself under the root-owned
+# filesystem.
+#
+# Create the real directory under /run (chowned to the runtime uid) and ship
+# /var/run as a symlink to /run, so /var/run/calico resolves to /run/calico on
+# every supported base. This has to work for two very different bases:
+#   - calico/base is extremely minimal: no /var, /run or /var/run at all, so we
+#     add the whole tree (the /var/run symlink included) from scratch.
+#   - ubi-minimal already ships /var/run as a symlink to /run. Staging a *real*
+#     /var/run/calico directory collides with that symlink in the final COPY
+#     ("cannot copy to non-directory: .../var/run"); shipping the real dir under
+#     /run and /var/run as the same symlink avoids the clash.
+# Only the calico subdirectory is chowned to the runtime uid; nothing above it
+# is writable by Typha.
+RUN mkdir -p /shim/run/calico && chown 10001:10001 /shim/run/calico && \
+    mkdir -p /shim/var && ln -s ../run /shim/var/run
+
 # Stage all build-context files into a scratch layer so the final image gets
 # them in a single COPY. This keeps the CALICO_BASE layer hash stable across
 # (hash)releases — only the staged layer above it changes from one build to

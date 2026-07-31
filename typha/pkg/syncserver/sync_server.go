@@ -27,6 +27,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +116,10 @@ const (
 	PortRandom                        = -1
 )
 
+// DefaultSocketPath is the default path for the plaintext, pod-private unix
+// domain socket used for in-pod diagnostics (see Config.SocketPath).
+const DefaultSocketPath = "/var/run/calico/typha.sock"
+
 type Server struct {
 	config        Config
 	caches        map[syncproto.SyncerType]BreadcrumbProvider
@@ -167,6 +172,12 @@ type Config struct {
 	ClientCN                       string
 	ClientURISAN                   string
 	WriteBufferSize                int
+
+	// SocketPath, if non-empty, makes Typha additionally listen for the sync
+	// protocol on a plaintext unix domain socket at this path (in addition to
+	// the main TLS TCP listener).  The socket is for in-pod diagnostics
+	// (see "calico typha client dump"); empty disables it.
+	SocketPath string
 
 	// DebugLogWrites tells the server to wrap each connection with a Writer that
 	// logs every write.  Intended only for use in tests!
@@ -355,6 +366,10 @@ func (s *Server) Start(cxt context.Context) {
 	go s.serve(cxt)
 	go s.governNumberOfConnections(cxt)
 	go s.handleGracefulShutDown(cxt, cancelFn)
+	if s.config.SocketPath != "" {
+		s.Finished.Add(1)
+		go s.serveUnix(cxt)
+	}
 }
 
 func (s *Server) SetMaxConns(numConns int) {
@@ -424,6 +439,71 @@ func (s *Server) serve(cxt context.Context) {
 	}
 	logCxt.Info("Opened listen socket")
 
+	s.closeListenerOnShutdown(cxt, l)
+
+	chosenPort := l.Addr().(*net.TCPAddr).Port
+
+	s.lock.Lock()
+	s.chosenPort = chosenPort
+	s.lock.Unlock()
+
+	logCxt = log.WithField("port", s.chosenPort)
+	close(s.listeningC)
+	s.acceptLoop(cxt, l, logCxt)
+}
+
+// serveUnix runs a second, plaintext listener on a filesystem unix domain
+// socket that is private to the Typha pod.  It serves exactly the same sync
+// protocol as the main (TLS) listener, but without TLS or client-certificate
+// auth — the trust boundary is the pod's mount namespace plus the socket's
+// filesystem permissions, not the wire.  This lets "calico typha client dump",
+// running inside the Typha pod, read what Typha is serving regardless of how
+// the Felix-Typha certificates are configured.
+//
+// A filesystem-path socket (not a Linux abstract socket) is essential here:
+// Typha runs with hostNetwork, so an abstract socket would live in the host's
+// network namespace and be reachable by any host-network process; a filesystem
+// socket lives in the (unshared) mount namespace and stays private to the pod.
+//
+// Failure to set up the socket is logged and otherwise ignored: the debug
+// socket must never prevent Typha from serving Felix.
+func (s *Server) serveUnix(cxt context.Context) {
+	defer s.Finished.Done()
+	logCxt := log.WithField("socket", s.config.SocketPath)
+
+	dir := filepath.Dir(s.config.SocketPath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		logCxt.WithError(err).Warn("Failed to create directory for debug socket; debug socket disabled")
+		return
+	}
+	// Remove any stale socket left behind by a previous (unclean) exit; bind
+	// fails if the path already exists.
+	if err := os.Remove(s.config.SocketPath); err != nil && !os.IsNotExist(err) {
+		logCxt.WithError(err).Warn("Failed to remove stale debug socket; debug socket disabled")
+		return
+	}
+	l, err := net.Listen("unix", s.config.SocketPath)
+	if err != nil {
+		logCxt.WithError(err).Warn("Failed to open debug socket; debug socket disabled")
+		return
+	}
+	// Restrict the socket to the owner.  The 0700 parent dir is the primary
+	// gate; this closes the brief window where bind() created the socket with
+	// umask-derived permissions.
+	if err := os.Chmod(s.config.SocketPath, 0o600); err != nil {
+		logCxt.WithError(err).Warn("Failed to chmod debug socket; closing it")
+		_ = l.Close()
+		return
+	}
+	logCxt.Info("Opened debug unix socket")
+
+	s.closeListenerOnShutdown(cxt, l)
+	s.acceptLoop(cxt, l, logCxt)
+}
+
+// closeListenerOnShutdown closes l when the context is done or graceful
+// shutdown is triggered, which unblocks the corresponding accept loop.
+func (s *Server) closeListenerOnShutdown(cxt context.Context, l net.Listener) {
 	s.Finished.Go(func() {
 		select {
 		case <-cxt.Done():
@@ -436,15 +516,12 @@ func (s *Server) serve(cxt context.Context) {
 			log.WithError(err).Warn("Ignoring error from socket Close during shut-down.")
 		}
 	})
+}
 
-	chosenPort := l.Addr().(*net.TCPAddr).Port
-
-	s.lock.Lock()
-	s.chosenPort = chosenPort
-	s.lock.Unlock()
-
-	logCxt = log.WithField("port", s.chosenPort)
-	close(s.listeningC)
+// acceptLoop accepts connections on l and dispatches each one to a connection
+// handler until the listener is closed.  It is safe to run concurrently for
+// more than one listener (e.g. the TLS and unix sockets).
+func (s *Server) acceptLoop(cxt context.Context, l net.Listener, logCxt *log.Entry) {
 	for {
 		logCxt.Debug("About to accept connection")
 		conn, err := l.Accept()
@@ -461,63 +538,84 @@ func (s *Server) serve(cxt context.Context) {
 			logCxt.WithError(err).Panic("Failed to accept connection")
 			return
 		}
-
-		logCxt.Infof("Accepted from %s", conn.RemoteAddr())
-
-		if s.config.WriteBufferSize != 0 {
-			// Try to set the write buffer size.  Only used in tests for now.
-			setWriteBufferSizeBestEffort(conn, s.config.WriteBufferSize)
-		}
-
-		connID := s.nextConnID
-		s.nextConnID++
-		logCxt.WithField("connID", connID).Info("New connection")
-		counterNumConnectionsAccepted.Inc()
-
-		// Create a new connection-scoped context, which we'll use for signaling to our child
-		// goroutines to halt.
-		connCxt, cancel := context.WithCancel(cxt)
-		var connW io.Writer = conn
-		if s.config.DebugLogWrites {
-			connW = writelogger.New(conn)
-		}
-		connection := &connection{
-			ID:              connID,
-			config:          &s.config,
-			allCaches:       s.caches,
-			allSnapshotters: s.binSnapCaches,
-			cxt:             connCxt,
-			cancelCxt:       cancel,
-			conn:            conn,
-			connW:           connW,
-			logCxt: log.WithFields(log.Fields{
-				"client": conn.RemoteAddr(),
-				"connID": connID,
-			}),
-
-			encoder:     gob.NewEncoder(connW),
-			flushWriter: func() error { return nil },
-			readC:       make(chan any),
-
-			allMetrics: s.perSyncerConnMetrics,
-		}
-		// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
-		s.recordConnection(connection)
-		// Defer to the connection-handler.
-		s.Finished.Add(2)
-		go func() {
-			err := connection.handle(&s.Finished)
-			if err != nil {
-				log.WithError(err).Info("Connection handler finished")
-			}
-		}()
-		// Clean up the entry in connIDToConn as soon as the context is canceled.
-		go func() {
-			<-connCxt.Done()
-			s.discardConnection(connection)
-			s.Finished.Done()
-		}()
+		s.handleAcceptedConn(cxt, conn, logCxt)
 	}
+}
+
+func (s *Server) handleAcceptedConn(cxt context.Context, conn net.Conn, logCxt *log.Entry) {
+	client := clientAddrForLog(conn)
+	logCxt.Infof("Accepted from %s", client)
+
+	if s.config.WriteBufferSize != 0 {
+		// Try to set the write buffer size.  Only used in tests for now.
+		setWriteBufferSizeBestEffort(conn, s.config.WriteBufferSize)
+	}
+
+	// connID allocation is shared across the (concurrent) TLS and unix accept
+	// loops, so it must be done under the lock.
+	s.lock.Lock()
+	connID := s.nextConnID
+	s.nextConnID++
+	s.lock.Unlock()
+	logCxt.WithField("connID", connID).Info("New connection")
+	counterNumConnectionsAccepted.Inc()
+
+	// Create a new connection-scoped context, which we'll use for signaling to our child
+	// goroutines to halt.
+	connCxt, cancel := context.WithCancel(cxt)
+	var connW io.Writer = conn
+	if s.config.DebugLogWrites {
+		connW = writelogger.New(conn)
+	}
+	connection := &connection{
+		ID:              connID,
+		config:          &s.config,
+		allCaches:       s.caches,
+		allSnapshotters: s.binSnapCaches,
+		cxt:             connCxt,
+		cancelCxt:       cancel,
+		conn:            conn,
+		connW:           connW,
+		logCxt: log.WithFields(log.Fields{
+			"client": client,
+			"connID": connID,
+		}),
+
+		encoder:     gob.NewEncoder(connW),
+		flushWriter: func() error { return nil },
+		readC:       make(chan any),
+
+		allMetrics: s.perSyncerConnMetrics,
+	}
+	// Track the connection's lifetime in connIDToConn so we can kill it later if needed.
+	s.recordConnection(connection)
+	// Defer to the connection-handler.
+	s.Finished.Add(2)
+	go func() {
+		err := connection.handle(&s.Finished)
+		if err != nil {
+			log.WithError(err).Info("Connection handler finished")
+		}
+	}()
+	// Clean up the entry in connIDToConn as soon as the context is canceled.
+	go func() {
+		<-connCxt.Done()
+		s.discardConnection(connection)
+		s.Finished.Done()
+	}()
+}
+
+// clientAddrForLog returns a human-readable identifier for the peer.  For an
+// accepted unix-socket connection the remote address is empty, so fall back to
+// the local socket path so such connections are still identifiable in the logs.
+func clientAddrForLog(conn net.Conn) string {
+	if ra := conn.RemoteAddr(); ra != nil && ra.String() != "" {
+		return ra.String()
+	}
+	if la := conn.LocalAddr(); la != nil {
+		return la.Network() + ":" + la.String()
+	}
+	return "unknown"
 }
 
 func setWriteBufferSizeBestEffort(conn net.Conn, size int) {
