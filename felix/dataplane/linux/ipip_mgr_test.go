@@ -73,6 +73,30 @@ var _ = Describe("IPIPManager", func() {
 		)
 	})
 
+	It("should mark the dataplane dirty when the parent device changes", func() {
+		dp := &InternalDataplane{}
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+	})
+
+	It("should leave the parent device alone when handed an empty name", func() {
+		dp := &InternalDataplane{}
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
+	})
+
 	It("should configure tunnel properly", func() {
 		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
 			Hostname: "node1",
