@@ -23,7 +23,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
-	"github.com/projectcalico/calico/felix/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var iptablesTables = []string{"filter", "nat", "mangle", "raw"}
@@ -56,7 +56,7 @@ type IPTablesCleanup struct {
 	lastSweep       time.Time
 	timeNow         func() time.Time
 	onStillAlive    func()
-	opReporter      logutils.OpRecorder
+	opReporter      logrusr.OpRecorder
 }
 
 // NewIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given IP
