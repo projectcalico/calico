@@ -43,7 +43,7 @@ spec:
       name: Conflicts
       priority: 1
       type: integer
-    name: v1beta1
+    name: v1
     schema:
       openAPIV3Schema:
         description: |-
@@ -71,10 +71,17 @@ spec:
             description: Spec defines the desired migration behavior.
             properties:
               type:
-                description: Type specifies the migration to perform (e.g., APIServerToCRDs).
+                description: |-
+                  Type specifies the migration to perform (e.g., APIServerToCRDs).
+                  It cannot be changed once set; migration is a one-shot operation and
+                  switching type mid-flight has no coherent meaning.
                 enum:
                 - APIServerToCRDs
+                maxLength: 64
                 type: string
+                x-kubernetes-validations:
+                - message: spec.type is immutable
+                  rule: self == oldSelf
             required:
             - type
             type: object
@@ -87,8 +94,10 @@ spec:
                 format: date-time
                 type: string
               conditions:
-                description: Conditions report conflicts and errors encountered during
-                  migration.
+                description: |-
+                  Conditions report conflicts and errors encountered during migration. The
+                  controller reports one condition per conflicting resource, so entries are
+                  not unique by type and are not merged.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -143,14 +152,23 @@ spec:
                   - status
                   - type
                   type: object
+                maxItems: 64
                 type: array
               message:
                 description: |-
                   Message is a human-readable status message describing what the controller
                   is currently doing or waiting on.
+                maxLength: 1024
                 type: string
               phase:
                 description: Phase is the current phase of the migration state machine.
+                enum:
+                - Pending
+                - Migrating
+                - WaitingForConflictResolution
+                - Converged
+                - Complete
+                - Failed
                 type: string
               progress:
                 description: Progress tracks per-type and aggregate migration counters.
@@ -158,29 +176,36 @@ spec:
                   completedTypes:
                     description: CompletedTypes is the number of resource types that
                       have been fully processed.
+                    format: int32
                     type: integer
                   conflicts:
                     description: Conflicts is the number of resources that existed
                       in v3 with different content.
+                    format: int32
                     type: integer
                   currentType:
                     description: CurrentType is the resource kind currently being
                       migrated, or empty if done.
+                    maxLength: 253
                     type: string
                   migrated:
                     description: Migrated is the number of resources successfully
                       copied to v3.
+                    format: int32
                     type: integer
                   skipped:
                     description: Skipped is the number of resources that already existed
                       in v3 with matching content.
+                    format: int32
                     type: integer
                   total:
                     description: Total is the total number of resources processed
                       across all types.
+                    format: int32
                     type: integer
                   totalTypes:
                     description: TotalTypes is the number of resource types to migrate.
+                    format: int32
                     type: integer
                   typeDetails:
                     description: TypeDetails contains per-resource-type migration
@@ -192,26 +217,35 @@ spec:
                         conflicts:
                           description: Conflicts is the number of resources of this
                             kind that existed in v3 with different content.
+                          format: int32
                           type: integer
                         kind:
                           description: Kind is the Calico resource kind (e.g., "NetworkPolicy",
                             "GlobalNetworkPolicy").
+                          maxLength: 253
                           type: string
                         migrated:
                           description: Migrated is the number of resources of this
                             kind successfully copied to v3.
+                          format: int32
                           type: integer
                         skipped:
                           description: Skipped is the number of resources of this
                             kind that already existed in v3 with matching content.
+                          format: int32
                           type: integer
                       required:
                       - kind
                       type: object
+                    maxItems: 128
                     type: array
+                    x-kubernetes-list-map-keys:
+                    - kind
+                    x-kubernetes-list-type: map
                   typeProgress:
                     description: TypeProgress is a human-readable summary like "5
                       / 21" for printer columns.
+                    maxLength: 64
                     type: string
                 type: object
               startedAt:
