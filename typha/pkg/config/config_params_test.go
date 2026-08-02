@@ -16,6 +16,7 @@ package config_test
 
 import (
 	"reflect"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -81,6 +82,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("PrometheusMetricsPort", "PrometheusMetricsPort", "1234", int(1234)),
 	Entry("PrometheusGoMetricsEnabled", "PrometheusGoMetricsEnabled", "false", false),
 	Entry("PrometheusProcessMetricsEnabled", "PrometheusProcessMetricsEnabled", "false", false),
+
+	Entry("ServerWriteTimeoutSecs", "ServerWriteTimeoutSecs", "600", 600*time.Second),
+	Entry("ServerWriteTimeoutSecs default", "ServerWriteTimeoutSecs", "", 120*time.Second),
 )
 
 var _ = DescribeTable("Config validation",
