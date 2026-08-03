@@ -38,8 +38,10 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -49,6 +51,7 @@ import (
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 // baselinePolicyScaleParams describes a policy store dominated by "baseline" policies:
@@ -87,6 +90,19 @@ var ipSetSizeHistogram = []struct{ numSets, minSize, maxSize int }{
 	{1, 54566, 54566},
 }
 
+// The benchmark flow. TEST-NET addresses; generated IP set members and rule CIDRs all
+// come from 10.0.0.0/8, so no rule ever matches on address and the walk covers the
+// whole policy set.
+const (
+	benchSourceIP   = "192.0.2.10"
+	benchDestIP     = "198.51.100.20"
+	benchSourcePort = 45000
+	benchDestPort   = 8080
+
+	// benchSentinelIPSetID is a set containing the flow's addresses; see makeScaleRule.
+	benchSentinelIPSetID = "s:bench-sentinel"
+)
+
 // benchTraceSink prevents the compiler from eliminating the Evaluate call.
 var benchTraceSink []*calc.RuleID
 
@@ -115,32 +131,18 @@ func BenchmarkEvaluateBaselinePolicyScale(b *testing.B) {
 
 func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams, level log.Level, matchEarly bool) {
 	logger := log.StandardLogger()
-	oldLevel, oldOut := logger.GetLevel(), logger.Out
-	counter := &ipsetMissCounter{}
-	hooks := make(log.LevelHooks)
-	hooks.Add(counter)
-	oldHooks := logger.ReplaceHooks(hooks)
-	defer func() {
-		logger.SetLevel(oldLevel)
-		logger.SetOutput(oldOut)
-		logger.ReplaceHooks(oldHooks)
-	}()
-	log.SetLevel(level)
-	// Discard output so we don't benchmark the terminal; the formatting cost stays, but
-	// a real deployment pays the log write too.
-	log.SetOutput(io.Discard)
+	counter, restoreLogging := withBenchLogging(level)
+	defer restoreLogging()
 
 	store, ep, expectedWarns := buildBaselinePolicyStore(p)
 	if matchEarly {
 		addMatchEarlyPolicy(store, ep)
 	}
 	flow := &MockFlow{
-		// TEST-NET addresses; generated IP set members all come from 10.0.0.0/8, so no
-		// rule ever matches and the walk covers the whole policy set.
-		SourceIP:   net.ParseIP("192.0.2.10"),
-		DestIP:     net.ParseIP("198.51.100.20"),
-		SourcePort: 45000,
-		DestPort:   8080,
+		SourceIP:   net.ParseIP(benchSourceIP),
+		DestIP:     net.ParseIP(benchDestIP),
+		SourcePort: benchSourcePort,
+		DestPort:   benchDestPort,
 		Protocol:   6, // TCP
 	}
 
@@ -243,6 +245,11 @@ func buildBaselinePolicyStore(p baselinePolicyScaleParams) (*policystore.PolicyS
 // measured deployment: selector and networkset derived sets) following the measured
 // size histogram. Members are unique /32s from 10.0.0.0/8.
 func makeScaleIPSets(rng *rand.Rand, store *policystore.PolicyStore) []string {
+	sentinel := policystore.NewIPSet(proto.IPSetUpdate_NET)
+	sentinel.AddString(benchSourceIP + "/32")
+	sentinel.AddString(benchDestIP + "/32")
+	store.IPSetByID[benchSentinelIPSetID] = sentinel
+
 	var ids []string
 	member := 0
 	for _, bucket := range ipSetSizeHistogram {
@@ -261,31 +268,29 @@ func makeScaleIPSets(rng *rand.Rand, store *policystore.PolicyStore) []string {
 	return ids
 }
 
-// makeScaleRule builds a rule that never matches the benchmark flow but still pays the
-// full match cost. Rules that reference an IP set are shaped so the set lookup always
-// executes:
-//   - src refs guard with a non-matching source port, which match() evaluates after the
-//     src IP set lookup; the guard is needed because a missing src set is skipped rather
-//     than treated as a non-match.
-//   - dst refs guard with a non-matching destination port for the same reason, and
-//     leave the source criteria empty so evaluation reaches the destination.
+// makeScaleRule builds a rule that never matches the benchmark flow. It returns the
+// referenced IP set ID, or "" for a rule with no reference.
 //
-// It returns the referenced IP set ID, or "" for a rule with no reference.
+// A rule that references an IP set must reach the set lookup whatever order match()
+// evaluates criteria in, and must still miss when the referenced set is absent from
+// the store (an absent set is skipped rather than treated as a non-match). Both hold
+// by pairing the reference with a negated reference to benchSentinelIPSetID, which
+// contains the flow's addresses: if the referenced set is present the lookup misses
+// and evaluation stops there; if it is absent the sentinel makes the rule miss.
 func makeScaleRule(rng *rand.Rand, setIDs []string, action string, refFraction float64) (*proto.Rule, string) {
 	rule := &proto.Rule{Action: action}
 	if rng.Float64() < refFraction {
 		id := setIDs[rng.Intn(len(setIDs))]
 		if rng.Intn(2) == 0 {
 			rule.SrcIpSetIds = []string{id}
-			rule.SrcPorts = []*proto.PortRange{{First: 65001, Last: 65001}}
+			rule.NotSrcIpSetIds = []string{benchSentinelIPSetID}
 		} else {
 			rule.DstIpSetIds = []string{id}
-			rule.DstPorts = []*proto.PortRange{{First: 65001, Last: 65001}}
+			rule.NotDstIpSetIds = []string{benchSentinelIPSetID}
 		}
 		return rule, id
 	}
-	// No IP set reference: guard with a non-matching destination port so the match walks
-	// the whole chain (including the per-rule dst-IP-port formatting) before failing.
+	// No IP set reference: guard with a non-matching destination port.
 	rule.DstPorts = []*proto.PortRange{{First: 65001, Last: 65001}}
 	return rule, ""
 }
@@ -309,8 +314,55 @@ type ipsetMissCounter struct {
 func (c *ipsetMissCounter) Levels() []log.Level { return []log.Level{log.WarnLevel} }
 
 func (c *ipsetMissCounter) Fire(e *log.Entry) error {
-	if e.Message == "IPSet not found" {
+	// The message carries the set ID, so match on the prefix.
+	if strings.HasPrefix(e.Message, "IPSet not found") {
 		c.count.Add(1)
 	}
 	return nil
+}
+
+// withBenchLogging sets the log level, discards output so the terminal is not part of the
+// measurement, installs the "IPSet not found" counter, and unthrottles the evaluation path's
+// rate-limited loggers. It returns the counter and a function restoring everything.
+func withBenchLogging(level log.Level) (*ipsetMissCounter, func()) {
+	logger := log.StandardLogger()
+	oldLevel, oldOut := logger.GetLevel(), logger.Out
+	counter := &ipsetMissCounter{}
+	hooks := make(log.LevelHooks)
+	hooks.Add(counter)
+	oldHooks := logger.ReplaceHooks(hooks)
+	restoreLoggers := withUnthrottledEvalPathLogs()
+
+	logger.SetLevel(level)
+	// The formatting cost stays in the measurement; a real deployment pays the write too.
+	logger.SetOutput(io.Discard)
+
+	return counter, func() {
+		logger.SetLevel(oldLevel)
+		logger.SetOutput(oldOut)
+		logger.ReplaceHooks(oldHooks)
+		restoreLoggers()
+	}
+}
+
+// withUnthrottledEvalPathLogs replaces the evaluation path's rate-limited loggers with ones
+// that never suppress, and returns a function restoring them. The warnings/op metric counts
+// every occurrence, which is the point of it — production gets the throttled loggers, and the
+// emitted line's "logsSkipped" field carries the count this benchmark reports directly.
+func withUnthrottledEvalPathLogs() func() {
+	saved := []**logrusr.RateLimitedLogger{
+		&rlogIPSetMissing, &rlogBadPrincipal, &rlogBadProtocol,
+		&rlogBadCIDR, &rlogBadSelector, &rlogBadRulePath,
+	}
+	originals := make([]*logrusr.RateLimitedLogger, len(saved))
+	for i, l := range saved {
+		originals[i] = *l
+		// A negative interval puts the next-log deadline in the past on every call.
+		*l = logrusr.NewRateLimitedLogger(logrusr.OptInterval(-time.Nanosecond))
+	}
+	return func() {
+		for i, l := range saved {
+			*l = originals[i]
+		}
+	}
 }
