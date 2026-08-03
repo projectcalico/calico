@@ -136,6 +136,11 @@ type Syncer struct {
 
 	maglevLUTSize int
 
+	// ctlbUDPAffinityTimeo is the affinity timeout that the connect-time load
+	// balancer enforces for unconnected UDP sockets, or 0 if the CTLB does not
+	// handle UDP on this node.
+	ctlbUDPAffinityTimeo time.Duration
+
 	// active Maps contain all active svcs endpoints at the end of an iteration
 	activeSvcsMap map[ipPortProto]uint32
 	activeEpsMap  map[uint32]map[ipPort]struct{}
@@ -222,18 +227,20 @@ func NewSyncer(family int, nodePortIPs []net.IP,
 	affmap maps.Map, rt Routes,
 	excludedCIDRs *ip.CIDRTrie,
 	maglevLUTSize int,
+	ctlbUDPAffinityTimeo time.Duration,
 ) (*Syncer, error) {
 
 	s := &Syncer{
-		ipFamily:      family,
-		bpfAff:        affmap,
-		rt:            rt,
-		nodePortIPs:   uniqueIPs(nodePortIPs),
-		prevSvcMap:    make(map[svcKey]svcInfo),
-		prevEpsMap:    make(k8sp.EndpointsMap),
-		stop:          make(chan struct{}),
-		excludedCIDRs: excludedCIDRs,
-		maglevLUTSize: maglevLUTSize,
+		ipFamily:             family,
+		bpfAff:               affmap,
+		rt:                   rt,
+		nodePortIPs:          uniqueIPs(nodePortIPs),
+		prevSvcMap:           make(map[svcKey]svcInfo),
+		prevEpsMap:           make(k8sp.EndpointsMap),
+		stop:                 make(chan struct{}),
+		excludedCIDRs:        excludedCIDRs,
+		maglevLUTSize:        maglevLUTSize,
+		ctlbUDPAffinityTimeo: ctlbUDPAffinityTimeo,
 	}
 
 	switch family {
@@ -850,7 +857,7 @@ func (s *Syncer) updateService(skey svcKey, sinfo Service, id uint32, eps []k8sp
 	cnt := 0
 	local := 0
 
-	if sinfo.SessionAffinityType() == v1.ServiceAffinityClientIP {
+	if s.affinityCleanupTimeo(sinfo) > 0 {
 		// since we write the backend before we write the frontend, we need to
 		// preallocate the map for it
 		s.stickyEps[id] = make(map[nat.BackendValueInterface]struct{})
@@ -1071,11 +1078,33 @@ func (s *Syncer) writeSvc(svc Service, svcID uint32, count, local int, flags uin
 		affkey := key.AffinityKeyCopy()
 		s.stickySvcs[affkey] = stickyFrontend{
 			id:    svcID,
-			timeo: time.Duration(affinityTimeo) * time.Second,
+			timeo: s.affinityCleanupTimeo(svc),
 		}
 	}
 
 	return nil
+}
+
+// affinityCleanupTimeo returns how long an affinity entry for this frontend may live
+// before cleanupSticky() treats it as expired. It is 0 for frontends that
+// should have no affinity entries at all.
+//
+// A service with ClientIP session affinity has entries created by both the TC
+// and the connect-time load balancer (CTLB) programs. On top of that, the CTLB
+// enforces affinity for *unconnected* UDP sockets on every UDP service, whether
+// or not the service asks for session affinity, so that consecutive datagrams
+// from one socket reach one backend. Those entries expire after
+// ctlbUDPAffinityTimeo. We take whichever timeout is longer so that we never
+// delete an entry that either program still considers valid.
+func (s *Syncer) affinityCleanupTimeo(svc Service) time.Duration {
+	timeo := time.Duration(0)
+	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
+		timeo = time.Duration(svc.StickyMaxAgeSeconds()) * time.Second
+	}
+	if svc.Protocol() == v1.ProtocolUDP && s.ctlbUDPAffinityTimeo > timeo {
+		timeo = s.ctlbUDPAffinityTimeo
+	}
+	return timeo
 }
 
 // ProtoV1ToInt translates k8s v1.Protocol to its IANA number and returns
