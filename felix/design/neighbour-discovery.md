@@ -115,18 +115,28 @@ target. Calico creates no such entries anywhere — the only neighbour
 entries it programs are `NUD_PERMANENT` ones
 (`routetable/route_table.go`, `vxlanfdb/`, `bpf_ep_mgr.go`).
 
-So the `proxy_ndp=1` that Felix (`endpoint_mgr.go`) and the CNI plugin
-(`cni-plugin/pkg/dataplane/linux/dataplane_linux.go`) set on workload
-interfaces answers nothing today. It is nonetheless left in place
-deliberately, because the sysctl is the *enabler* rather than the
-trigger: with `proxy_ndp=0` the kernel ignores a `NUD_PROXY` entry
-completely, and with `proxy_ndp=1` and no entries — Calico's situation —
-it answers nothing. Setting it therefore costs nothing and keeps the
-capability available to anyone who adds proxy entries out of band (a VM
-routing a delegated prefix behind it, say), which they cannot practically
-arrange for themselves on interfaces Calico creates and destroys.
-Removing it would be a silent behaviour change for those setups, not a
-tidy-up.
+Calico therefore **does not set `proxy_ndp`** on workload interfaces.
+Felix (`endpoint_mgr.go`) and the CNI plugin
+(`cni-plugin/pkg/dataplane/linux/dataplane_linux.go`) both used to set it
+by symmetry with `proxy_arp`, which was misleading — it implied a
+proxying arrangement that does not exist and cannot take effect — so the
+writes were removed rather than left as an unexplained vestige.
+
+One consequence is worth recording, because it is the reason the removal
+needed a release note rather than passing as a cleanup. The sysctl is the
+*enabler*, not the trigger: with `proxy_ndp=0` the kernel ignores a
+`NUD_PROXY` entry completely, and with `proxy_ndp=1` and no entries —
+Calico's situation — it answers nothing either. So while Calico's own
+behaviour is unchanged, anyone who had added proxy entries out of band
+(for a VM routing a delegated prefix behind it, say) was relying on
+Calico's write to make them work, and must now set `proxy_ndp`
+themselves. On interfaces Calico creates and destroys that is awkward,
+which is the trade-off that was accepted: an honest dataplane over an
+unadvertised, untested capability.
+
+The absence is guarded by test rather than by comment alone: the endpoint
+manager's `/proc/sys` expectations are asserted **exactly**
+(`testProcSys.checkState`), so re-adding the write fails the unit test.
 
 IPv6 does not need it, because the guest is never told that anything is
 on-link:
@@ -211,7 +221,8 @@ address being probed:
   `ip -6 neigh add proxy <addr> dev <host-side>` and the answer
   appears.
 - IPv6, `proxy_ndp=0`, *with* that same proxy entry: no answer again.
-  The sysctl gates the entry, which is why it is still set (above).
+  The sysctl gates the entry — which is why Calico no longer setting it
+  is visible to anyone who had added entries out of band (above).
 - The host side of the veth acquires its `fe80::` address with no
   `ip addr add` of any kind — visible in `ip -6 addr show scope link`
   immediately after creating the pair.
@@ -228,11 +239,14 @@ before the kernel will reply at all (see the previous section).
   section and the live-migration suppression below both need
   revisiting: the IPv6 path would acquire the same failure mode IPv4
   has today.
-- Do not remove the `proxy_ndp` write as dead code. It answers nothing
-  by itself, but it is what makes out-of-band `NUD_PROXY` entries work
-  at all, and it cannot be reinstated per-workload by anyone but
-  Calico. Removing it is a behaviour change needing a release note, not
-  a cleanup.
+- Do not re-add a `proxy_ndp` write for symmetry with `proxy_arp`. It
+  was deliberately removed; it cannot answer anything without
+  `NUD_PROXY` entries, which Calico does not program. The endpoint
+  manager UT asserts the `/proc/sys` state exactly and will fail if it
+  comes back.
+- Conversely, if a future feature *does* need kernel proxy NDP, setting
+  the sysctl is necessary but not sufficient — it must ship with the
+  entries, and with a decision about which node answers.
 - Changes to the OpenStack DHCP agent's RA or `off-link` handling, or
   to the CNI plugin's link-local gateway, change the premise of this
   whole section. Update it in the same PR.

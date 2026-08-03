@@ -1673,31 +1673,21 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 			return err
 		}
 	} else {
-		// Enable proxy NDP.  Note that this is _not_ the IPv6 equivalent of the
-		// proxy ARP above, despite the name: proxy_ndp does no route-based
-		// proxying.  The kernel answers a Neighbor Solicitation only when an
-		// explicit NUD_PROXY neighbour entry exists for the solicited address,
-		// and Calico programs none, so this answers nothing by itself.
-		//
-		// IPv6 doesn't need proxying: Linux auto-provisions a link-local address
-		// on this (host) side of every workload interface, so the workload can
-		// route via a real address of ours and we answer NDP for it as our own.
-		// IPv4 has no such automatic provisioning, hence the dummy 169.254.1.1
-		// gateway and the proxy ARP above.
-		//
-		// Keep this write even so: proxy_ndp is the enabler, and with it clear
-		// the kernel ignores NUD_PROXY entries entirely, so removing it would
-		// silently break anyone adding such entries out of band -- which they
-		// cannot do per-workload on interfaces we create.  See
-		// felix/design/neighbour-discovery.md.
-		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
-		if err != nil {
-			return err
-		}
+		// Note: deliberately no proxy_ndp counterpart to the proxy_arp above.
+		// Despite the name, proxy_ndp is not the IPv6 equivalent: it does no
+		// route-based proxying, and the kernel answers a Neighbor Solicitation
+		// only for addresses with an explicit NUD_PROXY neighbour entry, which
+		// Calico does not program.  IPv6 needs no proxying anyway, because Linux
+		// auto-provisions a link-local address on this (host) side of every
+		// workload interface, so the workload routes via a real address of ours
+		// and we answer NDP for it as our own.  IPv4 has no such automatic
+		// provisioning, hence the dummy 169.254.1.1 gateway and proxy ARP above.
+		// See felix/design/neighbour-discovery.md.
+
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
 		// interface too (or for the global default to be set).
-		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
 		if err != nil {
 			return err
 		}
