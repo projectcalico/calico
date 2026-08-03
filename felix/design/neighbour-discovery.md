@@ -114,15 +114,60 @@ on-link:
 - **OpenStack.** The DHCP agent runs dnsmasq with `--enable-ra`, and
   rewrites every IPv6 `--dhcp-range` to add `off-link`
   (`networking-calico/networking_calico/agent/linux/dhcp.py`), so the
-  advertised prefix carries no on-link flag. DHCPv6 conveys no prefix
-  length, so the address the guest receives is effectively a /128. The
-  guest therefore has no on-link prefix at all and sends *everything*,
-  including traffic to other VMs in the same pool, to the host via the
-  router's link-local address — which the host answers for as its own
-  address, no proxying involved.
-- **Containers.** The pod's IPv6 default route uses the host end of the
-  veth's link-local address as its gateway
-  (`hostSideMACAsIPv6LL`), again the host's own address.
+  pool prefix is advertised without the on-link flag. DHCPv6 conveys no
+  prefix length, so the address the guest receives is effectively a
+  /128. The guest therefore has *no on-link prefix except link-local*:
+  the pool prefix arrives as a route **via the router**, not as a
+  connected subnet. Everything — including traffic to other VMs in the
+  same pool — goes to the compute host's link-local address, which the
+  host answers for as its own address, no proxying involved.
+- **Containers.** Same shape. The pod's IPv6 default route uses the host
+  end of the veth's link-local address as its gateway
+  (`hostSideMACAsIPv6LL`, derived from the fixed `ee:ee:ee:ee:ee:ee`
+  veth MAC), again the host's own address, and the pod's own address is
+  a /128, so again nothing but link-local is on-link.
+
+### What the guest and pod actually see
+
+An OpenStack guest (from a smoke-test console dump; the gateway
+link-local address is derived from the tap's fixed `DEFAULT_TAP_MAC`,
+`00:61:fe:ed:ca:fe`):
+
+```
+if-info: eth0,up,10.28.0.57,17,fe80::f816:3eff:feab:f824/64,fd5f:5d21:845:1c2e:2::337/128
+ip-route :default via 10.28.0.1 dev eth0 src 10.28.0.57 metric 1002
+ip-route :10.28.0.0/17 dev eth0 scope link src 10.28.0.57 metric 1002
+ip-route6:fd5f:5d21:845:1c2e:2::/80 via fe80::261:feff:feed:cafe dev eth0 metric 1002
+ip-route6:fe80::/64 dev eth0 metric 256
+ip-route6:default via fe80::261:feff:feed:cafe dev eth0 metric 1002
+```
+
+The two families in one guest are the whole argument for this doc. The
+IPv4 pool is **on-link** (`10.28.0.0/17 dev eth0 scope link`), so the
+guest ARPs for every address in it and the host must proxy-ARP. The IPv6
+pool is reachable **via the router** (`.../80 via fe80::261:...`), so
+the guest never solicits a peer VM's address at all.
+
+A Kubernetes pod, dual-stack, no explicit routes configured (asserted
+in `cni-plugin/tests/calico_cni_k8s_test.go`, which runs real
+containers):
+
+```
+default via 169.254.1.1 dev eth0
+169.254.1.1 dev eth0 scope link
+dead:beef::<n> dev eth0 proto kernel metric 256 pref medium
+fe80::/64 dev eth0 proto kernel metric 256 pref medium
+default via fe80::ecee:eeff:feee:eeee dev eth0 metric 1024
+```
+
+Again asymmetric, and again in Calico's favour on the IPv6 side.
+`169.254.1.1` is a dummy gateway that is *not* assigned to the host end
+of the veth, so it resolves only because proxy ARP answers for it —
+that is the container-side reason the sysctl is needed. The IPv6
+gateway `fe80::ecee:eeff:feee:eeee` **is** a real address on the host
+end (auto-generated from its fixed MAC), so it resolves by ordinary
+NDP. Where the CNI config does request routes, they too appear `via`
+that gateway (`dead:beef::/96 via fe80::ecee:...`) rather than on-link.
 
 The IPv4 subnet trick and the IPv6 RA arrangement solve the same
 problem by different means. IPv6 did not abandon proxying so much as
