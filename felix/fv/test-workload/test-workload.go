@@ -515,9 +515,11 @@ func doNetkitSetUp(
 		writeProcSysOrLog("/proc/sys/net/ipv4/conf/%s/forwarding", hostIfName, "1")
 	}
 	if hasIPv6 {
+		// No proxy_ndp, matching the real CNI plugin: it is not the IPv6
+		// equivalent of proxy_arp and Calico programs no NUD_PROXY entries for
+		// it to act on.  See felix/design/neighbour-discovery.md.
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/accept_dad", hostIfName, "0")
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/disable_ipv6", hostIfName, "0")
-		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostIfName, "1")
 		writeProcSysOrLog("/proc/sys/net/ipv6/conf/%s/forwarding", hostIfName, "1")
 	}
 
