@@ -1833,6 +1833,15 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// the new jump maps!
 				return true
 			})
+		} else if v.Flags()&ifstate.FlgNotManaged != 0 {
+			// A host interface that Calico does not manage but that still
+			// exists - e.g. an ExternalNetwork exit device. Its FlgNotManaged
+			// entry is what lets fib_approve allow traffic out via that device;
+			// pruning it here would make fib_approve DENY that traffic (an
+			// egress gateway's own health probes included) until the device is
+			// bounced or felix happens to see a fresh interface event for it.
+			// Preserve it across the start-of-day resync (CORE-13245).
+			m.ifStateMap.Desired().Set(k, v)
 		} else {
 			// We no longer manage this device
 			m.ifStateMap.Desired().Delete(k)
