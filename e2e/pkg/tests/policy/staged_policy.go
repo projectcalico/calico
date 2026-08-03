@@ -252,6 +252,22 @@ var _ = describe.CalicoDescribe(
 			})
 
 			Context("StagedKubernetesNetworkPolicy", func() {
+				var (
+					knpPolicy   *v3.StagedKubernetesNetworkPolicy
+					knpEnforced *networkingv1.NetworkPolicy
+				)
+
+				AfterEach(func() {
+					if knpEnforced != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), knpEnforced))).ShouldNot(HaveOccurred())
+						knpEnforced = nil
+					}
+					if knpPolicy != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), knpPolicy))).ShouldNot(HaveOccurred())
+						knpPolicy = nil
+					}
+				})
+
 				It("should enforce a deny policy", func() {
 					// test connection from client to server - it should NOT fail
 					checker.ExpectSuccess(client1, server.ClusterIP().Port(serverPort))
@@ -259,18 +275,12 @@ var _ = describe.CalicoDescribe(
 
 					// create policy
 					podSelector := metav1.LabelSelector{MatchLabels: server.Pod().Labels}
-					policy := CreateStagedKubernetesNetworkPolicyIngressDeny("service-deny-in", server.Pod().Namespace, podSelector)
-					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					})
+					knpPolicy = CreateStagedKubernetesNetworkPolicyIngressDeny("service-deny-in", server.Pod().Namespace, podSelector)
+					Expect(cli.Create(context.TODO(), knpPolicy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := ConvertStagedKubernetesPolicyToK8SEnforced(policy)
-					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					})
+					_, knpEnforced = ConvertStagedKubernetesPolicyToK8SEnforced(knpPolicy)
+					Expect(cli.Create(context.TODO(), knpEnforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
@@ -280,6 +290,22 @@ var _ = describe.CalicoDescribe(
 			})
 
 			Context("StagedNetworkPolicy", func() {
+				var (
+					snpPolicy   *v3.StagedNetworkPolicy
+					snpEnforced *v3.NetworkPolicy
+				)
+
+				AfterEach(func() {
+					if snpEnforced != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), snpEnforced))).ShouldNot(HaveOccurred())
+						snpEnforced = nil
+					}
+					if snpPolicy != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), snpPolicy))).ShouldNot(HaveOccurred())
+						snpPolicy = nil
+					}
+				})
+
 				It("should enforce a deny policy", func() {
 					// test connection from client to server - it should NOT fail
 					checker.ExpectSuccess(client1, server.ClusterIP().Port(serverPort))
@@ -289,18 +315,12 @@ var _ = describe.CalicoDescribe(
 					ingress := []v3.Rule{{Action: v3.Deny}}
 					selector := fmt.Sprintf("pod-name==\"%s\"", server.Name())
 					order := 200.0
-					policy := CreateStagedNetworkPolicy("service-deny-in", customTier, server.Pod().Namespace, order, selector, ingress, nil)
-					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					})
+					snpPolicy = CreateStagedNetworkPolicy("service-deny-in", customTier, server.Pod().Namespace, order, selector, ingress, nil)
+					Expect(cli.Create(context.TODO(), snpPolicy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := ConvertStagedPolicyToEnforced(policy)
-					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					})
+					_, snpEnforced = ConvertStagedPolicyToEnforced(snpPolicy)
+					Expect(cli.Create(context.TODO(), snpEnforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
@@ -310,6 +330,22 @@ var _ = describe.CalicoDescribe(
 			})
 
 			Context("StagedGlobalNetworkPolicy", func() {
+				var (
+					sgnpPolicy   *v3.StagedGlobalNetworkPolicy
+					sgnpEnforced *v3.GlobalNetworkPolicy
+				)
+
+				AfterEach(func() {
+					if sgnpEnforced != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), sgnpEnforced))).ShouldNot(HaveOccurred())
+						sgnpEnforced = nil
+					}
+					if sgnpPolicy != nil {
+						Expect(ctrlclient.IgnoreNotFound(cli.Delete(context.TODO(), sgnpPolicy))).ShouldNot(HaveOccurred())
+						sgnpPolicy = nil
+					}
+				})
+
 				It("should enforce a deny policy", func() {
 					// test connection from client to server - it should NOT fail
 					checker.ExpectSuccess(client1, server.ClusterIP().Port(serverPort))
@@ -320,18 +356,12 @@ var _ = describe.CalicoDescribe(
 					selector := fmt.Sprintf("pod-name==\"%s\"", server.Name())
 					order := 200.0
 					policyName := utils.GenerateRandomName("service-deny-in")
-					policy := CreateStagedGlobalNetworkPolicy(policyName, customTier, order, selector, ingress, nil)
-					Expect(cli.Create(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), policy)).ShouldNot(HaveOccurred())
-					})
+					sgnpPolicy = CreateStagedGlobalNetworkPolicy(policyName, customTier, order, selector, ingress, nil)
+					Expect(cli.Create(context.TODO(), sgnpPolicy)).ShouldNot(HaveOccurred())
 
 					// enforce the policy
-					_, enforced := ConvertStagedGlobalPolicyToEnforced(policy)
-					Expect(cli.Create(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					DeferCleanup(func() {
-						Expect(cli.Delete(context.TODO(), enforced)).ShouldNot(HaveOccurred())
-					})
+					_, sgnpEnforced = ConvertStagedGlobalPolicyToEnforced(sgnpPolicy)
+					Expect(cli.Create(context.TODO(), sgnpEnforced)).ShouldNot(HaveOccurred())
 
 					// test connection from client to server - it should fail
 					checker.ResetExpectations()
