@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,20 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
 	syncapi "github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
+)
+
+// rlogBadAddr rate limits the unparseable-address warning: membership is tested once per set
+// per rule, so a single non-IP request would otherwise log once for every set reference in the
+// endpoint's whole policy set.
+var rlogBadAddr = logrusr.NewRateLimitedLogger(
+	logrusr.OptInterval(30*time.Second),
+	logrusr.OptBurst(10),
 )
 
 // IPSet is a data structure that contains IP addresses, or IP address/port pairs. It allows fast
@@ -163,8 +173,9 @@ func (m ipNetSet) Contains(addr string) bool {
 	ip := net.ParseIP(addr)
 	if ip == nil {
 		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
-		// connections, like Pipes.
-		log.WithField("addr", ip).Warn("could not parse IP")
+		// connections, like Pipes. Such a request is tested against every NET set every rule references, so
+		// the log is rate limited.
+		rlogBadAddr.Warnf("could not parse IP: %s", addr)
 		return false
 	}
 	ip4 := ip.To4()
