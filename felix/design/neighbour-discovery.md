@@ -95,18 +95,38 @@ own address.
 
 ## Workload-facing: why IPv6 needs nothing
 
-`net.ipv6.conf.<iface>.proxy_ndp` is **not** the IPv6 spelling of
-`proxy_arp`. It does no route-based proxying: the kernel answers a
-Neighbor Solicitation only when an explicit proxy neighbour entry
-(`NUD_PROXY`, i.e. `ip -6 neigh add proxy <addr> dev <iface>`) exists
-for the solicited target. Calico creates no such entries anywhere —
-the only neighbour entries it programs are `NUD_PERMANENT` ones
+The root of the asymmetry is **address provisioning, not proxying**.
+Linux gives every interface an IPv6 link-local address automatically, so
+the host side of a workload interface — veth for Kubernetes, tap for
+OpenStack — always has an address the workload can use as its next hop,
+and the host answers NDP for it as *its own* address. No proxying is
+involved, because nothing is being proxied. IPv4 has no automatic
+link-local provisioning: any such address has to be put there by an
+explicit `ip addr add`. That is why Calico instead points pods at a
+dummy gateway (`169.254.1.1`) which is never assigned to anything, and
+leans on proxy ARP to answer for it.
+
+The sysctl compounds the difference. `net.ipv6.conf.<iface>.proxy_ndp`
+is **not** the IPv6 spelling of `proxy_arp`: it does no route-based
+proxying. The kernel answers a Neighbor Solicitation only when an
+explicit proxy neighbour entry (`NUD_PROXY`, i.e.
+`ip -6 neigh add proxy <addr> dev <iface>`) exists for the solicited
+target. Calico creates no such entries anywhere — the only neighbour
+entries it programs are `NUD_PERMANENT` ones
 (`routetable/route_table.go`, `vxlanfdb/`, `bpf_ep_mgr.go`).
 
 So the `proxy_ndp=1` that Felix (`endpoint_mgr.go`) and the CNI plugin
 (`cni-plugin/pkg/dataplane/linux/dataplane_linux.go`) set on workload
-interfaces is **inert**. It is harmless, and would become load-bearing
-only if we ever started programming proxy entries.
+interfaces answers nothing today. It is nonetheless left in place
+deliberately, because the sysctl is the *enabler* rather than the
+trigger: with `proxy_ndp=0` the kernel ignores a `NUD_PROXY` entry
+completely, and with `proxy_ndp=1` and no entries — Calico's situation —
+it answers nothing. Setting it therefore costs nothing and keeps the
+capability available to anyone who adds proxy entries out of band (a VM
+routing a delegated prefix behind it, say), which they cannot practically
+arrange for themselves on interfaces Calico creates and destroys.
+Removing it would be a silent behaviour change for those setups, not a
+tidy-up.
 
 IPv6 does not need it, because the guest is never told that anything is
 on-link:
@@ -190,6 +210,11 @@ address being probed:
 - IPv6, `proxy_ndp=1`, no proxy entry: no answer. Add
   `ip -6 neigh add proxy <addr> dev <host-side>` and the answer
   appears.
+- IPv6, `proxy_ndp=0`, *with* that same proxy entry: no answer again.
+  The sysctl gates the entry, which is why it is still set (above).
+- The host side of the veth acquires its `fe80::` address with no
+  `ip addr add` of any kind — visible in `ip -6 addr show scope link`
+  immediately after creating the pair.
 
 Note that the IPv4 case needs a route back to the request's source
 before the kernel will reply at all (see the previous section).
@@ -203,6 +228,11 @@ before the kernel will reply at all (see the previous section).
   section and the live-migration suppression below both need
   revisiting: the IPv6 path would acquire the same failure mode IPv4
   has today.
+- Do not remove the `proxy_ndp` write as dead code. It answers nothing
+  by itself, but it is what makes out-of-band `NUD_PROXY` entries work
+  at all, and it cannot be reinstated per-workload by anyone but
+  Calico. Removing it is a behaviour change needing a release note, not
+  a cleanup.
 - Changes to the OpenStack DHCP agent's RA or `off-link` handling, or
   to the CNI plugin's link-local gateway, change the premise of this
   whole section. Update it in the same PR.

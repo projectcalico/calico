@@ -1677,11 +1677,18 @@ func configureProcSysForInterface(name string, ipVersion int, rpFilter string, w
 		// proxy ARP above, despite the name: proxy_ndp does no route-based
 		// proxying.  The kernel answers a Neighbor Solicitation only when an
 		// explicit NUD_PROXY neighbour entry exists for the solicited address,
-		// and Calico never programs one, so this setting is inert today.  IPv6
-		// doesn't need it: the guest/pod is never told that anything is on-link
-		// (OpenStack advertises the prefix off-link and hands out an effective
-		// /128; the CNI plugin points the pod's default route at the host end of
-		// the veth), so it sends everything to the host's own address.  See
+		// and Calico programs none, so this answers nothing by itself.
+		//
+		// IPv6 doesn't need proxying: Linux auto-provisions a link-local address
+		// on this (host) side of every workload interface, so the workload can
+		// route via a real address of ours and we answer NDP for it as our own.
+		// IPv4 has no such automatic provisioning, hence the dummy 169.254.1.1
+		// gateway and the proxy ARP above.
+		//
+		// Keep this write even so: proxy_ndp is the enabler, and with it clear
+		// the kernel ignores NUD_PROXY entries entirely, so removing it would
+		// silently break anyone adding such entries out of band -- which they
+		// cannot do per-workload on interfaces we create.  See
 		// felix/design/neighbour-discovery.md.
 		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
 		if err != nil {
