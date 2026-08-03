@@ -333,11 +333,11 @@ There is a second failure mode: if a migration stalls and never
 completes, PNM keeps directing traffic to the target — which never
 becomes active — until the stuck target endpoint is removed by hand.
 
-**Status: understood, deliberately deferred.** PNM plus live migration
-is not a supported combination today; the intent is to revisit it in a
-later phase of PNM development, at which point PNM would need to
-observe live-migration state rather than the raw role. Until then this
-gap is documented rather than fixed.
+**Status: understood, deliberately deferred — tracked as CORE-13246.**
+PNM plus live migration is not a supported combination today; the intent
+is to revisit it in a later phase of PNM development, at which point PNM
+would need to observe live-migration state rather than the raw role.
+Until then this gap is documented rather than fixed.
 
 ### Review notes for this section
 
