@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"

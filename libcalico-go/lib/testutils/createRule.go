@@ -20,7 +20,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"

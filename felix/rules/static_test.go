@@ -20,7 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/api/pkg/lib/numorstring"
+	"github.com/projectcalico/api/v3/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"

@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectcalico/api/pkg/openapi"
+	"github.com/projectcalico/api/v3/openapi"
 	"k8s.io/kube-openapi/pkg/util"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )

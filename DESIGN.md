@@ -171,7 +171,7 @@ reporters with timeouts).
 
 - Root `go.mod` (`github.com/projectcalico/calico`) is the
   primary module for most components.
-- `api/go.mod` (`github.com/projectcalico/api`) is separate (API
+- `api/go.mod` (`github.com/projectcalico/api/v3`) is separate (API
   exported as an independent repo).
 - `lib/std/go.mod` and `lib/httpmachinery/go.mod` are internal
   libraries with their own modules.

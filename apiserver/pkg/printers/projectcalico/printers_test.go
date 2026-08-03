@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	calico "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/kubernetes/pkg/printers"

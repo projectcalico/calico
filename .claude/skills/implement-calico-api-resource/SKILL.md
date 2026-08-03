@@ -14,7 +14,7 @@ Before using this skill, ensure you have:
 
 Adding a new Calico API resource touches these layers (in dependency order):
 
-1. **API type definition** (`api/pkg/apis/projectcalico/v3/`)
+1. **API type definition** (`api/apis/projectcalico/v3/`)
 2. **Code generation** (deepcopy, clients, informers, listers, OpenAPI)
 3. **CRD operator types** (`libcalico-go/lib/apis/crd.projectcalico.org/v1/`)
 4. **CRD v1 scheme registration** (`libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/scheme.go`)
@@ -39,9 +39,9 @@ Work through the following steps in order. Each step references specific files a
 
 ### Step 1: API Type Definition
 
-Create the Go type file in `api/pkg/apis/projectcalico/v3/`.
+Create the Go type file in `api/apis/projectcalico/v3/`.
 
-**File:** `api/pkg/apis/projectcalico/v3/<resourcename>.go`
+**File:** `api/apis/projectcalico/v3/<resourcename>.go`
 
 Follow this pattern (using BGPFilter as a clean example):
 
@@ -114,7 +114,7 @@ func NewMyResource() *MyResource {
 
 ### Step 2: Register in API Scheme
 
-**File:** `api/pkg/apis/projectcalico/v3/register.go`
+**File:** `api/apis/projectcalico/v3/register.go`
 
 Add both types to the `AllKnownTypes` slice:
 
@@ -133,11 +133,11 @@ cd api && make gen-files
 ```
 
 This generates the DeepCopy methods, typed Kubernetes client, informers, listers, and OpenAPI schema needed for compilation of downstream layers:
-- `api/pkg/apis/projectcalico/v3/zz_generated.deepcopy.go` — DeepCopy methods
-- `api/pkg/client/clientset_generated/` — typed Kubernetes client
-- `api/pkg/client/informers_generated/` — informer factories
-- `api/pkg/client/listers_generated/` — listers
-- `api/pkg/openapi/generated.openapi.go` — OpenAPI schema
+- `api/apis/projectcalico/v3/zz_generated.deepcopy.go` — DeepCopy methods
+- `api/client/clientset_generated/` — typed Kubernetes client
+- `api/client/informers_generated/` — informer factories
+- `api/client/listers_generated/` — listers
+- `api/openapi/generated.openapi.go` — OpenAPI schema
 
 Run this early so the remaining steps can compile against the generated types. A full `make generate` at the project root is still needed later (Step 19) to pick up CRDs, manifests, and other downstream generated files.
 
@@ -151,7 +151,7 @@ Calico has a dual-CRD system. Older clusters use `crd.projectcalico.org/v1` CRDs
 package v1
 
 import (
-    v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+    v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -202,7 +202,7 @@ package resources
 import (
     "reflect"
 
-    apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+    apiv3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
     "k8s.io/client-go/rest"
 )
 
@@ -290,7 +290,7 @@ package clientv3
 
 import (
     "context"
-    v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+    v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
     "github.com/projectcalico/calico/libcalico-go/lib/options"
     validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
     "github.com/projectcalico/calico/libcalico-go/lib/watch"
@@ -444,7 +444,7 @@ Add to the appropriate section (always-on or leader-only):
 
 No `UpdateProcessor` is needed for resources using `ResourceKey` — they pass through as-is to Felix/confd.
 
-**Alternative: Components using Kubernetes informers** — Some components (kube-controllers, webhooks) use the generated Kubernetes informers from `api/pkg/client/informers_generated/` instead of the syncer layer. These components automatically pick up new resources after code generation (Step 3) without additional plumbing. Check if your consuming component uses:
+**Alternative: Components using Kubernetes informers** — Some components (kube-controllers, webhooks) use the generated Kubernetes informers from `api/client/informers_generated/` instead of the syncer layer. These components automatically pick up new resources after code generation (Step 3) without additional plumbing. Check if your consuming component uses:
 - **Syncer** (Felix, Typha via syncer): needs explicit registration in the syncer.
 - **Informers** (kube-controllers, etc.): automatically available after codegen, but may need wiring in the controller.
 
@@ -460,7 +460,7 @@ package resourcemgr
 import (
 	"context"
 
-	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	api "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -545,8 +545,8 @@ make check-go-mod
 
 Use this checklist to verify completeness:
 
-- [ ] API type file in `api/pkg/apis/projectcalico/v3/`
-- [ ] Registered in `api/pkg/apis/projectcalico/v3/register.go` (`AllKnownTypes`)
+- [ ] API type file in `api/apis/projectcalico/v3/`
+- [ ] Registered in `api/apis/projectcalico/v3/register.go` (`AllKnownTypes`)
 - [ ] Code generation run (`cd api && make gen-files`)
 - [ ] CRD v1 type in `libcalico-go/lib/apis/crd.projectcalico.org/v1/`
 - [ ] CRD v1 scheme registration in `.../scheme/scheme.go`
@@ -575,7 +575,7 @@ Use this checklist to verify completeness:
 
 2. **CRD plural mismatch:** The plural name must be consistent across `model/resource.go`, the apiserver storage interface, the REST storage provider, and the CRD YAML. Kubernetes lowercases everything.
 
-3. **Missing scheme registration:** Resources must be registered in BOTH `api/pkg/apis/projectcalico/v3/register.go` (the API scheme) AND `libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/scheme.go` (the CRD v1 scheme).
+3. **Missing scheme registration:** Resources must be registered in BOTH `api/apis/projectcalico/v3/register.go` (the API scheme) AND `libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/scheme.go` (the CRD v1 scheme).
 
 4. **Dual CRD versions:** Calico supports both `crd.projectcalico.org/v1` and `projectcalico.org/v3` CRDs. New resources need type definitions and resource clients that handle both API groups, or at minimum a type in the v1 scheme.
 

@@ -19,9 +19,9 @@ import (
 	"os"
 	"path/filepath"
 
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
-	"github.com/projectcalico/api/pkg/client/informers_generated/externalversions"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
+	"github.com/projectcalico/api/v3/client/clientset_generated/clientset"
+	"github.com/projectcalico/api/v3/client/informers_generated/externalversions"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

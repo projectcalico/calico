@@ -30,9 +30,9 @@ file can be deleted.
  .../externalversions/projectcalico/v3/stagednetworkpolicy.go        | 2 +-
  7 files changed, 7 insertions(+), 7 deletions(-)
 
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go b/api/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/blockaffinity.go
 @@ -50,5 +50,5 @@ func NewFilteredBlockAffinityInformer(client clientset.Interface, resyncPeriod t
  // one. This reduces memory footprint and number of connections to the server.
  func NewBlockAffinityInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -40,9 +40,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "blockaffinities"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go b/api/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/caliconodestatus.go
 @@ -50,5 +50,5 @@ func NewFilteredCalicoNodeStatusInformer(client clientset.Interface, resyncPerio
  // one. This reduces memory footprint and number of connections to the server.
  func NewCalicoNodeStatusInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -50,9 +50,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "caliconodestatuses"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go b/api/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/globalnetworkpolicy.go
 @@ -50,5 +50,5 @@ func NewFilteredGlobalNetworkPolicyInformer(client clientset.Interface, resyncPe
  // one. This reduces memory footprint and number of connections to the server.
  func NewGlobalNetworkPolicyInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -60,9 +60,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "globalnetworkpolicies"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go b/api/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/networkpolicy.go
 @@ -51,5 +51,5 @@ func NewFilteredNetworkPolicyInformer(client clientset.Interface, namespace stri
  // one. This reduces memory footprint and number of connections to the server.
  func NewNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -70,9 +70,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "networkpolicies"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go b/api/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/stagedglobalnetworkpolicy.go
 @@ -50,5 +50,5 @@ func NewFilteredStagedGlobalNetworkPolicyInformer(client clientset.Interface, re
  // one. This reduces memory footprint and number of connections to the server.
  func NewStagedGlobalNetworkPolicyInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -80,9 +80,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagedglobalnetworkpolicies"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go b/api/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/stagedkubernetesnetworkpolicy.go
 @@ -51,5 +51,5 @@ func NewFilteredStagedKubernetesNetworkPolicyInformer(client clientset.Interface
  // one. This reduces memory footprint and number of connections to the server.
  func NewStagedKubernetesNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
@@ -90,9 +90,9 @@ diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v
 +	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "stagedkubernetesnetworkpolicies"}
  	identifier := options.InformerName.WithResource(gvr)
  	tweakListOptions := options.TweakListOptions
-diff --git a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
---- a/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
-+++ b/api/pkg/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
+diff --git a/api/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go b/api/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
+--- a/api/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
++++ b/api/client/informers_generated/externalversions/projectcalico/v3/stagednetworkpolicy.go
 @@ -51,5 +51,5 @@ func NewFilteredStagedNetworkPolicyInformer(client clientset.Interface, namespac
  // one. This reduces memory footprint and number of connections to the server.
  func NewStagedNetworkPolicyInformerWithOptions(client clientset.Interface, namespace string, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {

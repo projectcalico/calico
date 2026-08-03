@@ -17,7 +17,7 @@ package rest
 import (
 	"fmt"
 
-	calico "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	calico "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	"k8s.io/apiserver/pkg/registry/generic"

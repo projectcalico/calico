@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	calicoclient "github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
+	calicoclient "github.com/projectcalico/api/v3/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/admission/v1"

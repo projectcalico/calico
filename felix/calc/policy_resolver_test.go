@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	v3 "github.com/projectcalico/api/v3/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
