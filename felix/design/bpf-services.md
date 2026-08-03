@@ -438,8 +438,20 @@ refreshed on each use, so the affinity lasts as long as the socket keeps
 sending.
 
 These entries live in the same affinity map as the `sessionAffinity`
-ones, and `affinity_always_timeo` takes precedence over the service's own
-timeout on this path.
+ones. When both apply — a UDP service that also sets
+`sessionAffinity: ClientIP` — `calico_nat_lookup` uses whichever timeout
+is **longer**. Using the shorter one would break the promise the other
+made; in particular, honouring the CTLB's timeout over a service's
+3-hour `sessionAffinity` would re-pick a backend after a few idle
+seconds, which is not the stickiness the user asked for.
+
+A caveat on granularity: the CTLB looks the entry up with `client_ip` set
+to `VOID_IP`, because the source IP is not known at connect/sendmsg time.
+So there is one CTLB affinity entry per (service, port), shared by every
+workload on the node, rather than one per client IP. That is a known
+limitation (see the `XXX` comment in `connect.h`), independent of the
+timeout: within a burst of traffic the entry is refreshed on each use, so
+node-local clients coalesce onto one backend at any timeout value.
 
 ### Applicability
 
