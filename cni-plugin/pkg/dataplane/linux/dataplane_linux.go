@@ -541,10 +541,16 @@ func (d *LinuxDataplane) configureSysctls(hostVethName string, hasIPv4, hasIPv6 
 			return fmt.Errorf("failed to set net.ipv6.conf.%s.disable_ipv6=0: %s", hostVethName, err)
 		}
 
-		// Enable proxy NDP, similarly to proxy ARP, described above in IPv4 section.
-		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", hostVethName), "1"); err != nil {
-			return fmt.Errorf("failed to set net.ipv6.conf.%s.proxy_ndp=1: %s", hostVethName, err)
-		}
+		// Note: deliberately no proxy_ndp counterpart to the proxy_arp set in the
+		// IPv4 section above.  Despite the name it is not the IPv6 equivalent: it
+		// does no route-based proxying, and the kernel answers a Neighbor
+		// Solicitation only for addresses with an explicit NUD_PROXY neighbour
+		// entry, which Calico does not program.  IPv6 needs no proxying anyway,
+		// because the link-local address auto-provisioned on this interface (see
+		// disable_ipv6 above) is what the pod's default route points at, so we
+		// answer NDP for it as our own address.  IPv4 has no automatic link-local
+		// provisioning, hence the dummy 169.254.1.1 gateway and its proxy ARP.
+		// See felix/design/neighbour-discovery.md.
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
 		// be forwarded in both directions we need this flag to be set on the fabric-facing
