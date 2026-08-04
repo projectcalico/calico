@@ -597,11 +597,45 @@ Legitimate asymmetries are rare on the `*tables` path. Two notes:
   table, but was kept as two to track the iptables structure for
   porting ease.
 
+### Cross-cutting components that feed the per-family managers
+
+Not everything is duplicated per family. Some components are
+deliberately **single instances that feed the per-family managers**.
+The live migration monitor (`dataplane/linux/live_migration.go`) is
+the model: one FSM per workload, driven by GARP detection and timers
+that have nothing to do with IP family, whose state changes are then
+pushed into the endpoint managers — which own the per-family route
+programming.
+
+For those components the dual-stack trap is not "did you duplicate
+the code" but **"did you fan out to every family's manager"**. A
+singleton holding a *single* reference to its downstream manager
+silently serves IPv4 only, and nothing fails loudly: the IPv6
+manager simply never learns the state, so its routes keep their
+default behaviour. That was CORE-12806 — the live migration
+monitor's `listener` field was assigned the IPv4 endpoint manager
+only, so IPv6 workload routes were never suppressed on a migration
+target nor elevated after cutover, and IPv6 traffic to a migrating
+VM could black-hole for the duration of the migration. Prefer a list
+plus an explicit registration call (`registerListener`) over a
+single-valued field: a missing family then shows up as a missing
+call at the construction site in `int_dataplane.go`, alongside the
+`RegisterManager` call it belongs with.
+
 ### Review notes for this section
 
 - A dataplane change must be applied symmetrically to the IPv4 and
   IPv6 manager/driver instances unless there's a specific reason not
   to. "Works on v4, forgot v6" is a recurring bug.
+- A cross-cutting (non-per-family) component that pushes state into
+  the per-family managers must be wired to **all** of them. Check the
+  construction site in `int_dataplane.go`: every per-family manager
+  the component needs should have a matching registration call. A
+  single-valued reference field where a list belongs is the smell.
+- Dual-stack behaviour needs dual-stack tests. A per-family manager's
+  own unit tests may already run for both families and still pass
+  while the family is disconnected upstream; the registration itself
+  and at least one FV path need explicit IPv6 coverage.
 
 ## Windows (contrast)
 

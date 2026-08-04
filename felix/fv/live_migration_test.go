@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	gomegatypes "github.com/onsi/gomega/types"
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -52,7 +53,7 @@ import (
 //     VirtualMachineInstanceMigration (VMIM) resources, which the Kubernetes backend converts to
 //     LiveMigrations.
 //
-// In both suites the migrating VM is modelled by two FV workloads with the same IP, one on each
+// In both suites the migrating VM is modelled by two FV workloads with the same IPs, one on each
 // of two Felix hosts.  The expected route programming on the target host, as the migration
 // progresses, is:
 //
@@ -64,20 +65,31 @@ import (
 //     LiveMigrationRouteConvergenceTime has elapsed (back to state Base).
 //
 // Throughout, the source host's route programming for its WEP is normal.
+//
+// The workloads are dual-stack and every route expectation is checked for both families.  Felix
+// programs IPv4 and IPv6 workload routes through separate per-family endpoint managers, each
+// with its own copy of the live migration state, so an IPv4-only expectation proves nothing
+// about IPv6 (see CORE-12806, where the IPv6 endpoint manager was never told about live
+// migration state at all).
 const (
-	// Both workloads model the same migrating VM, so they share this IP.
-	lmMigratingIP = "10.65.0.2"
+	// Both workloads model the same migrating VM, so they share these IPs.
+	lmMigratingIP   = "10.65.0.2"
+	lmMigratingIPv6 = "dead:beef::2"
 
-	// Route priorities for these tests, matching the IPv4ElevatedRoutePriority and
-	// IPv4NormalRoutePriority defaults; lmTopologyOptions pins them explicitly so that the
-	// metric assertions cannot be broken by a change to the defaults.  Note that lower
-	// metric = more preferred.
+	// Route priorities for these tests, matching the IPv4/IPv6ElevatedRoutePriority and
+	// IPv4/IPv6NormalRoutePriority defaults; lmTopologyOptions pins all four explicitly so
+	// that the metric assertions cannot be broken by a change to the defaults.  Note that
+	// lower metric = more preferred.
 	lmElevatedPriority = "512"
 	lmNormalPriority   = "1024"
 
 	// Corresponding metric strings expected in "ip route show" output.
 	lmElevatedMetric = "metric " + lmElevatedPriority
 	lmNormalMetric   = "metric " + lmNormalPriority
+
+	// lmNoRoute is the route expectation for a workload whose route is suppressed
+	// altogether, i.e. no route at all.
+	lmNoRoute = ""
 
 	// LiveMigrationRouteConvergenceTime for these tests, in seconds.  Long enough that a
 	// Consistently over a few seconds fits within it, short enough that waiting for reversion
@@ -86,15 +98,18 @@ const (
 )
 
 // lmTopologyOptions returns the topology options shared by both live migration suites: flat
-// (unencapsulated) IPv4 routing, as in the OpenStack use case.  With no encap and the default
-// RouteSource, Felix programs only local workload routes, which are the subject of these tests.
+// (unencapsulated) dual-stack routing, as in the OpenStack use case.  With no encap and the
+// default RouteSource, Felix programs only local workload routes, which are the subject of
+// these tests.
 func lmTopologyOptions() infrastructure.TopologyOptions {
 	opts := infrastructure.DefaultTopologyOptions()
 	opts.IPIPMode = api.IPIPModeNever
-	opts.EnableIPv6 = false
+	opts.EnableIPv6 = true
 	opts.ExtraEnvVars["FELIX_LIVEMIGRATIONROUTECONVERGENCETIME"] = lmConvergenceTimeSecs
 	opts.ExtraEnvVars["FELIX_IPV4ELEVATEDROUTEPRIORITY"] = lmElevatedPriority
 	opts.ExtraEnvVars["FELIX_IPV4NORMALROUTEPRIORITY"] = lmNormalPriority
+	opts.ExtraEnvVars["FELIX_IPV6ELEVATEDROUTEPRIORITY"] = lmElevatedPriority
+	opts.ExtraEnvVars["FELIX_IPV6NORMALROUTEPRIORITY"] = lmNormalPriority
 
 	// The tests' routing expectations assume IPAM-derived routing (the default RouteSource);
 	// make that explicit too.
@@ -103,22 +118,82 @@ func lmTopologyOptions() infrastructure.TopologyOptions {
 	return opts
 }
 
+// lmFamilyRoute is one family's route-fetching function, labelled for failure messages.
+type lmFamilyRoute struct {
+	family string
+	route  func() string
+}
+
+// lmRoutes holds the route-fetching functions for one workload's IPv4 and IPv6 routes on one
+// host.  The lm*Route helpers below assert over both, so that no expectation can accidentally
+// cover only one family.
+type lmRoutes []lmFamilyRoute
+
+// lmWorkloadRoutes returns the host's main-table routes, per family, for the given workload's
+// IPs on that workload's interface.  Each function returns "" if there is no such route.
+func lmWorkloadRoutes(felix *infrastructure.Felix, w *workload.Workload) lmRoutes {
+	return lmRoutes{
+		{family: "IPv4", route: lmWorkloadRoute(felix, w, "-4", w.IP)},
+		{family: "IPv6", route: lmWorkloadRoute(felix, w, "-6", w.IP6)},
+	}
+}
+
 // lmWorkloadRoute returns a function that fetches the host's main-table route for the given
-// workload's IP on that workload's interface, or "" if there is no such route.
-func lmWorkloadRoute(felix *infrastructure.Felix, w *workload.Workload) func() string {
+// workload IP on that workload's interface, or "" if there is no such route.
+func lmWorkloadRoute(felix *infrastructure.Felix, w *workload.Workload, familyArg, ip string) func() string {
 	return func() string {
-		out, err := felix.ExecOutput("ip", "route", "show", "dev", w.InterfaceName)
+		out, err := felix.ExecOutput("ip", familyArg, "route", "show", "dev", w.InterfaceName)
 		if err != nil {
 			// Interface not present (e.g. workload stopped); no route.
 			return ""
 		}
 		for _, line := range strings.Split(out, "\n") {
 			fields := strings.Fields(line)
-			if len(fields) > 0 && fields[0] == w.IP {
+			if len(fields) > 0 && fields[0] == ip {
 				return strings.TrimSpace(line)
 			}
 		}
 		return ""
+	}
+}
+
+// lmRouteMatcher builds the matcher for a route expectation: either no route at all
+// (lmNoRoute), or a route carrying the given metric.
+func lmRouteMatcher(metric string) gomegatypes.GomegaMatcher {
+	if metric == lmNoRoute {
+		return BeEmpty()
+	}
+	return ContainSubstring(metric)
+}
+
+// lmRouteDesc labels a route expectation failure with the family it applies to.
+func lmRouteDesc(family string, desc []string) string {
+	if len(desc) == 0 {
+		return family + " route"
+	}
+	return family + " route: " + desc[0]
+}
+
+// lmEventuallyRoute asserts that both families' routes eventually reach the given expectation.
+func lmEventuallyRoute(routes lmRoutes, metric, timeout, poll string, desc ...string) {
+	for _, r := range routes {
+		EventuallyWithOffset(1, r.route, timeout, poll).Should(
+			lmRouteMatcher(metric), lmRouteDesc(r.family, desc))
+	}
+}
+
+// lmConsistentlyRoute asserts that both families' routes hold the given expectation throughout.
+func lmConsistentlyRoute(routes lmRoutes, metric, duration, poll string, desc ...string) {
+	for _, r := range routes {
+		ConsistentlyWithOffset(1, r.route, duration, poll).Should(
+			lmRouteMatcher(metric), lmRouteDesc(r.family, desc))
+	}
+}
+
+// lmExpectRoute asserts that both families' routes meet the given expectation right now.
+func lmExpectRoute(routes lmRoutes, metric string, desc ...string) {
+	for _, r := range routes {
+		ExpectWithOffset(1, r.route()).To(lmRouteMatcher(metric), lmRouteDesc(r.family, desc))
 	}
 }
 
@@ -132,15 +207,20 @@ func lmSendGARP(w *workload.Workload) {
 	}
 }
 
-// lmGARPElicitsRoute sends GARPs from the workload until the expected route appears on the host.
-// Retrying the GARP makes the test robust against the GARP being sent just before Felix's
-// listener is ready.
-func lmGARPElicitsRoute(felix *infrastructure.Felix, w *workload.Workload, expectedMetric string) {
-	route := lmWorkloadRoute(felix, w)
+// lmGARPElicitsRoutes sends GARPs from the workload until the expected routes appear on the
+// host.  Retrying the GARP makes the test robust against the GARP being sent just before
+// Felix's listener is ready.  Only the IPv4 route needs the retry loop: once it has appeared
+// the GARP has been seen, and the IPv6 route follows from the same FSM transition.
+func lmGARPElicitsRoutes(felix *infrastructure.Felix, w *workload.Workload, expectedMetric string) {
+	routes := lmWorkloadRoutes(felix, w)
 	EventuallyWithOffset(1, func() string {
 		lmSendGARP(w)
-		return route()
-	}, "10s", "500ms").Should(ContainSubstring(expectedMetric))
+		return routes[0].route()
+	}, "10s", "500ms").Should(ContainSubstring(expectedMetric), lmRouteDesc(routes[0].family, nil))
+	for _, r := range routes[1:] {
+		EventuallyWithOffset(1, r.route, "10s", "500ms").Should(
+			ContainSubstring(expectedMetric), lmRouteDesc(r.family, nil))
+	}
 }
 
 // lmWatchForState returns a channel that is closed when the given Felix logs a live migration
@@ -150,25 +230,38 @@ func lmWatchForState(felix *infrastructure.Felix, toState string) chan struct{} 
 		"Live migration state transition.*to=" + toState))
 }
 
-func lmExpectReachableVia(felix *infrastructure.Felix, w *workload.Workload) {
-	cc := &connectivity.Checker{}
-	cc.ExpectSome(felix, w)
-	cc.CheckConnectivity()
+// lmExpectReachableVia checks that the given host can reach the workload.  Both IP families
+// are checked unless ipVersions restricts them, because the two families' routes are
+// programmed independently.
+func lmExpectReachableVia(felix *infrastructure.Felix, w *workload.Workload, ipVersions ...int) {
+	lmCheckConnectivity(connectivity.Some, felix, w, ipVersions)
 }
 
-func lmExpectNotReachableVia(felix *infrastructure.Felix, w *workload.Workload) {
+func lmExpectNotReachableVia(felix *infrastructure.Felix, w *workload.Workload, ipVersions ...int) {
+	lmCheckConnectivity(connectivity.None, felix, w, ipVersions)
+}
+
+func lmCheckConnectivity(expected connectivity.Expected, felix *infrastructure.Felix,
+	w *workload.Workload, ipVersions []int,
+) {
+	if len(ipVersions) == 0 {
+		ipVersions = []int{4, 6}
+	}
 	cc := &connectivity.Checker{}
-	cc.ExpectNone(felix, w)
+	for _, ipVersion := range ipVersions {
+		cc.Expect(expected, felix, w, connectivity.ExpectWithIPVersion(ipVersion))
+	}
 	cc.CheckConnectivity()
 }
 
 // lmDumpDiagsOnFailure logs each Felix's routing table and interfaces if the current test failed.
 func lmDumpDiagsOnFailure(tc infrastructure.TopologyContainers) {
-	if !CurrentGinkgoTestDescription().Failed {
+	if !CurrentSpecReport().Failed() {
 		return
 	}
 	for _, felix := range tc.Felixes {
 		felix.Exec("ip", "route", "show")
+		felix.Exec("ip", "-6", "route", "show")
 		felix.Exec("ip", "addr", "show")
 	}
 }
@@ -195,10 +288,12 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			// would create it.  The WEPs carry the "openstack" orchestrator ID, as
 			// networking-calico's would, so that any OpenStack-specific handling in
 			// Felix is exercised.
-			source = workload.Run(tc.Felixes[0], "source", "default", lmMigratingIP, "8055", "tcp")
+			source = workload.Run(tc.Felixes[0], "source", "default", lmMigratingIP, "8055", "tcp",
+				workload.WithIPv6Address(lmMigratingIPv6))
 			source.WorkloadEndpoint.Spec.Orchestrator = api.OrchestratorOpenStack
 			source.ConfigureInInfra(infra)
-			target = workload.Run(tc.Felixes[1], "target", "default", lmMigratingIP, "8055", "tcp")
+			target = workload.Run(tc.Felixes[1], "target", "default", lmMigratingIP, "8055", "tcp",
+				workload.WithIPv6Address(lmMigratingIPv6))
 			target.WorkloadEndpoint.Spec.Orchestrator = api.OrchestratorOpenStack
 		})
 
@@ -245,11 +340,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 		}
 
 		It("should follow the mainline migration flow, with GARP detection", func() {
-			srcRouteFn := lmWorkloadRoute(tc.Felixes[0], source)
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			srcRoutes := lmWorkloadRoutes(tc.Felixes[0], source)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("programming a normal-priority route for the source workload")
-			Eventually(srcRouteFn, "10s", "200ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(srcRoutes, lmNormalMetric, "10s", "200ms")
 			lmExpectReachableVia(tc.Felixes[0], source)
 
 			By("creating the LiveMigration and then the target WEP")
@@ -259,15 +354,15 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 
 			By("suppressing the target workload's route while awaiting the GARP")
 			Eventually(targetSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty(),
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms",
 				"target route should be suppressed before the target VM is live")
-			Expect(srcRouteFn()).To(ContainSubstring(lmNormalMetric),
+			lmExpectRoute(srcRoutes, lmNormalMetric,
 				"source route should be untouched during migration")
 			lmExpectReachableVia(tc.Felixes[0], source)
 			lmExpectNotReachableVia(tc.Felixes[1], target)
 
 			By("programming an elevated-priority route when the target sends a GARP")
-			lmGARPElicitsRoute(tc.Felixes[1], target, lmElevatedMetric)
+			lmGARPElicitsRoutes(tc.Felixes[1], target, lmElevatedMetric)
 			lmExpectReachableVia(tc.Felixes[1], target)
 
 			By("completing the migration: removing the source WEP and the LiveMigration")
@@ -275,44 +370,44 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			deleteLiveMigration("migration-1")
 
 			By("keeping the elevated route until the convergence time has elapsed")
-			Consistently(tgtRouteFn, "3s", "500ms").Should(ContainSubstring(lmElevatedMetric))
-			Eventually(srcRouteFn, "10s", "200ms").Should(BeEmpty(),
+			lmConsistentlyRoute(tgtRoutes, lmElevatedMetric, "3s", "500ms")
+			lmEventuallyRoute(srcRoutes, lmNoRoute, "10s", "200ms",
 				"source route should be removed with the source WEP")
-			Eventually(tgtRouteFn, "15s", "500ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(tgtRoutes, lmNormalMetric, "15s", "500ms")
 			lmExpectReachableVia(tc.Felixes[1], target)
 		})
 
 		It("should complete a migration even if the GARP is missed", func() {
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("creating the LiveMigration and then the target WEP")
 			targetSeen := lmWatchForState(tc.Felixes[1], "Target")
 			createLiveMigration("migration-1", source, target)
 			target.ConfigureInInfra(infra)
 			Eventually(targetSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("completing the migration without any GARP having been sent")
 			source.RemoveFromInfra(infra)
 			deleteLiveMigration("migration-1")
 
 			By("programming an elevated route and then reverting to normal priority")
-			Eventually(tgtRouteFn, "10s", "200ms").Should(ContainSubstring(lmElevatedMetric))
+			lmEventuallyRoute(tgtRoutes, lmElevatedMetric, "10s", "200ms")
 			lmExpectReachableVia(tc.Felixes[1], target)
-			Eventually(tgtRouteFn, "15s", "500ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(tgtRoutes, lmNormalMetric, "15s", "500ms")
 			lmExpectReachableVia(tc.Felixes[1], target)
 		})
 
 		It("should handle migration failure", func() {
-			srcRouteFn := lmWorkloadRoute(tc.Felixes[0], source)
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			srcRoutes := lmWorkloadRoutes(tc.Felixes[0], source)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("creating the LiveMigration and then the target WEP")
 			targetSeen := lmWatchForState(tc.Felixes[1], "Target")
 			createLiveMigration("migration-1", source, target)
 			target.ConfigureInInfra(infra)
 			Eventually(targetSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("cleaning up the failed migration: removing the target WEP and LiveMigration")
 			baseSeen := lmWatchForState(tc.Felixes[1], "Base")
@@ -321,21 +416,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			Eventually(baseSeen, "10s").Should(BeClosed())
 
 			By("never programming a route for the failed target")
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("leaving the source untouched throughout")
-			Expect(srcRouteFn()).To(ContainSubstring(lmNormalMetric))
+			lmExpectRoute(srcRoutes, lmNormalMetric)
 			lmExpectReachableVia(tc.Felixes[0], source)
 		})
 
 		It("should handle immediate re-migration back to the original host", func() {
-			srcRouteFn := lmWorkloadRoute(tc.Felixes[0], source)
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			srcRoutes := lmWorkloadRoutes(tc.Felixes[0], source)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("migrating to the target host")
 			createLiveMigration("migration-1", source, target)
 			target.ConfigureInInfra(infra)
-			lmGARPElicitsRoute(tc.Felixes[1], target, lmElevatedMetric)
+			lmGARPElicitsRoutes(tc.Felixes[1], target, lmElevatedMetric)
 
 			By("starting a re-migration back to the original host")
 			// The workloads swap roles: the target of the first migration becomes the
@@ -344,41 +439,41 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			// the original workload's route is suppressed but the first migration's
 			// target keeps its elevated route.
 			createLiveMigration("migration-2", target, source)
-			Eventually(srcRouteFn, "10s", "200ms").Should(BeEmpty(),
+			lmEventuallyRoute(srcRoutes, lmNoRoute, "10s", "200ms",
 				"original workload's route should be suppressed as re-migration target")
-			Expect(tgtRouteFn()).To(ContainSubstring(lmElevatedMetric))
+			lmExpectRoute(tgtRoutes, lmElevatedMetric)
 
 			By("reverting the re-migration's source to a normal route immediately")
 			// Once the first LiveMigration is deleted, the first migration's target
 			// becomes purely a migration source, which takes effect immediately, with
 			// no elevated-priority TimeWait period.
 			deleteLiveMigration("migration-1")
-			Eventually(tgtRouteFn, "10s", "200ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(tgtRoutes, lmNormalMetric, "10s", "200ms")
 
 			By("completing the reverse migration with a GARP from the original workload")
-			lmGARPElicitsRoute(tc.Felixes[0], source, lmElevatedMetric)
+			lmGARPElicitsRoutes(tc.Felixes[0], source, lmElevatedMetric)
 			lmExpectReachableVia(tc.Felixes[0], source)
 
 			By("finishing: removing the reverse migration's source WEP and LiveMigration")
 			target.RemoveFromInfra(infra)
 			deleteLiveMigration("migration-2")
-			Consistently(srcRouteFn, "3s", "500ms").Should(ContainSubstring(lmElevatedMetric))
-			Eventually(tgtRouteFn, "10s", "200ms").Should(BeEmpty())
-			Eventually(srcRouteFn, "15s", "500ms").Should(ContainSubstring(lmNormalMetric))
+			lmConsistentlyRoute(srcRoutes, lmElevatedMetric, "3s", "500ms")
+			lmEventuallyRoute(tgtRoutes, lmNoRoute, "10s", "200ms")
+			lmEventuallyRoute(srcRoutes, lmNormalMetric, "15s", "500ms")
 			lmExpectReachableVia(tc.Felixes[0], source)
 		})
 
 		It("should withdraw the target's route if the WEP is created before the LiveMigration", func() {
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("programming a normal route when the target WEP is created with no LiveMigration")
 			target.ConfigureInInfra(infra)
-			Eventually(tgtRouteFn, "10s", "200ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(tgtRoutes, lmNormalMetric, "10s", "200ms")
 
 			By("withdrawing the route when the LiveMigration arrives")
 			createLiveMigration("migration-1", source, target)
-			Eventually(tgtRouteFn, "10s", "200ms").Should(BeEmpty())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmEventuallyRoute(tgtRoutes, lmNoRoute, "10s", "200ms")
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 		})
 	})
 
@@ -431,9 +526,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			// source starts out registered; the target pod is created by each test at
 			// the point in the migration flow where KubeVirt would create the target
 			// virt-launcher pod.
-			source = workload.Run(tc.Felixes[0], "source", "default", lmMigratingIP, "8055", "tcp")
+			source = workload.Run(tc.Felixes[0], "source", "default", lmMigratingIP, "8055", "tcp",
+				workload.WithIPv6Address(lmMigratingIPv6))
 			source.ConfigureInInfra(infra)
-			target = workload.Run(tc.Felixes[1], "target", "default", lmMigratingIP, "8055", "tcp")
+			target = workload.Run(tc.Felixes[1], "target", "default", lmMigratingIP, "8055", "tcp",
+				workload.WithIPv6Address(lmMigratingIPv6))
 		})
 
 		AfterEach(func() {
@@ -530,11 +627,11 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 		}
 
 		It("should follow the mainline migration flow, with GARP detection and IPAM owner swap", func() {
-			srcRouteFn := lmWorkloadRoute(tc.Felixes[0], source)
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			srcRoutes := lmWorkloadRoutes(tc.Felixes[0], source)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("programming a normal-priority route for the source pod")
-			Eventually(srcRouteFn, "10s", "200ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(srcRoutes, lmNormalMetric, "10s", "200ms")
 			lmExpectReachableVia(tc.Felixes[0], source)
 
 			By("seeding the VM's IPAM allocation, as the CNI plugin would have")
@@ -547,20 +644,21 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 
 			By("suppressing the target pod's route while awaiting the GARP")
 			Eventually(targetSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty(),
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms",
 				"target route should be suppressed before the target VM is live")
-			Expect(srcRouteFn()).To(ContainSubstring(lmNormalMetric),
+			lmExpectRoute(srcRoutes, lmNormalMetric,
 				"source route should be untouched during migration")
 
 			// Unlike in the OpenStack-style suite, the VM's IP is still reachable from
 			// the target host here: the seeded IPAM block is affine to the source node
 			// and the source pod is the active owner, so Felix routes the traffic to
 			// the source host, where the still-live source VM answers.  That is the
-			// intended during-migration behaviour.
-			lmExpectReachableVia(tc.Felixes[1], target)
+			// intended during-migration behaviour.  Only the IPv4 address has seeded
+			// IPAM state, so this is the one connectivity check that is IPv4-only.
+			lmExpectReachableVia(tc.Felixes[1], target, 4)
 
 			By("programming an elevated-priority route when the target sends a GARP")
-			lmGARPElicitsRoute(tc.Felixes[1], target, lmElevatedMetric)
+			lmGARPElicitsRoutes(tc.Felixes[1], target, lmElevatedMetric)
 			lmExpectReachableVia(tc.Felixes[1], target)
 
 			By("swapping the IPAM owner attributes to make the target pod the active owner")
@@ -571,39 +669,39 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ live migration route progra
 			source.RemoveFromInfra(infra)
 
 			By("keeping the elevated route until the convergence time has elapsed")
-			Consistently(tgtRouteFn, "3s", "500ms").Should(ContainSubstring(lmElevatedMetric))
-			Eventually(srcRouteFn, "10s", "200ms").Should(BeEmpty(),
+			lmConsistentlyRoute(tgtRoutes, lmElevatedMetric, "3s", "500ms")
+			lmEventuallyRoute(srcRoutes, lmNoRoute, "10s", "200ms",
 				"source route should be removed with the source pod")
-			Eventually(tgtRouteFn, "15s", "500ms").Should(ContainSubstring(lmNormalMetric))
+			lmEventuallyRoute(tgtRoutes, lmNormalMetric, "15s", "500ms")
 			lmExpectReachableVia(tc.Felixes[1], target)
 		})
 
 		It("should handle migration failure", func() {
-			srcRouteFn := lmWorkloadRoute(tc.Felixes[0], source)
-			tgtRouteFn := lmWorkloadRoute(tc.Felixes[1], target)
+			srcRoutes := lmWorkloadRoutes(tc.Felixes[0], source)
+			tgtRoutes := lmWorkloadRoutes(tc.Felixes[1], target)
 
 			By("creating the VMIM and then the target pod")
 			targetSeen := lmWatchForState(tc.Felixes[1], "Target")
 			vmim := createVMIM("migration-1", kubevirtv1.MigrationRunning, source.Name)
 			configureTargetPod(vmim)
 			Eventually(targetSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("keeping the target's route suppressed when the migration fails")
 			// A Failed VMIM still identifies the target pod, and the target VM never
 			// became live, so the route must stay suppressed until KubeVirt tears the
 			// target pod down.
 			setVMIMPhase("migration-1", kubevirtv1.MigrationFailed)
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("never programming a route for the target once it is torn down")
 			baseSeen := lmWatchForState(tc.Felixes[1], "Base")
 			target.RemoveFromInfra(infra)
 			Eventually(baseSeen, "10s").Should(BeClosed())
-			Consistently(tgtRouteFn, "3s", "500ms").Should(BeEmpty())
+			lmConsistentlyRoute(tgtRoutes, lmNoRoute, "3s", "500ms")
 
 			By("leaving the source untouched throughout")
-			Expect(srcRouteFn()).To(ContainSubstring(lmNormalMetric))
+			lmExpectRoute(srcRoutes, lmNormalMetric)
 			lmExpectReachableVia(tc.Felixes[0], source)
 		})
 	})
