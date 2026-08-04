@@ -48,7 +48,7 @@ type Installation struct {
 type InstallationSpec struct {
 	// Variant is the product to install - one of Calico or CalicoEnterprise.
 	// TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-	// Default: Calico
+	// If left unset, the operator fills in the variant it is running as.
 	// +optional
 	// +kubebuilder:validation:Enum=Calico;CalicoEnterprise;TigeraSecureEnterprise
 	Variant ProductVariant `json:"variant,omitempty"`
