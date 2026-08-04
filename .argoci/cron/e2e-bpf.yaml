@@ -698,6 +698,41 @@ steps:
             value: None
     commands: |
       .argoci/scripts/body_standard.sh
+  # The only run that exercises Maglev. Maglev needs the BPF dataplane with
+  # DSR, an external node, every node on a single VPC subnet, and no
+  # encapsulation -- see felix/design/bpf-services.md -> Maglev. This step is
+  # dedicated to it so that requirement doesn't constrain any other run's
+  # dataplane mode. e2e/config/maglev.yaml selects the Maglev tests and nothing
+  # else, and the include is what makes them run at all.
+  - name: maglev
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/maglev.yaml
+      - name: ENABLE_BPF_DSR
+        value: "true"
+      - name: ENABLE_DUAL_STACK
+        value: "true"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: IP_FAMILY
+        value: dual
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_CIDR
+        value: 172.16.0.0/16
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: bpf-mode-switch
     services:
       - docker
