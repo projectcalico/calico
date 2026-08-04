@@ -89,13 +89,10 @@ var (
 		Help: "Histogram for measuring latency for processing merging the proto.DataplaneStatistics to the current data cache.",
 	})
 
-	gaugeDataplaneStatsUpdateErrorsPerMinute = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_collector_dataplanestats_update_processing_errors_per_minute",
+	counterDataplaneStatsUpdateErrors = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_collector_dataplanestats_update_processing_errors_total",
 		Help: "Number of errors encountered when processing merging the proto.DataplaneStatistics to the current data cache.",
 	})
-
-	dataplaneStatsUpdateLastErrorReportTime time.Time
-	dataplaneStatsUpdateErrorsInLastMinute  uint32
 
 	// epStats cache prometheus metrics
 	gaugeEpStatsCacheSizeLength = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -126,7 +123,7 @@ func init() {
 	prometheus.MustRegister(histogramDumpStatsLatency)
 	prometheus.MustRegister(gaugeEpStatsCacheSizeLength)
 	prometheus.MustRegister(histogramDataplaneStatsUpdate)
-	prometheus.MustRegister(gaugeDataplaneStatsUpdateErrorsPerMinute)
+	prometheus.MustRegister(counterDataplaneStatsUpdateErrors)
 	prometheus.MustRegister(counterPolicyEvalBatches)
 	prometheus.MustRegister(counterPolicyEvalFlows)
 	prometheus.MustRegister(histogramPolicyEvalSweepDuration)
@@ -250,9 +247,6 @@ func (c *collector) Start() error {
 			log.Warning("missing DataplaneInfoReader")
 		}
 	}
-
-	// init prometheus metrics timings
-	dataplaneStatsUpdateLastErrorReportTime = time.Now()
 
 	// Start all metric reporters
 	for _, r := range c.metricReporters {
@@ -933,7 +927,7 @@ func (c *collector) convertDataplaneStatsAndApplyUpdate(d *proto.DataplaneStats)
 	t, err := extractTupleFromDataplaneStats(d)
 	if err != nil {
 		log.Errorf("unable to extract 5-tuple from DataplaneStats: %v", err)
-		reportDataplaneStatsUpdateErrorMetrics(1)
+		counterDataplaneStatsUpdateErrors.Inc()
 		return
 	}
 
@@ -1083,7 +1077,6 @@ func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error
 		case "udp":
 			protocol = 17
 		default:
-			reportDataplaneStatsUpdateErrorMetrics(1)
 			return tuple.Tuple{}, fmt.Errorf("unhandled protocol: %s", n)
 		}
 	}
@@ -1091,29 +1084,16 @@ func extractTupleFromDataplaneStats(d *proto.DataplaneStats) (tuple.Tuple, error
 	// Use the standard go net library to parse the IP since this always returns IPs as 16 bytes.
 	srcIP, ok := ip.ParseIPAs16Byte(d.SrcIp)
 	if !ok {
-		reportDataplaneStatsUpdateErrorMetrics(1)
 		return tuple.Tuple{}, fmt.Errorf("bad source IP: %s", d.SrcIp)
 	}
 	dstIP, ok := ip.ParseIPAs16Byte(d.DstIp)
 	if !ok {
-		reportDataplaneStatsUpdateErrorMetrics(1)
 		return tuple.Tuple{}, fmt.Errorf("bad destination IP: %s", d.DstIp)
 	}
 
 	// Locate the data for this connection, creating if not yet available (it's possible to get an update
 	// before nflogs or conntrack).
 	return tuple.Make(srcIP, dstIP, int(protocol), int(d.SrcPort), int(d.DstPort)), nil
-}
-
-// reportDataplaneStatsUpdateErrorMetrics reports error statistics encoutered when updating Dataplane stats
-func reportDataplaneStatsUpdateErrorMetrics(dataplaneErrorDelta uint32) {
-	if dataplaneStatsUpdateLastErrorReportTime.Before(time.Now().Add(-1 * time.Minute)) {
-		dataplaneStatsUpdateErrorsInLastMinute = dataplaneErrorDelta
-	} else {
-		dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
-	}
-	dataplaneStatsUpdateErrorsInLastMinute += dataplaneErrorDelta
-	gaugeDataplaneStatsUpdateErrorsPerMinute.Set(float64(dataplaneStatsUpdateErrorsInLastMinute))
 }
 
 // Logrus Formatter that strips the log entry of formatting such as time, log
