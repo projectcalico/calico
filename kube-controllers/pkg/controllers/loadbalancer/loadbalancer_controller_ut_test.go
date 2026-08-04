@@ -540,6 +540,21 @@ var _ = Describe("LoadBalancer controller UTs", func() {
 		Expect(cli.IPAMUpgradeCallCount()).To(Equal(2))
 	})
 
+	It("should recognize spec.loadBalancerIP as calico-managed in RequestedServicesOnly mode", func() {
+		// With no annotations and no spec.loadBalancerIP, not managed in RequestedServicesOnly mode.
+		managed := IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeFalse())
+
+		// Setting spec.loadBalancerIP should make it calico-managed (user is requesting a specific IP).
+		svc.Spec.LoadBalancerIP = "10.0.0.5"
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.RequestedServicesOnly)
+		Expect(managed).To(BeTrue())
+
+		// Should still be managed in AllServices mode.
+		managed = IsCalicoManagedLoadBalancer(&svc, apiv3.AllServices)
+		Expect(managed).To(BeTrue())
+	})
+
 	It("should handle invalid IP addresses in allocation tracker without panicking", func() {
 		svcKey, err := serviceKeyFromService(&svc)
 		Expect(err).ToNot(HaveOccurred())
