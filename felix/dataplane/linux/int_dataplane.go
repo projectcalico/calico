@@ -887,22 +887,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipsetsManager := dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
 	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
-	// iptables / nftables specific filter Table implementations for IPv6.
-	var filterTableV6NFT, filterTableV6IPT generictables.Table
-
-	// Create nftables Table implementations for IPv6.
+	// Required when nftables mode is configured, and for cleanup in the other modes.
 	nftablesV6RootTable := nftables.NewTable("calico", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
-	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
-	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
-
-	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
 	if nftablesEnabled {
-		filterTableV6 = filterTableV6NFT
+		filterTableV6 = nftables.NewTableLayer("filter", nftablesV6RootTable)
 	} else {
-		filterTableV6 = filterTableV6IPT
+		filterTableV6 = iptables.NewTable("filter", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
 
 	dp.RegisterManager(ipsetsManager)

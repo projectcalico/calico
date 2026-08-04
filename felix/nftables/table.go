@@ -346,9 +346,6 @@ type TableOptions struct {
 
 	RefreshInterval time.Duration
 
-	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
-	NewCmdOverride cmdshim.CmdFactory
-
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 
@@ -469,11 +466,8 @@ func newTable(
 		}
 	}
 
-	// Allow override of exec.Command() and time.Sleep() for test purposes.
+	// Allow override of time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
-	if options.NewCmdOverride != nil {
-		newCmd = options.NewCmdOverride
-	}
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
 		sleep = options.SleepOverride
