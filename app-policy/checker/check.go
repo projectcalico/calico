@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 var (
@@ -62,8 +63,13 @@ const (
 )
 
 // Evaluate evaluates the flow against the policy store and returns the trace of rules.
+//
+// This is the "pending" policy trace: the trace for the current state of policy with every staged
+// policy treated as if it were enforced. It can differ from the verdict the dataplane recorded
+// either because staged policies took part in it, or because the enforced policies have changed
+// since the dataplane reached its verdict.
 func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(store, ep, dir, flow)
+	_, trace := checkTiers(store, ep, dir, flow, stagedAsEnforced)
 	return trace
 }
 
@@ -100,15 +106,28 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
 func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
-	// Check using the configured policy
-	s, _ = checkTiers(store, ep, dir, req)
+	// Check using the configured policy. This decides whether to admit the request, so only the
+	// enforcing policies get a say.
+	s, _ = checkTiers(store, ep, dir, req, enforcedOnly)
 	return
 }
+
+// policyScope selects which of an endpoint's policies take part in evaluation.
+type policyScope int
+
+const (
+	// enforcedOnly evaluates only the policies that enforce, i.e. it answers "what does policy do to
+	// this flow right now". Staged policies play no part.
+	enforcedOnly policyScope = iota
+	// stagedAsEnforced treats staged policies as though they were enforced, for the pending policy
+	// trace. See Evaluate.
+	stagedAsEnforced
+)
 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow, scope policyScope) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	if ep == nil {
 		return
@@ -120,6 +139,18 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	for _, tier := range ep.Tiers {
 		log.Debugf("Checking tier %s", tier.GetName())
 		policies := getPoliciesByDirection(dir, tier)
+		if scope == enforcedOnly {
+			// Staged policies enforce nothing, so they take no part in this verdict. Dropping them can
+			// empty the tier, and a tier with nothing left to enforce is skipped entirely — as if it
+			// were not there, so not even its end-of-tier action applies. Felix programs the same rule
+			// into the dataplane: "If all of the policies in a tier are staged then the default end of
+			// tier behavior should be pass rather than drop" (felix/rules/endpoints.go).
+			//
+			// The store may hold staged policies quite legitimately — Felix keeps them for the pending
+			// trace (policystore.ProcessUpdate) — so the filtering has to happen here, not in the
+			// store.
+			policies = enforcedPolicies(policies)
+		}
 		if len(policies) == 0 {
 			continue
 		}
@@ -293,6 +324,28 @@ func handlePanic(s *status.Status) {
 			panic(r)
 		}
 	}
+}
+
+// enforcedPolicies drops the staged policies, leaving those that can affect the flow's action. It
+// returns the slice it was given when there is nothing to drop, which is the common case.
+func enforcedPolicies(policies []*proto.PolicyID) []*proto.PolicyID {
+	staged := 0
+	for _, p := range policies {
+		if model.KindIsStaged(p.GetKind()) {
+			staged++
+		}
+	}
+	if staged == 0 {
+		return policies
+	}
+
+	enforced := make([]*proto.PolicyID, 0, len(policies)-staged)
+	for _, p := range policies {
+		if !model.KindIsStaged(p.GetKind()) {
+			enforced = append(enforced, p)
+		}
+	}
+	return enforced
 }
 
 // getPoliciesByDirection returns the list of policy names for the given direction.

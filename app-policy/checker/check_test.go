@@ -25,6 +25,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -424,7 +425,7 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status, _ := checkTiers(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status, _ := checkTiers(store, store.Endpoint, rules.RuleDirIngress, flow, enforcedOnly)
 	expectedStatus := rpc.Status{Code: OK}
 	Expect(status.Code).To(Equal(expectedStatus.Code))
 	Expect(status.Message).To(Equal(expectedStatus.Message))
@@ -1060,4 +1061,162 @@ func (m *MockFlow) GetSourceLabels() map[string]string {
 
 func (m *MockFlow) GetDestLabels() map[string]string {
 	return m.DestLabels
+}
+
+// Staged policies enforce nothing, so a tier holding only staged policies takes no part in the
+// enforced verdict at all: evaluation falls through to the next tier without applying the skipped
+// tier's end-of-tier action. This matches what Felix programs into the dataplane, where a tier of
+// only staged policies ends in a pass rather than a drop.
+func TestCheckStoreSkipsTierOfOnlyStagedPolicies(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				// Nothing enforcing here, so this whole tier is as good as absent: neither its staged
+				// deny nor its Deny end-of-tier action may stop the request.
+				Name:            "tier1",
+				IngressPolicies: []*proto.PolicyID{stagedDeny},
+				DefaultAction:   "Deny",
+			},
+			{
+				Name:            "tier2",
+				IngressPolicies: []*proto.PolicyID{enforcedAllow},
+				DefaultAction:   "Deny",
+			},
+		},
+	}
+	store.PolicyByID[types.ProtoToPolicyID(stagedDeny)] = &proto.Policy{
+		Tier:         "tier1",
+		InboundRules: []*proto.Rule{{Action: "deny"}},
+	}
+	store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+		Tier:         "tier2",
+		InboundRules: []*proto.Rule{{Action: "allow"}},
+	}
+
+	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, &MockFlow{Protocol: 6, DestPort: 80})
+	Expect(status.Code).To(Equal(OK))
+}
+
+// In a tier that does have an enforcing policy, the staged ones are ignored for the enforced verdict
+// but the tier is evaluated as usual, end-of-tier action included.
+func TestCheckStoreIgnoresStagedPolicyInMixedTier(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}
+	enforcedNoMatch := &proto.PolicyID{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}
+
+	tests := []struct {
+		name     string
+		policies []*proto.PolicyID
+		wantCode int32
+	}{
+		{
+			// The staged deny comes first, so it would win if it were enforced.
+			name:     "staged deny ahead of an enforced allow",
+			policies: []*proto.PolicyID{stagedDeny, enforcedAllow},
+			wantCode: OK,
+		},
+		{
+			// No enforcing policy matches, so the tier's own default still applies.
+			name:     "staged deny ahead of an enforced policy that does not match",
+			policies: []*proto.PolicyID{stagedDeny, enforcedNoMatch},
+			wantCode: PERMISSION_DENIED,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := policystore.NewPolicyStore()
+			store.Endpoint = &proto.WorkloadEndpoint{
+				Tiers: []*proto.TierInfo{{
+					Name:            "tier1",
+					IngressPolicies: tt.policies,
+					DefaultAction:   "Deny",
+				}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(stagedDeny)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "deny"}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "allow"}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(enforcedNoMatch)] = &proto.Policy{Tier: "tier1"}
+
+			status := checkStore(store, store.Endpoint, rules.RuleDirIngress, &MockFlow{Protocol: 6, DestPort: 80})
+			Expect(status.Code).To(Equal(tt.wantCode))
+		})
+	}
+}
+
+// The pending trace is the trace for the current state of policy with every staged policy treated as
+// if it were enforced, so staged policies do take part in it: a staged deny decides the trace, and a
+// tier of only staged policies is evaluated like any other.
+func TestEvaluateTreatsStagedPoliciesAsEnforced(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}
+
+	tests := []struct {
+		name  string
+		tiers []*proto.TierInfo
+		// The trace the pending view should produce, as (tier, policy name, action) in order.
+		wantTrace []*calc.RuleID
+	}{
+		{
+			name: "a tier of only staged policies still applies",
+			tiers: []*proto.TierInfo{
+				{
+					Name:            "tier1",
+					IngressPolicies: []*proto.PolicyID{stagedDeny},
+					DefaultAction:   "Deny",
+				},
+				{
+					Name:            "tier2",
+					IngressPolicies: []*proto.PolicyID{enforcedAllow},
+					DefaultAction:   "Deny",
+				},
+			},
+			// tier1's staged deny decides it; tier2 is never reached.
+			wantTrace: []*calc.RuleID{calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged1", "",
+				0, rules.RuleDirIngress, rules.RuleActionDeny)},
+		},
+		{
+			name: "a staged policy ahead of an enforced one decides the trace",
+			tiers: []*proto.TierInfo{{
+				Name:            "tier1",
+				IngressPolicies: []*proto.PolicyID{stagedDeny, enforcedAllow},
+				DefaultAction:   "Deny",
+			}},
+			wantTrace: []*calc.RuleID{calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged1", "",
+				0, rules.RuleDirIngress, rules.RuleActionDeny)},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := policystore.NewPolicyStore()
+			ep := &proto.WorkloadEndpoint{Tiers: tt.tiers}
+			store.PolicyByID[types.ProtoToPolicyID(stagedDeny)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "deny"}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "allow"}},
+			}
+
+			trace := Evaluate(rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+			Expect(trace).To(Equal(tt.wantTrace))
+		})
+	}
 }
