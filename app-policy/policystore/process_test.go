@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	. "github.com/onsi/gomega"
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
@@ -470,4 +471,37 @@ func TestInSyncDispatch(t *testing.T) {
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_InSync{}}
 	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+}
+
+// Dikastes has no use for staged policies — they enforce nothing — so it syncs with storeStaged
+// false and they must not be stored. Felix passes storeStaged true because it reuses this store to
+// evaluate pending policy for flow logs.
+func TestActivePolicyUpdateStagedHandling(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedID := &proto.PolicyID{Name: "test_id", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedID := &proto.PolicyID{Name: "test_id", Kind: v3.KindGlobalNetworkPolicy}
+
+	tests := []struct {
+		name        string
+		id          *proto.PolicyID
+		storeStaged bool
+		wantStored  bool
+	}{
+		{"staged policy is skipped when staged policies are not wanted", stagedID, false, false},
+		{"staged policy is stored when staged policies are wanted", stagedID, true, true},
+		{"enforced policy is always stored", enforcedID, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := NewPolicyStore()
+			store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
+				ActivePolicyUpdate: &proto.ActivePolicyUpdate{Id: tt.id, Policy: policy1},
+			}}, tt.storeStaged)
+
+			_, stored := store.PolicyByID[types.ProtoToPolicyID(tt.id)]
+			Expect(stored).To(Equal(tt.wantStored))
+		})
+	}
 }
