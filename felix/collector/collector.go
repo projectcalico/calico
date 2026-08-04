@@ -363,7 +363,7 @@ func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToD
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
 			log.Debugf("Dataplane payload: %+v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
 			// Get the data and update the endpoints.
-			ps.ProcessUpdate(perHostPolicySubscription, dpInfo, true)
+			ps.ProcessUpdate(perHostPolicySubscription, dpInfo)
 		})
 		if _, ok := dpInfo.Payload.(*proto.ToDataplane_InSync); ok {
 			// Sync the policy store. This will swap the pending store to the active store. Setting the
@@ -1047,7 +1047,7 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policy
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
 	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace := checker.Evaluate(direction, store, protoEp, &flow)
+		trace := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
 		if !equal(*ruleIDs, trace) {
 			*ruleIDs = append([]*calc.RuleID(nil), trace...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
