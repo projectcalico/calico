@@ -473,7 +473,7 @@ func (d *Data) ConntrackBytesCounterReverse() counter.Counter {
 }
 
 // Set In Counters' values to packets and bytes. Use the SetConntrackCounters* methods
-// when the source if packets/bytes are absolute values.
+// when the packet/byte counts are absolute values.
 func (d *Data) SetConntrackCounters(packets int, bytes int) {
 	// Evaluate both counters before testing them: && would skip the bytes update whenever the
 	// packet count happens to be unchanged.
