@@ -45,7 +45,8 @@ var MinKernelVersionForNftables = environment.MustParseVersion("5.13")
 //   - a kernel of at least MinKernelVersionForNftables.
 //
 // It is used to resolve NFTablesMode=Auto on hosts that run no kube-proxy,
-// where the kube-proxy-based detection gives no signal.
+// where the kube-proxy-based detection gives no signal. The only caller is in
+// calico-private, which has the non-cluster host deployment that open source lacks.
 // Both dependencies are injectable for testing; pass nil for the defaults.
 func HostNftablesSupportedFn(newDataplane NewNftablesDataplaneFn, getKernelVersion func() (*environment.Version, error)) func() bool {
 	if newDataplane == nil {

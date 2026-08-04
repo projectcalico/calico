@@ -292,6 +292,9 @@ type NftablesTable struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
+	// recreatePending is set by queueTableRecreate after repeated programming failures.
+	recreatePending bool
+
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 
@@ -1137,21 +1140,16 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
-				if retries < 6 {
-					// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
-					// This can help in case we are trying to make a change that is incompatible with the current table state.
-					t.logCxt.Warn("Recreating table due to prior nftables programming error")
-					tx := t.nft.NewTransaction()
-					tx.Delete(&knftables.Table{})
-					tx.Add(&knftables.Table{})
-
-					if err := t.runTransaction(tx); err != nil {
-						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
-					}
+				if retries < 6 && !t.disabled {
+					// If we hit multiple failures in a row, rebuild the table from scratch on the next
+					// iteration. This can help in case we are trying to make a change that is
+					// incompatible with the current table state.
+					t.logCxt.Warn("Queueing table recreate due to prior nftables programming error")
+					t.queueTableRecreate()
+				} else {
+					// Reload the data plane state in case we're out of sync.
+					t.loadDataplaneState()
 				}
-
-				// Reload the data plane state in case we're out of sync.
-				t.loadDataplaneState()
 
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
@@ -1194,6 +1192,35 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	return
 }
 
+// queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same
+// transaction that rewrites the whole ruleset, so the table is never left without its base chains.
+func (t *NftablesTable) queueTableRecreate() {
+	t.recreatePending = true
+
+	// Nothing in the table survives the recreate, so drop our view of it and mark everything we
+	// want back as dirty.
+	t.chainToDataplaneHashes = map[string][]string{}
+	t.dirtyChains = set.New[string]()
+	for chainName := range t.chainNameToChain {
+		if _, present := t.desiredStateOfChain(chainName); present {
+			t.markChainDirty(chainName)
+		}
+	}
+	for chainName := range t.baseChainDefs {
+		t.dirtyBaseChains.Add(chainName)
+	}
+	t.flowtableDirty = t.flowtableEnabled
+
+	// Sets and maps live in the table too, and each layer programs them in its own transaction, so
+	// tell both that what they think they programmed is gone.
+	t.QueueResync()
+	t.InvalidateMapsCache()
+
+	// We already know what the table will contain, so there is nothing to be gained from reading
+	// it back before the retry.
+	t.inSyncWithDataPlane = true
+}
+
 func (t *NftablesTable) applyUpdates() error {
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
@@ -1212,9 +1239,18 @@ func (t *NftablesTable) applyUpdates() error {
 	// - Add elements to maps.
 	mapUpdates := t.MapUpdates()
 
-	if !t.disabled && len(t.chainToDataplaneHashes) == 0 {
-		// Table is enabled, but doesn't exist in the dataplane yet.
-		tx.Add(&knftables.Table{})
+	if !t.disabled {
+		if t.recreatePending {
+			// nftables commits the whole transaction or none of it, so folding the recreate in with
+			// the rewrite below means the table is never left standing without its base chains. The
+			// leading Add keeps the Delete from failing if the table is already gone.
+			tx.Add(&knftables.Table{})
+			tx.Delete(&knftables.Table{})
+			tx.Add(&knftables.Table{})
+		} else if len(t.chainToDataplaneHashes) == 0 {
+			// Table is enabled, but doesn't exist in the dataplane yet.
+			tx.Add(&knftables.Table{})
+		}
 	}
 
 	// Add in any new maps we need to create.
@@ -1436,6 +1472,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
+	t.recreatePending = false
 	if !keepFlowtableDirty {
 		t.flowtableDirty = false
 
