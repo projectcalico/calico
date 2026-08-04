@@ -79,7 +79,13 @@ const (
 // decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
 // EnforcedOnly for the trace the dataplane enforces.
 func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(scope, store, ep, dir, flow)
+	s, trace := checkTiers(scope, store, ep, dir, flow)
+	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
+		// The evaluation failed part way through, so the trace stops short of a verdict. Report no
+		// trace at all rather than one that reads as if policy ran out of rules to apply.
+		log.Debugf("Policy evaluation failed with %v, discarding partial trace", s.Code)
+		return nil
+	}
 	return trace
 }
 
@@ -157,16 +163,18 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 			}
 			policiesInScope++
 
-			if policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]; policy != nil {
-				action, ruleIndex = checkPolicy(policy, dir, request)
-				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
-			} else {
-				// The tier does contain this policy, we have just not been told its rules yet, so
-				// treat it as a non-match. The tier is still there, so its end-of-tier action still
-				// applies; only this policy's own verdict is missing.
-				log.Warnf("Policy not in store, treating as no-match (ordinal=%d, Id=%+v)", i, pID)
-				action, ruleIndex = NO_MATCH, tierDefaultActionIndex
+			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
+			if policy == nil {
+				// The endpoint's tier lists this policy but we have not been told its rules, so we
+				// cannot know its verdict, and skipping it would apply the rest of the tier's
+				// policies to a request they may not govern. Fail closed instead.
+				log.Errorf("Policy in tier but not in store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
+				s.Code = INTERNAL
+				return
 			}
+
+			action, ruleIndex = checkPolicy(policy, dir, request)
+			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {

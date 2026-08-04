@@ -716,8 +716,10 @@ func TestCheckStoreInitFails(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
+	// The tier lists policies whose rules have not been synced yet, so their verdict is unknowable
+	// and evaluation fails closed rather than guessing.
 	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
-	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	Expect(status.Code).To(Equal(INTERNAL))
 }
 
 // Ensure checkStore returns INVALID_ARGUMENT on invalid input
@@ -1121,12 +1123,20 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 			wantPending: PERMISSION_DENIED,
 		},
 		{
-			name: "a policy missing from the store counts as a non-match",
-			// Its update has not arrived yet; we cannot match it, but the tier is still there so its
-			// end-of-tier action still applies.
-			tiers:       tierInfos(policyIDs(notInStore)),
-			wantEnforce: PERMISSION_DENIED,
-			wantPending: PERMISSION_DENIED,
+			name: "a policy missing from the store fails the evaluation",
+			// Its update has not arrived yet, so its verdict is unknowable: fail closed rather than
+			// hand the request on to the rest of the tier.
+			tiers:       tierInfos(policyIDs(notInStore, enforcedAllow)),
+			wantEnforce: INTERNAL,
+			wantPending: INTERNAL,
+		},
+		{
+			name: "a policy missing from the store behind a match is never reached",
+			// Evaluation stops at the first match, in the store as in the dataplane, so a policy we
+			// know nothing about does not invalidate a verdict reached before it.
+			tiers:       tierInfos(policyIDs(enforcedAllow, notInStore)),
+			wantEnforce: OK,
+			wantPending: OK,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1151,7 +1161,6 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 					}
 				}
 				store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
-					Tier:         "tier2",
 					InboundRules: []*proto.Rule{{Action: "allow"}},
 				}
 
@@ -1177,6 +1186,27 @@ func tierInfos(tiers ...[]*proto.PolicyID) []*proto.TierInfo {
 		})
 	}
 	return tierInfos
+}
+
+// A trace that stops short of a verdict is worse than no trace: a flow log would show the flow
+// running off the end of policy. Callers get nothing instead.
+func TestEvaluateDiscardsTraceWhenEvaluationFails(t *testing.T) {
+	RegisterTestingT(t)
+
+	notInStore := &proto.PolicyID{Name: "not-in-store", Kind: v3.KindGlobalNetworkPolicy}
+	passes := &proto.PolicyID{Name: "passes", Kind: v3.KindGlobalNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(passes)] = &proto.Policy{
+		InboundRules: []*proto.Rule{{Action: "pass"}},
+	}
+	// tier1 passes, then tier2 holds a policy we have not been told the rules for.
+	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(passes), policyIDs(notInStore))}
+
+	for _, scope := range []PolicyScope{EnforcedOnly, StagedAsEnforced} {
+		trace := Evaluate(scope, rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+		Expect(trace).To(BeNil(), "scope %v", scope)
+	}
 }
 
 // The pending trace records the staged policy that decided it, so that flow logs can show which
