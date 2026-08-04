@@ -413,6 +413,17 @@ reconciliation of `*tables` chains and rules. The model:
   free: Felix still computes the hash delta and reprograms only
   changed rules, partly to avoid resetting iptables packet/byte
   counters on rules that didn't change.
+- **nftables rebuilds the table atomically after repeated
+  failures.** When `Apply()` has failed several times in a row, the
+  nftables backend recreates the table in case the change it is
+  trying to make is incompatible with the current state. The
+  `delete table` and `add table` go in the *same* transaction as
+  the rewrite of every chain and rule, and the sets and maps in the
+  table are marked for reprogramming at the same time. A failed
+  attempt therefore leaves the existing ruleset alone rather than
+  stripping the base chains and their hooks, which would leave
+  traffic unfiltered. iptables has no equivalent; its retry loop
+  only backs off.
 
 ### iptables vs nftables: parity and divergence
 
