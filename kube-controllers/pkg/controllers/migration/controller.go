@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -593,7 +594,90 @@ func (m *migrationController) runPendingPrechecks(logCtx *logrus.Entry, dm *migr
 		"installType":      installType,
 	}).Info("Detected installation details")
 
-	return false, m.ensureV3CRDs(logCtx)
+	if err := m.ensureV3CRDs(logCtx); err != nil {
+		return false, err
+	}
+
+	drift, err := m.checkBuiltInTiers()
+	if err != nil {
+		return false, fmt.Errorf("validating built-in tiers: %w", err)
+	}
+	if len(drift) > 0 {
+		logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
+		dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
+		return true, m.updateStatus(dm)
+	}
+
+	return false, nil
+}
+
+// builtInTierRequirement is the order and default action that the v3 Tier CRD's
+// CEL rules pin a built-in tier to.
+type builtInTierRequirement struct {
+	order         float64
+	defaultAction apiv3.Action
+}
+
+var builtInTierRequirements = map[string]builtInTierRequirement{
+	names.DefaultTierName:      {order: apiv3.DefaultTierOrder, defaultAction: apiv3.Deny},
+	names.KubeAdminTierName:    {order: apiv3.KubeAdminTierOrder, defaultAction: apiv3.Pass},
+	names.KubeBaselineTierName: {order: apiv3.KubeBaselineTierOrder, defaultAction: apiv3.Pass},
+}
+
+// checkBuiltInTiers returns a description of every built-in tier in v1 that the
+// v3 API would reject.
+func (m *migrationController) checkBuiltInTiers() ([]string, error) {
+	var tierMigrator migrators.ResourceMigrator
+	for _, mig := range m.migrators {
+		if mig.Kind() == apiv3.KindTier {
+			tierMigrator = mig
+			break
+		}
+	}
+	if tierMigrator == nil {
+		return nil, nil
+	}
+
+	tiers, err := tierMigrator.ListV1(m.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing v1 tiers: %w", err)
+	}
+
+	var drift []string
+	for _, obj := range tiers {
+		tier, ok := obj.(*apiv3.Tier)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for v1 Tier: %T", obj)
+		}
+		want, builtIn := builtInTierRequirements[tier.Name]
+		if !builtIn {
+			continue
+		}
+
+		if tier.Spec.Order == nil {
+			drift = append(drift, fmt.Sprintf("tier %q has no order, expected %s", tier.Name, formatTierOrder(want.order)))
+		} else if *tier.Spec.Order != want.order {
+			drift = append(drift, fmt.Sprintf("tier %q has order %s, expected %s", tier.Name, formatTierOrder(*tier.Spec.Order), formatTierOrder(want.order)))
+		}
+
+		// The v3 CRD defaults an unset defaultAction to Deny, so an unset value
+		// is only conformant on the default tier.
+		action := apiv3.Deny
+		if tier.Spec.DefaultAction != nil {
+			action = *tier.Spec.DefaultAction
+		}
+		if action != want.defaultAction {
+			drift = append(drift, fmt.Sprintf("tier %q has defaultAction %q, expected %q", tier.Name, action, want.defaultAction))
+		}
+	}
+	sort.Strings(drift)
+	return drift, nil
+}
+
+// formatTierOrder renders a tier order without scientific notation, which %v
+// would produce for the large built-in values.
+func formatTierOrder(order float64) string {
+	return strconv.FormatFloat(order, 'f', -1, 64)
 }
 
 // handleMigrating runs the core migration logic.
