@@ -22,7 +22,6 @@ import (
 	"os"
 	"reflect"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +78,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
@@ -556,7 +556,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Most tables need the same options.
 	iptablesOptions := iptables.TableOptions{
-		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
@@ -584,10 +584,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Delete the ip kube-proxy and ip6 kube-proxy tables in nftables.
 		nftablesKPOptions := nftablesOptions
 		nftablesKPOptions.Disabled = true
-		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT)
 		if config.IPv6Enabled {
-			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 			cleanupTables = append(cleanupTables, kubeProxyTableV6NFT)
 		}
 	}
@@ -612,7 +612,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 
 	// This is required when nftables mode is configured; but also useful for cleanup in other modes.
-	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
+	nftablesV4RootTable := nftables.NewTable("calico", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 
 	if nftablesEnabled {
 		// Create nftables Table implementations.
@@ -622,10 +622,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
 	} else {
 		// Create iptables table implementations.
-		mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-		natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-		rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-		filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+		mangleTableV4IPT = iptables.NewTable("mangle", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV4IPT = iptables.NewTable("nat", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV4IPT = iptables.NewTable("raw", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		filterTableV4IPT = iptables.NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
 
 	// Based on configuration, some of the above tables should be active and others not.
@@ -644,7 +644,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// via iptables-nft. We read them with nft rather than iptables-nft-save, which refuses to
 		// read a table holding rules it can't express (#13263).
 		cleanupTables = append(cleanupTables,
-			// HistoricChainPrefixes rather than rules.AllHistoricChainNamePrefixes: in BPF mode
+			// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
 			// it also covers kube-proxy's chains.
 			nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions),
 		)
@@ -891,11 +891,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	var filterTableV6NFT, filterTableV6IPT generictables.Table
 
 	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
+	nftablesV6RootTable := nftables.NewTable("calico", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
 
 	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+	filterTableV6IPT = iptables.NewTable("filter", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
@@ -1226,7 +1226,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			OpRecorder:       dp.loopSummarizer,
 			NewDataplane:     config.NewNftablesDataplane,
 		}
-		arpRootTable = nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
+		arpRootTable = nftables.NewARPTable("calico-arp", rulesdefs.RuleHashPrefix, featureDetector, arpTableOptions, false)
 	}
 	var arpFilterTable generictables.Table
 	var arpMaps nftables.MapsDataplane
@@ -1354,9 +1354,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
 		} else {
 			// Define iptables table implementations for IPv6.
-			mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-			natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-			rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
+			mangleTableV6IPT = iptables.NewTable("mangle", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+			natTableV6IPT = iptables.NewTable("nat", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+			rawTableV6IPT = iptables.NewTable("raw", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 		}
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
@@ -2916,23 +2916,11 @@ func (d *InternalDataplane) apply() {
 	}
 
 	// Sweep the tables we're no longer programming, to remove whatever a previous Felix left in
-	// them. Cleanup finishes: once a table reports that nothing of ours is left we stop visiting
-	// it, so on the great majority of nodes this costs one read of each table at startup.
+	// them.
 	for _, t := range d.cleanupTables {
 		runTable(t.CleanUp)
 	}
 	iptablesWG.Wait()
-
-	d.cleanupTables = slices.DeleteFunc(d.cleanupTables, func(t generictables.CleanupTable) bool {
-		if !t.Done() {
-			return false
-		}
-		log.WithFields(log.Fields{
-			"table":     t.Name(),
-			"ipVersion": t.IPVersion(),
-		}).Debug("Nothing of ours left to clean up in this table, will stop checking it")
-		return true
-	})
 
 	// Now clean up any left-over IP sets.
 	var ipSetsNeedsReschedule atomic.Bool

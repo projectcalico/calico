@@ -23,13 +23,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/knftables"
-)
 
-// Copy of rules.AllHistoricChainNamePrefixes; felix/rules imports this package, so importing it
-// back would be a cycle.
-var ourPrefixes = []string{
-	"cali-", "califw-", "calitw-", "califh-", "calith-", "calipi-", "calipo-", "felix-",
-}
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
+)
 
 // The testdata files are real netlink reads of the #13263 ruleset (Tailscale, NixOS firewall, CNI
 // port mapping, kubelet) over the state a previous iptables-mode Felix would have left, captured
@@ -46,7 +42,7 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 	var cleanup *IPTablesCleanup
 
 	BeforeEach(func() {
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{})
+		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{})
 	})
 
 	Describe("filter table", func() {
@@ -153,13 +149,32 @@ var _ = Describe("iptables cleanup, identifying our own state", func() {
 		_, handles := cleanup.ourState(state)
 		Expect(handles).To(BeEmpty(), "the hash prefix is cali: with the colon")
 	})
+
+	// The netlink read only fetches rules from base chains, so anything we claim in a chain we're
+	// not deleting has to live in one. Guards the two halves against drifting apart.
+	It("claims rules only in base chains", func() {
+		for _, table := range []string{"filter", "nat", "mangle", "raw"} {
+			state := loadTestdata(table)
+			isBase := map[string]bool{}
+			for _, ch := range state.Chains {
+				isBase[ch.Name] = ch.Base
+			}
+
+			_, handles := cleanup.ourState(state)
+			Expect(handles).NotTo(BeEmpty(), "%s capture should hold rules of ours", table)
+			for chain := range handles {
+				Expect(isBase[chain]).To(BeTrue(), "%s: claimed a rule in non-base chain %s", table, chain)
+			}
+		}
+	})
 })
 
-var _ = Describe("iptables cleanup, deciding when it's finished", func() {
+var _ = Describe("iptables cleanup, scheduling its passes", func() {
 	var (
 		read     [][]string
 		readErr  error
 		contents *iptablesTableState
+		now      time.Time
 		cleanup  *IPTablesCleanup
 	)
 
@@ -172,57 +187,41 @@ var _ = Describe("iptables cleanup, deciding when it's finished", func() {
 		return map[string]*iptablesTableState{"filter": contents}, nil
 	}
 
-	tablesRead := func() []string {
-		var all []string
-		for _, pass := range read {
-			all = append(all, pass...)
-		}
-		return all
-	}
-
 	BeforeEach(func() {
 		read, readErr = nil, nil
+		now = time.Now()
 		// A table with none of our state in it.
 		contents = &iptablesTableState{
-			Chains: []iptablesChain{{Name: "ts-input"}},
+			Chains: []iptablesChain{{Name: "ts-input", Base: true}},
 			Rules:  []iptablesRule{{Chain: "ts-input", Handle: 3}},
 		}
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{})
+		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+			RefreshInterval: time.Minute,
+			NowOverride:     func() time.Time { return now },
+		})
 		cleanup.readTables = readTables
 	})
 
-	It("asks for every table it hasn't cleared yet", func() {
+	It("asks for every table on every pass", func() {
+		Expect(cleanup.CleanUp()).To(Equal(time.Minute))
+		Expect(read).To(ConsistOf(ConsistOf("filter", "nat", "mangle", "raw")))
+
+		// A clean table doesn't retire: something else can write to it at any point.
+		now = now.Add(time.Minute)
+		Expect(cleanup.CleanUp()).To(Equal(time.Minute))
+		Expect(read).To(HaveLen(2))
+	})
+
+	It("waits out the refresh interval between passes", func() {
 		cleanup.CleanUp()
-		Expect(tablesRead()).To(ConsistOf("filter", "nat", "mangle", "raw"))
+
+		now = now.Add(20 * time.Second)
+		Expect(cleanup.CleanUp()).To(Equal(40 * time.Second))
+		Expect(read).To(HaveLen(1), "should not have read the dataplane again")
 	})
 
-	It("finishes after one pass when there is nothing of ours anywhere", func() {
-		Expect(cleanup.CleanUp()).To(BeZero())
-		Expect(cleanup.Done()).To(BeTrue())
-
-		read = nil
-		Expect(cleanup.CleanUp()).To(BeZero())
-		Expect(read).To(BeEmpty())
-	})
-
-	It("retries the whole pass if the read fails", func() {
+	It("reschedules when the read fails", func() {
 		readErr = errors.New("netlink blew up")
-		cleanup = NewIPTablesCleanup(4, ourPrefixes, TableOptions{RefreshInterval: time.Second})
-		cleanup.readTables = readTables
-
-		Expect(cleanup.CleanUp()).To(Equal(time.Second))
-		Expect(cleanup.Done()).To(BeFalse())
-	})
-
-	It("keeps a table that errored, and drops it once the read succeeds", func() {
-		readErr = errors.New("netlink blew up")
-		cleanup.CleanUp()
-		Expect(cleanup.Done()).To(BeFalse())
-
-		readErr = nil
-		read = nil
-		cleanup.CleanUp()
-		Expect(tablesRead()).To(ConsistOf("filter", "nat", "mangle", "raw"))
-		Expect(cleanup.Done()).To(BeTrue())
+		Expect(cleanup.CleanUp()).To(Equal(time.Minute))
 	})
 })

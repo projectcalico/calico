@@ -23,13 +23,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var iptablesTables = []string{"filter", "nat", "mangle", "raw"}
-
-// ruleHashPrefix mirrors rules.RuleHashPrefix; we can't import felix/rules, it imports us.
-const ruleHashPrefix = "cali:"
 
 // IPTablesCleanup removes what an iptables-mode Felix left in the standard filter/nat/mangle/raw
 // tables of one IP family. Those are nftables tables too, since iptables-nft writes there.
@@ -47,10 +45,6 @@ type IPTablesCleanup struct {
 
 	// readTables reads back whichever of the given tables exist; tests inject a fake.
 	readTables func(family knftables.Family, tables []string) (map[string]*iptablesTableState, error)
-
-	// pending holds the tables we have yet to see a clean pass on, so cleanup finishes instead of
-	// reading the dataplane forever.
-	pending map[string]bool
 
 	refreshInterval time.Duration
 	lastSweep       time.Time
@@ -86,18 +80,12 @@ func NewIPTablesCleanup(
 		onStillAlive = func() {}
 	}
 
-	pending := map[string]bool{}
-	for _, t := range iptablesTables {
-		pending[t] = true
-	}
-
 	return &IPTablesCleanup{
 		ipVersion:       ipVersion,
 		family:          family,
 		chainPrefixes:   chainPrefixes,
 		newDataplane:    newDataplane,
 		readTables:      readTablesViaNetlink,
-		pending:         pending,
 		refreshInterval: options.RefreshInterval,
 		timeNow:         timeNow,
 		onStillAlive:    onStillAlive,
@@ -113,74 +101,50 @@ func (c *IPTablesCleanup) IPVersion() uint8 {
 	return c.ipVersion
 }
 
-// Done reports whether every table has come back clean.
-func (c *IPTablesCleanup) Done() bool {
-	return len(c.pending) == 0
-}
-
-// CleanUp makes one pass over the tables we haven't yet seen clean, rate limited to one pass per
-// refresh interval. A table that errors out is retried.
+// CleanUp makes one pass over the tables, rate limited to one pass per refresh interval.
 func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
-	if c.Done() {
-		return 0
-	}
-
 	now := c.timeNow()
 	if sinceLast := now.Sub(c.lastSweep); !c.lastSweep.IsZero() && sinceLast < c.refreshInterval {
 		return c.refreshInterval - sinceLast
 	}
 	c.lastSweep = now
 
-	wanted := make([]string, 0, len(c.pending))
-	for table := range c.pending {
-		wanted = append(wanted, table)
-	}
-	states, err := c.readTables(c.family, wanted)
+	states, err := c.readTables(c.family, iptablesTables)
 	if err != nil {
 		logrus.WithError(err).WithField("family", c.family).Warn("Failed to read nftables tables; will retry iptables cleanup")
 		return c.refreshInterval
 	}
 
-	for table := range c.pending {
+	for _, table := range iptablesTables {
 		c.onStillAlive()
 
+		// A table missing from the read doesn't exist, so no previous Felix wrote there.
 		state, ok := states[table]
 		if !ok {
-			// No such table, so no previous Felix ever wrote here.
-			delete(c.pending, table)
 			continue
 		}
 
-		clean, err := c.sweepTable(table, state)
-		if err != nil {
+		if err := c.sweepTable(table, state); err != nil {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"family": c.family,
 				"table":  table,
 			}).Warn("Failed to clean up rules left by a previous iptables-mode Felix; will retry")
-			continue
-		}
-		if clean {
-			delete(c.pending, table)
 		}
 	}
 
-	if c.Done() {
-		logrus.WithField("family", c.family).Debug("No iptables state left to clean up")
-		return 0
-	}
 	return c.refreshInterval
 }
 
-// sweepTable removes our state from one table, reporting whether the table held none of it.
-func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) (bool, error) {
+// sweepTable removes our state from one table.
+func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) error {
 	ourChains, ourRuleHandles := c.ourState(state)
 	if len(ourChains) == 0 && len(ourRuleHandles) == 0 {
-		return true, nil
+		return nil
 	}
 
 	nft, err := c.newDataplane(c.family, table)
 	if err != nil {
-		return false, fmt.Errorf("create nft client: %w", err)
+		return fmt.Errorf("create nft client: %w", err)
 	}
 	tx := nft.NewTransaction()
 
@@ -207,7 +171,7 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) (b
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 	if err := nft.Run(ctx, tx); err != nil {
-		return false, fmt.Errorf("apply cleanup transaction: %w", err)
+		return fmt.Errorf("apply cleanup transaction: %w", err)
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -216,8 +180,7 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) (b
 		"chains": len(ourChains),
 	}).Info("Cleaned up rules left behind by a previous iptables-mode Felix")
 
-	// Read the table again on the next pass to confirm the deletes stuck.
-	return false, nil
+	return nil
 }
 
 // ourState picks out the chains and rules a previous iptables-mode Felix wrote: chains by name,
@@ -238,7 +201,7 @@ func (c *IPTablesCleanup) ourState(state *iptablesTableState) ([]string, map[str
 			// Goes when the chain does.
 			continue
 		}
-		if strings.HasPrefix(r.Comment, ruleHashPrefix) || hasAnyPrefix(r.JumpTarget, c.chainPrefixes) {
+		if strings.HasPrefix(r.Comment, rulesdefs.RuleHashPrefix) || hasAnyPrefix(r.JumpTarget, c.chainPrefixes) {
 			handles[r.Chain] = append(handles[r.Chain], r.Handle)
 		}
 	}
@@ -254,6 +217,10 @@ type iptablesTableState struct {
 
 type iptablesChain struct {
 	Name string `json:"name"`
+
+	// Base is set for a chain attached to a netfilter hook. Felix only ever inserted rules into
+	// those, so they're the only chains we need to read rules from.
+	Base bool `json:"base,omitempty"`
 }
 
 type iptablesRule struct {

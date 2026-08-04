@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -64,7 +64,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -921,7 +921,7 @@ var _ = Describe("Insert early rules", func() {
 		table = nftables.NewTable(
 			"cali-filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -990,7 +990,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1069,7 +1069,7 @@ var _ = Describe("Enabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1122,7 +1122,7 @@ var _ = Describe("ARP Table", func() {
 		featureDetector = environment.NewFeatureDetector(nil)
 		table = nftables.NewARPTable(
 			"calico-arp",
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1182,7 +1182,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1282,7 +1282,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1316,7 +1316,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1351,7 +1351,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,

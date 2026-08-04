@@ -1,13 +1,16 @@
 {
   "chains": [
     {
-      "name": "INPUT"
+      "name": "INPUT",
+      "base": true
     },
     {
-      "name": "FORWARD"
+      "name": "FORWARD",
+      "base": true
     },
     {
-      "name": "OUTPUT"
+      "name": "OUTPUT",
+      "base": true
     },
     {
       "name": "cali-FORWARD"

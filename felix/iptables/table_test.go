@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	. "github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -48,10 +48,10 @@ var _ = Describe("Table with an empty dataplane (legacy)", func() {
 		table := NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
@@ -85,10 +85,10 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
@@ -169,10 +169,10 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			NewTable(
 				"filter",
 				4,
-				rules.RuleHashPrefix,
+				rulesdefs.RuleHashPrefix,
 				featureDetector,
 				TableOptions{
-					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+					HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 					NewCmdOverride:        dataplane.NewCmd,
 					SleepOverride:         dataplane.Sleep,
 					InsertMode:            "unknown",
@@ -1204,7 +1204,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			"OUTPUT":  {},
 		}, dataplaneMode)
 		options := TableOptions{
-			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+			HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 			NewCmdOverride:        dataplane.NewCmd,
 			SleepOverride:         dataplane.Sleep,
 			NowOverride:           dataplane.Now,
@@ -1221,7 +1221,7 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			options,
 		)
@@ -1477,10 +1477,10 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes:    rulesdefs.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: "sneaky-rule",
 				NewCmdOverride:           dataplane.NewCmd,
 				SleepOverride:            dataplane.Sleep,
@@ -1898,10 +1898,10 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			6,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
@@ -1965,10 +1965,10 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		table = NewTable(
 			"filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			TableOptions{
-				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.NewCmd,
 				SleepOverride:         dataplane.Sleep,
 				NowOverride:           dataplane.Now,
@@ -1992,9 +1992,9 @@ func describeInsertEarlyRules(dataplaneMode string) {
 
 		Expect(dataplane.Chains).To(Equal(map[string][]string{
 			"FORWARD": {
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[0] +
 					"\" -m comment --comment \"my rule\" --jump DROP",
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[1] +
 					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
 				"-m comment --comment \"some rule\"",
 			},
@@ -2012,9 +2012,9 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		// Init chains
 		dataplane.Chains = map[string][]string{
 			"FORWARD": {
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[0] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[0] +
 					"\" -m comment --comment \"my rule\" --jump DROP",
-				"-m comment --comment \"" + rules.RuleHashPrefix + hashes[1] +
+				"-m comment --comment \"" + rulesdefs.RuleHashPrefix + hashes[1] +
 					"\" -m comment --comment \"my other rule\" --jump ACCEPT",
 				"-m comment --comment \"some rule\"",
 			},

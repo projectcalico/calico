@@ -26,9 +26,8 @@ type TableSet interface {
 // CleanupTable removes state Calico left in a table it no longer programs: a dataplane we've
 // switched away from, or a component (such as kube-proxy) whose rules we've taken over.
 //
-// Cleanup finishes: once a pass finds none of the state we're looking for, we stop reading the
-// table. That's exact for state a previous Felix left, less so for a component still running
-// (kube-proxy, in BPF mode) - but we remove its configuration too, so what it writes is transient.
+// Cleanup keeps running for the lifetime of the process, because anything we clean up can be
+// written again: kube-proxy restarts, and a table we share is never ours alone to declare clean.
 type CleanupTable interface {
 	Name() string
 	IPVersion() uint8
@@ -36,10 +35,6 @@ type CleanupTable interface {
 	// CleanUp makes one pass at removing our state, returning the minimum time to wait before
 	// another pass is worth making.
 	CleanUp() time.Duration
-
-	// Done reports whether a pass has confirmed there is nothing of ours left. False until at
-	// least one successful read.
-	Done() bool
 }
 
 // Table is a logical table of chains and rules.

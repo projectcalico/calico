@@ -1,10 +1,12 @@
 {
   "chains": [
     {
-      "name": "PREROUTING"
+      "name": "PREROUTING",
+      "base": true
     },
     {
-      "name": "OUTPUT"
+      "name": "OUTPUT",
+      "base": true
     },
     {
       "name": "cali-OUTPUT"

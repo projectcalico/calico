@@ -576,12 +576,6 @@ func (n *NftablesTable) CleanUp() time.Duration {
 	return n.Apply()
 }
 
-// Done implements generictables.CleanupTable: we've read the dataplane back and nothing of ours
-// is left in it.
-func (n *NftablesTable) Done() bool {
-	return n.inSyncWithDataPlane && len(n.chainToDataplaneHashes) == 0
-}
-
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
 // flowtable device list. Called by the flowtable manager as tunnel devices come up and go
 // down, so only devices that currently exist are passed through.

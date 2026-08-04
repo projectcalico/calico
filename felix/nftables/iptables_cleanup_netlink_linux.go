@@ -79,7 +79,16 @@ func readTablesViaNetlink(family knftables.Family, tables []string) (map[string]
 			continue
 		}
 		state := states[chain.Table.Name]
-		state.Chains = append(state.Chains, iptablesChain{Name: chain.Name})
+
+		// The kernel reports a hook for base chains only, whoever created them.
+		base := chain.Hooknum != nil
+		state.Chains = append(state.Chains, iptablesChain{Name: chain.Name, Base: base})
+
+		// Rules come back per chain, and a kube-proxy node has thousands of them. We only need
+		// the base chains: our own chains go wholesale, and Felix inserted nowhere else.
+		if !base {
+			continue
+		}
 
 		rules, err := conn.GetRules(table, chain)
 		if err != nil {

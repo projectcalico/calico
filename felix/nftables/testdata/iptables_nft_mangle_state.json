@@ -1,19 +1,24 @@
 {
   "chains": [
     {
-      "name": "PREROUTING"
+      "name": "PREROUTING",
+      "base": true
     },
     {
-      "name": "INPUT"
+      "name": "INPUT",
+      "base": true
     },
     {
-      "name": "FORWARD"
+      "name": "FORWARD",
+      "base": true
     },
     {
-      "name": "OUTPUT"
+      "name": "OUTPUT",
+      "base": true
     },
     {
-      "name": "POSTROUTING"
+      "name": "POSTROUTING",
+      "base": true
     },
     {
       "name": "cali-POSTROUTING"
