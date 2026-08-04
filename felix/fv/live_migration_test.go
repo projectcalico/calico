@@ -256,7 +256,7 @@ func lmCheckConnectivity(expected connectivity.Expected, felix *infrastructure.F
 
 // lmDumpDiagsOnFailure logs each Felix's routing table and interfaces if the current test failed.
 func lmDumpDiagsOnFailure(tc infrastructure.TopologyContainers) {
-	if !CurrentGinkgoTestDescription().Failed {
+	if !CurrentSpecReport().Failed() {
 		return
 	}
 	for _, felix := range tc.Felixes {
