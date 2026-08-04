@@ -18,10 +18,10 @@
 package components
 
 var (
-	EnterpriseRelease string = "v3.24.0-1.0"
+	EnterpriseRelease string = "release-calient-v3.24-2"
 
 	ComponentTigeraCalico = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "calico",
 		Registry:  "",
 		imagePath: "",
@@ -29,7 +29,7 @@ var (
 	}
 
 	ComponentComplianceBenchmarker = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "compliance-benchmarker",
 		Registry:  "",
 		imagePath: "",
@@ -37,7 +37,7 @@ var (
 	}
 
 	ComponentDeepPacketInspection = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "deep-packet-inspection",
 		Registry:  "",
 		imagePath: "",
@@ -55,7 +55,7 @@ var (
 	}
 
 	ComponentElasticTseeInstaller = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "intrusion-detection-job-installer",
 		Registry:  "",
 		imagePath: "",
@@ -63,7 +63,7 @@ var (
 	}
 
 	ComponentElasticsearch = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "elasticsearch",
 		Registry:  "",
 		imagePath: "",
@@ -76,7 +76,7 @@ var (
 	}
 
 	ComponentElasticsearchOperator = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "eck-operator",
 		Registry:  "",
 		imagePath: "",
@@ -84,7 +84,7 @@ var (
 	}
 
 	ComponentFluentd = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "fluentd",
 		Registry:  "",
 		imagePath: "",
@@ -92,7 +92,7 @@ var (
 	}
 
 	ComponentFluentdWindows = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "fluentd-windows",
 		Registry:  "",
 		imagePath: "",
@@ -100,7 +100,7 @@ var (
 	}
 
 	ComponentIntrusionDetectionController = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "intrusion-detection-controller",
 		Registry:  "",
 		imagePath: "",
@@ -108,7 +108,7 @@ var (
 	}
 
 	ComponentKibana = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "kibana",
 		Registry:  "",
 		imagePath: "",
@@ -116,7 +116,7 @@ var (
 	}
 
 	ComponentManager = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "manager",
 		Registry:  "",
 		imagePath: "",
@@ -124,7 +124,7 @@ var (
 	}
 
 	ComponentDex = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "dex",
 		Registry:  "",
 		imagePath: "",
@@ -132,7 +132,7 @@ var (
 	}
 
 	ComponentEgressGateway = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "egress-gateway",
 		Registry:  "",
 		imagePath: "",
@@ -140,14 +140,14 @@ var (
 	}
 
 	ComponentGatewayL7Collector = Component{
-		Version:  "v3.24.0-1.0",
+		Version:  "release-calient-v3.24-2",
 		Image:    "gateway-l7-collector",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentEnvoyProxy = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "envoy",
 		Registry:  "",
 		imagePath: "",
@@ -155,7 +155,7 @@ var (
 	}
 
 	ComponentDikastes = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "dikastes",
 		Registry:  "",
 		imagePath: "",
@@ -168,7 +168,7 @@ var (
 	}
 
 	ComponentPrometheus = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "prometheus",
 		Registry:  "",
 		imagePath: "",
@@ -181,7 +181,7 @@ var (
 	}
 
 	ComponentPrometheusAlertmanager = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "alertmanager",
 		Registry:  "",
 		imagePath: "",
@@ -189,7 +189,7 @@ var (
 	}
 
 	ComponentTigeraNode = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "node",
 		Registry:  "",
 		imagePath: "",
@@ -197,7 +197,7 @@ var (
 	}
 
 	ComponentTigeraNodeWindows = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "node-windows",
 		Registry:  "",
 		imagePath: "",
@@ -205,7 +205,7 @@ var (
 	}
 
 	ComponentTigeraCNIWindows = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "cni-windows",
 		Registry:  "",
 		imagePath: "",
@@ -213,7 +213,7 @@ var (
 	}
 
 	ComponentTigeraCNIPlugins = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "third-party-cni-plugins",
 		Registry:  "",
 		imagePath: "",
@@ -221,7 +221,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyGateway = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "envoy-gateway",
 		Registry:  "",
 		imagePath: "",
@@ -229,7 +229,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyProxy = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "envoy-proxy",
 		Registry:  "",
 		imagePath: "",
@@ -237,7 +237,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyRatelimit = Component{
-		Version:   "v3.24.0-1.0",
+		Version:   "release-calient-v3.24-2",
 		Image:     "envoy-ratelimit",
 		Registry:  "",
 		imagePath: "",
@@ -245,28 +245,28 @@ var (
 	}
 
 	ComponentIstioPilot = Component{
-		Version:  "v3.24.0-1.0",
+		Version:  "release-calient-v3.24-2",
 		Image:    "istio-pilot",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioInstallCNI = Component{
-		Version:  "v3.24.0-1.0",
+		Version:  "release-calient-v3.24-2",
 		Image:    "istio-install-cni",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioZTunnel = Component{
-		Version:  "v3.24.0-1.0",
+		Version:  "release-calient-v3.24-2",
 		Image:    "istio-ztunnel",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioProxyv2 = Component{
-		Version:  "v3.24.0-1.0",
+		Version:  "release-calient-v3.24-2",
 		Image:    "istio-proxyv2",
 		Registry: "",
 		variant:  enterpriseVariant,
