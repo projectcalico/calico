@@ -1734,7 +1734,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
-				m.ifStateMap.Desired().Delete(k)
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
@@ -1772,9 +1771,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			}
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
-
-			m.ifStateMap.Desired().Set(k, v)
-
 			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
 				if netiface.Flags&net.FlagUp != 0 {
 					iface.info.ifIndex = netiface.Index
@@ -1849,9 +1845,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// the new jump maps!
 				return true
 			})
-		} else {
-			// We no longer manage this device
-			m.ifStateMap.Desired().Delete(k)
 		}
 	})
 }
