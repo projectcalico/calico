@@ -476,32 +476,44 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, golde
 	cleanup()
 }
 
+// TestProgramClusterRoutes checks that the running daemon re-renders BIRD's config as
+// BGPConfiguration.programClusterRoutes is moved around its enum.  The mesh/restart-time input has
+// only unencapsulated IP Pools, so the two values that cover no-encap (Enabled and
+// EnabledNoEncapOnly) render as the base golden, and the two that do not (Disabled and
+// EnabledIPIPOnly) render as the pcr-disabled golden.  The IPIP side of the split is covered by the
+// oneshot cluster_routes scenarios.
 func TestProgramClusterRoutes(t *testing.T) {
+	steps := []struct {
+		value  *string
+		golden string
+	}{
+		// Step 1 leaves the field unset: the default, EnabledNoEncapOnly, means BIRD keeps
+		// programming the routes for these unencapsulated pools.
+		{value: nil, golden: "mesh/restart-time"},
+		{value: ptr.To("Disabled"), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To("Enabled"), golden: "mesh/restart-time"},
+		{value: ptr.To("EnabledIPIPOnly"), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To("EnabledNoEncapOnly"), golden: "mesh/restart-time"},
+	}
+
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
 			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
-			// Step 1: as for mesh/restart-time test oneshot test.
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh/restart-time/input.yaml")
 			t.Cleanup(cleanup)
-			d.expectOutput("mesh/restart-time")
 
-			// Step 2: update BGPConfiguration to disable cluster route programming.
-			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Disabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time/pcr-disabled")
-
-			// Step 3: update BGPConfiguration to enable cluster route programming.
-			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Enabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time")
+			for _, step := range steps {
+				if step.value != nil {
+					cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+					require.NoError(t, err)
+					cfg.Spec.ProgramClusterRoutes = step.value
+					_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+					require.NoError(t, err)
+				}
+				d.expectOutput(step.golden)
+			}
 		})
 	}
 }
