@@ -45,6 +45,19 @@ var (
 	rlog2 = logrusr.NewRateLimitedLogger()
 )
 
+// PolicyScope selects which of an endpoint's policies take part in an evaluation.
+type PolicyScope int
+
+const (
+	// EnforcedOnly ignores staged policies, giving the verdict that is actually enforced.
+	// A tier whose policies are all staged is skipped entirely, end-of-tier action included,
+	// exactly as if the tier were not attached to the endpoint at all.
+	EnforcedOnly PolicyScope = iota
+	// StagedAsEnforced evaluates staged policies as though they had been promoted to enforced,
+	// giving the "pending" verdict: what would happen if the staged policies went live now.
+	StagedAsEnforced
+)
+
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
 
@@ -62,14 +75,11 @@ const (
 	unknownIndex = -2
 )
 
-// Evaluate evaluates the flow against the policy store and returns the trace of rules.
-//
-// This is the "pending" policy trace: the trace for the current state of policy with every staged
-// policy treated as if it were enforced. It can differ from the verdict the dataplane recorded
-// either because staged policies took part in it, or because the enforced policies have changed
-// since the dataplane reached its verdict.
-func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(store, ep, dir, flow, stagedAsEnforced)
+// Evaluate evaluates the flow against the policy store and returns the trace of rules. The scope
+// decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
+// EnforcedOnly for the trace the dataplane enforces.
+func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
+	_, trace := checkTiers(scope, store, ep, dir, flow)
 	return trace
 }
 
@@ -105,29 +115,16 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
-func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
-	// Check using the configured policy. This decides whether to admit the request, so only the
-	// enforcing policies get a say.
-	s, _ = checkTiers(store, ep, dir, req, enforcedOnly)
+func checkStore(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
+	// Check using the configured policy
+	s, _ = checkTiers(scope, store, ep, dir, req)
 	return
 }
-
-// policyScope selects which of an endpoint's policies take part in evaluation.
-type policyScope int
-
-const (
-	// enforcedOnly evaluates only the policies that enforce, i.e. it answers "what does policy do to
-	// this flow right now". Staged policies play no part.
-	enforcedOnly policyScope = iota
-	// stagedAsEnforced treats staged policies as though they were enforced, for the pending policy
-	// trace. See Evaluate.
-	stagedAsEnforced
-)
 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow, scope policyScope) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	if ep == nil {
 		return
@@ -139,18 +136,6 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 	for _, tier := range ep.Tiers {
 		log.Debugf("Checking tier %s", tier.GetName())
 		policies := getPoliciesByDirection(dir, tier)
-		if scope == enforcedOnly {
-			// Staged policies enforce nothing, so they take no part in this verdict. Dropping them can
-			// empty the tier, and a tier with nothing left to enforce is skipped entirely — as if it
-			// were not there, so not even its end-of-tier action applies. Felix programs the same rule
-			// into the dataplane: "If all of the policies in a tier are staged then the default end of
-			// tier behavior should be pass rather than drop" (felix/rules/endpoints.go).
-			//
-			// The store may hold staged policies quite legitimately — Felix keeps them for the pending
-			// trace (policystore.ProcessUpdate) — so the filtering has to happen here, not in the
-			// store.
-			policies = enforcedPolicies(policies)
-		}
 		if len(policies) == 0 {
 			continue
 		}
@@ -158,14 +143,30 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		var (
 			ruleIndex               int
 			tierDefaultActionRuleID *calc.RuleID
+			// Policies of this tier that are in scope for this evaluation. A tier with none of
+			// them contributes nothing at all, end-of-tier action included.
+			policiesInScope int
 		)
 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
-			action, ruleIndex = checkPolicy(policy, dir, request)
-			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			if scope == EnforcedOnly && model.KindIsStaged(pID.Kind) {
+				log.Debugf("Staged policy, not enforced, skipping (ordinal=%d, Id=%+v)", i, pID)
+				continue Policy
+			}
+			policiesInScope++
+
+			if policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]; policy != nil {
+				action, ruleIndex = checkPolicy(policy, dir, request)
+				log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
+			} else {
+				// The tier does contain this policy, we have just not been told its rules yet, so
+				// treat it as a non-match. The tier is still there, so its end-of-tier action still
+				// applies; only this policy's own verdict is missing.
+				log.Warnf("Policy not in store, treating as no-match (ordinal=%d, Id=%+v)", i, pID)
+				action, ruleIndex = NO_MATCH, tierDefaultActionIndex
+			}
 			switch action {
 			case NO_MATCH:
 				if tierDefaultActionRuleID == nil {
@@ -192,7 +193,7 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			}
 		}
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
-		if action == NO_MATCH {
+		if policiesInScope > 0 && action == NO_MATCH {
 			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
 			trace = append(trace, tierDefaultActionRuleID)
 			// If the default action is anything beside Pass, then apply tier default deny action.
@@ -324,28 +325,6 @@ func handlePanic(s *status.Status) {
 			panic(r)
 		}
 	}
-}
-
-// enforcedPolicies drops the staged policies, leaving those that can affect the flow's action. It
-// returns the slice it was given when there is nothing to drop, which is the common case.
-func enforcedPolicies(policies []*proto.PolicyID) []*proto.PolicyID {
-	staged := 0
-	for _, p := range policies {
-		if model.KindIsStaged(p.GetKind()) {
-			staged++
-		}
-	}
-	if staged == 0 {
-		return policies
-	}
-
-	enforced := make([]*proto.PolicyID, 0, len(policies)-staged)
-	for _, p := range policies {
-		if !model.KindIsStaged(p.GetKind()) {
-			enforced = append(enforced, p)
-		}
-	}
-	return enforced
 }
 
 // getPoliciesByDirection returns the list of policy names for the given direction.

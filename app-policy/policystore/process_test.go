@@ -144,7 +144,7 @@ func TestIPSetUpdateDispatch(t *testing.T) {
 			},
 		}},
 	}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // IPSetDeltaUpdate with existing ID.
@@ -187,7 +187,7 @@ func TestIPSetDeltaUpdateDispatch(t *testing.T) {
 			RemovedMembers: []string{addr3Ip},
 		},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // IPSetRemove with an existing ID.
@@ -222,7 +222,7 @@ func TestIPSetRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_IpsetRemove{
 		IpsetRemove: &proto.IPSetRemove{Id: id},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // ActiveProfileUpdate with a new id
@@ -265,7 +265,7 @@ func TestActiveProfileUpdateDispatch(t *testing.T) {
 			Profile: profile1,
 		},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // ActiveProfileRemove with an unknown id is handled without panic.
@@ -299,7 +299,7 @@ func TestActiveProfileRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActiveProfileRemove{
 		ActiveProfileRemove: &proto.ActiveProfileRemove{Id: &id},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // ActivePolicyUpdate for a new id
@@ -342,7 +342,7 @@ func TestActivePolicyUpdateDispatch(t *testing.T) {
 			Policy: policy1,
 		},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // ActivePolicyRemove with unknown id is handled
@@ -378,7 +378,7 @@ func TestActivePolicyRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
 		ActivePolicyRemove: &proto.ActivePolicyRemove{Id: &id},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointUpdate sets the endpoint
@@ -397,7 +397,7 @@ func TestWorkloadEndpointUpdateDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointUpdate{
 		WorkloadEndpointUpdate: &proto.WorkloadEndpointUpdate{Endpoint: endpoint1},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 // WorkloadEndpointRemove removes the endpoint
@@ -418,14 +418,14 @@ func TestWorkloadEndpointRemoveDispatch(t *testing.T) {
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_WorkloadEndpointRemove{
 		WorkloadEndpointRemove: &proto.WorkloadEndpointRemove{},
 	}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
 func TestServiceAccountUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: serviceAccount1}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{
 		types.ProtoToServiceAccountID(serviceAccount1.GetId()): serviceAccount1,
 	}))
@@ -439,7 +439,7 @@ func TestServiceAccountRemoveDispatch(t *testing.T) {
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountRemove{
 		ServiceAccountRemove: &proto.ServiceAccountRemove{Id: serviceAccount1.Id},
 	}}
-	Expect(func() { store.ProcessUpdate("", remove, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", remove) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[types.ServiceAccountID]*proto.ServiceAccountUpdate{}))
 }
 
@@ -447,7 +447,7 @@ func TestNamespaceUpdateDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: namespace1}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{
 		types.ProtoToNamespaceID(namespace1.GetId()): namespace1,
 	}))
@@ -461,7 +461,7 @@ func TestNamespaceRemoveDispatch(t *testing.T) {
 	remove := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceRemove{
 		NamespaceRemove: &proto.NamespaceRemove{Id: namespace1.Id},
 	}}
-	Expect(func() { store.ProcessUpdate("", remove, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", remove) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[types.NamespaceID]*proto.NamespaceUpdate{}))
 }
 
@@ -470,38 +470,27 @@ func TestInSyncDispatch(t *testing.T) {
 	RegisterTestingT(t)
 	store := NewPolicyStore()
 	update := &proto.ToDataplane{Payload: &proto.ToDataplane_InSync{}}
-	Expect(func() { store.ProcessUpdate("", update, false) }).ToNot(Panic())
+	Expect(func() { store.ProcessUpdate("", update) }).ToNot(Panic())
 }
 
-// Dikastes has no use for staged policies — they enforce nothing — so it syncs with storeStaged
-// false and they must not be stored. Felix passes storeStaged true because it reuses this store to
-// evaluate pending policy for flow logs.
-func TestActivePolicyUpdateStagedHandling(t *testing.T) {
+// Staged policies are stored like enforced ones; it is the evaluation that decides whether they
+// count (see checker.PolicyScope).
+func TestActivePolicyUpdateStoresStagedPolicies(t *testing.T) {
 	RegisterTestingT(t)
 
-	stagedID := &proto.PolicyID{Name: "test_id", Kind: v3.KindStagedGlobalNetworkPolicy}
-	enforcedID := &proto.PolicyID{Name: "test_id", Kind: v3.KindGlobalNetworkPolicy}
-
-	tests := []struct {
-		name        string
-		id          *proto.PolicyID
-		storeStaged bool
-		wantStored  bool
-	}{
-		{"staged policy is skipped when staged policies are not wanted", stagedID, false, false},
-		{"staged policy is stored when staged policies are wanted", stagedID, true, true},
-		{"enforced policy is always stored", enforcedID, false, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, kind := range []string{v3.KindStagedGlobalNetworkPolicy, v3.KindStagedNetworkPolicy, v3.KindGlobalNetworkPolicy} {
+		t.Run(kind, func(t *testing.T) {
+			id := &proto.PolicyID{Name: "test_id", Kind: kind}
 			store := NewPolicyStore()
 			store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyUpdate{
-				ActivePolicyUpdate: &proto.ActivePolicyUpdate{Id: tt.id, Policy: policy1},
-			}}, tt.storeStaged)
+				ActivePolicyUpdate: &proto.ActivePolicyUpdate{Id: id, Policy: policy1},
+			}})
+			Expect(store.PolicyByID).To(HaveKey(types.ProtoToPolicyID(id)))
 
-			_, stored := store.PolicyByID[types.ProtoToPolicyID(tt.id)]
-			Expect(stored).To(Equal(tt.wantStored))
+			store.ProcessUpdate("", &proto.ToDataplane{Payload: &proto.ToDataplane_ActivePolicyRemove{
+				ActivePolicyRemove: &proto.ActivePolicyRemove{Id: id},
+			}})
+			Expect(store.PolicyByID).ToNot(HaveKey(types.ProtoToPolicyID(id)))
 		})
 	}
 }
