@@ -13518,12 +13518,13 @@ webhooks:
           - CREATE
           - UPDATE
           - DELETE
+          - CONNECT
         resources:
           - networkpolicies
           - globalnetworkpolicies
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
+        scope: '*'
   # Blocks user writes to ClusterInformation, which is managed by Calico system components.
   # This mirrors the write protection provided by the aggregated API server.
   - name: cluster-info.api.projectcalico.org
