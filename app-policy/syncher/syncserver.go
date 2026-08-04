@@ -147,7 +147,7 @@ func (s *SyncClient) syncStore(cxt context.Context, inSync chan<- struct{}, done
 			s.storeManager.OnInSync()
 		default:
 			s.storeManager.DoWithLock(func(ps *policystore.PolicyStore) {
-				ps.ProcessUpdate(s.subscriptionType, update, false)
+				ps.ProcessUpdate(s.subscriptionType, update)
 			})
 		}
 	}
