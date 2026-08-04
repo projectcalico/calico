@@ -1718,7 +1718,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
-				m.ifStateMap.Desired().Delete(k)
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
@@ -1756,9 +1755,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			}
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
-
-			m.ifStateMap.Desired().Set(k, v)
-
 			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
 				if netiface.Flags&net.FlagUp != 0 {
 					iface.info.ifIndex = netiface.Index
@@ -1833,18 +1829,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// the new jump maps!
 				return true
 			})
-		} else if v.Flags()&ifstate.FlgNotManaged != 0 {
-			// A host interface that Calico does not manage but that still
-			// exists - e.g. an ExternalNetwork exit device. Its FlgNotManaged
-			// entry is what lets fib_approve allow traffic out via that device;
-			// pruning it here would make fib_approve DENY that traffic (an
-			// egress gateway's own health probes included) until the device is
-			// bounced or felix happens to see a fresh interface event for it.
-			// Preserve it across the start-of-day resync (CORE-13245).
-			m.ifStateMap.Desired().Set(k, v)
-		} else {
-			// We no longer manage this device
-			m.ifStateMap.Desired().Delete(k)
 		}
 	})
 }
