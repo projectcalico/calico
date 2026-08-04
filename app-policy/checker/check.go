@@ -44,6 +44,10 @@ var (
 
 	rlog1 = logrusr.NewRateLimitedLogger()
 	rlog2 = logrusr.NewRateLimitedLogger()
+	// A missing policy is one log line per evaluation, and Felix's collector re-evaluates every
+	// flow in both directions on every sweep, so a policy that stays missing would log per flow
+	// per sweep.
+	rlogMissingPolicy = logrusr.NewRateLimitedLogger()
 )
 
 // PolicyScope selects which of an endpoint's policies take part in an evaluation.
@@ -79,15 +83,18 @@ const (
 // Evaluate evaluates the flow against the policy store and returns the trace of rules. The scope
 // decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
 // EnforcedOnly for the trace the dataplane enforces.
-func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
+//
+// ok is false if the evaluation could not be completed, in which case the trace is nil and the
+// caller should hold on to whatever trace it already had: an empty trace would say the flow has no
+// policy, which is a stronger claim than "we could not work it out".
+func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) (trace []*calc.RuleID, ok bool) {
 	s, trace := checkTiers(scope, store, ep, dir, flow)
 	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
-		// The evaluation failed part way through, so the trace stops short of a verdict. Report no
-		// trace at all rather than one that reads as if policy ran out of rules to apply.
-		log.Debugf("Policy evaluation failed with %v, discarding partial trace", s.Code)
-		return nil
+		// The evaluation stopped part way through, so the trace stops short of a verdict. It has
+		// already been logged with the reason.
+		return nil, false
 	}
-	return trace
+	return trace, true
 }
 
 // LookupEndpointKeysFromSrcDst looks up the source and destination endpoint keys for the given
@@ -170,7 +177,7 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 				// know its verdict. We should never get here: a policy is sent before the endpoints
 				// that reference it. Fail closed rather than apply the rest of the tier to a request
 				// this policy may govern.
-				log.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
+				rlogMissingPolicy.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
 				s.Code = INTERNAL
 				s.Message = fmt.Sprintf("policy %s of tier %s is missing from the policy store",
 					policyDisplayName(pID), tier.GetName())

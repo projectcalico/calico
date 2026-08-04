@@ -1047,7 +1047,13 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policy
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
 	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
+		trace, ok := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
+		if !ok {
+			// The evaluation could not be completed, and has logged why. Keep the trace we worked
+			// out last time: reporting no pending policy at all would be a stronger claim than we
+			// are in a position to make.
+			return
+		}
 		if !equal(*ruleIDs, trace) {
 			*ruleIDs = append([]*calc.RuleID(nil), trace...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)
