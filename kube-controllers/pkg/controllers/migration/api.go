@@ -124,6 +124,10 @@ type DatastoreMigrationStatus struct {
 	// Message is a human-readable status message describing what the controller
 	// is currently doing or waiting on.
 	Message string `json:"message,omitempty"`
+	// DatastoreLockedAt is the timestamp when the v1 datastore was locked
+	// (DatastoreReady=false) during the Pending phase. It also anchors the
+	// drain period the controller waits out before unregistering the APIService.
+	DatastoreLockedAt *metav1.Time `json:"datastoreLockedAt,omitempty"`
 	// StartedAt is the timestamp when the migration transitioned to Migrating.
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 	// CompletedAt is the timestamp when the migration transitioned to Complete.
