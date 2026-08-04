@@ -704,7 +704,6 @@ func guardianCalicoSystemPolicy(cfg *GuardianConfiguration) (*v3.NetworkPolicy, 
 	egressRules = append(egressRules, v3.Rule{Action: v3.Pass})
 
 	guardianIngressDestinationEntityRule := v3.EntityRule{Ports: networkpolicy.Ports(GuardianTargetPort)}
-	networkpolicyHelper := networkpolicy.DefaultHelper()
 	var ingressRules []v3.Rule
 	if cfg.Installation.Variant.IsEnterprise() {
 		ingressRules = append(ingressRules, []v3.Rule{
@@ -712,30 +711,6 @@ func guardianCalicoSystemPolicy(cfg *GuardianConfiguration) (*v3.NetworkPolicy, 
 				Action:      v3.Allow,
 				Protocol:    &networkpolicy.TCPProtocol,
 				Source:      FluentBitSourceEntityRule,
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      networkpolicyHelper.ComplianceBenchmarkerSourceEntityRule(),
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      networkpolicyHelper.ComplianceReporterSourceEntityRule(),
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      networkpolicyHelper.ComplianceSnapshotterSourceEntityRule(),
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      networkpolicyHelper.ComplianceControllerSourceEntityRule(),
 				Destination: guardianIngressDestinationEntityRule,
 			},
 			{

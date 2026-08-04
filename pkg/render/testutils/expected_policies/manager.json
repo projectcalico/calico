@@ -45,8 +45,7 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {
-        },
+        "source": {},
         "destination": {
           "ports": [
             9449
@@ -58,8 +57,7 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {
-        },
+        "source": {},
         "destination": {
           "selector": "k8s-app == 'calico-manager'",
           "namespaceSelector": "projectcalico.org/name == 'calico-system'",
@@ -81,8 +79,7 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {
-        },
+        "source": {},
         "destination": {
           "selector": "k8s-app == 'tigera-secure-es-gateway'",
           "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
@@ -94,24 +91,12 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {
-        },
+        "source": {},
         "destination": {
           "selector": "k8s-app == 'tigera-linseed'",
           "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
           "ports": [
             8444
-          ]
-        }
-      },
-      {
-        "action": "Allow",
-        "protocol": "TCP",
-        "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'",
-          "selector": "k8s-app == 'compliance-server'",
-          "ports": [
-            5443
           ]
         }
       },

@@ -201,12 +201,6 @@ var _ = Describe("Manager controller tests", func() {
 				},
 			)).NotTo(HaveOccurred())
 
-			Expect(c.Create(ctx, &operatorv1.Compliance{
-				ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-				Status: operatorv1.ComplianceStatus{
-					State: operatorv1.TigeraStatusReady,
-				},
-			})).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{Name: common.TigeraPrometheusNamespace},
 			})).NotTo(HaveOccurred())
@@ -219,9 +213,6 @@ var _ = Describe("Manager controller tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			caSecret := certificateManager.KeyPair().Secret(common.OperatorNamespace())
 			Expect(c.Create(ctx, caSecret)).NotTo(HaveOccurred())
-			complianceKp, err := certificateManager.GetOrCreateKeyPair(c, render.ComplianceServerCertSecret, common.OperatorNamespace(), []string{render.ComplianceServerCertSecret})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Create(ctx, complianceKp.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 			pcapKp, err := certificateManager.GetOrCreateKeyPair(c, render.PacketCaptureServerCert, common.OperatorNamespace(), []string{render.PacketCaptureServerCert})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, pcapKp.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
@@ -439,7 +430,6 @@ var _ = Describe("Manager controller tests", func() {
 		var r ReconcileManager
 		var mockStatus *status.MockStatus
 		var licenseKey *v3.LicenseKey
-		var compliance *operatorv1.Compliance
 		var certificateManager certificatemanager.CertificateManager
 		var installation *operatorv1.Installation
 
@@ -473,9 +463,7 @@ var _ = Describe("Manager controller tests", func() {
 			licenseKey = &v3.LicenseKey{
 				ObjectMeta: metav1.ObjectMeta{Name: "default"},
 				Status: v3.LicenseKeyStatus{
-					Features: []string{
-						common.ComplianceFeature,
-					},
+					Features: []string{},
 				},
 			}
 			Expect(c.Create(ctx, licenseKey)).NotTo(HaveOccurred())
@@ -540,23 +528,12 @@ var _ = Describe("Manager controller tests", func() {
 				mockStatus.On("ReadyToMonitor")
 				mockStatus.On("SetMetaData", mock.Anything).Return()
 
-				compliance = &operatorv1.Compliance{
-					ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-					Status: operatorv1.ComplianceStatus{
-						State: operatorv1.TigeraStatusReady,
-					},
-				}
-				Expect(c.Create(ctx, compliance)).NotTo(HaveOccurred())
-
 				// Provision certificates that the controller will query as part of the test.
 				var err error
 				certificateManager, err = certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 				Expect(err).NotTo(HaveOccurred())
 				caSecret := certificateManager.KeyPair().Secret(common.OperatorNamespace())
 				Expect(c.Create(ctx, caSecret)).NotTo(HaveOccurred())
-				complianceKp, err := certificateManager.GetOrCreateKeyPair(c, render.ComplianceServerCertSecret, common.OperatorNamespace(), []string{render.ComplianceServerCertSecret})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(c.Create(ctx, complianceKp.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 				pcapKp, err := certificateManager.GetOrCreateKeyPair(c, render.PacketCaptureServerCert, common.OperatorNamespace(), []string{render.PacketCaptureServerCert})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, pcapKp.Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
@@ -746,54 +723,6 @@ var _ = Describe("Manager controller tests", func() {
 					mockStatus.AssertExpectations(GinkgoT())
 				})
 
-				It("should degrade if compliance CR and compliance-enabled license is present, but compliance is not ready", func() {
-					compliance.Status.State = ""
-					Expect(c.Status().Update(ctx, compliance)).NotTo(HaveOccurred())
-					mockStatus = &status.MockStatus{}
-					mockStatus.On("OnCRFound").Return()
-					mockStatus.On("SetDegraded", operatorv1.ResourceNotReady, "Compliance is not ready", mock.Anything, mock.Anything).Return()
-					mockStatus.On("SetMetaData", mock.Anything).Return()
-					r.status = mockStatus
-
-					_, err := r.Reconcile(ctx, reconcile.Request{})
-
-					Expect(err).NotTo(HaveOccurred())
-					mockStatus.AssertExpectations(GinkgoT())
-				})
-
-				DescribeTable("should not degrade when compliance CR or compliance license feature is not present/active", func(crPresent, licenseFeatureActive bool) {
-					mockStatus = &status.MockStatus{}
-					mockStatus.On("IsAvailable").Return(true)
-					mockStatus.On("OnCRFound").Return()
-					mockStatus.On("AddDeployments", mock.Anything)
-					mockStatus.On("RemoveDeployments", []types.NamespacedName{{Name: render.LegacyManagerDeploymentName, Namespace: render.LegacyManagerNamespace}}).Return()
-					mockStatus.On("ClearDegraded")
-					mockStatus.On("SetWarning", mock.Anything, mock.Anything).Return().Maybe()
-					mockStatus.On("ClearWarning", mock.Anything).Return().Maybe()
-					mockStatus.On("SetDegraded", operatorv1.ResourceNotReady, "Compliance is not ready", mock.Anything, mock.Anything).Return().Maybe()
-					mockStatus.On("RemoveCertificateSigningRequests", mock.Anything)
-					mockStatus.On("ReadyToMonitor")
-					mockStatus.On("SetMetaData", mock.Anything).Return()
-					r.status = mockStatus
-
-					if !crPresent {
-						Expect(c.Delete(ctx, compliance)).NotTo(HaveOccurred())
-					}
-					if !licenseFeatureActive {
-						licenseKey.Status.Features = []string{}
-						Expect(c.Update(ctx, licenseKey)).NotTo(HaveOccurred())
-					}
-
-					_, err := r.Reconcile(ctx, reconcile.Request{})
-
-					// Expect no error, and no degraded status from compliance
-					Expect(err).NotTo(HaveOccurred())
-					mockStatus.AssertExpectations(GinkgoT())
-				},
-					Entry("CR and license feature not present/active", false, false),
-					Entry("CR not present, license feature active", false, true),
-					Entry("CR present, license feature inactive", true, false),
-				)
 			})
 
 			Context("Reconcile for Condition status", func() {

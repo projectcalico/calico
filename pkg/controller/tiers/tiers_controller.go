@@ -170,7 +170,6 @@ func (r *ReconcileTiers) prepareTiersConfig(ctx context.Context, reqLogger logr.
 	}
 	if r.opts.Variant.IsEnterprise() {
 		namespaces = append(namespaces,
-			render.ComplianceNamespace,
 			render.DexNamespace,
 			render.ElasticsearchNamespace,
 			render.IntrusionDetectionNamespace,

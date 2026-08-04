@@ -87,7 +87,7 @@ kubectl scale deploy -n tigera-operator tigera-operator --replicas=0
 ```
 2. Run kubefwd in a separate terminal, so pods and service names are accessible from your local computer.
 ```bash
-kubefwd svc -n calico-system -n tigera-compliance -n tigera-kibana -n tigera-manager -n tigera-dex -n tigera-elasticsearch -n tigera-prometheus -c $KUBECONFIG
+kubefwd svc -n calico-system -n tigera-kibana -n tigera-manager -n tigera-dex -n tigera-elasticsearch -n tigera-prometheus -c $KUBECONFIG
 ```
 3. Open a code file in your editor and set a breakpoint.
 4. Create a debug configuration by right-clicking main.go and select `modify run configuration`.

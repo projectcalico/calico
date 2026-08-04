@@ -49,19 +49,6 @@
         },
         "protocol": "TCP",
         "source": {
-          "selector": "k8s-app == 'compliance-server'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'"
-        }
-      },
-      {
-        "action": "Allow",
-        "destination": {
-          "ports": [
-            5556
-          ]
-        },
-        "protocol": "TCP",
-        "source": {
           "selector": "k8s-app == 'tigera-packetcapture'",
           "namespaceSelector": "projectcalico.org/name == 'tigera-packetcapture'"
         }
@@ -111,8 +98,8 @@
         "destination": {
           "services": {
             "name": "kubernetes",
-	    "namespace": "default"
-	  }
+            "namespace": "default"
+          }
         }
       },
       {

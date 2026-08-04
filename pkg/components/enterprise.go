@@ -28,14 +28,6 @@ var (
 		variant:   enterpriseVariant,
 	}
 
-	ComponentComplianceBenchmarker = Component{
-		Version:   "master",
-		Image:     "compliance-benchmarker",
-		Registry:  "",
-		imagePath: "",
-		variant:   enterpriseVariant,
-	}
-
 	ComponentDeepPacketInspection = Component{
 		Version:   "master",
 		Image:     "deep-packet-inspection",
@@ -276,7 +268,6 @@ var (
 	// Components that are only for providing a version should be left out of this list.
 	EnterpriseImages = []Component{
 		ComponentTigeraCalico,
-		ComponentComplianceBenchmarker,
 		ComponentDeepPacketInspection,
 		ComponentElasticTseeInstaller,
 		ComponentElasticsearch,

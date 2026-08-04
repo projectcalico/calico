@@ -7,7 +7,7 @@
   "spec": {
     "tier":"calico-system",
     "order":10,
-    "selector": "projectcalico.org/namespace in {'calico-system','tigera-compliance','tigera-dex','tigera-elasticsearch','tigera-intrusion-detection','tigera-kibana','tigera-eck-operator','tigera-packetcapture','tigera-prometheus','tigera-skraper'}",
+    "selector": "projectcalico.org/namespace in {'calico-system','tigera-dex','tigera-elasticsearch','tigera-intrusion-detection','tigera-kibana','tigera-eck-operator','tigera-packetcapture','tigera-prometheus','tigera-skraper'}",
     "egress":[
        {
          "action":"Allow",

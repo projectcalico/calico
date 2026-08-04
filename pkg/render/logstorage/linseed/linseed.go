@@ -659,36 +659,6 @@ func (l *linseed) linseedCalicoSystemPolicy() *v3.NetworkPolicy {
 		{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
-			Source:      networkpolicyHelper.ComplianceBenchmarkerSourceEntityRule(),
-			Destination: linseedIngressDestinationEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Source:      networkpolicyHelper.ComplianceControllerSourceEntityRule(),
-			Destination: linseedIngressDestinationEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Source:      networkpolicyHelper.ComplianceServerSourceEntityRule(),
-			Destination: linseedIngressDestinationEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Source:      networkpolicyHelper.ComplianceSnapshotterSourceEntityRule(),
-			Destination: linseedIngressDestinationEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Source:      networkpolicyHelper.ComplianceReporterSourceEntityRule(),
-			Destination: linseedIngressDestinationEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
 			Source:      networkpolicyHelper.IntrusionDetectionSourceEntityRule(),
 			Destination: linseedIngressDestinationEntityRule,
 		},

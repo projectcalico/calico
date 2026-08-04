@@ -480,12 +480,6 @@ func (r *SecretSubController) collectUpstreamCerts(log logr.Logger, helper utils
 		// Get certificate for DPI, which Linseed needs to trust in a standalone or management cluster.
 		render.DPITLSSecretName: helper.TruthNamespace(),
 
-		// Get compliance certificates, which Linseed needs to trust.
-		render.ComplianceServerCertSecret:  helper.TruthNamespace(),
-		render.ComplianceSnapshotterSecret: helper.TruthNamespace(),
-		render.ComplianceBenchmarkerSecret: helper.TruthNamespace(),
-		render.ComplianceReporterSecret:    helper.TruthNamespace(),
-
 		// Get certificate for policy-recommendation, which Linseed needs to trust.
 		render.PolicyRecommendationTLSSecretName: helper.TruthNamespace(),
 

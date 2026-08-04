@@ -471,8 +471,6 @@ func (c *dexComponent) calicoSystemNetworkPolicy(installationVariant operatorv1.
 		Ports: networkpolicy.Ports(DexPort),
 	}
 
-	networkpolicyHelper := networkpolicy.DefaultHelper()
-
 	return &v3.NetworkPolicy{
 		TypeMeta: metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -495,12 +493,6 @@ func (c *dexComponent) calicoSystemNetworkPolicy(installationVariant operatorv1.
 					Action:      v3.Allow,
 					Protocol:    &networkpolicy.TCPProtocol,
 					Source:      networkpolicy.DefaultHelper().ESGatewaySourceEntityRule(),
-					Destination: dexIngressPortDestination,
-				},
-				{
-					Action:      v3.Allow,
-					Protocol:    &networkpolicy.TCPProtocol,
-					Source:      networkpolicyHelper.ComplianceServerSourceEntityRule(),
 					Destination: dexIngressPortDestination,
 				},
 				{

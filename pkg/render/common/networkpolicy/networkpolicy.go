@@ -298,30 +298,6 @@ func (h *NetworkPolicyHelper) PolicyRecommendationSourceEntityRule() v3.EntityRu
 	return CreateSourceEntityRule(h.namespace(common.CalicoNamespace), "tigera-policy-recommendation")
 }
 
-func (h *NetworkPolicyHelper) ComplianceServerEntityRule() v3.EntityRule {
-	return CreateEntityRule(h.namespace("tigera-compliance"), "compliance-server", 5443)
-}
-
-func (h *NetworkPolicyHelper) ComplianceServerSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-compliance"), "compliance-server")
-}
-
-func (h *NetworkPolicyHelper) ComplianceBenchmarkerSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-compliance"), "compliance-benchmarker")
-}
-
-func (h *NetworkPolicyHelper) ComplianceControllerSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-compliance"), "compliance-controller")
-}
-
-func (h *NetworkPolicyHelper) ComplianceSnapshotterSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-compliance"), "compliance-snapshotter")
-}
-
-func (h *NetworkPolicyHelper) ComplianceReporterSourceEntityRule() v3.EntityRule {
-	return CreateSourceEntityRule(h.namespace("tigera-compliance"), "compliance-reporter")
-}
-
 func (h *NetworkPolicyHelper) IntrusionDetectionSourceEntityRule() v3.EntityRule {
 	return CreateSourceEntityRule(h.namespace("tigera-intrusion-detection"), "intrusion-detection-controller")
 }

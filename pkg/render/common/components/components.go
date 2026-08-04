@@ -302,14 +302,6 @@ func GetPriorityClassName(overrides any) string {
 // Extracted so test code that wraps getField can reproduce the same path
 // transformations when recording.
 func normalizeFieldPath(overrides any, fieldNames []string) []string {
-	// SPECIAL CASE: ComplianceReporterPodTemplate doesn't follow the Spec, Template, Spec, ...
-	// pattern that all our other override structures follow.  Instead it skips the top-level
-	// Spec and has Template, Spec, ...
-	if _, isComplianceReporterPodTemplate := overrides.(*operator.ComplianceReporterPodTemplate); isComplianceReporterPodTemplate {
-		if len(fieldNames) > 0 && fieldNames[0] == "Spec" {
-			return fieldNames[1:]
-		}
-	}
 	return fieldNames
 }
 

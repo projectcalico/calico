@@ -34,7 +34,6 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/compliance"
 	lscommon "github.com/tigera/operator/pkg/controller/logstorage/common"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -134,9 +133,6 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	if err = c.WatchObject(&operatorv1.APIServer{}, eventHandler); err != nil {
 		return fmt.Errorf("manager-controller failed to watch APIServer resource: %w", err)
 	}
-	if err = c.WatchObject(&operatorv1.Compliance{}, eventHandler); err != nil {
-		return fmt.Errorf("manager-controller failed to watch APIServer resource: %w", err)
-	}
 	if err = c.WatchObject(&operatorv1.ManagementCluster{}, eventHandler); err != nil {
 		return fmt.Errorf("manager-controller failed to watch primary resource: %w", err)
 	}
@@ -175,7 +171,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 			// client to talk to elastic via es-gateway
 			render.ManagerTLSSecretName, relasticsearch.PublicCertSecret,
 			render.VoltronTunnelSecretName, render.VoltronAdditionalTunnelSecretName,
-			render.ComplianceServerCertSecret, render.PacketCaptureServerCert,
+			render.PacketCaptureServerCert,
 			render.ManagerInternalTLSSecretName, monitor.PrometheusServerTLSSecretName, certificatemanagement.CASecretName,
 		} {
 			if err = utils.AddSecretsWatch(c, secretName, namespace); err != nil {
@@ -189,7 +185,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	if err = utils.AddConfigMapWatch(c, relasticsearch.ClusterConfigConfigMapName, common.OperatorNamespace(), eventHandler); err != nil {
-		return fmt.Errorf("compliance-controller failed to watch the ConfigMap resource: %w", err)
+		return fmt.Errorf("manager-controller failed to watch the ConfigMap resource: %w", err)
 	}
 
 	if err = utils.AddNamespaceWatch(c, common.TigeraPrometheusNamespace); err != nil {
@@ -323,8 +319,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// TODO: Do we need a license per-tenant in the management cluster?
-	license, err := utils.FetchLicenseKey(ctx, r.client)
-	if err != nil {
+	if _, err := utils.FetchLicenseKey(ctx, r.client); err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "License not found", err, logc)
 			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
@@ -391,14 +386,6 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	// Determine if compliance is enabled.
-	complianceLicenseFeatureActive := utils.IsFeatureActive(license, common.ComplianceFeature)
-	complianceCR, err := compliance.GetCompliance(ctx, r.client, r.opts.MultiTenant, request.Namespace)
-	if err != nil && !errors.IsNotFound(err) {
-		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying compliance: ", err, logc)
-		return reconcile.Result{}, err
-	}
-
 	// Build a trusted bundle containing all of the certificates of components that communicate with the manager pod.
 	// This bundle contains the root CA used to sign all operator-generated certificates, as well as the explicitly named
 	// certificates, in case the user has provided their own cert in lieu of the default certificate.
@@ -442,15 +429,6 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 		if monitorCR.Spec.ExternalPrometheus == nil {
 			trustedSecretNames = append(trustedSecretNames, monitor.PrometheusServerTLSSecretName)
-		}
-
-		if complianceLicenseFeatureActive && complianceCR != nil {
-			// Check that compliance is running.
-			if complianceCR.Status.State != operatorv1.TigeraStatusReady {
-				r.status.SetDegraded(operatorv1.ResourceNotReady, "Compliance is not ready", nil, logc)
-				return reconcile.Result{}, nil
-			}
-			trustedSecretNames = append(trustedSecretNames, render.ComplianceServerCertSecret)
 		}
 	}
 
@@ -723,9 +701,6 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		ClusterDomain:              r.opts.ClusterDomain,
 		ESLicenseType:              elasticLicenseType,
 		Replicas:                   replicas,
-		Compliance:                 complianceCR,
-		ComplianceLicenseActive:    complianceLicenseFeatureActive,
-		ComplianceNamespace:        utils.NewNamespaceHelper(r.opts.MultiTenant, render.ComplianceNamespace, request.Namespace).InstallNamespace(),
 		Namespace:                  helper.InstallNamespace(),
 		TruthNamespace:             helper.TruthNamespace(),
 		Tenant:                     tenant,

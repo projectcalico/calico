@@ -196,12 +196,9 @@ type ManagerConfiguration struct {
 	// by clients as part of mTLS authentication.
 	TrustedCertBundle certificatemanagement.TrustedBundleRO
 
-	ClusterDomain           string
-	ESLicenseType           ElasticsearchLicenseType
-	Replicas                *int32
-	Compliance              *operatorv1.Compliance
-	ComplianceLicenseActive bool
-	ComplianceNamespace     string
+	ClusterDomain string
+	ESLicenseType ElasticsearchLicenseType
+	Replicas      *int32
 
 	Namespace      string
 	TruthNamespace string
@@ -503,7 +500,6 @@ func (c *managerComponent) managerEnvVars() []corev1.EnvVar {
 	envs := []corev1.EnvVar{
 		// TODO: Prometheus URL will need to change.
 		{Name: "CNX_PROMETHEUS_API_URL", Value: fmt.Sprintf("/api/v1/namespaces/%s/services/calico-node-prometheus:9090/proxy/api/v1", common.TigeraPrometheusNamespace)},
-		{Name: "CNX_COMPLIANCE_REPORTS_API_URL", Value: "/compliance/reports"},
 		{Name: "CNX_QUERY_API_URL", Value: "/api/v1/namespaces/calico-system/services/https:calico-api:8080/proxy"},
 		{Name: "DASHBOARD_API_URL", Value: "/dashboards"},
 		{Name: "CNX_ELASTICSEARCH_API_URL", Value: "/tigera-elasticsearch"},
@@ -583,14 +579,12 @@ func (c *managerComponent) voltronContainer() corev1.Container {
 
 	env := []corev1.EnvVar{
 		{Name: "VOLTRON_PORT", Value: defaultVoltronPort},
-		{Name: "VOLTRON_COMPLIANCE_ENDPOINT", Value: fmt.Sprintf("https://compliance.%s.svc.%s", c.cfg.ComplianceNamespace, c.cfg.ClusterDomain)},
 		{Name: "VOLTRON_LOGLEVEL", Value: "Info"},
 		{Name: "VOLTRON_KIBANA_ENDPOINT", Value: rkibana.HTTPSEndpoint(c.SupportedOSType(), c.cfg.ClusterDomain)},
 		{Name: "VOLTRON_KIBANA_BASE_PATH", Value: fmt.Sprintf("/%s/", KibanaBasePath)},
 		{Name: "VOLTRON_KIBANA_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
 		{Name: "VOLTRON_PACKET_CAPTURE_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
 		{Name: "VOLTRON_PROMETHEUS_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
-		{Name: "VOLTRON_COMPLIANCE_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
 		{Name: "VOLTRON_DEX_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
 		// Voltron verifies the in-cluster fluent-bit http input (non-cluster-host
 		// log ingestion) against the same trusted bundle. Without this the config
@@ -610,7 +604,6 @@ func (c *managerComponent) voltronContainer() corev1.Container {
 		{Name: "VOLTRON_ENABLE_NONCLUSTER_HOST", Value: strconv.FormatBool(c.cfg.NonClusterHost != nil)},
 		{Name: "VOLTRON_TUNNEL_PORT", Value: defaultTunnelVoltronPort},
 		{Name: "VOLTRON_DEFAULT_FORWARD_SERVER", Value: defaultForwardServer},
-		{Name: "VOLTRON_ENABLE_COMPLIANCE", Value: strconv.FormatBool(c.cfg.ComplianceLicenseActive)},
 	}
 
 	if c.cfg.VoltronRouteConfig != nil {
@@ -1339,11 +1332,6 @@ func (c *managerComponent) managerCalicoSystemNetworkPolicy() *v3.NetworkPolicy 
 		{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicyHelper.ComplianceServerEntityRule(),
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
 			Destination: DexEntityRule,
 		},
 		{
@@ -1540,7 +1528,6 @@ func managerUserSpecificSettingsGroup() *v3.UISettingsGroup {
 // Calico Enterprise only
 func managerClusterWideTigeraLayer() *v3.UISettings {
 	namespaces := []string{
-		"tigera-compliance",
 		"tigera-dex",
 		"tigera-dpi",
 		"tigera-eck-operator",

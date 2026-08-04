@@ -45,9 +45,6 @@ components:
   intrusion-detection-controller:
     image: intrusion-detection-controller
     version: master
-  compliance-benchmarker:
-    image: compliance-benchmarker
-    version: master
   tigera-cni-windows:
     image: cni-windows
     version: master

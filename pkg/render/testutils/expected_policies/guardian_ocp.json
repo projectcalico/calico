@@ -36,58 +36,6 @@
         },
         "protocol": "TCP",
         "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'",
-          "selector": "k8s-app == 'compliance-benchmarker'"
-        }
-      },
-      {
-        "action": "Allow",
-        "destination": {
-          "ports": [
-            8080
-          ]
-        },
-        "protocol": "TCP",
-        "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'",
-          "selector": "k8s-app == 'compliance-reporter'"
-        }
-      },
-      {
-        "action": "Allow",
-        "destination": {
-          "ports": [
-            8080
-          ]
-        },
-        "protocol": "TCP",
-        "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'",
-          "selector": "k8s-app == 'compliance-snapshotter'"
-        }
-      },
-      {
-        "action": "Allow",
-        "destination": {
-          "ports": [
-            8080
-          ]
-        },
-        "protocol": "TCP",
-        "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-compliance'",
-          "selector": "k8s-app == 'compliance-controller'"
-        }
-      },
-      {
-        "action": "Allow",
-        "destination": {
-          "ports": [
-            8080
-          ]
-        },
-        "protocol": "TCP",
-        "source": {
           "namespaceSelector": "projectcalico.org/name == 'tigera-intrusion-detection'",
           "selector": "k8s-app == 'intrusion-detection-controller'"
         }
@@ -155,15 +103,15 @@
         "destination": {
           "services": {
             "name": "kubernetes",
-	    "namespace": "default"
-	  }
+            "namespace": "default"
+          }
         }
       },
       {
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "selector":"k8s-app == 'tigera-prometheus'",
+          "selector": "k8s-app == 'tigera-prometheus'",
           "namespaceSelector": "projectcalico.org/name == 'tigera-prometheus'",
           "ports": [
             9095
@@ -183,8 +131,7 @@
       {
         "action": "Allow",
         "protocol": "TCP",
-        "source": {
-        },
+        "source": {},
         "destination": {
           "nets": [
             "127.0.0.1/32"

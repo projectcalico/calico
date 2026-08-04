@@ -559,7 +559,6 @@ admission policy installation; once an Installation exists it is the authority o
 		common.CalicoNamespace,
 		"calico-apiserver",
 		render.ElasticsearchNamespace,
-		render.ComplianceNamespace,
 		render.IntrusionDetectionNamespace,
 		dpi.DeepPacketInspectionNamespace,
 		eck.OperatorNamespace,

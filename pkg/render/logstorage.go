@@ -90,9 +90,10 @@ const (
 	DefaultElasticsearchReplicas    = 0
 	DefaultElasticStorageGi         = 10
 
-	ESCuratorName           = "elastic-curator"
-	EsCuratorServiceAccount = "tigera-elastic-curator"
-	EsCuratorPolicyName     = networkpolicy.CalicoComponentPolicyPrefix + "allow-elastic-curator"
+	ESCuratorName                  = "elastic-curator"
+	EsCuratorServiceAccount        = "tigera-elastic-curator"
+	EsCuratorPolicyName            = networkpolicy.CalicoComponentPolicyPrefix + "allow-elastic-curator"
+	ElasticsearchCuratorUserSecret = "tigera-ee-curator-elasticsearch-access"
 
 	OIDCUsersConfigMapName = "tigera-known-oidc-users"
 	OIDCUsersESSecretName  = "tigera-oidc-users-elasticsearch-credentials"

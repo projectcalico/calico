@@ -160,11 +160,6 @@ var _ = Describe("Common components render tests", func() {
 		Entry("CalicoNodeDaemonSet", &v1.CalicoNodeDaemonSet{}, false),
 		Entry("CalicoNodeWindowsDaemonSet", &v1.CalicoNodeWindowsDaemonSet{}, false),
 		Entry("CalicoWindowsUpgradeDaemonSet", &v1.CalicoWindowsUpgradeDaemonSet{}, false),
-		Entry("ComplianceBenchmarkerDaemonSet", &v1.ComplianceBenchmarkerDaemonSet{}, false),
-		Entry("ComplianceControllerDeployment", &v1.ComplianceControllerDeployment{}, false),
-		Entry("ComplianceReporterPodTemplate", &v1.ComplianceReporterPodTemplate{}, false),
-		Entry("ComplianceServerDeployment", &v1.ComplianceServerDeployment{}, false),
-		Entry("ComplianceSnapshotterDeployment", &v1.ComplianceSnapshotterDeployment{}, false),
 		Entry("CSINodeDriverDaemonSet", &v1.CSINodeDriverDaemonSet{}, false),
 		Entry("DashboardsJob", &v1.DashboardsJob{}, false),
 		Entry("DexDeployment", &v1.DexDeployment{}, false),
@@ -1273,7 +1268,7 @@ var _ = Describe("Common components render tests", func() {
 			d := appsv1.Deployment{}
 			d.Spec.Template.Spec.Containers = []corev1.Container{
 				{
-					Name:  "compliance-server",
+					Name:  "calico-manager",
 					Image: "test-image",
 					ReadinessProbe: &corev1.Probe{
 						ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health"}},
@@ -1282,13 +1277,13 @@ var _ = Describe("Common components render tests", func() {
 			}
 
 			period := int32(30)
-			overrides := &v1.ComplianceServerDeployment{
-				Spec: &v1.ComplianceServerDeploymentSpec{
-					Template: &v1.ComplianceServerDeploymentPodTemplateSpec{
-						Spec: &v1.ComplianceServerDeploymentPodSpec{
-							Containers: []v1.ComplianceServerDeploymentContainer{
+			overrides := &v1.ManagerDeployment{
+				Spec: &v1.ManagerDeploymentSpec{
+					Template: &v1.ManagerDeploymentPodTemplateSpec{
+						Spec: &v1.ManagerDeploymentPodSpec{
+							Containers: []v1.ManagerDeploymentContainer{
 								{
-									Name:           "compliance-server",
+									Name:           "calico-manager",
 									ReadinessProbe: &v1.ProbeOverride{PeriodSeconds: &period},
 								},
 							},
@@ -1305,7 +1300,7 @@ var _ = Describe("Common components render tests", func() {
 			d := appsv1.Deployment{}
 			d.Spec.Template.Spec.Containers = []corev1.Container{
 				{
-					Name:  "compliance-server",
+					Name:  "calico-manager",
 					Image: "test-image",
 					ReadinessProbe: &corev1.Probe{
 						ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/health"}},
@@ -1320,13 +1315,13 @@ var _ = Describe("Common components render tests", func() {
 			overrideResources := corev1.ResourceRequirements{
 				Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")},
 			}
-			overrides := &v1.ComplianceServerDeployment{
-				Spec: &v1.ComplianceServerDeploymentSpec{
-					Template: &v1.ComplianceServerDeploymentPodTemplateSpec{
-						Spec: &v1.ComplianceServerDeploymentPodSpec{
-							Containers: []v1.ComplianceServerDeploymentContainer{
+			overrides := &v1.ManagerDeployment{
+				Spec: &v1.ManagerDeploymentSpec{
+					Template: &v1.ManagerDeploymentPodTemplateSpec{
+						Spec: &v1.ManagerDeploymentPodSpec{
+							Containers: []v1.ManagerDeploymentContainer{
 								{
-									Name:           "compliance-server",
+									Name:           "calico-manager",
 									ReadinessProbe: &v1.ProbeOverride{PeriodSeconds: &period},
 									LivenessProbe:  &v1.ProbeOverride{PeriodSeconds: &period},
 									Resources:      &overrideResources,
@@ -1347,10 +1342,10 @@ var _ = Describe("Common components render tests", func() {
 		It("should not set annotation when no probe or resource overrides", func() {
 			d := appsv1.Deployment{}
 			d.Spec.Template.Spec.Containers = []corev1.Container{
-				{Name: "compliance-server", Image: "test-image"},
+				{Name: "calico-manager", Image: "test-image"},
 			}
-			overrides := &v1.ComplianceServerDeployment{
-				Spec: &v1.ComplianceServerDeploymentSpec{},
+			overrides := &v1.ManagerDeployment{
+				Spec: &v1.ManagerDeploymentSpec{},
 			}
 			ApplyDeploymentOverrides(&d, overrides)
 			Expect(d.Annotations).NotTo(HaveKey(CustomOverridesAnnotation))

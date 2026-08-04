@@ -24,8 +24,6 @@ const (
 	// Monitor + Prometheus related const
 	TigeraPrometheusNamespace = "tigera-prometheus"
 
-	// ComplianceFeature name
-	ComplianceFeature = "compliance-reports"
 	// ThreatDefenseFeature feature name
 	ThreatDefenseFeature = "threat-defense"
 	// ExportLogsFeature to 3rd party systems feature name

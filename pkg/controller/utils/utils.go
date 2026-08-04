@@ -143,10 +143,6 @@ func AddAPIServerWatch(c ctrlruntime.Controller) error {
 	return c.WatchObject(&operatorv1.APIServer{}, &handler.EnqueueRequestForObject{})
 }
 
-func AddComplianceWatch(c ctrlruntime.Controller) error {
-	return c.WatchObject(&operatorv1.Compliance{}, &handler.EnqueueRequestForObject{})
-}
-
 func AddNamespaceWatch(c ctrlruntime.Controller, name string) error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
