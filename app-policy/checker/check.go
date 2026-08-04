@@ -84,17 +84,17 @@ const (
 // decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
 // EnforcedOnly for the trace the dataplane enforces.
 //
-// ok is false if the evaluation could not be completed, in which case the trace is nil and the
-// caller should hold on to whatever trace it already had: an empty trace would say the flow has no
-// policy, which is a stronger claim than "we could not work it out".
-func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) (trace []*calc.RuleID, ok bool) {
+// It returns an error if the evaluation could not be completed, in which case the trace is nil and
+// the caller should hold on to whatever trace it already had: an empty trace would say the flow has
+// no policy, which is a stronger claim than "we could not work it out".
+func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
 	s, trace := checkTiers(scope, store, ep, dir, flow)
 	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
-		// The evaluation stopped part way through, so the trace stops short of a verdict. It has
-		// already been logged with the reason.
-		return nil, false
+		// The evaluation stopped part way through, so the trace stops short of a verdict. Drop it
+		// and report why it stopped.
+		return nil, fmt.Errorf("%s: %s", code.Code(s.Code), s.Message)
 	}
-	return trace, true
+	return trace, nil
 }
 
 // LookupEndpointKeysFromSrcDst looks up the source and destination endpoint keys for the given

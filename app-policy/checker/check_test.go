@@ -1221,8 +1221,8 @@ func TestEvaluateReportsFailureInsteadOfPartialTrace(t *testing.T) {
 	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(passes), policyIDs(notInStore))}
 
 	for _, scope := range []PolicyScope{EnforcedOnly, StagedAsEnforced} {
-		trace, ok := Evaluate(scope, rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
-		Expect(ok).To(BeFalse(), "scope %v", scope)
+		trace, err := Evaluate(scope, rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+		Expect(err).To(MatchError(ContainSubstring("not-in-store")), "scope %v", scope)
 		Expect(trace).To(BeNil(), "scope %v", scope)
 	}
 }
@@ -1247,15 +1247,15 @@ func TestEvaluateRecordsStagedPolicyInPendingTraceOnly(t *testing.T) {
 	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(stagedDeny), policyIDs(enforcedAllow))}
 	flow := &MockFlow{Protocol: 6, DestPort: 80}
 
-	pending, ok := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, ep, flow)
-	Expect(ok).To(BeTrue())
+	pending, err := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, ep, flow)
+	Expect(err).ToNot(HaveOccurred())
 	Expect(pending).To(Equal([]*calc.RuleID{
 		calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged-deny", "",
 			0, rules.RuleDirIngress, rules.RuleActionDeny),
 	}))
 
-	enforced, ok := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
-	Expect(ok).To(BeTrue())
+	enforced, err := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
+	Expect(err).ToNot(HaveOccurred())
 	Expect(enforced).To(Equal([]*calc.RuleID{
 		calc.NewRuleID(v3.KindGlobalNetworkPolicy, "tier2", "allow", "",
 			0, rules.RuleDirIngress, rules.RuleActionAllow),
