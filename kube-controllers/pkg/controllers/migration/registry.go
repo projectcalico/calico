@@ -41,6 +41,8 @@ const (
 )
 
 // ConflictInfo identifies a resource that exists in v3 with a different spec than v1.
+//
+// +kubebuilder:object:generate=false
 type ConflictInfo struct {
 	Kind      string
 	Name      string
@@ -55,6 +57,8 @@ func (c ConflictInfo) String() string {
 }
 
 // MigrationResult tracks the result of migrating a single resource type.
+//
+// +kubebuilder:object:generate=false
 type MigrationResult struct {
 	Migrated  int
 	Skipped   int
