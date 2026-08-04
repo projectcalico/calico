@@ -52,6 +52,10 @@ type mockBackendClient struct {
 	// Get/Update for the ClusterInformation resource.
 	clusterInfoGetErr    error
 	clusterInfoUpdateErr error
+
+	// events, when set, records v1 datastore locks so tests can assert on the
+	// order of the controller's side effects.
+	events *orderLog
 }
 
 // getClusterInfo returns a copy of the stored v1 ClusterInformation KVPair, so callers
@@ -69,6 +73,13 @@ func (m *mockBackendClient) getClusterInfo() *model.KVPair {
 	return &copied
 }
 
+// listCount returns the number of times List has been called for a kind.
+func (m *mockBackendClient) listCount(kind string) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.listCounts[kind]
+}
+
 func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ string) (*model.KVPairList, error) {
 	switch list.(type) {
 	case model.BlockListOptions:
@@ -78,16 +89,14 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 	default:
 		rlo := list.(model.ResourceListOptions)
 		m.mu.Lock()
+		if m.listCounts == nil {
+			m.listCounts = make(map[string]int)
+		}
+		m.listCounts[rlo.Kind]++
 		if m.listErrors != nil {
-			if err, ok := m.listErrors[rlo.Kind]; ok {
-				if m.listCounts == nil {
-					m.listCounts = make(map[string]int)
-				}
-				m.listCounts[rlo.Kind]++
-				if m.listCounts[rlo.Kind] > m.listErrorAfter {
-					m.mu.Unlock()
-					return nil, err
-				}
+			if err, ok := m.listErrors[rlo.Kind]; ok && m.listCounts[rlo.Kind] > m.listErrorAfter {
+				m.mu.Unlock()
+				return nil, err
 			}
 		}
 		m.mu.Unlock()
@@ -119,6 +128,11 @@ func (m *mockBackendClient) Update(_ context.Context, kvp *model.KVPair) (*model
 			return nil, m.clusterInfoUpdateErr
 		}
 		m.clusterInfo = kvp
+		if m.events != nil {
+			if ci, ok := kvp.Value.(*apiv3.ClusterInformation); ok && ci.Spec.DatastoreReady != nil && !*ci.Spec.DatastoreReady {
+				m.events.record(eventLockV1)
+			}
+		}
 		return kvp, nil
 	}
 	return nil, fmt.Errorf("not found: %v", kvp.Key)
