@@ -246,6 +246,39 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}))
 	})
 
+	It("Should re-add the table's maps in the transaction that recreates it", func() {
+		m := nftables.MapMetadata{Name: "cali-map", Type: nftables.MapTypeInterfaceMatch}
+		table.AddOrReplaceMap(m, map[string][]string{"cali1234": {"jump cali-foobar"}})
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.JumpAction{Target: "cali-foobar"}},
+		})
+		table.Apply()
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
+
+		// Dirty the table, then fail enough writes to trigger a recreate.
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.DropAction{}}},
+		})
+		f.RunErrors = 6
+		Expect(func() {
+			table.Apply()
+		}).NotTo(Panic())
+
+		// The delete takes the maps with it, so the same transaction has to put them back. If the
+		// map survived while our cached view said it was gone, re-adding its members would fail.
+		lastTx := f.transactions[len(f.transactions)-1].String()
+		Expect(lastTx).To(ContainSubstring("delete table"))
+		Expect(strings.Index(lastTx, "delete table")).To(
+			BeNumerically("<", strings.Index(lastTx, "add map")),
+			"the table delete must be emitted before the map is re-added")
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
+	})
+
 	It("should not reload the dataplane on a no-op Apply()", func() {
 		// Drive to a settled, in-sync state. The first Apply() reads the dataplane
 		// once to learn what's there, then writes the base chains; after that the

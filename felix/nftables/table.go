@@ -1211,11 +1211,6 @@ func (t *NftablesTable) queueTableRecreate() {
 	}
 	t.flowtableDirty = t.flowtableEnabled
 
-	// Sets and maps live in the table too, and each layer programs them in its own transaction, so
-	// tell both that what they think they programmed is gone.
-	t.QueueResync()
-	t.InvalidateMapsCache()
-
 	// We already know what the table will contain, so there is nothing to be gained from reading
 	// it back before the retry.
 	t.inSyncWithDataPlane = true
@@ -1237,6 +1232,14 @@ func (t *NftablesTable) applyUpdates() error {
 	// - Create any new maps.
 	// - Create any new chains / rules.
 	// - Add elements to maps.
+	// The recreate below takes the sets and maps with it, and each layer tracks its own view of
+	// what it programmed. Drop those views here, next to the recreate they depend on, so the two
+	// cannot get out of step.
+	if t.recreatePending && !t.disabled {
+		t.QueueResync()
+		t.InvalidateMapsCache()
+	}
+
 	mapUpdates := t.MapUpdates()
 
 	if !t.disabled {
