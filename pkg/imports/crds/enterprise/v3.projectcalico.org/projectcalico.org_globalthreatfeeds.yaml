@@ -196,6 +196,10 @@ spec:
                           type: array
                           x-kubernetes-list-type: atomic
                         url:
+                          description: |-
+                            URL is the location of the threat feed. Only the http and https schemes
+                            are permitted; other schemes (e.g. javascript:, data:, file:) are rejected.
+                          pattern: ^https?://
                           type: string
                       required:
                         - url
