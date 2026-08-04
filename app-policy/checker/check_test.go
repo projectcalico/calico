@@ -1061,3 +1061,114 @@ func (m *MockFlow) GetSourceLabels() map[string]string {
 func (m *MockFlow) GetDestLabels() map[string]string {
 	return m.DestLabels
 }
+
+// A staged policy enforces nothing, so a tier holding only staged policies takes no part in the
+// action at all: evaluation falls through to the next tier without applying the skipped tier's
+// end-of-tier action. This matches what Felix programs into the dataplane, where a tier of only
+// staged policies ends in a pass rather than a drop.
+func TestEvaluateTierOfOnlyStagedPoliciesIsSkipped(t *testing.T) {
+	RegisterTestingT(t)
+
+	store := policystore.NewPolicyStore()
+	// Both policies deny, so if either tier were applied the flow would be denied.
+	for _, id := range []*proto.PolicyID{
+		{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy},
+		{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy},
+	} {
+		store.PolicyByID[types.ProtoToPolicyID(id)] = &proto.Policy{
+			Tier:         "tier1",
+			InboundRules: []*proto.Rule{{Action: "deny"}},
+		}
+	}
+
+	ep := &proto.WorkloadEndpoint{
+		Tiers: []*proto.TierInfo{
+			{
+				// Nothing enforcing here, so this whole tier is as good as absent — its Deny
+				// end-of-tier action must not apply either.
+				Name:            "tier1",
+				IngressPolicies: []*proto.PolicyID{{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy}},
+				DefaultAction:   "Deny",
+			},
+			{
+				Name:            "tier2",
+				IngressPolicies: []*proto.PolicyID{{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}},
+				DefaultAction:   "Deny",
+			},
+		},
+	}
+
+	trace := Evaluate(rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+
+	// Only tier2's deny should show up: the staged tier contributed nothing, not even a tier default.
+	Expect(trace).To(HaveLen(1))
+	Expect(trace[0].Tier).To(Equal("tier2"))
+	Expect(trace[0].Name).To(Equal("policy2"))
+	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
+}
+
+// In a tier that does have an enforcing policy, the staged ones are ignored but the tier is
+// evaluated as usual, end-of-tier action included.
+func TestEvaluateStagedPolicyDoesNotDecideMixedTier(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged1", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}
+	enforcedNoMatch := &proto.PolicyID{Name: "policy3", Kind: v3.KindGlobalNetworkPolicy}
+
+	tests := []struct {
+		name       string
+		policies   []*proto.PolicyID
+		wantLen    int
+		wantAction rules.RuleAction
+		wantIndex  int
+	}{
+		{
+			// The staged deny is first, so it would win if it were enforced.
+			name:       "staged deny ahead of an enforced allow",
+			policies:   []*proto.PolicyID{stagedDeny, enforcedAllow},
+			wantLen:    1,
+			wantAction: rules.RuleActionAllow,
+			wantIndex:  0,
+		},
+		{
+			// No enforced policy matches, so the tier's own default applies, and it must be
+			// attributed to an enforced policy rather than to the staged one.
+			name:       "staged deny ahead of an enforced policy that does not match",
+			policies:   []*proto.PolicyID{stagedDeny, enforcedNoMatch},
+			wantLen:    1,
+			wantAction: rules.RuleActionDeny,
+			wantIndex:  tierDefaultActionIndex,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := policystore.NewPolicyStore()
+			store.PolicyByID[types.ProtoToPolicyID(stagedDeny)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "deny"}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+				Tier:         "tier1",
+				InboundRules: []*proto.Rule{{Action: "allow"}},
+			}
+			store.PolicyByID[types.ProtoToPolicyID(enforcedNoMatch)] = &proto.Policy{Tier: "tier1"}
+
+			ep := &proto.WorkloadEndpoint{
+				Tiers: []*proto.TierInfo{{
+					Name:            "tier1",
+					IngressPolicies: tt.policies,
+					DefaultAction:   "Deny",
+				}},
+			}
+
+			trace := Evaluate(rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+
+			Expect(trace).To(HaveLen(tt.wantLen))
+			Expect(trace[0].Action).To(Equal(tt.wantAction))
+			Expect(trace[0].Index).To(Equal(tt.wantIndex))
+			Expect(trace[0].Kind).NotTo(Equal(v3.KindStagedGlobalNetworkPolicy))
+		})
+	}
+}

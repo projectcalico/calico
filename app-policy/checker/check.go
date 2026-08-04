@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 var (
@@ -119,7 +120,16 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 
 	for _, tier := range ep.Tiers {
 		log.Debugf("Checking tier %s", tier.GetName())
-		policies := getPoliciesByDirection(dir, tier)
+		// Staged policies enforce nothing, so they take no part in the action. A tier holding only
+		// staged policies is skipped entirely — as if it were not there, so not even its end-of-tier
+		// action applies. Felix programs the same rule into the dataplane: "If all of the policies in
+		// a tier are staged then the default end of tier behavior should be pass rather than drop"
+		// (felix/rules/endpoints.go).
+		//
+		// The store may hold staged policies quite legitimately: Felix reuses this checker to
+		// evaluate pending policy for flow logs, and keeps them for that (policystore.ProcessUpdate).
+		// So the filtering has to happen here, not in the store.
+		policies := enforcedPolicies(getPoliciesByDirection(dir, tier))
 		if len(policies) == 0 {
 			continue
 		}
@@ -293,6 +303,28 @@ func handlePanic(s *status.Status) {
 			panic(r)
 		}
 	}
+}
+
+// enforcedPolicies drops the staged policies, leaving those that can affect the flow's action. It
+// returns the slice it was given when there is nothing to drop, which is the common case.
+func enforcedPolicies(policies []*proto.PolicyID) []*proto.PolicyID {
+	staged := 0
+	for _, p := range policies {
+		if model.KindIsStaged(p.GetKind()) {
+			staged++
+		}
+	}
+	if staged == 0 {
+		return policies
+	}
+
+	enforced := make([]*proto.PolicyID, 0, len(policies)-staged)
+	for _, p := range policies {
+		if !model.KindIsStaged(p.GetKind()) {
+			enforced = append(enforced, p)
+		}
+	}
+	return enforced
 }
 
 // getPoliciesByDirection returns the list of policy names for the given direction.
