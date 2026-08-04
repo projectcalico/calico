@@ -1213,8 +1213,8 @@ func (t *NftablesTable) queueTableRecreate() {
 
 	// Sets and maps live in the table too, and each layer programs them in its own transaction, so
 	// tell both that what they think they programmed is gone.
-	t.IPSetsDataplane.QueueResync()
-	t.MapsDataplane.InvalidateMapsCache()
+	t.QueueResync()
+	t.InvalidateMapsCache()
 
 	// We already know what the table will contain, so there is nothing to be gained from reading
 	// it back before the retry.
