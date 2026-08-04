@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -463,6 +464,46 @@ const (
 	aksMTUOverhead         = 100
 )
 
+// legacyIPTablesCleanupTables returns tables that sweep the legacy iptables backend for one IP
+// family. They're marked cleanup-only: the legacy backend has no kernel support on some distros,
+// where reading it fails and there is nothing of ours to find anyway.
+func legacyIPTablesCleanupTables(
+	ipVersion uint8,
+	featureDetector environment.FeatureDetectorIface,
+	options iptables.TableOptions,
+	natOptions iptables.TableOptions,
+) []generictables.CleanupTable {
+	lookPath := options.LookPathOverride
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+
+	// Without the legacy binaries, FindBestBinary falls back to the default iptables, which on a
+	// modern distro drives nftables: we would sweep the backend Felix is programming.
+	prefix := "iptables-legacy"
+	if ipVersion == 6 {
+		prefix = "ip6tables-legacy"
+	}
+	for _, cmd := range []string{prefix + "-save", prefix + "-restore"} {
+		if _, err := lookPath(cmd); err != nil {
+			log.WithField("binary", cmd).Info("No legacy iptables binary; not cleaning up that backend")
+			return nil
+		}
+	}
+
+	options.BackendMode = "legacy"
+	options.CleanupOnly = true
+	natOptions.BackendMode = "legacy"
+	natOptions.CleanupOnly = true
+
+	var tables []generictables.CleanupTable
+	for _, name := range []string{"filter", "mangle", "raw"} {
+		tables = append(tables, iptables.NewTable(name, ipVersion, rulesdefs.RuleHashPrefix, featureDetector, options))
+	}
+	tables = append(tables, iptables.NewTable("nat", ipVersion, rulesdefs.RuleHashPrefix, featureDetector, natOptions))
+	return tables
+}
+
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
@@ -607,6 +648,24 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
+	// Sweep whichever iptables backend we're not using, since a node can switch between them
+	// across a restart and would otherwise keep the old backend's rules forever.
+	if nftablesEnabled || backendMode == "nft" {
+		cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(4, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		if config.IPv6Enabled {
+			cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(6, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		}
+	}
+	if nftablesEnabled || backendMode == "legacy" {
+		// iptables-nft writes into the standard nftables tables, so this reads them with nft.
+		// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
+		// it also covers kube-proxy's chains.
+		cleanupTables = append(cleanupTables, nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+		if config.IPv6Enabled {
+			cleanupTables = append(cleanupTables, nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+		}
+	}
+
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
@@ -639,15 +698,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		rawTableV4 = rawTableV4NFT
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
-
-		// Clean up after a previous iptables-mode Felix, which wrote into the same nftables tables
-		// via iptables-nft. We read them with nft rather than iptables-nft-save, which refuses to
-		// read a table holding rules it can't express (#13263).
-		cleanupTables = append(cleanupTables,
-			// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
-			// it also covers kube-proxy's chains.
-			nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions),
-		)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
@@ -1360,11 +1410,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			natTableV6 = natTableV6NFT
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
-
-			// Clean up after a previous iptables-mode Felix; see the IPv4 path.
-			cleanupTables = append(cleanupTables,
-				nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions),
-			)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.

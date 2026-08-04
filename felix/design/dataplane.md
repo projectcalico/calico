@@ -430,25 +430,36 @@ The two backends are kept behaviourally aligned, but parity is a
 
 ### Cleaning up after the other backend
 
-A node can switch backends across a Felix restart, so each mode has
-to sweep what the other left behind:
+A node can switch backends across a Felix restart, so Felix sweeps
+every dataplane it isn't currently programming. There are three, and
+`iptablesBackend: Auto` can move a node between the last two on its
+own — detection keys off kube-proxy's chains, so boot ordering
+changes the answer:
 
-- **nftables mode** cleans the standard `filter`/`nat`/`mangle`/`raw`
-  tables, which `iptables-nft` writes into as nftables tables. Felix
-  reads them over **netlink** rather than with `iptables-nft-save`,
-  which refuses to read a table holding anything iptables can't
-  express — a neighbouring tool's native nft rules used to crash-loop
-  Felix that way. Only **base chains** are read for rules, since those
-  are the only chains Felix ever inserted into, so the cost doesn't
+| Dataplane | Swept by | Needed when |
+|---|---|---|
+| Calico's own nftables table | that table's `Table`, which deletes it wholesale (safe: nothing else writes there) | iptables mode, either backend |
+| standard `filter`/`nat`/`mangle`/`raw` nftables tables, where `iptables-nft` writes | `nftables.IPTablesCleanup` | nftables mode, or iptables mode on the legacy backend |
+| legacy `iptables` tables | `iptables.Table` pinned to the legacy backend, `CleanupOnly` | nftables mode, or iptables mode on the nft backend |
+
+Two details that are easy to get wrong:
+
+- The standard tables are read over **netlink**, not with
+  `iptables-nft-save`, which refuses to read a table holding anything
+  iptables can't express — a neighbouring tool's native nft rules used
+  to crash-loop Felix that way. Only **base chains** are read for
+  rules, the only chains Felix ever inserted into, so the cost doesn't
   grow with kube-proxy's chain count.
-- **iptables mode** deletes Calico's nftables table wholesale, which
-  is safe because nothing else writes to it.
-- Cleanup **never terminates**. A shared table can be written again at
-  any point (kube-proxy restarting, say), so one clean read proves
-  nothing about the next.
-- **Not covered:** state left by a Felix on the legacy `iptables`
-  backend. That lives in a separate kernel dataplane that neither of
-  these can see.
+- A `CleanupOnly` table never panics: the backend it names may have no
+  kernel support on this host, in which case there is nothing of ours
+  in it anyway. Felix also declines to build the legacy tables at all
+  unless the legacy binaries are present, because `FindBestBinary`
+  would otherwise fall back to the default `iptables`, and Felix would
+  sweep the backend it is programming.
+
+Cleanup **never terminates**. A shared table can be written again at
+any point (kube-proxy restarting, say), so one clean read proves
+nothing about the next.
 
 ### Review notes for this section
 

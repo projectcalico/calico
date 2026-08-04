@@ -2025,3 +2025,59 @@ func describeInsertEarlyRules(dataplaneMode string) {
 		Expect(res).To(HaveLen(2))
 	})
 }
+
+var _ = Describe("Table in cleanup-only mode", func() {
+	var dataplane *testutils.MockDataplane
+	var table *Table
+
+	newTable := func(cleanupOnly bool) *Table {
+		featureDetector := environment.NewFeatureDetector(nil)
+		featureDetector.NewCmd = dataplane.NewCmd
+		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
+		return NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, TableOptions{
+			HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
+			RefreshInterval:       30 * time.Second,
+			CleanupOnly:           cleanupOnly,
+			NewCmdOverride:        dataplane.NewCmd,
+			SleepOverride:         dataplane.Sleep,
+			NowOverride:           dataplane.Now,
+			LookPathOverride:      testutils.LookPathAll,
+			OpRecorder:            logrusr.NewSummarizer("test loop"),
+		})
+	}
+
+	BeforeEach(func() {
+		dataplane = testutils.NewMockDataplane("filter", map[string][]string{
+			"FORWARD": {},
+		}, "legacy")
+	})
+
+	// A cleanup-only table names a backend that may have no kernel support, so an unreadable
+	// dataplane means there is nothing of ours there, not that Felix should die.
+	It("reschedules instead of panicking when the backend can't be read", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(true)
+
+		var delay time.Duration
+		Expect(func() { delay = table.Apply() }).NotTo(Panic())
+		Expect(delay).To(Equal(30 * time.Second))
+	})
+
+	It("panics when a table it programs can't be read", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(false)
+
+		Expect(func() { table.Apply() }).To(Panic())
+	})
+
+	It("still cleans up once the backend can be read", func() {
+		dataplane.Chains = map[string][]string{
+			"FORWARD":      {},
+			"cali-FORWARD": {},
+		}
+		table = newTable(true)
+		table.Apply()
+
+		Expect(dataplane.Chains).NotTo(HaveKey("cali-FORWARD"))
+	})
+})
