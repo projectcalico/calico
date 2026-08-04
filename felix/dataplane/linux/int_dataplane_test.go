@@ -138,6 +138,27 @@ var _ = Describe("Constructor test", func() {
 		Expect(dp).ToNot(BeNil())
 	})
 
+	// The live migration monitor drives per-workload route suppression and priority
+	// elevation through the endpoint managers, of which there is one per IP version.
+	// Each manager tracks its own live migration state, so all of them must be
+	// registered as listeners; registering only the IPv4 one leaves IPv6 workload
+	// routes unsuppressed on a migration target and unelevated after cutover
+	// (CORE-12806).
+	It("should register an endpoint manager per IP version with the live migration monitor", func() {
+		dpConfig.IPv6Enabled = true
+
+		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+		Expect(dp.LiveMigrationListenerCount()).To(Equal(2),
+			"both endpoint managers should listen for live migration state changes")
+	})
+
+	It("should register only the IPv4 endpoint manager when IPv6 is disabled", func() {
+		dpConfig.IPv6Enabled = false
+
+		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+		Expect(dp.LiveMigrationListenerCount()).To(Equal(1))
+	})
+
 	Context("when nft is not available", func() {
 		BeforeEach(func() {
 			nftablesDataplane = func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
