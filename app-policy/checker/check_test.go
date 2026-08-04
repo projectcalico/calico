@@ -25,6 +25,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	"github.com/projectcalico/calico/felix/calc"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/rules"
@@ -37,7 +38,7 @@ func TestEvaluateNoEndpoint(t *testing.T) {
 	store := policystore.NewPolicyStore()
 
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, nil, flow)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, nil, flow)
 	Expect(trace).To(BeNil())
 }
 
@@ -48,7 +49,7 @@ func TestEvaluateEndpointNoTiersNoProfiles(t *testing.T) {
 
 	ep := &proto.WorkloadEndpoint{}
 	flow := &MockFlow{}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -84,7 +85,7 @@ func TestEvaluateEndpointWithMatchingPolicy(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -150,7 +151,7 @@ func TestEvaluateEndpointWithNonMatchingPolicyTierDefaultAction(t *testing.T) {
 			store.PolicyByID[types.PolicyID{Name: "policy2", Kind: v3.KindGlobalNetworkPolicy}] = &proto.Policy{Tier: "default"}
 
 			flow := &MockFlow{Protocol: 6, DestPort: 443}
-			trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+			trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 
 			Expect(trace).To(HaveLen(tt.expLen))
 			for i, act := range tt.expActs {
@@ -180,7 +181,7 @@ func TestEvaluateEndpointWithMatchingProfile(t *testing.T) {
 		Protocol: 6,
 		DestPort: 80,
 	}
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirIngress))
@@ -237,7 +238,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace := Evaluate(rules.RuleDirEgress, store, ep, flow1)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, flow1)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -254,7 +255,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_10_0_0_1,
 		DestIP:     ip_192_168_1_1,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow2)
+	trace, _ = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, flow2)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionAllow))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -271,7 +272,7 @@ func TestEvaluateEndpointWithNonMatchingProfile(t *testing.T) {
 		SourceIP:   ip_192_168_1_2,
 		DestIP:     ip_10_0_0_2,
 	}
-	trace = Evaluate(rules.RuleDirEgress, store, ep, flow3)
+	trace, _ = Evaluate(EnforcedOnly, rules.RuleDirEgress, store, ep, flow3)
 	Expect(trace).To(HaveLen(1))
 	Expect(trace[0].Action).To(Equal(rules.RuleActionDeny))
 	Expect(trace[0].Direction).To(Equal(rules.RuleDirEgress))
@@ -424,7 +425,7 @@ func TestCheckNoIngressPolicyRulesInTier(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status, _ := checkTiers(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status, _ := checkTiers(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	expectedStatus := rpc.Status{Code: OK}
 	Expect(status.Code).To(Equal(expectedStatus.Code))
 	Expect(status.Message).To(Equal(expectedStatus.Message))
@@ -448,7 +449,7 @@ func TestCheckStoreNoEndpoint(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, nil, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, nil, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -472,7 +473,7 @@ func TestCheckStoreNoTiers(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -522,13 +523,13 @@ func TestCheckStorePolicyMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -571,13 +572,13 @@ func TestCheckStoreProfileOnly(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "HEAD"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -627,7 +628,7 @@ func TestCheckStorePolicyDefaultDeny(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 }
 
@@ -688,7 +689,7 @@ func TestCheckStorePass(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -715,8 +716,10 @@ func TestCheckStoreInitFails(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
-	Expect(status.Code).To(Equal(PERMISSION_DENIED))
+	// The tier names policies the store does not have, so their verdict is unknowable and
+	// evaluation fails closed rather than guessing.
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
+	Expect(status.Code).To(Equal(INTERNAL))
 }
 
 // Ensure checkStore returns INVALID_ARGUMENT on invalid input
@@ -757,7 +760,7 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(INVALID_ARGUMENT))
 }
 
@@ -842,20 +845,20 @@ func TestCheckStorePolicyMultiTierMatch(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 
 	// Change to a bad path, and check that we get PERMISSION_DENIED
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Path = "/bad"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	// Change to a path that hits tier2 default Pass action, and then is allowed in tier3
 	http.Path = "/bar"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -921,13 +924,13 @@ func TestCheckStorePolicyMultiTierDiffTierMatch(t *testing.T) {
 		},
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
-	status := checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(PERMISSION_DENIED))
 
 	http := req.GetAttributes().GetRequest().GetHttp()
 	http.Method = "GET"
 
-	status = checkStore(store, store.Endpoint, rules.RuleDirIngress, flow)
+	status = checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(OK))
 }
 
@@ -1060,4 +1063,201 @@ func (m *MockFlow) GetSourceLabels() map[string]string {
 
 func (m *MockFlow) GetDestLabels() map[string]string {
 	return m.DestLabels
+}
+
+// Staged policies are stored like any other, so which verdict comes out depends entirely on the
+// PolicyScope the caller asks for. Under EnforcedOnly the answer must be the same as if the staged
+// policies were not attached to the endpoint at all: they match nothing, and a tier holding only
+// staged policies does not even get to apply its end-of-tier action. Under StagedAsEnforced they
+// behave like ordinary policies, end-of-tier action included.
+func TestCheckTiersPolicyScope(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged-deny", Kind: v3.KindStagedGlobalNetworkPolicy}
+	stagedNoMatch := &proto.PolicyID{Name: "staged-no-match", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
+	enforcedNoMatch := &proto.PolicyID{Name: "no-match", Kind: v3.KindGlobalNetworkPolicy}
+	notInStore := &proto.PolicyID{Name: "not-in-store", Kind: v3.KindGlobalNetworkPolicy}
+
+	for _, tc := range []struct {
+		name        string
+		tiers       []*proto.TierInfo
+		wantEnforce int32
+		wantPending int32
+	}{
+		{
+			name:        "tier of only staged policies is skipped when enforcing",
+			tiers:       tierInfos(policyIDs(stagedDeny)),
+			wantEnforce: OK, // Falls through the tier, so the endpoint's allowing profile decides.
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name:  "end-of-tier action of a staged-only tier applies only when pending",
+			tiers: tierInfos(policyIDs(stagedNoMatch)),
+			// Nothing matches either way, but when enforcing there is no tier to apply a default.
+			wantEnforce: OK,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name:        "end-of-tier action survives a staged policy last in a mixed tier",
+			tiers:       tierInfos(policyIDs(enforcedNoMatch, stagedNoMatch)),
+			wantEnforce: PERMISSION_DENIED,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name:        "end-of-tier action survives a staged policy first in a mixed tier",
+			tiers:       tierInfos(policyIDs(stagedNoMatch, enforcedNoMatch)),
+			wantEnforce: PERMISSION_DENIED,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name:        "staged policy ahead of an enforced one only decides the pending verdict",
+			tiers:       tierInfos(policyIDs(stagedDeny, enforcedAllow)),
+			wantEnforce: OK,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name:        "a staged policy does not shadow a later tier when enforcing",
+			tiers:       tierInfos(policyIDs(stagedDeny), policyIDs(enforcedAllow)),
+			wantEnforce: OK,
+			wantPending: PERMISSION_DENIED,
+		},
+		{
+			name: "a policy missing from the store fails the evaluation",
+			// Its verdict is unknowable, so fail closed rather than hand the request on to the rest
+			// of the tier.
+			tiers:       tierInfos(policyIDs(notInStore, enforcedAllow)),
+			wantEnforce: INTERNAL,
+			wantPending: INTERNAL,
+		},
+		{
+			name: "a policy missing from the store behind a match is never reached",
+			// Evaluation stops at the first match, in the store as in the dataplane, so a missing
+			// policy does not invalidate a verdict reached before it.
+			tiers:       tierInfos(policyIDs(enforcedAllow, notInStore)),
+			wantEnforce: OK,
+			wantPending: OK,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, scope := range []struct {
+				PolicyScope
+				want int32
+			}{{EnforcedOnly, tc.wantEnforce}, {StagedAsEnforced, tc.wantPending}} {
+				store := policystore.NewPolicyStore()
+				store.Endpoint = &proto.WorkloadEndpoint{Tiers: tc.tiers, ProfileIds: []string{"profile1"}}
+				// An allowing profile, so that an end-of-tier deny which failed to apply shows up as
+				// OK instead of being masked by the overall default deny.
+				store.ProfileByID[types.ProtoToProfileID(&proto.ProfileID{Name: "profile1"})] = &proto.Profile{
+					InboundRules: []*proto.Rule{{Action: "allow"}},
+				}
+				for _, id := range []*proto.PolicyID{stagedNoMatch, enforcedNoMatch} {
+					store.PolicyByID[types.ProtoToPolicyID(id)] = &proto.Policy{Tier: "tier1"}
+				}
+				for _, id := range []*proto.PolicyID{stagedDeny} {
+					store.PolicyByID[types.ProtoToPolicyID(id)] = &proto.Policy{
+						Tier:         "tier1",
+						InboundRules: []*proto.Rule{{Action: "deny"}},
+					}
+				}
+				store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+					InboundRules: []*proto.Rule{{Action: "allow"}},
+				}
+
+				st := checkStore(scope.PolicyScope, store, store.Endpoint, rules.RuleDirIngress,
+					&MockFlow{Protocol: 6, DestPort: 80})
+				Expect(st.Code).To(Equal(scope.want), "scope %v", scope.PolicyScope)
+			}
+		})
+	}
+}
+
+// policyIDs and tierInfos build one tier per argument list, named tier1, tier2, ... , each denying
+// at the end so that skipping a tier is visible.
+func policyIDs(ids ...*proto.PolicyID) []*proto.PolicyID { return ids }
+
+func tierInfos(tiers ...[]*proto.PolicyID) []*proto.TierInfo {
+	var tierInfos []*proto.TierInfo
+	for i, policies := range tiers {
+		tierInfos = append(tierInfos, &proto.TierInfo{
+			Name:            fmt.Sprintf("tier%d", i+1),
+			IngressPolicies: policies,
+			DefaultAction:   "Deny",
+		})
+	}
+	return tierInfos
+}
+
+// The status message says which policy was missing, so an operator seeing a denied request in the
+// Dikastes log does not have to guess.
+func TestCheckStoreReportsWhichPolicyIsMissing(t *testing.T) {
+	RegisterTestingT(t)
+
+	missing := &proto.PolicyID{Name: "policy1", Namespace: "ns1", Kind: v3.KindNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(missing))}
+
+	st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
+		&MockFlow{Protocol: 6, DestPort: 80})
+	Expect(st.Code).To(Equal(INTERNAL))
+	Expect(st.Message).To(Equal("policy ns1/policy1(NetworkPolicy) of tier tier1 is missing from the policy store"))
+}
+
+// A trace that stops short of a verdict is worse than no trace: a flow log would show the flow
+// running off the end of policy. Callers are told the evaluation failed, so they can keep whatever
+// trace they had rather than record the flow as having no policy at all.
+func TestEvaluateReportsFailureInsteadOfPartialTrace(t *testing.T) {
+	RegisterTestingT(t)
+
+	notInStore := &proto.PolicyID{Name: "not-in-store", Kind: v3.KindGlobalNetworkPolicy}
+	passes := &proto.PolicyID{Name: "passes", Kind: v3.KindGlobalNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(passes)] = &proto.Policy{
+		InboundRules: []*proto.Rule{{Action: "pass"}},
+	}
+	// tier1 passes, then tier2 holds a policy we have not been told the rules for.
+	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(passes), policyIDs(notInStore))}
+
+	for _, scope := range []PolicyScope{EnforcedOnly, StagedAsEnforced} {
+		trace, ok := Evaluate(scope, rules.RuleDirIngress, store, ep, &MockFlow{Protocol: 6, DestPort: 80})
+		Expect(ok).To(BeFalse(), "scope %v", scope)
+		Expect(trace).To(BeNil(), "scope %v", scope)
+	}
+}
+
+// The pending trace records the staged policy that decided it, so that flow logs can show which
+// staged policy would have taken effect.
+func TestEvaluateRecordsStagedPolicyInPendingTraceOnly(t *testing.T) {
+	RegisterTestingT(t)
+
+	stagedDeny := &proto.PolicyID{Name: "staged-deny", Kind: v3.KindStagedGlobalNetworkPolicy}
+	enforcedAllow := &proto.PolicyID{Name: "allow", Kind: v3.KindGlobalNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.PolicyByID[types.ProtoToPolicyID(stagedDeny)] = &proto.Policy{
+		Tier:         "tier1",
+		InboundRules: []*proto.Rule{{Action: "deny"}},
+	}
+	store.PolicyByID[types.ProtoToPolicyID(enforcedAllow)] = &proto.Policy{
+		Tier:         "tier2",
+		InboundRules: []*proto.Rule{{Action: "allow"}},
+	}
+	ep := &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(stagedDeny), policyIDs(enforcedAllow))}
+	flow := &MockFlow{Protocol: 6, DestPort: 80}
+
+	pending, ok := Evaluate(StagedAsEnforced, rules.RuleDirIngress, store, ep, flow)
+	Expect(ok).To(BeTrue())
+	Expect(pending).To(Equal([]*calc.RuleID{
+		calc.NewRuleID(v3.KindStagedGlobalNetworkPolicy, "tier1", "staged-deny", "",
+			0, rules.RuleDirIngress, rules.RuleActionDeny),
+	}))
+
+	enforced, ok := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
+	Expect(ok).To(BeTrue())
+	Expect(enforced).To(Equal([]*calc.RuleID{
+		calc.NewRuleID(v3.KindGlobalNetworkPolicy, "tier2", "allow", "",
+			0, rules.RuleDirIngress, rules.RuleActionAllow),
+	}))
 }
