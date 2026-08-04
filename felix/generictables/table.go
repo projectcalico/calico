@@ -23,10 +23,25 @@ type TableSet interface {
 	WithTable(name string) Table
 }
 
+// CleanupTable removes state Calico left in a table it no longer programs: a dataplane we've
+// switched away from, or a component (such as kube-proxy) whose rules we've taken over.
+//
+// Cleanup keeps running for the lifetime of the process, because anything we clean up can be
+// written again: kube-proxy restarts, and a table we share is never ours alone to declare clean.
+type CleanupTable interface {
+	Name() string
+	IPVersion() uint8
+
+	// CleanUp makes one pass at removing our state, returning the minimum time to wait before
+	// another pass is worth making.
+	CleanUp() time.Duration
+}
+
 // Table is a logical table of chains and rules.
 type Table interface {
 	Name() string
 	IPVersion() uint8
+
 	InsertOrAppendRules(chainName string, rules []Rule)
 	AppendRules(chainName string, rules []Rule)
 	UpdateChain(chain *Chain)
