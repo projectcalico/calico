@@ -82,6 +82,8 @@ const (
 )
 
 // ControllerConfig holds all dependencies for creating the migration controller.
+//
+// +kubebuilder:object:generate=false
 type ControllerConfig struct {
 	Ctx           context.Context
 	K8sClient     kubernetes.Interface
