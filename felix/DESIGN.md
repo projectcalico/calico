@@ -200,7 +200,28 @@ fit the dataplane manager/driver architecture and resync doctrine
 covered in [`dataplane.md`](./design/dataplane.md); their deeper
 netlink-level design (resync grace periods, conntrack cleanup on
 IP moves) is reserved for a future `route-sync.md` sub-design.
-`flow-logs-collector.md` is likewise still to be written.
+
+### Flow logs: the collector
+
+`felix/collector/` runs *downstream* of the dataplane rather than
+programming it. Whichever dataplane is active counts packets and
+bytes per flow and records which policy rules each flow hit; the
+collector correlates those sources per 5-tuple, attaches metadata from
+the calc graph's `LookupsCache` (endpoints, labels, services,
+NetworkSets), aggregates like flows, and dispatches flow logs to
+goldmane or a local socket.
+
+It is structured as one `select` loop that is the **sole owner** of the
+per-flow cache, fed by reader goroutines over buffered channels. That
+single-owner rule is why the hot path needs no locks, and it is the
+constraint every change in this area runs into — along with the cost
+of the periodic O(all flows) sweeps that share the same loop.
+
+The ownership model, the copy-on-write invariant on published policy
+traces, the reporting and expiry gates, the time-boxed policy
+re-evaluation sweep, and the plan to move policy evaluation onto its
+own goroutine are all in
+[`flow-logs-collector.md`](./design/flow-logs-collector.md).
 
 ## 2. Sub-design index
 
@@ -243,7 +264,7 @@ large enough to bloat AI-tool context.
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
-| flow-logs-collector | `felix/collector/**` | *not yet written* |
+| [flow-logs-collector](./design/flow-logs-collector.md) | `felix/collector/**` | ✅ exists |
 | config-engine | `felix/config/**` | *not yet written* |
 | windows-dataplane | `felix/dataplane/windows/**` | *not yet written* |
 
