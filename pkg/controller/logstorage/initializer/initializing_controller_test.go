@@ -58,6 +58,7 @@ func NewTestInitializer(
 		DetectedProvider: provider,
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &LogStorageInitializer{

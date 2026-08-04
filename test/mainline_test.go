@@ -55,9 +55,6 @@ const (
 	ManageCRDsEnable  = true
 	ManageCRDsDisable = false
 
-	EnterpriseCRDsExist    = true
-	EnterpriseCRDsNotExist = false
-
 	WhiskerCRDExists    = true
 	WhiskerCRDNotExists = false
 
@@ -73,7 +70,7 @@ var _ = Describe("Mainline component function tests", func() {
 	var operatorDone chan struct{}
 
 	BeforeEach(func() {
-		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, SingleTenant, EnterpriseCRDsExist)
+		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsDisable, SingleTenant, operator.Calico)
 
 		By("Cleaning up resources before the test")
 		cleanupResources(c)
@@ -236,7 +233,7 @@ var _ = Describe("Mainline component function tests", func() {
 
 var _ = Describe("Mainline component function tests - multi-tenant", func() {
 	It("should set up all controllers correctly in multi-tenant mode", func() {
-		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, EnterpriseCRDsExist)
+		_, _, cancel, _ := setupManager(ManageCRDsDisable, MultiTenant, operator.CalicoEnterprise)
 		cancel()
 	})
 })
@@ -332,18 +329,18 @@ func setupManagerNoControllers() (client.Client, *kubernetes.Clientset, manager.
 	return mgr.GetClient(), clientset, mgr
 }
 
-func setupManager(manageCRDs bool, multiTenant bool, enterpriseCRDsExist bool) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
+func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVariant) (client.Client, context.Context, context.CancelFunc, manager.Manager) {
 	client, clientset, mgr := setupManagerNoControllers()
 
 	// Setup all Controllers
 	ctx, cancel := context.WithCancel(context.TODO())
 	err := controller.AddToManager(mgr, options.ControllerOptions{
-		DetectedProvider:    operator.ProviderNone,
-		EnterpriseCRDExists: enterpriseCRDsExist,
-		ManageCRDs:          manageCRDs,
-		ShutdownContext:     ctx,
-		K8sClientset:        clientset,
-		MultiTenant:         multiTenant,
+		DetectedProvider: operator.ProviderNone,
+		Variant:          variant,
+		ManageCRDs:       manageCRDs,
+		ShutdownContext:  ctx,
+		K8sClientset:     clientset,
+		MultiTenant:      multiTenant,
 	})
 	Expect(err).NotTo(HaveOccurred())
 

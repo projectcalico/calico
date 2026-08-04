@@ -35,7 +35,7 @@ import (
 )
 
 func AddConditionsController(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 

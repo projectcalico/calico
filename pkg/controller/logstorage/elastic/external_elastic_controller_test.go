@@ -220,6 +220,7 @@ func NewExternalESReconcilerWithShims(
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
 		ElasticExternal:  true,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &ExternalESController{

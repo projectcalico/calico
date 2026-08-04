@@ -186,7 +186,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	}
 
 	// Get the Installation, for k8s provider info.
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -194,11 +194,6 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		}
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying installation", err, reqLogger)
 		return reconcile.Result{}, err
-	}
-
-	if variant == "" {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for Installation Variant to be set", nil, reqLogger)
-		return reconcile.Result{}, nil
 	}
 
 	pullSecrets, err := utils.GetInstallationPullSecrets(installationSpec, r)
@@ -391,7 +386,7 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 		// installationSpec.Variant (i.e. Installation.Spec.Variant), so the
 		// policy-sync field tracks the renderer's decision to ship the L7
 		// waypoint sidecar even before Status.Variant catches up.
-		_, installationSpec, err := utils.GetInstallationSpec(ctx, r.Client)
+		installationSpec, err := utils.GetInstallationSpec(ctx, r.Client)
 		if err != nil && !errors.IsNotFound(err) {
 			return false, err
 		}

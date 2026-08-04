@@ -60,6 +60,7 @@ type ESKubeControllersController struct {
 	scheme          *runtime.Scheme
 	status          status.StatusManager
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	elasticExternal bool
 	multiTenant     bool
 	cloud           bool
@@ -67,7 +68,7 @@ type ESKubeControllersController struct {
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -84,6 +85,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		client:          mgr.GetClient(),
 		scheme:          mgr.GetScheme(),
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		status:          status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageKubeController, opts.KubernetesVersion),
 		elasticExternal: opts.ElasticExternal,
 		multiTenant:     opts.MultiTenant,
@@ -211,7 +213,7 @@ func (r *ESKubeControllersController) Reconcile(ctx context.Context, request rec
 	}
 
 	// Get Installation resource.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -316,7 +318,7 @@ func (r *ESKubeControllersController) Reconcile(ctx context.Context, request rec
 		ctx,
 		gwNSHelper,
 		installationSpec,
-		variant,
+		r.variant,
 		pullSecrets,
 		hdler,
 		reqLogger,
@@ -361,7 +363,7 @@ func (r *ESKubeControllersController) Reconcile(ctx context.Context, request rec
 	}
 	esKubeControllerComponents := kubecontrollers.NewElasticsearchKubeControllers(&kubeControllersCfg)
 
-	imageSet, err := imageset.GetImageSet(ctx, r.client, variant)
+	imageSet, err := imageset.GetImageSet(ctx, r.client, r.variant)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting ImageSet", err, reqLogger)
 		return reconcile.Result{}, err

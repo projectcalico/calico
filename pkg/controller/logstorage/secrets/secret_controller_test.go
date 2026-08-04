@@ -87,6 +87,7 @@ func NewSecretControllerWithShims(
 		DetectedProvider: provider,
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &SecretSubController{
@@ -113,6 +114,7 @@ func NewMultiTenantSecretControllerWithShims(
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      true,
 		ElasticExternal:  true,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &SecretSubController{

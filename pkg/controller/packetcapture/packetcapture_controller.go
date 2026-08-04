@@ -55,7 +55,7 @@ var log = logf.Log.WithName("controller_packet_capture")
 // Add creates a new PacketCapture Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		// No need to start this controller
 		return nil
 	}
@@ -159,18 +159,13 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		}
 	}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
 			return reconcile.Result{}, err
 		}
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying installation", err, reqLogger)
-		return reconcile.Result{}, err
-	}
-
-	if !variant.IsEnterprise() {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for Installation variant to be an enterprise variant", nil, reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -215,6 +210,7 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	packetCaptureCertSecret, err := certificateManager.GetOrCreateKeyPair(
 		r.client,
 		render.PacketCaptureServerCert,
@@ -291,7 +287,7 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		components = append(components, pcPolicy)
 	}
 
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, components...); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.opts.Variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}
@@ -321,5 +317,6 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 	if err = r.client.Status().Update(ctx, packetcaptureapi); err != nil {
 		return reconcile.Result{}, err
 	}
+
 	return reconcile.Result{}, nil
 }

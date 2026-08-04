@@ -48,6 +48,7 @@ func NewTestConditionController(
 	opts := options.ControllerOptions{
 		ClusterDomain:   clusterDomain,
 		ShutdownContext: context.TODO(),
+		Variant:         operatorv1.CalicoEnterprise,
 	}
 
 	r := &LogStorageConditions{

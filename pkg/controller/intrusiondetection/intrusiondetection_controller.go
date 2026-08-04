@@ -63,7 +63,7 @@ var log = logf.Log.WithName("controller_intrusiondetection")
 // Add creates a new IntrusionDetection Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		// No need to start this controller.
 		return nil
 	}
@@ -330,7 +330,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 	}
 
 	// Query for the installation object.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -481,7 +481,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 	})
 	intrusionDetectionComponent := render.IntrusionDetection(intrusionDetectionCfg)
 
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, intrusionDetectionComponent); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.opts.Variant, intrusionDetectionComponent); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}
@@ -542,7 +542,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 			ClusterDomain:      r.opts.ClusterDomain,
 			DPICertSecret:      dpiKeyPair,
 		})
-		if err = imageset.ApplyImageSet(ctx, r.client, variant, dpiComponent); err != nil {
+		if err = imageset.ApplyImageSet(ctx, r.client, r.opts.Variant, dpiComponent); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 			return reconcile.Result{}, err
 		}

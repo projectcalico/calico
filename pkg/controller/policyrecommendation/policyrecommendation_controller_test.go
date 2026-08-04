@@ -106,6 +106,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 			policyRecScopeWatchReady: &utils.ReadyFlag{},
 			opts: options.ControllerOptions{
 				DetectedProvider: operatorv1.ProviderNone,
+				Variant:          operatorv1.CalicoEnterprise,
 			},
 		}
 
@@ -250,6 +251,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 				policyRecScopeWatchReady: readyFlag,
 				opts: options.ControllerOptions{
 					DetectedProvider: operatorv1.ProviderNone,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 		})
@@ -520,6 +522,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 				policyRecScopeWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
 					DetectedProvider: operatorv1.ProviderNone,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 
@@ -558,6 +561,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 				// Set the provider to OpenShift.
 				opts: options.ControllerOptions{
 					DetectedProvider: operatorv1.ProviderOpenShift,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 

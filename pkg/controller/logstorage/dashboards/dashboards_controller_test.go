@@ -72,6 +72,7 @@ func NewDashboardsControllerWithShims(
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
 		ElasticExternal:  externalElastic,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &DashboardsSubController{
@@ -79,6 +80,7 @@ func NewDashboardsControllerWithShims(
 		scheme:          scheme,
 		status:          status,
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		multiTenant:     opts.MultiTenant,
 		elasticExternal: opts.ElasticExternal,
 		tierWatchReady:  &utils.ReadyFlag{},

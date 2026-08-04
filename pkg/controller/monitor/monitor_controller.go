@@ -60,7 +60,7 @@ const ResourceName = "monitor"
 var log = logf.Log.WithName("controller_monitor")
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -108,6 +108,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, promethe
 		tierWatchReady:  tierWatchReady,
 		licenseAPIReady: licenseAPIReady,
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		multiTenant:     opts.MultiTenant,
 		cloud:           opts.Cloud,
 	}
@@ -189,6 +190,7 @@ type ReconcileMonitor struct {
 	tierWatchReady  *utils.ReadyFlag
 	licenseAPIReady *utils.ReadyFlag
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	multiTenant     bool
 	cloud           bool
 }
@@ -285,7 +287,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 		graceRequeueAfter = time.Until(license.Status.Expiry.Add(gracePeriod))
 	}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -480,7 +482,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 		components = append(components, monitor.MonitorPolicy(monitorCfg))
 	}
 
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, components...); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

@@ -57,12 +57,13 @@ type ESMetricsSubController struct {
 	status         status.StatusManager
 	provider       operatorv1.Provider
 	clusterDomain  string
+	variant        operatorv1.ProductVariant
 	multiTenant    bool
 	tierWatchReady *utils.ReadyFlag
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -77,6 +78,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		scheme:         mgr.GetScheme(),
 		status:         status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageESMetrics, opts.KubernetesVersion),
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		provider:       opts.DetectedProvider,
 		tierWatchReady: &utils.ReadyFlag{},
 	}
@@ -180,7 +182,7 @@ func (r *ESMetricsSubController) Reconcile(ctx context.Context, request reconcil
 		return reconcile.Result{}, nil
 	}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -239,7 +241,7 @@ func (r *ESMetricsSubController) Reconcile(ctx context.Context, request reconcil
 		LogStorage:           logStorage,
 	}
 	esMetricsComponent := esmetrics.ElasticsearchMetrics(esMetricsCfg)
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, esMetricsComponent); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.variant, esMetricsComponent); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

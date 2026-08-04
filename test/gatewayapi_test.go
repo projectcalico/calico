@@ -62,12 +62,12 @@ var _ = Describe("GatewayAPI tests", func() {
 			Client: c,
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr, options.ControllerOptions{
-			DetectedProvider:    operator.ProviderNone,
-			EnterpriseCRDExists: EnterpriseCRDsExist,
-			ManageCRDs:          ManageCRDsDisable,
-			ShutdownContext:     shutdownContext,
-			K8sClientset:        clientset,
-			MultiTenant:         SingleTenant,
+			DetectedProvider: operator.ProviderNone,
+			Variant:          operator.CalicoEnterprise,
+			ManageCRDs:       ManageCRDsDisable,
+			ShutdownContext:  shutdownContext,
+			K8sClientset:     clientset,
+			MultiTenant:      SingleTenant,
 		})
 		Expect(err).NotTo(HaveOccurred())
 

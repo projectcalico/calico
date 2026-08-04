@@ -72,6 +72,7 @@ func NewLinseedControllerWithShims(
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &LinseedSubController{
@@ -79,6 +80,7 @@ func NewLinseedControllerWithShims(
 		scheme:         scheme,
 		status:         status,
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		multiTenant:    opts.MultiTenant,
 		tierWatchReady: &utils.ReadyFlag{},
 		dpiAPIReady:    &utils.ReadyFlag{},

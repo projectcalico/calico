@@ -35,7 +35,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,6 +42,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -640,14 +640,13 @@ func GetInstallationStatus(ctx context.Context, client client.Client) (*operator
 	return &instance.Status, nil
 }
 
-// GetInstallationSpec returns the current installation, for use by other controllers. It accounts for overlays and
-// returns the variant according to status.Variant, which is leveraged by other controllers to know when it is safe to
-// launch enterprise-dependent components.
-func GetInstallationSpec(ctx context.Context, client client.Client) (operatorv1.ProductVariant, *operatorv1.InstallationSpec, error) {
+// GetInstallationSpec returns the current installation, accounting for overlays. Controllers take
+// the variant from their ControllerOptions instead, so that the whole process agrees on one value.
+func GetInstallationSpec(ctx context.Context, client client.Client) (*operatorv1.InstallationSpec, error) {
 	// Fetch the Installation instance. We only support a single instance named "default".
 	instance := &operatorv1.Installation{}
 	if err := client.Get(ctx, DefaultInstanceKey, instance); err != nil {
-		return instance.Status.Variant, nil, err
+		return nil, err
 	}
 
 	spec := instance.Spec
@@ -656,13 +655,13 @@ func GetInstallationSpec(ctx context.Context, client client.Client) (operatorv1.
 	overlay := operatorv1.Installation{}
 	if err := client.Get(ctx, OverlayInstanceKey, &overlay); err != nil {
 		if !errors.IsNotFound(err) {
-			return instance.Status.Variant, nil, err
+			return nil, err
 		}
 	} else {
 		spec = OverrideInstallationSpec(spec, overlay.Spec)
 	}
 
-	return instance.Status.Variant, &spec, nil
+	return &spec, nil
 }
 
 // GetAPIServer finds the correct API server instance and returns a message and error in the case of an error.
@@ -986,43 +985,36 @@ func GetDNSServiceName(provider operatorv1.Provider) types.NamespacedName {
 	return kubeDNSServiceName
 }
 
-// MonitorConfigMap starts a goroutine which exits if the given configmap's data is changed.
-func MonitorConfigMap(cs kubernetes.Interface, name string, data map[string]string) error {
-	informer := cache.NewSharedInformer(
-		cache.NewListWatchFromClient(
-			cs.CoreV1().RESTClient(),
-			"configmaps",
-			common.OperatorNamespace(),
-			fields.OneTermEqualSelector("metadata.name", name),
-		),
-		&corev1.ConfigMap{},
-		0, // no resync period
-	)
-	_, err := informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(_, newObj interface{}) {
-			if !compareMap(data, newObj.(*corev1.ConfigMap).Data) {
-				log.Info("detected config change. rebooting")
-				os.Exit(0)
-			}
-			log.Info("ignoring configmap update as data was not modified")
-		},
-		AddFunc: func(obj interface{}) {
-			if !compareMap(data, obj.(*corev1.ConfigMap).Data) {
-				log.Info("detected config creation change. rebooting")
-				os.Exit(0)
-			}
-			log.Info("ignoring configmap creation as data was not modified")
-		},
-	})
+// MonitorConfigMap exits the operator if the given ConfigMap's data is changed.
+func MonitorConfigMap(ctx context.Context, ca ctrlcache.Cache, name string, data map[string]string) error {
+	// The cache isn't running yet, so don't wait on a sync that can't happen.
+	informer, err := ca.GetInformer(ctx, &corev1.ConfigMap{}, ctrlcache.BlockUntilSynced(false))
 	if err != nil {
 		return err
 	}
 
-	go informer.Run(make(chan struct{}))
-	for !informer.HasSynced() {
-		time.Sleep(1 * time.Second)
+	// The shared cache isn't filtered to this ConfigMap, so match on it here.
+	namespace := common.OperatorNamespace()
+	check := func(obj interface{}) {
+		cm, ok := obj.(*corev1.ConfigMap)
+		if !ok || cm.Name != name || cm.Namespace != namespace {
+			return
+		}
+
+		if compareMap(data, cm.Data) {
+			log.Info("ignoring configmap event as data was not modified")
+			return
+		}
+
+		log.Info("detected config change. rebooting")
+		os.Exit(0)
 	}
-	return nil
+
+	_, err = informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    check,
+		UpdateFunc: func(_, newObj interface{}) { check(newObj) },
+	})
+	return err
 }
 
 func compareMap(m1, m2 map[string]string) bool {

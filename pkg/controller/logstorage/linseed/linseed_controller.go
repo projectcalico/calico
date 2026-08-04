@@ -64,6 +64,7 @@ type LinseedSubController struct {
 	scheme          *runtime.Scheme
 	status          status.StatusManager
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	tierWatchReady  *utils.ReadyFlag
 	dpiAPIReady     *utils.ReadyFlag
 	multiTenant     bool
@@ -72,7 +73,7 @@ type LinseedSubController struct {
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -81,6 +82,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		client:          mgr.GetClient(),
 		scheme:          mgr.GetScheme(),
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		tierWatchReady:  &utils.ReadyFlag{},
 		dpiAPIReady:     &utils.ReadyFlag{},
 		multiTenant:     opts.MultiTenant,
@@ -247,7 +249,7 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	// Get Installation resource.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -471,7 +473,7 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 	linseedComponent := linseed.Linseed(cfg)
 
-	if err := imageset.ApplyImageSet(ctx, r.client, variant, linseedComponent); err != nil {
+	if err := imageset.ApplyImageSet(ctx, r.client, r.variant, linseedComponent); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

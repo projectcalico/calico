@@ -156,8 +156,8 @@ var _ = Describe("packet capture controller tests", func() {
 			status:         mockStatus,
 			tierWatchReady: ready,
 			opts: options.ControllerOptions{
-				DetectedProvider:    operatorv1.ProviderNone,
-				EnterpriseCRDExists: true,
+				DetectedProvider: operatorv1.ProviderNone,
+				Variant:          operatorv1.CalicoEnterprise,
 			},
 		}
 
@@ -320,8 +320,8 @@ var _ = Describe("packet capture controller tests", func() {
 				status:         mockStatus,
 				tierWatchReady: readyFlag,
 				opts: options.ControllerOptions{
-					DetectedProvider:    operatorv1.ProviderNone,
-					EnterpriseCRDExists: true,
+					DetectedProvider: operatorv1.ProviderNone,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 			Expect(cli.Create(ctx, installation)).To(BeNil())
@@ -557,9 +557,9 @@ var _ = Describe("packet capture controller tests", func() {
 					status:         mockStatus,
 					tierWatchReady: ready,
 					opts: options.ControllerOptions{
-						DetectedProvider:    operatorv1.ProviderNone,
-						EnterpriseCRDExists: true,
-						MultiTenant:         true,
+						DetectedProvider: operatorv1.ProviderNone,
+						Variant:          operatorv1.CalicoEnterprise,
+						MultiTenant:      true,
 					},
 				}
 
@@ -586,9 +586,9 @@ var _ = Describe("packet capture controller tests", func() {
 					status:         mockStatus,
 					tierWatchReady: ready,
 					opts: options.ControllerOptions{
-						DetectedProvider:    operatorv1.ProviderNone,
-						EnterpriseCRDExists: true,
-						MultiTenant:         false,
+						DetectedProvider: operatorv1.ProviderNone,
+						Variant:          operatorv1.CalicoEnterprise,
+						MultiTenant:      false,
 					},
 				}
 

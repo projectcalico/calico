@@ -197,7 +197,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				status:               mockStatus,
 				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
 				namespaceMigration:   &fakeNamespaceMigration{},
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				migrationChecked:     true,
 				tierWatchReady:       ready,
 				migrationWatchReady:  &utils.ReadyFlag{},
@@ -708,7 +708,7 @@ var _ = Describe("Testing core-controller installation", func() {
 					VXLANMode:    v3.VXLANModeAlways,
 				},
 			})
-			Expect(MergeAndFillDefaults(installation, nil, &currentPools)).To(BeNil())
+			Expect(MergeAndFillDefaults(installation, nil, &currentPools, operator.Calico)).To(BeNil())
 			Expect(installation.Spec.CalicoNetwork.NodeAddressAutodetectionV4.SkipInterface).Should(Equal("^br-.*"))
 			Expect(installation.Spec.CalicoNetwork.NodeAddressAutodetectionV6).Should(BeNil())
 		})
@@ -721,7 +721,7 @@ var _ = Describe("Testing core-controller installation", func() {
 					KubernetesProvider: provider,
 				},
 			}
-			Expect(MergeAndFillDefaults(installation, nil, nil)).To(BeNil())
+			Expect(MergeAndFillDefaults(installation, nil, nil, operator.Calico)).To(BeNil())
 			if expected {
 				Expect(installation.Spec.TyphaAffinity).ToNot(BeNil())
 				Expect(installation.Spec.TyphaAffinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms).Should(Equal(result))
@@ -826,7 +826,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				status:               mockStatus,
 				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
 				namespaceMigration:   &fakeNamespaceMigration{},
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				migrationChecked:     true,
 				clusterDomain:        dns.DefaultClusterDomain,
 				tierWatchReady:       ready,
@@ -1048,7 +1048,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				status:               mockStatus,
 				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
 				namespaceMigration:   &fakeNamespaceMigration{},
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				migrationChecked:     true,
 				tierWatchReady:       ready,
 				migrationWatchReady:  &utils.ReadyFlag{},
@@ -2217,7 +2217,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			cr.Spec.Variant = operator.Calico
 			cr.Status.Variant = operator.Calico
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
-			r.enterpriseCRDsExist = false
+			r.variant = operator.Calico
 			Expect(c.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
 			_, err := r.Reconcile(ctx, reconcile.Request{})
@@ -2336,7 +2336,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				status:               mockStatus,
 				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
 				namespaceMigration:   &fakeNamespaceMigration{},
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				migrationChecked:     true,
 				clusterDomain:        dns.DefaultClusterDomain,
 				tierWatchReady:       ready,
@@ -2473,7 +2473,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				status:               mockStatus,
 				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
 				namespaceMigration:   &fakeNamespaceMigration{},
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				migrationChecked:     true,
 				tierWatchReady:       ready,
 				migrationWatchReady:  &utils.ReadyFlag{},

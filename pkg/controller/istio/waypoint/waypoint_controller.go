@@ -82,7 +82,7 @@ var log = logf.Log.WithName("controller_istio_waypoint")
 // deletes the resource sets istiod strands when a Gateway's
 // spec.gatewayClassName changes.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -228,7 +228,7 @@ func (r *ReconcileWaypoint) Reconcile(ctx context.Context, request reconcile.Req
 // garbage collected by owner reference. Objects stranded while the CR still exists and
 // is the only owner (a removed Gateway, a renamed pull secret) are not yet cleaned up.
 func (r *ReconcileWaypoint) pullSecretResources(ctx context.Context, reqLogger logr.Logger) ([]client.Object, error) {
-	_, installationSpec, err := utils.GetInstallationSpec(ctx, r)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.V(1).Info("Installation not found")

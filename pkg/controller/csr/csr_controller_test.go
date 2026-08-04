@@ -98,14 +98,14 @@ var _ = Describe("CSR controller tests", func() {
 		mockStatus = &status.MockStatus{}
 		mockStatus.On("OnCRFound").Return()
 		r = reconcileCSR{
-			client:              cli,
-			clientset:           clientset,
-			calicoClient:        calicoClientset,
-			scheme:              scheme,
-			provider:            operatorv1.ProviderNone,
-			clusterDomain:       dns.DefaultClusterDomain,
-			allowedTLSAssets:    allowedAssets(dns.DefaultClusterDomain),
-			enterpriseCRDExists: true,
+			client:           cli,
+			clientset:        clientset,
+			calicoClient:     calicoClientset,
+			scheme:           scheme,
+			provider:         operatorv1.ProviderNone,
+			clusterDomain:    dns.DefaultClusterDomain,
+			allowedTLSAssets: allowedAssets(dns.DefaultClusterDomain),
+			variant:          operatorv1.CalicoEnterprise,
 		}
 	})
 

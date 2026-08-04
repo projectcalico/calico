@@ -94,6 +94,7 @@ func NewReconcilerWithShims(
 		DetectedProvider: provider,
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &ElasticSubController{
@@ -103,6 +104,7 @@ func NewReconcilerWithShims(
 		tierWatchReady: tierWatchReady,
 		status:         status,
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		provider:       opts.DetectedProvider,
 		multiTenant:    opts.MultiTenant,
 	}

@@ -168,7 +168,7 @@ func (r *ReconcileTiers) prepareTiersConfig(ctx context.Context, reqLogger logr.
 	namespaces := []string{
 		common.CalicoNamespace,
 	}
-	if r.opts.EnterpriseCRDExists {
+	if r.opts.Variant.IsEnterprise() {
 		namespaces = append(namespaces,
 			render.ComplianceNamespace,
 			render.DexNamespace,

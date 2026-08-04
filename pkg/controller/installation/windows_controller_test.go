@@ -124,7 +124,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				scheme:               scheme,
 				autoDetectedProvider: operator.ProviderNone,
 				status:               mockStatus,
-				enterpriseCRDsExist:  true,
+				variant:              operator.CalicoEnterprise,
 				ipamConfigWatchReady: &utils.ReadyFlag{},
 			}
 			r.ipamConfigWatchReady.MarkAsReady()
@@ -155,7 +155,7 @@ var _ = Describe("windows-controller installation tests", func() {
 					},
 				},
 			}
-			Expect(updateInstallationWithDefaults(ctx, r.client, cr, r.autoDetectedProvider)).NotTo(HaveOccurred())
+			Expect(updateInstallationWithDefaults(ctx, r.client, cr, r.autoDetectedProvider, r.variant)).NotTo(HaveOccurred())
 			certificateManager, err := certificatemanager.Create(c, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 			prometheusTLS, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace(), []string{monitor.PrometheusClientTLSSecretName})
@@ -194,7 +194,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Status = operator.InstallationStatus{
 					Variant: operator.Calico,
 				}
-				Expect(updateInstallationWithDefaults(ctx, r.client, cr, r.autoDetectedProvider)).NotTo(HaveOccurred())
+				Expect(updateInstallationWithDefaults(ctx, r.client, cr, r.autoDetectedProvider, r.variant)).NotTo(HaveOccurred())
 
 				// Set serviceCIDRs in the installation (required for Calico for Windows)
 				cr.Spec.ServiceCIDRs = []string{"10.96.0.0/12"}
@@ -614,7 +614,7 @@ var _ = Describe("windows-controller installation tests", func() {
 						scheme:               scheme,
 						autoDetectedProvider: operator.ProviderNone,
 						status:               mockStatus,
-						enterpriseCRDsExist:  true,
+						variant:              operator.CalicoEnterprise,
 						ipamConfigWatchReady: &utils.ReadyFlag{},
 					}
 					r.ipamConfigWatchReady.MarkAsReady()
@@ -663,7 +663,7 @@ var _ = Describe("windows-controller installation tests", func() {
 							},
 						},
 					}
-					Expect(updateInstallationWithDefaults(ctx, r.client, instance, r.autoDetectedProvider)).NotTo(HaveOccurred())
+					Expect(updateInstallationWithDefaults(ctx, r.client, instance, r.autoDetectedProvider, r.variant)).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, instance)).NotTo(HaveOccurred())
 				})
 				AfterEach(func() {

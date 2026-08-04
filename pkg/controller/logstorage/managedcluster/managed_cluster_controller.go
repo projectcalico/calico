@@ -47,7 +47,7 @@ type LogStorageManagedClusterController struct {
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 
@@ -103,22 +103,19 @@ func (r *LogStorageManagedClusterController) Reconcile(ctx context.Context, requ
 
 	reqLogger.Info("Reconciling ManagedCluster resources for log storage")
 
-	// Make sure this is an Enterprise cluster.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{}, err
 	}
-	if !variant.IsEnterprise() {
-		return reconcile.Result{}, nil
-	}
 
 	managementCluster, err := utils.GetManagementCluster(ctx, r.client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+
 	if managementCluster != nil {
 		// ManagementCluster is not supported on a managed cluster. Return an error.
 		return reconcile.Result{}, fmt.Errorf("ManagementCluster is not supported on a managed cluster")
@@ -128,6 +125,7 @@ func (r *LogStorageManagedClusterController) Reconcile(ctx context.Context, requ
 	if err != nil {
 		return reconcile.Result{}, err
 	}
+
 	if exists {
 		// LogStorage is not supported on a managed cluster. Return an error.
 		return reconcile.Result{}, fmt.Errorf("LogStorage is not supported on a managed cluster")

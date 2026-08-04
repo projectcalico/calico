@@ -73,10 +73,10 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	r := &ReconcileGatewayAPI{
 		client:              mgr.GetClient(),
 		scheme:              mgr.GetScheme(),
-		enterpriseCRDsExist: opts.EnterpriseCRDExists,
 		tierWatchReady:      &utils.ReadyFlag{},
 		status:              status.New(mgr.GetClient(), "gatewayapi", opts.KubernetesVersion),
 		clusterDomain:       opts.ClusterDomain,
+		variant:             opts.Variant,
 		multiTenant:         opts.MultiTenant,
 		newComponentHandler: utils.NewComponentHandler,
 	}
@@ -177,10 +177,10 @@ var _ reconcile.Reconciler = &ReconcileGatewayAPI{}
 type ReconcileGatewayAPI struct {
 	client              client.Client
 	scheme              *runtime.Scheme
-	enterpriseCRDsExist bool
 	tierWatchReady      *utils.ReadyFlag
 	status              status.StatusManager
 	clusterDomain       string
+	variant             operatorv1.ProductVariant
 	multiTenant         bool
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object) utils.ComponentHandler
 	watchEnvoyProxy     func(namespacedName operatorv1.NamespacedName) error
@@ -220,7 +220,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	defer r.status.SetMetaData(&gatewayAPI.ObjectMeta)
 
 	// Get the Installation, for private registry and pull secret config.
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -228,11 +228,6 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		}
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying installation", err, reqLogger)
 		return reconcile.Result{}, err
-	}
-
-	if variant == "" {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for Installation Variant to be set", nil, reqLogger)
-		return reconcile.Result{}, nil
 	}
 
 	// Render CRDs.  Note, we do this as early as possible so as to enable the following
@@ -566,7 +561,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Gateway API resources", err, log)
 		return reconcile.Result{}, err
 	}
-	err = imageset.ApplyImageSet(ctx, r.client, variant, nonCRDComponent)
+	err = imageset.ApplyImageSet(ctx, r.client, r.variant, nonCRDComponent)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error with images from ImageSet", err, log)
 		return reconcile.Result{}, err
@@ -584,7 +579,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	}
 
 	// Per-namespace resources, owned by the namespace's Gateways so the GC cleans them up.
-	if err = r.reconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, variant.IsEnterprise(), gwList.Items, ownedClass); err != nil {
+	if err = r.reconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, r.variant.IsEnterprise(), gwList.Items, ownedClass); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error writing per-namespace Gateway resources", err, log)
 		return reconcile.Result{}, err
 	}

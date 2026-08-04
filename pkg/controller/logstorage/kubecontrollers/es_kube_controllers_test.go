@@ -73,6 +73,7 @@ func NewControllerWithShims(
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &ESKubeControllersController{
@@ -80,6 +81,7 @@ func NewControllerWithShims(
 		scheme:         scheme,
 		status:         status,
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		tierWatchReady: tierWatchReady,
 		multiTenant:    multiTenant,
 	}

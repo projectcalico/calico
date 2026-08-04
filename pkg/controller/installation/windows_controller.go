@@ -150,7 +150,7 @@ func AddWindowsController(mgr manager.Manager, opts options.ControllerOptions) e
 	// Watch for changes to IPAMConfiguration.
 	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, logw, ri.ipamConfigWatchReady, []client.Object{&v3.IPAMConfiguration{TypeMeta: metav1.TypeMeta{Kind: v3.KindIPAMConfiguration}}})
 
-	if ri.enterpriseCRDsExist {
+	if ri.variant.IsEnterprise() {
 		for _, ns := range []string{common.CalicoNamespace, common.OperatorNamespace()} {
 			if err = utils.AddSecretsWatch(c, render.NodePrometheusTLSServerSecret, ns); err != nil {
 				return fmt.Errorf("tigera-windows-controller failed to watch secret '%s' in '%s' namespace: %w", render.NodePrometheusTLSServerSecret, ns, err)
@@ -178,7 +178,7 @@ type ReconcileWindows struct {
 	watches              map[runtime.Object]struct{}
 	autoDetectedProvider operatorv1.Provider
 	status               status.StatusManager
-	enterpriseCRDsExist  bool
+	variant              operatorv1.ProductVariant
 	clusterDomain        string
 	ipamConfigWatchReady *utils.ReadyFlag
 }
@@ -194,7 +194,7 @@ func newWindowsReconciler(mgr manager.Manager, opts options.ControllerOptions) (
 		watches:              make(map[runtime.Object]struct{}),
 		autoDetectedProvider: opts.DetectedProvider,
 		status:               statusManager,
-		enterpriseCRDsExist:  opts.EnterpriseCRDExists,
+		variant:              opts.Variant,
 		clusterDomain:        opts.ClusterDomain,
 		ipamConfigWatchReady: &utils.ReadyFlag{},
 	}

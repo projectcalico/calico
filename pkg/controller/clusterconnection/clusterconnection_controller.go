@@ -80,7 +80,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("failed to create %s: %w", controllerName, err)
 	}
 
-	if opts.EnterpriseCRDExists {
+	if opts.Variant.IsEnterprise() {
 		// Watch for changes to License and Tier, as their status is used as input to determine whether network policy should be reconciled by this controller.
 		go utils.WaitToAddLicenseKeyWatch(c, opts.K8sClientset, log, nil)
 	}
@@ -131,7 +131,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("clusterconnection-controller failed to watch management-cluster-connection Tigerastatus: %w", err)
 	}
 
-	if opts.EnterpriseCRDExists {
+	if opts.Variant.IsEnterprise() {
 		err = c.WatchObject(&operatorv1.ManagementCluster{}, &handler.EnqueueRequestForObject{})
 		if err != nil {
 			return fmt.Errorf("%s failed to watch primary resource: %w", controllerName, err)
@@ -174,6 +174,7 @@ func newReconciler(
 		provider:              p,
 		status:                statusMgr,
 		clusterDomain:         opts.ClusterDomain,
+		variant:               opts.Variant,
 		tierWatchReady:        tierWatchReady,
 		clusterInfoWatchReady: clusterInfoWatchReady,
 	}
@@ -191,6 +192,7 @@ type ReconcileConnection struct {
 	provider                   operatorv1.Provider
 	status                     status.StatusManager
 	clusterDomain              string
+	variant                    operatorv1.ProductVariant
 	tierWatchReady             *utils.ReadyFlag
 	clusterInfoWatchReady      *utils.ReadyFlag
 	resolvedPodProxies         []*httpproxy.Config
@@ -206,7 +208,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 	reqLogger.V(2).Info("Reconciling the management cluster connection")
 	result := reconcile.Result{}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return result, err
 	}
@@ -245,7 +247,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 	}
 
 	// Verify the cluster doesn't also have the ManagementCluster CRD installed.
-	if variant.IsEnterprise() {
+	if r.variant.IsEnterprise() {
 		managementCluster, err := utils.GetManagementCluster(ctx, r.cli)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading ManagementCluster", err, reqLogger)
@@ -291,7 +293,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 
 	includeSystem := false
 	if managementClusterConnection.Spec.TLS.CA == operatorv1.CATypePublic {
-		if variant == operatorv1.Calico {
+		if r.variant == operatorv1.Calico {
 			r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Guardian CA cannot be public in Calico.", nil, reqLogger)
 			return reconcile.Result{}, nil
 		}
@@ -306,7 +308,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 	}
 
 	var guardianKeyPair certificatemanagement.KeyPairInterface
-	if !variant.IsEnterprise() {
+	if !r.variant.IsEnterprise() {
 		guardianCertificateNames := dns.GetServiceDNSNames("guardian", render.GuardianNamespace, r.clusterDomain)
 		guardianCertificateNames = append(guardianCertificateNames, "localhost", "127.0.0.1")
 		guardianKeyPair, err = certificateManager.GetOrCreateKeyPair(r.cli, render.GuardianKeyPairSecret, whisker.WhiskerNamespace, guardianCertificateNames)
@@ -409,7 +411,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying clusterInformation", err, reqLogger)
 		return reconcile.Result{}, err
 	}
-	if variant.IsEnterprise() {
+	if r.variant.IsEnterprise() {
 		managedClusterVersion = clusterInformation.Spec.CNXVersion
 	} else {
 		managedClusterVersion = clusterInformation.Spec.CalicoVersion
@@ -422,7 +424,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 	}
 
 	var includeEgressNetworkPolicy bool
-	if variant.IsEnterprise() {
+	if r.variant.IsEnterprise() {
 		// Ensure the license can support enterprise policy, before rendering any network policies within it.
 		if license, err := utils.FetchLicenseKey(ctx, r.cli); err == nil {
 			if utils.IsFeatureActive(license, common.EgressAccessControlFeature) {
@@ -483,7 +485,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		}
 	}
 
-	if err = imageset.ApplyImageSet(ctx, r.cli, variant, components...); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.cli, r.variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

@@ -103,6 +103,7 @@ var _ = Describe("Compliance controller tests", func() {
 			opts: options.ControllerOptions{
 				DetectedProvider: operatorv1.ProviderNone,
 				ClusterDomain:    dns.DefaultClusterDomain,
+				Variant:          operatorv1.CalicoEnterprise,
 			},
 		}
 		// We start off with a 'standard' installation, with nothing special
@@ -642,6 +643,7 @@ var _ = Describe("Compliance controller tests", func() {
 				opts: options.ControllerOptions{
 					DetectedProvider: operatorv1.ProviderNone,
 					ClusterDomain:    dns.DefaultClusterDomain,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 		})

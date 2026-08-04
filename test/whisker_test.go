@@ -47,7 +47,7 @@ var _ = Describe("Tests for Whisker installation", func() {
 	var operatorDone chan struct{}
 
 	BeforeEach(func() {
-		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, SingleTenant, EnterpriseCRDsNotExist)
+		c, shutdownContext, cancel, mgr = setupManager(ManageCRDsEnable, SingleTenant, operator.Calico)
 
 		By("Cleaning up resources before the test")
 		cleanupResources(c)

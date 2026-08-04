@@ -52,7 +52,7 @@ type ExternalESController struct {
 }
 
 func AddExternalES(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 	if !opts.ElasticExternal {
@@ -127,7 +127,7 @@ func (r *ExternalESController) Reconcile(ctx context.Context, request reconcile.
 	}
 	r.status.OnCRFound()
 
-	_, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

@@ -105,6 +105,7 @@ var _ = Describe("LogCollector controller tests", func() {
 			tierWatchReady:  &utils.ReadyFlag{},
 			opts: options.ControllerOptions{
 				DetectedProvider: operatorv1.ProviderNone,
+				Variant:          operatorv1.CalicoEnterprise,
 			},
 		}
 
@@ -888,6 +889,7 @@ var _ = Describe("LogCollector controller tests", func() {
 				tierWatchReady:  readyFlag,
 				opts: options.ControllerOptions{
 					DetectedProvider: operatorv1.ProviderNone,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 		})

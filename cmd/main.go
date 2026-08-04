@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/cloudflare/cfssl/log"
+	"github.com/go-logr/logr"
 	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
@@ -63,6 +64,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	clientgocache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -70,6 +72,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -127,7 +130,7 @@ func main() {
 	var sgSetup bool
 	var manageCRDs bool
 	var preDelete bool
-	var variant string
+	var bootstrapVariant string
 
 	// bootstrapCRDs is a flag that can be used to install the CRDs and exit. This is useful for
 	// workflows that use an init container to install CustomResources prior to the operator starting.
@@ -166,13 +169,26 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 	flag.BoolVar(&manageCRDs, "manage-crds", false, "Operator should manage the projectcalico.org and operator.tigera.io CRDs.")
 	flag.BoolVar(&preDelete, "pre-delete", false, "Run helm pre-deletion hook logic, then exit.")
 	flag.BoolVar(&bootstrapCRDs, "bootstrap-crds", false, "Install CRDs and exit")
-	flag.StringVar(&variant, "variant", string(operatortigeraiov1.Calico), "Default product variant to assume during boostrapping.")
+	flag.StringVar(
+		&bootstrapVariant, "variant", string(operatortigeraiov1.Calico),
+		`Product variant to install CRDs for before an Installation exists. Only affects CRD and
+admission policy installation; once an Installation exists it is the authority on the variant.`,
+	)
 
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.WriteTo(os.Stdout), zap.UseFlagOptions(&opts)))
+
+	// An unrecognised variant is silently treated as Calico, which installs the wrong CRDs for
+	// the bootstrap-crds path where nothing runs afterwards to correct them.
+	switch v := operatortigeraiov1.ProductVariant(bootstrapVariant); {
+	case v == operatortigeraiov1.Calico, v.IsEnterprise():
+	default:
+		fmt.Printf("Invalid -variant %q\n", bootstrapVariant)
+		os.Exit(1)
+	}
 
 	if showVersion {
 		// If the following line is updated then it might be necessary to update the assertOperatorImageVersion in hack/release/build.go
@@ -392,17 +408,17 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 	if bootstrapCRDs || manageCRDs {
 		setupLog.WithValues("v3", v3CRDs).Info("Ensuring CRDs are installed")
 
-		if err := crds.Ensure(mgr.GetClient(), variant, v3CRDs, setupLog); err != nil {
+		if err := crds.Ensure(mgr.GetClient(), bootstrapVariant, v3CRDs, setupLog); err != nil {
 			setupLog.Error(err, "Failed to ensure CRDs are created")
 			os.Exit(1)
 		}
 
-		if err := admission.Ensure(mgr.GetClient(), variant, v3CRDs, apiDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy), setupLog); err != nil {
+		if err := admission.Ensure(mgr.GetClient(), bootstrapVariant, v3CRDs, apiDiscovery.ServedVersion(admission.APIGroup, admission.KindPolicy), setupLog); err != nil {
 			setupLog.Error(err, "Failed to ensure MutatingAdmissionPolicies are created")
 			os.Exit(1)
 		}
 
-		if err := admission.EnsureValidating(mgr.GetClient(), variant, v3CRDs, apiDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy), setupLog); err != nil {
+		if err := admission.EnsureValidating(mgr.GetClient(), bootstrapVariant, v3CRDs, apiDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy), setupLog); err != nil {
 			setupLog.Error(err, "Failed to ensure ValidatingAdmissionPolicies are created")
 			os.Exit(1)
 		}
@@ -410,6 +426,34 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 		if bootstrapCRDs {
 			setupLog.Info("CRDs installed successfully")
 			os.Exit(0)
+		}
+	}
+
+	// Resolve the variant now that the operator CRDs exist.
+	variant := waitForVariant(ctx, c, setupLog)
+	setupLog.WithValues("variant", variant).Info("Resolved product variant")
+
+	// The bootstrap pass above used the flag default, which doesn't cover the enterprise APIs.
+	if manageCRDs && variant != operatortigeraiov1.ProductVariant(bootstrapVariant) {
+		setupLog.WithValues("variant", variant).Info("Ensuring CRDs are installed for the resolved variant")
+
+		if err := crds.Ensure(mgr.GetClient(), string(variant), v3CRDs, setupLog); err != nil {
+			setupLog.Error(err, "Failed to ensure CRDs are created")
+			os.Exit(1)
+		}
+	}
+
+	// The enterprise controllers can't register without their APIs. Exiting lets the kubelet
+	// retry us once the CRDs are installed.
+	if variant.IsEnterprise() {
+		enterpriseAPIs, err := discovery.EnterpriseAPIsExist(cs)
+		if err != nil {
+			setupLog.Error(err, "Failed to determine whether the Enterprise APIs are available")
+			os.Exit(1)
+		}
+		if !enterpriseAPIs {
+			setupLog.Error(fmt.Errorf("the Calico Enterprise CRDs are not installed"), "Cannot run as Calico Enterprise")
+			os.Exit(1)
 		}
 	}
 
@@ -497,14 +541,6 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 	}
 	setupLog.WithValues("tenancy", multiTenant).Info("Checking tenancy mode")
 
-	// Determine if we need to start the Enterprise specific controllers.
-	enterpriseCRDExists, err := discovery.RequiresTigeraSecure(clientset)
-	if err != nil {
-		setupLog.Error(err, "Failed to determine if Enterprise controllers are required")
-		os.Exit(1)
-	}
-	setupLog.WithValues("required", enterpriseCRDExists).Info("Checking if Enterprise controllers are required")
-
 	clusterDomain, err := dns.GetClusterDomain(dns.DefaultResolveConfPath)
 	if err != nil {
 		clusterDomain = dns.DefaultClusterDomain
@@ -563,25 +599,31 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 	}
 
 	// Start a watch on our bootstrap configmap so we can restart if it changes.
-	if err = utils.MonitorConfigMap(clientset, bootstrapConfigMapName, bootConfig.Data); err != nil {
+	if err = utils.MonitorConfigMap(ctx, mgr.GetCache(), bootstrapConfigMapName, bootConfig.Data); err != nil {
 		log.Error(err, "Failed to monitor bootstrap configmap")
 		os.Exit(1)
 	}
 
+	// Same for the variant, which the process can only change by restarting.
+	if err = monitorVariant(ctx, mgr, variant); err != nil {
+		log.Error(err, "Failed to monitor the product variant")
+		os.Exit(1)
+	}
+
 	options := options.ControllerOptions{
-		DetectedProvider:    provider,
-		EnterpriseCRDExists: enterpriseCRDExists,
-		ClusterDomain:       clusterDomain,
-		KubernetesVersion:   kubernetesVersion,
-		ManageCRDs:          manageCRDs,
-		ShutdownContext:     ctx,
-		K8sClientset:        clientset,
-		MultiTenant:         multiTenant,
-		ElasticExternal:     useExternalElastic,
-		Cloud:               isCloudBuild(),
-		ESMigration:         elasticIsMigrating,
-		UseV3CRDs:           v3CRDs,
-		APIDiscovery:        apiDiscovery,
+		DetectedProvider:  provider,
+		Variant:           variant,
+		ClusterDomain:     clusterDomain,
+		KubernetesVersion: kubernetesVersion,
+		ManageCRDs:        manageCRDs,
+		ShutdownContext:   ctx,
+		K8sClientset:      clientset,
+		MultiTenant:       multiTenant,
+		ElasticExternal:   useExternalElastic,
+		Cloud:             isCloudBuild(),
+		ESMigration:       elasticIsMigrating,
+		UseV3CRDs:         v3CRDs,
+		APIDiscovery:      apiDiscovery,
 	}
 
 	// Before we start any controllers, make sure our options are valid.
@@ -598,7 +640,7 @@ If a value other than 'all' is specified, the first CRD with a prefix of the spe
 
 	// Register custom Prometheus metrics collector.
 	if common.MetricsEnabled() {
-		collector := metrics.NewOperatorCollector(mgr.GetClient(), enterpriseCRDExists)
+		collector := metrics.NewOperatorCollector(mgr.GetClient(), variant.IsEnterprise())
 		ctrlmetrics.Registry.MustRegister(collector)
 	}
 
@@ -662,6 +704,98 @@ func setKubernetesServiceEnv(kubeconfigFile string) error {
 		return err
 	}
 	return nil
+}
+
+// waitForVariant blocks until an Installation exists and returns the variant it asks for. The
+// operator has nothing to do before then, and the bootstrap flag is only ever for the CRDs above.
+func waitForVariant(ctx context.Context, c client.Client, log logr.Logger) operatortigeraiov1.ProductVariant {
+	for first := true; ; first = false {
+		variant, err := effectiveVariant(ctx, c)
+		switch {
+		case err != nil:
+			log.Error(err, "Failed to read the Installation, will retry")
+		case variant != "":
+			return variant
+		case first:
+			log.Info("Waiting for an Installation")
+		}
+
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+			log.Info("Requested to stop while waiting for an Installation")
+			os.Exit(0)
+		}
+	}
+}
+
+// effectiveVariant returns the variant the Installation asks for, merging in the overlay. It
+// returns an empty variant when no Installation exists.
+func effectiveVariant(ctx context.Context, c client.Client) (operatortigeraiov1.ProductVariant, error) {
+	instance := &operatortigeraiov1.Installation{}
+	if err := c.Get(ctx, utils.DefaultInstanceKey, instance); err != nil {
+		if errors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	spec := instance.Spec
+
+	// The overlay can set the variant like any other field, so it has to be merged in.
+	overlay := &operatortigeraiov1.Installation{}
+	if err := c.Get(ctx, utils.OverlayInstanceKey, overlay); err != nil {
+		if !errors.IsNotFound(err) {
+			return "", err
+		}
+	} else {
+		spec = utils.OverrideInstallationSpec(spec, overlay.Spec)
+	}
+
+	if spec.Variant == "" {
+		// An Installation that doesn't ask for a variant gets Calico.
+		return operatortigeraiov1.Calico, nil
+	}
+	return spec.Variant, nil
+}
+
+// monitorVariant restarts the operator when the effective variant moves off the one this
+// process booted with.
+func monitorVariant(ctx context.Context, mgr manager.Manager, booted operatortigeraiov1.ProductVariant) error {
+	// The cache isn't running yet, so don't wait on a sync that can't happen.
+	informer, err := mgr.GetCache().GetInformer(ctx, &operatortigeraiov1.Installation{}, cache.BlockUntilSynced(false))
+	if err != nil {
+		return err
+	}
+
+	// Re-resolve rather than reading the event's object, since the effective variant is the
+	// merge of the default Installation and the overlay.
+	c := mgr.GetClient()
+	check := func() {
+		// Exiting mid-uninstall would skip the graceful termination wait in main, which
+		// holds the process open so controllers can run their finalizers.
+		instance := &operatortigeraiov1.Installation{}
+		if err := c.Get(ctx, utils.DefaultInstanceKey, instance); err == nil && instance.DeletionTimestamp != nil {
+			return
+		}
+
+		requested, err := effectiveVariant(ctx, c)
+		if err != nil {
+			log.Error(err, "Failed to resolve the requested variant")
+			return
+		}
+
+		if requested != "" && requested != booted {
+			log.Info("Requested variant changed, rebooting", "booted", booted, "requested", requested)
+			os.Exit(0)
+		}
+	}
+
+	_, err = informer.AddEventHandler(clientgocache.ResourceEventHandlerFuncs{
+		AddFunc:    func(any) { check() },
+		UpdateFunc: func(_, _ any) { check() },
+		DeleteFunc: func(any) { check() },
+	})
+	return err
 }
 
 func showCRDs(variant operatortigeraiov1.ProductVariant, outputType string) error {

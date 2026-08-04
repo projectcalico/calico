@@ -47,6 +47,7 @@ func NewReconcilerWithShims(
 		DetectedProvider: provider,
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &LogStorageManagedClusterController{

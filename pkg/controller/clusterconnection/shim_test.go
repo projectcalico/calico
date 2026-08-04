@@ -40,6 +40,7 @@ func NewReconcilerWithShims(
 ) reconcile.Reconciler {
 	opts := options.ControllerOptions{
 		ShutdownContext: context.Background(),
+		Variant:         operatorv1.CalicoEnterprise,
 	}
 
 	return newReconciler(cli, schema, status, provider, tierWatchReady, clusterInfoWatchReady, opts)

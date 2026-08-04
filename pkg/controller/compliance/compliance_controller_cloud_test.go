@@ -186,6 +186,7 @@ var _ = Describe("Cloud Compliance controller tests", func() {
 					ClusterDomain:    dns.DefaultClusterDomain,
 					ShutdownContext:  context.TODO(),
 					Cloud:            true,
+					Variant:          operatorv1.CalicoEnterprise,
 				},
 			}
 			r.status.Run(r.opts.ShutdownContext)

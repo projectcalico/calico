@@ -63,6 +63,7 @@ type DashboardsSubController struct {
 	status          status.StatusManager
 	provider        operatorv1.Provider
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	multiTenant     bool
 	elasticExternal bool
 	cloud           bool
@@ -70,7 +71,7 @@ type DashboardsSubController struct {
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists || opts.MultiTenant {
+	if !opts.Variant.IsEnterprise() || opts.MultiTenant {
 		return nil
 	}
 
@@ -79,6 +80,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		scheme:          mgr.GetScheme(),
 		status:          status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageDashboards, opts.KubernetesVersion),
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		provider:        opts.DetectedProvider,
 		tierWatchReady:  &utils.ReadyFlag{},
 		multiTenant:     opts.MultiTenant,
@@ -196,7 +198,7 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 	}
 
 	// Get Installation resource.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), d.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), d.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			d.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -366,7 +368,7 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 	}
 	dashboardsComponent := dashboards.Dashboards(cfg)
 
-	if err := imageset.ApplyImageSet(ctx, d.client, variant, dashboardsComponent); err != nil {
+	if err := imageset.ApplyImageSet(ctx, d.client, d.variant, dashboardsComponent); err != nil {
 		d.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

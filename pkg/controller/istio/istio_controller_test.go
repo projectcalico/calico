@@ -706,31 +706,6 @@ var _ = Describe("Istio controller tests", func() {
 	})
 
 	Context("Error handling tests", func() {
-		It("should handle missing variant gracefully", func() {
-			// Create installation without variant
-			installationNoVariant := &operatorv1.Installation{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "default",
-				},
-				Spec: operatorv1.InstallationSpec{
-					Variant: "",
-				},
-			}
-			Expect(cli.Create(ctx, installationNoVariant)).NotTo(HaveOccurred())
-			Expect(cli.Create(ctx, istioCR)).NotTo(HaveOccurred())
-
-			r := &ReconcileIstio{
-				Client:   cli,
-				scheme:   scheme,
-				provider: operatorv1.ProviderNone,
-				status:   mockStatus,
-			}
-
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-			Expect(err).ShouldNot(HaveOccurred())
-			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotReady, "Waiting for Installation Variant to be set", mock.Anything, mock.Anything)
-		})
-
 		It("should handle TigeraStatus update in reconciliation", func() {
 			createResources()
 

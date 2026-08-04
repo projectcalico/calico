@@ -61,6 +61,7 @@ func NewESMetricsControllerWithShims(
 		ClusterDomain:    clusterDomain,
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
+		Variant:          operatorv1.CalicoEnterprise,
 	}
 
 	r := &ESMetricsSubController{
@@ -68,6 +69,7 @@ func NewESMetricsControllerWithShims(
 		scheme:         scheme,
 		status:         status,
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		multiTenant:    opts.MultiTenant,
 		tierWatchReady: readyFlag,
 	}

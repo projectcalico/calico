@@ -67,7 +67,7 @@ const (
 // Add creates a new authentication Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		// No need to start this controller.
 		return nil
 	}
@@ -113,6 +113,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, tierWatc
 		provider:       opts.DetectedProvider,
 		status:         status.New(mgr.GetClient(), "authentication", opts.KubernetesVersion),
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		tierWatchReady: tierWatchReady,
 		multiTenant:    opts.MultiTenant,
 	}
@@ -169,6 +170,7 @@ type ReconcileAuthentication struct {
 	provider                   oprv1.Provider
 	status                     status.StatusManager
 	clusterDomain              string
+	variant                    oprv1.ProductVariant
 	tierWatchReady             *utils.ReadyFlag
 	multiTenant                bool
 	resolvedPodProxies         []*httpproxy.Config
@@ -192,6 +194,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 		}
 		return reconcile.Result{}, err
 	}
+
 	r.status.OnCRFound()
 
 	// SetMetaData in the TigeraStatus such as observedGenerations.
@@ -230,7 +233,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 	}
 
 	// Query for the installation object.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(oprv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -238,10 +241,6 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 		}
 		r.status.SetDegraded(oprv1.ResourceReadError, "Error querying installation", err, reqLogger)
 		return reconcile.Result{}, err
-	}
-	if !variant.IsEnterprise() {
-		r.status.SetDegraded(oprv1.ResourceNotReady, "Waiting for network to be an enterprise variant", nil, reqLogger)
-		return reconcile.Result{}, nil
 	}
 
 	// Validate that the tier watch is ready before querying the tier to ensure we utilize the cache.
@@ -278,6 +277,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 		r.status.SetDegraded(oprv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	dnsNames := dns.GetServiceDNSNames(render.DexObjectName, render.DexNamespace, r.clusterDomain)
 	tlsKeyPair, err := certificateManager.GetOrCreateKeyPair(r.client, render.DexTLSSecretName, common.OperatorNamespace(), dnsNames)
 	if err != nil {
@@ -403,7 +403,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 	reqLogger.V(3).Info("rendering components")
 	component := render.Dex(dexComponentCfg)
 
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, component); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.variant, component); err != nil {
 		r.status.SetDegraded(oprv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}
@@ -448,6 +448,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 	if err = r.client.Status().Update(ctx, authentication); err != nil {
 		return reconcile.Result{}, err
 	}
+
 	return reconcile.Result{}, nil
 }
 

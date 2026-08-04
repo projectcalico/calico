@@ -54,7 +54,7 @@ var log = logf.Log.WithName("controller_applicationlayer")
 // Add creates a new ApplicationLayer Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		// No need to start this controller.
 		return nil
 	}
@@ -80,6 +80,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, licenseA
 		provider:        opts.DetectedProvider,
 		status:          status.New(mgr.GetClient(), "applicationlayer", opts.KubernetesVersion),
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		licenseAPIReady: licenseAPIReady,
 	}
 	r.status.Run(opts.ShutdownContext)
@@ -165,6 +166,7 @@ type ReconcileApplicationLayer struct {
 	provider        operatorv1.Provider
 	status          status.StatusManager
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	licenseAPIReady *utils.ReadyFlag
 }
 
@@ -193,6 +195,7 @@ func (r *ReconcileApplicationLayer) Reconcile(ctx context.Context, request recon
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying for Application Layer", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	r.status.OnCRFound()
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&instance.ObjectMeta)
@@ -226,7 +229,7 @@ func (r *ReconcileApplicationLayer) Reconcile(ctx context.Context, request recon
 		return reconcile.Result{}, err
 	}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -234,11 +237,6 @@ func (r *ReconcileApplicationLayer) Reconcile(ctx context.Context, request recon
 		}
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying installation", err, reqLogger)
 		return reconcile.Result{}, err
-	}
-
-	if !variant.IsEnterprise() {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for network to be an enterprise variant", nil, reqLogger)
-		return reconcile.Result{}, nil
 	}
 
 	pullSecrets, err := utils.GetInstallationPullSecrets(installationSpec, r.client)
@@ -253,6 +251,7 @@ func (r *ReconcileApplicationLayer) Reconcile(ctx context.Context, request recon
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error checking GatewayAPI WAF state", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	if err = r.patchFelixConfiguration(ctx, instance, gatewayWAFEnabled); err != nil {
 		r.status.SetDegraded(operatorv1.ResourcePatchError, "Error patching felix configuration", err, reqLogger)
 		return reconcile.Result{}, err
@@ -297,7 +296,7 @@ func (r *ReconcileApplicationLayer) Reconcile(ctx context.Context, request recon
 
 	ch := utils.NewComponentHandler(log, r.client, r.scheme, instance)
 
-	if err = imageset.ApplyImageSet(ctx, r.client, variant, component); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.client, r.variant, component); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}
@@ -520,17 +519,7 @@ func (r *ReconcileApplicationLayer) patchFelixConfiguration(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	// Use Spec.Variant (via the second return of GetInstallationSpec) so the
-	// gate matches the renderer's decision to ship the L7 waypoint sidecar.
-	var variant operatorv1.ProductVariant
-	if _, spec, ierr := utils.GetInstallationSpec(ctx, r.client); ierr != nil {
-		if !apierrors.IsNotFound(ierr) {
-			return ierr
-		}
-	} else if spec != nil {
-		variant = spec.Variant
-	}
-	istioNeeds := utils.IstioRequiresPolicySync(istioCR, variant)
+	istioNeeds := utils.IstioRequiresPolicySync(istioCR, r.variant)
 
 	_, err = utils.PatchFelixConfiguration(ctx, r.client, func(fc *v3.FelixConfiguration) (bool, error) {
 		wafEventLogsFileEnabled := wafEventLogsFileRequired(al, gatewayWAFEnabled)

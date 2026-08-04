@@ -58,7 +58,7 @@ var log = logf.Log.WithName("controller_egressgateway")
 // Add creates a new EgressGateway Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		// No need to start this controller.
 		return nil
 	}
@@ -84,6 +84,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions, licenseA
 		provider:        opts.DetectedProvider,
 		status:          status.New(mgr.GetClient(), "egressgateway", opts.KubernetesVersion),
 		clusterDomain:   opts.ClusterDomain,
+		variant:         opts.Variant,
 		licenseAPIReady: licenseAPIReady,
 	}
 	r.status.Run(opts.ShutdownContext)
@@ -132,6 +133,7 @@ type ReconcileEgressGateway struct {
 	provider        operatorv1.Provider
 	status          status.StatusManager
 	clusterDomain   string
+	variant         operatorv1.ProductVariant
 	licenseAPIReady *utils.ReadyFlag
 }
 
@@ -241,7 +243,7 @@ func (r *ReconcileEgressGateway) Reconcile(ctx context.Context, request reconcil
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Error(err, "Installation not found")
@@ -258,16 +260,6 @@ func (r *ReconcileEgressGateway) Reconcile(ctx context.Context, request reconcil
 			setDegraded(r.client, ctx, &egw, reconcileErr, fmt.Sprintf("Error querying installation err = %s", err.Error()))
 		}
 		return reconcile.Result{}, err
-	}
-
-	if !variant.IsEnterprise() {
-		degradedMsg := "Waiting for network to be an enterprise variant"
-		reqLogger.Error(err, degradedMsg)
-		r.status.SetDegraded(operatorv1.ResourceNotReady, degradedMsg, nil, reqLogger)
-		for _, egw := range egwsToReconcile {
-			setDegraded(r.client, ctx, &egw, reconcileErr, degradedMsg)
-		}
-		return reconcile.Result{}, nil
 	}
 
 	installStatus, err := utils.GetInstallationStatus(ctx, r.client)
@@ -315,7 +307,7 @@ func (r *ReconcileEgressGateway) Reconcile(ctx context.Context, request reconcil
 	// Reconcile all the EGWs
 	var errMsgs []string
 	for _, egw := range egwsToReconcile {
-		err = r.reconcileEgressGateway(ctx, &egw, reqLogger, variant, fc, pullSecrets, installationSpec, namespaceAndNames)
+		err = r.reconcileEgressGateway(ctx, &egw, reqLogger, r.variant, fc, pullSecrets, installationSpec, namespaceAndNames)
 		if err != nil {
 			reqLogger.Error(err, "Error reconciling egress gateway")
 			errMsgs = append(errMsgs, err.Error())

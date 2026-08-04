@@ -126,6 +126,7 @@ func newReconciler(
 		provider:      p,
 		status:        statusMgr,
 		clusterDomain: opts.ClusterDomain,
+		variant:       opts.Variant,
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -141,6 +142,7 @@ type Reconciler struct {
 	provider      operatorv1.Provider
 	status        status.StatusManager
 	clusterDomain string
+	variant       operatorv1.ProductVariant
 }
 
 // Reconcile reads that state of the cluster for a Goldmane object and makes changes based on the
@@ -169,7 +171,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&goldmaneCR.ObjectMeta)
 
-	variant, installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if installationSpec == nil {
@@ -267,7 +269,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	components := []render.Component{certComponent, goldmane.Goldmane(cfg)}
-	if err = imageset.ApplyImageSet(ctx, r.cli, variant, components...); err != nil {
+	if err = imageset.ApplyImageSet(ctx, r.cli, r.variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
 	}

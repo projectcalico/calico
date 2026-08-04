@@ -239,7 +239,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("tigera-installation-controller failed to watch BGPConfiguration resource: %w", err)
 	}
 
-	if opts.EnterpriseCRDExists {
+	if opts.Variant.IsEnterprise() {
 		// Watch for changes to primary resource ManagementCluster
 		err = c.WatchObject(&operatorv1.ManagementCluster{}, &handler.EnqueueRequestForObject{})
 		if err != nil {
@@ -354,7 +354,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 		status:               statusManager,
 		typhaAutoscaler:      typhaScaler,
 		namespaceMigration:   nm,
-		enterpriseCRDsExist:  opts.EnterpriseCRDExists,
+		variant:              opts.Variant,
 		clusterDomain:        opts.ClusterDomain,
 		manageCRDs:           opts.ManageCRDs,
 		tierWatchReady:       &utils.ReadyFlag{},
@@ -414,7 +414,7 @@ type ReconcileInstallation struct {
 	typhaAutoscaler               *typhaAutoscaler
 	typhaAutoscalerNonClusterHost *typhaAutoscaler
 	namespaceMigration            migration.NamespaceMigration
-	enterpriseCRDsExist           bool
+	variant                       operatorv1.ProductVariant
 	migrationChecked              bool
 	clusterDomain                 string
 	manageCRDs                    bool
@@ -449,7 +449,7 @@ func GetActivePools(ctx context.Context, client client.Client) (*v3.IPPoolList, 
 }
 
 // updateInstallationWithDefaults returns the default installation instance with defaults populated.
-func updateInstallationWithDefaults(ctx context.Context, client client.Client, instance *operatorv1.Installation, provider operatorv1.Provider) error {
+func updateInstallationWithDefaults(ctx context.Context, client client.Client, instance *operatorv1.Installation, provider operatorv1.Provider, variant operatorv1.ProductVariant) error {
 	// Determine the provider in use by combining any auto-detected value with any value
 	// specified in the Installation CR. mergeProvider updates the CR with the correct value.
 	err := mergeProvider(instance, provider)
@@ -472,7 +472,7 @@ func updateInstallationWithDefaults(ctx context.Context, client client.Client, i
 		return fmt.Errorf("unable to list IPPools: %s", err.Error())
 	}
 
-	err = MergeAndFillDefaults(instance, awsNode, currentPools)
+	err = MergeAndFillDefaults(instance, awsNode, currentPools, variant)
 	if err != nil {
 		return err
 	}
@@ -481,21 +481,21 @@ func updateInstallationWithDefaults(ctx context.Context, client client.Client, i
 
 // MergeAndFillDefaults merges in configuration from the Kubernetes provider, if applicable, and then
 // populates defaults in the Installation instance.
-func MergeAndFillDefaults(i *operatorv1.Installation, awsNode *appsv1.DaemonSet, currentPools *v3.IPPoolList) error {
+func MergeAndFillDefaults(i *operatorv1.Installation, awsNode *appsv1.DaemonSet, currentPools *v3.IPPoolList, variant operatorv1.ProductVariant) error {
 	if awsNode != nil {
 		if err := updateInstallationForAWSNode(i, awsNode); err != nil {
 			return fmt.Errorf("could not resolve AWS node configuration: %s", err.Error())
 		}
 	}
 
-	return fillDefaults(i, currentPools)
+	return fillDefaults(i, currentPools, variant)
 }
 
-// fillDefaults populates the default values onto an Installation object.
-func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList) error {
+// fillDefaults populates the default values onto an Installation object. The variant defaults to
+// the one the process booted as, so that main and this controller can't disagree about it.
+func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList, variant operatorv1.ProductVariant) error {
 	if len(instance.Spec.Variant) == 0 {
-		// Default to installing Calico.
-		instance.Spec.Variant = operatorv1.Calico
+		instance.Spec.Variant = variant
 	}
 
 	if instance.Spec.TyphaAffinity == nil {
@@ -876,7 +876,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	// update Installation with defaults
-	if err := updateInstallationWithDefaults(ctx, r.client, instance, r.autoDetectedProvider); err != nil {
+	if err := updateInstallationWithDefaults(ctx, r.client, instance, r.autoDetectedProvider, r.variant); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying installation", err, reqLogger)
 		return reconcile.Result{}, err
 	}
@@ -940,7 +940,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// Update CRDs before persisting defaults. Defaulting can set a value only this operator version's
 	// CRD accepts (e.g. an autodetected kubernetesProvider=Kind); on upgrade the old served CRD would
 	// otherwise reject the write and the reconcile would loop before ever reaching the CRD update.
-	if err = r.updateCRDs(ctx, instance.Spec.Variant, reqLogger); err != nil {
+	if err = r.updateCRDs(ctx, r.variant, reqLogger); err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -1038,27 +1038,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
-	// The operator supports running in a "Calico only" mode so that it doesn't need to run enterprise-specific controllers.
-	// If we are switching from this mode to one that enables enterprise, we need to restart the operator to enable the other controllers.
-	if !r.enterpriseCRDsExist && instance.Spec.Variant.IsEnterprise() {
-		// Perform an API discovery to determine if the necessary APIs exist. If they do, we can reboot into enterprise mode.
-		// if they do not, we need to notify the user that the requested configuration is invalid.
-		b, err := discovery.RequiresTigeraSecure(r.clientset)
-		if b {
-			log.Info("Rebooting to enable TigeraSecure controllers")
-			os.Exit(0)
-		} else if err != nil {
-			r.status.SetDegraded(operatorv1.InternalServerError, "Error discovering Tigera Secure availability", err, reqLogger)
-		} else {
-			r.status.SetDegraded(operatorv1.InternalServerError, "Cannot deploy Tigera Secure", fmt.Errorf("missing Tigera Secure custom resource definitions"), reqLogger)
-		}
-
-		// Queue a retry. We don't want to watch the APIServer API since it might not exist and would cause
-		// this controller to fail.
-		reqLogger.Info("Scheduling a retry", "when", utils.StandardRetry)
-		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
-	}
-
 	// Query for pull secrets in operator namespace
 	pullSecrets, err := utils.GetInstallationPullSecrets(&instance.Spec, r.client)
 	if err != nil {
@@ -1070,7 +1049,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	var managementClusterConnection *operatorv1.ManagementClusterConnection
 	var managerCR *operatorv1.Manager
 	var logCollector *operatorv1.LogCollector
-	if r.enterpriseCRDsExist {
+	if r.variant.IsEnterprise() {
 		logCollector, err = utils.GetLogCollector(ctx, r.client)
 		if logCollector != nil {
 			if err != nil {

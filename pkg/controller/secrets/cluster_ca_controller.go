@@ -82,7 +82,7 @@ func (r *ClusterCAController) Reconcile(ctx context.Context, request reconcile.R
 	logc := r.log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 
 	// Get Installation resource.
-	_, installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			logc.Info("Installation not found")

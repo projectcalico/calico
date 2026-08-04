@@ -41,7 +41,7 @@ const controllerName = "nonclusterhost-controller"
 var log = logf.Log.WithName("controller_nonclusterhost")
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 

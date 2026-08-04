@@ -79,13 +79,14 @@ type ElasticSubController struct {
 	provider       operatorv1.Provider
 	esCliCreator   utils.ElasticsearchClientCreator
 	clusterDomain  string
+	variant        operatorv1.ProductVariant
 	tierWatchReady *utils.ReadyFlag
 	multiTenant    bool
 	cloud          bool
 }
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.EnterpriseCRDExists {
+	if !opts.Variant.IsEnterprise() {
 		return nil
 	}
 	if opts.ElasticExternal {
@@ -102,6 +103,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		tierWatchReady: &utils.ReadyFlag{},
 		status:         status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageElastic, opts.KubernetesVersion),
 		clusterDomain:  opts.ClusterDomain,
+		variant:        opts.Variant,
 		provider:       opts.DetectedProvider,
 		multiTenant:    opts.MultiTenant,
 		cloud:          opts.Cloud,
@@ -284,7 +286,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	// Get Installation resource.
-	variant, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -292,10 +294,6 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		}
 		r.status.SetDegraded(operatorv1.ResourceReadError, "An error occurred while querying Installation", err, reqLogger)
 		return reconcile.Result{}, err
-	}
-	if !variant.IsEnterprise() {
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for network to be an enterprise variant", nil, reqLogger)
-		return reconcile.Result{}, nil
 	}
 
 	// Validate that the tier watch is ready before querying the tier to ensure we utilize the cache.
@@ -326,6 +324,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading ManagementClusterConnection", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	if managementClusterConnection != nil {
 		// LogStorage is not support on a managed cluster.
 		r.status.SetDegraded(operatorv1.ResourceNotReady, "LogStorage is not supported on a managed cluster", nil, reqLogger)
@@ -350,6 +349,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	cm.AddToStatusManager(r.status, render.ElasticsearchNamespace)
 
 	esDNSNames := dns.GetServiceDNSNames(render.ElasticsearchServiceName, render.ElasticsearchNamespace, r.clusterDomain)
@@ -358,6 +358,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Failed to create Elasticsearch secrets", err, log)
 		return reconcile.Result{}, err
 	}
+
 	kbDNSNames := dns.GetServiceDNSNames(kibana.ServiceName, kibana.Namespace, r.clusterDomain)
 	kibanaKeyPair, err := cm.GetKeyPair(r.client, kibana.TigeraKibanaCertSecret, common.OperatorNamespace(), kbDNSNames)
 	if err != nil {
@@ -404,6 +405,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to get Elasticsearch admin user secret", err, reqLogger)
 		return reconcile.Result{}, err
 	}
+
 	if esAdminUserSecret != nil {
 		esAdminUserSecret = rsecret.CopyToNamespace(common.OperatorNamespace(), esAdminUserSecret)[0]
 	}
@@ -553,7 +555,7 @@ func (r *ElasticSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	for _, component := range components {
-		if err = imageset.ApplyImageSet(ctx, r.client, variant, component); err != nil {
+		if err = imageset.ApplyImageSet(ctx, r.client, r.variant, component); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
 			return reconcile.Result{}, err
 		}

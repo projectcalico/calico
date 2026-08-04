@@ -44,7 +44,7 @@ var _ = Describe("Defaulting logic tests", func() {
 		}
 
 		instance := &operator.Installation{}
-		err := fillDefaults(instance, &currentPools)
+		err := fillDefaults(instance, &currentPools, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 
 		// The resulting resource should pass validation.
@@ -83,7 +83,7 @@ var _ = Describe("Defaulting logic tests", func() {
 
 		instance := &operator.Installation{}
 		instance.Spec.Variant = operator.CalicoEnterprise
-		err := fillDefaults(instance, &currentPools)
+		err := fillDefaults(instance, &currentPools, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -195,7 +195,7 @@ var _ = Describe("Defaulting logic tests", func() {
 			},
 		}
 		instanceCopy := instance.DeepCopyObject().(*operator.Installation)
-		err := fillDefaults(instanceCopy, nil)
+		err := fillDefaults(instanceCopy, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instanceCopy.Spec).To(Equal(instance.Spec))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -283,7 +283,7 @@ var _ = Describe("Defaulting logic tests", func() {
 			},
 		}
 		instanceCopy := instance.DeepCopyObject().(*operator.Installation)
-		err := fillDefaults(instanceCopy, nil)
+		err := fillDefaults(instanceCopy, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instanceCopy.Spec).To(Equal(instance.Spec))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -300,7 +300,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(instance.Spec.CalicoNetwork.IPPools)).To(Equal(0))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -314,7 +314,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPEnabled))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -328,7 +328,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.CNI.SpecVersion).NotTo(BeNil())
 		Expect(*instance.Spec.CNI.SpecVersion).To(Equal(operator.CNISpecVersionAuto))
@@ -344,7 +344,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				CalicoNetwork: &operator.CalicoNetworkSpec{},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.CNI.SpecVersion).To(BeNil())
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -359,7 +359,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				CalicoNetwork: &operator.CalicoNetworkSpec{},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPDisabled))
 
@@ -374,14 +374,14 @@ var _ = Describe("Defaulting logic tests", func() {
 				Registry: "test-reg",
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.Registry).To(Equal("test-reg"))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 
 		// "UseDefault" should not be modified.
 		instance.Spec.Registry = components.UseDefault
-		err = fillDefaults(instance, nil)
+		err = fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.Registry).To(Equal(components.UseDefault))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -398,7 +398,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				},
 			},
 		}
-		err := fillDefaults(instance, nil)
+		err := fillDefaults(instance, nil, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 	})
@@ -416,14 +416,14 @@ var _ = Describe("Defaulting logic tests", func() {
 				},
 			},
 		}
-		err := fillDefaults(instance, &currentPools)
+		err := fillDefaults(instance, &currentPools, operator.Calico)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 	})
 
 	DescribeTable("Test different values for FlexVolumePath",
 		func(i *operator.Installation, expectedFlexVolumePath string) {
-			Expect(fillDefaults(i, nil)).To(BeNil())
+			Expect(fillDefaults(i, nil, operator.Calico)).To(BeNil())
 			Expect(i.Spec.FlexVolumePath).To(Equal(expectedFlexVolumePath))
 		},
 
@@ -452,7 +452,7 @@ var _ = Describe("Defaulting logic tests", func() {
 
 	DescribeTable("Test different values for KubeletVolumePluginPath",
 		func(i *operator.Installation, expectedKubeletVolumePluginPath string) {
-			Expect(fillDefaults(i, nil)).To(BeNil())
+			Expect(fillDefaults(i, nil, operator.Calico)).To(BeNil())
 			Expect(i.Spec.KubeletVolumePluginPath).To(Equal(expectedKubeletVolumePluginPath))
 		},
 
@@ -485,7 +485,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				CNI: &operator.CNISpec{},
 			},
 		}
-		Expect(fillDefaults(instance, nil)).NotTo(HaveOccurred())
+		Expect(fillDefaults(instance, nil, operator.Calico)).NotTo(HaveOccurred())
 		Expect(instance.Spec.CNI.Type).To(Equal(operator.PluginCalico))
 		Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
 	})
@@ -496,7 +496,7 @@ var _ = Describe("Defaulting logic tests", func() {
 				CNI: &operator.CNISpec{},
 			},
 		}
-		Expect(fillDefaults(instance, nil)).NotTo(HaveOccurred())
+		Expect(fillDefaults(instance, nil, operator.Calico)).NotTo(HaveOccurred())
 		Expect(*instance.Spec.Logging.CNI.LogSeverity).To(Equal(operator.LogLevelInfo))
 		Expect(*instance.Spec.Logging.CNI.LogFileMaxCount).To(Equal(uint32(10)))
 		Expect(*instance.Spec.Logging.CNI.LogFileMaxAgeDays).To(Equal(uint32(30)))
@@ -509,7 +509,7 @@ var _ = Describe("Defaulting logic tests", func() {
 			instance := &operator.Installation{
 				Spec: operator.InstallationSpec{KubernetesProvider: provider},
 			}
-			Expect(fillDefaults(instance, nil)).NotTo(HaveOccurred())
+			Expect(fillDefaults(instance, nil, operator.Calico)).NotTo(HaveOccurred())
 			Expect(instance.Spec.CNI.Type).To(Equal(plugin))
 			iptables := operator.LinuxDataplaneIptables
 			winDataplane := operator.WindowsDataplaneDisabled
@@ -534,7 +534,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					CNI: &operator.CNISpec{Type: plugin},
 				},
 			}
-			Expect(fillDefaults(instance, nil)).NotTo(HaveOccurred())
+			Expect(fillDefaults(instance, nil, operator.Calico)).NotTo(HaveOccurred())
 			Expect(instance.Spec.CNI.Type).To(Equal(plugin))
 			iptables := operator.LinuxDataplaneIptables
 			winDataplane := operator.WindowsDataplaneDisabled
@@ -563,7 +563,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 			}
-			err := fillDefaults(instance, nil)
+			err := fillDefaults(instance, nil, operator.Calico)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPDisabled))
 			Expect(validateCustomResource(instance)).NotTo(HaveOccurred())
@@ -593,7 +593,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 			}
-			err := fillDefaults(instance, nil)
+			err := fillDefaults(instance, nil, operator.Calico)
 			Expect(err).NotTo(HaveOccurred())
 			iptables := operator.LinuxDataplaneIptables
 			winDataplane := operator.WindowsDataplaneDisabled
@@ -621,7 +621,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 			}
-			err := fillDefaults(instance, nil)
+			err := fillDefaults(instance, nil, operator.Calico)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPDisabled))
 			Expect(instance.Spec.CalicoNetwork.IPPools).To(BeEmpty())
@@ -644,7 +644,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					},
 				},
 			}
-			err := fillDefaults(instance, nil)
+			err := fillDefaults(instance, nil, operator.Calico)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*instance.Spec.CalicoNetwork.BGP).To(Equal(operator.BGPDisabled))
 			Expect(instance.Spec.CalicoNetwork.IPPools).To(BeEmpty())
@@ -662,7 +662,7 @@ var _ = Describe("Defaulting logic tests", func() {
 					CNI: &operator.CNISpec{Type: cni},
 				},
 			}
-			Expect(fillDefaults(instance, nil)).NotTo(HaveOccurred())
+			Expect(fillDefaults(instance, nil, operator.Calico)).NotTo(HaveOccurred())
 			Expect(instance.Spec.CNI.IPAM.Type).To(Equal(ipam))
 		},
 
@@ -678,7 +678,7 @@ var _ = Describe("Defaulting logic tests", func() {
 	DescribeTable("should handle various pool configurations",
 		func(currentPools []v3.IPPool) {
 			instance := &operator.Installation{}
-			Expect(fillDefaults(instance, &v3.IPPoolList{Items: currentPools})).NotTo(HaveOccurred())
+			Expect(fillDefaults(instance, &v3.IPPoolList{Items: currentPools}, operator.Calico)).NotTo(HaveOccurred())
 
 			// The resulting instance should be valid.
 			Expect(validateCustomResource(instance)).NotTo(HaveOccurred())

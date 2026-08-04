@@ -137,7 +137,7 @@ func (r *TenantController) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 	// Get Installation resource.
-	_, installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, logc)

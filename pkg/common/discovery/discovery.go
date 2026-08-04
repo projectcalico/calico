@@ -31,10 +31,8 @@ import (
 
 const gkeNodeLabelPrefix = "cloud.google.com/gke-"
 
-// RequiresTigeraSecure determines if the configuration requires we start the tigera secure
-// controllers.
-func RequiresTigeraSecure(clientset *kubernetes.Clientset) (bool, error) {
-	// Use the discovery client to determine if the tigera secure specific APIs exist.
+// EnterpriseAPIsExist reports whether the cluster serves the Calico Enterprise APIs.
+func EnterpriseAPIsExist(clientset *kubernetes.Clientset) (bool, error) {
 	resources, err := clientset.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
 	if err != nil {
 		return false, err

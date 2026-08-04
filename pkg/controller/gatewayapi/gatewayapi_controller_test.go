@@ -116,6 +116,7 @@ var _ = Describe("Gateway API controller tests", func() {
 			client:              c,
 			scheme:              scheme,
 			status:              mockStatus,
+			variant:             operatorv1.CalicoEnterprise,
 			tierWatchReady:      &utils.ReadyFlag{},
 			newComponentHandler: FakeComponentHandler,
 			watchEnvoyProxy:     func(namespacedName operatorv1.NamespacedName) error { return nil },
