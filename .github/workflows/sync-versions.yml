@@ -93,3 +93,28 @@ jobs:
             exit 0
           fi
           gh pr review "$PR" -R "$REPO" --approve
+
+      # GitHub holds Actions runs on a PR pushed by github-actions[bot] in the
+      # action_required state, which leaves the PR permanently unmergeable.
+      # Release them as marvin-tigera.
+      - name: Approve held workflow runs
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.MARVIN_PAT }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=$(gh pr view "$PR" -R "$REPO" --json headRefOid -q .headRefOid)
+          for _ in $(seq 1 6); do
+            runs=$(gh api "repos/$REPO/actions/runs?head_sha=$sha" \
+              --jq '.workflow_runs[] | select(.conclusion == "action_required") | .id')
+            if [ -n "$runs" ]; then
+              for id in $runs; do
+                echo "Approving held run $id"
+                gh api -X POST "repos/$REPO/actions/runs/$id/approve"
+              done
+              break
+            fi
+            echo "No held runs for $sha yet; waiting."
+            sleep 10
+          done
