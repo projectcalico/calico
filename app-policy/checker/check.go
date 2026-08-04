@@ -171,16 +171,18 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 			}
 			policiesInScope++
 
-			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
+			policyID := ftypes.ProtoToPolicyID(pID)
+			policy := store.PolicyByID[policyID]
 			if policy == nil {
 				// The endpoint's tier names this policy but the store does not have it, so we cannot
 				// know its verdict. We should never get here: a policy is sent before the endpoints
 				// that reference it. Fail closed rather than apply the rest of the tier to a request
 				// this policy may govern.
-				rlogMissingPolicy.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
+				rlogMissingPolicy.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, policy=%s, tier=%s)",
+					i, policyID.ID(), tier.GetName())
 				s.Code = INTERNAL
 				s.Message = fmt.Sprintf("policy %s of tier %s is missing from the policy store",
-					policyDisplayName(pID), tier.GetName())
+					policyID.ID(), tier.GetName())
 				return
 			}
 
@@ -208,7 +210,7 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 			case LOG:
 				log.Debug("policy should never return LOG action")
 				s.Code = INVALID_ARGUMENT
-				s.Message = fmt.Sprintf("policy %s returned a LOG action", policyDisplayName(pID))
+				s.Message = fmt.Sprintf("policy %s returned a LOG action", policyID.ID())
 				return
 			}
 		}
@@ -353,13 +355,4 @@ func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []*proto.Po
 		return tier.EgressPolicies
 	}
 	return tier.IngressPolicies
-}
-
-// policyDisplayName renders a policy ID for a human: how an operator would name it when looking for
-// it with calicoctl.
-func policyDisplayName(pID *proto.PolicyID) string {
-	if pID.Namespace == "" {
-		return fmt.Sprintf("%s(%s)", pID.Name, pID.Kind)
-	}
-	return fmt.Sprintf("%s/%s(%s)", pID.Namespace, pID.Name, pID.Kind)
 }

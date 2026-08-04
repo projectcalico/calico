@@ -1201,7 +1201,7 @@ func TestCheckStoreReportsWhichPolicyIsMissing(t *testing.T) {
 	st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
 		&MockFlow{Protocol: 6, DestPort: 80})
 	Expect(st.Code).To(Equal(INTERNAL))
-	Expect(st.Message).To(Equal("policy ns1/policy1(NetworkPolicy) of tier tier1 is missing from the policy store"))
+	Expect(st.Message).To(Equal("policy np/ns1/policy1 of tier tier1 is missing from the policy store"))
 }
 
 // A trace that stops short of a verdict is worse than no trace: a flow log would show the flow
