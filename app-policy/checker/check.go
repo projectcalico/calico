@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"fmt"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -30,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/rules"
 	ftypes "github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/lib/logrusr"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
 var (
@@ -42,6 +44,23 @@ var (
 
 	rlog1 = logrusr.NewRateLimitedLogger()
 	rlog2 = logrusr.NewRateLimitedLogger()
+	// A missing policy is one log line per evaluation, and Felix's collector re-evaluates every
+	// flow in both directions on every sweep, so a policy that stays missing would log per flow
+	// per sweep.
+	rlogMissingPolicy = logrusr.NewRateLimitedLogger()
+)
+
+// PolicyScope selects which of an endpoint's policies take part in an evaluation.
+type PolicyScope int
+
+const (
+	// EnforcedOnly ignores staged policies, giving the verdict that is actually enforced.
+	// A tier whose policies are all staged is skipped entirely, end-of-tier action included,
+	// exactly as if the tier were not attached to the endpoint at all.
+	EnforcedOnly PolicyScope = iota
+	// StagedAsEnforced evaluates staged policies as though they had been promoted to enforced,
+	// giving the "pending" verdict: what would happen if the staged policies went live now.
+	StagedAsEnforced
 )
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
@@ -61,10 +80,21 @@ const (
 	unknownIndex = -2
 )
 
-// Evaluate evaluates the flow against the policy store and returns the trace of rules.
-func Evaluate(dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) []*calc.RuleID {
-	_, trace := checkTiers(store, ep, dir, flow)
-	return trace
+// Evaluate evaluates the flow against the policy store and returns the trace of rules. The scope
+// decides whether staged policies take part: pass StagedAsEnforced for the pending trace, or
+// EnforcedOnly for the trace the dataplane enforces.
+//
+// It returns an error if the evaluation could not be completed, in which case the trace is nil and
+// the caller should hold on to whatever trace it already had: an empty trace would say the flow has
+// no policy, which is a stronger claim than "we could not work it out".
+func Evaluate(scope PolicyScope, dir rules.RuleDir, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, flow Flow) ([]*calc.RuleID, error) {
+	s, trace := checkTiers(scope, store, ep, dir, flow)
+	if s.Code == INTERNAL || s.Code == INVALID_ARGUMENT {
+		// The evaluation stopped part way through, so the trace stops short of a verdict. Drop it
+		// and report why it stopped.
+		return nil, fmt.Errorf("%s: %s", code.Code(s.Code), s.Message)
+	}
+	return trace, nil
 }
 
 // LookupEndpointKeysFromSrcDst looks up the source and destination endpoint keys for the given
@@ -99,16 +129,16 @@ func ipToEndpointKeys(store *policystore.PolicyStore, addr ip.Addr) []proto.Work
 
 // checkStore applies the tiered policy plus any config based corrections and returns OK if the
 // check passes or PERMISSION_DENIED if the check fails.
-func checkStore(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
+func checkStore(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, req Flow) (s status.Status) {
 	// Check using the configured policy
-	s, _ = checkTiers(store, ep, dir, req)
+	s, _ = checkTiers(scope, store, ep, dir, req)
 	return
 }
 
 // checkTiers applies the tiered policy in the given store and returns OK if the check passes, or PERMISSION_DENIED if
 // the check fails. Note, if no policy matches, the default is PERMISSION_DENIED. It returns the trace of rules that
 // were evaluated.
-func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
+func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir rules.RuleDir, flow Flow) (s status.Status, trace []*calc.RuleID) {
 	s = status.Status{Code: PERMISSION_DENIED}
 	if ep == nil {
 		return
@@ -127,12 +157,33 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 		var (
 			ruleIndex               int
 			tierDefaultActionRuleID *calc.RuleID
+			// Policies of this tier that are in scope for this evaluation. A tier with none of
+			// them contributes nothing at all, end-of-tier action included.
+			policiesInScope int
 		)
 
 		action := NO_MATCH
 	Policy:
 		for i, pID := range policies {
+			if scope == EnforcedOnly && model.KindIsStaged(pID.Kind) {
+				log.Debugf("Staged policy, not enforced, skipping (ordinal=%d, Id=%+v)", i, pID)
+				continue Policy
+			}
+			policiesInScope++
+
 			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
+			if policy == nil {
+				// The endpoint's tier names this policy but the store does not have it, so we cannot
+				// know its verdict. We should never get here: a policy is sent before the endpoints
+				// that reference it. Fail closed rather than apply the rest of the tier to a request
+				// this policy may govern.
+				rlogMissingPolicy.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
+				s.Code = INTERNAL
+				s.Message = fmt.Sprintf("policy %s of tier %s is missing from the policy store",
+					policyDisplayName(pID), tier.GetName())
+				return
+			}
+
 			action, ruleIndex = checkPolicy(policy, dir, request)
 			log.Debugf("Policy checked (ordinal=%d, Id=%+v, action=%v)", i, pID, action)
 			switch action {
@@ -157,11 +208,12 @@ func checkTiers(store *policystore.PolicyStore, ep *proto.WorkloadEndpoint, dir 
 			case LOG:
 				log.Debug("policy should never return LOG action")
 				s.Code = INVALID_ARGUMENT
+				s.Message = fmt.Sprintf("policy %s returned a LOG action", policyDisplayName(pID))
 				return
 			}
 		}
 		// Done evaluating policies in the tier. If no policy rules have matched, apply tier's default action.
-		if action == NO_MATCH {
+		if policiesInScope > 0 && action == NO_MATCH {
 			log.Debugf("No policy matched. Tier default action %v applies.", tier.DefaultAction)
 			trace = append(trace, tierDefaultActionRuleID)
 			// If the default action is anything beside Pass, then apply tier default deny action.
@@ -288,7 +340,7 @@ func handlePanic(s *status.Status) {
 	if r := recover(); r != nil {
 		if v, ok := r.(*InvalidDataFromDataPlane); ok {
 			log.Debug("InvalidFromDataPlane: ", v.string)
-			*s = status.Status{Code: INVALID_ARGUMENT}
+			*s = status.Status{Code: INVALID_ARGUMENT, Message: v.string}
 		} else {
 			panic(r)
 		}
@@ -301,4 +353,13 @@ func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []*proto.Po
 		return tier.EgressPolicies
 	}
 	return tier.IngressPolicies
+}
+
+// policyDisplayName renders a policy ID for a human: how an operator would name it when looking for
+// it with calicoctl.
+func policyDisplayName(pID *proto.PolicyID) string {
+	if pID.Namespace == "" {
+		return fmt.Sprintf("%s(%s)", pID.Name, pID.Kind)
+	}
+	return fmt.Sprintf("%s/%s(%s)", pID.Namespace, pID.Name, pID.Kind)
 }
