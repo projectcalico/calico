@@ -208,9 +208,12 @@ func lmSendGARP(w *workload.Workload) {
 }
 
 // lmGARPElicitsRoutes sends GARPs from the workload until the expected routes appear on the
-// host.  Retrying the GARP makes the test robust against the GARP being sent just before
-// Felix's listener is ready.  Only the IPv4 route needs the retry loop: once it has appeared
-// the GARP has been seen, and the IPv6 route follows from the same FSM transition.
+// host.  Re-sending the GARP on each poll makes the test robust against the GARP being sent
+// just before Felix's listener is ready, and only the first (IPv4) assertion needs to do that:
+// once its route appears the GARP has demonstrably been seen, and the remaining families follow
+// from the same FSM transition.  Those still get a bounded wait rather than a bare expectation,
+// because each family's routes are programmed independently, by its own endpoint manager, and
+// may land a moment later.
 func lmGARPElicitsRoutes(felix *infrastructure.Felix, w *workload.Workload, expectedMetric string) {
 	routes := lmWorkloadRoutes(felix, w)
 	EventuallyWithOffset(1, func() string {
