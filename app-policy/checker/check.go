@@ -166,12 +166,13 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 
 			policy := store.PolicyByID[ftypes.ProtoToPolicyID(pID)]
 			if policy == nil {
-				// The endpoint's tier lists this policy but we have not been told its rules, so we
-				// cannot know its verdict, and skipping it would apply the rest of the tier's
-				// policies to a request they may not govern. Fail closed instead.
-				log.Errorf("Policy in tier but not in store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
+				// The endpoint's tier names this policy but the store does not have it, so we cannot
+				// know its verdict. We should never get here: a policy is sent before the endpoints
+				// that reference it. Fail closed rather than apply the rest of the tier to a request
+				// this policy may govern.
+				log.Errorf("Policy named in tier is missing from the store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
 				s.Code = INTERNAL
-				s.Message = fmt.Sprintf("policy %s of tier %s has not been synced yet",
+				s.Message = fmt.Sprintf("policy %s of tier %s is missing from the policy store",
 					policyDisplayName(pID), tier.GetName())
 				return
 			}

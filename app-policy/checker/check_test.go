@@ -716,8 +716,8 @@ func TestCheckStoreInitFails(t *testing.T) {
 	}}
 	flow := NewCheckRequestToFlowAdapter(req)
 
-	// The tier lists policies whose rules have not been synced yet, so their verdict is unknowable
-	// and evaluation fails closed rather than guessing.
+	// The tier names policies the store does not have, so their verdict is unknowable and
+	// evaluation fails closed rather than guessing.
 	status := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress, flow)
 	Expect(status.Code).To(Equal(INTERNAL))
 }
@@ -1124,16 +1124,16 @@ func TestCheckTiersPolicyScope(t *testing.T) {
 		},
 		{
 			name: "a policy missing from the store fails the evaluation",
-			// Its update has not arrived yet, so its verdict is unknowable: fail closed rather than
-			// hand the request on to the rest of the tier.
+			// Its verdict is unknowable, so fail closed rather than hand the request on to the rest
+			// of the tier.
 			tiers:       tierInfos(policyIDs(notInStore, enforcedAllow)),
 			wantEnforce: INTERNAL,
 			wantPending: INTERNAL,
 		},
 		{
 			name: "a policy missing from the store behind a match is never reached",
-			// Evaluation stops at the first match, in the store as in the dataplane, so a policy we
-			// know nothing about does not invalidate a verdict reached before it.
+			// Evaluation stops at the first match, in the store as in the dataplane, so a missing
+			// policy does not invalidate a verdict reached before it.
 			tiers:       tierInfos(policyIDs(enforcedAllow, notInStore)),
 			wantEnforce: OK,
 			wantPending: OK,
@@ -1201,7 +1201,7 @@ func TestCheckStoreReportsWhichPolicyIsMissing(t *testing.T) {
 	st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
 		&MockFlow{Protocol: 6, DestPort: 80})
 	Expect(st.Code).To(Equal(INTERNAL))
-	Expect(st.Message).To(Equal("policy ns1/policy1(NetworkPolicy) of tier tier1 has not been synced yet"))
+	Expect(st.Message).To(Equal("policy ns1/policy1(NetworkPolicy) of tier tier1 is missing from the policy store"))
 }
 
 // A trace that stops short of a verdict is worse than no trace: a flow log would show the flow
