@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"fmt"
 	"strings"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
@@ -170,6 +171,8 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 				// policies to a request they may not govern. Fail closed instead.
 				log.Errorf("Policy in tier but not in store, failing evaluation (ordinal=%d, Id=%+v)", i, pID)
 				s.Code = INTERNAL
+				s.Message = fmt.Sprintf("policy %s of tier %s has not been synced yet",
+					policyDisplayName(pID), tier.GetName())
 				return
 			}
 
@@ -197,6 +200,7 @@ func checkTiers(scope PolicyScope, store *policystore.PolicyStore, ep *proto.Wor
 			case LOG:
 				log.Debug("policy should never return LOG action")
 				s.Code = INVALID_ARGUMENT
+				s.Message = fmt.Sprintf("policy %s returned a LOG action", policyDisplayName(pID))
 				return
 			}
 		}
@@ -328,7 +332,7 @@ func handlePanic(s *status.Status) {
 	if r := recover(); r != nil {
 		if v, ok := r.(*InvalidDataFromDataPlane); ok {
 			log.Debug("InvalidFromDataPlane: ", v.string)
-			*s = status.Status{Code: INVALID_ARGUMENT}
+			*s = status.Status{Code: INVALID_ARGUMENT, Message: v.string}
 		} else {
 			panic(r)
 		}
@@ -341,4 +345,13 @@ func getPoliciesByDirection(dir rules.RuleDir, tier *proto.TierInfo) []*proto.Po
 		return tier.EgressPolicies
 	}
 	return tier.IngressPolicies
+}
+
+// policyDisplayName renders a policy ID for a human: how an operator would name it when looking for
+// it with calicoctl.
+func policyDisplayName(pID *proto.PolicyID) string {
+	if pID.Namespace == "" {
+		return fmt.Sprintf("%s(%s)", pID.Name, pID.Kind)
+	}
+	return fmt.Sprintf("%s/%s(%s)", pID.Namespace, pID.Name, pID.Kind)
 }

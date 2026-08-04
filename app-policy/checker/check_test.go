@@ -1188,6 +1188,22 @@ func tierInfos(tiers ...[]*proto.PolicyID) []*proto.TierInfo {
 	return tierInfos
 }
 
+// The status message says which policy was missing, so an operator seeing a denied request in the
+// Dikastes log does not have to guess.
+func TestCheckStoreReportsWhichPolicyIsMissing(t *testing.T) {
+	RegisterTestingT(t)
+
+	missing := &proto.PolicyID{Name: "policy1", Namespace: "ns1", Kind: v3.KindNetworkPolicy}
+
+	store := policystore.NewPolicyStore()
+	store.Endpoint = &proto.WorkloadEndpoint{Tiers: tierInfos(policyIDs(missing))}
+
+	st := checkStore(EnforcedOnly, store, store.Endpoint, rules.RuleDirIngress,
+		&MockFlow{Protocol: 6, DestPort: 80})
+	Expect(st.Code).To(Equal(INTERNAL))
+	Expect(st.Message).To(Equal("policy ns1/policy1(NetworkPolicy) of tier tier1 has not been synced yet"))
+}
+
 // A trace that stops short of a verdict is worse than no trace: a flow log would show the flow
 // running off the end of policy. Callers get nothing instead.
 func TestEvaluateDiscardsTraceWhenEvaluationFails(t *testing.T) {
