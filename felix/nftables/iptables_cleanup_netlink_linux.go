@@ -95,7 +95,15 @@ func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive
 
 		rules, err := conn.GetRules(table, chain)
 		if err != nil {
-			return nil, fmt.Errorf("list rules in chain %s: %w", chain.Name, err)
+			// A partial view could miss a rule of ours, so give up on this table and let the
+			// others be swept.
+			logrus.WithError(err).WithFields(logrus.Fields{
+				"table": chain.Table.Name,
+				"chain": chain.Name,
+			}).Warn("Failed to read chain; skipping this table")
+			delete(states, chain.Table.Name)
+			delete(wanted, chain.Table.Name)
+			continue
 		}
 		for _, rule := range rules {
 			state.Rules = append(state.Rules, iptablesRule{
