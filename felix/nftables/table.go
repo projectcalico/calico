@@ -466,7 +466,7 @@ func newTable(
 		}
 	}
 
-	// Allow override of exec.Command() and time.Sleep() for test purposes.
+	// Allow override of time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
@@ -561,6 +561,13 @@ func (n *NftablesTable) Name() string {
 
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+// CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
+// when nftables is disabled an ordinary apply deletes the whole table. That's safe because we
+// don't share the Calico table with any other writers.
+func (n *NftablesTable) CleanUp() time.Duration {
+	return n.Apply()
 }
 
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
