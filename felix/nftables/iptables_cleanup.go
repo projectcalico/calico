@@ -95,7 +95,7 @@ func NewIPTablesCleanup(
 		chainPrefixes:   chainPrefixes,
 		newDataplane:    newDataplane,
 		readTables:      readTablesViaNetlink,
-		refreshInterval: options.RefreshInterval,
+		refreshInterval: refreshInterval,
 		timeNow:         timeNow,
 		onStillAlive:    onStillAlive,
 		opReporter:      options.OpRecorder,

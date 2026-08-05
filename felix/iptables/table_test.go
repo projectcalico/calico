@@ -2030,13 +2030,13 @@ var _ = Describe("Table in cleanup-only mode", func() {
 	var dataplane *testutils.MockDataplane
 	var table *Table
 
-	newTable := func(cleanupOnly bool) *Table {
+	newTableWithRefresh := func(cleanupOnly bool, refreshInterval time.Duration) *Table {
 		featureDetector := environment.NewFeatureDetector(nil)
 		featureDetector.NewCmd = dataplane.NewCmd
 		featureDetector.GetKernelVersionReader = dataplane.GetKernelVersionReader
 		return NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, TableOptions{
 			HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
-			RefreshInterval:       30 * time.Second,
+			RefreshInterval:       refreshInterval,
 			CleanupOnly:           cleanupOnly,
 			NewCmdOverride:        dataplane.NewCmd,
 			SleepOverride:         dataplane.Sleep,
@@ -2044,6 +2044,10 @@ var _ = Describe("Table in cleanup-only mode", func() {
 			LookPathOverride:      testutils.LookPathAll,
 			OpRecorder:            logrusr.NewSummarizer("test loop"),
 		})
+	}
+
+	newTable := func(cleanupOnly bool) *Table {
+		return newTableWithRefresh(cleanupOnly, 30*time.Second)
 	}
 
 	BeforeEach(func() {
@@ -2073,6 +2077,25 @@ var _ = Describe("Table in cleanup-only mode", func() {
 		Expect(dataplane.CmdNames).To(HaveLen(saves), "retried before the refresh interval was up")
 
 		dataplane.AdvanceTimeBy(31 * time.Second)
+		table.Apply()
+		Expect(len(dataplane.CmdNames)).To(BeNumerically(">", saves))
+	})
+
+	// Zero disables the periodic refresh, but a zero reschedule means the dataplane loop never
+	// comes back to us, so cleanup would stop for good on an idle node.
+	It("still reschedules with the refresh interval disabled", func() {
+		dataplane.FailAllSaves = true
+		table = newTableWithRefresh(true, 0)
+
+		// Matches defaultCleanupRetryInterval, which this external test package can't see.
+		const retryInterval = 180 * time.Second
+		Expect(table.Apply()).To(Equal(retryInterval))
+
+		saves := len(dataplane.CmdNames)
+		table.Apply()
+		Expect(dataplane.CmdNames).To(HaveLen(saves), "retried before the retry interval was up")
+
+		dataplane.AdvanceTimeBy(retryInterval + time.Second)
 		table.Apply()
 		Expect(len(dataplane.CmdNames)).To(BeNumerically(">", saves))
 	})

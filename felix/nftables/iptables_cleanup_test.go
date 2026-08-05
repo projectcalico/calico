@@ -337,4 +337,25 @@ var _ = Describe("iptables cleanup, scheduling its passes", func() {
 		readErr = errors.New("netlink blew up")
 		Expect(cleanup.CleanUp()).To(Equal(time.Minute))
 	})
+
+	// Zero disables the periodic refresh of the tables Felix programs. The sweep still has to
+	// happen, but without a pace of its own it would run on every dataplane apply.
+	It("paces itself with the refresh interval disabled", func() {
+		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+			RefreshInterval: 0,
+			NowOverride:     func() time.Time { return now },
+		})
+		cleanup.readTables = readTables
+
+		Expect(cleanup.CleanUp()).To(Equal(defaultSweepInterval))
+		Expect(read).To(HaveLen(1))
+
+		now = now.Add(time.Minute)
+		Expect(cleanup.CleanUp()).To(Equal(defaultSweepInterval - time.Minute))
+		Expect(read).To(HaveLen(1), "should not have read the dataplane again")
+
+		now = now.Add(defaultSweepInterval)
+		Expect(cleanup.CleanUp()).To(Equal(defaultSweepInterval))
+		Expect(read).To(HaveLen(2))
+	})
 })
