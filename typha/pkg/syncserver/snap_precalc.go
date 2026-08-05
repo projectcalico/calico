@@ -22,8 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
-	"github.com/klauspost/compress/zstd"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
@@ -204,7 +202,7 @@ func (s *SnapshotCache) clearSnapshot() {
 }
 
 type progressWriter struct {
-	W            io.WriteCloser
+	W            syncproto.Compressor
 	BytesWritten int
 }
 
@@ -216,22 +214,11 @@ func (p2 *progressWriter) Write(p []byte) (n int, err error) {
 
 func (s *SnapshotCache) writeDataToSnapshot(snap *snapshot) {
 	s.counterBinSnapsGenerated.Inc()
-	var progressW progressWriter
-	var w io.WriteCloser
-	switch s.compressionAlgorithm {
-	case syncproto.CompressionSnappy:
-		w = snappy.NewBufferedWriter(snap.buf)
-		progressW = progressWriter{W: w}
-	case syncproto.CompressionZstd:
-		var err error
-		w, err = zstd.NewWriter(snap.buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
-		if err != nil {
-			s.logCtx.WithError(err).Panic("Failed to create Zstd writer")
-		}
-		progressW = progressWriter{W: w}
-	default:
-		s.logCtx.Panic("Unknown compression algorithm")
+	w, err := syncproto.NewSnapshotCompressor(s.compressionAlgorithm, snap.buf)
+	if err != nil {
+		s.logCtx.WithError(err).Panic("Failed to create compression writer")
 	}
+	progressW := progressWriter{W: w}
 	encoder := gob.NewEncoder(&progressW)
 	writeMsg := func(msg any) error {
 		envelope := syncproto.Envelope{
@@ -243,7 +230,7 @@ func (s *SnapshotCache) writeDataToSnapshot(snap *snapshot) {
 		}
 		return nil
 	}
-	err := writeSnapshotMessages(
+	err = writeSnapshotMessages(
 		context.Background(),
 		s.logCtx.WithField("destination", "compressed in-memory cache"),
 		snap.crumb,
@@ -255,19 +242,19 @@ func (s *SnapshotCache) writeDataToSnapshot(snap *snapshot) {
 		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot.")
 	}
 
-	err = writeMsg(syncproto.MsgDecoderRestart{
-		Message:              "End of compressed snapshot.",
-		CompressionAlgorithm: s.compressionAlgorithm,
+	// End the snapshot stream with a trailing MsgDecoderRestart;
+	// CloseWithFinalMessage keeps that message in the stream's final block so
+	// that the client's synchronous decompressor consumes the whole stream
+	// when it decodes the message.
+	err = syncproto.CloseWithFinalMessage(w, func() error {
+		return writeMsg(syncproto.MsgDecoderRestart{
+			Message:              "End of compressed snapshot.",
+			CompressionAlgorithm: s.compressionAlgorithm,
+		})
 	})
 	if err != nil {
 		// Shouldn't happen because we're serialising to an in-memory buffer.
-		s.logCtx.WithError(err).Panic("Failed to serialise datastore snapshot end message.")
-	}
-
-	err = w.Close() // Does Flush() for us.
-	if err != nil {
-		// Shouldn't happen because we're serialising to an in-memory buffer.
-		s.logCtx.WithError(err).Panic("Failed to close datastore snapshot.")
+		s.logCtx.WithError(err).Panic("Failed to finish datastore snapshot.")
 	}
 
 	// Closing the multi-reader buffer signals all the waiting readers.

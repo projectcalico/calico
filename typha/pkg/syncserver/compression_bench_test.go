@@ -143,19 +143,19 @@ func gobEncodeUpdates(updates []api.Update) []byte {
 	return buf.Bytes()
 }
 
-// compressSnappy compresses data using snappy (same as Typha's snappy.NewBufferedWriter).
+// compressSnappy compresses data with Typha's snapshot compressor settings.
 func compressSnappy(data []byte) []byte {
-	var buf bytes.Buffer
-	w := snappy.NewBufferedWriter(&buf)
-	_, _ = w.Write(data)
-	_ = w.Close()
-	return buf.Bytes()
+	return compressWithSnapshotCompressor(syncproto.CompressionSnappy, data)
 }
 
-// compressZstd compresses data using zstd at SpeedFastest (same as Typha's snap_precalc.go).
+// compressZstd compresses data with Typha's snapshot compressor settings.
 func compressZstd(data []byte) []byte {
+	return compressWithSnapshotCompressor(syncproto.CompressionZstd, data)
+}
+
+func compressWithSnapshotCompressor(alg syncproto.CompressionAlgorithm, data []byte) []byte {
 	var buf bytes.Buffer
-	w, err := zstd.NewWriter(&buf, zstd.WithEncoderLevel(zstd.SpeedFastest))
+	w, err := syncproto.NewSnapshotCompressor(alg, &buf)
 	if err != nil {
 		panic(err)
 	}

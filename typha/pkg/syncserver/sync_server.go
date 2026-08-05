@@ -15,7 +15,6 @@
 package syncserver
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -31,8 +30,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
-	"github.com/klauspost/compress/zstd"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -53,6 +50,7 @@ var (
 	ErrReadFailed               = errors.New("failed to read from client")
 	ErrUnexpectedClientMsg      = errors.New("unexpected message from client")
 	ErrUnsupportedClientFeature = errors.New("unsupported client feature")
+	ErrNoSnapshotCache          = errors.New("no snapshot cache for negotiated compression algorithm")
 	errInboundMessageTooLarge   = errors.New("inbound message too large")
 )
 
@@ -400,6 +398,12 @@ func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Ser
 				s.binSnapCaches[alg][st] = NewSnappySnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
 			case syncproto.CompressionZstd:
 				s.binSnapCaches[alg][st] = NewZstdSnapCache(string(st), cache, config.BinarySnapshotTimeout, config.WriteTimeout)
+			default:
+				// Negotiation picks from the same order, so a missing arm
+				// here would put every client that prefers the new
+				// algorithm into a connect/tear-down loop.  Fail at startup
+				// instead.
+				log.WithField("algorithm", alg).Panic("No snapshot cache implementation for compression algorithm.")
 			}
 		}
 	}
@@ -562,9 +566,7 @@ func (s *Server) serve(cxt context.Context) {
 				"connID": connID,
 			}),
 
-			encoder:     gob.NewEncoder(connW),
-			flushWriter: func() error { return nil },
-			readC:       make(chan any),
+			readC: make(chan any),
 
 			allMetrics: s.perSyncerConnMetrics,
 		}
@@ -790,9 +792,11 @@ type connection struct {
 	writeLock            sync.Mutex
 	currentWriteDeadline time.Time
 	encoder              *gob.Encoder
-	flushWriter          func() error
-	compressCloser       io.Closer // tracks the active compression writer for cleanup
-	readC                chan any
+	// writer is the (possibly compressing) writer that the encoder writes
+	// to; it wraps connW.  Replaced together with the encoder at each
+	// encoding restart.
+	writer syncproto.Compressor
+	readC  chan any
 
 	logCxt                       *log.Entry
 	chosenCompression            syncproto.CompressionAlgorithm
@@ -822,12 +826,11 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 		}
 		// Wait for the background threads to shut down.
 		h.shutDownWG.Wait()
-		// Now that no other goroutine can be writing, close the compression
-		// writer (if any) to release its resources.  The connection is
-		// already closed, so nothing reaches the client.
-		if h.compressCloser != nil {
-			_ = h.compressCloser.Close()
-			h.compressCloser = nil
+		// Now that no other goroutine can be writing, close the writer to
+		// release the compression writer's resources (if any).  The
+		// connection is already closed, so nothing reaches the client.
+		if h.writer != nil {
+			_ = h.writer.Close()
 		}
 		gaugeNumConnections.Dec()
 		h.logCxt.Info("Client connection shut down.")
@@ -841,6 +844,13 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	h.shutDownWG.Add(1)
 	go h.readFromClient(h.logCxt.WithField("thread", "read"))
 
+	// The handshake always starts uncompressed; if it picks a compression
+	// algorithm, we restart the encoding below.
+	if err = h.restartEncoder(); err != nil {
+		log.WithError(err).Error("Failed to create initial encoder")
+		return
+	}
+
 	// Now do the (synchronous) handshake.
 	if err = h.doHandshake(); err != nil {
 		return // Error already logged.
@@ -852,28 +862,25 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 	var binSnapCache snapshotCache
 	if h.clientSupportsDecoderRestart {
 		binSnapCache = h.allSnapshotters[h.chosenCompression][h.syncerType]
-		var reasonsToRestart []string
-		if h.chosenCompression != "" {
-			reasonsToRestart = append(reasonsToRestart, fmt.Sprintf("enable compression: %v", h.chosenCompression))
+		if h.chosenCompression != "" && binSnapCache == nil {
+			// Shouldn't happen: the server creates a snapshot cache for
+			// every algorithm it can choose, for every syncer type that
+			// passes the handshake.
+			h.logCxt.WithField("algorithm", h.chosenCompression).Error(
+				"No snapshot cache for negotiated compression algorithm.")
+			err = ErrNoSnapshotCache
+			return
 		}
 		if binSnapCache != nil {
-			reasonsToRestart = append(reasonsToRestart, "send binary snapshot")
-		}
-		if len(reasonsToRestart) > 0 {
-			// We have a reason to restart the encoding...
-			h.logCxt.WithField("reasons", reasonsToRestart).Info("Restarting encoding.")
-			if binSnapCache != nil {
-				// Binary snapshot will follow: send MsgDecoderRestart and wait
-				// for ACK, but don't create a compressed encoder yet -- the
-				// snapshot is sent as raw bytes directly to the connection,
-				// bypassing the encoder.  The real encoder is created after
-				// the snapshot.
-				err = h.sendDecoderRestartAndWaitForAck(strings.Join(reasonsToRestart, ";"))
-			} else {
-				// No binary snapshot: create the compressed encoder now so
-				// the streamed snapshot goes through it.
-				err = h.restartEncodingIfSupported(strings.Join(reasonsToRestart, ";"))
-			}
+			// A snapshot cache only exists for a negotiated compression
+			// algorithm, so both reasons always apply together.  Send
+			// MsgDecoderRestart and wait for ACK, but don't create the new
+			// encoder yet -- the binary snapshot that follows is sent as raw
+			// bytes directly to the connection, bypassing the encoder.  The
+			// new encoder is created after the snapshot.
+			reason := fmt.Sprintf("enable compression: %v; send binary snapshot", h.chosenCompression)
+			h.logCxt.WithField("reason", reason).Info("Restarting encoding.")
+			err = h.sendDecoderRestartAndWaitForAck(reason)
 			if err != nil {
 				log.WithError(err).Info("Failed to restart encoding after handshake, tearing down connection.")
 				return
@@ -891,6 +898,10 @@ func (h *connection) handle(finishedWG *sync.WaitGroup) (err error) {
 			log.WithError(err).Info("Failed to send snapshot to client, tearing down connection.")
 			return
 		}
+		// SendSnapshot manages the connection's write deadline itself and
+		// leaves it unset; zero our cached deadline so the next sendMsg arms
+		// a fresh one rather than trusting the stale value.
+		h.currentWriteDeadline = time.Time{}
 
 		// The canned snapshot ends with a MsgDecoderRestart, so we just need
 		// to wait for the ACK and then create the compressed encoder for
@@ -1119,27 +1130,26 @@ func (h *connection) doHandshake() error {
 	return nil
 }
 
-func (h *connection) restartEncodingIfSupported(message string) error {
-	if !h.clientSupportsDecoderRestart {
-		log.Debug("Can't restart decoder, client doesn't support it.")
-		return nil
-	}
-
-	if err := h.sendDecoderRestartAndWaitForAck(message); err != nil {
-		return err
-	}
-	return h.restartEncoder()
-}
-
 // sendDecoderRestartAndWaitForAck signals the client to restart its decoder
-// (possibly with compression enabled) and waits for the ACK, but does NOT
-// create a new encoder.  Use this when a binary snapshot will follow
-// immediately (the snapshot bypasses the encoder).
+// (possibly with compression enabled) and waits for the ACK.  The restart
+// message is the last message in the old encoding: after sending it, we
+// close the old writer so that the old stream -- including any compression
+// stream terminator -- is fully on the wire.  The client relies on that to
+// discard its decompressor at the boundary without losing bytes.  The caller
+// starts the new encoding after this returns: either a cached binary
+// snapshot written directly to the connection, or a new encoder from
+// restartEncoder.
 func (h *connection) sendDecoderRestartAndWaitForAck(message string) error {
-	// Signal for the client to restart its decoder (possibly) with compression enabled.
-	err := h.sendMsg(syncproto.MsgDecoderRestart{
-		Message:              message,
-		CompressionAlgorithm: h.chosenCompression,
+	// CloseWithFinalMessage terminates the old encoding's stream with the
+	// restart message as its final data, writing everything -- stream
+	// terminator included -- through to the connection.  Nothing else writes
+	// during this phase of the protocol, and we write nothing more until the
+	// ACK arrives.
+	err := syncproto.CloseWithFinalMessage(h.writer, func() error {
+		return h.sendMsgWithoutFlush(syncproto.MsgDecoderRestart{
+			Message:              message,
+			CompressionAlgorithm: h.chosenCompression,
+		})
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send DecoderRestart to client")
@@ -1172,58 +1182,35 @@ func (h *connection) waitForAckAndRestartEncoder() error {
 	return h.restartEncoder()
 }
 
-// restartEncoder creates a new encoder on the connection, optionally wrapping
-// it with a compression writer based on h.chosenCompression.
+// restartEncoder creates a fresh encoder for the connection, writing through
+// a compression writer chosen during the handshake (a pass-through before
+// the handshake or if no compression was negotiated).  Each encoding is a
+// self-contained stream: the previous one, if any, was terminated by
+// sendDecoderRestartAndWaitForAck.
 func (h *connection) restartEncoder() error {
-	// Close any previous compression writer before creating a new one.
-	if h.compressCloser != nil {
-		_ = h.compressCloser.Close()
-		h.compressCloser = nil
+	w, err := syncproto.NewStreamCompressor(h.chosenCompression, h.connW)
+	if err != nil {
+		return err
 	}
-
-	bw := bufio.NewWriter(h.connW)
-	switch h.chosenCompression {
-	case syncproto.CompressionSnappy:
-		w := snappy.NewBufferedWriter(bw)
-		h.compressCloser = w
-		h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
-		h.flushWriter = func() error {
-			if err := w.Flush(); err != nil {
-				return err
-			}
-			return bw.Flush()
-		}
-	case syncproto.CompressionZstd:
-		// Bound per-connection resource usage: delta updates are written in
-		// small, frequently-flushed batches, so one encoder goroutine and a
-		// modest window are plenty.  The library defaults (GOMAXPROCS
-		// goroutines and an 8MiB window per Writer) add up quickly when the
-		// server has many connections.
-		w, err := zstd.NewWriter(bw,
-			zstd.WithEncoderLevel(zstd.SpeedFastest),
-			zstd.WithEncoderConcurrency(1),
-			zstd.WithWindowSize(1<<20),
-		)
-		if err != nil {
-			return err
-		}
-		h.compressCloser = w
-		h.encoder = gob.NewEncoder(w)
-		h.flushWriter = func() error {
-			if err := w.Flush(); err != nil {
-				return err
-			}
-			return bw.Flush()
-		}
-	default:
-		h.encoder = gob.NewEncoder(bw) // Need a new Encoder, there's no way to change out the Writer.
-		h.flushWriter = bw.Flush
-	}
+	h.writer = w
+	h.encoder = gob.NewEncoder(w) // Need a new Encoder, there's no way to change out the Writer.
 	return nil
 }
 
-// sendMsg sends a message to the client.  It may be called from multiple goroutines.
+// sendMsg sends a message to the client and flushes it through to the
+// connection.  It may be called from multiple goroutines.
 func (h *connection) sendMsg(msg any) error {
+	return h.sendMsgMaybeFlush(msg, true)
+}
+
+// sendMsgWithoutFlush sends a message to the client, leaving it pending in
+// the writer.  Used only for the final message of a stream, which the caller
+// pushes out by closing the writer (see sendDecoderRestartAndWaitForAck).
+func (h *connection) sendMsgWithoutFlush(msg any) error {
+	return h.sendMsgMaybeFlush(msg, false)
+}
+
+func (h *connection) sendMsgMaybeFlush(msg any, flush bool) error {
 	if h.cxt.Err() != nil {
 		// Optimisation, don't bother to send if we're being torn down.
 		return h.cxt.Err()
@@ -1249,9 +1236,11 @@ func (h *connection) sendMsg(msg any) error {
 		h.logCxt.WithError(err).Info("Failed to write to client")
 		return err
 	}
-	if err := h.flushWriter(); err != nil {
-		h.logCxt.WithError(err).Info("Failed to flush write to client")
-		return err
+	if flush {
+		if err := h.writer.Flush(); err != nil {
+			h.logCxt.WithError(err).Info("Failed to flush write to client")
+			return err
+		}
 	}
 	h.summaryWriteLatency.Observe(time.Since(startTime).Seconds())
 	return nil

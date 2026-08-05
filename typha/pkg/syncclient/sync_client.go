@@ -29,8 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/snappy"
-	"github.com/klauspost/compress/zstd"
 	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -175,7 +173,10 @@ type SyncerClient struct {
 	connR      io.Reader
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
-	zstdReader *zstd.Decoder
+	// decompressor is the (possibly pass-through) reader that the decoder
+	// reads from; it wraps connR.  Replaced together with the decoder at
+	// each decoder restart.
+	decompressor syncproto.Decompressor
 
 	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
 	// server selected for the current connection ("" if uncompressed).
@@ -439,9 +440,9 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 	defer connFinished.Done()
 	defer cancelFn()
 	defer func() {
-		if s.zstdReader != nil {
-			s.zstdReader.Close()
-			s.zstdReader = nil
+		if s.decompressor != nil {
+			s.decompressor.Close()
+			s.decompressor = nil
 		}
 	}()
 
@@ -451,8 +452,10 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
-	s.decoder = gob.NewDecoder(s.connR)
-	s.negotiatedCompression.Store(syncproto.CompressionAlgorithm(""))
+	if err := s.swapDecompressor(""); err != nil {
+		logCxt.WithError(err).Error("Failed to create decoder")
+		return
+	}
 
 	ourSyncerType := s.options.SyncerType
 	if ourSyncerType == "" {
@@ -580,45 +583,40 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 }
 
 func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
-	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
-	// Check if we should enable compression.
-	switch msg.CompressionAlgorithm {
-	case syncproto.CompressionSnappy:
-		logCxt.Info("Server selected snappy compression.")
-		// Snappy's reader is synchronous (no background goroutine or
-		// read-ahead buffering), so it's safe to create a new reader on
-		// each decoder restart without losing data from the connection.
-		r := snappy.NewReader(s.connR)
-		s.decoder = gob.NewDecoder(r)
-	case syncproto.CompressionZstd:
-		logCxt.Info("Server selected zstd compression.")
-		if s.zstdReader == nil {
-			r, err := zstd.NewReader(s.connR, zstd.WithDecoderConcurrency(1))
-			if err != nil {
-				logCxt.WithError(err).Error("Failed to create zstd reader")
-				return err
-			}
-			s.zstdReader = r
-		}
-		// Reuse the existing zstd reader across decoder restarts.  It may
-		// hold input that it read ahead from the connection, and it decodes
-		// consecutive zstd frames as one continuous stream, so no bytes are
-		// lost at the frame boundary.  We only need a new gob decoder since
-		// the server restarted its gob encoder.
-		s.decoder = gob.NewDecoder(s.zstdReader)
-	case "":
-		logCxt.Info("Server selected no compression.")
-		s.decoder = gob.NewDecoder(s.connR)
-	default:
-		logCxt.WithField("algorithm", msg.CompressionAlgorithm).Error("Server selected unknown compression algorithm")
-		return fmt.Errorf("unknown compression algorithm: %q", msg.CompressionAlgorithm)
+	logCxt.WithFields(log.Fields{
+		"msg":         msg,
+		"compression": msg.CompressionAlgorithm,
+	}).Info("Server asked us to restart our decoder")
+	// The restart message is the last data in the old stream and the server
+	// terminated the stream right after it, so the old decompressor has
+	// consumed exactly the old stream's bytes from the connection.  Discard
+	// it and start a fresh one for the new stream; syncproto.Decompressor
+	// guarantees no read-ahead across the boundary.
+	if err := s.swapDecompressor(msg.CompressionAlgorithm); err != nil {
+		logCxt.WithError(err).Error("Failed to restart decoder")
+		return err
 	}
-	s.negotiatedCompression.Store(msg.CompressionAlgorithm)
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
 		syncproto.MsgACK{},
 	)
 	return err
+}
+
+// swapDecompressor closes the current decompressor (if any) and installs a
+// fresh one reading from the connection, along with a fresh gob decoder.
+func (s *SyncerClient) swapDecompressor(algorithm syncproto.CompressionAlgorithm) error {
+	d, err := syncproto.NewDecompressor(algorithm, s.connR)
+	if err != nil {
+		return err
+	}
+	if s.decompressor != nil {
+		s.decompressor.Close()
+	}
+	s.decompressor = d
+	s.decoder = gob.NewDecoder(d)
+	s.negotiatedCompression.Store(algorithm)
+	return nil
 }
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's

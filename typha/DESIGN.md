@@ -40,10 +40,17 @@ uncompressed).
   requires the client to support decoder restart; otherwise the stream
   stays uncompressed.
 - **Switching invariant.** The server changes the stream encoding only
-  via `MsgDecoderRestart`, and it sends no bytes in the new encoding
-  until the client ACKs. This guarantees the client can never read
-  bytes in one encoding with a decoder for another, no matter how much
-  its decoder has buffered.
+  via `MsgDecoderRestart`, which is a hard boundary. On the server, the
+  restart message is the last data in the old stream: the server flushes,
+  writes the message, then closes the stream (so the message sits in the
+  stream's final data block and the terminator reaches the wire), and
+  sends no bytes in the new encoding until the client ACKs. On the
+  client, decoding the restart message therefore means the old stream
+  is fully consumed; the client discards its decompressor and creates a
+  fresh one for the new stream, whatever the algorithm. Both sides
+  access compression only through the `Compressor`/`Decompressor`
+  interfaces in `pkg/syncproto`, which document and enforce the
+  synchronous, no-read-ahead contract this depends on.
 - **Cached binary snapshots.** For each (syncer type × configured
   algorithm) the server pre-compresses the current snapshot once and
   streams the same bytes to every new client, instead of re-encoding
