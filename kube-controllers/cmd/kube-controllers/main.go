@@ -489,7 +489,8 @@ func (cc *controllerControl) InitControllers(
 	namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 	if v3c != nil {
-		// Create informers for Calico resources.
+		// Create informers for Calico resources. The resync period doubles as the recovery path
+		// for controllers that drop work after max retries.
 		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
 		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
 		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
