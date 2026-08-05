@@ -54,11 +54,19 @@ type mockBackendClient struct {
 	clusterInfoUpdateErr error
 }
 
-// getClusterInfo returns the currently stored v1 ClusterInformation KVPair.
+// getClusterInfo returns a copy of the stored v1 ClusterInformation KVPair, so callers
+// can read it without racing the controller goroutine.
 func (m *mockBackendClient) getClusterInfo() *model.KVPair {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.clusterInfo
+	if m.clusterInfo == nil {
+		return nil
+	}
+	copied := *m.clusterInfo
+	if ci, ok := m.clusterInfo.Value.(*apiv3.ClusterInformation); ok {
+		copied.Value = ci.DeepCopy()
+	}
+	return &copied
 }
 
 func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ string) (*model.KVPairList, error) {

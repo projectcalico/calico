@@ -419,8 +419,9 @@ func TestLifecycle_Rollback(t *testing.T) {
 	g.Expect(apiSvc.Spec.Service).NotTo(BeNil(), "restored APIService should be aggregated (have a Service ref)")
 
 	// Verify v1 ClusterInformation was unlocked.
-	g.Expect(bc.getClusterInfo()).NotTo(BeNil())
-	v1CI, ok := bc.getClusterInfo().Value.(*apiv3.ClusterInformation)
+	v1KVP := bc.getClusterInfo()
+	g.Expect(v1KVP).NotTo(BeNil())
+	v1CI, ok := v1KVP.Value.(*apiv3.ClusterInformation)
 	g.Expect(ok).To(BeTrue())
 	g.Expect(v1CI.Spec.DatastoreReady).To(Equal(ptr.To(true)), "v1 ClusterInformation should be unlocked after abort")
 
