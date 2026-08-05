@@ -15,9 +15,11 @@
 package nftables
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -37,6 +39,116 @@ func loadTestdata(table string) *iptablesTableState {
 	Expect(json.Unmarshal(raw, &state)).To(Succeed())
 	return &state
 }
+
+// stubDataplane fails to delete one chain, the way nftables does when something still jumps to it.
+type stubDataplane struct {
+	knftables.Interface
+
+	stuckChain string
+}
+
+func (s *stubDataplane) Run(ctx context.Context, tx *knftables.Transaction) error {
+	if s.stuckChain != "" && strings.Contains(tx.String(), "delete chain ip filter "+s.stuckChain+"\n") {
+		return errors.New("Device or resource busy")
+	}
+	return s.Interface.Run(ctx, tx)
+}
+
+var _ = Describe("iptables cleanup, sweeping a table", func() {
+	var (
+		ctx      context.Context
+		fake     *knftables.Fake
+		stub     *stubDataplane
+		cleanup  *IPTablesCleanup
+		state    *iptablesTableState
+		listing  func(string) []string
+		ruleText func(string) []string
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		fake = knftables.NewFake(knftables.IPv4Family, "filter")
+		stub = &stubDataplane{Interface: fake}
+		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+			NewDataplane: func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
+				return stub, nil
+			},
+		})
+
+		// A previous Felix's state: its own chains, jumps into them from INPUT, and a neighbour's
+		// rule that has to survive.
+		tx := fake.NewTransaction()
+		tx.Add(&knftables.Table{})
+		tx.Add(&knftables.Chain{Name: "INPUT", Type: knftables.PtrTo(knftables.FilterType), Hook: knftables.PtrTo(knftables.InputHook), Priority: knftables.PtrTo(knftables.FilterPriority)})
+		tx.Add(&knftables.Chain{Name: "cali-INPUT"})
+		tx.Add(&knftables.Chain{Name: "cali-from-wl"})
+		tx.Add(&knftables.Chain{Name: "ts-input"})
+		tx.Add(&knftables.Rule{Chain: "INPUT", Rule: "jump cali-INPUT", Comment: knftables.PtrTo(rulesdefs.RuleHashPrefix + "abcdef")})
+		tx.Add(&knftables.Rule{Chain: "INPUT", Rule: "jump ts-input"})
+		tx.Add(&knftables.Rule{Chain: "cali-INPUT", Rule: "jump cali-from-wl"})
+		Expect(fake.Run(ctx, tx)).To(Succeed())
+
+		// Read the handles back so the state matches what a netlink read would have returned.
+		inputRules, err := fake.ListRules(ctx, "INPUT")
+		Expect(err).NotTo(HaveOccurred())
+		state = &iptablesTableState{
+			Chains: []iptablesChain{
+				{Name: "INPUT", Base: true},
+				{Name: "cali-INPUT"},
+				{Name: "cali-from-wl"},
+				{Name: "ts-input"},
+			},
+		}
+		for _, r := range inputRules {
+			rule := iptablesRule{Chain: "INPUT", Handle: uint64(*r.Handle)}
+			if r.Comment != nil {
+				rule.Comment = *r.Comment
+			}
+			state.Rules = append(state.Rules, rule)
+		}
+
+		listing = func(objectType string) []string {
+			out, err := fake.List(ctx, objectType)
+			Expect(err).NotTo(HaveOccurred())
+			return out
+		}
+		ruleText = func(chain string) []string {
+			rules, err := fake.ListRules(ctx, chain)
+			Expect(err).NotTo(HaveOccurred())
+			var out []string
+			for _, r := range rules {
+				out = append(out, r.Rule)
+			}
+			return out
+		}
+	})
+
+	It("removes our chains and our jumps, and nothing else", func() {
+		Expect(cleanup.sweepTable("filter", state)).To(Succeed())
+
+		Expect(listing("chains")).To(ConsistOf("INPUT", "ts-input"))
+		Expect(ruleText("INPUT")).To(ConsistOf("jump ts-input"))
+	})
+
+	It("does nothing to a table with none of our state in it", func() {
+		Expect(cleanup.sweepTable("filter", &iptablesTableState{
+			Chains: []iptablesChain{{Name: "ts-input"}},
+		})).To(Succeed())
+
+		Expect(listing("chains")).To(ContainElements("cali-INPUT", "cali-from-wl"))
+	})
+
+	// nftables won't delete a chain something still jumps to, and one of those used to take the
+	// whole table's cleanup with it.
+	It("empties the chains it can't delete and deletes the rest", func() {
+		stub.stuckChain = "cali-from-wl"
+		Expect(cleanup.sweepTable("filter", state)).To(Succeed())
+
+		Expect(listing("chains")).To(ConsistOf("INPUT", "ts-input", "cali-from-wl"))
+		Expect(ruleText("cali-from-wl")).To(BeEmpty())
+		Expect(ruleText("INPUT")).To(ConsistOf("jump ts-input"))
+	})
+})
 
 var _ = Describe("iptables cleanup, identifying our own state", func() {
 	var cleanup *IPTablesCleanup
