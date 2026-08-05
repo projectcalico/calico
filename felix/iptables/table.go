@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2022 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,6 +39,10 @@ import (
 const (
 	MaxChainNameLength   = 28
 	minPostWriteInterval = 50 * time.Millisecond
+
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled;
+	// returning a zero reschedule leaves an idle Felix never coming back to the table.
+	defaultCleanupRetryInterval = 180 * time.Second
 )
 
 var (
@@ -88,6 +92,15 @@ var (
 		Name: "felix_iptables_lines_executed",
 		Help: "Number of iptables rule updates executed.",
 	}, []string{"ip_version", "table"})
+
+	// Cleanup-only tables share ip_version and table with the tables Felix programs, so their
+	// counts go here instead of overwriting the real ones. Never registered.
+	discardedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_iptables_discarded_gauge",
+	})
+	discardedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_iptables_discarded_counter",
+	})
 )
 
 func init() {
@@ -287,6 +300,13 @@ type Table struct {
 	onStillAlive func()
 	opReporter   logrusr.OpRecorder
 	reason       string
+
+	// cleanupOnly means we only sweep this table, so we never panic over it.
+	cleanupOnly bool
+
+	// nextCleanupAttempt holds off a cleanup-only table after a failure. Nothing else latches it,
+	// and a backend that never reads would otherwise burn its whole retry budget on every apply.
+	nextCleanupAttempt time.Time
 }
 
 type TableOptions struct {
@@ -299,6 +319,10 @@ type TableOptions struct {
 
 	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
 	LockProbeInterval time.Duration
+
+	// CleanupOnly marks a table that Felix sweeps but doesn't program. The backend it names may
+	// not work on this host at all, so failures are logged and retried instead of fatal.
+	CleanupOnly bool
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdshim.CmdFactory
@@ -435,10 +459,16 @@ func NewTable(
 		timeNow:   now,
 		lookPath:  lookPath,
 
-		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
+		gaugeNumChains:        discardedGauge,
+		gaugeNumRules:         discardedGauge,
+		countNumLinesExecuted: discardedCounter,
 		opReporter:            options.OpRecorder,
+		cleanupOnly:           options.CleanupOnly,
+	}
+	if !options.CleanupOnly {
+		table.gaugeNumChains = gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
+		table.gaugeNumRules = gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
+		table.countNumLinesExecuted = countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
@@ -469,6 +499,12 @@ func (t *Table) IPVersion() uint8 {
 
 func (t *Table) Name() string {
 	return t.name
+}
+
+// CleanUp implements generictables.CleanupTable. With no chains or inserts programmed, an apply
+// deletes whatever a previous Felix left in this table and nothing else.
+func (t *Table) CleanUp() time.Duration {
+	return t.Apply()
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -664,7 +700,7 @@ func (t *Table) decrefChain(chainName string) {
 	t.chainRefCounts[chainName] -= 1
 }
 
-func (t *Table) loadDataplaneState() {
+func (t *Table) loadDataplaneState() bool {
 	// Refresh the cache of feature data.
 	t.featureDetector.RefreshFeatures()
 
@@ -673,7 +709,10 @@ func (t *Table) loadDataplaneState() {
 	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.name, t.ipVersion))
 
 	t.lastReadTime = t.timeNow()
-	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
+	dataplaneHashes, dataplaneRules, ok := t.getHashesAndRulesFromDataplane()
+	if !ok {
+		return false
+	}
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -773,6 +812,7 @@ func (t *Table) loadDataplaneState() {
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
+	return true
 }
 
 // expectedHashesForInsertAppendChain calculates the expected hashes for a whole top-level chain
@@ -820,7 +860,7 @@ func (t *Table) expectedHashesForInsertAppendChain(
 // represented by an empty string. The 'rules' map contains an entry for each non-Calico chain in the table that
 // contains inserts. It is used to generate deletes using the full rule, rather than deletes by line number, to avoid
 // race conditions on chains we don't fully control.
-func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string) {
+func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, ok bool) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
@@ -840,13 +880,18 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 				retries--
 				t.timeSleep(retryDelay)
 				retryDelay *= 2
-			} else {
-				t.logCxt.Panicf("%s command failed after retries", t.iptablesSaveCmd)
+				continue
 			}
-			continue
+			if t.cleanupOnly {
+				// This backend may not exist on this host, which is not an error: there's then
+				// nothing of ours in it to clean up.
+				t.logCxt.WithError(err).Debug("Cannot read the backend we're cleaning up, skipping")
+				return nil, nil, false
+			}
+			t.logCxt.Panicf("%s command failed after retries", t.iptablesSaveCmd)
 		}
 
-		return hashes, rules
+		return hashes, rules, true
 	}
 }
 
@@ -1044,6 +1089,9 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			}).Info("Updating iptables took >1s")
 		}
 	}()
+	if t.cleanupOnly && now.Before(t.nextCleanupAttempt) {
+		return t.nextCleanupAttempt.Sub(now)
+	}
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
@@ -1086,7 +1134,10 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 		if !t.inSyncWithDataPlane {
 			// We have reason to believe that our picture of the dataplane is out of
 			// sync.  Refresh it.  This may mark more chains as dirty.
-			t.loadDataplaneState()
+			if !t.loadDataplaneState() {
+				// Cleanup-only table we can't read; try again on the next refresh.
+				return t.scheduleCleanupRetry(now)
+			}
 		}
 		t.onStillAlive()
 
@@ -1099,6 +1150,10 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue
+			} else if t.cleanupOnly {
+				t.logCxt.WithError(err).Warn("Failed to clean up iptables, will retry on the next refresh")
+				t.InvalidateDataplaneCache("cleanup failed")
+				return t.scheduleCleanupRetry(now)
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program iptables, loading diags before panic.")
 				cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.name)
@@ -1135,6 +1190,17 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 	}
 
 	return
+}
+
+// scheduleCleanupRetry holds this table off until the next attempt is due, and returns how long
+// that is.
+func (t *Table) scheduleCleanupRetry(now time.Time) time.Duration {
+	delay := t.refreshInterval
+	if delay <= 0 {
+		delay = defaultCleanupRetryInterval
+	}
+	t.nextCleanupAttempt = now.Add(delay)
+	return delay
 }
 
 func (t *Table) applyUpdates() error {
@@ -1472,7 +1538,7 @@ func (t *Table) CheckRulesPresent(chain string, rules []generictables.Rule) []ge
 
 	hashes := CalculateRuleHashes(chain, rules, features)
 
-	dpHashes, _ := t.getHashesAndRulesFromDataplane()
+	dpHashes, _, _ := t.getHashesAndRulesFromDataplane()
 	dpHashesSet := set.New[string]()
 	for _, h := range dpHashes[chain] {
 		dpHashesSet.Add(h)
