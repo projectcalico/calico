@@ -521,23 +521,25 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	logCtx.Info("Migration in progress")
 	dm.Status.Message = "Migrating resources"
 
-	// Step 1: Save and delete the APIService to route v3 requests to CRDs.
-	// Pending already did this; repeat it in case we resumed straight into
-	// Migrating after a restart.
+	// Step 1: Lock v1 first, in case we resumed into Migrating without Pending
+	// having taken the lock.
+	if err := m.lockV1Datastore(logCtx); err != nil {
+		return err
+	}
+
+	// Step 2: Save and delete the APIService so v3 requests route to CRDs.
+	// Repeated in case we resumed.
 	if err := m.saveAndDeleteAPIService(logCtx, dm); err != nil {
 		return err
 	}
 
-	// Step 2: Lock both datastores. The v3 lock has to come after the APIService
-	// delete, since the aggregated API server rejects ClusterInformation creates.
-	if err := m.lockV1Datastore(logCtx); err != nil {
-		return err
-	}
+	// Step 3: Lock v3. This has to come after the APIService delete, since the
+	// aggregated API server rejects ClusterInformation creates.
 	if err := m.lockV3Datastore(logCtx); err != nil {
 		return err
 	}
 
-	// Step 3: Migrate all resources in order.
+	// Step 4: Migrate all resources in order.
 	allMigrators := m.migrators
 	sort.Slice(allMigrators, func(i, j int) bool {
 		return allMigrators[i].Order() < allMigrators[j].Order()
@@ -634,7 +636,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 	setPhaseMetric(DatastoreMigrationPhaseConverged)
 	logCtx.Info("Migration converged, unlocking datastore")
 
-	// Step 4: Unlock the datastore.
+	// Step 5: Unlock the datastore.
 	if err := m.unlockV3CRDDatastore(logCtx); err != nil {
 		return err
 	}
