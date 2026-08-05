@@ -172,7 +172,7 @@ func (m ipNetSet) RemoveString(network string) {
 func (m ipNetSet) Contains(addr string) bool {
 	ip := net.ParseIP(addr)
 	if ip == nil {
-		// Envoy should not send us malformed IP addresses, but its possible we could get requests from non-IP
+		// Envoy should not send us malformed IP addresses, but it's possible we could get requests from non-IP
 		// connections, like Pipes. Such a request is tested against every NET set every rule references, so
 		// the log is rate limited.
 		rlogBadAddr.Warnf("could not parse IP: %s", addr)

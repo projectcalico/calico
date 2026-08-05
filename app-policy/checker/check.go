@@ -138,14 +138,14 @@ func LookupEndpointKeysFromSrcDst(store *policystore.PolicyStore, src, dst strin
 
 	// Map the destination
 	if destinationIp, err := ip.ParseCIDROrIP(dst); err != nil {
-		rlogBadDstAddr.WithError(err).Errorf("cannot process destination addr %s", dst)
+		rlogBadDstAddr.Errorf("cannot process destination addr %s: %v", dst, err)
 	} else {
 		log.Debugf("lookup endpoint for destination %s", destinationIp.String())
 		destination = ipToEndpointKeys(store, destinationIp.Addr())
 	}
 	// Map the source
 	if sourceIp, err := ip.ParseCIDROrIP(src); err != nil {
-		rlogBadSrcAddr.WithError(err).Errorf("cannot process source addr %s", src)
+		rlogBadSrcAddr.Errorf("cannot process source addr %s: %v", src, err)
 	} else {
 		log.Debugf("lookup endpoint for source %s", sourceIp.String())
 		source = ipToEndpointKeys(store, sourceIp.Addr())
