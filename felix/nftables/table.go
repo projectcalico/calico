@@ -1167,6 +1167,12 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue
+			} else if t.disabled {
+				// A table we only sweep, so its state moves under us and there is nothing of ours
+				// left to enforce. Retry on the next pass rather than taking Felix down.
+				t.logCxt.WithError(err).Warn("Failed to clean up nftables, will retry on the next refresh")
+				t.InvalidateDataplaneCache("cleanup failed")
+				return t.refreshInterval
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
 				t.dumpTableState()
