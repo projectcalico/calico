@@ -446,16 +446,22 @@ Two details that are easy to get wrong:
 
 - The standard tables are read over **netlink**, not with
   `iptables-nft-save`, which refuses to read a table holding anything
-  iptables can't express — a neighbouring tool's native nft rules used
+  iptables can't express - a neighbouring tool's native nft rules used
   to crash-loop Felix that way. Only **base chains** are read for
-  rules, the only chains Felix ever inserted into, so the cost doesn't
-  grow with kube-proxy's chain count.
+  rules, the only chains Felix ever inserted into, which is what keeps
+  the rule dumps off kube-proxy's thousands of chains. The chain list
+  itself is one dump of the whole family, since netlink has no
+  per-table filter for it, so the sweep is paced by the refresh
+  interval rather than run on every apply.
 - A `CleanupOnly` table never panics: the backend it names may have no
   kernel support on this host, in which case there is nothing of ours
   in it anyway. Felix also declines to build the legacy tables at all
   unless the legacy binaries are present, because `FindBestBinary`
   would otherwise fall back to the default `iptables`, and Felix would
-  sweep the backend it is programming.
+  sweep the backend it is programming. The same check gates the nft
+  view in iptables mode. Nor does it build them unless the legacy
+  modules are already loaded, since `iptables-legacy-save` would
+  autoload them onto a node running pure nftables.
 
 Cleanup **never terminates**. A shared table can be written again at
 any point (kube-proxy restarting, say), so one clean read proves
