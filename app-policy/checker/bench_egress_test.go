@@ -110,20 +110,38 @@ func BenchmarkEvaluateEgressAllowList(b *testing.B) {
 	})
 }
 
-// egressFlowFunc builds the flow for one case, given the fixture's target rule. It returns the
-// flow and the number of rules the walk is expected to visit.
-type egressFlowFunc func(target egressTarget) (*MockFlow, int)
-
-func egressTailPortFlow(target egressTarget) (*MockFlow, int) {
-	return egressFlow(target.addrInCIDR, target.tailPort), target.rulesWalked
+// egressCase is what one benchmark case measures: the flow, how many rules the walk is
+// expected to visit, and whether a rule is expected to match it.
+type egressCase struct {
+	flow        *MockFlow
+	rulesWalked int
+	matches     bool
 }
 
-func egressPopularPortFlow(target egressTarget) (*MockFlow, int) {
-	return egressFlow(target.addrInCIDR, egressPortWeights[0].port), target.rulesWalked
+// egressCaseFunc builds one case from the fixture's target rule.
+type egressCaseFunc func(target egressTarget) egressCase
+
+func egressTailPortFlow(target egressTarget) egressCase {
+	return egressCase{
+		flow:        egressFlow(target.addrInCIDR, target.tailPort),
+		rulesWalked: target.rulesWalked,
+		matches:     true,
+	}
 }
 
-func egressDeniedFlow(_ egressTarget) (*MockFlow, int) {
-	return egressFlow(egressDeniedIP, egressPortWeights[0].port), egressNumPolicies * egressRulesPerPolicy
+func egressPopularPortFlow(target egressTarget) egressCase {
+	return egressCase{
+		flow:        egressFlow(target.addrInCIDR, egressPortWeights[0].port),
+		rulesWalked: target.rulesWalked,
+		matches:     true,
+	}
+}
+
+func egressDeniedFlow(_ egressTarget) egressCase {
+	return egressCase{
+		flow:        egressFlow(egressDeniedIP, egressPortWeights[0].port),
+		rulesWalked: egressNumPolicies * egressRulesPerPolicy,
+	}
 }
 
 func egressFlow(destIP string, destPort int32) *MockFlow {
@@ -136,35 +154,32 @@ func egressFlow(destIP string, destPort int32) *MockFlow {
 	}
 }
 
-func benchEvaluateEgressAllowList(b *testing.B, flowFor egressFlowFunc) {
+func benchEvaluateEgressAllowList(b *testing.B, caseFor egressCaseFunc) {
 	_, restoreLogging := withBenchLogging(log.WarnLevel)
 	defer restoreLogging()
 
 	store, ep, target := buildEgressAllowListStore()
-	flow, rulesWalked := flowFor(target)
+	c := caseFor(target)
 
 	// Pre-flight outside the timed loop: prove the walk is the one the case intends, so that
 	// a fixture change cannot silently turn a full walk into an early exit.
-	trace := Evaluate(rules.RuleDirEgress, store, ep, flow)
-	switch {
-	case rulesWalked == egressNumPolicies*egressRulesPerPolicy:
-		if len(trace) != 1 || trace[0].Action != rules.RuleActionDeny || trace[0].Index != tierDefaultActionIndex {
-			b.Fatalf("expected a full walk ending in the tier default deny, got %v", trace)
-		}
-	default:
+	trace := Evaluate(rules.RuleDirEgress, store, ep, c.flow)
+	if c.matches {
 		if len(trace) != 1 || trace[0].Action != rules.RuleActionAllow || trace[0].Index != target.ruleIndex {
 			b.Fatalf("expected an allow from the target rule at index %d, got %v", target.ruleIndex, trace)
 		}
+	} else if len(trace) != 1 || trace[0].Action != rules.RuleActionDeny || trace[0].Index != tierDefaultActionIndex {
+		b.Fatalf("expected a full walk ending in the tier default deny, got %v", trace)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchTraceSink = Evaluate(rules.RuleDirEgress, store, ep, flow)
+		benchTraceSink = Evaluate(rules.RuleDirEgress, store, ep, c.flow)
 	}
 	b.StopTimer()
-	b.ReportMetric(float64(rulesWalked), "rules/op")
-	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(rulesWalked), "ns/rule")
+	b.ReportMetric(float64(c.rulesWalked), "rules/op")
+	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(c.rulesWalked), "ns/rule")
 }
 
 // egressTarget describes the one rule in the fixture that a matching flow is built to hit.
