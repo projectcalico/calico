@@ -2063,6 +2063,20 @@ var _ = Describe("Table in cleanup-only mode", func() {
 		Expect(delay).To(Equal(30 * time.Second))
 	})
 
+	It("doesn't retry an unreadable backend until the next refresh", func() {
+		dataplane.FailAllSaves = true
+		table = newTable(true)
+		table.Apply()
+
+		saves := len(dataplane.CmdNames)
+		table.Apply()
+		Expect(dataplane.CmdNames).To(HaveLen(saves), "retried before the refresh interval was up")
+
+		dataplane.AdvanceTimeBy(31 * time.Second)
+		table.Apply()
+		Expect(len(dataplane.CmdNames)).To(BeNumerically(">", saves))
+	})
+
 	It("panics when a table it programs can't be read", func() {
 		dataplane.FailAllSaves = true
 		table = newTable(false)

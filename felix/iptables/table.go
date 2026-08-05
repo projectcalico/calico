@@ -290,6 +290,10 @@ type Table struct {
 
 	// cleanupOnly means we only sweep this table, so we never panic over it.
 	cleanupOnly bool
+
+	// nextCleanupAttempt holds off a cleanup-only table after a failure. Nothing else latches it,
+	// and a backend that never reads would otherwise burn its whole retry budget on every apply.
+	nextCleanupAttempt time.Time
 }
 
 type TableOptions struct {
@@ -1067,6 +1071,9 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			}).Info("Updating iptables took >1s")
 		}
 	}()
+	if t.cleanupOnly && now.Before(t.nextCleanupAttempt) {
+		return t.nextCleanupAttempt.Sub(now)
+	}
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
@@ -1111,6 +1118,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			// sync.  Refresh it.  This may mark more chains as dirty.
 			if !t.loadDataplaneState() {
 				// Cleanup-only table we can't read; try again on the next refresh.
+				t.nextCleanupAttempt = now.Add(t.refreshInterval)
 				return t.refreshInterval
 			}
 		}
@@ -1128,6 +1136,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			} else if t.cleanupOnly {
 				t.logCxt.WithError(err).Warn("Failed to clean up iptables, will retry on the next refresh")
 				t.InvalidateDataplaneCache("cleanup failed")
+				t.nextCleanupAttempt = now.Add(t.refreshInterval)
 				return t.refreshInterval
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program iptables, loading diags before panic.")
