@@ -41,6 +41,14 @@ func v1TierKVP(name string, order *float64, action apiv3.Action) *model.KVPair {
 	}
 }
 
+// v1TierKVPUnsetAction builds a v1 Tier KVPair with no defaultAction, which the v3
+// CRD defaults to Deny.
+func v1TierKVPUnsetAction(name string, order *float64) *model.KVPair {
+	kvp := v1TierKVP(name, order, apiv3.Deny)
+	kvp.Value.(*apiv3.Tier).Spec.DefaultAction = nil
+	return kvp
+}
+
 // tierOnlyV1Resources returns backend data containing just the given tiers.
 func tierOnlyV1Resources(tiers ...*model.KVPair) map[string][]*model.KVPair {
 	return map[string][]*model.KVPair{
@@ -239,4 +247,46 @@ func TestPreflight_ConformantBuiltInTiersProceed(t *testing.T) {
 		tier := &apiv3.Tier{}
 		h.getV3Resource(name, tier)
 	}
+}
+
+// TestPreflight_UnsetDefaultActionBlocks verifies that an unset defaultAction is
+// treated as Deny, which is drift on the tiers that require Pass.
+func TestPreflight_UnsetDefaultActionBlocks(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: tierOnlyV1Resources(
+			v1TierKVP("default", ptr.To(apiv3.DefaultTierOrder), apiv3.Deny),
+			v1TierKVPUnsetAction("kube-admin", ptr.To(apiv3.KubeAdminTierOrder)),
+		),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	expectBlockedInPending(t, ctx, g, bc, `tier "kube-admin" has defaultAction "Deny", expected "Pass"`)
+}
+
+// TestPreflight_UnsetDefaultActionOnDefaultTierProceeds verifies that an unset
+// defaultAction is conformant on the default tier, which requires Deny.
+func TestPreflight_UnsetDefaultActionOnDefaultTierProceeds(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: tierOnlyV1Resources(
+			v1TierKVPUnsetAction("default", ptr.To(apiv3.DefaultTierOrder)),
+			v1TierKVP("kube-admin", ptr.To(apiv3.KubeAdminTierOrder), apiv3.Pass),
+			v1TierKVP("kube-baseline", ptr.To(apiv3.KubeBaselineTierOrder), apiv3.Pass),
+		),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	ensureV1CRD(t, ctx)
+	startController(t, ctx, bc, nil)
+	createMigrationCR(t, ctx)
+
+	g.Eventually(func(g Gomega) {
+		fvh := newFVHelper(t, g, ctx)
+		fvh.expectPhase(DatastoreMigrationPhaseConverged)
+	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
 }
