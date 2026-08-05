@@ -29,7 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/snappy"
 	log "github.com/sirupsen/logrus"
 
 	calicotls "github.com/projectcalico/calico/crypto/pkg/tls"
@@ -79,6 +78,13 @@ type Options struct {
 	// DebugDiscardKVUpdates discards all KV updates from typha without decoding them.
 	// Useful for load testing Typha without having to run a "full" client.
 	DebugDiscardKVUpdates bool
+
+	// PreferredCompressionAlgorithmOrder overrides the set of compression
+	// algorithms advertised to the server.  The server makes the final choice
+	// based on its own preference order.  Nil means advertise all supported
+	// algorithms; an empty (non-nil) slice disables compression.  Intended
+	// for tests that need to pin the negotiated algorithm.
+	PreferredCompressionAlgorithmOrder []syncproto.CompressionAlgorithm
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -167,9 +173,26 @@ type SyncerClient struct {
 	connR      io.Reader
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
+	// decompressor is the (possibly pass-through) reader that the decoder
+	// reads from; it wraps connR.  Replaced together with the decoder at
+	// each decoder restart.
+	decompressor syncproto.Decompressor
+
+	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
+	// server selected for the current connection ("" if uncompressed).
+	negotiatedCompression atomic.Value
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+}
+
+// NegotiatedCompressionAlgorithm returns the compression algorithm the server
+// selected for the current connection, or "" if the stream is uncompressed
+// (or compression has not been negotiated yet).  Safe to call from any
+// goroutine; intended for tests and diagnostics.
+func (s *SyncerClient) NegotiatedCompressionAlgorithm() syncproto.CompressionAlgorithm {
+	alg, _ := s.negotiatedCompression.Load().(syncproto.CompressionAlgorithm)
+	return alg
 }
 
 type RestartAwareCallbacks interface {
@@ -416,6 +439,12 @@ func (s *SyncerClient) logConnectionFailure(cxt context.Context, logCxt *log.Ent
 func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, connFinished *sync.WaitGroup) {
 	defer connFinished.Done()
 	defer cancelFn()
+	defer func() {
+		if s.decompressor != nil {
+			s.decompressor.Close()
+			s.decompressor = nil
+		}
+	}()
 
 	logCxt := s.logCxt.WithField("connection", s.connInfo)
 	logCxt.Info("Started Typha client main loop")
@@ -423,13 +452,19 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 
 	// Always start with basic gob encoding for the handshake.  We may upgrade to a compressed version below.
 	s.encoder = gob.NewEncoder(s.connection)
-	s.decoder = gob.NewDecoder(s.connR)
+	if err := s.swapDecompressor(""); err != nil {
+		logCxt.WithError(err).Error("Failed to create decoder")
+		return
+	}
 
 	ourSyncerType := s.options.SyncerType
 	if ourSyncerType == "" {
 		ourSyncerType = syncproto.SyncerTypeFelix
 	}
-	compAlgs := []syncproto.CompressionAlgorithm{syncproto.CompressionSnappy}
+	compAlgs := s.options.PreferredCompressionAlgorithmOrder
+	if compAlgs == nil {
+		compAlgs = syncproto.AllCompressionAlgorithms
+	}
 	if s.options.DisableDecoderRestart {
 		// Compression requires decoder restart.
 		compAlgs = nil
@@ -548,22 +583,40 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 }
 
 func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, msg syncproto.MsgDecoderRestart) error {
-	logCxt.WithField("msg", msg).Info("Server asked us to restart our decoder")
-	// Check if we should enable compression.
-	switch msg.CompressionAlgorithm {
-	case syncproto.CompressionSnappy:
-		logCxt.Info("Server selected snappy compression.")
-		r := snappy.NewReader(s.connR)
-		s.decoder = gob.NewDecoder(r)
-	case "":
-		logCxt.Info("Server selected no compression.")
-		s.decoder = gob.NewDecoder(s.connR)
+	logCxt.WithFields(log.Fields{
+		"msg":         msg,
+		"compression": msg.CompressionAlgorithm,
+	}).Info("Server asked us to restart our decoder")
+	// The restart message is the last data in the old stream and the server
+	// terminated the stream right after it, so the old decompressor has
+	// consumed exactly the old stream's bytes from the connection.  Discard
+	// it and start a fresh one for the new stream; syncproto.Decompressor
+	// guarantees no read-ahead across the boundary.
+	if err := s.swapDecompressor(msg.CompressionAlgorithm); err != nil {
+		logCxt.WithError(err).Error("Failed to restart decoder")
+		return err
 	}
 	// Server requires an ack of the MsgDecoderRestart before it can send data in the new format.
 	err := s.sendMessageToServer(cxt, logCxt, "send ACK to server",
 		syncproto.MsgACK{},
 	)
 	return err
+}
+
+// swapDecompressor closes the current decompressor (if any) and installs a
+// fresh one reading from the connection, along with a fresh gob decoder.
+func (s *SyncerClient) swapDecompressor(algorithm syncproto.CompressionAlgorithm) error {
+	d, err := syncproto.NewDecompressor(algorithm, s.connR)
+	if err != nil {
+		return err
+	}
+	if s.decompressor != nil {
+		s.decompressor.Close()
+	}
+	s.decompressor = d
+	s.decoder = gob.NewDecoder(d)
+	s.negotiatedCompression.Store(algorithm)
+	return nil
 }
 
 // sendMessageToServer sends a single value-type MsgXYZ object to the server.  It updates the connection's
