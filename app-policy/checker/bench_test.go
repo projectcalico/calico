@@ -146,7 +146,7 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 
 	// Pre-flight outside the timed loop: prove the walk is the intended one and that
 	// the warning count matches the analytic count, so that warnings/op is exact.
-	trace := Evaluate(rules.RuleDirIngress, store, ep, flow)
+	trace, _ := Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	if matchEarly {
 		if len(trace) != 1 || trace[0].Action != rules.RuleActionAllow || trace[0].Index != 0 {
 			b.Fatalf("expected an immediate allow from the match-early policy, got %v", trace)
@@ -165,7 +165,7 @@ func benchEvaluateBaselinePolicyScale(b *testing.B, p baselinePolicyScaleParams,
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		benchTraceSink = Evaluate(rules.RuleDirIngress, store, ep, flow)
+		benchTraceSink, _ = Evaluate(EnforcedOnly, rules.RuleDirIngress, store, ep, flow)
 	}
 	b.StopTimer()
 	b.ReportMetric(float64(counter.count.Load())/float64(b.N), "warnings/op")

@@ -164,6 +164,121 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}).To(Panic())
 	})
 
+	It("Should keep the base chains programmed while retrying nft failures", func() {
+		// Settle, so the table is fully programmed before we break it.
+		table.Apply()
+		table.ApplyUpdates(nil)
+		chains, err := f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ConsistOf(expectedBaseChains))
+
+		// Insert rules into a non-existent chain to make every subsequent write fail.
+		table.InsertOrAppendRules("badchain", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.DropAction{}},
+		})
+		Expect(func() {
+			table.Apply()
+		}).To(Panic())
+
+		// The retry loop recreates the table after repeated failures. Each recreate must be part of
+		// the transaction that writes the whole ruleset back, so that a failed attempt leaves the
+		// table alone rather than stripping its hooks.
+		recreates := 0
+		for _, tx := range f.transactions {
+			s := tx.String()
+			if !strings.Contains(s, "delete table") {
+				continue
+			}
+			recreates++
+			for _, chain := range expectedBaseChains {
+				Expect(s).To(ContainSubstring("add chain ip calico %s ", chain))
+			}
+		}
+		Expect(recreates).To(BeNumerically(">", 0), "expected the retry loop to attempt a table recreate")
+
+		// The property that matters: nothing was committed, so the dataplane still has our hooks.
+		chains, err = f.List(context.TODO(), "chain")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(chains).To(ConsistOf(expectedBaseChains))
+
+		// The recreate would have dropped the IP sets too, so a resync must be queued for them.
+		listCalls := f.ListCallCount
+		table.ApplyUpdates(nil)
+		Expect(f.ListCallCount).To(BeNumerically(">", listCalls), "expected an IP set resync to have been queued")
+	})
+
+	It("Should recreate the table and reprogram everything after repeated nft failures", func() {
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.JumpAction{Target: "cali-foobar"}},
+		})
+		table.Apply()
+		Expect(f.List(context.TODO(), "chain")).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.DropAction{}}},
+		})
+
+		// Six consecutive write failures is enough to trigger a recreate. The seventh attempt goes
+		// through, and must restore the whole ruleset rather than just the part that was dirty.
+		f.RunErrors = 6
+		Expect(func() {
+			table.Apply()
+		}).NotTo(Panic())
+		Expect(f.RunErrors).To(BeZero(), "expected the retry loop to consume every injected error")
+
+		lastTx := f.transactions[len(f.transactions)-1].String()
+		Expect(lastTx).To(ContainSubstring("delete table"))
+		Expect(f.List(context.TODO(), "chain")).To(ConsistOf(append(expectedBaseChains, "cali-foobar")))
+		Expect(f.ListRules(context.TODO(), "filter-FORWARD")).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "filter-FORWARD",
+			Rule:    "counter jump cali-foobar",
+			Comment: ptr("cali:5BWf2dLBa-ZMC-kf;"),
+		}))
+		Expect(f.ListRules(context.TODO(), "cali-foobar")).To(nftables.ContainRule(knftables.Rule{
+			Chain:   "cali-foobar",
+			Rule:    "counter drop",
+			Comment: ptr("cali:qEazjD2XdAvzH1n5;"),
+		}))
+	})
+
+	It("Should re-add the table's maps in the transaction that recreates it", func() {
+		m := nftables.MapMetadata{Name: "cali-map", Type: nftables.MapTypeInterfaceMatch}
+		table.AddOrReplaceMap(m, map[string][]string{"cali1234": {"jump cali-foobar"}})
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.AcceptAction{}}},
+		})
+		table.InsertOrAppendRules("filter-FORWARD", []generictables.Rule{
+			{Match: nftables.Match(), Action: nftables.JumpAction{Target: "cali-foobar"}},
+		})
+		table.Apply()
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
+
+		// Dirty the table, then fail enough writes to trigger a recreate.
+		table.UpdateChain(&generictables.Chain{
+			Name:  "cali-foobar",
+			Rules: []generictables.Rule{{Match: nftables.Match(), Action: nftables.DropAction{}}},
+		})
+		f.RunErrors = 6
+		Expect(func() {
+			table.Apply()
+		}).NotTo(Panic())
+
+		// The delete takes the maps with it, so the same transaction has to put them back. If the
+		// map survived while our cached view said it was gone, re-adding its members would fail.
+		lastTx := f.transactions[len(f.transactions)-1].String()
+		Expect(lastTx).To(ContainSubstring("delete table"))
+		Expect(strings.Index(lastTx, "delete table")).To(
+			BeNumerically("<", strings.Index(lastTx, "add map")),
+			"the table delete must be emitted before the map is re-added")
+		Expect(f.List(context.TODO(), "map")).To(ContainElement("cali-map"))
+	})
+
 	It("should not reload the dataplane on a no-op Apply()", func() {
 		// Drive to a settled, in-sync state. The first Apply() reads the dataplane
 		// once to learn what's there, then writes the base chains; after that the
@@ -1047,7 +1162,8 @@ var _ = Describe("Disabled table cache invalidation", func() {
 			tx.Add(&knftables.Rule{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")})
 			Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
 
-			f.RunError = errors.New("Error: Could not process rule: No such file or directory")
+			// More than the retry budget, so every attempt in one Apply fails.
+			f.RunErrors = 100
 		})
 
 		It("reschedules instead of panicking", func() {
@@ -1057,7 +1173,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		It("cleans up once the dataplane accepts it again", func() {
 			table.Apply()
 
-			f.RunError = nil
+			f.RunErrors = 0
 			table.Apply()
 			_, err := f.Fake().List(context.Background(), "chain")
 			Expect(err).To(HaveOccurred(), "Expected table to be deleted once cleanup succeeded")

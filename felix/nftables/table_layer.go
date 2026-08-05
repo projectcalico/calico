@@ -187,3 +187,7 @@ func (t *tableLayer) FinishMapUpdates(updates *MapUpdates) {
 func (t *tableLayer) LoadDataplaneState(ctx context.Context, mapNames []string) error {
 	return t.maps.LoadDataplaneState(ctx, mapNames)
 }
+
+func (t *tableLayer) InvalidateMapsCache() {
+	t.maps.InvalidateMapsCache()
+}

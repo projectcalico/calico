@@ -16,6 +16,7 @@ package nftables_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -61,8 +62,8 @@ type fakeNFT struct {
 	// Allow overriding the next ListAll response to be an error.
 	ListAllError error
 
-	// Allow failing every transaction, standing in for a dataplane that moves under us.
-	RunError error
+	// Number of subsequent Run calls to fail without touching the underlying fake.
+	RunErrors int
 
 	// Track the number of List calls (simulates nft process spawns).
 	ListCallCount int
@@ -111,10 +112,22 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
-	if f.RunError != nil {
-		return f.RunError
+	if err := f.takeRunError(); err != nil {
+		logrus.WithError(err).Info("Returning test error from Run")
+		return err
 	}
 	return f.fake.Run(ctx, tx)
+}
+
+func (f *fakeNFT) takeRunError() error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+
+	if f.RunErrors == 0 {
+		return nil
+	}
+	f.RunErrors--
+	return errors.New("injected nft failure")
 }
 
 // Transactions returns a copy of the transactions Run has seen, for test assertions.

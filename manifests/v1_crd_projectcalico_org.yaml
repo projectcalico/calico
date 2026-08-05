@@ -19758,7 +19758,7 @@ spec:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
                     TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                    Default: Calico
+                    If left unset, the operator fills in the variant it is running as.
                   enum:
                     - Calico
                     - CalicoEnterprise
@@ -29247,7 +29247,7 @@ spec:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.
                         TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                        Default: Calico
+                        If left unset, the operator fills in the variant it is running as.
                       enum:
                         - Calico
                         - CalicoEnterprise
