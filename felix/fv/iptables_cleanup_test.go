@@ -118,6 +118,40 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 		})
 	})
 
+	// The nft view and the legacy backend are separate dataplanes, and only the legacy one goes
+	// through the CleanupOnly iptables tables.
+	Describe("switching from legacy iptables -> nftables", func() {
+		BeforeEach(func() {
+			if !NFTMode() {
+				Skip("This test is only relevant in nftables mode")
+			}
+
+			err := tc.Felixes[0].CopyFileIntoContainer("cali-iptables-dump.txt", "/iptables-dump.txt")
+			Expect(err).ToNot(HaveOccurred(), "Failed to copy iptables dump into felix container")
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-legacy-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+
+			tc.Felixes[0].Restart()
+		})
+
+		It("should clean up legacy iptables rules when running in nftables mode", func() {
+			legacySave := func() string {
+				out, err := tc.Felixes[0].ExecOutput("iptables-legacy-save")
+				Expect(err).NotTo(HaveOccurred())
+				return out
+			}
+
+			Eventually(legacySave, "20s").ShouldNot(ContainSubstring("cali-"))
+
+			// Cleanup never terminates, so rules that turn up while Felix is running go too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-legacy-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(legacySave, "20s").ShouldNot(ContainSubstring("cali-"))
+		})
+	})
+
 	Describe("switching from nftables -> iptables", func() {
 		BeforeEach(func() {
 			if NFTMode() {
