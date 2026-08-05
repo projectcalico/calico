@@ -458,9 +458,10 @@ func kubeControllersRoleCommonRules(cfg *KubeControllersConfiguration) []rbacv1.
 		},
 		{
 			// IPAM resources are manipulated in response to node and block updates, as well as periodic triggers.
+			// The node controller watches IPReservations to report how much of each pool they cover.
 			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
 			Resources: []string{"ipreservations"},
-			Verbs:     []string{"list"},
+			Verbs:     []string{"list", "watch"},
 		},
 		{
 			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
