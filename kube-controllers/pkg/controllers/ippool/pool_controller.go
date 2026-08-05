@@ -40,7 +40,8 @@ import (
 const (
 	IPPoolFinalizer = "projectcalico.org/ippool-finalizer"
 
-	// maxRetries is the number of times a failed reconcile is retried before being dropped.
+	// maxRetries is how many times a failed reconcile is retried before we fall back
+	// to the informer resync in run.go.
 	maxRetries = 5
 
 	// reconcileKey is the single workqueue key this controller uses. Overlap detection is global
@@ -468,9 +469,13 @@ func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool,
 	}
 
 	logrus.WithField("pool", p.Name).Infof("Updating condition %s to %s", condition.Type, condition.Status)
-	if _, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{}); err != nil {
+	updated, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{})
+	if err != nil {
 		return fmt.Errorf("update status of IPPool %s: %w", p.Name, err)
 	}
+
+	// Take the accepted object so a later finalizer write on this pool does not conflict.
+	*p = *updated
 	return nil
 }
 

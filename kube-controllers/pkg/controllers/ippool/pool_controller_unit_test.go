@@ -506,3 +506,32 @@ func TestReconcile_HappyPath(t *testing.T) {
 		t.Fatalf("controller mutated the informer cache: finalizers=%v status=%+v", cp.Finalizers, cp.Status)
 	}
 }
+
+// TestReconcile_FinalizerWriteUsesStatusResourceVersion checks that the finalizer write uses
+// the resourceVersion the status write returned.
+func TestReconcile_FinalizerWriteUsesStatusResourceVersion(t *testing.T) {
+	pool := testPool("pool-1", "192.168.0.0/24")
+	pool.ResourceVersion = "1"
+	cli := fake.NewClientset(pool)
+
+	var finalizerRV string
+	cli.PrependReactor("update", "ippools", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		obj := a.(k8stesting.UpdateAction).GetObject().(*v3.IPPool)
+		if a.GetSubresource() == "status" {
+			accepted := obj.DeepCopy()
+			accepted.ResourceVersion = "2"
+			return true, accepted, nil
+		}
+		finalizerRV = obj.ResourceVersion
+		return true, obj, nil
+	})
+
+	c, _ := newTestController(cli, pool)
+
+	if err := c.reconcile(); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	if finalizerRV != "2" {
+		t.Fatalf("expected finalizer write to use resourceVersion 2, got %q", finalizerRV)
+	}
+}
