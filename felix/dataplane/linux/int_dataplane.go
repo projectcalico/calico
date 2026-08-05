@@ -464,6 +464,28 @@ const (
 	aksMTUOverhead         = 100
 )
 
+// legacyIPTablesBinariesPresent reports whether this host has the legacy iptables binaries for the
+// given IP family. Without them FindBestBinary falls back to the default iptables, which on a
+// modern distro drives nftables, so "legacy" and "nft" name the same backend.
+func legacyIPTablesBinariesPresent(ipVersion uint8, lookPathOverride func(string) (string, error)) bool {
+	lookPath := lookPathOverride
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+
+	prefix := "iptables-legacy"
+	if ipVersion == 6 {
+		prefix = "ip6tables-legacy"
+	}
+	for _, cmd := range []string{prefix + "-save", prefix + "-restore"} {
+		if _, err := lookPath(cmd); err != nil {
+			log.WithField("binary", cmd).Info("No legacy iptables binary on this host")
+			return false
+		}
+	}
+	return true
+}
+
 // legacyIPTablesCleanupTables returns tables that sweep the legacy iptables backend for one IP
 // family. They're marked cleanup-only: the legacy backend has no kernel support on some distros,
 // where reading it fails and there is nothing of ours to find anyway.
@@ -473,22 +495,8 @@ func legacyIPTablesCleanupTables(
 	options iptables.TableOptions,
 	natOptions iptables.TableOptions,
 ) []generictables.CleanupTable {
-	lookPath := options.LookPathOverride
-	if lookPath == nil {
-		lookPath = exec.LookPath
-	}
-
-	// Without the legacy binaries, FindBestBinary falls back to the default iptables, which on a
-	// modern distro drives nftables: we would sweep the backend Felix is programming.
-	prefix := "iptables-legacy"
-	if ipVersion == 6 {
-		prefix = "ip6tables-legacy"
-	}
-	for _, cmd := range []string{prefix + "-save", prefix + "-restore"} {
-		if _, err := lookPath(cmd); err != nil {
-			log.WithField("binary", cmd).Info("No legacy iptables binary; not cleaning up that backend")
-			return nil
-		}
+	if !legacyIPTablesBinariesPresent(ipVersion, options.LookPathOverride) {
+		return nil
 	}
 
 	options.BackendMode = "legacy"
@@ -656,12 +664,20 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(6, featureDetector, iptablesOptions, iptablesNATOptions)...)
 		}
 	}
+	// iptables-nft writes into the standard nftables tables, so this reads them with nft.
+	// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
+	// it also covers kube-proxy's chains.
+	//
+	// In legacy mode we sweep only if the legacy binaries are really there. If they aren't, Felix
+	// is programming these very tables through the fallback binary and we'd delete its chains.
+	sweepNFTView := func(ipVersion uint8) bool {
+		return nftablesEnabled || legacyIPTablesBinariesPresent(ipVersion, config.LookPathOverride)
+	}
 	if nftablesEnabled || backendMode == "legacy" {
-		// iptables-nft writes into the standard nftables tables, so this reads them with nft.
-		// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
-		// it also covers kube-proxy's chains.
-		cleanupTables = append(cleanupTables, nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
-		if config.IPv6Enabled {
+		if sweepNFTView(4) {
+			cleanupTables = append(cleanupTables, nftables.NewIPTablesCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+		}
+		if config.IPv6Enabled && sweepNFTView(6) {
 			cleanupTables = append(cleanupTables, nftables.NewIPTablesCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
 		}
 	}
