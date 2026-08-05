@@ -423,6 +423,7 @@ local:felix/routerule
 local:felix/routetable
 local:felix/routetable/ownershippol
 local:felix/rules
+local:felix/rules/rulesdefs
 local:felix/serviceindex
 local:felix/statusrep
 local:felix/stringutils
