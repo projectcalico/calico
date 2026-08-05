@@ -686,7 +686,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 	// iptables-nft writes into the standard nftables tables, so this reads them with nft.
 	// HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes: in BPF mode
-	// it also covers kube-proxy's chains.
+	// it also covers kube-proxy's chains, which is what ExtraCleanupRegexPattern matches there.
+	// The NAT regex has no equivalent here because those rules predate iptables-nft.
 	//
 	// In legacy mode we sweep only if the legacy binaries are really there. If they aren't, Felix
 	// is programming these very tables through the fallback binary and we'd delete its chains.
