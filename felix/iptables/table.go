@@ -459,16 +459,16 @@ func NewTable(
 		timeNow:   now,
 		lookPath:  lookPath,
 
-		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
-		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
+		gaugeNumChains:        discardedGauge,
+		gaugeNumRules:         discardedGauge,
+		countNumLinesExecuted: discardedCounter,
 		opReporter:            options.OpRecorder,
 		cleanupOnly:           options.CleanupOnly,
 	}
-	if options.CleanupOnly {
-		table.gaugeNumChains = discardedGauge
-		table.gaugeNumRules = discardedGauge
-		table.countNumLinesExecuted = discardedCounter
+	if !options.CleanupOnly {
+		table.gaugeNumChains = gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
+		table.gaugeNumRules = gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
+		table.countNumLinesExecuted = countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name)
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 

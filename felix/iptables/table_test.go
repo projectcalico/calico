@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/environment"
@@ -2105,6 +2106,43 @@ var _ = Describe("Table in cleanup-only mode", func() {
 		table = newTable(false)
 
 		Expect(func() { table.Apply() }).To(Panic())
+	})
+
+	// A cleanup-only table shares ip_version and table with the table Felix programs, so anything
+	// it publishes lands on the real table's series.
+	It("leaves the shared metrics alone", func() {
+		chainsGauge := func() (float64, bool) {
+			families, err := prometheus.DefaultGatherer.Gather()
+			Expect(err).NotTo(HaveOccurred())
+			for _, family := range families {
+				if family.GetName() != "felix_iptables_chains" {
+					continue
+				}
+				for _, metric := range family.GetMetric() {
+					labels := map[string]string{}
+					for _, l := range metric.GetLabel() {
+						labels[l.GetName()] = l.GetValue()
+					}
+					if labels["ip_version"] == "4" && labels["table"] == "filter" {
+						return metric.GetGauge().GetValue(), true
+					}
+				}
+			}
+			return 0, false
+		}
+
+		before, foundBefore := chainsGauge()
+
+		dataplane.Chains = map[string][]string{
+			"FORWARD":      {},
+			"cali-FORWARD": {},
+		}
+		table = newTable(true)
+		table.Apply()
+
+		after, foundAfter := chainsGauge()
+		Expect(foundAfter).To(Equal(foundBefore))
+		Expect(after).To(Equal(before))
 	})
 
 	It("still cleans up once the backend can be read", func() {
