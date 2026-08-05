@@ -720,7 +720,11 @@ steps:
         value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
+      # Off for both families: the run asks for dual-stack, and left unset the
+      # v6 pool would keep whatever the installer defaults to.
       - name: ENCAPSULATION_TYPE
+        value: None
+      - name: ENCAPSULATION_TYPE_V6
         value: None
       - name: IP_FAMILY
         value: dual
