@@ -39,6 +39,10 @@ import (
 const (
 	MaxChainNameLength   = 28
 	minPostWriteInterval = 50 * time.Millisecond
+
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled;
+	// returning a zero reschedule leaves an idle Felix never coming back to the table.
+	defaultCleanupRetryInterval = 180 * time.Second
 )
 
 var (
@@ -1132,8 +1136,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			// sync.  Refresh it.  This may mark more chains as dirty.
 			if !t.loadDataplaneState() {
 				// Cleanup-only table we can't read; try again on the next refresh.
-				t.nextCleanupAttempt = now.Add(t.refreshInterval)
-				return t.refreshInterval
+				return t.scheduleCleanupRetry(now)
 			}
 		}
 		t.onStillAlive()
@@ -1150,8 +1153,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			} else if t.cleanupOnly {
 				t.logCxt.WithError(err).Warn("Failed to clean up iptables, will retry on the next refresh")
 				t.InvalidateDataplaneCache("cleanup failed")
-				t.nextCleanupAttempt = now.Add(t.refreshInterval)
-				return t.refreshInterval
+				return t.scheduleCleanupRetry(now)
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program iptables, loading diags before panic.")
 				cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.name)
@@ -1188,6 +1190,17 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 	}
 
 	return
+}
+
+// scheduleCleanupRetry holds this table off until the next attempt is due, and returns how long
+// that is.
+func (t *Table) scheduleCleanupRetry(now time.Time) time.Duration {
+	delay := t.refreshInterval
+	if delay <= 0 {
+		delay = defaultCleanupRetryInterval
+	}
+	t.nextCleanupAttempt = now.Add(delay)
+	return delay
 }
 
 func (t *Table) applyUpdates() error {
