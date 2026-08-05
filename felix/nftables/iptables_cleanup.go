@@ -29,6 +29,10 @@ import (
 
 var iptablesTables = []string{"filter", "nat", "mangle", "raw"}
 
+// defaultSweepInterval paces the sweep when the refresh interval is disabled; it walks every chain
+// in the family, so it can't run on every dataplane apply.
+const defaultSweepInterval = 180 * time.Second
+
 // IPTablesCleanup removes what an iptables-mode Felix left in the standard filter/nat/mangle/raw
 // tables of one IP family. Those are nftables tables too, since iptables-nft writes there.
 //
@@ -78,6 +82,11 @@ func NewIPTablesCleanup(
 	onStillAlive := options.OnStillAlive
 	if onStillAlive == nil {
 		onStillAlive = func() {}
+	}
+
+	refreshInterval := options.RefreshInterval
+	if refreshInterval <= 0 {
+		refreshInterval = defaultSweepInterval
 	}
 
 	return &IPTablesCleanup{
