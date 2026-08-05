@@ -1195,6 +1195,10 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 // queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same
 // transaction that rewrites the whole ruleset, so the table is never left without its base chains.
 func (t *NftablesTable) queueTableRecreate() {
+	if t.recreatePending {
+		// Already queued, and the desired state cannot change mid-retry, so nothing to redo.
+		return
+	}
 	t.recreatePending = true
 
 	// Nothing in the table survives the recreate, so drop our view of it and mark everything we
