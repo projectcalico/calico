@@ -95,18 +95,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 				return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "/iptables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
 
-			// Cleanup runs from startup until the dataplane comes back clean, so the leftover
-			// rules have to be in place before Felix starts, as they would be after a mode switch.
+			// Restart so the rules are already there when Felix starts, as they would be after a
+			// mode switch.
 			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up iptables rules when running in nftables mode", func() {
-			// There should be no cali chains left in iptables after Felix has run.
-			Eventually(func() string {
+			iptablesSave := func() string {
 				out, err := tc.Felixes[0].ExecOutput("iptables-nft-save")
 				Expect(err).NotTo(HaveOccurred())
 				return out
-			}, "10s").ShouldNot(ContainSubstring("cali-"))
+			}
+
+			// There should be no cali chains left in iptables after Felix has run.
+			Eventually(iptablesSave, "10s").ShouldNot(ContainSubstring("cali-"))
+
+			// Cleanup never terminates, so rules that turn up while Felix is running go too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("iptables-nft-restore", "/iptables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(iptablesSave, "10s").ShouldNot(ContainSubstring("cali-"))
 		})
 	})
 
@@ -123,18 +131,26 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 				return tc.Felixes[0].ExecMayFail("nft", "-f", "/nftables-dump.txt")
 			}, "5s", "100ms").ShouldNot(HaveOccurred())
 
-			// See the iptables -> nftables case: the table has to be there before Felix starts.
+			// See the iptables -> nftables case: the table is there before Felix starts.
 			tc.Felixes[0].Restart()
 		})
 
 		It("should clean up nftables rules when running in iptables mode", func() {
-			// The stale "table ip calico" should be cleaned up. The "table arp calico-arp"
-			// is legitimately created by Felix for ARP suppression regardless of dataplane mode.
-			Eventually(func() string {
+			listTables := func() string {
 				out, err := tc.Felixes[0].ExecOutput("nft", "list", "tables")
 				Expect(err).NotTo(HaveOccurred())
 				return out
-			}, "5s").ShouldNot(ContainSubstring("table ip calico"))
+			}
+
+			// The stale "table ip calico" should be cleaned up. The "table arp calico-arp"
+			// is legitimately created by Felix for ARP suppression regardless of dataplane mode.
+			Eventually(listTables, "5s").ShouldNot(ContainSubstring("table ip calico"))
+
+			// Cleanup never terminates, so a table that turns up while Felix is running goes too.
+			Eventually(func() error {
+				return tc.Felixes[0].ExecMayFail("nft", "-f", "/nftables-dump.txt")
+			}, "5s", "100ms").ShouldNot(HaveOccurred())
+			Eventually(listTables, "10s").ShouldNot(ContainSubstring("table ip calico"))
 		})
 	})
 })
