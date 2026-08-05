@@ -10,7 +10,7 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE-CalicoBPF}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA-bpf.yml}"
   export INSTALLER="${INSTALLER-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY-true}"
   source .argoci/scripts/global_prologue.sh
@@ -98,7 +98,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -138,7 +138,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
@@ -176,7 +176,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: PROVISIONER
         value: aws-talos
       - name: VPC_SUBNETS
@@ -201,7 +201,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
@@ -226,7 +226,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: PROVISIONER
         value: gcp-kubeadm
     matrix:
@@ -254,7 +254,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
     matrix:
       - name: azr-aks
         env:
@@ -282,7 +282,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: PROVISIONER
         value: azr-aks
     commands: |
@@ -328,7 +328,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -423,7 +423,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: NUM_ADDON_PODS
         value: "45"
       - name: PROVISIONER
@@ -455,7 +455,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Maglev)
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -513,7 +513,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env IP_FAMILY
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise)
+        value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise|Feature:Maglev)
       - name: NAT_OUTGOING
         value: Enabled
       - name: NAT_OUTGOING_V6
@@ -559,7 +559,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev)
       - name: K8S_VERSION
         value: stable-1
       - name: NAT_OUTGOING_V6
@@ -603,7 +603,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev)
       - name: NAT_OUTGOING
         value: Enabled
       - name: PROVISIONER
@@ -656,7 +656,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env NETWORK_MTU
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_MTU
         value: "9001"
       - name: PROVISIONER
@@ -686,7 +686,7 @@ steps:
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env NETWORK_MTU
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_MTU
         value: "9001"
       - name: PROVISIONER
@@ -698,6 +698,41 @@ steps:
         env:
           - name: ENCAPSULATION_TYPE
             value: None
+    commands: |
+      .argoci/scripts/body_standard.sh
+  # The only run that exercises Maglev. Maglev needs the BPF dataplane with
+  # DSR, an external node, every node on a single VPC subnet, and no
+  # encapsulation -- see felix/design/bpf-services.md -> Maglev. Every other
+  # run skips it, so that requirement doesn't constrain their dataplane mode.
+  - name: maglev
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: BGP_STATUS
+        value: Enabled
+      # The tests route through the second and third node by name, so the
+      # cluster needs at least three. Pinned because the default drops to one
+      # node on an AWS provisioner when the zone is a comma list.
+      - name: CLUSTER_NODES
+        value: "3"
+      - name: ENABLE_BPF_DSR
+        value: "true"
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: IP_FAMILY
+        value: dual
+      # Selects the Maglev tests and nothing else.
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[Feature:Maglev\])
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: VPC_CIDR
+        value: 172.16.0.0/16
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-mode-switch
