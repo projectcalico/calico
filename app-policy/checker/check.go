@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package checker
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -42,8 +43,8 @@ var (
 	INTERNAL          = int32(code.Code_INTERNAL)
 	UNKNOWN           = int32(code.Code_UNKNOWN)
 
-	rlog1 = logrusr.NewRateLimitedLogger()
-	rlog2 = logrusr.NewRateLimitedLogger()
+	rlogBadDstAddr = logrusr.NewRateLimitedLogger()
+	rlogBadSrcAddr = logrusr.NewRateLimitedLogger()
 	// A missing policy is one log line per evaluation, and Felix's collector re-evaluates every
 	// flow in both directions on every sweep, so a policy that stays missing would log per flow
 	// per sweep.
@@ -62,6 +63,37 @@ const (
 	// giving the "pending" verdict: what would happen if the staged policies went live now.
 	StagedAsEnforced
 )
+
+// Every log site on the per-request evaluation path needs its own rate limiter.
+//
+// A rule set that applies tens of thousands of rules to one endpoint turns any per-rule log
+// into a storm: the conditions below are all "shouldn't happen, but does" — a dangling IP set
+// reference while the store catches up, a malformed CIDR or selector that got past validation,
+// a flow that is not IP at all — and each one repeats for every rule in the set, on every
+// request. Rate limiting is per logger instance, so sharing one across sites would let the
+// noisiest message starve the rest; sites that report the same condition do share one.
+//
+// These sites must not use the WithField/WithError builders: those allocate a fields map, a
+// logrus.Entry and a wrapper *before* the rate limiter gets to drop the message, which is the
+// per-rule allocation this path has been optimised to avoid. Pass the value to Warnf instead.
+var (
+	rlogIPSetMissing = newEvalPathLogger()
+	rlogBadPrincipal = newEvalPathLogger()
+	rlogBadProtocol  = newEvalPathLogger()
+	rlogBadCIDR      = newEvalPathLogger()
+	rlogBadSelector  = newEvalPathLogger()
+	rlogBadRulePath  = newEvalPathLogger()
+)
+
+// newEvalPathLogger returns a logger that admits a short burst and then one line per interval,
+// so a storm leaves a few concrete examples plus a "logsSkipped" count rather than filling the
+// log. Tests that need every line replace these vars; see withUnthrottledEvalPathLogs.
+func newEvalPathLogger() *logrusr.RateLimitedLogger {
+	return logrusr.NewRateLimitedLogger(
+		logrusr.OptInterval(30*time.Second),
+		logrusr.OptBurst(10),
+	)
+}
 
 // Action is an enumeration of actions a policy rule can take if it is matched.
 type Action int
@@ -106,14 +138,14 @@ func LookupEndpointKeysFromSrcDst(store *policystore.PolicyStore, src, dst strin
 
 	// Map the destination
 	if destinationIp, err := ip.ParseCIDROrIP(dst); err != nil {
-		rlog1.WithError(err).Errorf("cannot process destination addr %s", dst)
+		rlogBadDstAddr.WithError(err).Errorf("cannot process destination addr %s", dst)
 	} else {
 		log.Debugf("lookup endpoint for destination %s", destinationIp.String())
 		destination = ipToEndpointKeys(store, destinationIp.Addr())
 	}
 	// Map the source
 	if sourceIp, err := ip.ParseCIDROrIP(src); err != nil {
-		rlog2.WithError(err).Errorf("cannot process source addr %s", src)
+		rlogBadSrcAddr.WithError(err).Errorf("cannot process source addr %s", src)
 	} else {
 		log.Debugf("lookup endpoint for source %s", sourceIp.String())
 		source = ipToEndpointKeys(store, sourceIp.Addr())
