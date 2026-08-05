@@ -65,6 +65,9 @@ var _ = describe.CalicoDescribe(
 		var cli ctrlclient.Client
 
 		BeforeEach(func() {
+			if !isKubeVirtInstalled(f) {
+				Skip("KubeVirt is not installed in this cluster")
+			}
 			// Live migration needs at least 2 nodes to migrate between.
 			utils.RequireNodeCount(f, 2)
 

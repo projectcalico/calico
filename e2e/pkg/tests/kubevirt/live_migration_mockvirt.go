@@ -54,6 +54,9 @@ var _ = describe.CalicoDescribe(
 		var cli ctrlclient.Client
 
 		BeforeEach(func() {
+			if !isKubeVirtInstalled(f) {
+				Skip("KubeVirt is not installed in this cluster")
+			}
 			if !isMockVirtDeployed(f) {
 				Fail("KubeVirt-MockVirt tests selected but cluster does not have MockVirt deployed")
 			}
