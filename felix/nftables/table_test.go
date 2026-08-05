@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/iptables/testutils"
 	"github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -64,7 +64,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -921,7 +921,7 @@ var _ = Describe("Insert early rules", func() {
 		table = nftables.NewTable(
 			"cali-filter",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -990,7 +990,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1037,6 +1037,33 @@ var _ = Describe("Disabled table cache invalidation", func() {
 		})
 	})
 
+	// The table Felix sweeps is one it doesn't program, and its chains can go while we work. That
+	// costs us a pass, not the process.
+	Context("when the dataplane rejects the cleanup", func() {
+		BeforeEach(func() {
+			tx := f.NewTransaction()
+			tx.Add(&knftables.Table{})
+			tx.Add(&knftables.Chain{Name: "cali-foobar"})
+			tx.Add(&knftables.Rule{Chain: "cali-foobar", Rule: "counter accept", Comment: ptr("cali:en3LGdDuVUQEgLl8;")})
+			Expect(f.Run(context.Background(), tx)).NotTo(HaveOccurred())
+
+			f.RunError = errors.New("Error: Could not process rule: No such file or directory")
+		})
+
+		It("reschedules instead of panicking", func() {
+			Expect(func() { table.Apply() }).NotTo(Panic())
+		})
+
+		It("cleans up once the dataplane accepts it again", func() {
+			table.Apply()
+
+			f.RunError = nil
+			table.Apply()
+			_, err := f.Fake().List(context.Background(), "chain")
+			Expect(err).To(HaveOccurred(), "Expected table to be deleted once cleanup succeeded")
+		})
+	})
+
 	Context("when there are no chains in the dataplane", func() {
 		It("should not invalidate cache after apply (no cleanup needed)", func() {
 			// First Apply: empty dataplane, nothing to clean up. The first Apply will call
@@ -1069,7 +1096,7 @@ var _ = Describe("Enabled table cache invalidation", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1122,7 +1149,7 @@ var _ = Describe("ARP Table", func() {
 		featureDetector = environment.NewFeatureDetector(nil)
 		table = nftables.NewARPTable(
 			"calico-arp",
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			featureDetector,
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1182,7 +1209,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1282,7 +1309,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1316,7 +1343,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,
@@ -1351,7 +1378,7 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		table = nftables.NewTable(
 			"calico",
 			4,
-			rules.RuleHashPrefix,
+			rulesdefs.RuleHashPrefix,
 			environment.NewFeatureDetector(nil),
 			nftables.TableOptions{
 				NewDataplane:     newDataplane,

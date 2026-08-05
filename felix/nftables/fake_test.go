@@ -61,6 +61,9 @@ type fakeNFT struct {
 	// Allow overriding the next ListAll response to be an error.
 	ListAllError error
 
+	// Allow failing every transaction, standing in for a dataplane that moves under us.
+	RunError error
+
 	// Track the number of List calls (simulates nft process spawns).
 	ListCallCount int
 }
@@ -108,6 +111,9 @@ func (f *fakeNFT) NewTransaction() *knftables.Transaction {
 // IsAlreadyExists methods can be used to test the result.
 func (f *fakeNFT) Run(ctx context.Context, tx *knftables.Transaction) error {
 	f.preRun(tx)
+	if f.RunError != nil {
+		return f.RunError
+	}
 	return f.fake.Run(ctx, tx)
 }
 
