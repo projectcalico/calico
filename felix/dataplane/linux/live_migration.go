@@ -45,7 +45,7 @@ type garpHandle interface {
 }
 
 // liveMigrationStateUpdate records a per-workload FSM state change that the
-// liveMigrationMonitor needs to forward to its listener (the endpoint manager).
+// liveMigrationMonitor needs to forward to its listeners (the endpoint managers).
 type liveMigrationStateUpdate struct {
 	ID    types.WorkloadEndpointID
 	State liveMigrationState
@@ -53,13 +53,17 @@ type liveMigrationStateUpdate struct {
 
 // liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
-// migration role, and drives a per-workload FSM whose state changes are forwarded to
-// the endpoint manager via the liveMigrationListener interface during ResolveUpdateBatch.
+// migration role, and drives a per-workload FSM whose state changes are forwarded to the
+// endpoint managers via the liveMigrationListener interface during ResolveUpdateBatch.
+//
+// There is one endpoint manager per IP version, and each keeps its own live migration state,
+// so every state change must be forwarded to all of them: a monitor with only the IPv4
+// manager registered would leave IPv6 workload routes unsuppressed and unelevated.
 type liveMigrationMonitor struct {
 	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
-	listener        liveMigrationListener
+	listeners       []liveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -99,13 +103,21 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 	}
 }
 
-// ResolveUpdateBatch drains accumulated FSM state changes and forwards them
-// to the endpoint manager via the liveMigrationListener interface.  This runs
-// before CompleteDeferredWork, so the endpoint manager sees the state changes
-// before it programs the dataplane.
+// registerListener adds a listener - in production, one endpoint manager per IP version -
+// that should be told about every FSM state change.
+func (m *liveMigrationMonitor) registerListener(l liveMigrationListener) {
+	m.listeners = append(m.listeners, l)
+}
+
+// ResolveUpdateBatch drains accumulated FSM state changes and forwards them to each
+// registered listener via the liveMigrationListener interface.  This runs before
+// CompleteDeferredWork, so the endpoint managers see the state changes before they
+// program the dataplane.
 func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
 	for _, update := range m.pendingUpdates {
-		m.listener.OnLiveMigrationStateUpdate(update.ID, update.State)
+		for _, l := range m.listeners {
+			l.OnLiveMigrationStateUpdate(update.ID, update.State)
+		}
 	}
 	m.pendingUpdates = m.pendingUpdates[:0]
 	return nil

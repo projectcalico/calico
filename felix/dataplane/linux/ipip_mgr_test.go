@@ -25,11 +25,11 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("IPIPManager", func() {
@@ -44,7 +44,7 @@ var _ = Describe("IPIPManager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := logrusr.NewSummarizer("test")
 
 		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
@@ -71,6 +71,30 @@ var _ = Describe("IPIPManager", func() {
 			opRecorder,
 			dataplane,
 		)
+	})
+
+	It("should mark the dataplane dirty when the parent device changes", func() {
+		dp := &InternalDataplane{}
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+	})
+
+	It("should leave the parent device alone when handed an empty name", func() {
+		dp := &InternalDataplane{}
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
 	})
 
 	It("should configure tunnel properly", func() {

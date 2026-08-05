@@ -30,10 +30,10 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type routeManager struct {
@@ -69,7 +69,7 @@ type routeManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
 	// run 2 instance of the vxlan manager, one for each ip version - like in
@@ -88,7 +88,7 @@ func newRouteManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
@@ -321,12 +321,15 @@ func (m *routeManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *routeManager) OnParentDeviceUpdate(name string) {
+// OnParentDeviceUpdate records a new parent device, reporting whether anything changed so the
+// caller knows to kick an apply.
+func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return false
 	}
 	if name == m.parentDevice {
-		return
+		return false
 	}
 	if m.parentDevice != "" {
 		// We're changing parent interface, remove the old routes.
@@ -334,6 +337,7 @@ func (m *routeManager) OnParentDeviceUpdate(name string) {
 	}
 	m.parentDevice = name
 	m.routesDirty = true
+	return true
 }
 
 func (m *routeManager) updateRoutes() {
