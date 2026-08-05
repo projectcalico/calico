@@ -51,7 +51,9 @@ const (
 	WhiskerContainerName        = "whisker"
 	WhiskerBackendContainerName = "whisker-backend"
 
+	WhiskerKeyPairSecret        = "whisker-key-pair"
 	WhiskerBackendKeyPairSecret = "whisker-backend-key-pair"
+	WhiskerServicePort          = 8443
 	GoldmaneDeploymentName      = "goldmane"
 	GoldmaneServicePort         = 7443
 	GoldmaneNamespace           = common.CalicoNamespace
@@ -82,6 +84,7 @@ type Configuration struct {
 	OpenShift             bool
 	Installation          *operatorv1.InstallationSpec
 	TrustedCertBundle     certificatemanagement.TrustedBundleRO
+	WhiskerKeyPair        certificatemanagement.KeyPairInterface
 	WhiskerBackendKeyPair certificatemanagement.KeyPairInterface
 	Whisker               *operatorv1.Whisker
 	ClusterID             string
@@ -173,6 +176,7 @@ func (c *Component) whiskerContainer() corev1.Container {
 				MountPath: configMountPath,
 				ReadOnly:  true,
 			},
+			c.cfg.WhiskerKeyPair.VolumeMount(c.SupportedOSType()),
 		},
 	}
 }
@@ -184,7 +188,7 @@ func (c *Component) whiskerService() *corev1.Service {
 			Namespace: WhiskerNamespace,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{{Port: 8081}},
+			Ports: []corev1.ServicePort{{Port: WhiskerServicePort}},
 			Selector: map[string]string{
 				"k8s-app": WhiskerDeploymentName,
 			},
@@ -203,6 +207,8 @@ func (c *Component) whiskerBackendContainer() corev1.Container {
 			{Name: "GOLDMANE_HOST", Value: fmt.Sprintf("goldmane.%s.svc.%s:7443", GoldmaneNamespace, c.cfg.ClusterDomain)},
 			{Name: "TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
 			{Name: "TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
+			{Name: "SERVER_TLS_CERT_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountCertificateFilePath()},
+			{Name: "SERVER_TLS_KEY_PATH", Value: c.cfg.WhiskerBackendKeyPair.VolumeMountKeyFilePath()},
 		},
 		SecurityContext: securitycontext.NewNonRootContext(),
 		VolumeMounts: append(
@@ -223,6 +229,9 @@ func (c *Component) deployment() *appsv1.Deployment {
 		// Add the trusted cert bundle volume to the pod.
 		c.cfg.TrustedCertBundle.Volume(),
 
+		// Add the whisker TLS key pair volume (used by nginx for HTTPS).
+		c.cfg.WhiskerKeyPair.Volume(),
+
 		// Add the whisker backend key pair volume to the pod.
 		c.cfg.WhiskerBackendKeyPair.Volume(),
 
@@ -235,6 +244,14 @@ func (c *Component) deployment() *appsv1.Deployment {
 				},
 			},
 		},
+	}
+
+	// Both key pairs are served at process startup (nginx and the backend), so
+	// rotate the pod when either changes. The trusted bundle is only used by a
+	// client that picks up changes without a restart.
+	annotations := map[string]string{
+		c.cfg.WhiskerKeyPair.HashAnnotationKey():        c.cfg.WhiskerKeyPair.HashAnnotationValue(),
+		c.cfg.WhiskerBackendKeyPair.HashAnnotationKey(): c.cfg.WhiskerBackendKeyPair.HashAnnotationValue(),
 	}
 
 	return &appsv1.Deployment{
@@ -250,7 +267,8 @@ func (c *Component) deployment() *appsv1.Deployment {
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: WhiskerDeploymentName,
+					Name:        WhiskerDeploymentName,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					NodeSelector:       c.cfg.Installation.ControlPlaneNodeSelector,
