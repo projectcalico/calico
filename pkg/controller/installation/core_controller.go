@@ -83,6 +83,7 @@ import (
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/common/resourcequota"
 	"github.com/tigera/operator/pkg/render/goldmane"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
@@ -240,6 +241,11 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	if opts.Variant.IsEnterprise() {
+		// Watched so a toggle re-renders the access gated on it.
+		if err = utils.AddConfigMapWatch(c, rbacmanagement.ConfigMapName, common.CalicoNamespace, &handler.EnqueueRequestForObject{}); err != nil {
+			return fmt.Errorf("tigera-installation-controller failed to watch ConfigMap %s: %w", rbacmanagement.ConfigMapName, err)
+		}
+
 		// Watch for changes to primary resource ManagementCluster
 		err = c.WatchObject(&operatorv1.ManagementCluster{}, &handler.EnqueueRequestForObject{})
 		if err != nil {
@@ -250,14 +256,6 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		err = c.WatchObject(&operatorv1.ManagementClusterConnection{}, &handler.EnqueueRequestForObject{})
 		if err != nil {
 			return fmt.Errorf("tigera-installation-controller failed to watch primary resource: %v", err)
-		}
-
-		// Watch the Manager CR so changes to spec.rbac re-run the installation
-		// reconcile (the rbacsync controller in calico-kube-controllers is
-		// gated on it).
-		err = c.WatchObject(&operatorv1.Manager{}, &handler.EnqueueRequestForObject{})
-		if err != nil {
-			return fmt.Errorf("tigera-installation-controller failed to watch Manager: %v", err)
 		}
 
 		// watch for change to primary resource LogCollector
@@ -357,6 +355,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 		variant:              opts.Variant,
 		clusterDomain:        opts.ClusterDomain,
 		manageCRDs:           opts.ManageCRDs,
+		multiTenant:          opts.MultiTenant,
 		tierWatchReady:       &utils.ReadyFlag{},
 		migrationWatchReady:  &utils.ReadyFlag{},
 		newComponentHandler:  utils.NewComponentHandler,
@@ -418,6 +417,7 @@ type ReconcileInstallation struct {
 	migrationChecked              bool
 	clusterDomain                 string
 	manageCRDs                    bool
+	multiTenant                   bool
 	tierWatchReady                *utils.ReadyFlag
 	migrationWatchReady           *utils.ReadyFlag
 	v3CRDs                        bool
@@ -1047,7 +1047,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	var managementCluster *operatorv1.ManagementCluster
 	var managementClusterConnection *operatorv1.ManagementClusterConnection
-	var managerCR *operatorv1.Manager
 	var logCollector *operatorv1.LogCollector
 	if r.variant.IsEnterprise() {
 		logCollector, err = utils.GetLogCollector(ctx, r.client)
@@ -1067,12 +1066,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		managementClusterConnection, err = utils.GetManagementClusterConnection(ctx, r.client)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading ManagementClusterConnection", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-
-		managerCR, err = utils.GetManager(ctx, r.client, false, "")
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading Manager", err, reqLogger)
 			return reconcile.Result{}, err
 		}
 
@@ -1331,6 +1324,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 	if err := handler.CreateOrUpdateOrDelete(ctx, render.Namespaces(namespaceCfg), nil); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating namespaces", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
+	rbacManagementEnabled, err := utils.RBACManagementEnabled(ctx, r.client, instance.Spec.Variant, r.multiTenant)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the RBAC management UI ConfigMap", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -1720,8 +1719,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		// disabled); the caBundle is the operator CA that issued the serving
 		// cert above.
 		WAFWebhookCABundle:    certificateManager.KeyPair().GetCertificatePEM(),
-		RBACManagementEnabled: managerCR.RBACManagementEnabled(),
 		Cloud:                 r.cloud,
+		RBACManagementEnabled: rbacManagementEnabled,
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 

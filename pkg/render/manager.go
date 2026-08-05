@@ -41,6 +41,7 @@ import (
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/podaffinity"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
@@ -77,11 +78,6 @@ const (
 	ManagerInternalTLSSecretName = "internal-manager-tls"
 	ManagerPolicyName            = networkpolicy.CalicoComponentPolicyPrefix + "manager-access"
 	ManagerPortName              = "https"
-
-	// RBACManagementLDAPConfigSecretName is the RBAC-UI LDAP directory-sync config
-	// Secret (calico-system) the rbacsync process reads to perform the sync.
-	// Keep in sync with ui-apis rbacmanagement/idp LDAPConfigSecretName.
-	RBACManagementLDAPConfigSecretName = "tigera-idp-ldap-config"
 
 	// The name of the TLS certificate used by Voltron to authenticate connections from managed
 	// cluster clients talking to Linseed.
@@ -218,6 +214,10 @@ type ManagerConfiguration struct {
 	Authentication *operatorv1.Authentication
 	KibanaEnabled  bool
 
+	// RBACManagementEnabled reports whether to render the RBAC management UI access.
+	// The controller has already applied the variant, the admin's gate and tenancy.
+	RBACManagementEnabled bool
+
 	// CACertCommonName is the CommonName from the CA certificate used for operator-managed certificates.
 	// Passed to Voltron so it can identify the correct CA issuer public key.
 	CACertCommonName string
@@ -293,11 +293,11 @@ func (c *managerComponent) Objects() ([]client.Object, []client.Object) {
 
 	objsToCreate = append(objsToCreate,
 		managerClusterRoleBinding(c.cfg.Tenant, c.cfg.BindingNamespaces, c.cfg.OSSTenantNamespaces),
-		managerClusterRole(false, c.cfg.Installation.KubernetesProvider, c.cfg.Tenant, c.cfg.Manager.RBACManagementEnabled()),
+		managerClusterRole(false, c.cfg.Installation.KubernetesProvider, c.cfg.Tenant, c.cfg.RBACManagementEnabled),
 		c.managedClustersWatchRoleBinding(),
 	)
 	objsToCreate = append(objsToCreate, c.managedClustersUpdateRBAC()...)
-	if c.cfg.Manager.RBACManagementEnabled() && !c.cfg.Tenant.MultiTenant() {
+	if c.cfg.RBACManagementEnabled {
 		objsToCreate = append(objsToCreate, c.rbacManagementUINamespacedRole()...)
 	}
 	if c.cfg.Tenant.MultiTenant() {
@@ -770,7 +770,6 @@ func (c *managerComponent) managerUIAPIsContainer() corev1.Container {
 		{Name: "LINSEED_CLIENT_KEY", Value: keyPath},
 		{Name: "ELASTIC_KIBANA_DISABLED", Value: strconv.FormatBool(c.cfg.Tenant.MultiTenant())},
 		{Name: "VOLTRON_URL", Value: ManagerService(c.cfg.Tenant)},
-		{Name: "RBAC_UI_ENABLED", Value: strconv.FormatBool(c.cfg.Manager.RBACManagementEnabled() && !c.cfg.Tenant.MultiTenant())},
 	}
 
 	// Determine the Linseed location. Use code default unless in multi-tenant mode,
@@ -1187,10 +1186,8 @@ func managerClusterRole(managedCluster bool, kubernetesProvider operatorv1.Provi
 		},
 	}
 
-	// Not rendered on multi-tenant management clusters. Keep this condition in
-	// sync with the rbacManagementUINamespacedRole gate; the cluster rules and
-	// the namespaced grant are rendered together.
-	if rbacManagementEnabled && !tenant.MultiTenant() {
+	// Keep in sync with the rbacManagementUINamespacedRole gate.
+	if rbacManagementEnabled {
 		cr.Rules = append(cr.Rules, rbacManagementUIRules()...)
 	}
 
@@ -1254,9 +1251,8 @@ func (c *managerComponent) rbacManagementUINamespacedRole() []client.Object {
 			ObjectMeta: metav1.ObjectMeta{Name: ManagerClusterRole, Namespace: common.CalicoNamespace},
 			Rules: []rbacv1.PolicyRule{
 				{
-					// create carries the object name in the request body, not the
-					// URL path, so RBAC cannot restrict it by resource name; it is
-					// scoped to this namespace instead.
+					// create cannot be restricted by resource name, so it is scoped to
+					// this namespace instead.
 					APIGroups: []string{""},
 					Resources: []string{"configmaps", "secrets"},
 					Verbs:     []string{"create"},
@@ -1264,14 +1260,21 @@ func (c *managerComponent) rbacManagementUINamespacedRole() []client.Object {
 				{
 					APIGroups:     []string{""},
 					Resources:     []string{"secrets"},
-					ResourceNames: []string{RBACManagementLDAPConfigSecretName},
+					ResourceNames: []string{rbacmanagement.LDAPConfigSecretName},
 					Verbs:         []string{"get", "list", "watch", "update", "patch", "delete"},
 				},
 				{
 					APIGroups:     []string{""},
 					Resources:     []string{"configmaps"},
-					ResourceNames: []string{"tigera-idp-groups"},
+					ResourceNames: []string{rbacmanagement.GroupsConfigMapName},
 					Verbs:         []string{"get", "list", "watch", "update", "patch", "delete"},
+				},
+				{
+					// The gate ui-apis watches; read-only, the value is the admin's.
+					APIGroups:     []string{""},
+					Resources:     []string{"configmaps"},
+					ResourceNames: []string{rbacmanagement.ConfigMapName},
+					Verbs:         []string{"get", "list", "watch"},
 				},
 			},
 		},
@@ -1359,7 +1362,7 @@ func (c *managerComponent) managerCalicoSystemNetworkPolicy() *v3.NetworkPolicy 
 		})
 	}
 
-	if c.cfg.Manager.RBACManagementEnabled() && !c.cfg.Tenant.MultiTenant() &&
+	if c.cfg.RBACManagementEnabled &&
 		c.cfg.Authentication != nil && c.cfg.Authentication.Spec.LDAP != nil {
 		// LDAP/AD egress (389, 636) for the RBAC-UI directory sync, gated on LDAP
 		// being configured on the Authentication CR. The destination is scoped to

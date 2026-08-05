@@ -298,18 +298,6 @@ spec:
                           type: object
                       type: object
                   type: object
-                rbacUI:
-                  description: RBACUI configures the RBAC management UI feature.
-                  properties:
-                    state:
-                      description:
-                        State turns the RBAC management UI on or off. Defaults
-                        to Disabled.
-                      enum:
-                        - Enabled
-                        - Disabled
-                      type: string
-                  type: object
               type: object
             status:
               description: Most recently observed state for the Calico Enterprise manager.

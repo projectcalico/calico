@@ -46,6 +46,7 @@ import (
 	tigerakvc "github.com/tigera/operator/pkg/render/common/authentication/tigera/key_validator_config"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/logstorage/eck"
 	rmanager "github.com/tigera/operator/pkg/render/manager"
 	"github.com/tigera/operator/pkg/render/monitor"
@@ -182,6 +183,11 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 
 	if err = utils.AddConfigMapWatch(c, tigerakvc.StaticWellKnownJWKSConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("manager-controller failed to watch ConfigMap resource %s: %w", tigerakvc.StaticWellKnownJWKSConfigMapName, err)
+	}
+
+	// Watched so that toggling the RBAC management UI re-renders the access gated on it.
+	if err = utils.AddConfigMapWatch(c, rbacmanagement.ConfigMapName, common.CalicoNamespace, eventHandler); err != nil {
+		return fmt.Errorf("manager-controller failed to watch ConfigMap resource %s: %w", rbacmanagement.ConfigMapName, err)
 	}
 
 	if err = utils.AddConfigMapWatch(c, relasticsearch.ClusterConfigConfigMapName, common.OperatorNamespace(), eventHandler); err != nil {
@@ -684,6 +690,12 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
+	rbacManagementEnabled, err := utils.RBACManagementEnabled(ctx, r.client, installationSpec.Variant, tenant.MultiTenant())
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the RBAC management UI ConfigMap", err, logc)
+		return reconcile.Result{}, err
+	}
+
 	managerCfg := &render.ManagerConfiguration{
 		VoltronRouteConfig:         routeConfig,
 		KeyValidatorConfig:         keyValidatorConfig,
@@ -710,6 +722,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		Manager:                    instance,
 		Authentication:             authenticationCR,
 		KibanaEnabled:              kibanaEnabled,
+		RBACManagementEnabled:      rbacManagementEnabled,
 		CACertCommonName:           certificateManager.CACertCommonName(),
 		Cloud:                      r.opts.Cloud,
 		CloudResources:             mcr,

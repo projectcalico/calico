@@ -51,6 +51,7 @@ import (
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	rsecret "github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/logstorage/eck"
 	"github.com/tigera/operator/pkg/render/monitor"
@@ -561,6 +562,64 @@ var _ = Describe("Manager controller tests", func() {
 				// Mark that watches were successful.
 				r.licenseAPIReady.MarkAsReady()
 				r.tierWatchReady.MarkAsReady()
+			})
+
+			// These cover the controller's half: reading the ConfigMap and handing the
+			// value to the renderer. The namespaced Role is where it is observable.
+			Context("RBAC management UI feature gate", func() {
+				roleKey := client.ObjectKey{Name: render.ManagerClusterRole, Namespace: common.CalicoNamespace}
+
+				writeGate := func(value string) {
+					Expect(c.Create(ctx, &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      rbacmanagement.ConfigMapName,
+							Namespace: common.CalicoNamespace,
+						},
+						Data: map[string]string{rbacmanagement.ConfigMapKey: value},
+					})).NotTo(HaveOccurred())
+				}
+
+				// idpRoleExists reconciles and reports whether the gated Role landed.
+				idpRoleExists := func() bool {
+					_, err := r.Reconcile(ctx, reconcile.Request{})
+					Expect(err).NotTo(HaveOccurred())
+
+					err = c.Get(ctx, roleKey, &rbacv1.Role{})
+					if err != nil && !kerror.IsNotFound(err) {
+						Expect(err).NotTo(HaveOccurred())
+					}
+					return err == nil
+				}
+
+				It("withholds the namespaced Role when the admin has not created the ConfigMap", func() {
+					Expect(idpRoleExists()).To(BeFalse())
+				})
+
+				It("renders the namespaced Role once the admin enables the feature", func() {
+					writeGate("true")
+					Expect(idpRoleExists()).To(BeTrue())
+				})
+
+				It("withholds the namespaced Role when the admin sets the value to false", func() {
+					writeGate("false")
+					Expect(idpRoleExists()).To(BeFalse())
+				})
+
+				// An unreadable ConfigMap is unknown state, not absent, so it degrades
+				// rather than rendering as disabled.
+				It("degrades and requeues when the ConfigMap cannot be read", func() {
+					readErr := fmt.Errorf("the API server is having a bad day")
+					r.client = failingGateReadClient{Client: c, err: readErr}
+					// The shared mockStatus expects a full reconcile, which this returns
+					// early from, so assert the one call.
+					mockStatus.On("SetDegraded", operatorv1.ResourceReadError,
+						"Error reading the RBAC management UI ConfigMap", readErr.Error(), mock.Anything).Return().Once()
+
+					_, err := r.Reconcile(ctx, reconcile.Request{})
+					Expect(err).To(MatchError(readErr))
+					mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceReadError,
+						"Error reading the RBAC management UI ConfigMap", readErr.Error(), mock.Anything)
+				})
 			})
 
 			It("should reconcile legacy manager namespace", func() {
@@ -1263,6 +1322,24 @@ var _ = Describe("Manager controller tests", func() {
 				Expect(clusterRoleBinding.Subjects).To(HaveLen(2))
 			})
 
+			// Multi-tenant force-disables the RBAC management UI on the ui-apis side, so
+			// the controller must resolve the switch to off even with the admin's gate on.
+			It("withholds the RBAC management UI access even when the admin enables the gate", func() {
+				Expect(c.Create(ctx, &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rbacmanagement.ConfigMapName,
+						Namespace: common.CalicoNamespace,
+					},
+					Data: map[string]string{rbacmanagement.ConfigMapKey: "true"},
+				})).NotTo(HaveOccurred())
+
+				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: tenantANamespace}})
+				Expect(err).ShouldNot(HaveOccurred())
+
+				err = c.Get(ctx, client.ObjectKey{Name: render.ManagerClusterRole, Namespace: tenantANamespace}, &rbacv1.Role{})
+				Expect(kerror.IsNotFound(err)).To(BeTrue(), "expected no RBAC management UI Role in a tenant namespace")
+			})
+
 			Context("with both OSS and Enterprise managed clusters", func() {
 				tenantCNamespace := "tenant-c"
 
@@ -1410,6 +1487,20 @@ var _ = Describe("Manager controller tests", func() {
 		})
 	})
 })
+
+// failingGateReadClient fails the read of the gate ConfigMap and passes everything else
+// through, to distinguish an unreadable ConfigMap from an absent one.
+type failingGateReadClient struct {
+	client.Client
+	err error
+}
+
+func (f failingGateReadClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if _, ok := obj.(*corev1.ConfigMap); ok && key.Name == rbacmanagement.ConfigMapName {
+		return f.err
+	}
+	return f.Client.Get(ctx, key, obj, opts...)
+}
 
 func assertSANs(secret *corev1.Secret, expectedSAN string) {
 	var cert *x509.Certificate

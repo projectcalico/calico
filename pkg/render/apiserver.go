@@ -44,6 +44,7 @@ import (
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/podaffinity"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
@@ -152,15 +153,15 @@ type APIServerConfiguration struct {
 	KubernetesVersion  *common.VersionInfo
 	ClusterDomain      string
 
-	// RBACManagementEnabled gates the RBAC management UI permissions on
-	// tigera-network-admin.
-	RBACManagementEnabled bool
-
 	// Cloud indicates the API server is being rendered for a Calico Cloud install. It gates
 	// cloud-specific RBAC in the tigera-ui-user / tigera-network-admin cluster roles (Calico Cloud
 	// exposes only per-user UISettings and grants access to runtime logs). When false the RBAC is
 	// exactly the regular Calico/Calico Enterprise RBAC.
 	Cloud bool
+
+	// RBACManagementEnabled reports whether to render the RBAC management UI access.
+	// The controller has already applied the variant, the admin's gate and tenancy.
+	RBACManagementEnabled bool
 
 	// Whether or not we should run the aggregation API server for projectcalico.org/v3 APIs
 	// as part of this component.
@@ -2192,10 +2193,26 @@ func (c *apiServerComponent) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole
 		},
 	}...)
 
-	// Role/binding access for the RBAC management UI. ui-apis writes these
-	// impersonating the caller, so the apiserver enforces escalation against the
-	// user's own permissions. The UI reads the role catalogue and manages group
-	// membership through both cluster- and namespace-scoped bindings.
+	// Write access to the switch, so a network admin can enable the feature without
+	// cluster-admin. Not gated: a rule rendered only while the feature is on could never
+	// be used to turn it on. create cannot be restricted by resource name, so it admits
+	// creating any ConfigMap in the namespace.
+	rules = append(rules,
+		rbacv1.PolicyRule{
+			APIGroups: []string{""},
+			Resources: []string{"configmaps"},
+			Verbs:     []string{"create"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"configmaps"},
+			ResourceNames: []string{rbacmanagement.ConfigMapName},
+			Verbs:         []string{"get", "list", "watch", "update", "patch", "delete"},
+		},
+	)
+
+	// Role/binding access for the RBAC management UI. ui-apis writes these impersonating
+	// the caller, so the apiserver enforces escalation against the user's own permissions.
 	if c.cfg.RBACManagementEnabled {
 		rules = append(rules,
 			rbacv1.PolicyRule{
