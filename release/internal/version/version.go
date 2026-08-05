@@ -121,6 +121,11 @@ func (v *Version) Stream() string {
 	return stream
 }
 
+// PrimaryStream returns the stream without any EP suffix.
+func (v *Version) PrimaryStream() string {
+	return strings.Split(v.Stream(), "-")[0]
+}
+
 func (v *Version) Semver() *semver.Version {
 	ver := semver.MustParse(string(*v))
 	return ver
@@ -142,49 +147,54 @@ func (v *Version) NextBranchVersion() Version {
 	return New(ver.IncMinor().String())
 }
 
-// NextReleaseVersion returns the next version for a release in the current branch.
-// If the version is a EP1 version, it will increment the EP version.
-// If the version is a EP2 version, it will increment to GA version.
-// If the version is a GA version, it will increment the patch version.
-//
-// For example, for version "v3.15.0-1.0", the next release version is "v3.15.0-1.1".
-// For version "v3.15.0-2.0", the next release version is "v3.15.1".
-// For version "v3.15.0", the next release version is "v3.15.1".
-// For version "v3.15.0-1.0-1-g1a2b3c4d5e67", the next release version is "v3.15.0-1.1".
-func (v *Version) NextReleaseVersion() (Version, error) {
-	ver := v.Semver()
-	ep, epVer := IsEarlyPreviewVersion(ver)
-	if ep {
-		if epVer == 1 {
-			// EP 1 = increment EP version i.e vX.Y.Z-1.0 to vX.Y.Z-1.1
-			parts := strings.Split(ver.Prerelease(), ".")
-			minorEPver, err := strconv.Atoi(strings.Split(parts[1], "-")[0])
-			if err != nil {
-				logrus.WithError(err).Error("Failed to parse minor EP version")
-				return "", err
-			}
-			return New(fmt.Sprintf("v%d.%d.0-1.%d", ver.Major(), ver.Minor(), minorEPver+1)), nil
-		}
-		// EP 2 - increment to GA version i.e vX.Y.Z-2.0 to vX.Y.1
-		return New(fmt.Sprintf("v%d.%d.1", ver.Major(), ver.Minor())), nil
+var epIsEarlyPreview = func(v *semver.Version) (bool, int) {
+	if v.Prerelease() == "" {
+		return false, -1
 	}
-	// GA versions - increment patch version i.e vX.Y.Z to vX.Y.Z+1
-	return New(ver.IncPatch().String()), nil
-}
-
-// IsEarlyPreviewVersion handles the logic for determining if a version is an early preview (EP) version.
-//
-// An early preview version is a version that has a prerelease tag starting with "1." or "2.".
-// The function returns true if it is an EP and EP major version as EP 1 is treated differently from EP 2.
-func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
-	if v.Prerelease() != "" {
-		if strings.HasPrefix(v.Prerelease(), "1.") {
-			return true, 1
-		} else if strings.HasPrefix(v.Prerelease(), "2.") {
-			return true, 2
-		}
+	if strings.HasPrefix(v.Prerelease(), "1.") {
+		return true, 1
+	} else if strings.HasPrefix(v.Prerelease(), "2.") {
+		return true, 2
 	}
 	return false, -1
+}
+
+// epNextRelease returns the next release version for an EP version. ok is false
+// for a non-EP version (the caller then uses GA logic); when ok is true, err is
+// non-nil if the EP version could not be parsed. The default bumps EP1's patch
+// and promotes EP2 to GA.
+var epNextRelease = func(v *Version) (next Version, ok bool, err error) {
+	ver := v.Semver()
+	ep, epVer := epIsEarlyPreview(ver)
+	if !ep {
+		return "", false, nil
+	}
+	if epVer == 1 {
+		parts := strings.Split(ver.Prerelease(), ".")
+		minorEPver, err := strconv.Atoi(strings.Split(parts[1], "-")[0])
+		if err != nil {
+			return "", true, fmt.Errorf("failed to parse EP version from %s: %w", v, err)
+		}
+		return New(fmt.Sprintf("v%d.%d.0-1.%d", ver.Major(), ver.Minor(), minorEPver+1)), true, nil
+	}
+	// EP2 -> GA
+	return New(fmt.Sprintf("v%d.%d.1", ver.Major(), ver.Minor())), true, nil
+}
+
+// IsEarlyPreviewVersion reports whether v is an early-preview version and, if
+// so, its EP line. GA and non-EP versions return (false, -1).
+func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
+	return epIsEarlyPreview(v)
+}
+
+// NextReleaseVersion returns the next release version for the current branch.
+// EP versions are handled by epNextRelease; a GA version bumps its patch.
+func (v *Version) NextReleaseVersion() (Version, error) {
+	if next, ok, err := epNextRelease(v); ok {
+		return next, err
+	}
+	ver := v.Semver()
+	return New(ver.IncPatch().String()), nil
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
@@ -269,14 +279,24 @@ func VersionsFromManifests(repoRoot string) (Version, Version, error) {
 	return productVersion, operatorVersion, nil
 }
 
+// epBranchStreamSuffix returns the stream suffix (e.g. "-2") for a release
+// branch that carries one. The default returns "" so the stream comes from the
+// version alone; a build can override it to key the stream off the branch name.
+var epBranchStreamSuffix = func(branch string) string { return "" }
+
 // DeterminePublishStream returns the stream for a given branch and version.
 // If the branch is the default branch i.e. master, the stream is master.
-// Otherwise, the stream is the major and minor version of the version.
+// Otherwise, the stream is the major and minor version of the version. When the
+// branch carries a stream suffix (see epBranchStreamSuffix), that suffix is
+// used instead of any suffix the version would give.
 func DeterminePublishStream(branch string, version string) string {
 	if branch == utils.DefaultBranch {
 		return branch
 	}
 	ver := New(version)
+	if suffix := epBranchStreamSuffix(branch); suffix != "" {
+		return ver.PrimaryStream() + suffix
+	}
 	return ver.Stream()
 }
 
