@@ -47,6 +47,17 @@ func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive
 		}
 	}()
 
+	return readTablesFrom(conn, netlinkFamily, tables, onStillAlive)
+}
+
+// nftReader is the part of the netlink client the read needs; tests inject a fake.
+type nftReader interface {
+	ListTablesOfFamily(nftables.TableFamily) ([]*nftables.Table, error)
+	ListChainsOfTableFamily(nftables.TableFamily) ([]*nftables.Chain, error)
+	GetRules(*nftables.Table, *nftables.Chain) ([]*nftables.Rule, error)
+}
+
+func readTablesFrom(conn nftReader, netlinkFamily nftables.TableFamily, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
 	present, err := conn.ListTablesOfFamily(netlinkFamily)
 	if err != nil {
 		return nil, fmt.Errorf("list tables: %w", err)
