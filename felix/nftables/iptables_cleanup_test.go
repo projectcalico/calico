@@ -179,8 +179,9 @@ var _ = Describe("iptables cleanup, scheduling its passes", func() {
 	)
 
 	// Stands in for the netlink read. Of our four tables only "filter" exists on this host.
-	readTables := func(family knftables.Family, tables []string) (map[string]*iptablesTableState, error) {
+	readTables := func(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
 		read = append(read, tables)
+		onStillAlive()
 		if readErr != nil {
 			return nil, readErr
 		}

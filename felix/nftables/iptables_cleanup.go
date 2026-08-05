@@ -48,7 +48,7 @@ type IPTablesCleanup struct {
 	newDataplane NewNftablesDataplaneFn
 
 	// readTables reads back whichever of the given tables exist; tests inject a fake.
-	readTables func(family knftables.Family, tables []string) (map[string]*iptablesTableState, error)
+	readTables func(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error)
 
 	refreshInterval time.Duration
 	lastSweep       time.Time
@@ -118,7 +118,7 @@ func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	}
 	c.lastSweep = now
 
-	states, err := c.readTables(c.family, iptablesTables)
+	states, err := c.readTables(c.family, iptablesTables, c.onStillAlive)
 	if err != nil {
 		logrus.WithError(err).WithField("family", c.family).Warn("Failed to read nftables tables; will retry iptables cleanup")
 		return c.refreshInterval

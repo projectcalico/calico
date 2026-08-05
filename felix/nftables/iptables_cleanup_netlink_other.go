@@ -20,6 +20,6 @@ import "sigs.k8s.io/knftables"
 
 // readTablesViaNetlink reports no tables off Linux, where there is no nftables to clean up. The
 // netlink client we use for the real read doesn't build anywhere else.
-func readTablesViaNetlink(family knftables.Family, tables []string) (map[string]*iptablesTableState, error) {
+func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
 	return nil, nil
 }

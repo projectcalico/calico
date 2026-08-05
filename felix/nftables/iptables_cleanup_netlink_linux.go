@@ -30,7 +30,7 @@ import (
 //
 // Netlink rather than the nft binary because of the rule comment: the kernel hands back iptables'
 // comment payload, which is how iptables-nft-save recovers it, but every nft renderer drops it.
-func readTablesViaNetlink(family knftables.Family, tables []string) (map[string]*iptablesTableState, error) {
+func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
 	netlinkFamily := nftables.TableFamilyIPv4
 	if family == knftables.IPv6Family {
 		netlinkFamily = nftables.TableFamilyIPv6
@@ -89,6 +89,9 @@ func readTablesViaNetlink(family knftables.Family, tables []string) (map[string]
 		if !base {
 			continue
 		}
+
+		// One dump per base chain, and the whole read blocks the apply loop.
+		onStillAlive()
 
 		rules, err := conn.GetRules(table, chain)
 		if err != nil {
