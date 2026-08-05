@@ -155,32 +155,29 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) er
 	if err != nil {
 		return fmt.Errorf("create nft client: %w", err)
 	}
-	tx := nft.NewTransaction()
 
-	// Delete our rules from other people's chains first, so our own chains stop being referenced.
+	if c.opReporter != nil {
+		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-iptables-%s-v%d", table, c.ipVersion))
+	}
+
+	// Rules first, then empty our chains. Nothing of ours affects traffic after this, even if the
+	// deletes below can't go through.
+	tx := nft.NewTransaction()
 	for chain, handles := range ourRuleHandles {
 		for _, h := range handles {
 			handle := int(h)
 			tx.Delete(&knftables.Rule{Chain: chain, Handle: &handle})
 		}
 	}
-
-	// Flush all of our chains before deleting any: they jump to each other, and deleting as we go
-	// would hit a chain a later one still references, losing the whole transaction.
 	for _, name := range ourChains {
 		tx.Flush(&knftables.Chain{Name: name})
 	}
-	for _, name := range ourChains {
-		tx.Delete(&knftables.Chain{Name: name})
+	if err := c.runTransaction(nft, tx); err != nil {
+		return fmt.Errorf("remove rules: %w", err)
 	}
 
-	if c.opReporter != nil {
-		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-iptables-%s-v%d", table, c.ipVersion))
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-	if err := nft.Run(ctx, tx); err != nil {
-		return fmt.Errorf("apply cleanup transaction: %w", err)
+	if len(ourChains) > 0 {
+		c.deleteChains(nft, table, ourChains)
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -190,6 +187,40 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) er
 	}).Info("Cleaned up rules left behind by a previous iptables-mode Felix")
 
 	return nil
+}
+
+// deleteChains removes our chains, falling back to one transaction each. nftables refuses to delete
+// a chain something still jumps to, and one of those would otherwise take the whole batch with it.
+func (c *IPTablesCleanup) deleteChains(nft knftables.Interface, table string, chains []string) {
+	tx := nft.NewTransaction()
+	for _, name := range chains {
+		tx.Delete(&knftables.Chain{Name: name})
+	}
+	if err := c.runTransaction(nft, tx); err == nil {
+		return
+	}
+
+	var referenced []string
+	for _, name := range chains {
+		tx := nft.NewTransaction()
+		tx.Delete(&knftables.Chain{Name: name})
+		if err := c.runTransaction(nft, tx); err != nil {
+			referenced = append(referenced, name)
+		}
+	}
+	if len(referenced) > 0 {
+		logrus.WithFields(logrus.Fields{
+			"family": c.family,
+			"table":  table,
+			"chains": referenced,
+		}).Warn("Left empty chains behind; something outside the base chains still jumps to them")
+	}
+}
+
+func (c *IPTablesCleanup) runTransaction(nft knftables.Interface, tx *knftables.Transaction) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	return nft.Run(ctx, tx)
 }
 
 // ourState picks out the chains and rules a previous iptables-mode Felix wrote: chains by name,
