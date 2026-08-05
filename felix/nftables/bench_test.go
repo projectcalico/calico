@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/nftables"
-	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
@@ -204,7 +204,7 @@ func newRealTable(b *testing.B) (*nftables.NftablesTable, *ipsets.IPVersionConfi
 	table := nftables.NewTable(
 		benchTableName,
 		4,
-		rules.RuleHashPrefix,
+		rulesdefs.RuleHashPrefix,
 		environment.NewFeatureDetector(nil),
 		nftables.TableOptions{
 			OpRecorder: logrusr.NewSummarizer("bench"),
