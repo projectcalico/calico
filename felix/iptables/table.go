@@ -88,6 +88,15 @@ var (
 		Name: "felix_iptables_lines_executed",
 		Help: "Number of iptables rule updates executed.",
 	}, []string{"ip_version", "table"})
+
+	// Cleanup-only tables share ip_version and table with the tables Felix programs, so their
+	// counts go here instead of overwriting the real ones. Never registered.
+	discardedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "felix_iptables_discarded_gauge",
+	})
+	discardedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "felix_iptables_discarded_counter",
+	})
 )
 
 func init() {
@@ -451,6 +460,11 @@ func NewTable(
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		opReporter:            options.OpRecorder,
 		cleanupOnly:           options.CleanupOnly,
+	}
+	if options.CleanupOnly {
+		table.gaugeNumChains = discardedGauge
+		table.gaugeNumRules = discardedGauge
+		table.countNumLinesExecuted = discardedCounter
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
