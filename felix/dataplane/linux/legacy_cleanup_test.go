@@ -26,6 +26,19 @@ import (
 var _ = Describe("Legacy iptables cleanup tables", func() {
 	featureDetector := environment.NewFeatureDetector(nil)
 
+	var realLegacyIPTablesLoaded func(ipVersion uint8) bool
+
+	BeforeEach(func() {
+		realLegacyIPTablesLoaded = legacyIPTablesLoaded
+		legacyIPTablesLoaded = func(ipVersion uint8) bool {
+			return true
+		}
+	})
+
+	AfterEach(func() {
+		legacyIPTablesLoaded = realLegacyIPTablesLoaded
+	})
+
 	It("sweeps all four tables when the legacy binaries are there", func() {
 		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathAll}
 		tables := legacyIPTablesCleanupTables(4, featureDetector, opts, opts)
@@ -44,5 +57,14 @@ var _ = Describe("Legacy iptables cleanup tables", func() {
 		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathNoLegacy}
 		Expect(legacyIPTablesCleanupTables(4, featureDetector, opts, opts)).To(BeEmpty())
 		Expect(legacyIPTablesCleanupTables(6, featureDetector, opts, opts)).To(BeEmpty())
+	})
+
+	// Reading the legacy tables would autoload the modules onto a pure-nftables node.
+	It("builds nothing when the legacy modules aren't loaded", func() {
+		legacyIPTablesLoaded = func(ipVersion uint8) bool {
+			return false
+		}
+		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathAll}
+		Expect(legacyIPTablesCleanupTables(4, featureDetector, opts, opts)).To(BeEmpty())
 	})
 })

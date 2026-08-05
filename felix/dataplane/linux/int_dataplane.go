@@ -486,6 +486,20 @@ func legacyIPTablesBinariesPresent(ipVersion uint8, lookPathOverride func(string
 	return true
 }
 
+// legacyIPTablesLoaded reports whether the legacy xtables modules are loaded for the given IP
+// family. The kernel creates this file along with them, and stat'ing it doesn't autoload anything.
+var legacyIPTablesLoaded = func(ipVersion uint8) bool {
+	path := "/proc/net/ip_tables_names"
+	if ipVersion == 6 {
+		path = "/proc/net/ip6_tables_names"
+	}
+	if _, err := os.Stat(path); err != nil {
+		log.WithField("file", path).Info("Legacy iptables not loaded on this host")
+		return false
+	}
+	return true
+}
+
 // legacyIPTablesCleanupTables returns tables that sweep the legacy iptables backend for one IP
 // family. They're marked cleanup-only: the legacy backend has no kernel support on some distros,
 // where reading it fails and there is nothing of ours to find anyway.
@@ -496,6 +510,12 @@ func legacyIPTablesCleanupTables(
 	natOptions iptables.TableOptions,
 ) []generictables.CleanupTable {
 	if !legacyIPTablesBinariesPresent(ipVersion, options.LookPathOverride) {
+		return nil
+	}
+
+	// Running iptables-legacy-save against unloaded modules would autoload them, putting legacy
+	// hooks on a node that deliberately runs pure nftables.
+	if !legacyIPTablesLoaded(ipVersion) {
 		return nil
 	}
 
