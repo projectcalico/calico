@@ -297,5 +297,7 @@ Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`
 
 The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. The doc-update rule above applies; for charts, "changes how it works" means anything that alters how a user installs or upgrades Calico via Helm — moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, or changing a documented values key or example command.
 
+`charts/calico` is the exception, and it is exempt: nobody installs it with Helm. It is only the template source that `make gen-manifests` renders into `manifests/calico*.yaml`, so the rendered manifests are the whole contract - no `values.yaml` compatibility to keep, no Helm upgrade path, no install docs to sync. Review such a PR by reading the regenerated `manifests/` diff.
+
 ### Trust These Instructions
 These instructions are based on actual testing of the build system. Only search for additional information if you encounter specific errors not covered here or if the repository structure has changed significantly.

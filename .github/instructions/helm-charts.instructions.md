@@ -5,6 +5,24 @@ applyTo:
 
 # Helm charts
 
+## `charts/calico` is not a user-facing chart
+
+Only three charts here are packaged and published: `tigera-operator`,
+`crd.projectcalico.org.v1`, and `projectcalico.org.v3` (see the
+`helm package` rules in the root `Makefile`).
+
+`charts/calico` is never installed with Helm by anyone. It exists
+only as the template source that `make gen-manifests` renders into
+the `manifests/calico*.yaml` files, and those rendered manifests are
+the only thing users consume. So when changing that chart, the
+rendered output in `manifests/` is the entire contract. End-user
+chart usability does not apply: `values.yaml` keys can be renamed or
+restructured freely, there is no Helm upgrade path to preserve, and
+there are no user-facing install instructions to keep in sync.
+Review it by reading the diff in `manifests/`.
+
+## User-facing install instructions
+
 The install and upgrade instructions users follow live in two
 README files, not in a `DESIGN.md`:
 
@@ -38,6 +56,11 @@ same PR.
 alter any documented step — e.g. a values default that the README
 never mentions, a templating-only refactor, or a generated-CRD
 content bump. If in doubt, update the doc.
+
+`charts/calico` is always exempt from this rule, for the reason
+above: no user installs it, so no install instructions can drift. A
+PR touching it does need the regenerated `manifests/` committed
+alongside.
 
 ## Amending the PR
 
