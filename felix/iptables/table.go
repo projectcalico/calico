@@ -92,16 +92,26 @@ var (
 		Name: "felix_iptables_lines_executed",
 		Help: "Number of iptables rule updates executed.",
 	}, []string{"ip_version", "table"})
-
-	// Cleanup-only tables share ip_version and table with the tables Felix programs, so their
-	// counts go here instead of overwriting the real ones. Never registered.
-	discardedGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "felix_iptables_discarded_gauge",
-	})
-	discardedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "felix_iptables_discarded_counter",
-	})
 )
+
+// gauge is the part of prometheus.Gauge a Table uses, alongside counter in restore_buffer.go.
+type gauge interface {
+	Set(float64)
+	Add(float64)
+	Sub(float64)
+}
+
+// noopMetric takes the numbers from a table Felix only sweeps. Such a table shares its metric
+// labels with the one Felix programs, so publishing would overwrite the real counts.
+type noopMetric struct{}
+
+func (noopMetric) Set(float64) {}
+
+func (noopMetric) Add(float64) {}
+
+func (noopMetric) Sub(float64) {}
+
+func (noopMetric) Inc() {}
 
 func init() {
 	prometheus.MustRegister(countNumRestoreCalls)
@@ -281,9 +291,9 @@ type Table struct {
 	logCxt               *log.Entry
 	updateRateLimitedLog *logrusr.RateLimitedLogger
 
-	gaugeNumChains        prometheus.Gauge
-	gaugeNumRules         prometheus.Gauge
-	countNumLinesExecuted prometheus.Counter
+	gaugeNumChains        gauge
+	gaugeNumRules         gauge
+	countNumLinesExecuted counter
 	unexpectedInsertsSeen int
 
 	// Reusable buffer for writing to iptables.
@@ -459,9 +469,9 @@ func NewTable(
 		timeNow:   now,
 		lookPath:  lookPath,
 
-		gaugeNumChains:        discardedGauge,
-		gaugeNumRules:         discardedGauge,
-		countNumLinesExecuted: discardedCounter,
+		gaugeNumChains:        noopMetric{},
+		gaugeNumRules:         noopMetric{},
+		countNumLinesExecuted: noopMetric{},
 		opReporter:            options.OpRecorder,
 		cleanupOnly:           options.CleanupOnly,
 	}
