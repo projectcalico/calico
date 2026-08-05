@@ -4076,6 +4076,7 @@ func (f *fakeMapsDataplane) FinishMapUpdates(updates *nftables.MapUpdates)      
 func (f *fakeMapsDataplane) LoadDataplaneState(ctx context.Context, mapNames []string) error {
 	return nil
 }
+func (f *fakeMapsDataplane) InvalidateMapsCache() {}
 
 // fakeFlowtableHandler records the workload interface lists handed to the flowtable.
 type fakeFlowtableHandler struct {
