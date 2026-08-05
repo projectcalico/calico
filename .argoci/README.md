@@ -44,7 +44,7 @@ own prologue, and a missing one fails at provision time, not at startup:
 | `KOPS_STATE_STORE_NAME` | `kops-tigera-dev` (403) | `kops-tigera-dev-ci` |
 | `KOPS_AWS_DNS_ZONE` | `kops.crc.aws.eng.tigera.net` (no zone) | `kops.ci.aws.eng.tigera.net` |
 | `OPENSHIFT_BASE_DOMAIN` | `openshift.crc.aws.eng.tigera.net` (no zone) | `openshift.ci.aws.eng.tigera.net` |
-| `AZ_PROJECT` | `tigera-dev` | `tigera-dev-ci` |
+| `AZ_PROJECT` (a subscription *name*) | `tigera-dev` | `tigera-dev-ci` |
 
 Semaphore vars deliberately **not** ported, so the next audit doesn't re-add
 them: `KOPS_VERSION`/`RKE_VERSION` (banzai-core resolves or pins these, and
