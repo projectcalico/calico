@@ -773,7 +773,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       - name: K8S_VERSION
         value: stable-1.35
       - name: NUM_KUBEVIRT_VMS

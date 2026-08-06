@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables pipeline: test selection scope.
+#
+# Full Calico suite plus upstream networking conformance.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - sig-calico
+  - Conformance && sig-network
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
