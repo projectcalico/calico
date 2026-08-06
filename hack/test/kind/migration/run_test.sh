@@ -179,8 +179,8 @@ done
 ###############################################################################
 log "Step 2: Seeding test resources via apiserver"
 
-# The seeded HostEndpoint default-denies host traffic on kind-worker. Add the kind
-# registry and kubelet ports to the failsafes so image pulls and kubectl logs survive.
+# HostEndpoint default-denies host traffic. Felix replaces this list, so it repeats
+# felix/config/config_params.go's defaults plus the kind registry and kubelet ports.
 ${kubectl} patch felixconfigurations.projectcalico.org default --type=merge -p '{
   "spec": {
     "failsafeInboundHostPorts": [
@@ -189,11 +189,11 @@ ${kubectl} patch felixconfigurations.projectcalico.org default --type=merge -p '
       {"protocol": "tcp", "port": 179},
       {"protocol": "tcp", "port": 2379},
       {"protocol": "tcp", "port": 2380},
-      {"protocol": "tcp", "port": 5000},
       {"protocol": "tcp", "port": 5473},
       {"protocol": "tcp", "port": 6443},
       {"protocol": "tcp", "port": 6666},
       {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 5000},
       {"protocol": "tcp", "port": 10250}
     ],
     "failsafeOutboundHostPorts": [
@@ -202,11 +202,11 @@ ${kubectl} patch felixconfigurations.projectcalico.org default --type=merge -p '
       {"protocol": "tcp", "port": 179},
       {"protocol": "tcp", "port": 2379},
       {"protocol": "tcp", "port": 2380},
-      {"protocol": "tcp", "port": 5000},
       {"protocol": "tcp", "port": 5473},
       {"protocol": "tcp", "port": 6443},
       {"protocol": "tcp", "port": 6666},
       {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 5000},
       {"protocol": "tcp", "port": 10250}
     ]
   }
