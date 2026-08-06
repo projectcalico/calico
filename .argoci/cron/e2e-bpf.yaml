@@ -730,6 +730,12 @@ steps:
         value: None
       - name: IP_FAMILY
         value: dual
+      # Only E2E_TEST_CONFIG is read on this path, but the value inherited from
+      # the prologue skips Maglev, which would leave this run selecting nothing
+      # at all if it ever started being read. Override it so this run selects
+      # the Maglev tests either way.
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[Feature:Maglev\])
       - name: PROVISIONER
         value: aws-kubeadm
       - name: VPC_CIDR
