@@ -345,6 +345,17 @@ func (m *migrationController) reconcile() error {
 func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
 
+	// Checked before the finalizer is added so a CR that can never migrate
+	// never reaches the abort path.
+	v1CRDCount, err := m.countV1CRDs()
+	if err != nil {
+		return err
+	}
+	if v1CRDCount == 0 {
+		return asTerminal(fmt.Errorf("no v1 CRDs (crd.projectcalico.org) found — nothing to migrate"))
+	}
+	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
+
 	// Add the finalizer if not already present.
 	if !hasFinalizer(dm) {
 		logCtx.Info("Adding finalizer to DatastoreMigration CR")
@@ -369,24 +380,6 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		dm.Status.Message = "Waiting for migration RBAC permissions"
 		return m.updateStatus(dm)
 	}
-
-	// Pre-validation: check that v1 CRDs exist.
-	crdClient := m.dynamicClient.Resource(crdGVR)
-	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("listing CRDs for pre-validation: %w", err)
-	}
-	v1CRDCount := 0
-	for _, crd := range crdList.Items {
-		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
-		if group == "crd.projectcalico.org" {
-			v1CRDCount++
-		}
-	}
-	if v1CRDCount == 0 {
-		return asTerminal(fmt.Errorf("no v1 CRDs (crd.projectcalico.org) found — nothing to migrate"))
-	}
-	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
 
 	// Pre-validation: check the APIService. A missing or automanaged (CRD-backed)
 	// APIService is fine — it just means there's no aggregated API server to
@@ -456,6 +449,22 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 	return m.updateStatus(dm)
 }
 
+// countV1CRDs returns the number of installed CRDs in the crd.projectcalico.org group.
+func (m *migrationController) countV1CRDs() (int, error) {
+	crdList, err := m.dynamicClient.Resource(crdGVR).List(m.ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("listing CRDs for pre-validation: %w", err)
+	}
+	count := 0
+	for _, crd := range crdList.Items {
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if group == "crd.projectcalico.org" {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // handleMigrating runs the core migration logic.
 func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *DatastoreMigration) error {
 	logCtx.Info("Migration in progress")
@@ -498,7 +507,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *Datastor
 		}
 
 		typeStart := time.Now()
-		result, err := MigrateResourceType(m.ctx, migrator)
+		result, err := MigrateResourceType(m.ctx, migrator, string(dm.UID))
 		migrationTypeDuration.WithLabelValues(migrator.Kind()).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
 			migrationResourceErrors.WithLabelValues(migrator.Kind()).Inc()
@@ -769,7 +778,12 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMig
 	// This is best-effort — the resources become inert once the APIService is
 	// restored since nothing reads v3 CRDs in API server mode, but cleaning
 	// them up avoids confusion on retry.
-	m.cleanupPartialV3Resources(logCtx)
+	if dm.Status.StartedAt == nil {
+		// Migration never reached Migrating, so it created no v3 resources.
+		logCtx.Info("Migration never started, skipping v3 resource cleanup")
+	} else {
+		m.cleanupPartialV3Resources(logCtx, dm)
+	}
 
 	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
 	// reading from crd.projectcalico.org/v1 resume normal operation.
@@ -797,9 +811,15 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMig
 	return m.removeFinalizer(dm)
 }
 
-// cleanupPartialV3Resources deletes v3 resources that were created during
-// migration. This is best-effort: failures are logged but don't block the abort.
-func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
+// cleanupPartialV3Resources deletes v3 resources that this migration created.
+// This is best-effort: failures are logged but don't block the abort.
+func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry, dm *DatastoreMigration) {
+	migrationID := string(dm.UID)
+	if migrationID == "" {
+		logCtx.Warn("DatastoreMigration has no UID, skipping v3 resource cleanup")
+		return
+	}
+
 	for _, migrator := range m.migrators {
 		items, err := migrator.ListV3(m.ctx)
 		if err != nil {
@@ -808,11 +828,10 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
 		}
 		deleted := 0
 		for _, obj := range items {
-			// Only delete resources that were created by migration, not
-			// pre-existing v3 resources.
-			annotations := obj.GetAnnotations()
-			if annotations == nil || annotations[migratedByAnnotation] == "" {
-				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName()}).Debug("Skipping non-migrated v3 resource during cleanup")
+			// Skip resources this migration didn't create, including ones left
+			// behind by an earlier migration of the same cluster.
+			if obj.GetAnnotations()[migratedByAnnotation] != migrationID {
+				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName()}).Debug("Skipping v3 resource not created by this migration")
 				continue
 			}
 			if err := migrator.DeleteV3(m.ctx, obj); err != nil {
