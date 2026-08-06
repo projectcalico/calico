@@ -526,20 +526,18 @@ func (m *migrationController) builtInTierDrift() ([]string, error) {
 			continue
 		}
 
-		if tier.Spec.Order == nil {
-			drift = append(drift, fmt.Sprintf("tier %q has no order, expected %s", tier.Name, formatTierOrder(want.order)))
-		} else if *tier.Spec.Order != want.order {
-			drift = append(drift, fmt.Sprintf("tier %q has order %s, expected %s", tier.Name, formatTierOrder(*tier.Spec.Order), formatTierOrder(want.order)))
+		// Name the value to set, not the value we read: the backend defaults
+		// unset fields on read.
+		if tier.Spec.Order == nil || *tier.Spec.Order != want.order {
+			drift = append(drift, fmt.Sprintf("tier %q must have order %s", tier.Name, formatTierOrder(want.order)))
 		}
 
-		// The v3 CRD defaults an unset defaultAction to Deny, so an unset value
-		// is only conformant on the default tier.
 		action := apiv3.Deny
 		if tier.Spec.DefaultAction != nil {
 			action = *tier.Spec.DefaultAction
 		}
 		if action != want.defaultAction {
-			drift = append(drift, fmt.Sprintf("tier %q has defaultAction %q, expected %q", tier.Name, action, want.defaultAction))
+			drift = append(drift, fmt.Sprintf("tier %q must have defaultAction %q", tier.Name, want.defaultAction))
 		}
 	}
 	sort.Strings(drift)

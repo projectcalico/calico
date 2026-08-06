@@ -41,8 +41,8 @@ func v1TierKVP(name string, order *float64, action apiv3.Action) *model.KVPair {
 	}
 }
 
-// v1TierKVPUnsetAction builds a v1 Tier KVPair with no defaultAction, which the v3
-// CRD defaults to Deny.
+// v1TierKVPUnsetAction builds a v1 Tier KVPair with no defaultAction, which the
+// backend read path defaults to Deny.
 func v1TierKVPUnsetAction(name string, order *float64) *model.KVPair {
 	kvp := v1TierKVP(name, order, apiv3.Deny)
 	kvp.Value.(*apiv3.Tier).Spec.DefaultAction = nil
@@ -67,9 +67,8 @@ func conformantBuiltInTiers() []*model.KVPair {
 	}
 }
 
-// ensureV1CRD makes sure at least one crd.projectcalico.org CRD exists.
-// TestLifecycle_DeletionBlockedThenCompleted deletes them all, and handlePending
-// refuses to start a migration with no v1 CRDs to copy.
+// ensureV1CRD makes sure at least one crd.projectcalico.org CRD exists, since
+// handlePending refuses to migrate without one.
 func ensureV1CRD(t *testing.T, ctx context.Context) {
 	t.Helper()
 	crd := &apiextv1.CustomResourceDefinition{
@@ -115,9 +114,8 @@ func ensureV1CRD(t *testing.T, ctx context.Context) {
 	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
-// expectBlockedInPending waits for the controller to report the given substrings
-// in the CR's status message without leaving the Pending phase, and asserts the
-// APIService was left in place.
+// expectBlockedInPending asserts the controller reports the given substrings,
+// stays in Pending, and leaves the APIService in place.
 func expectBlockedInPending(t *testing.T, ctx context.Context, g *WithT, bc *mockBackendClient, substrings ...string) {
 	t.Helper()
 
@@ -163,7 +161,7 @@ func TestPreflight_DriftedKubeAdminOrderBlocks(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	expectBlockedInPending(t, ctx, g, bc, `tier "kube-admin" has order 42, expected 1000`)
+	expectBlockedInPending(t, ctx, g, bc, `tier "kube-admin" must have order 1000`)
 }
 
 // TestPreflight_DriftedDefaultActionBlocks verifies that a built-in tier with
@@ -180,11 +178,11 @@ func TestPreflight_DriftedDefaultActionBlocks(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	expectBlockedInPending(t, ctx, g, bc, `tier "kube-baseline" has defaultAction "Deny", expected "Pass"`)
+	expectBlockedInPending(t, ctx, g, bc, `tier "kube-baseline" must have defaultAction "Pass"`)
 }
 
 // TestPreflight_MultipleDriftedTiersReported verifies that every offending tier
-// is named in a single status message so the user can fix them in one pass.
+// is named in one status message, so they can be fixed in one pass.
 func TestPreflight_MultipleDriftedTiersReported(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
@@ -193,16 +191,18 @@ func TestPreflight_MultipleDriftedTiersReported(t *testing.T) {
 		resources: tierOnlyV1Resources(
 			v1TierKVP("default", ptr.To(apiv3.DefaultTierOrder), apiv3.Pass),
 			v1TierKVP("kube-admin", ptr.To(float64(42)), apiv3.Deny),
+
+			// An unset order defaults to 1000000, which is drift for kube-baseline.
 			v1TierKVP("kube-baseline", nil, apiv3.Pass),
 		),
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
 	expectBlockedInPending(t, ctx, g, bc,
-		`tier "default" has defaultAction "Pass", expected "Deny"`,
-		`tier "kube-admin" has order 42, expected 1000`,
-		`tier "kube-admin" has defaultAction "Deny", expected "Pass"`,
-		`tier "kube-baseline" has no order, expected 10000000`,
+		`tier "default" must have defaultAction "Deny"`,
+		`tier "kube-admin" must have order 1000`,
+		`tier "kube-admin" must have defaultAction "Pass"`,
+		`tier "kube-baseline" must have order 10000000`,
 	)
 }
 
@@ -219,7 +219,7 @@ func TestPreflight_DriftedDefaultTierOrderBlocks(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	expectBlockedInPending(t, ctx, g, bc, `tier "default" has order 42, expected 1000000`)
+	expectBlockedInPending(t, ctx, g, bc, `tier "default" must have order 1000000`)
 }
 
 // TestPreflight_ConformantBuiltInTiersProceed verifies that conformant built-in
@@ -263,18 +263,18 @@ func TestPreflight_UnsetDefaultActionBlocks(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	expectBlockedInPending(t, ctx, g, bc, `tier "kube-admin" has defaultAction "Deny", expected "Pass"`)
+	expectBlockedInPending(t, ctx, g, bc, `tier "kube-admin" must have defaultAction "Pass"`)
 }
 
-// TestPreflight_UnsetDefaultActionOnDefaultTierProceeds verifies that an unset
-// defaultAction is conformant on the default tier, which requires Deny.
-func TestPreflight_UnsetDefaultActionOnDefaultTierProceeds(t *testing.T) {
+// TestPreflight_UnsetDefaultTierFieldsProceed verifies that the historical
+// default tier, carrying neither order nor defaultAction, is still conformant.
+func TestPreflight_UnsetDefaultTierFieldsProceed(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
 
 	bc := &mockBackendClient{
 		resources: tierOnlyV1Resources(
-			v1TierKVPUnsetAction("default", ptr.To(apiv3.DefaultTierOrder)),
+			v1TierKVPUnsetAction("default", nil),
 			v1TierKVP("kube-admin", ptr.To(apiv3.KubeAdminTierOrder), apiv3.Pass),
 			v1TierKVP("kube-baseline", ptr.To(apiv3.KubeBaselineTierOrder), apiv3.Pass),
 		),
