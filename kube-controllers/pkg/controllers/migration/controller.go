@@ -841,7 +841,12 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 	// This is best-effort — the resources become inert once the APIService is
 	// restored since nothing reads v3 CRDs in API server mode, but cleaning
 	// them up avoids confusion on retry.
-	m.cleanupPartialV3Resources(logCtx, dm)
+	if dm.Status.StartedAt == nil {
+		// Migration never reached Migrating, so it created no v3 resources.
+		logCtx.Info("Migration never started, skipping v3 resource cleanup")
+	} else {
+		m.cleanupPartialV3Resources(logCtx, dm)
+	}
 
 	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
 	// reading from crd.projectcalico.org/v1 resume normal operation.
