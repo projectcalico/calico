@@ -40,17 +40,21 @@ steps:
         value: gcp-kubeadm
       - name: STERN_CHECK
         value: DISABLED
+    # Both cells float onto the next k8s minor's beta/rc when one exists, else
+    # current stable. Cell names are historical — they no longer imply the stable
+    # channel. arm64 on a k8s pre-release is the least-proven combination we run:
+    # a provision failure here is more likely a node-image/containerd gap than Calico.
     matrix:
       - name: stable-ubuntu-2204-lts-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: ubuntu-2204-lts-arm64
       - name: stable-rocky-linux-9-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: rocky-linux-9-arm64
     commands: |
