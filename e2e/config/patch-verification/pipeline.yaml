@@ -2,10 +2,14 @@
 #
 # patch-verification pipeline: test selection scope.
 #
-# Upstream conformance plus tier RBAC: enough to show a
-# patch release did not regress the basics, without the full suite's runtime.
-# TODO(DE): confirm this is the right bar for a patch release -- these lanes have
-# been running almost no Calico specs for months, so this scope is new, not restored.
+# Conformance from both SIGs, plus tier RBAC: enough to
+# show a patch release did not regress the basics, without the full suite's
+# runtime. `Conformance && sig-calico` is the 21 framework.ConformanceIt specs --
+# policy, tiers, tiered RBAC, host endpoints, workload ingress/egress.
+#
+# Note the two SIG terms are separate include entries, i.e. OR'd. They cannot be
+# AND'd: SIGDescribe adds exactly one sig- label, so `sig-network && sig-calico`
+# matches nothing at all.
 #
 # Abstract parent -- no cell points at this file directly. The sibling
 # configs extend it and subtract what their cluster shape cannot run.
@@ -14,6 +18,7 @@ extends: ../base.yaml
 
 include:
   - Conformance && sig-network
+  - Conformance && sig-calico
   - Feature:Tiered-RBAC
 
 exclude:
