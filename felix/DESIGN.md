@@ -242,6 +242,7 @@ large enough to bloat AI-tool context.
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| [neighbour-discovery](./design/neighbour-discovery.md) | `felix/dataplane/linux/proxy_neigh_mgr.go`; the proxy-ARP/NDP sysctl and live-migration ARP-suppression parts of `felix/dataplane/linux/endpoint_mgr.go` (that file's manager architecture is [dataplane](./design/dataplane.md)'s). Depends on, and is invalidated by changes to, `cni-plugin/pkg/dataplane/linux/dataplane_linux.go` and `networking-calico/networking_calico/agent/linux/dhcp.py` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |

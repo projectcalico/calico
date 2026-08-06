@@ -3661,11 +3661,11 @@ func checkInterfaceConfig(name, ipVersion string) error {
 			return err
 		}
 	case "6":
-		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
-		if err != nil {
-			return err
-		}
-
+		// No proxy_ndp check: we deliberately don't set it (it is not the IPv6
+		// equivalent of proxy_arp and does nothing without NUD_PROXY entries).
+		// Asserting it is 0 would depend on the host's conf/default, so the
+		// regression guard lives in Felix's endpoint manager UT, whose
+		// /proc/sys expectations are matched exactly.
 		err = testutils.CheckSysctlValue(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
 		if err != nil {
 			return err
