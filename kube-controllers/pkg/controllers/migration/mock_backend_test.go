@@ -23,6 +23,7 @@ import (
 
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/calico/libcalico-go/lib/resources"
 )
 
 // TODO: Remove this mock when the backend client supports injecting client mocks.
@@ -100,8 +101,31 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 			}
 		}
 		m.mu.Unlock()
-		return &model.KVPairList{KVPairs: m.resources[rlo.Kind]}, nil
+		kvps := m.resources[rlo.Kind]
+		if rlo.Kind == apiv3.KindTier {
+			kvps = defaultTierKVPs(kvps)
+		}
+		return &model.KVPairList{KVPairs: kvps}, nil
 	}
+}
+
+// defaultTierKVPs applies the defaulting the real backend does on the tier read
+// path, so tests see the shape production sees.
+func defaultTierKVPs(kvps []*model.KVPair) []*model.KVPair {
+	out := make([]*model.KVPair, 0, len(kvps))
+	for _, kvp := range kvps {
+		tier, ok := kvp.Value.(*apiv3.Tier)
+		if !ok {
+			out = append(out, kvp)
+			continue
+		}
+		defaulted := tier.DeepCopy()
+		resources.DefaultTierFields(defaulted)
+		copied := *kvp
+		copied.Value = defaulted
+		out = append(out, &copied)
+	}
+	return out
 }
 
 func (m *mockBackendClient) Get(_ context.Context, key model.Key, _ string) (*model.KVPair, error) {
