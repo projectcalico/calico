@@ -18,21 +18,24 @@
 #
 # Prerequisites:
 #   - Kind cluster running with v1 CRDs and apiserver:
-#       CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
+#       KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
 #
-# What this script does:
-#   1. Deploys client/server pods for continuous connectivity probing
-#   2. Seeds test resources via the Calico apiserver (stored in v1 CRDs)
-#   3. Snapshots v1 resource counts
-#   4. Installs v3 CRDs alongside v1
-#   5. Installs the DatastoreMigration CRD and creates a migration CR
-#   6. Waits for the migration controller to complete
-#   7. Verifies migrated resources exist in v3 CRDs
-#   8. Verifies zero connectivity loss during migration
+# This script covers only what needs a live cluster:
+#   - The APIService cutover from the aggregated apiserver to CRD-backed serving
+#   - calico-node and typha rolling with CALICO_API_GROUP=projectcalico.org/v3
+#   - Surviving a force-kill of kube-controllers mid-migration
+#   - Zero connectivity loss across the whole migration
+#   - v1 CRD cleanup when the completed DatastoreMigration CR is deleted
+#
+# Everything at the resource level - which types migrate, stored-name handling,
+# namespacing, OwnerReference remapping, progress reporting, conflicts, rollback -
+# is covered by the envtest FV in
+# kube-controllers/pkg/controllers/migration/controller_fv_test.go and
+# controller_v1crd_fv_test.go. Do not re-add those assertions here.
 #
 # To re-run: destroy the cluster and recreate it, then run this script again:
 #   make kind-down
-#   CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
+#   KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
 #   hack/test/kind/migration/run_test.sh
 
 REPO_ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -65,36 +68,6 @@ function fail() {
   errors="${errors}\n  - $1"
 }
 
-function check_resource_exists() {
-  local resource="$1"
-  local name="$2"
-  local namespace="$3"
-  local description="$4"
-
-  local ns_flag=""
-  if [ -n "$namespace" ]; then
-    ns_flag="-n $namespace"
-  fi
-
-  if ${kubectl} get "$resource" $ns_flag "$name" &>/dev/null; then
-    pass "$description"
-  else
-    fail "$description"
-  fi
-}
-
-function check_resource_not_exists() {
-  local resource="$1"
-  local name="$2"
-  local description="$3"
-
-  if ${kubectl} get "$resource" "$name" &>/dev/null; then
-    fail "$description"
-  else
-    pass "$description"
-  fi
-}
-
 ###############################################################################
 # Step 0: Preflight checks
 ###############################################################################
@@ -102,14 +75,14 @@ log "Step 0: Preflight checks"
 
 if ! ${kubectl} cluster-info &>/dev/null; then
   echo "ERROR: Cannot connect to kind cluster. Is it running?"
-  echo "  Run: CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up"
+  echo "  Run: KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up"
   exit 1
 fi
 echo "  Kind cluster is reachable"
 
 # Verify v1 CRDs exist.
 if ! ${kubectl} get crd felixconfigurations.crd.projectcalico.org &>/dev/null; then
-  echo "ERROR: v1 CRDs not found. Cluster must be created with CALICO_API_GROUP=crd.projectcalico.org/v1"
+  echo "ERROR: v1 CRDs not found. Cluster must be created with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1"
   exit 1
 fi
 echo "  v1 CRDs (crd.projectcalico.org) found"
@@ -206,95 +179,53 @@ done
 ###############################################################################
 log "Step 2: Seeding test resources via apiserver"
 
-# Apply the seed resources. The migration-test namespace was already created by connectivity.yaml.
+# The seeded HostEndpoint default-denies host traffic on kind-worker. Add the kind
+# registry and kubelet ports to the failsafes so image pulls and kubectl logs survive.
+${kubectl} patch felixconfigurations.projectcalico.org default --type=merge -p '{
+  "spec": {
+    "failsafeInboundHostPorts": [
+      {"protocol": "tcp", "port": 22},
+      {"protocol": "udp", "port": 68},
+      {"protocol": "tcp", "port": 179},
+      {"protocol": "tcp", "port": 2379},
+      {"protocol": "tcp", "port": 2380},
+      {"protocol": "tcp", "port": 5000},
+      {"protocol": "tcp", "port": 5473},
+      {"protocol": "tcp", "port": 6443},
+      {"protocol": "tcp", "port": 6666},
+      {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 10250}
+    ],
+    "failsafeOutboundHostPorts": [
+      {"protocol": "udp", "port": 53},
+      {"protocol": "udp", "port": 67},
+      {"protocol": "tcp", "port": 179},
+      {"protocol": "tcp", "port": 2379},
+      {"protocol": "tcp", "port": 2380},
+      {"protocol": "tcp", "port": 5000},
+      {"protocol": "tcp", "port": 5473},
+      {"protocol": "tcp", "port": 6443},
+      {"protocol": "tcp", "port": 6666},
+      {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 10250}
+    ]
+  }
+}'
+echo "  Failsafe ports extended for the kind registry and kubelet"
+
+# Apply the seed resources. The migration-test namespace was already created by
+# connectivity.yaml. These give the migration real data to move while the
+# connectivity probe runs; the FV asserts on what lands in v3.
 ${kubectl} apply -f "${SCRIPT_DIR}/seed-resources.yaml"
 echo "  Seed resources applied"
 
 # Give the apiserver a moment to sync.
 sleep 3
 
-# Patch OwnerReferences onto some resources to test that they survive migration.
-# Two cases:
-#   1. OwnerRef to a native K8s resource (Namespace) — UID should be copied as-is.
-#   2. OwnerRef to a Calico resource (Tier) — UID will be different on the v3 copy,
-#      so the migration controller needs to remap it (or we need to document that it doesn't yet).
-
-NS_UID=$(${kubectl} get namespace migration-test -o jsonpath='{.metadata.uid}')
-TIER_UID=$(${kubectl} get tiers.projectcalico.org security -o jsonpath='{.metadata.uid}')
-echo "  Namespace migration-test UID: ${NS_UID}"
-echo "  Tier security UID: ${TIER_UID}"
-
-# NetworkSet with ownerRef to its Namespace (native K8s owner).
-${kubectl} patch networksets.projectcalico.org test-trusted-ips -n migration-test --type=merge -p "{
-  \"metadata\": {
-    \"ownerReferences\": [{
-      \"apiVersion\": \"v1\",
-      \"kind\": \"Namespace\",
-      \"name\": \"migration-test\",
-      \"uid\": \"${NS_UID}\"
-    }]
-  }
-}"
-echo "  Patched NetworkSet 'test-trusted-ips' with ownerRef to Namespace"
-
-# GlobalNetworkPolicy with ownerRef to the security Tier (Calico owner).
-${kubectl} patch globalnetworkpolicies.projectcalico.org security.test-allow-dns --type=merge -p "{
-  \"metadata\": {
-    \"ownerReferences\": [{
-      \"apiVersion\": \"projectcalico.org/v3\",
-      \"kind\": \"Tier\",
-      \"name\": \"security\",
-      \"uid\": \"${TIER_UID}\"
-    }]
-  }
-}"
-echo "  Patched GNP 'security.test-allow-dns' with ownerRef to Tier"
-
 ###############################################################################
-# Step 3: Snapshot v1 resource state
+# Step 3: Install v3 CRDs alongside v1
 ###############################################################################
-log "Step 3: Snapshotting v1 resource state"
-
-echo "  Tiers:"
-${kubectl} get tiers.projectcalico.org 2>/dev/null || echo "    (none)"
-echo ""
-echo "  GlobalNetworkPolicies:"
-${kubectl} get globalnetworkpolicies.projectcalico.org 2>/dev/null || echo "    (none)"
-echo ""
-echo "  NetworkPolicies (migration-test ns):"
-${kubectl} get networkpolicies.projectcalico.org -n migration-test 2>/dev/null || echo "    (none)"
-echo ""
-echo "  HostEndpoints:"
-${kubectl} get hostendpoints.projectcalico.org 2>/dev/null || echo "    (none)"
-echo ""
-echo "  GlobalNetworkSets:"
-${kubectl} get globalnetworksets.projectcalico.org 2>/dev/null || echo "    (none)"
-echo ""
-echo "  NetworkSets (migration-test ns):"
-${kubectl} get networksets.projectcalico.org -n migration-test 2>/dev/null || echo "    (none)"
-echo ""
-echo "  BGPPeers:"
-${kubectl} get bgppeers.projectcalico.org 2>/dev/null || echo "    (none)"
-echo ""
-echo "  IPPools:"
-${kubectl} get ippools.projectcalico.org 2>/dev/null || echo "    (none)"
-
-# Also snapshot the raw v1 CRD objects to see the actual stored names.
-echo ""
-echo "  --- Raw v1 CRD objects (crd.projectcalico.org) ---"
-echo "  v1 GlobalNetworkPolicies:"
-${kubectl} get globalnetworkpolicies.crd.projectcalico.org --no-headers 2>/dev/null || echo "    (none)"
-echo ""
-echo "  v1 NetworkPolicies:"
-${kubectl} get networkpolicies.crd.projectcalico.org -A --no-headers 2>/dev/null || echo "    (none)"
-echo ""
-echo "  v1 Tiers:"
-${kubectl} get tiers.crd.projectcalico.org --no-headers 2>/dev/null || echo "    (none)"
-
-###############################################################################
-# Step 4: Install v3 CRDs alongside v1
-###############################################################################
-log "Step 4: Installing v3 CRDs (projectcalico.org) alongside v1"
+log "Step 3: Installing v3 CRDs (projectcalico.org) alongside v1"
 
 # The v3 CRDs are in api/config/crd/. While the APIService exists, it takes
 # precedence for the projectcalico.org group. But the CRDs need to be present
@@ -303,9 +234,9 @@ ${kubectl} apply --server-side --force-conflicts -f "${REPO_ROOT}/api/config/crd
 echo "  v3 CRDs installed"
 
 ###############################################################################
-# Step 5: Install migration CRD
+# Step 4: Install migration CRD
 ###############################################################################
-log "Step 5: Installing migration CRD"
+log "Step 4: Installing migration CRD"
 
 # Install the DatastoreMigration CRD (separate from the v3 Calico CRDs — it lives
 # in the migration.projectcalico.org group to avoid APIService conflicts).
@@ -319,9 +250,9 @@ fi
 echo "  DatastoreMigration CRD verified"
 
 ###############################################################################
-# Step 6: Disruption test — force-kill kube-controllers during migration
+# Step 5: Disruption test — force-kill kube-controllers during migration
 ###############################################################################
-log "Step 6: Disruption test — force-kill kube-controllers during migration"
+log "Step 5: Disruption test — force-kill kube-controllers during migration"
 
 # Create the migration CR to kick things off.
 cat <<'EOF' | ${kubectl} apply -f -
@@ -351,7 +282,8 @@ if [ "$phase" = "Migrating" ]; then
   echo "  Force-deleting kube-controllers pod..."
   ${kubectl} delete pod -n calico-system -l k8s-app=calico-kube-controllers --force --grace-period=0 2>/dev/null
   echo "  Pod deleted, waiting for replacement..."
-  ${kubectl} wait --for=condition=Available --timeout=120s deployment/calico-kube-controllers -n calico-system
+  # The replacement schedules and pulls while the datastore is locked, so give it room.
+  ${kubectl} wait --for=condition=Available --timeout=300s deployment/calico-kube-controllers -n calico-system
   echo "  kube-controllers restarted"
 elif [ "$phase" = "Converged" ] || [ "$phase" = "Complete" ]; then
   echo "  Migration already past Migrating phase ($phase), skipping disruption"
@@ -360,9 +292,9 @@ else
 fi
 
 ###############################################################################
-# Step 7: Wait for migration to complete
+# Step 6: Wait for migration to complete
 ###############################################################################
-log "Step 7: Waiting for migration to complete"
+log "Step 6: Waiting for migration to complete"
 
 TIMEOUT=300
 INTERVAL=5
@@ -405,125 +337,17 @@ if [ $elapsed -ge $TIMEOUT ]; then
   exit 1
 fi
 
-# Verify the finalizer was added during the Pending phase.
-finalizers=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.metadata.finalizers}' 2>/dev/null || echo "")
-if echo "$finalizers" | grep -q "migration.projectcalico.org/v1-crd-cleanup"; then
-  pass "Finalizer present on DatastoreMigration CR"
-else
-  fail "Finalizer not found on DatastoreMigration CR (got: $finalizers)"
-fi
-
-# Verify the saved APIService annotation exists.
-saved_apisvc=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.metadata.annotations.migration\.projectcalico\.org/saved-apiservice}' 2>/dev/null || echo "")
-if [ -n "$saved_apisvc" ]; then
-  pass "Saved APIService annotation present on DatastoreMigration CR"
-else
-  fail "Saved APIService annotation not found on DatastoreMigration CR"
-fi
-
 ###############################################################################
-# Step 8: Verify migration results
+# Step 7: Verify the APIService cutover and component reconfiguration
 ###############################################################################
-log "Step 8: Verifying migration results"
+log "Step 7: Verifying APIService cutover and component reconfiguration"
 
 echo ""
-echo "  --- DatastoreMigration Status ---"
-${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3
-echo ""
-echo "  Wide output (includes priority columns):"
 ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o wide
 echo ""
-${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status}' | python3 -m json.tool 2>/dev/null || \
-  ${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status}'
-echo ""
 
-# Verify per-type progress was reported.
-type_count=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.typeDetails}' 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-completed_types=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.completedTypes}' 2>/dev/null || echo "0")
-total_types=$(${kubectl} get datastoremigration.migration.projectcalico.org v1-to-v3 -o jsonpath='{.status.progress.totalTypes}' 2>/dev/null || echo "0")
-
-if [ "$type_count" -gt 0 ]; then
-  pass "Per-type progress reported ($type_count types in typeDetails)"
-else
-  fail "No per-type progress in typeDetails"
-fi
-
-if [ "$completed_types" -gt 0 ] && [ "$completed_types" = "$total_types" ]; then
-  pass "All resource types completed (completedTypes=$completed_types, totalTypes=$total_types)"
-else
-  fail "Type completion mismatch (completedTypes=$completed_types, totalTypes=$total_types)"
-fi
-
-echo ""
-echo "  --- Checking migrated resources ---"
-echo ""
-
-# After the APIService is deleted, projectcalico.org/v3 is now served by the v3 CRDs.
-# Verify that the test resources exist.
-
-# Tiers: "default" (auto-created) and "security" (seeded).
-check_resource_exists "tiers.projectcalico.org" "default" "" \
-  "Tier 'default' exists in v3"
-check_resource_exists "tiers.projectcalico.org" "security" "" \
-  "Tier 'security' migrated to v3"
-
-# GlobalNetworkPolicies: the "default." prefix should be stripped for default-tier policies.
-# "default.test-deny-all" in v1 should become "test-deny-all" in v3.
-check_resource_exists "globalnetworkpolicies.projectcalico.org" "test-deny-all" "" \
-  "GNP 'test-deny-all' migrated (default. prefix stripped)"
-
-# Non-default tier policy should keep its name.
-check_resource_exists "globalnetworkpolicies.projectcalico.org" "security.test-allow-dns" "" \
-  "GNP 'security.test-allow-dns' migrated (non-default tier name preserved)"
-
-# NetworkPolicy: "default.test-allow-web" should become "test-allow-web".
-check_resource_exists "networkpolicies.projectcalico.org" "test-allow-web" "migration-test" \
-  "NP 'test-allow-web' migrated to migration-test namespace (default. prefix stripped)"
-
-# HostEndpoint.
-check_resource_exists "hostendpoints.projectcalico.org" "test-hep" "" \
-  "HostEndpoint 'test-hep' migrated to v3"
-
-# GlobalNetworkSet.
-check_resource_exists "globalnetworksets.projectcalico.org" "test-external-ips" "" \
-  "GlobalNetworkSet 'test-external-ips' migrated to v3"
-
-# NetworkSet (namespaced).
-check_resource_exists "networksets.projectcalico.org" "test-trusted-ips" "migration-test" \
-  "NetworkSet 'test-trusted-ips' migrated to migration-test namespace"
-
-# BGPPeer.
-check_resource_exists "bgppeers.projectcalico.org" "test-peer" "" \
-  "BGPPeer 'test-peer' migrated to v3"
-
-# IPPool — the default pool created by Calico installation should also be migrated.
-# We don't know the exact name, but at least one should exist.
-pool_count=$(${kubectl} get ippools.projectcalico.org --no-headers 2>/dev/null | wc -l)
-if [ "$pool_count" -gt 0 ]; then
-  pass "IPPool(s) migrated to v3 (found $pool_count)"
-else
-  fail "No IPPools found in v3 CRDs"
-fi
-
-# FelixConfiguration — "default" should be migrated.
-check_resource_exists "felixconfigurations.projectcalico.org" "default" "" \
-  "FelixConfiguration 'default' migrated to v3"
-
-# BGPConfiguration — may or may not exist depending on cluster config.
-bgp_count=$(${kubectl} get bgpconfigurations.projectcalico.org --no-headers 2>/dev/null | wc -l)
-bgp_v1_count=$(${kubectl} get bgpconfigurations.crd.projectcalico.org --no-headers 2>/dev/null | wc -l)
-if [ "$bgp_count" -ge "$bgp_v1_count" ]; then
-  pass "BGPConfiguration(s) migrated (v1: $bgp_v1_count, v3: $bgp_count)"
-else
-  fail "BGPConfiguration count mismatch (v1: $bgp_v1_count, v3: $bgp_count)"
-fi
-
-# ClusterInformation — "default" should exist (used for datastore lock/unlock).
-check_resource_exists "clusterinformations.projectcalico.org" "default" "" \
-  "ClusterInformation 'default' exists in v3"
-
-# Verify the aggregated APIService was replaced by a local (CRD-backed) one.
-# K8s auto-creates a local APIService when CRDs exist for a group.
+# The aggregated APIService should be gone. Kubernetes auto-creates an
+# automanaged one in its place once the v3 CRDs are serving the group.
 api_svc_label=$(${kubectl} get apiservice v3.projectcalico.org -o jsonpath='{.metadata.labels.kube-aggregator\.kubernetes\.io/automanaged}' 2>/dev/null || echo "")
 if [ "$api_svc_label" = "true" ]; then
   pass "APIService v3.projectcalico.org is now CRD-backed (automanaged)"
@@ -533,43 +357,49 @@ else
   fail "APIService v3.projectcalico.org still points to aggregated API server"
 fi
 
-# OwnerReference to native K8s resource (Namespace) — UID should be copied as-is.
-ns_ownerref_uid=$(${kubectl} get networksets.projectcalico.org test-trusted-ips -n migration-test -o jsonpath='{.metadata.ownerReferences[0].uid}' 2>/dev/null || echo "")
-if [ "$ns_ownerref_uid" = "$NS_UID" ]; then
-  pass "NetworkSet ownerRef to Namespace preserved (UID: ${ns_ownerref_uid})"
-elif [ -n "$ns_ownerref_uid" ]; then
-  fail "NetworkSet ownerRef to Namespace has wrong UID (got: ${ns_ownerref_uid}, expected: ${NS_UID})"
+# The v3 API group must actually serve reads now that the aggregated apiserver
+# is unregistered.
+if ${kubectl} get tiers.projectcalico.org &>/dev/null; then
+  pass "projectcalico.org/v3 is served by CRDs after cutover"
 else
-  fail "NetworkSet ownerRef to Namespace missing after migration"
+  fail "projectcalico.org/v3 reads failed after cutover"
 fi
 
-# OwnerReference to Calico resource (Tier) — the v3 Tier gets a new UID after
-# migration. The migration controller should remap the ownerRef UID from the
-# old v1 UID to the new v3 UID.
-v3_tier_uid=$(${kubectl} get tiers.projectcalico.org security -o jsonpath='{.metadata.uid}' 2>/dev/null || echo "")
-gnp_ownerref_uid=$(${kubectl} get globalnetworkpolicies.projectcalico.org security.test-allow-dns -o jsonpath='{.metadata.ownerReferences[0].uid}' 2>/dev/null || echo "")
-if [ "$gnp_ownerref_uid" = "$v3_tier_uid" ]; then
-  pass "GNP ownerRef to Tier remapped to v3 UID (UID: ${gnp_ownerref_uid})"
-elif [ "$gnp_ownerref_uid" = "$TIER_UID" ]; then
-  fail "GNP ownerRef to Tier still has stale v1 UID (${TIER_UID}), expected v3 UID (${v3_tier_uid})"
-elif [ -n "$gnp_ownerref_uid" ]; then
-  fail "GNP ownerRef to Tier has unexpected UID (got: ${gnp_ownerref_uid}, expected v3: ${v3_tier_uid})"
+# calico-node and typha must have been rolled with the v3 API group set. The
+# migration only reaches Complete once they have, but assert it directly so a
+# regression names the component.
+node_api_group=$(${kubectl} get daemonset -n calico-system calico-node \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="calico-node")].env[?(@.name=="CALICO_API_GROUP")].value}' 2>/dev/null || echo "")
+if [ "$node_api_group" = "projectcalico.org/v3" ]; then
+  pass "calico-node has CALICO_API_GROUP=projectcalico.org/v3"
 else
-  fail "GNP ownerRef to Tier missing after migration"
+  fail "calico-node CALICO_API_GROUP is '$node_api_group', expected 'projectcalico.org/v3'"
 fi
 
-# Verify DatastoreReady is true (datastore unlocked).
-ds_ready=$(${kubectl} get clusterinformations.projectcalico.org default -o jsonpath='{.spec.datastoreReady}' 2>/dev/null || echo "")
-if [ "$ds_ready" = "true" ]; then
-  pass "ClusterInformation.spec.datastoreReady is true (datastore unlocked)"
+node_updated=$(${kubectl} get daemonset -n calico-system calico-node -o jsonpath='{.status.updatedNumberScheduled}' 2>/dev/null || echo "0")
+node_desired=$(${kubectl} get daemonset -n calico-system calico-node -o jsonpath='{.status.desiredNumberScheduled}' 2>/dev/null || echo "0")
+if [ "$node_updated" = "$node_desired" ] && [ "$node_desired" != "0" ]; then
+  pass "calico-node rollout complete ($node_updated/$node_desired updated)"
 else
-  fail "ClusterInformation.spec.datastoreReady is '$ds_ready', expected 'true'"
+  fail "calico-node rollout incomplete ($node_updated/$node_desired updated)"
+fi
+
+if ${kubectl} get deployment -n calico-system calico-typha &>/dev/null; then
+  typha_api_group=$(${kubectl} get deployment -n calico-system calico-typha \
+    -o jsonpath='{.spec.template.spec.containers[?(@.name=="calico-typha")].env[?(@.name=="CALICO_API_GROUP")].value}' 2>/dev/null || echo "")
+  if [ "$typha_api_group" = "projectcalico.org/v3" ]; then
+    pass "calico-typha has CALICO_API_GROUP=projectcalico.org/v3"
+  else
+    fail "calico-typha CALICO_API_GROUP is '$typha_api_group', expected 'projectcalico.org/v3'"
+  fi
+else
+  echo "  calico-typha not deployed, skipping its API group check"
 fi
 
 ###############################################################################
-# Step 9: Verify continuous connectivity
+# Step 8: Verify continuous connectivity
 ###############################################################################
-log "Step 9: Verifying continuous connectivity during migration"
+log "Step 8: Verifying continuous connectivity during migration"
 
 # Give the client a few more seconds to log post-migration probes.
 sleep 5
@@ -600,9 +430,9 @@ else
 fi
 
 ###############################################################################
-# Step 10: Test v1 CRD cleanup via CR deletion (post-completion)
+# Step 9: Test v1 CRD cleanup via CR deletion (post-completion)
 ###############################################################################
-log "Step 10: Testing v1 CRD cleanup via CR deletion"
+log "Step 9: Testing v1 CRD cleanup via CR deletion"
 
 # Count v1 CRDs before deletion.
 v1_crd_count_before=$(${kubectl} get crd -o name 2>/dev/null | grep "crd.projectcalico.org" | wc -l)
