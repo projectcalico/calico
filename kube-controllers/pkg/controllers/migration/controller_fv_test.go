@@ -53,7 +53,7 @@ var (
 	fvRTClient      rtclient.WithWatch
 )
 
-// dmKey is the NamespacedName for the well-known DatastoreMigration CR.
+// dmKey is the NamespacedName for the well-known migrationv1.DatastoreMigration CR.
 var dmKey = types.NamespacedName{Name: defaultMigrationName}
 
 // expectNoError fatally exits if err is non-nil. Used in TestMain where there
@@ -66,7 +66,7 @@ func expectNoError(err error) {
 }
 
 // TestMain starts a real kube-apiserver via envtest with all Calico CRDs
-// installed (v3, v1, and DatastoreMigration). The apiserver runs for the
+// installed (v3, v1, and migrationv1.DatastoreMigration). The apiserver runs for the
 // lifetime of the test binary; individual tests get real API semantics
 // (status subresources, finalizer/deletion, informers) without needing a
 // full cluster.
@@ -125,7 +125,7 @@ func newAggregatedAPIServiceObj() *apiregv1.APIService {
 }
 
 // TestLifecycle_Mainline exercises the full migration lifecycle against a real
-// kube-apiserver: seed v1 resources in a mock backend, create a DatastoreMigration
+// kube-apiserver: seed v1 resources in a mock backend, create a migrationv1.DatastoreMigration
 // CR, and verify the controller drives through Pending → Migrating → Converged →
 // Complete with correct v3 resources, OwnerRef remapping, progress tracking, and
 // APIService save/delete behavior.
@@ -167,7 +167,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	})
 	go ctrl.Run(stop)
 
-	// Create the DatastoreMigration CR.
+	// Create the migrationv1.DatastoreMigration CR.
 	dm := &migrationv1.DatastoreMigration{
 		ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName},
 		Spec:       migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
@@ -383,7 +383,7 @@ func TestPending_LockOrderingAndDrain(t *testing.T) {
 	m := newTestController(ctx, bc, fakeAPIReg, recordingRTClient(fvRTClient, log), time.Hour)
 
 	createMigrationCR(t, ctx)
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
 
 	// First pass: prechecks run, v1 is locked, and the drain requeues before
@@ -411,7 +411,7 @@ func TestPending_LockOrderingAndDrain(t *testing.T) {
 	// migration starts.
 	m.drainPeriod = 0
 	g.Expect(m.handlePending(logCtx, dm)).To(Succeed())
-	g.Expect(dm.Status.Phase).To(Equal(DatastoreMigrationPhaseMigrating))
+	g.Expect(dm.Status.Phase).To(Equal(migrationv1.DatastoreMigrationPhaseMigrating))
 	_, err = fakeAPIReg.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})
 	g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "APIService should be deleted after the drain, got: %v", err)
 	g.Expect(log.snapshot()).To(Equal([]string{eventLockV1, eventDeleteAPIService}))
@@ -445,17 +445,17 @@ func TestPending_ConflictsParkWithV1Locked(t *testing.T) {
 	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
 
 	createMigrationCR(t, ctx)
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
 
 	g.Expect(m.handlePending(logCtx, dm)).To(Succeed())
-	g.Expect(dm.Status.Phase).To(Equal(DatastoreMigrationPhaseWaitingForConflictResolution))
+	g.Expect(dm.Status.Phase).To(Equal(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution))
 	g.Expect(dm.Status.Conditions).To(HaveLen(1))
 	g.Expect(v1DatastoreReady(g, bc)).To(Equal(ptr.To(false)), "v1 should stay locked while parked on conflicts")
 	g.Expect(log.snapshot()).To(Equal([]string{eventLockV1, eventDeleteAPIService}))
 }
 
-// TestLifecycle_Rollback verifies that deleting the DatastoreMigration CR while
+// TestLifecycle_Rollback verifies that deleting the migrationv1.DatastoreMigration CR while
 // in the Migrating phase aborts the migration: the APIService is restored from
 // the saved annotation, v1 ClusterInformation is unlocked, migrated v3
 // resources are cleaned up, and the finalizer is removed so the CR is deleted.

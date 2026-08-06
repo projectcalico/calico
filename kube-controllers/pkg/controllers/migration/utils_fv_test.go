@@ -50,7 +50,7 @@ func newFVHelper(t *testing.T, g Gomega, ctx context.Context) *fvHelper {
 	return &fvHelper{t: t, g: g, ctx: ctx}
 }
 
-// getMigration fetches the DatastoreMigration CR by the well-known name.
+// getMigration fetches the migrationv1.DatastoreMigration CR by the well-known name.
 func (h *fvHelper) getMigration() *migrationv1.DatastoreMigration {
 	dm := &migrationv1.DatastoreMigration{}
 	h.g.ExpectWithOffset(1, fvRTClient.Get(h.ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
@@ -243,7 +243,7 @@ func newTestController(
 	}
 }
 
-// createMigrationCR creates the well-known DatastoreMigration CR and registers
+// createMigrationCR creates the well-known migrationv1.DatastoreMigration CR and registers
 // a cleanup to delete it (and all migrated resources) when the test ends.
 func createMigrationCR(t *testing.T, ctx context.Context) {
 	t.Helper()
@@ -252,12 +252,12 @@ func createMigrationCR(t *testing.T, ctx context.Context) {
 		Spec:       migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	if err := fvRTClient.Create(ctx, dm); err != nil {
-		t.Fatalf("creating DatastoreMigration CR: %v", err)
+		t.Fatalf("creating migrationv1.DatastoreMigration CR: %v", err)
 	}
 	t.Cleanup(func() { cleanupMigrationResources(t, ctx) })
 }
 
-// cleanupMigrationResources removes the DatastoreMigration CR (stripping its
+// cleanupMigrationResources removes the migrationv1.DatastoreMigration CR (stripping its
 // finalizer first so deletion isn't blocked) and all v3 Calico resources that
 // may have been created during migration.
 func cleanupMigrationResources(t *testing.T, ctx context.Context) {
@@ -277,7 +277,7 @@ func cleanupMigrationResources(t *testing.T, ctx context.Context) {
 			continue
 		}
 		if err := fvRTClient.Delete(ctx, dm); err != nil {
-			t.Logf("cleanup: deleting DatastoreMigration: %v", err)
+			t.Logf("cleanup: deleting migrationv1.DatastoreMigration: %v", err)
 		}
 		break
 	}

@@ -505,9 +505,9 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 		return fmt.Errorf("pre-checking conflicts: %w", err)
 	}
 	if len(conflicts) > 0 {
-		logCtx.WithField("conflicts", len(conflicts)).Warn("Pre-check found conflicts, waiting for resolution before migrating")
+		logCtx.WithField("conflicts", len(conflicts)).Warn("Pre-check found conflicts, datastore stays locked until they are resolved")
 		dm.Status.Phase = migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution
-		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(conflicts))
+		dm.Status.Message = fmt.Sprintf("Datastore is locked: resolve %d resource conflicts to let the migration continue", len(conflicts))
 		dm.Status.Conditions = conflictConditions(conflicts)
 		setPhaseMetric(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution)
 		return m.updateStatus(dm)
@@ -675,9 +675,9 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 	dm.Status.Conditions = conflictConditions(allConflicts)
 
 	if len(allConflicts) > 0 {
-		logCtx.WithField("conflicts", len(allConflicts)).Warn("Migration has conflicts that need manual resolution")
+		logCtx.WithField("conflicts", len(allConflicts)).Warn("Migration has conflicts, datastore stays locked until they are resolved")
 		dm.Status.Phase = migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution
-		dm.Status.Message = fmt.Sprintf("%d resource conflicts need manual resolution", len(allConflicts))
+		dm.Status.Message = fmt.Sprintf("Datastore is locked: resolve %d resource conflicts to let the migration continue", len(allConflicts))
 		setPhaseMetric(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution)
 		return m.updateStatus(dm)
 	}
@@ -714,7 +714,7 @@ func (m *migrationController) handleWaiting(logCtx *logrus.Entry, dm *migrationv
 
 	if len(remaining) > 0 {
 		logCtx.WithField("conflicts", len(remaining)).Debug("Conflicts still present")
-		dm.Status.Message = fmt.Sprintf("%d resource conflicts need resolution before migration can begin", len(remaining))
+		dm.Status.Message = fmt.Sprintf("Datastore is locked: resolve %d resource conflicts to let the migration continue", len(remaining))
 		dm.Status.Conditions = conflictConditions(remaining)
 
 		// The poll cadence here is deliberate: this path is polling for the user
