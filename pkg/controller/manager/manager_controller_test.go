@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayapiv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -1234,6 +1235,28 @@ var _ = Describe("Manager controller tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			It("should degrade when spec.ingressGateway is set on a tenant Manager", func() {
+				manager := &operatorv1.Manager{}
+				Expect(c.Get(ctx, types.NamespacedName{Name: "tigera-secure", Namespace: tenantANamespace}, manager)).NotTo(HaveOccurred())
+				manager.Spec.IngressGateway = &operatorv1.IngressGatewaySpec{Hostname: "manager.example.com"}
+				Expect(c.Update(ctx, manager)).NotTo(HaveOccurred())
+
+				mockStatus.On("SetDegraded", operatorv1.InvalidConfigurationError, "spec.ingressGateway is not supported in multi-tenant clusters", mock.Anything, mock.Anything).Return()
+
+				result, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: tenantANamespace}})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(result).To(Equal(reconcile.Result{}))
+
+				mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.InvalidConfigurationError, "spec.ingressGateway is not supported in multi-tenant clusters", mock.Anything, mock.Anything)
+
+				// Nothing gateway-related is rendered for the tenant.
+				gw := &gatewayapiv1.Gateway{
+					TypeMeta:   metav1.TypeMeta{Kind: "Gateway", APIVersion: "gateway.networking.k8s.io/v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: ManagerGatewayResourcePrefix + "-gateway", Namespace: tenantANamespace},
+				}
+				Expect(kerror.IsNotFound(test.GetResource(c, gw))).To(BeTrue())
+			})
+
 			It("should reconcile only if a namespace is provided", func() {
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).ShouldNot(HaveOccurred())
@@ -1484,6 +1507,39 @@ var _ = Describe("Manager controller tests", func() {
 
 				Expect(kerror.IsNotFound(test.GetResource(c, &tenantBRoutes))).Should(BeTrue())
 			})
+		})
+	})
+
+	Context("ensureGatewayNamespace", func() {
+		var r ReconcileManager
+
+		BeforeEach(func() {
+			r = ReconcileManager{client: c, scheme: scheme}
+		})
+
+		It("should create the namespace when it does not exist", func() {
+			Expect(r.ensureGatewayNamespace(ctx, "ns-a")).NotTo(HaveOccurred())
+
+			ns := &corev1.Namespace{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "ns-a"}, ns)).NotTo(HaveOccurred())
+			Expect(ns.Labels).To(HaveKeyWithValue("name", "ns-a"))
+			Expect(ns.OwnerReferences).To(BeEmpty())
+		})
+
+		It("should leave an existing namespace untouched", func() {
+			existing := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "ns-a",
+					Labels: map[string]string{"team": "netsec"},
+				},
+			}
+			Expect(c.Create(ctx, existing)).NotTo(HaveOccurred())
+
+			Expect(r.ensureGatewayNamespace(ctx, "ns-a")).NotTo(HaveOccurred())
+
+			ns := &corev1.Namespace{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "ns-a"}, ns)).NotTo(HaveOccurred())
+			Expect(ns.Labels).To(Equal(map[string]string{"team": "netsec"}))
 		})
 	})
 })

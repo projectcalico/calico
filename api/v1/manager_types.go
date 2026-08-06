@@ -26,6 +26,13 @@ type ManagerSpec struct {
 	// ManagerDeployment configures the Manager Deployment.
 	// +optional
 	ManagerDeployment *ManagerDeployment `json:"managerDeployment,omitempty"`
+
+	// IngressGateway configures Calico Ingress Gateway access to the Manager UI.
+	// When set, the operator renders Gateway API resources (Gateway, HTTPRoute,
+	// Backend, ReferenceGrant, TLS Secret) to expose Manager via CIG.
+	// Requires a GatewayAPI CR to be present.
+	// +optional
+	IngressGateway *IngressGatewaySpec `json:"ingressGateway,omitempty"`
 }
 
 // ManagerDeployment is the configuration for the Manager Deployment.
