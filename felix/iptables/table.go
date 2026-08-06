@@ -40,8 +40,7 @@ const (
 	MaxChainNameLength   = 28
 	minPostWriteInterval = 50 * time.Millisecond
 
-	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled;
-	// returning a zero reschedule leaves an idle Felix never coming back to the table.
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled.
 	defaultCleanupRetryInterval = 180 * time.Second
 )
 

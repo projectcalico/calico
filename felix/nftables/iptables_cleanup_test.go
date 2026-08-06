@@ -30,7 +30,7 @@ import (
 )
 
 // The testdata files are real netlink reads of the #13263 ruleset (Tailscale, NixOS firewall, CNI
-// port mapping, kubelet) over the state a previous iptables-mode Felix would have left, captured
+// port mapping, kubelet) over the state a previous iptables-nft Felix would have left, captured
 // from felix/fv/cali-iptables-dump.txt plus felix/fv/foreign-nft-dump.txt.
 func loadTestdata(table string) *iptablesTableState {
 	raw, err := os.ReadFile("testdata/iptables_nft_" + table + "_state.json")
@@ -59,7 +59,7 @@ var _ = Describe("iptables cleanup, sweeping a table", func() {
 		ctx      context.Context
 		fake     *knftables.Fake
 		stub     *stubDataplane
-		cleanup  *IPTablesCleanup
+		cleanup  *IPTablesNFTCleanup
 		state    *iptablesTableState
 		listing  func(string) []string
 		ruleText func(string) []string
@@ -69,7 +69,7 @@ var _ = Describe("iptables cleanup, sweeping a table", func() {
 		ctx = context.Background()
 		fake = knftables.NewFake(knftables.IPv4Family, "filter")
 		stub = &stubDataplane{Interface: fake}
-		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+		cleanup = NewIPTablesNFTCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
 			NewDataplane: func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
 				return stub, nil
 			},
@@ -151,10 +151,10 @@ var _ = Describe("iptables cleanup, sweeping a table", func() {
 })
 
 var _ = Describe("iptables cleanup, identifying our own state", func() {
-	var cleanup *IPTablesCleanup
+	var cleanup *IPTablesNFTCleanup
 
 	BeforeEach(func() {
-		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{})
+		cleanup = NewIPTablesNFTCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{})
 	})
 
 	Describe("filter table", func() {
@@ -287,7 +287,7 @@ var _ = Describe("iptables cleanup, scheduling its passes", func() {
 		readErr  error
 		contents *iptablesTableState
 		now      time.Time
-		cleanup  *IPTablesCleanup
+		cleanup  *IPTablesNFTCleanup
 	)
 
 	// Stands in for the netlink read. Of our four tables only "filter" exists on this host.
@@ -308,7 +308,7 @@ var _ = Describe("iptables cleanup, scheduling its passes", func() {
 			Chains: []iptablesChain{{Name: "ts-input", Base: true}},
 			Rules:  []iptablesRule{{Chain: "ts-input", Handle: 3}},
 		}
-		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+		cleanup = NewIPTablesNFTCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
 			RefreshInterval: time.Minute,
 			NowOverride:     func() time.Time { return now },
 		})
@@ -341,7 +341,7 @@ var _ = Describe("iptables cleanup, scheduling its passes", func() {
 	// Zero disables the periodic refresh of the tables Felix programs. The sweep still has to
 	// happen, but without a pace of its own it would run on every dataplane apply.
 	It("paces itself with the refresh interval disabled", func() {
-		cleanup = NewIPTablesCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
+		cleanup = NewIPTablesNFTCleanup(4, rulesdefs.AllHistoricChainNamePrefixes, TableOptions{
 			RefreshInterval: 0,
 			NowOverride:     func() time.Time { return now },
 		})

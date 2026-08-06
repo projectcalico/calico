@@ -25,11 +25,11 @@ import (
 	"sigs.k8s.io/knftables"
 )
 
-// readTablesViaNetlink reads back whichever of the named tables exist; a table missing from the
-// result doesn't exist.
+// readTablesViaNetlink reads back whichever of the named tables exist.
 //
-// Netlink rather than the nft binary because of the rule comment: the kernel hands back iptables'
-// comment payload, which is how iptables-nft-save recovers it, but every nft renderer drops it.
+// We use netlink rather than the nft binary because of the rule comment: the kernel hands back
+// iptables' comment payload, which is how iptables-nft-save recovers it, but every nft renderer
+// drops it.
 func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
 	netlinkFamily := nftables.TableFamilyIPv4
 	if family == knftables.IPv6Family {

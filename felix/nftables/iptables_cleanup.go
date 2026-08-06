@@ -27,18 +27,20 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
-var iptablesTables = []string{"filter", "nat", "mangle", "raw"}
+// sharedTables are the tables Calico shares with everything else on the node. Both iptables
+// backends write into their own copies of these.
+var sharedTables = []string{"filter", "nat", "mangle", "raw"}
 
 // defaultSweepInterval paces the sweep when the refresh interval is disabled; it walks every chain
 // in the family, so it can't run on every dataplane apply.
 const defaultSweepInterval = 180 * time.Second
 
-// IPTablesCleanup removes what an iptables-mode Felix left in the standard filter/nat/mangle/raw
-// tables of one IP family. Those are nftables tables too, since iptables-nft writes there.
+// IPTablesNFTCleanup removes what an iptables-nft Felix left in the nftables copies of the shared
+// tables for one IP family.
 //
-// We read them over netlink, not with iptables-nft-save: that refuses to read a table holding
-// anything iptables can't express, which crash-looped Felix next to Tailscale (#13263).
-type IPTablesCleanup struct {
+// We read them over netlink rather than with iptables-nft-save, which refuses to read a table
+// holding anything iptables can't express and so crash-looped Felix next to Tailscale (#13263).
+type IPTablesNFTCleanup struct {
 	ipVersion uint8
 	family    knftables.Family
 
@@ -57,13 +59,12 @@ type IPTablesCleanup struct {
 	opReporter      logrusr.OpRecorder
 }
 
-// NewIPTablesCleanup returns a cleanup pass over the shared nftables tables for the given IP
-// version.
-func NewIPTablesCleanup(
+// NewIPTablesNFTCleanup returns a cleanup pass over the nftables copies of the shared tables.
+func NewIPTablesNFTCleanup(
 	ipVersion uint8,
 	chainPrefixes []string,
 	options TableOptions,
-) *IPTablesCleanup {
+) *IPTablesNFTCleanup {
 	family := knftables.IPv4Family
 	if ipVersion == 6 {
 		family = knftables.IPv6Family
@@ -89,7 +90,7 @@ func NewIPTablesCleanup(
 		refreshInterval = defaultSweepInterval
 	}
 
-	return &IPTablesCleanup{
+	return &IPTablesNFTCleanup{
 		ipVersion:       ipVersion,
 		family:          family,
 		chainPrefixes:   chainPrefixes,
@@ -102,34 +103,35 @@ func NewIPTablesCleanup(
 	}
 }
 
-func (c *IPTablesCleanup) Name() string {
-	return "iptables"
+func (c *IPTablesNFTCleanup) Name() string {
+	return "iptables-nft"
 }
 
-func (c *IPTablesCleanup) IPVersion() uint8 {
+func (c *IPTablesNFTCleanup) IPVersion() uint8 {
 	return c.ipVersion
 }
 
 // CleanUp makes one pass over the tables, rate limited to one pass per refresh interval.
-func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
+func (c *IPTablesNFTCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	now := c.timeNow()
 	if sinceLast := now.Sub(c.lastSweep); !c.lastSweep.IsZero() && sinceLast < c.refreshInterval {
 		return c.refreshInterval - sinceLast
 	}
 	c.lastSweep = now
 
-	states, err := c.readTables(c.family, iptablesTables, c.onStillAlive)
+	states, err := c.readTables(c.family, sharedTables, c.onStillAlive)
 	if err != nil {
-		logrus.WithError(err).WithField("family", c.family).Warn("Failed to read nftables tables; will retry iptables cleanup")
+		logrus.WithError(err).WithField("family", c.family).Warn("Failed to read the shared tables; will retry the iptables-nft cleanup")
 		return c.refreshInterval
 	}
 
-	for _, table := range iptablesTables {
+	for _, table := range sharedTables {
 		c.onStillAlive()
 
-		// A table missing from the read doesn't exist, so no previous Felix wrote there.
 		state, ok := states[table]
 		if !ok {
+			// The table doesn't exist, so no iptables-nft Felix ever wrote there.
+			logrus.WithFields(logrus.Fields{"family": c.family, "table": table}).Debug("Shared table not present")
 			continue
 		}
 
@@ -137,7 +139,7 @@ func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 			logrus.WithError(err).WithFields(logrus.Fields{
 				"family": c.family,
 				"table":  table,
-			}).Warn("Failed to clean up rules left by a previous iptables-mode Felix; will retry")
+			}).Warn("Failed to clean up rules left by a previous iptables-nft Felix; will retry")
 		}
 	}
 
@@ -145,7 +147,7 @@ func (c *IPTablesCleanup) CleanUp() (rescheduleAfter time.Duration) {
 }
 
 // sweepTable removes our state from one table.
-func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) error {
+func (c *IPTablesNFTCleanup) sweepTable(table string, state *iptablesTableState) error {
 	ourChains, ourRuleHandles := c.ourState(state)
 	if len(ourChains) == 0 && len(ourRuleHandles) == 0 {
 		return nil
@@ -157,7 +159,7 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) er
 	}
 
 	if c.opReporter != nil {
-		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-iptables-%s-v%d", table, c.ipVersion))
+		c.opReporter.RecordOperation(fmt.Sprintf("cleanup-iptables-nft-%s-v%d", table, c.ipVersion))
 	}
 
 	// Rules first, then empty our chains. Nothing of ours affects traffic after this, even if the
@@ -184,14 +186,14 @@ func (c *IPTablesCleanup) sweepTable(table string, state *iptablesTableState) er
 		"family": c.family,
 		"table":  table,
 		"chains": len(ourChains),
-	}).Info("Cleaned up rules left behind by a previous iptables-mode Felix")
+	}).Info("Cleaned up rules left behind by a previous iptables-nft Felix")
 
 	return nil
 }
 
 // deleteChains removes our chains, falling back to one transaction each. nftables refuses to delete
 // a chain something still jumps to, and one of those would otherwise take the whole batch with it.
-func (c *IPTablesCleanup) deleteChains(nft knftables.Interface, table string, chains []string) {
+func (c *IPTablesNFTCleanup) deleteChains(nft knftables.Interface, table string, chains []string) {
 	tx := nft.NewTransaction()
 	for _, name := range chains {
 		tx.Delete(&knftables.Chain{Name: name})
@@ -217,15 +219,15 @@ func (c *IPTablesCleanup) deleteChains(nft knftables.Interface, table string, ch
 	}
 }
 
-func (c *IPTablesCleanup) runTransaction(nft knftables.Interface, tx *knftables.Transaction) error {
+func (c *IPTablesNFTCleanup) runTransaction(nft knftables.Interface, tx *knftables.Transaction) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 	return nft.Run(ctx, tx)
 }
 
-// ourState picks out the chains and rules a previous iptables-mode Felix wrote: chains by name,
-// rules by the hash comment the iptables Table puts on every rule it manages.
-func (c *IPTablesCleanup) ourState(state *iptablesTableState) ([]string, map[string][]uint64) {
+// ourState picks out the chains and rules a previous iptables-nft Felix wrote: chains by name,
+// rules by the hash comment iptables puts on every rule Felix manages.
+func (c *IPTablesNFTCleanup) ourState(state *iptablesTableState) ([]string, map[string][]uint64) {
 	ourChains := []string{}
 	isOurChain := map[string]bool{}
 	for _, ch := range state.Chains {

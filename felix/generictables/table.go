@@ -33,7 +33,8 @@ type CleanupTable interface {
 	IPVersion() uint8
 
 	// CleanUp makes one pass at removing our state, returning the minimum time to wait before
-	// another pass is worth making.
+	// another pass is worth making. Zero means no reschedule at all, so an idle Felix never comes
+	// back to this table.
 	CleanUp() time.Duration
 }
 

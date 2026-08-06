@@ -333,6 +333,13 @@ func hasKubernetesChains(output []byte) bool {
 	return strings.Contains(string(output), "KUBE-IPTABLES-HINT") || strings.Contains(string(output), "KUBE-KUBELET-CANARY")
 }
 
+// The two iptables backends: iptables-legacy programs the legacy xtables dataplane, iptables-nft
+// renders the same rules into nftables.
+const (
+	IPTablesBackendLegacy = "legacy"
+	IPTablesBackendNFT    = "nft"
+)
+
 // GetIptablesBackend attempts to detect the iptables backend being used where Felix is running.
 // This code is duplicating the detection method found at
 // https://github.com/kubernetes-sigs/iptables-wrappers/blob/master/iptables-wrapper-installer.sh#L107
@@ -349,7 +356,7 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 
 	var detectedBackend string
 	if hasKubernetesChains(ip6nm) || hasKubernetesChains(ip4nm) {
-		detectedBackend = "nft"
+		detectedBackend = IPTablesBackendNFT
 	} else {
 		ip6LgcySave := FindBestBinary(lookPath, 6, "legacy", "save")
 		ip4LgcySave := FindBestBinary(lookPath, 4, "legacy", "save")
@@ -359,7 +366,7 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 		log.WithField("ip4l", string(ip4lm)).Debug("Iptables legacy save -t mangle out")
 
 		if hasKubernetesChains(ip6lm) || hasKubernetesChains(ip4lm) {
-			detectedBackend = "legacy"
+			detectedBackend = IPTablesBackendLegacy
 		} else {
 			ip6l, _ := newCmd(ip6LgcySave).Output()
 			log.WithField("ip6l", string(ip6l)).Debug("Ip6tables legacy save out")
@@ -373,9 +380,9 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 			log.WithField("ip4n", string(ip4n)).Debug("Iptables save out")
 			nftLines := countRulesInIptableOutput(ip6n) + countRulesInIptableOutput(ip4n)
 			if legacyLines >= nftLines {
-				detectedBackend = "legacy" // default to legacy mode
+				detectedBackend = IPTablesBackendLegacy // default to legacy mode
 			} else {
-				detectedBackend = "nft"
+				detectedBackend = IPTablesBackendNFT
 			}
 		}
 	}

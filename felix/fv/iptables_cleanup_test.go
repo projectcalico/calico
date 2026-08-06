@@ -118,8 +118,8 @@ var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ iptables cleanup tests", []
 		})
 	})
 
-	// The nft view and the legacy backend are separate dataplanes, and only the legacy one goes
-	// through the CleanupOnly iptables tables.
+	// The nftables and legacy copies of the shared tables are separate dataplanes, and only the
+	// legacy copies go through the CleanupOnly iptables tables.
 	Describe("switching from legacy iptables -> nftables", func() {
 		BeforeEach(func() {
 			if !NFTMode() {

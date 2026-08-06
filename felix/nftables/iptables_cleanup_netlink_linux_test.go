@@ -71,7 +71,7 @@ var _ = Describe("iptables cleanup, reading the tables over netlink", func() {
 	})
 
 	read := func() (map[string]*iptablesTableState, error) {
-		return readTablesFrom(reader, nftables.TableFamilyIPv4, iptablesTables, func() { alive++ })
+		return readTablesFrom(reader, nftables.TableFamilyIPv4, sharedTables, func() { alive++ })
 	}
 
 	It("reads rules from the base chains only", func() {

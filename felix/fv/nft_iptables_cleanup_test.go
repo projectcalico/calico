@@ -24,10 +24,10 @@ import (
 
 // Reproduction of #13263: native nft rules written into the shared filter/mangle/nat tables by
 // other tools made those tables unreadable to iptables-nft-save, which Felix was using to clean up
-// after a previous iptables-mode Felix, so Felix panic-looped.
+// after a previous iptables-nft Felix, so Felix panic-looped.
 //
 // foreign-nft-dump.txt is the ruleset from the issue; cali-iptables-dump.txt is the state a
-// previous iptables-mode Felix would have left underneath it.
+// previous iptables-nft Felix would have left underneath it.
 var _ = infrastructure.DatastoreDescribe("_BPF-SAFE_ nftables cleanup of iptables rules, with foreign nft rules present", []apiconfig.DatastoreType{apiconfig.EtcdV3}, func(getInfra infrastructure.InfraFactory) {
 	var (
 		infra infrastructure.DatastoreInfra
