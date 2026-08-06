@@ -36,8 +36,10 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/controller/status"
+	"github.com/tigera/operator/pkg/render/whisker"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -136,6 +138,25 @@ var _ = Describe("whisker controller tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(cli.Get(ctx, types.NamespacedName{Name: installation.Name}, installation)).ShouldNot(HaveOccurred())
 			_ = installation
+		})
+
+		It("should create the whisker TLS key pairs", func() {
+			Expect(cli.Create(ctx, installation)).To(BeNil())
+			reconciler := Reconciler{
+				cli:      cli,
+				scheme:   scheme,
+				provider: operatorv1.ProviderNone,
+				status:   mockStatus,
+			}
+			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			for _, name := range []string{whisker.WhiskerKeyPairSecret, whisker.WhiskerBackendKeyPairSecret} {
+				secret := &corev1.Secret{}
+				Expect(cli.Get(ctx, types.NamespacedName{Name: name, Namespace: common.OperatorNamespace()}, secret)).ShouldNot(HaveOccurred())
+				Expect(secret.Data).To(HaveKey("tls.crt"))
+				Expect(secret.Data).To(HaveKey("tls.key"))
+			}
 		})
 	})
 })
