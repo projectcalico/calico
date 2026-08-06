@@ -493,6 +493,28 @@ var _ = Describe("API server rendering tests (Calico Enterprise)", func() {
 		}
 	})
 
+	It("binds the previous API server to the CRD role while the cutover is held", func() {
+		// v1.38 created calico-apiserver-access-calico-crds with the previous service account, so
+		// narrowing it to one subject mid-migration stops the API server that is still serving.
+		subjectsFor := func(hold bool) []rbacv1.Subject {
+			cfg.HoldAPIServiceCutover = hold
+			component, err := render.APIServer(cfg)
+			Expect(err).To(BeNil())
+			resources, _ := component.Objects()
+			crb := rtest.GetResource(resources, "calico-apiserver-access-calico-crds", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding")
+			Expect(crb).NotTo(BeNil())
+			return crb.(*rbacv1.ClusterRoleBinding).Subjects
+		}
+
+		held := subjectsFor(true)
+		Expect(held).To(ContainElement(rbacv1.Subject{Kind: "ServiceAccount", Name: "calico-apiserver", Namespace: "calico-system"}))
+		Expect(held).To(ContainElement(rbacv1.Subject{Kind: "ServiceAccount", Name: "tigera-apiserver", Namespace: "tigera-system"}))
+
+		done := subjectsFor(false)
+		Expect(done).To(HaveLen(1))
+		Expect(done).To(ContainElement(rbacv1.Subject{Kind: "ServiceAccount", Name: "calico-apiserver", Namespace: "calico-system"}))
+	})
+
 	It("should grant the calico-apiserver SA write access to globalreports/status", func() {
 		component, err := render.APIServer(cfg)
 		Expect(err).To(BeNil(), "Expected APIServer to create successfully %s", err)
