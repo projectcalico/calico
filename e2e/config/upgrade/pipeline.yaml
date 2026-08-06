@@ -3,7 +3,7 @@
 # upgrade pipeline: test selection scope.
 #
 # As patch-verification: shows the cluster still works after an
-# upgrade. Same TODO on whether upstream conformance is the right bar.
+# upgrade.
 #
 # Abstract parent -- no cell points at this file directly. The sibling
 # configs extend it and subtract what their cluster shape cannot run.
@@ -12,6 +12,7 @@ extends: ../base.yaml
 
 include:
   - Conformance && sig-network
+  - Conformance && sig-calico
   - Feature:Tiered-RBAC
 
 exclude:
