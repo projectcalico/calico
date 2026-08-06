@@ -1,0 +1,37 @@
+# bpf-aws-single-subnet.yaml - test selection for the AWS single-subnet BPF run.
+#
+# This run selected its tests with a --ginkgo.focus/--ginkgo.skip pair until the
+# scheduled runs moved to E2E_TEST_CONFIG; the variable was never set for it, so
+# it has been falling back to the upstream default of skipping everything
+# labelled [Feature:...] ever since. This config restores the same set of tests
+# the run selected before that move, expressed the way the config loader wants
+# it. Adding or removing tests here changes what that run covers, so keep the
+# two in step.
+#
+# The pre-testconfig filter was:
+#   --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy)
+#   --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+
+include:
+  - sig-calico
+  - Conformance
+  # Upstream node and storage tests carrying [NodeConformance]. The old filter
+  # matched these because its bare "Conformance" also matched the longer label;
+  # naming it keeps the run's coverage unchanged and makes it a visible choice.
+  - NodeConformance
+  - Dataplane:BPF
+  - Feature:NetworkPolicy
+
+exclude:
+  # These stay regex patterns rather than label exclusions so they match the
+  # same tests the old filter did -- as text, "Feature:SCTP" also catches
+  # [Feature:SCTPConnectivity], which the label of that name does not.
+  namePatterns:
+    - group: "carried over from the run's own skip list"
+      patterns:
+        - Slow
+        - Disruptive
+        - calient
+        - allow.ingress.access.from.updated.pod
+        - Dataplane:LB
+        - Feature:SCTP
