@@ -200,6 +200,9 @@ steps:
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+      # The BPF suite's canary on new Kubernetes; the rest of these runs sit on stable-3.
+      - name: K8S_VERSION
+        value: beta-or-stable
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
