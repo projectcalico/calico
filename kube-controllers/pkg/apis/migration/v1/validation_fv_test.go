@@ -41,7 +41,14 @@ import (
 var (
 	schemaClient ctrlclient.Client
 	crdClient    apiextclient.Interface
+
+	// betaClient talks to the deprecated v1beta1 endpoint of the same CRD.
+	betaClient ctrlclient.Client
 )
+
+// betaVersion is the pre-GA version the CRD still serves for clusters that
+// installed it on v3.32.
+const betaVersion = "v1beta1"
 
 // crdName is the installed CRD's object name, derived from the GVR so it follows
 // the group version flip.
@@ -83,6 +90,15 @@ func run(m *testing.M) int {
 	if err != nil {
 		panic(err)
 	}
+
+	betaScheme := runtime.NewScheme()
+	if err := migrationv1.AddToSchemeForVersion(betaScheme, betaVersion); err != nil {
+		panic(err)
+	}
+	betaClient, err = ctrlclient.New(testEnv.RestConfig, ctrlclient.Options{Scheme: betaScheme})
+	if err != nil {
+		panic(err)
+	}
 	return m.Run()
 }
 
@@ -94,6 +110,87 @@ func newMigration(name string) *migrationv1.DatastoreMigration {
 		Spec: migrationv1.DatastoreMigrationSpec{
 			Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs,
 		},
+	}
+}
+
+// TestBothVersionsAreServed checks what keeps the v3.33 upgrade a plain CRD
+// update. Dropping v1beta1 would run the finalizer on every CR.
+func TestBothVersionsAreServed(t *testing.T) {
+	ctx := context.Background()
+
+	crd, err := crdClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crdName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get crd %q: %v", crdName, err)
+	}
+
+	versions := map[string]apiextv1.CustomResourceDefinitionVersion{}
+	for _, version := range crd.Spec.Versions {
+		versions[version.Name] = version
+	}
+	if len(versions) != 2 {
+		t.Fatalf("expected v1 and %s, got %d versions", betaVersion, len(versions))
+	}
+
+	if v1 := versions[migrationv1.Version]; !v1.Served || !v1.Storage {
+		t.Errorf("expected v1 to be served and the storage version, got served=%v storage=%v", v1.Served, v1.Storage)
+	}
+
+	beta := versions[betaVersion]
+	if !beta.Served || beta.Storage {
+		t.Errorf("expected %s to be served but not the storage version, got served=%v storage=%v", betaVersion, beta.Served, beta.Storage)
+	}
+	if !beta.Deprecated {
+		t.Errorf("expected %s to be marked deprecated", betaVersion)
+	}
+
+	// A conversion webhook would need serving certs, so the two schemas stay
+	// wire-compatible instead.
+	if crd.Spec.Conversion != nil && crd.Spec.Conversion.Strategy != apiextv1.NoneConverter {
+		t.Errorf("expected conversion strategy None, got %q", crd.Spec.Conversion.Strategy)
+	}
+
+	// Only the storage version is ever written, which is what lets v3.34 drop
+	// v1beta1 without a storage version migration.
+	if len(crd.Status.StoredVersions) != 1 || crd.Status.StoredVersions[0] != migrationv1.Version {
+		t.Errorf("expected v1 to be the only stored version, got %v", crd.Status.StoredVersions)
+	}
+}
+
+// TestV1Beta1RoundTripsThroughV1 checks that a CR created through the deprecated
+// endpoint reads back through v1. That is the v3.32 mid-migration upgrade.
+func TestV1Beta1RoundTripsThroughV1(t *testing.T) {
+	ctx := context.Background()
+	m := newMigration("version-round-trip")
+	if err := betaClient.Create(ctx, m); err != nil {
+		t.Fatalf("create through %s: %v", betaVersion, err)
+	}
+	defer func() { _ = betaClient.Delete(ctx, m) }()
+
+	got := &migrationv1.DatastoreMigration{}
+	if err := schemaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, got); err != nil {
+		t.Fatalf("get through v1: %v", err)
+	}
+	if got.Spec.Type != migrationv1.DatastoreMigrationTypeAPIServerToCRDs {
+		t.Errorf("got spec.type %q, want %q", got.Spec.Type, migrationv1.DatastoreMigrationTypeAPIServerToCRDs)
+	}
+
+	got.Status.Phase = migrationv1.DatastoreMigrationPhaseMigrating
+	got.Status.Progress.Migrated = 7
+	if err := schemaClient.Status().Update(ctx, got); err != nil {
+		t.Fatalf("status update through v1: %v", err)
+	}
+
+	// The operator on a v3.32 cluster reads the phase off v1beta1 while
+	// kube-controllers writes it through v1.
+	back := &migrationv1.DatastoreMigration{}
+	if err := betaClient.Get(ctx, ctrlclient.ObjectKey{Name: m.Name}, back); err != nil {
+		t.Fatalf("get through %s: %v", betaVersion, err)
+	}
+	if back.Status.Phase != migrationv1.DatastoreMigrationPhaseMigrating {
+		t.Errorf("got status.phase %q, want %q", back.Status.Phase, migrationv1.DatastoreMigrationPhaseMigrating)
+	}
+	if back.Status.Progress.Migrated != 7 {
+		t.Errorf("got status.progress.migrated %d, want 7", back.Status.Progress.Migrated)
 	}
 }
 
@@ -133,8 +230,10 @@ func TestSpecTypeIsImmutable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get crd %q: %v", crdName, err)
 	}
+	// v1beta1 is frozen at its pre-GA shape and carries no such rule, so the
+	// assertion is against v1 alone.
 	for _, version := range crd.Spec.Versions {
-		if !version.Served {
+		if version.Name != migrationv1.Version {
 			continue
 		}
 		if !specTypeHasTransitionRule(version) {

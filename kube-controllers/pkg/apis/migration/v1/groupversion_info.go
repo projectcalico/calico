@@ -37,10 +37,17 @@ var (
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
+	return AddToSchemeForVersion(scheme, Version)
+}
+
+// AddToSchemeForVersion registers the types under the given migration group
+// version. v1beta1 is wire-identical to v1.
+func AddToSchemeForVersion(scheme *runtime.Scheme, version string) error {
+	gv := schema.GroupVersion{Group: Group, Version: version}
+	scheme.AddKnownTypes(gv,
 		&DatastoreMigration{},
 		&DatastoreMigrationList{},
 	)
-	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	metav1.AddToGroupVersion(scheme, gv)
 	return nil
 }
