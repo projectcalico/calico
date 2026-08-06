@@ -40,15 +40,14 @@ steps:
         value: gcp-kubeadm
       - name: STERN_CHECK
         value: DISABLED
-    # Names no longer match the value; they are the Lens/OTEL job identity, so they stay.
     matrix:
-      - name: stable-ubuntu-2204-lts-arm64
+      - name: beta-or-stable-ubuntu-2204-lts-arm64
         env:
           - name: K8S_VERSION
             value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: ubuntu-2204-lts-arm64
-      - name: stable-rocky-linux-9-arm64
+      - name: beta-or-stable-rocky-linux-9-arm64
         env:
           - name: K8S_VERSION
             value: beta-or-stable

@@ -302,8 +302,7 @@ steps:
       - name: USE_API_SERVER
         value: "false"
     matrix:
-      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
-      - name: stable
+      - name: beta-or-stable
         env:
           - name: K8S_VERSION
             value: beta-or-stable
@@ -342,7 +341,7 @@ steps:
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
-      - name: beta-calico-yaml-iptables
+      - name: beta-or-stable-calico-yaml-iptables
         env:
           - name: K8S_VERSION
             value: beta-or-stable
@@ -390,8 +389,7 @@ steps:
       - name: VPC_SUBNETS
         value: '["172.16.101.0/24"]'
     matrix:
-      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
-      - name: stable
+      - name: beta-or-stable
         env:
           - name: K8S_VERSION
             value: beta-or-stable
@@ -771,21 +769,20 @@ steps:
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: PROVISIONER
         value: gcp-kubeadm
-    # Names no longer match the value; they are the Lens/OTEL job identity, so they stay.
     matrix:
-      - name: stable-calico-yaml
+      - name: beta-or-stable-calico-yaml
         env:
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
-      - name: stable-calico-typha-yaml
+      - name: beta-or-stable-calico-typha-yaml
         env:
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico-typha.yaml
-      - name: stable-canal-yaml
+      - name: beta-or-stable-canal-yaml
         env:
           - name: K8S_VERSION
             value: beta-or-stable
