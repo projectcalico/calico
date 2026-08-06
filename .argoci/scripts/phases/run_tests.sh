@@ -44,8 +44,21 @@ fi
 # E2E_BINARY is a set/unset sentinel (its value is not used here -- make
 # e2e-run locates the binary itself). Take the structured path whenever a
 # k8s-e2e binary was acquired above; non-e2e test types fall through to bz
-# tests below. E2E_TEST_CONFIG may be empty (selects the default config).
+# tests below.
 if [[ -n "${E2E_BINARY:-}" ]]; then
+  # An empty config is not "run the defaults". With no focus, no skip and no
+  # label-filter, the upstream framework applies its own default skip of
+  # \[Flaky\]|\[Feature:.+\] (test_context.go CreateGinkgoConfig), and 29 of our
+  # 30 Calico spec files carry a Feature: label -- so the run silently drops
+  # nearly all Calico coverage and still reports green. Fail loudly instead.
+  if [[ -z "${E2E_TEST_CONFIG:-}" ]]; then
+    echo "[ERROR] E2E_TEST_CONFIG is required for k8s-e2e runs."
+    echo "[ERROR] Without it the suite skips every spec labelled Feature:*, which is"
+    echo "[ERROR] almost all of the Calico e2e tests, and still exits 0."
+    echo "[ERROR] Set it on this cell to a config under e2e/config/."
+    exit 1
+  fi
+
   echo "[INFO] starting e2e tests..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
