@@ -64,6 +64,10 @@ const (
 	// can be restored on abort.
 	savedAPIServiceAnnotation = "migration.projectcalico.org/saved-apiservice"
 
+	// lockedByAnnotation holds the UID of the DatastoreMigration CR that set
+	// DatastoreReady=false on a v3 ClusterInformation it did not create.
+	lockedByAnnotation = "migration.projectcalico.org/locked-by"
+
 	// defaultMigrationName is the well-known name of the DatastoreMigration CR.
 	defaultMigrationName = "v1-to-v3"
 
@@ -561,7 +565,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 	}
 
 	// Step 2: Create v3 ClusterInformation with DatastoreReady=false to lock the datastore.
-	if err := m.lockDatastore(logCtx); err != nil {
+	if err := m.lockDatastore(logCtx, dm); err != nil {
 		return err
 	}
 
@@ -846,39 +850,30 @@ func (m *migrationController) handleCompletedCleanup(logCtx *logrus.Entry, dm *m
 func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration incomplete, aborting and restoring pre-migration state")
 
-	// Step 1: Delete partial v3 resources that were created during migration.
-	// This is best-effort — the resources become inert once the APIService is
-	// restored since nothing reads v3 CRDs in API server mode, but cleaning
-	// them up avoids confusion on retry.
 	if dm.Status.StartedAt == nil {
-		// Migration never reached Migrating, so it created no v3 resources.
-		logCtx.Info("Migration never started, skipping v3 resource cleanup")
+		// Only the Migrating phase creates v3 resources and locks v1, so steps 1
+		// and 2 have nothing to undo.
+		logCtx.Info("Migration never started, skipping v3 resource cleanup and v1 ClusterInformation restore")
 	} else {
+		// Step 1: Delete v3 resources created during migration. Best-effort, since
+		// they go inert once the APIService is restored.
 		m.cleanupPartialV3Resources(logCtx, dm)
+
+		// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
+		// reading from crd.projectcalico.org/v1 resume normal operation.
+		// This is the only unlock: nothing on the success path clears the v1 lock,
+		// so giving up here leaves the datastore locked with no CR left to retry from.
+		if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
+			var doesNotExist cerrors.ErrorResourceDoesNotExist
+			if !errors.As(err, &doesNotExist) {
+				return fmt.Errorf("restoring v1 ClusterInformation: %w", err)
+			}
+			logCtx.WithError(err).Info("No v1 ClusterInformation to restore")
+		}
 	}
 
-	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
-	// reading from crd.projectcalico.org/v1 resume normal operation.
-	// This is the only unlock: nothing on the success path clears the v1 lock,
-	// so giving up here leaves the datastore locked with no CR left to retry from.
-	if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
-		var doesNotExist cerrors.ErrorResourceDoesNotExist
-		if !errors.As(err, &doesNotExist) {
-			return fmt.Errorf("restoring v1 ClusterInformation: %w", err)
-		}
-		logCtx.WithError(err).Info("No v1 ClusterInformation to restore")
-	}
-
-	// Step 3: Delete the v3 ClusterInformation if it was created with
-	// DatastoreReady=false, so components don't stay paused after restore.
-	ciObj := &apiv3.ClusterInformation{ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName}}
-	if err := m.rtClient.Delete(m.ctx, ciObj); err != nil {
-		if !kerrors.IsNotFound(err) {
-			logCtx.WithError(err).Warn("Failed to delete v3 ClusterInformation during abort")
-		}
-	} else {
-		logCtx.Info("Deleted v3 ClusterInformation")
-	}
+	// Step 3: Undo whatever this migration did to the v3 ClusterInformation.
+	m.restoreV3ClusterInfo(logCtx, dm)
 
 	// Step 4: Restore the aggregated APIService from the saved annotation.
 	if err := m.restoreAPIService(logCtx, dm); err != nil {
@@ -891,7 +886,7 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 
 // cleanupPartialV3Resources deletes v3 resources that this migration created.
 // This is best-effort: failures are logged but don't block the abort.
-func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry, dm *DatastoreMigration) {
+func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) {
 	migrationID := string(dm.UID)
 	if migrationID == "" {
 		logCtx.Warn("DatastoreMigration has no UID, skipping v3 resource cleanup")
@@ -923,6 +918,43 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry, dm
 		if deleted > 0 {
 			logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "deleted": deleted}).Info("Deleted partial v3 resources")
 		}
+	}
+}
+
+// restoreV3ClusterInfo reverses lockDatastore: delete the v3 ClusterInformation
+// this migration created, unlock one it locked, leave anything else alone.
+func (m *migrationController) restoreV3ClusterInfo(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) {
+	migrationID := string(dm.UID)
+	if migrationID == "" {
+		logCtx.Warn("DatastoreMigration has no UID, leaving v3 ClusterInformation alone")
+		return
+	}
+
+	ci := &apiv3.ClusterInformation{}
+	if err := m.rtClient.Get(m.ctx, types.NamespacedName{Name: clusterInfoName}, ci); err != nil {
+		if !kerrors.IsNotFound(err) {
+			logCtx.WithError(err).Warn("Failed to read v3 ClusterInformation during abort")
+		}
+		return
+	}
+
+	switch {
+	case ci.Annotations[migratedByAnnotation] == migrationID:
+		if err := m.rtClient.Delete(m.ctx, ci); err != nil && !kerrors.IsNotFound(err) {
+			logCtx.WithError(err).Warn("Failed to delete v3 ClusterInformation during abort")
+			return
+		}
+		logCtx.Info("Deleted v3 ClusterInformation created by this migration")
+	case ci.Annotations[lockedByAnnotation] == migrationID:
+		delete(ci.Annotations, lockedByAnnotation)
+		ci.Spec.DatastoreReady = ptr.To(true)
+		if err := m.rtClient.Update(m.ctx, ci); err != nil {
+			logCtx.WithError(err).Warn("Failed to unlock v3 ClusterInformation during abort")
+			return
+		}
+		logCtx.Info("Set DatastoreReady=true on v3 ClusterInformation locked by this migration")
+	default:
+		logCtx.Info("v3 ClusterInformation was not created or locked by this migration, leaving it alone")
 	}
 }
 
@@ -1034,7 +1066,7 @@ func (m *migrationController) restoreAPIService(logCtx *logrus.Entry, dm *migrat
 // DatastoreReady=false to signal components to pause and retain cached dataplane state.
 // When creating the v3 ClusterInformation, it copies the full spec from the v1
 // resource so that fields like ClusterGUID, ClusterType, and CalicoVersion are preserved.
-func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
+func (m *migrationController) lockDatastore(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	// Read the v1 ClusterInformation to use as the base for the v3 resource.
 	v1Key := model.ResourceKey{Kind: apiv3.KindClusterInformation, Name: clusterInfoName}
 	v1KVP, err := m.backendClient.Get(m.ctx, v1Key, "")
@@ -1044,7 +1076,10 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 
 	// Build the v3 ClusterInformation, copying the full spec from v1 if available.
 	ci := &apiv3.ClusterInformation{
-		ObjectMeta: metav1.ObjectMeta{Name: clusterInfoName},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        clusterInfoName,
+			Annotations: map[string]string{migratedByAnnotation: string(dm.UID)},
+		},
 		Spec: apiv3.ClusterInformationSpec{
 			DatastoreReady: ptr.To(false),
 		},
@@ -1068,6 +1103,13 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 			return fmt.Errorf("getting v3 ClusterInformation: %w", err)
 		}
 	} else if existing.Spec.DatastoreReady == nil || *existing.Spec.DatastoreReady {
+		// The resource pre-dates this migration, so abort must unlock it rather
+		// than delete it.
+		if existing.Annotations == nil {
+			existing.Annotations = map[string]string{}
+		}
+		existing.Annotations[lockedByAnnotation] = string(dm.UID)
+
 		existing.Spec.DatastoreReady = ptr.To(false)
 		if updateErr := m.rtClient.Update(m.ctx, existing); updateErr != nil {
 			return fmt.Errorf("updating v3 ClusterInformation: %w", updateErr)
