@@ -27,6 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
 
 // fvHelper bundles the gomega instance, context, and testing.T for FV test
@@ -45,14 +47,14 @@ func newFVHelper(t *testing.T, g Gomega, ctx context.Context) *fvHelper {
 }
 
 // getMigration fetches the DatastoreMigration CR by the well-known name.
-func (h *fvHelper) getMigration() *DatastoreMigration {
-	dm := &DatastoreMigration{}
+func (h *fvHelper) getMigration() *migrationv1.DatastoreMigration {
+	dm := &migrationv1.DatastoreMigration{}
 	h.g.ExpectWithOffset(1, fvRTClient.Get(h.ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
 	return dm
 }
 
 // expectPhase fetches the CR and asserts its phase matches.
-func (h *fvHelper) expectPhase(phase DatastoreMigrationPhase) *DatastoreMigration {
+func (h *fvHelper) expectPhase(phase migrationv1.DatastoreMigrationPhase) *migrationv1.DatastoreMigration {
 	dm := h.getMigration()
 	h.g.ExpectWithOffset(1, dm.Status.Phase).To(Equal(phase))
 	return dm
@@ -153,9 +155,9 @@ func startController(
 // a cleanup to delete it (and all migrated resources) when the test ends.
 func createMigrationCR(t *testing.T, ctx context.Context) {
 	t.Helper()
-	dm := &DatastoreMigration{
+	dm := &migrationv1.DatastoreMigration{
 		ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName},
-		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+		Spec:       migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	if err := fvRTClient.Create(ctx, dm); err != nil {
 		t.Fatalf("creating DatastoreMigration CR: %v", err)
@@ -173,7 +175,7 @@ func cleanupMigrationResources(t *testing.T, ctx context.Context) {
 	// is already stopped. Retry on conflict since the controller may still
 	// be writing to the CR.
 	for range 5 {
-		dm := &DatastoreMigration{}
+		dm := &migrationv1.DatastoreMigration{}
 		if err := fvRTClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, dm); err != nil {
 			break
 		}

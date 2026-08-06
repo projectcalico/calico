@@ -12,23 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package migration
+// Package v1beta1 is the frozen pre-GA DatastoreMigration API. No controller
+// code imports it; controller-gen alone reads it.
+//
+// +kubebuilder:object:generate=true
+// +groupName=migration.projectcalico.org
+// +versionName=v1beta1
+package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
-
-const (
-	Group   = "migration.projectcalico.org"
-	Version = "v1beta1"
-)
-
-var DatastoreMigrationGVR = schema.GroupVersionResource{
-	Group:    Group,
-	Version:  Version,
-	Resource: "datastoremigrations",
-}
 
 // DatastoreMigrationPhase represents the current state of a datastore migration.
 type DatastoreMigrationPhase string
@@ -80,6 +74,7 @@ const (
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
+// +kubebuilder:deprecatedversion:warning="migration.projectcalico.org/v1beta1 DatastoreMigration is deprecated; use migration.projectcalico.org/v1"
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Types",type=string,JSONPath=`.status.progress.typeProgress`
 // +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
