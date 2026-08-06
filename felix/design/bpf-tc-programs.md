@@ -16,7 +16,7 @@ limitations under the License.
 
 # eBPF dataplane — TC program layout
 
-How the per-interface BPF programs are organised: the attach mechanisms (clsact, TCX, netkit) and the netkit-specific concessions that follow, the per-interface preamble, the two-tier jump maps that decouple per-endpoint policy from generic packet-handling, the `skb->cb` allow/deny convention, and the fast/debug path machinery. Also covers the `cali_iface` ifstate map and the attach-gap protection it enables.
+How the per-interface BPF programs are organised: the attach mechanisms (clsact, TCX, netkit), how one is selected and how a device moves between them, the netkit-specific concessions that follow, the per-interface preamble, the two-tier jump maps that decouple per-endpoint policy from generic packet-handling, the `skb->cb` allow/deny convention, and the fast/debug path machinery. Also covers the `cali_iface` ifstate map and the attach-gap protection it enables.
 
 This is one of several sub-designs for the eBPF dataplane. See
 [`bpf-overview.md`](./bpf-overview.md) for the packet-path mental
@@ -52,13 +52,21 @@ kernel mechanisms, selected per interface:
   (`tc.IsNetkitSupported` in `felix/bpf/tc/attach.go`) and only
   uses netkit attachment for the workload interfaces it
   manages — host or data-plane netkit devices are not Felix's
-  concern. The internal signal `AttachPoint.Netkit` is set
-  separately from the user-facing `BPFAttachType` enum so that
-  the override is scoped to Felix's own detection.
+  concern.
+
+`BPFAttachType` selects between them. Its default, `Netkit`,
+means "netkit where it applies, TCX everywhere else"; `TCX` and
+`TC` name a single mechanism and so opt the node out of netkit
+attachment entirely. The option resolves at startup into
+`bpfAttachType` (only ever TC or TCX, carried on every attach
+point) plus `netkitAttachAllowed`, which gates the per-interface
+decision in `useNetkitAttach`. Keeping the internal
+`AttachPoint.Netkit` signal separate from the enum lets the
+attach layer stay two-valued.
 
 A netkit-enabled cluster is not a wholesale swap. Felix selects
 the attach mechanism per attach point at attach time
-(`calculateTCAttachPoint` in `bpf_ep_mgr.go`): TC clsact or TCX
+(`doApplyPolicy` in `bpf_ep_mgr.go`): TC clsact or TCX
 for HEPs, tunnels, the bpfnat and loopback pair, and any workload
 interface that is still a regular veth; netkit only for workload
 interfaces that are themselves netkit devices. A single Felix
@@ -66,6 +74,47 @@ process therefore programs both styles concurrently — the
 supporting machinery (jump-map sets, globals plumbing, cleanup
 paths) handles both in parallel rather than switching wholesale
 when netkit is enabled.
+
+### Leaving netkit attachment
+
+Changing `BPFAttachType` restarts Felix, so the switch away from
+netkit is a start-of-day migration rather than a live one. It is
+the supported way off netkit: a release that has no concept of
+netkit cannot clean up netkit attachments, so a downgrade has to
+be preceded by moving the devices onto TC/TCX while a release
+that understands both is still running. The devices themselves
+stay netkit for the life of each pod; only the attach mechanism
+changes, and no pod is recreated.
+
+Three things have to line up for that to be safe:
+
+- **The old attachment is removed.** The netkit attach path
+  already clears leftover TC/TCX state; the TCX and TC paths
+  clear a leftover netkit link the same way
+  (`cleanUpNetkitAttach` in `felix/bpf/tc/attach.go`). Without
+  it the device would run both dataplanes at once, each with its
+  own policy and conntrack state.
+- **Jump map indices go back where they came from.** The two
+  allocators are disjoint, so an index issued by one must not be
+  returned to — or reused under — the other. `bpfInterfaceState`
+  records which allocator issued its indices in `netkitJumps`,
+  and `wepStateFillJumps` releases and reallocates when the
+  mechanism changes. At start of day the record comes from the
+  netkit link pin rather than the device type
+  (`netkitPinned`), because the device is still netkit while the
+  mechanism may already have changed.
+- **A qdisc appears.** A netkit-attached device never needed
+  one; a TC-driven one does, so the `ensureQdisc` call keys off
+  the mechanism rather than the link type.
+
+A downgrade with netkit attachment still live is not supported.
+Recovery on a node already in that state is to remove the pins
+(`rm /sys/fs/bpf/netkit/*`) and restart Felix: the pin is the
+last reference to the link, so removing it detaches the program,
+and a netkit pair created with `NETKIT_POLICY_FORWARD` and no
+programs forwards exactly like a veth. That property is what
+makes the whole path work, so a default-drop netkit policy would
+have to keep a forwarding window for downgrade.
 
 The packet-handling code is mechanism-agnostic — same preamble,
 same jump-map layout, same policy program — with four
@@ -95,8 +144,9 @@ netkit-specific concessions:
   `skb_at_tc_ingress` context; netkit programs run in xmit
   context where the helper silently drops the packet. Felix
   forces `RedirectPeer = false` on netkit attach points so the
-  FIB path uses plain `bpf_redirect`. Set in
-  `calculateTCAttachPoint` in `bpf_ep_mgr.go`.
+  FIB path uses plain `bpf_redirect`. Set in `doApplyPolicy` in
+  `bpf_ep_mgr.go`, alongside the rest of the netkit override, so
+  a device driven by TC/TCX gets `bpf_redirect_peer` back.
 - **Synchronous detach on cleanup.** `detachAndRemoveLinkPins`
   in `felix/bpf/tc/cleanup.go` opens each pinned link, calls
   `Detach()`, and only then unlinks the pin file. The same
