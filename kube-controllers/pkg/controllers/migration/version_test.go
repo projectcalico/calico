@@ -17,10 +17,10 @@ package migration
 import (
 	"testing"
 
-	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sdiscovery "k8s.io/client-go/discovery"
 	discoveryfake "k8s.io/client-go/discovery/fake"
+	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
@@ -92,15 +92,42 @@ func TestResolveServedVersionIgnoresOtherResources(t *testing.T) {
 }
 
 // A cluster still on the v3.32 CRD must not be allowed to start a new migration.
-func TestHandlePendingRefusesPreGAVersion(t *testing.T) {
-	m := &migrationController{servedVersion: "v1beta1"}
+func TestRefusePreGAVersion(t *testing.T) {
+	m := &migrationController{
+		servedVersion: "v1beta1",
+		k8sClient:     fakeClientsetServing(t, "v1beta1"),
+	}
 
-	err := m.handlePending(logrus.NewEntry(logrus.StandardLogger()), &migrationv1.DatastoreMigration{})
+	err := m.refusePreGAVersion()
 	if err == nil {
-		t.Fatal("handlePending() = nil, want a terminal error")
+		t.Fatal("refusePreGAVersion() = nil, want a terminal error")
 	}
 	if !isTerminal(err) {
-		t.Errorf("handlePending() = %v, want a terminal error", err)
+		t.Errorf("refusePreGAVersion() = %v, want a terminal error", err)
+	}
+}
+
+// Applying the v1 CRD over a running controller must clear the guard without a restart.
+func TestRefusePreGAVersionRechecksAfterCRDUpgrade(t *testing.T) {
+	m := &migrationController{
+		servedVersion: "v1beta1",
+		k8sClient:     fakeClientsetServing(t, migrationv1.Version, "v1beta1"),
+	}
+
+	if err := m.refusePreGAVersion(); err != nil {
+		t.Errorf("refusePreGAVersion() = %v, want nil", err)
+	}
+	if m.servedVersion != migrationv1.Version {
+		t.Errorf("servedVersion = %q, want %q", m.servedVersion, migrationv1.Version)
+	}
+}
+
+// An unresolved version means no guard, so the FV clients are left alone.
+func TestRefusePreGAVersionUnresolved(t *testing.T) {
+	m := &migrationController{}
+
+	if err := m.refusePreGAVersion(); err != nil {
+		t.Errorf("refusePreGAVersion() = %v, want nil", err)
 	}
 }
 
@@ -109,7 +136,16 @@ func TestHandlePendingRefusesPreGAVersion(t *testing.T) {
 func fakeDiscovery(t *testing.T, versions ...string) k8sdiscovery.DiscoveryInterface {
 	t.Helper()
 
-	disco, ok := k8sfake.NewSimpleClientset().Discovery().(*discoveryfake.FakeDiscovery)
+	return fakeClientsetServing(t, versions...).Discovery()
+}
+
+// fakeClientsetServing returns a clientset whose discovery serves DatastoreMigration
+// on each of the given versions of the migration group.
+func fakeClientsetServing(t *testing.T, versions ...string) kubernetes.Interface {
+	t.Helper()
+
+	cs := k8sfake.NewSimpleClientset()
+	disco, ok := cs.Discovery().(*discoveryfake.FakeDiscovery)
 	if !ok {
 		t.Fatal("fake clientset did not return a fake discovery client")
 	}
@@ -122,5 +158,5 @@ func fakeDiscovery(t *testing.T, versions ...string) k8sdiscovery.DiscoveryInter
 			}},
 		})
 	}
-	return disco
+	return cs
 }

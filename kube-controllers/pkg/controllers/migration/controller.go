@@ -431,9 +431,8 @@ func conflictConditions(conflicts []ConflictInfo) []metav1.Condition {
 func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
 
-	if m.servedVersion != "" && m.servedVersion != migrationv1.Version {
-		// Refuse to start on the pre-GA API. An already-running migration is left alone.
-		return asTerminal(fmt.Errorf("cluster serves the pre-GA DatastoreMigration API (%s); apply the %s CRD before starting a migration", m.servedVersion, migrationv1.Version))
+	if err := m.refusePreGAVersion(); err != nil {
+		return err
 	}
 
 	// Add the finalizer if not already present.

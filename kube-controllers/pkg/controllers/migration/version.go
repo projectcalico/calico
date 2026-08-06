@@ -75,3 +75,20 @@ func resolveServedVersion(disco k8sdiscovery.DiscoveryInterface) (string, error)
 	}
 	return "", fmt.Errorf("no served version of %s", datastoreMigrationCRDName)
 }
+
+// refusePreGAVersion blocks a new migration while the cluster only serves the
+// pre-GA API. A migration already in flight is left to finish.
+func (m *migrationController) refusePreGAVersion() error {
+	if m.servedVersion == "" || m.servedVersion == migrationv1.Version {
+		return nil
+	}
+
+	// The CRD may have been upgraded in place since startup, so re-check discovery first.
+	if served, err := resolveServedVersion(m.k8sClient.Discovery()); err == nil {
+		m.servedVersion = served
+	}
+	if m.servedVersion == migrationv1.Version {
+		return nil
+	}
+	return asTerminal(fmt.Errorf("cluster serves the pre-GA DatastoreMigration API (%s); apply the %s CRD before starting a migration", m.servedVersion, migrationv1.Version))
+}
