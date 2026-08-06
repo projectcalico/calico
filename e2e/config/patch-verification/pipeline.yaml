@@ -1,0 +1,26 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# patch-verification pipeline: test selection scope.
+#
+# Upstream conformance plus tier RBAC: enough to show a
+# patch release did not regress the basics, without the full suite's runtime.
+# TODO(DE): confirm this is the right bar for a patch release -- these lanes have
+# been running almost no Calico specs for months, so this scope is new, not restored.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - Conformance && sig-network
+  - Feature:Tiered-RBAC
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"
