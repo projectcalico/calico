@@ -21,6 +21,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -92,15 +93,33 @@ func match(policyNamespace string, rule *proto.Rule, req *requestCache) bool {
 			"HttpPath":   req.GetHttpPath(),
 		}).Debug("Checking rule on request")
 	}
-	return matchSource(policyNamespace, rule, req) &&
-		matchDestination(policyNamespace, rule, req) &&
-		matchRequest(rule, req) &&
-		matchL4Protocol(rule, int32(req.GetProtocol()))
+	// A rule's criteria are ANDed, so they may be evaluated in any order. Evaluate them
+	// cheapest-first, because most rules in a large policy set are rejected by exactly
+	// one criterion and the walk stops at it:
+	//
+	//   - protocol and ports are integer comparisons against the flow;
+	//   - the address criteria parse a CIDR per entry, or hash and walk an IP set;
+	//   - the identity criteria parse and evaluate a label selector.
+	//
+	// The HTTP criteria go last because matchRequest normalises the request path,
+	// and because it panics on a malformed one: leaving it last confines that to
+	// requests that a rule otherwise matches.
+	return matchL4Protocol(rule, int32(req.GetProtocol())) &&
+		matchSrcPort(rule, req) &&
+		matchDstPort(rule, req) &&
+		matchSrcNet(rule, req) &&
+		matchDstNet(rule, req) &&
+		matchSrcIPSets(rule, req) &&
+		matchDstIPSets(rule, req) &&
+		matchDstIPPortSetIds(rule, req) &&
+		matchSrcIdentity(policyNamespace, rule, req) &&
+		matchDstIdentity(policyNamespace, rule, req) &&
+		matchRequest(rule, req)
 }
 
-// matchSource checks if the source part of the Rule matches the request. It returns true if the
-// Rule matches, false otherwise.
-func matchSource(policyNamespace string, r *proto.Rule, req *requestCache) bool {
+// matchSrcIdentity checks the source service account and namespace criteria of the Rule
+// against the request's identity. It returns true if the Rule matches, false otherwise.
+func matchSrcIdentity(policyNamespace string, r *proto.Rule, req *requestCache) bool {
 	nsMatch := computeNamespaceMatch(
 		policyNamespace,
 		r.GetOriginalSrcNamespaceSelector(),
@@ -109,15 +128,13 @@ func matchSource(policyNamespace string, r *proto.Rule, req *requestCache) bool 
 		r.GetSrcServiceAccountMatch())
 
 	return matchServiceAccounts(r.GetSrcServiceAccountMatch(), req.getSrcPeer()) &&
-		matchNamespace(nsMatch, req.getSrcNamespace()) &&
-		matchSrcIPSets(r, req) &&
-		matchSrcPort(r, req) &&
-		matchSrcNet(r, req)
+		matchNamespace(nsMatch, req.getSrcNamespace())
 }
 
-// matchDestination checks if the destination part of the Rule matches the request. It returns true if the
-// Rule matches, false otherwise.
-func matchDestination(policyNamespace string, r *proto.Rule, req *requestCache) bool {
+// matchDstIdentity checks the destination service account and namespace criteria of the
+// Rule against the request's identity. It returns true if the Rule matches, false
+// otherwise.
+func matchDstIdentity(policyNamespace string, r *proto.Rule, req *requestCache) bool {
 	nsMatch := computeNamespaceMatch(
 		policyNamespace,
 		r.GetOriginalDstNamespaceSelector(),
@@ -126,11 +143,7 @@ func matchDestination(policyNamespace string, r *proto.Rule, req *requestCache) 
 		r.GetDstServiceAccountMatch())
 
 	return matchServiceAccounts(r.GetDstServiceAccountMatch(), req.getDstPeer()) &&
-		matchNamespace(nsMatch, req.getDstNamespace()) &&
-		matchDstIPSets(r, req) &&
-		matchDstIPPortSetIds(r, req) &&
-		matchDstPort(r, req) &&
-		matchDstNet(r, req)
+		matchNamespace(nsMatch, req.getDstNamespace())
 }
 
 // computeNamespaceMatch computes the namespace match based on the policyNamespace, namespace
@@ -219,7 +232,7 @@ func matchLabels(selectorStr string, labels map[string]string) bool {
 	}
 	sel, err := selector.Parse(selectorStr)
 	if err != nil {
-		log.Warnf("Could not parse label selector %v, %v", selectorStr, err)
+		rlogBadSelector.Warnf("Could not parse label selector %v, %v", selectorStr, err)
 		return false
 	}
 	log.Debugf("Parsed selector.")
@@ -339,7 +352,7 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 		case *proto.HTTPMatch_PathMatch_Exact:
 			rulePath, ok := normalizeHTTPPath(m.Exact)
 			if !ok {
-				log.WithField("rulePath", m.Exact).Warn("HTTP Path exact rule could not be normalized; skipping.")
+				rlogBadRulePath.Warnf("HTTP Path exact rule could not be normalized; skipping: %s", m.Exact)
 				continue
 			}
 			if normalizedReq == rulePath {
@@ -349,7 +362,7 @@ func matchHTTPPaths(paths []*proto.HTTPMatch_PathMatch, reqPath *string) bool {
 		case *proto.HTTPMatch_PathMatch_Prefix:
 			rulePrefix, ok := normalizeHTTPPath(m.Prefix)
 			if !ok {
-				log.WithField("rulePath", m.Prefix).Warn("HTTP Path prefix rule could not be normalized; skipping.")
+				rlogBadRulePath.Warnf("HTTP Path prefix rule could not be normalized; skipping: %s", m.Prefix)
 				continue
 			}
 			if segmentPrefixMatch(normalizedReq, rulePrefix) {
@@ -579,8 +592,11 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ip
 			return true
 		}
 	}
+	if len(namedPortSets) == 0 {
+		return false
+	}
+	portStr := strconv.Itoa(port)
 	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
 		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
 			return true
 		}
@@ -608,8 +624,11 @@ func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string,
 			return false
 		}
 	}
+	if len(namedPortSets) == 0 {
+		return true
+	}
+	portStr := strconv.Itoa(port)
 	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
 		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
 			return false
 		}
@@ -648,7 +667,7 @@ func matchNet(dir string, nets []string, ip net.IP) bool {
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
 			// validation earlier in processing before it gets to Dikastes.
-			log.WithField("cidr", n).Warn("unable to parse CIDR")
+			rlogBadCIDR.Warnf("unable to parse CIDR %s", n)
 			return false
 		}
 		if ipn.Contains(ip) {
@@ -677,7 +696,7 @@ func matchNotNet(dir string, nets []string, ip net.IP) bool {
 		if err != nil {
 			// Don't match CIDRs if they are malformed. This case should generally be weeded out by
 			// validation earlier in processing before it gets to Dikastes.
-			log.WithField("cidr", n).Warn("unable to parse CIDR")
+			rlogBadCIDR.Warnf("unable to parse CIDR %s", n)
 			return false
 		}
 		if ipn.Contains(ip) {
@@ -701,9 +720,7 @@ var stringToProto = map[string]int32{
 func matchL4Protocol(rule *proto.Rule, protocol int32) bool {
 	// Protocol is a 8-bit field.
 	if protocol > 255 || protocol < 1 {
-		log.WithFields(log.Fields{
-			"protocol": protocol,
-		}).Warn("Unsupported L4 protocol")
+		rlogBadProtocol.Warnf("Unsupported L4 protocol: %d", protocol)
 		return false
 	}
 	if log.IsLevelEnabled(log.DebugLevel) {

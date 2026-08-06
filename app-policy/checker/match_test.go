@@ -15,6 +15,7 @@
 package checker
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -1223,6 +1224,130 @@ func TestMatchDstIPPortSetIds(t *testing.T) {
 
 			req := &requestCache{Flow: fl, store: store}
 			Expect(matchDstIPPortSetIds(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
+		})
+	}
+}
+
+// Port matching covers both forms a rule can take: explicit ranges, and named port
+// sets resolved through the store.
+func TestMatchPort(t *testing.T) {
+	RegisterTestingT(t)
+
+	const namedPortSetID = "namedPortSet"
+
+	testCases := []struct {
+		title    string
+		rule     *proto.Rule
+		port     int
+		expected bool
+	}{
+		{"no port criteria", &proto.Rule{}, 8080, true},
+		{
+			"in range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			85, true,
+		},
+		{
+			"below range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			79, false,
+		},
+		{
+			"above range",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			91, false,
+		},
+		{
+			"in second of two ranges",
+			&proto.Rule{DstPorts: []*proto.PortRange{{First: 80, Last: 80}, {First: 443, Last: 443}}},
+			443, true,
+		},
+		{
+			"in negated range",
+			&proto.Rule{NotDstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			85, false,
+		},
+		{
+			"outside negated range",
+			&proto.Rule{NotDstPorts: []*proto.PortRange{{First: 80, Last: 90}}},
+			91, true,
+		},
+		{
+			"in named port set",
+			&proto.Rule{DstNamedPortIpSetIds: []string{namedPortSetID}},
+			8080, true,
+		},
+		{
+			"not in named port set",
+			&proto.Rule{DstNamedPortIpSetIds: []string{namedPortSetID}},
+			8081, false,
+		},
+		{
+			"in negated named port set",
+			&proto.Rule{NotDstNamedPortIpSetIds: []string{namedPortSetID}},
+			8080, false,
+		},
+		{
+			"not in negated named port set",
+			&proto.Rule{NotDstNamedPortIpSetIds: []string{namedPortSetID}},
+			8081, true,
+		},
+		{
+			"range misses but named port set matches",
+			&proto.Rule{
+				DstPorts:             []*proto.PortRange{{First: 80, Last: 80}},
+				DstNamedPortIpSetIds: []string{namedPortSetID},
+			},
+			8080, true,
+		},
+		{
+			"unknown named port set is skipped",
+			&proto.Rule{DstNamedPortIpSetIds: []string{"nonexistent"}},
+			8080, false,
+		},
+	}
+
+	store := policystore.NewPolicyStore()
+	namedPortSet := policystore.NewIPSet(proto.IPSetUpdate_IP)
+	namedPortSet.AddString("8080")
+	store.IPSetByID[namedPortSetID] = namedPortSet
+
+	for _, tc := range testCases {
+		t.Run(tc.title, func(t *testing.T) {
+			fl := &mocks.Flow{}
+			fl.On("GetDestPort").Return(tc.port)
+			req := &requestCache{Flow: fl, store: store}
+			Expect(matchDstPort(tc.rule, req)).To(Equal(tc.expected), "Test case: %s", tc.title)
+
+			// The source criteria are the same code with the other set of fields, so
+			// mirror the case onto them.
+			srcRule := &proto.Rule{
+				SrcPorts:                tc.rule.DstPorts,
+				NotSrcPorts:             tc.rule.NotDstPorts,
+				SrcNamedPortIpSetIds:    tc.rule.DstNamedPortIpSetIds,
+				NotSrcNamedPortIpSetIds: tc.rule.NotDstNamedPortIpSetIds,
+			}
+			srcFl := &mocks.Flow{}
+			srcFl.On("GetSourcePort").Return(tc.port)
+			srcReq := &requestCache{Flow: srcFl, store: store}
+			Expect(matchSrcPort(srcRule, srcReq)).To(Equal(tc.expected), "Test case (source): %s", tc.title)
+		})
+	}
+}
+
+// Protocol is an 8-bit field, so a flow reporting a value outside 1-255 — a Unix pipe, say —
+// can match no rule, not even one with no protocol criterion of its own. match() tests this
+// first, so the warning it logs is rate limited: otherwise one such flow logs once per rule.
+func TestMatchUnsupportedL4Protocol(t *testing.T) {
+	RegisterTestingT(t)
+
+	for _, protocol := range []int{0, -1, 256, 1 << 20} {
+		t.Run(fmt.Sprintf("protocol %d", protocol), func(t *testing.T) {
+			fl := &mocks.Flow{}
+			fl.On("GetProtocol").Return(protocol)
+			req := &requestCache{Flow: fl, store: policystore.NewPolicyStore()}
+
+			Expect(match("testns", &proto.Rule{}, req)).To(BeFalse())
 		})
 	}
 }
