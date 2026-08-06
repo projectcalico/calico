@@ -418,19 +418,11 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *DatastoreM
 		return err
 	}
 
-	// Pre-validation: the v3 Tier CRD pins order and defaultAction on the
-	// built-in tiers via CEL, so a drifted one would fail its create partway
-	// through the copy with the datastore already locked.
-	drift, err := m.checkBuiltInTiers()
+	wait, err := m.checkBuiltInTiers(logCtx, dm)
 	if err != nil {
-		return fmt.Errorf("validating built-in tiers: %w", err)
+		return err
 	}
-	if len(drift) > 0 {
-		logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
-		dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
-		if err := m.updateStatus(dm); err != nil {
-			return err
-		}
+	if wait {
 		return requeueAfter(m.waitingPollInterval)
 	}
 
@@ -486,9 +478,27 @@ var builtInTierRequirements = map[string]builtInTierRequirement{
 	names.KubeBaselineTierName: {order: apiv3.KubeBaselineTierOrder, defaultAction: apiv3.Pass},
 }
 
-// checkBuiltInTiers returns a description of every built-in tier in v1 that the
+// checkBuiltInTiers reports whether the caller should wait for a human to fix a
+// built-in v1 tier the v3 API rejects.
+func (m *migrationController) checkBuiltInTiers(logCtx *logrus.Entry, dm *DatastoreMigration) (bool, error) {
+	// The v3 Tier CRD pins order and defaultAction via CEL, so a drifted
+	// built-in fails mid-copy.
+	drift, err := m.builtInTierDrift()
+	if err != nil {
+		return false, fmt.Errorf("validating built-in tiers: %w", err)
+	}
+	if len(drift) == 0 {
+		return false, nil
+	}
+
+	logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
+	dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
+	return true, m.updateStatus(dm)
+}
+
+// builtInTierDrift returns a description of every built-in tier in v1 that the
 // v3 API would reject.
-func (m *migrationController) checkBuiltInTiers() ([]string, error) {
+func (m *migrationController) builtInTierDrift() ([]string, error) {
 	var tierMigrator migrators.ResourceMigrator
 	for _, mig := range m.migrators {
 		if mig.Kind() == apiv3.KindTier {
