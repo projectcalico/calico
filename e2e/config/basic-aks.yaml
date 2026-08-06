@@ -1,0 +1,18 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Basic set on AKS: see basic.yaml. Adds only this
+# platform's upstream-conformance gaps.
+#
+# No label exclusions: the scope here is upstream sig-network only, and
+# every label this platform would otherwise rule out gates a Calico spec.
+
+extends: basic.yaml
+
+exclude:
+  namePatterns:
+    - group: "AKS load balancer does not hairpin traffic originating in-cluster"
+      patterns:
+        - 'outside.the.cluster'
+        - 'external.to.nodeport'
+        - 'StrictAffinity'
+        - 'allow.ingress.access.from.updated.pod'

@@ -1,0 +1,15 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Fallback scope for lanes whose original focus targeted specs that no longer
+# exist in the OSS monorepo suite (WireGuard, Dataplane:LB, BPF mode-switch --
+# all stripped with the enterprise tests).
+#
+# Upstream networking conformance only. Deliberately not the owning pipeline's
+# full scope, which would multiply these lanes' runtime for coverage other lanes
+# already provide. No dataplane/encap variants are needed: every axis label gates
+# a Calico-specific spec, and none of those carry sig-network.
+
+extends: base.yaml
+
+include:
+  - Conformance && sig-network
