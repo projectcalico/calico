@@ -2,7 +2,8 @@
 #
 # bpf pipeline: test selection scope.
 #
-# Calico suite plus the BPF-only specs and upstream networking conformance.
+# As iptables. Dataplane:BPF is not listed: its only spec (maglev) also
+# carries sig-calico, so the first entry already selects it.
 #
 # Abstract parent -- no cell points at this file directly. The sibling
 # configs extend it and subtract what their cluster shape cannot run.
@@ -12,10 +13,13 @@ extends: ../base.yaml
 include:
   - sig-calico
   - Conformance && sig-network
-  - Dataplane:BPF
   - Feature:NetworkPolicy
 
 exclude:
   labels:
     - label: Feature:KubeVirt
       reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"

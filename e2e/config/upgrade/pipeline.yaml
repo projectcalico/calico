@@ -2,7 +2,8 @@
 #
 # upgrade pipeline: test selection scope.
 #
-# As patch-verification: proves the cluster still works after an upgrade.
+# As patch-verification: shows the cluster still works after an
+# upgrade. Same TODO on whether upstream conformance is the right bar.
 #
 # Abstract parent -- no cell points at this file directly. The sibling
 # configs extend it and subtract what their cluster shape cannot run.
@@ -17,3 +18,7 @@ exclude:
   labels:
     - label: Feature:KubeVirt
       reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"

@@ -24,12 +24,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const configDir = "../../config"
+const (
+	configDir = "../../config"
+	repoRoot  = "../../.."
+)
 
-// abstractConfigs carry scope for their siblings to extend and are never named
-// by a CI cell, so they are exempt from the label-filter check below.
-var abstractConfigs = map[string]bool{
-	"base.yaml": true,
+// isFragment reports whether a config exists only to be composed into others.
+// Fragments carry no include scope and are never named by a CI cell, so the
+// scope checks below do not apply to them. Matched on the path relative to
+// e2e/config, not the base name, so a stray base.yaml in a pipeline directory is
+// still checked.
+func isFragment(rel string) bool {
+	return rel == "base.yaml" || strings.HasPrefix(rel, "platform"+string(filepath.Separator))
+}
+
+// isAbstractParent reports whether a config supplies scope to its siblings but
+// is not itself named by a cell. These declare includes, so they are checked
+// like any other config; they are called out only where being unreferenced is
+// expected.
+func isAbstractParent(rel string) bool {
+	return filepath.Base(rel) == "pipeline.yaml"
 }
 
 func eachConfig(t *testing.T, fn func(t *testing.T, relPath, absPath string)) {
@@ -68,10 +82,13 @@ func TestRepoConfigsAreValid(t *testing.T) {
 		if err != nil {
 			t.Fatalf("to flags: %v", err)
 		}
+		if isFragment(rel) {
+			return
+		}
 		if flags.LabelFilter == "" {
 			t.Error("empty label filter: this config selects the entire suite")
 		}
-		if base := filepath.Base(rel); !abstractConfigs[base] && len(cfg.Include) == 0 {
+		if len(cfg.Include) == 0 {
 			t.Error("no include scope, so selection is 'everything minus excludes'; " +
 				"declare an include or extend a config that does")
 		}
@@ -100,18 +117,41 @@ func TestSkipPatternsSurviveYAML(t *testing.T) {
 	})
 }
 
-// TestReferencedConfigsExist checks that every e2e/config path named anywhere in
-// CI resolves to a real file. Renaming a config without updating its callers
-// otherwise fails only at run time, after a cluster has been provisioned.
-func TestReferencedConfigsExist(t *testing.T) {
-	repoRoot := "../../.."
-	// Deliberately matches any e2e/config path, not just E2E_TEST_CONFIG values,
-	// so Makefile targets and docs are covered too.
-	ref := regexp.MustCompile(`e2e/config/[A-Za-z0-9._/-]+\.yaml`)
-	scanDirs := []string{".argoci", ".semaphore", "Makefile"}
+// TestNoDuplicateExclusions checks that composition does not leave a label
+// excluded twice. merge() dedups, so a failure here means a resolved config
+// would render as `!X && !X` -- harmless to ginkgo, confusing to read when
+// working out why a lane selected the wrong specs.
+func TestNoDuplicateExclusions(t *testing.T) {
+	eachConfig(t, func(t *testing.T, rel, abs string) {
+		cfg, err := Load(abs)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		seen := map[string]bool{}
+		for _, e := range cfg.Exclude.Labels {
+			if seen[e.Label] {
+				t.Errorf("label %q excluded more than once after merge", e.Label)
+			}
+			seen[e.Label] = true
+		}
+		inc := map[string]bool{}
+		for _, e := range cfg.Include {
+			if inc[e.Label] {
+				t.Errorf("include %q appears more than once after merge", e.Label)
+			}
+			inc[e.Label] = true
+		}
+	})
+}
 
+// configReferences returns every e2e/config path named anywhere in CI, mapped to
+// the files naming it. Deliberately matches any e2e/config path rather than only
+// E2E_TEST_CONFIG values, so Makefile targets and docs are covered too.
+func configReferences(t *testing.T) map[string][]string {
+	t.Helper()
+	ref := regexp.MustCompile(`e2e/config/[A-Za-z0-9._/-]+\.yaml`)
 	seen := map[string][]string{}
-	for _, dir := range scanDirs {
+	for _, dir := range []string{".argoci", ".semaphore", "Makefile"} {
 		root := filepath.Join(repoRoot, dir)
 		err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -139,17 +179,65 @@ func TestReferencedConfigsExist(t *testing.T) {
 			t.Fatalf("walking %s: %v", dir, err)
 		}
 	}
-
 	if len(seen) == 0 {
 		t.Fatal("found no e2e/config references in CI -- wrong working directory?")
 	}
-	for cfgPath, referrers := range seen {
+	return seen
+}
+
+// TestReferencedConfigsExist checks that every e2e/config path named in CI
+// resolves to a real file. Renaming a config without updating its callers
+// otherwise fails only at run time, after a cluster has been provisioned.
+func TestReferencedConfigsExist(t *testing.T) {
+	refs := configReferences(t)
+	for cfgPath, referrers := range refs {
 		if _, err := os.Stat(filepath.Join(repoRoot, cfgPath)); err != nil {
 			t.Errorf("%s does not exist, referenced by: %s",
 				cfgPath, strings.Join(referrers, ", "))
 		}
 	}
-	t.Logf("checked %d distinct config references", len(seen))
+	t.Logf("checked %d distinct config references", len(refs))
+}
+
+// TestFragmentsAreNotUsedDirectly keeps composition-only configs out of CI. A
+// fragment has no include scope, so a cell pointing at one would select
+// everything the excludes happen not to catch.
+func TestFragmentsAreNotUsedDirectly(t *testing.T) {
+	refs := configReferences(t)
+	for cfgPath, referrers := range refs {
+		rel, err := filepath.Rel("e2e/config", cfgPath)
+		if err != nil {
+			continue
+		}
+		if isFragment(rel) || isAbstractParent(rel) {
+			t.Errorf("%s is a composition-only config but is referenced by: %s",
+				cfgPath, strings.Join(referrers, ", "))
+		}
+	}
+}
+
+// TestNoOrphanedConfigs checks the reverse of TestReferencedConfigsExist: a
+// config nobody names sits in the tree looking authoritative.
+//
+// TODO: unskip once the per-cron wiring PRs have pointed every cell at its
+// config. Until then every config added ahead of its cell is legitimately
+// unreferenced, so enforcing this now would just fail.
+func TestNoOrphanedConfigs(t *testing.T) {
+	t.Skip("cells are wired to configs in follow-up PRs; nothing references them yet")
+
+	referenced := map[string]bool{}
+	for cfgPath := range configReferences(t) {
+		rel, err := filepath.Rel("e2e/config", cfgPath)
+		if err == nil {
+			referenced[rel] = true
+		}
+	}
+	eachConfig(t, func(t *testing.T, rel, abs string) {
+		if isFragment(rel) || isAbstractParent(rel) || referenced[rel] {
+			return
+		}
+		t.Error("no CI cell, Makefile target or doc references this config")
+	})
 }
 
 // TestExtendsStaysInTree keeps `extends` chains inside e2e/config. A config that
@@ -169,18 +257,17 @@ func TestExtendsStaysInTree(t *testing.T) {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
-		if cfg.Extends == "" {
-			return
-		}
-		absParent, err := filepath.Abs(filepath.Join(filepath.Dir(abs), cfg.Extends))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.HasPrefix(absParent, rootAbs+string(filepath.Separator)) {
-			t.Errorf("extends %q resolves to %s, outside e2e/config", cfg.Extends, absParent)
-		}
-		if _, err := os.Stat(absParent); err != nil {
-			t.Errorf("extends %q does not exist: %v", cfg.Extends, err)
+		for _, parent := range cfg.Extends {
+			absParent, err := filepath.Abs(filepath.Join(filepath.Dir(abs), parent))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.HasPrefix(absParent, rootAbs+string(filepath.Separator)) {
+				t.Errorf("extends %q resolves to %s, outside e2e/config", parent, absParent)
+			}
+			if _, err := os.Stat(absParent); err != nil {
+				t.Errorf("extends %q does not exist: %v", parent, err)
+			}
 		}
 	})
 }

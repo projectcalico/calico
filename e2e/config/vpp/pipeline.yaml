@@ -2,8 +2,9 @@
 #
 # vpp pipeline: test selection scope.
 #
-# Calico suite. VPP is a third-party dataplane; the old config focused a
-# BPF label that matches nothing here, so it never selected what it intended.
+# Calico suite. VPP is a third-party dataplane; the old config focused
+# Dataplane:BPF (and Dataplane-BPF, a typo matching nothing), neither of which is
+# what this lane is for.
 #
 # Abstract parent -- no cell points at this file directly. The sibling
 # configs extend it and subtract what their cluster shape cannot run.
@@ -17,3 +18,7 @@ exclude:
   labels:
     - label: Feature:KubeVirt
       reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"
