@@ -238,6 +238,10 @@ func (ap *AttachPoint) AttachProgram() error {
 		if err != nil {
 			log.Errorf("error removing qdisc from %s:%s", ap.Iface, err)
 		}
+		// A netkit device driven by TC/TCX still runs whatever netkit program is
+		// attached to it, so leaving one behind would mean two dataplanes on one
+		// device, each with its own policy and conntrack state.
+		ap.cleanUpNetkitAttach()
 		logCxt.Info("Program attached to tcx.")
 		return nil
 	}
@@ -271,7 +275,21 @@ func (ap *AttachPoint) AttachProgram() error {
 			logCxt.Warnf("error removing tcx program from %s", err)
 		}
 	}
+	ap.cleanUpNetkitAttach()
 	return nil
+}
+
+// cleanUpNetkitAttach removes a netkit attachment left over from an earlier run
+// that used the netkit mechanism on this interface. It is a no-op on the vast
+// majority of interfaces, which never had one.
+func (ap *AttachPoint) cleanUpNetkitAttach() {
+	if _, err := os.Stat(ap.NetkitProgPinPath()); err != nil {
+		return
+	}
+	ap.Log().Info("Removing existing netkit program")
+	if err := ap.detachNetkitProgram(); err != nil {
+		ap.Log().Warnf("error removing netkit program: %s", err)
+	}
 }
 
 func (ap *AttachPoint) ProgPinPath() string {
