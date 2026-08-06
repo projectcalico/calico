@@ -392,6 +392,16 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
   scanner) set it before decrementing, and the Go scanner skips
   entries that carry it. Without that, drift accumulates upward.
+- For each direction, the limit *check* and the CT *stamp* must be
+  gated on the same `*_CONN_LIMIT_CONFIGURED` global. Felix writes
+  the `cali_qos_conn` entry and sets the AttachPoint flag in one
+  pass, but the program only picks the global up when it is
+  reattached. Gating only the stamp leaves a window in which
+  connections are counted without being marked
+  `CONNLIMIT_INGRESS`/`_EGRESS` — and
+  `qos_connlimit_decrement_for_ct` returns early for an entry
+  carrying neither, so nothing can decrement them until the
+  scanner's next recount.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
