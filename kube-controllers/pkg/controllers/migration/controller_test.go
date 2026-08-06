@@ -123,6 +123,35 @@ func tierNames(g Gomega, rt rtclient.Client) []string {
 	return names
 }
 
+// TestAbortSkipsCleanupBeforeMigrationStarts verifies that aborting before the
+// Migrating phase deletes no v3 resources.
+func TestAbortSkipsCleanupBeforeMigrationStarts(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	dm := &DatastoreMigration{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       defaultMigrationName,
+			UID:        "migration-a",
+			Finalizers: []string{finalizerName},
+		},
+		Spec:   DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+		Status: DatastoreMigrationStatus{Phase: DatastoreMigrationPhasePending},
+	}
+	objects := []rtclient.Object{dm, migratedTier("security", "migration-a")}
+	m, rt := newFakeController(t, objects, []*unstructured.Unstructured{
+		crdObj("tiers.crd.projectcalico.org", "crd.projectcalico.org"),
+	})
+
+	// StartedAt is only set on the transition into Migrating, so it is nil here.
+	g.Expect(dm.Status.StartedAt).To(BeNil())
+	g.Expect(rt.Delete(ctx, dm)).To(Succeed())
+	g.Expect(m.reconcile()).To(Succeed())
+
+	g.Expect(kerrors.IsNotFound(rt.Get(ctx, dmKey, &DatastoreMigration{}))).To(BeTrue(), "finalizer should have been removed")
+	g.Expect(tierNames(g, rt)).To(ConsistOf("security"))
+}
+
 // TestAbortOnlyDeletesOwnResources verifies that abort deletes only the v3
 // resources this migration created.
 func TestAbortOnlyDeletesOwnResources(t *testing.T) {
