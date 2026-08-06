@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# patch-verification pipeline: test selection scope.
+#
+# Upstream conformance plus tier RBAC: enough to prove a patch
+# release did not regress the basics, without the full suite's runtime.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - Conformance && sig-network
+  - Feature:Tiered-RBAC
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"

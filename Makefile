@@ -243,7 +243,7 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
@@ -304,7 +304,7 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
 ## Build the rapidclient helper image from PR source and load it into the kind
 ## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
