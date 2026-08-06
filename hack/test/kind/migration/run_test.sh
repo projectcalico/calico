@@ -18,7 +18,7 @@
 #
 # Prerequisites:
 #   - Kind cluster running with v1 CRDs and apiserver:
-#       CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
+#       KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
 #
 # What this script does:
 #   1. Deploys client/server pods for continuous connectivity probing
@@ -32,7 +32,7 @@
 #
 # To re-run: destroy the cluster and recreate it, then run this script again:
 #   make kind-down
-#   CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
+#   KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up
 #   hack/test/kind/migration/run_test.sh
 
 REPO_ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
@@ -102,14 +102,14 @@ log "Step 0: Preflight checks"
 
 if ! ${kubectl} cluster-info &>/dev/null; then
   echo "ERROR: Cannot connect to kind cluster. Is it running?"
-  echo "  Run: CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up"
+  echo "  Run: KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 make kind-up"
   exit 1
 fi
 echo "  Kind cluster is reachable"
 
 # Verify v1 CRDs exist.
 if ! ${kubectl} get crd felixconfigurations.crd.projectcalico.org &>/dev/null; then
-  echo "ERROR: v1 CRDs not found. Cluster must be created with CALICO_API_GROUP=crd.projectcalico.org/v1"
+  echo "ERROR: v1 CRDs not found. Cluster must be created with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1"
   exit 1
 fi
 echo "  v1 CRDs (crd.projectcalico.org) found"
@@ -205,6 +205,40 @@ done
 # Step 2: Seed test resources via the apiserver
 ###############################################################################
 log "Step 2: Seeding test resources via apiserver"
+
+# The seeded HostEndpoint default-denies host traffic on kind-worker. Add the kind
+# registry and kubelet ports to the failsafes so image pulls and kubectl logs survive.
+${kubectl} patch felixconfigurations.projectcalico.org default --type=merge -p '{
+  "spec": {
+    "failsafeInboundHostPorts": [
+      {"protocol": "tcp", "port": 22},
+      {"protocol": "udp", "port": 68},
+      {"protocol": "tcp", "port": 179},
+      {"protocol": "tcp", "port": 2379},
+      {"protocol": "tcp", "port": 2380},
+      {"protocol": "tcp", "port": 5000},
+      {"protocol": "tcp", "port": 5473},
+      {"protocol": "tcp", "port": 6443},
+      {"protocol": "tcp", "port": 6666},
+      {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 10250}
+    ],
+    "failsafeOutboundHostPorts": [
+      {"protocol": "udp", "port": 53},
+      {"protocol": "udp", "port": 67},
+      {"protocol": "tcp", "port": 179},
+      {"protocol": "tcp", "port": 2379},
+      {"protocol": "tcp", "port": 2380},
+      {"protocol": "tcp", "port": 5000},
+      {"protocol": "tcp", "port": 5473},
+      {"protocol": "tcp", "port": 6443},
+      {"protocol": "tcp", "port": 6666},
+      {"protocol": "tcp", "port": 6667},
+      {"protocol": "tcp", "port": 10250}
+    ]
+  }
+}'
+echo "  Failsafe ports extended for the kind registry and kubelet"
 
 # Apply the seed resources. The migration-test namespace was already created by connectivity.yaml.
 ${kubectl} apply -f "${SCRIPT_DIR}/seed-resources.yaml"
@@ -351,7 +385,8 @@ if [ "$phase" = "Migrating" ]; then
   echo "  Force-deleting kube-controllers pod..."
   ${kubectl} delete pod -n calico-system -l k8s-app=calico-kube-controllers --force --grace-period=0 2>/dev/null
   echo "  Pod deleted, waiting for replacement..."
-  ${kubectl} wait --for=condition=Available --timeout=120s deployment/calico-kube-controllers -n calico-system
+  # The replacement schedules and pulls while the datastore is locked, so give it room.
+  ${kubectl} wait --for=condition=Available --timeout=300s deployment/calico-kube-controllers -n calico-system
   echo "  kube-controllers restarted"
 elif [ "$phase" = "Converged" ] || [ "$phase" = "Complete" ]; then
   echo "  Migration already past Migrating phase ($phase), skipping disruption"
