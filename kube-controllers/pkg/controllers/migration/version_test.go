@@ -15,13 +15,20 @@
 package migration
 
 import (
+	"context"
+	"fmt"
 	"testing"
+	"time"
 
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sdiscovery "k8s.io/client-go/discovery"
 	discoveryfake "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
@@ -131,9 +138,96 @@ func TestRefusePreGAVersionUnresolved(t *testing.T) {
 	}
 }
 
+// Nothing re-triggers RunWithContext once it returns, so a failed client build
+// has to be retried in place.
+func TestWaitForServedAPIRetriesClientBuild(t *testing.T) {
+	want := fake.NewClientBuilder().Build()
+	attempts := 0
+	m := &migrationController{
+		k8sClient: fakeClientsetServing(t, "v1beta1"),
+		rtClientForVersion: func(version string) (rtclient.WithWatch, error) {
+			attempts++
+			if attempts == 1 {
+				return nil, fmt.Errorf("discovery blip")
+			}
+			return want, nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	version, client, err := m.waitForServedAPI(ctx)
+	if err != nil {
+		t.Fatalf("waitForServedAPI() = %v, want nil", err)
+	}
+	if version != "v1beta1" {
+		t.Errorf("version = %q, want %q", version, "v1beta1")
+	}
+	if client != want {
+		t.Errorf("client = %v, want the client from the successful retry", client)
+	}
+	if attempts != 2 {
+		t.Errorf("rtClientForVersion called %d times, want 2", attempts)
+	}
+}
+
+// Discovery lags the CRD becoming established, so an unresolved version is retried too.
+func TestWaitForServedAPIRetriesDiscovery(t *testing.T) {
+	// Two failures covers one full pass over both candidate versions.
+	disco := &flakyDiscovery{
+		DiscoveryInterfaces: fakeDiscovery(t, migrationv1.Version),
+		failures:            2,
+	}
+	m := &migrationController{
+		k8sClient: clientsetWithDiscovery{Interface: k8sfake.NewSimpleClientset(), disco: disco},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	version, _, err := m.waitForServedAPI(ctx)
+	if err != nil {
+		t.Fatalf("waitForServedAPI() = %v, want nil", err)
+	}
+	if version != migrationv1.Version {
+		t.Errorf("version = %q, want %q", version, migrationv1.Version)
+	}
+	if disco.failures != 0 {
+		t.Errorf("%d discovery failures left unspent, want 0", disco.failures)
+	}
+}
+
+// The v1 path leaves the pre-built client alone.
+func TestWaitForServedAPIKeepsClientForV1(t *testing.T) {
+	want := fake.NewClientBuilder().Build()
+	m := &migrationController{
+		k8sClient: fakeClientsetServing(t, migrationv1.Version),
+		rtClient:  want,
+		rtClientForVersion: func(version string) (rtclient.WithWatch, error) {
+			t.Errorf("rtClientForVersion called for %q, want no call", version)
+			return nil, nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	version, client, err := m.waitForServedAPI(ctx)
+	if err != nil {
+		t.Fatalf("waitForServedAPI() = %v, want nil", err)
+	}
+	if version != migrationv1.Version {
+		t.Errorf("version = %q, want %q", version, migrationv1.Version)
+	}
+	if client != want {
+		t.Errorf("client = %v, want the pre-built client", client)
+	}
+}
+
 // fakeDiscovery returns a discovery client serving DatastoreMigration on each of
 // the given versions of the migration group.
-func fakeDiscovery(t *testing.T, versions ...string) k8sdiscovery.DiscoveryInterface {
+func fakeDiscovery(t *testing.T, versions ...string) k8sdiscovery.DiscoveryInterfaces {
 	t.Helper()
 
 	return fakeClientsetServing(t, versions...).Discovery()
@@ -159,4 +253,30 @@ func fakeClientsetServing(t *testing.T, versions ...string) kubernetes.Interface
 		})
 	}
 	return cs
+}
+
+// clientsetWithDiscovery swaps in a discovery client the fake clientset can't produce.
+type clientsetWithDiscovery struct {
+	kubernetes.Interface
+
+	disco k8sdiscovery.DiscoveryInterfaces
+}
+
+func (c clientsetWithDiscovery) Discovery() k8sdiscovery.DiscoveryInterfaces {
+	return c.disco
+}
+
+// flakyDiscovery reports the group version as absent for the first few lookups.
+type flakyDiscovery struct {
+	k8sdiscovery.DiscoveryInterfaces
+
+	failures int
+}
+
+func (f *flakyDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*metav1.APIResourceList, error) {
+	if f.failures > 0 {
+		f.failures--
+		return nil, kerrors.NewNotFound(schema.GroupResource{Resource: groupVersion}, "")
+	}
+	return f.DiscoveryInterfaces.ServerResourcesForGroupVersion(groupVersion)
 }

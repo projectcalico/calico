@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	k8sdiscovery "k8s.io/client-go/discovery"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
@@ -32,13 +33,14 @@ import (
 // controller can drive, most preferred first.
 var datastoreMigrationVersions = []string{migrationv1.Version, "v1beta1"}
 
-// discoveryPollInterval is how often waitForServedVersion re-checks discovery.
+// discoveryPollInterval is how often waitForServedAPI re-checks discovery.
 const discoveryPollInterval = time.Second
 
-// waitForServedVersion polls discovery until the DatastoreMigration API turns up.
-// Discovery lags the CRD becoming established.
-func (m *migrationController) waitForServedVersion(ctx context.Context) (string, error) {
+// waitForServedAPI polls until discovery serves the DatastoreMigration API and a
+// client for that version builds. Only ctx ends it.
+func (m *migrationController) waitForServedAPI(ctx context.Context) (string, rtclient.WithWatch, error) {
 	var version string
+	var versionedClient rtclient.WithWatch
 	err := wait.PollUntilContextCancel(ctx, discoveryPollInterval, true, func(context.Context) (bool, error) {
 		var err error
 		version, err = resolveServedVersion(m.k8sClient.Discovery())
@@ -46,12 +48,23 @@ func (m *migrationController) waitForServedVersion(ctx context.Context) (string,
 			logrus.WithError(err).Debug("Waiting for the DatastoreMigration API to appear in discovery")
 			return false, nil
 		}
+
+		versionedClient = m.rtClient
+		if version == migrationv1.Version || m.rtClientForVersion == nil {
+			return true, nil
+		}
+
+		versionedClient, err = m.rtClientForVersion(version)
+		if err != nil {
+			logrus.WithError(err).Error("Failed to build a client for the served DatastoreMigration API version, will retry")
+			return false, nil
+		}
 		return true, nil
 	})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return version, nil
+	return version, versionedClient, nil
 }
 
 // resolveServedVersion returns the preferred DatastoreMigration version the

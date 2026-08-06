@@ -200,26 +200,19 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 	m.operatorManaged = operatorManaged
 	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
 
-	version, err := m.waitForServedVersion(ctx)
+	version, versionedClient, err := m.waitForServedAPI(ctx)
 	if err != nil {
-		logrus.WithError(err).Error("Failed to resolve the served DatastoreMigration API version")
+		logrus.WithError(err).Error("Gave up resolving the served DatastoreMigration API")
 		return
 	}
 	m.servedVersion = version
+	m.rtClient = versionedClient
 	gvr := migrationv1.DatastoreMigrationGVR
 	gvr.Version = version
 
 	if version != migrationv1.Version {
 		// Keep watching the pre-GA version so a migration started before the upgrade can still finish.
 		logrus.WithField("version", version).Warn("Cluster serves a pre-GA DatastoreMigration API, re-apply the CRD to pick up v1")
-		if m.rtClientForVersion != nil {
-			versionedClient, err := m.rtClientForVersion(version)
-			if err != nil {
-				logrus.WithError(err).Error("Failed to build a client for the served DatastoreMigration API version")
-				return
-			}
-			m.rtClient = versionedClient
-		}
 	}
 
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
