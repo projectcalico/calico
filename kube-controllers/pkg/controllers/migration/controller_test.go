@@ -123,6 +123,44 @@ func tierNames(g Gomega, rt rtclient.Client) []string {
 	return names
 }
 
+// TestAbortOnMigratedCluster verifies that creating and deleting a CR on an
+// already-migrated cluster leaves the migrated data alone.
+func TestAbortOnMigratedCluster(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	dm := &DatastoreMigration{
+		ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName, UID: "second-migration"},
+		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+	}
+	objects := []rtclient.Object{
+		dm,
+		migratedTier("default", "first-migration"),
+		migratedTier("security", "first-migration"),
+	}
+
+	// Only v3 CRDs remain: the first migration deleted the v1 ones.
+	m, rt := newFakeController(t, objects, []*unstructured.Unstructured{
+		crdObj("tiers.projectcalico.org", "projectcalico.org"),
+	})
+
+	err := m.reconcile()
+	g.Expect(err).To(HaveOccurred())
+	g.Expect(isTerminal(err)).To(BeTrue(), "expected a terminal error, got %v", err)
+	m.handleTerminalError(err)
+
+	failed := &DatastoreMigration{}
+	g.Expect(rt.Get(ctx, dmKey, failed)).To(Succeed())
+	g.Expect(failed.Status.Phase).To(Equal(DatastoreMigrationPhaseFailed))
+	g.Expect(hasFinalizer(failed)).To(BeFalse(), "a CR that cannot migrate must not carry the finalizer")
+
+	// Tidying up the failed CR must not touch the migrated data.
+	g.Expect(rt.Delete(ctx, failed)).To(Succeed())
+	g.Expect(m.reconcile()).To(Succeed())
+	g.Expect(kerrors.IsNotFound(rt.Get(ctx, dmKey, &DatastoreMigration{}))).To(BeTrue())
+	g.Expect(tierNames(g, rt)).To(ConsistOf("default", "security"))
+}
+
 // TestAbortSkipsCleanupBeforeMigrationStarts verifies that aborting before the
 // Migrating phase deletes no v3 resources.
 func TestAbortSkipsCleanupBeforeMigrationStarts(t *testing.T) {

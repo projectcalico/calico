@@ -439,6 +439,17 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 		return err
 	}
 
+	// Checked before the finalizer is added so a CR that can never migrate
+	// never reaches the abort path.
+	v1CRDCount, err := m.countV1CRDs()
+	if err != nil {
+		return err
+	}
+	if v1CRDCount == 0 {
+		return asTerminal(fmt.Errorf("no v1 CRDs (crd.projectcalico.org) found — nothing to migrate"))
+	}
+	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
+
 	// Add the finalizer if not already present.
 	if !hasFinalizer(dm) {
 		logCtx.Info("Adding finalizer to DatastoreMigration CR")
@@ -463,24 +474,6 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 		dm.Status.Message = "Waiting for migration RBAC permissions"
 		return m.updateStatus(dm)
 	}
-
-	// Pre-validation: check that v1 CRDs exist.
-	crdClient := m.dynamicClient.Resource(crdGVR)
-	crdList, err := crdClient.List(m.ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("listing CRDs for pre-validation: %w", err)
-	}
-	v1CRDCount := 0
-	for _, crd := range crdList.Items {
-		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
-		if group == "crd.projectcalico.org" {
-			v1CRDCount++
-		}
-	}
-	if v1CRDCount == 0 {
-		return asTerminal(fmt.Errorf("no v1 CRDs (crd.projectcalico.org) found — nothing to migrate"))
-	}
-	logCtx.WithField("v1CRDs", v1CRDCount).Info("Found v1 CRDs to migrate")
 
 	// Pre-validation: check the APIService. A missing or automanaged (CRD-backed)
 	// APIService is fine — it just means there's no aggregated API server to
@@ -539,6 +532,22 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 	dm.Status.StartedAt = &now
 	setPhaseMetric(migrationv1.DatastoreMigrationPhaseMigrating)
 	return m.updateStatus(dm)
+}
+
+// countV1CRDs returns the number of installed CRDs in the crd.projectcalico.org group.
+func (m *migrationController) countV1CRDs() (int, error) {
+	crdList, err := m.dynamicClient.Resource(crdGVR).List(m.ctx, metav1.ListOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("listing CRDs for pre-validation: %w", err)
+	}
+	count := 0
+	for _, crd := range crdList.Items {
+		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
+		if group == "crd.projectcalico.org" {
+			count++
+		}
+	}
+	return count, nil
 }
 
 // handleMigrating runs the core migration logic.
