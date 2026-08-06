@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,11 +33,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/util/workqueue"
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/lib/logrusr"
 	libtestutils "github.com/projectcalico/calico/libcalico-go/lib/testutils"
@@ -73,7 +77,7 @@ func init() {
 
 func TestMain(m *testing.M) {
 	repoRoot := libtestutils.FindRepoRoot()
-	migrationCRDPath := filepath.Join(repoRoot, "kube-controllers", "pkg", "controllers", "migration", "crd")
+	migrationCRDPath := filepath.Join(repoRoot, "kube-controllers", "pkg", "apis", "migration", "v1", "crd")
 
 	var err error
 	fvTestEnv, err = testutils.NewTestEnv(migrationCRDPath)
@@ -84,7 +88,7 @@ func TestMain(m *testing.M) {
 	scheme := runtime.NewScheme()
 	expectNoError(clientgoscheme.AddToScheme(scheme))
 	expectNoError(apiv3.AddToScheme(scheme))
-	expectNoError(AddToScheme(scheme))
+	expectNoError(migrationv1.AddToScheme(scheme))
 	fvRTClient, err = rtclient.NewWithWatch(fvTestEnv.RestConfig, rtclient.Options{Scheme: scheme})
 	expectNoError(err)
 
@@ -140,8 +144,8 @@ func TestLifecycle_Mainline(t *testing.T) {
 
 	// Set up phase gate to observe intermediate states.
 	gate := newPhaseGate(
-		DatastoreMigrationPhaseMigrating,
-		DatastoreMigrationPhaseConverged,
+		migrationv1.DatastoreMigrationPhaseMigrating,
+		migrationv1.DatastoreMigrationPhaseConverged,
 	)
 	gatedClient := gate.wrapClient(fvRTClient)
 
@@ -163,25 +167,25 @@ func TestLifecycle_Mainline(t *testing.T) {
 	go ctrl.Run(stop)
 
 	// Create the DatastoreMigration CR.
-	dm := &DatastoreMigration{
+	dm := &migrationv1.DatastoreMigration{
 		ObjectMeta: metav1.ObjectMeta{Name: defaultMigrationName},
-		Spec:       DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+		Spec:       migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	g.Expect(fvRTClient.Create(ctx, dm)).To(Succeed())
 	t.Cleanup(func() { cleanupMigrationResources(t, ctx) })
 
 	// Phase: Migrating
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseMigrating, 10*time.Second)).To(Succeed())
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseMigrating, 10*time.Second)).To(Succeed())
 
-	dm = h.expectPhase(DatastoreMigrationPhaseMigrating)
+	dm = h.expectPhase(migrationv1.DatastoreMigrationPhaseMigrating)
 	g.Expect(dm.Status.StartedAt).NotTo(BeNil())
 	g.Expect(hasFinalizer(dm)).To(BeTrue())
 
-	gate.release(DatastoreMigrationPhaseMigrating)
+	gate.release(migrationv1.DatastoreMigrationPhaseMigrating)
 
 	// Phase: Converged
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
-	dm = h.expectPhase(DatastoreMigrationPhaseConverged)
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	dm = h.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// Tiers should exist in v3 with the internal annotation stripped.
 	tier1 := &apiv3.Tier{}
@@ -208,7 +212,7 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Progress tracking should be populated. All migrators are registered
 	// but only the seeded types (Tier, GNP) produce resources; the rest
 	// report zero.
-	g.Expect(dm.Status.Progress.Migrated).To(Equal(3), "2 tiers + 1 GNP = 3 migrated")
+	g.Expect(dm.Status.Progress.Migrated).To(Equal(int32(3)), "2 tiers + 1 GNP = 3 migrated")
 	g.Expect(dm.Status.Progress.TypeDetails).To(HaveLen(len(NewMigrators(bc, fvRTClient))))
 
 	// v3 ClusterInformation should have DatastoreReady=true (unlocked after converging).
@@ -223,14 +227,14 @@ func TestLifecycle_Mainline(t *testing.T) {
 	// Saved APIService annotation should be present on the CR.
 	g.Expect(dm.Annotations).To(HaveKey(savedAPIServiceAnnotation))
 
-	gate.release(DatastoreMigrationPhaseConverged)
+	gate.release(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// Create calico-node DaemonSet and wait for Complete.
 	h.createReadyCalicoNodeDS()
 
 	g.Eventually(func(g Gomega) {
 		fvh := newFVHelper(t, g, ctx)
-		dm := fvh.expectPhase(DatastoreMigrationPhaseComplete)
+		dm := fvh.expectPhase(migrationv1.DatastoreMigrationPhaseComplete)
 		g.Expect(dm.Status.CompletedAt).NotTo(BeNil())
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
@@ -252,7 +256,7 @@ func TestLifecycle_BackendListError(t *testing.T) {
 		listErrorAfter: 2,
 	}
 
-	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	gate := newPhaseGate(migrationv1.DatastoreMigrationPhaseConverged)
 	startController(t, ctx, bc, gate)
 	createMigrationCR(t, ctx)
 
@@ -271,16 +275,16 @@ func TestLifecycle_BackendListError(t *testing.T) {
 	bc.listErrors = nil
 	bc.mu.Unlock()
 
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 30*time.Second)).To(Succeed())
-	dm := h.expectPhase(DatastoreMigrationPhaseConverged)
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseConverged, 30*time.Second)).To(Succeed())
+	dm := h.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 	g.Expect(dm.Status.Progress.Migrated).To(BeNumerically(">", 0), "should have migrated resources after error cleared")
 
-	gate.release(DatastoreMigrationPhaseConverged)
+	gate.release(migrationv1.DatastoreMigrationPhaseConverged)
 
 	h.createReadyCalicoNodeDS()
 	g.Eventually(func(g Gomega) {
 		fvh := newFVHelper(t, g, ctx)
-		fvh.expectPhase(DatastoreMigrationPhaseComplete)
+		fvh.expectPhase(migrationv1.DatastoreMigrationPhaseComplete)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
@@ -314,22 +318,22 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 
 	// Gate at WaitingForConflictResolution and Converged.
 	gate := newPhaseGate(
-		DatastoreMigrationPhaseWaitingForConflictResolution,
-		DatastoreMigrationPhaseConverged,
+		migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution,
+		migrationv1.DatastoreMigrationPhaseConverged,
 	)
 	startController(t, ctx, bc, gate)
 	createMigrationCR(t, ctx)
 
 	// Wait for the controller to detect the conflict.
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseWaitingForConflictResolution, 10*time.Second)).To(Succeed())
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution, 10*time.Second)).To(Succeed())
 
-	dm := h.expectPhase(DatastoreMigrationPhaseWaitingForConflictResolution)
+	dm := h.expectPhase(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution)
 	g.Expect(dm.Status.Conditions).To(HaveLen(1))
 	g.Expect(dm.Status.Conditions[0].Type).To(Equal(conditionTypeConflict))
 	g.Expect(dm.Status.Conditions[0].Reason).To(Equal(conditionReasonResourceMismatch))
 	g.Expect(dm.Status.Conditions[0].Message).To(ContainSubstring("Tier/custom"))
 
-	gate.release(DatastoreMigrationPhaseWaitingForConflictResolution)
+	gate.release(migrationv1.DatastoreMigrationPhaseWaitingForConflictResolution)
 
 	// Fix the conflict by updating the v3 Tier's Order to match v1.
 	tier := &apiv3.Tier{}
@@ -339,8 +343,8 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 
 	// The controller should re-check, find no conflicts, transition through
 	// Pending → Migrating → Converged.
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
-	dm = h.expectPhase(DatastoreMigrationPhaseConverged)
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	dm = h.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// The previously-conflicting tier should now be skipped (specs match),
 	// so Migrated=0, Skipped=1 for that type.
@@ -349,14 +353,14 @@ func TestLifecycle_ConflictResolution(t *testing.T) {
 	// Conflict conditions should be cleared.
 	g.Expect(dm.Status.Conditions).To(BeEmpty())
 
-	gate.release(DatastoreMigrationPhaseConverged)
+	gate.release(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// Complete the lifecycle.
 	h.createReadyCalicoNodeDS()
 
 	g.Eventually(func(g Gomega) {
 		fvh := newFVHelper(t, g, ctx)
-		fvh.expectPhase(DatastoreMigrationPhaseComplete)
+		fvh.expectPhase(migrationv1.DatastoreMigrationPhaseComplete)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
 }
 
@@ -377,11 +381,11 @@ func TestLifecycle_Rollback(t *testing.T) {
 	// saved/deleted) but the controller hasn't transitioned yet. We'll delete
 	// the CR after verifying the post-migration state, then release the gate
 	// to let the controller see the DeletionTimestamp and run the abort path.
-	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	gate := newPhaseGate(migrationv1.DatastoreMigrationPhaseConverged)
 	fakeAPIReg := startController(t, ctx, bc, gate)
 	createMigrationCR(t, ctx)
 
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
 
 	// At this point migration completed: v3 resources exist, APIService was
 	// deleted from the fake client, and the annotation was saved.
@@ -393,9 +397,9 @@ func TestLifecycle_Rollback(t *testing.T) {
 	// in Migrating (not Converged) for abort to run. Rewrite the phase back
 	// to Migrating before releasing the gate — this simulates a crash/restart
 	// where the phase hadn't been persisted as Converged yet.
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
-	dm.Status.Phase = DatastoreMigrationPhaseMigrating
+	dm.Status.Phase = migrationv1.DatastoreMigrationPhaseMigrating
 	g.Expect(fvRTClient.Status().Update(ctx, dm)).To(Succeed())
 
 	// Now delete the CR. The finalizer prevents immediate garbage collection.
@@ -403,13 +407,13 @@ func TestLifecycle_Rollback(t *testing.T) {
 
 	// Release the gate. The controller will re-read the CR, see
 	// DeletionTimestamp + phase=Migrating, and run handleAbort.
-	gate.release(DatastoreMigrationPhaseConverged)
+	gate.release(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// The CR should be fully deleted once the finalizer is removed.
 	// The abort path lists all v3 types for cleanup (slow with 22 types
 	// against envtest), so allow extra time.
 	g.Eventually(func(g Gomega) {
-		err := fvRTClient.Get(ctx, dmKey, &DatastoreMigration{})
+		err := fvRTClient.Get(ctx, dmKey, &migrationv1.DatastoreMigration{})
 		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after abort, got: %v", err)
 	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
 
@@ -449,24 +453,24 @@ func TestLifecycle_DeletionBlockedThenCompleted(t *testing.T) {
 		clusterInfo: mainlineV1ClusterInfo(),
 	}
 
-	gate := newPhaseGate(DatastoreMigrationPhaseConverged)
+	gate := newPhaseGate(migrationv1.DatastoreMigrationPhaseConverged)
 	startController(t, ctx, bc, gate)
 	createMigrationCR(t, ctx)
 
 	// Wait for Converged.
-	g.Expect(gate.waitForPhase(DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
-	h.expectPhase(DatastoreMigrationPhaseConverged)
+	g.Expect(gate.waitForPhase(migrationv1.DatastoreMigrationPhaseConverged, 10*time.Second)).To(Succeed())
+	h.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 
 	// Delete the CR while Converged. The finalizer prevents garbage
 	// collection, and the controller should report that rollback is blocked.
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
 	g.Expect(fvRTClient.Delete(ctx, dm)).To(Succeed())
 
-	gate.release(DatastoreMigrationPhaseConverged)
+	gate.release(migrationv1.DatastoreMigrationPhaseConverged)
 
 	g.Eventually(func(g Gomega) {
-		dm := &DatastoreMigration{}
+		dm := &migrationv1.DatastoreMigration{}
 		g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
 		g.Expect(dm.Status.Message).To(ContainSubstring("cannot be rolled back"))
 		g.Expect(dm.DeletionTimestamp).NotTo(BeNil())
@@ -478,7 +482,117 @@ func TestLifecycle_DeletionBlockedThenCompleted(t *testing.T) {
 	h.createReadyCalicoNodeDS()
 
 	g.Eventually(func(g Gomega) {
-		err := fvRTClient.Get(ctx, dmKey, &DatastoreMigration{})
+		err := fvRTClient.Get(ctx, dmKey, &migrationv1.DatastoreMigration{})
 		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after completed cleanup, got: %v", err)
 	}, 10*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestStatusWriteFailuresSurface checks how a rejected status write is handled
+// on the terminal-error and conflict-polling paths. handleTerminalError returns
+// the failure, since it used to swallow it and a status the apiserver refuses
+// to accept would then stay invisible to anyone reading the CR. handleWaiting
+// deliberately does not: it keeps its fixed poll cadence and only logs the
+// failure, since routing it through backoff would delay noticing conflict
+// resolution by many minutes.
+func TestStatusWriteFailuresSurface(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	createMigrationCR(t, ctx)
+
+	// Pre-create a v3 Tier whose spec differs from the v1 source, so it is
+	// handleWaiting's conflict branch that runs. Same setup as
+	// TestLifecycle_ConflictResolution, and for the same reason: a non-default
+	// tier, because CEL validation locks the default tier's fields.
+	conflictingTier := &apiv3.Tier{
+		ObjectMeta: metav1.ObjectMeta{Name: "custom"},
+		Spec:       apiv3.TierSpec{Order: ptr.To(float64(999)), DefaultAction: actionPtr(apiv3.Deny)},
+	}
+	g.Expect(fvRTClient.Create(ctx, conflictingTier)).To(Succeed())
+	t.Cleanup(func() {
+		if err := fvRTClient.Delete(ctx, &apiv3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "custom"}}); err != nil {
+			t.Logf("cleanup: deleting tier: %v", err)
+		}
+	})
+
+	rejected := fmt.Errorf("simulated status write rejection")
+	failingClient := interceptor.NewClient(fvRTClient, interceptor.Funcs{
+		SubResourceUpdate: func(
+			ctx context.Context,
+			client rtclient.Client,
+			subResourceName string,
+			obj rtclient.Object,
+			opts ...rtclient.SubResourceUpdateOption,
+		) error {
+			if _, ok := obj.(*migrationv1.DatastoreMigration); ok {
+				return rejected
+			}
+			return client.SubResource(subResourceName).Update(ctx, obj, opts...)
+		},
+	})
+
+	bc := &mockBackendClient{
+		resources:   conflictV1Resources(),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+	m := &migrationController{
+		ctx:                 ctx,
+		rtClient:            failingClient,
+		migrators:           NewMigrators(bc, fvRTClient),
+		waitingPollInterval: 500 * time.Millisecond,
+	}
+
+	t.Run("terminal error", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Expect(m.handleTerminalError(fmt.Errorf("unsupported migration type"))).To(MatchError(rejected))
+	})
+
+	t.Run("terminal error requeues instead of forgetting", func(t *testing.T) {
+		g := NewWithT(t)
+
+		// Force reconcile down its terminal path by handing it a spec type it does
+		// not support. The CRD enum won't let one be written, so it gets injected on
+		// the way out of the Get instead.
+		terminalClient := interceptor.NewClient(failingClient, interceptor.Funcs{
+			Get: func(ctx context.Context, client rtclient.WithWatch, key rtclient.ObjectKey, obj rtclient.Object, opts ...rtclient.GetOption) error {
+				if err := client.Get(ctx, key, obj, opts...); err != nil {
+					return err
+				}
+				if dm, ok := obj.(*migrationv1.DatastoreMigration); ok {
+					dm.Spec.Type = migrationv1.DatastoreMigrationType("Unsupported")
+				}
+				return nil
+			},
+		})
+
+		tm := &migrationController{
+			ctx:      ctx,
+			rtClient: terminalClient,
+			queue:    workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
+		}
+		defer tm.queue.ShutDown()
+
+		tm.queue.Add(defaultMigrationName)
+		g.Expect(tm.processNextWorkItem()).To(BeTrue())
+
+		// A forgotten key never comes back. The rate limiter's first delay is a few
+		// milliseconds, so a requeue shows up almost immediately.
+		g.Eventually(tm.queue.Len, 5*time.Second, 10*time.Millisecond).Should(Equal(1),
+			"a terminal error whose status write failed must be requeued, not forgotten")
+	})
+
+	t.Run("conflicts still present", func(t *testing.T) {
+		g := NewWithT(t)
+		dm := newFVHelper(t, g, ctx).getMigration()
+
+		err := m.handleWaiting(logrus.WithField("test", t.Name()), dm)
+
+		// The status write failure must not propagate as an error: it is only
+		// logged, so the fixed poll cadence below is what actually retries it.
+		g.Expect(err).NotTo(MatchError(rejected))
+
+		var requeue requeueAfter
+		g.Expect(errors.As(err, &requeue)).To(BeTrue(), "a failed conflict-status write must still requeue at the fixed poll interval")
+		g.Expect(time.Duration(requeue)).To(Equal(m.waitingPollInterval))
+	})
 }
