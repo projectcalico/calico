@@ -118,6 +118,13 @@ blocks:
             - env_var: ENABLE_WIREGUARD
               values: ["true", "false"]
           env_vars:
+            # This run supplies what the Maglev tests need -- BPF with DSR, an
+            # external node, one subnet, no encapsulation -- so it is the only
+            # run that keeps them. Same filter as the block, minus that skip.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+            - name: ENABLE_BPF_DSR
+              value: "true"
             - name: VPC_SUBNETS
               value: '["172.16.101.0/24"]'
             - name: IPAM_TEST_POOL_SUBNET
@@ -613,50 +620,6 @@ blocks:
           value: --env NETWORK_MTU
         - name: ENABLE_EXTERNAL_NODE
           value: "true"
-
-  # The only run that exercises Maglev. Maglev needs the BPF dataplane with
-  # DSR, an external node, every node on a single VPC subnet, and no
-  # encapsulation -- see felix/design/bpf-services.md -> Maglev. Every other
-  # run skips it, so that requirement doesn't constrain their dataplane mode.
-  - name: Maglev
-    dependencies: []
-    task:
-      jobs:
-        - name: aws-kubeadm - BPF DSR, single subnet
-          execution_time_limit:
-            hours: 2
-          commands:
-            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
-          env_vars:
-            # Selects the Maglev tests and nothing else.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Feature:Maglev\])
-            - name: PROVISIONER
-              value: "aws-kubeadm"
-            - name: ENABLE_EXTERNAL_NODE
-              value: "true"
-            - name: ENABLE_BPF_DSR
-              value: "true"
-            # The tests route through the second and third node by name, so the
-            # cluster needs at least three. Pinned because the default drops to
-            # one node on an AWS provisioner when the zone is a comma list.
-            - name: CLUSTER_NODES
-              value: "3"
-            - name: VPC_CIDR
-              value: "172.16.0.0/16"
-            # One subnet, so every node and the external node share an L2 segment.
-            - name: VPC_SUBNETS
-              value: '["172.16.101.0/24"]'
-            # Off for both families: the run asks for dual-stack, and left
-            # unset the v6 pool would keep whatever the installer defaults to.
-            - name: ENCAPSULATION_TYPE
-              value: "None"
-            - name: ENCAPSULATION_TYPE_V6
-              value: "None"
-            - name: BGP_STATUS
-              value: Enabled
-            - name: IP_FAMILY
-              value: dual
 
   - name: BPF mode switch
     dependencies: []
