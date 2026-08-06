@@ -31,10 +31,14 @@ type Config struct {
 	Port         string `default:"8080"`
 	LogLevel     string `default:"info" envconfig:"LOG_LEVEL"`
 
-	// TLS certificate and key for both server TLS and Goldmane client mTLS.
+	// TLS certificate and key for Goldmane client mTLS.
 	TLSCertPath string `default:"" envconfig:"TLS_CERT_PATH"`
 	TLSKeyPath  string `default:"" envconfig:"TLS_KEY_PATH"`
 	CACertPath  string `default:"/etc/pki/tls/certs/ca.crt" envconfig:"CA_CERT_PATH"`
+
+	// TLS certificate and key for serving HTTPS. Required; the server only serves HTTPS.
+	ServerTLSCertPath string `envconfig:"SERVER_TLS_CERT_PATH" required:"true"`
+	ServerTLSKeyPath  string `envconfig:"SERVER_TLS_KEY_PATH" required:"true"`
 }
 
 func NewConfig() (*Config, error) {
