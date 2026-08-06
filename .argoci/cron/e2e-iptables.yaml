@@ -302,10 +302,9 @@ steps:
       - name: USE_API_SERVER
         value: "false"
     matrix:
+      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
       - name: stable
         env:
-          # Floats onto the next k8s minor's beta/rc when one exists, else current
-          # stable. Cell name is historical — it no longer implies the stable channel.
           - name: K8S_VERSION
             value: beta-or-stable
     commands: |
@@ -345,8 +344,6 @@ steps:
     matrix:
       - name: beta-calico-yaml-iptables
         env:
-          # Was `beta`, which errors outright when no pre-release exists. Falls back
-          # to current stable instead, so a no-beta window no longer burns the run.
           - name: K8S_VERSION
             value: beta-or-stable
           - name: MANIFEST_FILE
@@ -393,10 +390,9 @@ steps:
       - name: VPC_SUBNETS
         value: '["172.16.101.0/24"]'
     matrix:
+      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
       - name: stable
         env:
-          # Floats onto the next k8s minor's beta/rc when one exists, else current
-          # stable. Cell name is historical — it no longer implies the stable channel.
           - name: K8S_VERSION
             value: beta-or-stable
     commands: |
@@ -775,9 +771,7 @@ steps:
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: PROVISIONER
         value: gcp-kubeadm
-    # These three float onto the next k8s minor's beta/rc when one exists, else
-    # current stable. Cell names are historical — they no longer imply the stable
-    # channel. The kdd-old and etcd steps stay pinned as the older-version contrast.
+    # Names no longer match the value; they are the Lens/OTEL job identity, so they stay.
     matrix:
       - name: stable-calico-yaml
         env:

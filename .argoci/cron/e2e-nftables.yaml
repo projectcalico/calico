@@ -40,10 +40,7 @@ steps:
         value: gcp-kubeadm
       - name: STERN_CHECK
         value: DISABLED
-    # Both cells float onto the next k8s minor's beta/rc when one exists, else
-    # current stable. Cell names are historical — they no longer imply the stable
-    # channel. arm64 on a k8s pre-release is the least-proven combination we run:
-    # a provision failure here is more likely a node-image/containerd gap than Calico.
+    # Names no longer match the value; they are the Lens/OTEL job identity, so they stay.
     matrix:
       - name: stable-ubuntu-2204-lts-arm64
         env:
