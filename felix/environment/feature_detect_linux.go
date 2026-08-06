@@ -401,6 +401,26 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 // FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
 // of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
 // Panics if no binary can be found.
+// BackendBinariesPresent reports whether this host has the binaries for the named backend. Without
+// them FindBestBinary falls back to plain iptables, which on a modern distro is iptables-nft.
+func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersion uint8, backendMode string) bool {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	verInfix := ""
+	if ipVersion == 6 {
+		verInfix = "6"
+	}
+	for _, saveOrRestore := range []string{"save", "restore"} {
+		binary := "ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore
+		if _, err := lookPath(binary); err != nil {
+			log.WithField("binary", binary).Info("Backend binary not available to Felix")
+			return false
+		}
+	}
+	return true
+}
+
 func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
 	if lookPath == nil {
 		lookPath = exec.LookPath

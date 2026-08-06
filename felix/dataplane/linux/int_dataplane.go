@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -464,31 +463,8 @@ const (
 	aksMTUOverhead         = 100
 )
 
-// legacyIPTablesBinariesPresent reports whether this host has the legacy iptables binaries for the
-// given IP family. Felix runs these from its own container, which is the point: without them
-// FindBestBinary falls back to the default iptables, and on a modern distro that is iptables-nft.
-func legacyIPTablesBinariesPresent(ipVersion uint8, lookPathOverride func(string) (string, error)) bool {
-	lookPath := lookPathOverride
-	if lookPath == nil {
-		lookPath = exec.LookPath
-	}
-
-	prefix := "iptables-legacy"
-	if ipVersion == 6 {
-		prefix = "ip6tables-legacy"
-	}
-	for _, cmd := range []string{prefix + "-save", prefix + "-restore"} {
-		if _, err := lookPath(cmd); err != nil {
-			log.WithField("binary", cmd).Info("No iptables-legacy binary available to Felix")
-			return false
-		}
-	}
-	return true
-}
-
-// legacyIPTablesLoaded reports whether the legacy xtables modules are loaded for the given IP
-// family. The kernel creates this file along with them, and stat'ing it doesn't autoload anything.
-// Unlike the binary check, this is host state.
+// legacyIPTablesLoaded reports whether the legacy xtables modules are loaded. Stat'ing the file
+// the kernel creates alongside them doesn't autoload anything.
 var legacyIPTablesLoaded = func(ipVersion uint8) bool {
 	path := "/proc/net/ip_tables_names"
 	if ipVersion == 6 {
@@ -501,30 +477,30 @@ var legacyIPTablesLoaded = func(ipVersion uint8) bool {
 	return true
 }
 
-// sweepIPTablesNFT reports whether to sweep the nftables copies of the shared tables for stale
-// rules. That's worth doing in one of two cases:
+// sweepIPTablesNFT reports whether the nftables copies of the shared tables belong to someone else:
 //
-//   - We're on native nftables, so anything iptables-nft left is stale.
-//   - We're on iptables-legacy, so iptables-nft isn't ours either. Only if the legacy binaries are
-//     really there, though: without them Felix is programming these very tables through the
-//     fallback binary, and we'd delete its chains.
+//   - On native nftables, anything iptables-nft left there is stale.
+//   - On iptables-legacy, so is anything iptables-nft wrote. Only if the legacy binaries are real,
+//     though: without them Felix programs these very tables.
 func sweepIPTablesNFT(ipVersion uint8, nftablesEnabled bool, backendMode string, lookPath func(string) (string, error)) bool {
 	if nftablesEnabled {
 		return true
 	}
-	return backendMode == environment.IPTablesBackendLegacy && legacyIPTablesBinariesPresent(ipVersion, lookPath)
+	return backendMode == environment.IPTablesBackendLegacy &&
+		environment.BackendBinariesPresent(lookPath, ipVersion, environment.IPTablesBackendLegacy)
 }
 
-// legacyIPTablesCleanupTables returns tables that sweep the legacy copies of the shared tables for
-// one IP family. They're marked cleanup-only: iptables-legacy has no kernel support on some
-// distros, where reading it fails and there is nothing of ours to find anyway.
+// legacyIPTablesCleanupTables returns tables that sweep the legacy copies of the shared tables.
+// They're cleanup-only: iptables-legacy is unreadable on some distros, and holds nothing of ours
+// there anyway.
 func legacyIPTablesCleanupTables(
 	ipVersion uint8,
 	featureDetector environment.FeatureDetectorIface,
 	options iptables.TableOptions,
 	natOptions iptables.TableOptions,
 ) []generictables.CleanupTable {
-	if !legacyIPTablesBinariesPresent(ipVersion, options.LookPathOverride) {
+	// Without the legacy binaries these tables would drive iptables-nft, where Felix programs.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendLegacy) {
 		return nil
 	}
 
