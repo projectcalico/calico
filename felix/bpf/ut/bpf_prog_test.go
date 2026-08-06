@@ -371,10 +371,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
-	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
-	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir + "v6")
-
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {
 		obj = "../../bpf-gpl/bin/test_"
