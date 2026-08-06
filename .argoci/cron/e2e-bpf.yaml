@@ -125,6 +125,15 @@ steps:
         value: "3"
       - name: CLUSTER_ROUTING_MODE
         value: Felix
+      # This run picks its tests with a config rather than a focus/skip pair:
+      # e2e/config/bpf-aws-single-subnet.yaml holds the same selection the
+      # focus/skip used to give, Maglev tests included.
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf-aws-single-subnet.yaml
+      # Maglev needs DSR, and this is the one run whose cluster otherwise suits
+      # it: BPF, an external node, one subnet, no encapsulation.
+      - name: ENABLE_BPF_DSR
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -135,8 +144,6 @@ steps:
         value: dual
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
@@ -696,52 +703,6 @@ steps:
         env:
           - name: ENCAPSULATION_TYPE
             value: None
-    commands: |
-      .argoci/scripts/body_standard.sh
-  # The only run that exercises Maglev. Maglev needs the BPF dataplane with
-  # DSR, an external node, every node on a single VPC subnet, and no
-  # encapsulation -- see felix/design/bpf-services.md -> Maglev. This step is
-  # dedicated to it so that requirement doesn't constrain any other run's
-  # dataplane mode. e2e/config/maglev.yaml selects the Maglev tests and nothing
-  # else, and the include is what makes them run at all.
-  - name: maglev
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: BGP_STATUS
-        value: Enabled
-      # The tests route through the second and third node by name, so the
-      # cluster needs at least three. Pinned because the default drops to one
-      # node on an AWS provisioner when the zone is a comma list.
-      - name: CLUSTER_NODES
-        value: "3"
-      - name: E2E_TEST_CONFIG
-        value: e2e/config/maglev.yaml
-      - name: ENABLE_BPF_DSR
-        value: "true"
-      - name: ENABLE_EXTERNAL_NODE
-        value: "true"
-      # Off for both families: the run asks for dual-stack, and left unset the
-      # v6 pool would keep whatever the installer defaults to.
-      - name: ENCAPSULATION_TYPE
-        value: None
-      - name: ENCAPSULATION_TYPE_V6
-        value: None
-      - name: IP_FAMILY
-        value: dual
-      # Only E2E_TEST_CONFIG is read on this path, but the value inherited from
-      # the prologue skips Maglev, which would leave this run selecting nothing
-      # at all if it ever started being read. Override it so this run selects
-      # the Maglev tests either way.
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Feature:Maglev\])
-      - name: PROVISIONER
-        value: aws-kubeadm
-      - name: VPC_CIDR
-        value: 172.16.0.0/16
-      - name: VPC_SUBNETS
-        value: '["172.16.101.0/24"]'
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-mode-switch
