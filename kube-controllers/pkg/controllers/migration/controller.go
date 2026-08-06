@@ -178,6 +178,10 @@ type migrationController struct {
 	// operatorManaged is true if the cluster is managed by the Tigera operator,
 	// detected at RunWithContext start by checking for an Installation CR.
 	operatorManaged bool
+
+	// servedVersion is the DatastoreMigration API version this cluster serves,
+	// resolved from discovery once the CRD is established.
+	servedVersion string
 }
 
 // RunWithContext is called by the DeferredCRDController once the DatastoreMigration
@@ -201,10 +205,12 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 		logrus.WithError(err).Error("Failed to resolve the served DatastoreMigration API version")
 		return
 	}
+	m.servedVersion = version
 	gvr := migrationv1.DatastoreMigrationGVR
 	gvr.Version = version
 
 	if version != migrationv1.Version {
+		// Keep watching the pre-GA version so a migration started before the upgrade can still finish.
 		logrus.WithField("version", version).Warn("Cluster serves a pre-GA DatastoreMigration API, re-apply the CRD to pick up v1")
 		if m.rtClientForVersion != nil {
 			versionedClient, err := m.rtClientForVersion(version)
@@ -304,9 +310,7 @@ func (m *migrationController) processNextWorkItem() bool {
 		} else if isTerminal(err) {
 			logrus.WithError(err).Error("Terminal migration error, setting Failed status")
 			if statusErr := m.handleTerminalError(err); statusErr != nil {
-				// Without the status write the Failed phase never reaches the CR,
-				// so a log line is the only record that anything went wrong.
-				// Retry with backoff until it lands.
+				// Failed to update status. Retry until we succeed, so that errors properly appear in the API.
 				logrus.WithError(statusErr).Error("Failed to record terminal migration error in CR status, will retry")
 				m.queue.AddRateLimited(key)
 			} else {
@@ -426,6 +430,11 @@ func conflictConditions(conflicts []ConflictInfo) []metav1.Condition {
 // handlePending validates prerequisites, adds the finalizer, and transitions to Migrating.
 func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) error {
 	logCtx.Info("Migration is pending, validating prerequisites")
+
+	if m.servedVersion != "" && m.servedVersion != migrationv1.Version {
+		// Refuse to start on the pre-GA API. An already-running migration is left alone.
+		return asTerminal(fmt.Errorf("cluster serves the pre-GA DatastoreMigration API (%s); apply the %s CRD before starting a migration", m.servedVersion, migrationv1.Version))
+	}
 
 	// Add the finalizer if not already present.
 	if !hasFinalizer(dm) {

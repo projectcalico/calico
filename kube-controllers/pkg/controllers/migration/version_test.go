@@ -17,6 +17,7 @@ package migration
 import (
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sdiscovery "k8s.io/client-go/discovery"
 	discoveryfake "k8s.io/client-go/discovery/fake"
@@ -87,6 +88,19 @@ func TestResolveServedVersionIgnoresOtherResources(t *testing.T) {
 
 	if version, err := resolveServedVersion(disco); err == nil {
 		t.Fatalf("expected an error, got version %q", version)
+	}
+}
+
+// A cluster still on the v3.32 CRD must not be allowed to start a new migration.
+func TestHandlePendingRefusesPreGAVersion(t *testing.T) {
+	m := &migrationController{servedVersion: "v1beta1"}
+
+	err := m.handlePending(logrus.NewEntry(logrus.StandardLogger()), &migrationv1.DatastoreMigration{})
+	if err == nil {
+		t.Fatal("handlePending() = nil, want a terminal error")
+	}
+	if !isTerminal(err) {
+		t.Errorf("handlePending() = %v, want a terminal error", err)
 	}
 }
 
