@@ -47,7 +47,6 @@ import (
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
-	"github.com/projectcalico/calico/kube-controllers/pkg/discovery"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -176,8 +175,8 @@ type migrationController struct {
 	restartFunc         func()
 	queue               workqueue.TypedRateLimitingInterface[string]
 
-	// operatorManaged is true if the cluster is managed by the Tigera operator,
-	// detected at RunWithContext start by checking for an Installation CR.
+	// operatorManaged is true once an Installation CR has been seen. It is not
+	// cached while false, since the operator grants the RBAC to read it lazily.
 	operatorManaged bool
 
 	// servedVersion is the DatastoreMigration API version this cluster serves,
@@ -194,12 +193,7 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 
 	m.ctx = ctx
 
-	operatorManaged, err := discovery.IsOperatorManaged(ctx, m.k8sClient.Discovery(), m.dynamicClient)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to detect install type, defaulting to manifest mode")
-	}
-	m.operatorManaged = operatorManaged
-	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
+	logrus.WithField("operatorManaged", m.isOperatorManaged()).Info("Migration controller: detected install type")
 
 	version, versionedClient, err := m.waitForServedAPI(ctx)
 	if err != nil {
@@ -504,7 +498,7 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 
 	installNamespace := names.OwnNamespace()
 	installType := "manifest"
-	if m.operatorManaged {
+	if m.isOperatorManaged() {
 		installType = "operator"
 	}
 	logCtx.WithFields(logrus.Fields{
@@ -729,7 +723,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *migratio
 	}
 	if len(needV3) > 0 {
 		logCtx.WithField("components", needV3).Info("Waiting for components to be configured with v3 API group")
-		if m.operatorManaged {
+		if m.isOperatorManaged() {
 			dm.Status.Message = fmt.Sprintf("Waiting for operator to configure %s with v3 API group", joinComponents(needV3))
 		} else {
 			dm.Status.Message = fmt.Sprintf("Waiting for user to set CALICO_API_GROUP=projectcalico.org/v3 on %s", joinComponents(needV3))
@@ -769,7 +763,7 @@ func (m *migrationController) handleConverged(logCtx *logrus.Entry, dm *migratio
 	// group on startup. In operator mode, the operator handles the restart.
 	// Skip the restart if the CR is being deleted - let the finalizer finish
 	// cleanup first.
-	if !m.operatorManaged && dm.DeletionTimestamp == nil {
+	if !m.isOperatorManaged() && dm.DeletionTimestamp == nil {
 		logCtx.Info("Migration complete, restarting kube-controllers to pick up v3 API group")
 		m.restartFunc()
 	}

@@ -16,17 +16,22 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	k8sdiscovery "k8s.io/client-go/discovery"
 	discoveryfake "k8s.io/client-go/discovery/fake"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -279,4 +284,83 @@ func (f *flakyDiscovery) ServerResourcesForGroupVersion(groupVersion string) (*m
 		return nil, kerrors.NewNotFound(schema.GroupResource{Resource: groupVersion}, "")
 	}
 	return f.DiscoveryInterfaces.ServerResourcesForGroupVersion(groupVersion)
+}
+
+// installationGVR is the Installation resource isOperatorManaged looks for.
+var installationGVR = schema.GroupVersionResource{Group: "operator.tigera.io", Version: "v1", Resource: "installations"}
+
+// k8sfakeWithDiscovery returns a clientset whose discovery serves the operator
+// API group, so isOperatorManaged gets past the discovery check.
+func k8sfakeWithDiscovery(t *testing.T) kubernetes.Interface {
+	t.Helper()
+
+	cs := k8sfake.NewSimpleClientset()
+	disco, ok := cs.Discovery().(*discoveryfake.FakeDiscovery)
+	if !ok {
+		t.Fatal("fake clientset did not return a fake discovery client")
+	}
+	disco.Resources = append(disco.Resources, &metav1.APIResourceList{
+		GroupVersion: "operator.tigera.io/v1",
+		APIResources: []metav1.APIResource{{Name: "installations", Kind: "Installation"}},
+	})
+	return cs
+}
+
+// installationDynamicClient returns a dynamic client holding the given Installations.
+func installationDynamicClient(objs ...runtime.Object) *dynamicfake.FakeDynamicClient {
+	return dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+		runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{installationGVR: "InstallationList"},
+		objs...,
+	)
+}
+
+// installationObj is a minimal Installation CR.
+func installationObj() *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "operator.tigera.io/v1",
+		"kind":       "Installation",
+		"metadata":   map[string]any{"name": "default"},
+	}}
+}
+
+// The operator only grants the RBAC to read Installations once a migration starts,
+// so a negative answer has to be retried rather than cached for the process.
+func TestIsOperatorManagedRetriesUntilVisible(t *testing.T) {
+	dyn := installationDynamicClient()
+	dyn.PrependReactor("list", "installations", func(ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, kerrors.NewForbidden(installationGVR.GroupResource(), "", errors.New("no RBAC yet"))
+	})
+
+	m := &migrationController{
+		ctx:           context.Background(),
+		k8sClient:     k8sfakeWithDiscovery(t),
+		dynamicClient: dyn,
+	}
+	if m.isOperatorManaged() {
+		t.Fatal("isOperatorManaged() = true while the list is forbidden, want false")
+	}
+
+	// RBAC lands and the Installation becomes readable.
+	m.dynamicClient = installationDynamicClient(installationObj())
+	if !m.isOperatorManaged() {
+		t.Error("isOperatorManaged() = false after the Installation became readable, want true")
+	}
+}
+
+// Once seen, the answer sticks even if a later read fails.
+func TestIsOperatorManagedCachesTrue(t *testing.T) {
+	m := &migrationController{
+		ctx:           context.Background(),
+		k8sClient:     k8sfakeWithDiscovery(t),
+		dynamicClient: installationDynamicClient(installationObj()),
+	}
+	if !m.isOperatorManaged() {
+		t.Fatal("isOperatorManaged() = false with an Installation present, want true")
+	}
+
+	m.dynamicClient = installationDynamicClient()
+	if !m.isOperatorManaged() {
+		t.Error("isOperatorManaged() = false on a later failed read, want the cached true")
+	}
 }

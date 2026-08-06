@@ -27,6 +27,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
+	"github.com/projectcalico/calico/kube-controllers/pkg/discovery"
 )
 
 // datastoreMigrationVersions are the DatastoreMigration API versions this
@@ -89,8 +90,8 @@ func resolveServedVersion(disco k8sdiscovery.DiscoveryInterface) (string, error)
 	return "", fmt.Errorf("no served version of %s", datastoreMigrationCRDName)
 }
 
-// refusePreGAVersion blocks a new migration while the cluster only serves the
-// pre-GA API. A migration already in flight is left to finish.
+// refusePreGAVersion blocks a new migration on the pre-GA API. One already in
+// flight is left to finish.
 func (m *migrationController) refusePreGAVersion() error {
 	if m.servedVersion == "" || m.servedVersion == migrationv1.Version {
 		return nil
@@ -104,4 +105,20 @@ func (m *migrationController) refusePreGAVersion() error {
 		return nil
 	}
 	return asTerminal(fmt.Errorf("cluster serves the pre-GA DatastoreMigration API (%s); apply the %s CRD before starting a migration", m.servedVersion, migrationv1.Version))
+}
+
+// isOperatorManaged reports whether an Installation CR is present. The RBAC to
+// read it arrives late, so a false is retried.
+func (m *migrationController) isOperatorManaged() bool {
+	if m.operatorManaged {
+		return true
+	}
+
+	managed, err := discovery.IsOperatorManaged(m.ctx, m.k8sClient.Discovery(), m.dynamicClient)
+	if err != nil {
+		logrus.WithError(err).Debug("Failed to detect install type, assuming manifest mode for now")
+		return false
+	}
+	m.operatorManaged = managed
+	return managed
 }
