@@ -598,17 +598,7 @@ func (m *migrationController) runPendingPrechecks(logCtx *logrus.Entry, dm *migr
 		return false, err
 	}
 
-	drift, err := m.checkBuiltInTiers()
-	if err != nil {
-		return false, fmt.Errorf("validating built-in tiers: %w", err)
-	}
-	if len(drift) > 0 {
-		logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
-		dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
-		return true, m.updateStatus(dm)
-	}
-
-	return false, nil
+	return m.checkBuiltInTiers(logCtx, dm)
 }
 
 // builtInTierRequirement is the order and default action that the v3 Tier CRD's
@@ -624,9 +614,27 @@ var builtInTierRequirements = map[string]builtInTierRequirement{
 	names.KubeBaselineTierName: {order: apiv3.KubeBaselineTierOrder, defaultAction: apiv3.Pass},
 }
 
-// checkBuiltInTiers returns a description of every built-in tier in v1 that the
+// checkBuiltInTiers reports whether the caller should wait for a human to fix a
+// built-in v1 tier the v3 API rejects.
+func (m *migrationController) checkBuiltInTiers(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) (bool, error) {
+	// The v3 Tier CRD pins order and defaultAction via CEL, so a drifted
+	// built-in fails mid-copy.
+	drift, err := m.builtInTierDrift()
+	if err != nil {
+		return false, fmt.Errorf("validating built-in tiers: %w", err)
+	}
+	if len(drift) == 0 {
+		return false, nil
+	}
+
+	logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
+	dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
+	return true, m.updateStatus(dm)
+}
+
+// builtInTierDrift returns a description of every built-in tier in v1 that the
 // v3 API would reject.
-func (m *migrationController) checkBuiltInTiers() ([]string, error) {
+func (m *migrationController) builtInTierDrift() ([]string, error) {
 	var tierMigrator migrators.ResourceMigrator
 	for _, mig := range m.migrators {
 		if mig.Kind() == apiv3.KindTier {
