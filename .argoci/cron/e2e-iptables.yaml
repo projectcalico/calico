@@ -302,10 +302,11 @@ steps:
       - name: USE_API_SERVER
         value: "false"
     matrix:
+      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
       - name: stable
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: usage-reporting
@@ -344,7 +345,7 @@ steps:
       - name: beta-calico-yaml-iptables
         env:
           - name: K8S_VERSION
-            value: beta
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
           - name: KUBE_PROXY_MODE
@@ -389,10 +390,11 @@ steps:
       - name: VPC_SUBNETS
         value: '["172.16.101.0/24"]'
     matrix:
+      # Name no longer matches the value; it is the Lens/OTEL job identity, so it stays.
       - name: stable
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: wireguard-k8s-e2e
@@ -769,23 +771,24 @@ steps:
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: PROVISIONER
         value: gcp-kubeadm
+    # Names no longer match the value; they are the Lens/OTEL job identity, so they stay.
     matrix:
       - name: stable-calico-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
       - name: stable-calico-typha-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico-typha.yaml
       - name: stable-canal-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: canal.yaml
     commands: |
