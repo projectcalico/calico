@@ -341,7 +341,7 @@ func (m *migrationController) handleTerminalError(err error) error {
 // migration shows why instead of showing the last progress message forever. The
 // phase is left alone since the workqueue will retry.
 func (m *migrationController) handleRetryableError(err error) {
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	if getErr := m.rtClient.Get(m.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); getErr != nil {
 		logrus.WithError(getErr).Error("Failed to fetch CR for retryable error status update")
 		return
