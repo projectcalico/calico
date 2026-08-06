@@ -583,7 +583,7 @@ func (m *migrationController) handleMigrating(logCtx *logrus.Entry, dm *migratio
 		}
 
 		typeStart := time.Now()
-		result, err := MigrateResourceType(m.ctx, migrator)
+		result, err := MigrateResourceType(m.ctx, migrator, string(dm.UID))
 		migrationTypeDuration.WithLabelValues(migrator.Kind()).Observe(time.Since(typeStart).Seconds())
 		if err != nil {
 			migrationResourceErrors.WithLabelValues(migrator.Kind()).Inc()
@@ -841,7 +841,7 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 	// This is best-effort — the resources become inert once the APIService is
 	// restored since nothing reads v3 CRDs in API server mode, but cleaning
 	// them up avoids confusion on retry.
-	m.cleanupPartialV3Resources(logCtx)
+	m.cleanupPartialV3Resources(logCtx, dm)
 
 	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
 	// reading from crd.projectcalico.org/v1 resume normal operation.
@@ -875,9 +875,15 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *migrationv1.
 	return m.removeFinalizer(dm)
 }
 
-// cleanupPartialV3Resources deletes v3 resources that were created during
-// migration. This is best-effort: failures are logged but don't block the abort.
-func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
+// cleanupPartialV3Resources deletes v3 resources that this migration created.
+// This is best-effort: failures are logged but don't block the abort.
+func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry, dm *DatastoreMigration) {
+	migrationID := string(dm.UID)
+	if migrationID == "" {
+		logCtx.Warn("DatastoreMigration has no UID, skipping v3 resource cleanup")
+		return
+	}
+
 	for _, migrator := range m.migrators {
 		items, err := migrator.ListV3(m.ctx)
 		if err != nil {
@@ -886,11 +892,10 @@ func (m *migrationController) cleanupPartialV3Resources(logCtx *logrus.Entry) {
 		}
 		deleted := 0
 		for _, obj := range items {
-			// Only delete resources that were created by migration, not
-			// pre-existing v3 resources.
-			annotations := obj.GetAnnotations()
-			if annotations == nil || annotations[migratedByAnnotation] == "" {
-				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName()}).Debug("Skipping non-migrated v3 resource during cleanup")
+			// Skip resources this migration didn't create, including ones left
+			// behind by an earlier migration of the same cluster.
+			if obj.GetAnnotations()[migratedByAnnotation] != migrationID {
+				logCtx.WithFields(logrus.Fields{"kind": migrator.Kind(), "name": obj.GetName()}).Debug("Skipping v3 resource not created by this migration")
 				continue
 			}
 			if err := migrator.DeleteV3(m.ctx, obj); err != nil {
