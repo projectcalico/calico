@@ -48,6 +48,7 @@ import (
 	"github.com/projectcalico/calico/kube-controllers/pkg/discovery"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
 )
 
@@ -273,6 +274,7 @@ func (m *migrationController) processNextWorkItem() bool {
 			m.queue.Forget(key)
 		} else {
 			logrus.WithError(err).Error("Migration reconcile error, will retry")
+			m.handleRetryableError(err)
 			m.queue.AddRateLimited(key)
 		}
 		return true
@@ -294,6 +296,21 @@ func (m *migrationController) handleTerminalError(err error) {
 	m.setFailedStatus(dm, err.Error())
 	if updateErr := m.updateStatus(dm); updateErr != nil {
 		logrus.WithError(updateErr).Error("Failed to update CR status for terminal error")
+	}
+}
+
+// handleRetryableError records the error in the CR's status message so a stuck
+// migration shows why instead of showing the last progress message forever. The
+// phase is left alone since the workqueue will retry.
+func (m *migrationController) handleRetryableError(err error) {
+	dm := &DatastoreMigration{}
+	if getErr := m.rtClient.Get(m.ctx, types.NamespacedName{Name: defaultMigrationName}, dm); getErr != nil {
+		logrus.WithError(getErr).Error("Failed to fetch CR for retryable error status update")
+		return
+	}
+	dm.Status.Message = err.Error()
+	if updateErr := m.updateStatus(dm); updateErr != nil {
+		logrus.WithError(updateErr).Error("Failed to update CR status for retryable error")
 	}
 }
 
@@ -773,8 +790,14 @@ func (m *migrationController) handleAbort(logCtx *logrus.Entry, dm *DatastoreMig
 
 	// Step 2: Restore v1 ClusterInformation to DatastoreReady=true so components
 	// reading from crd.projectcalico.org/v1 resume normal operation.
+	// This is the only unlock: nothing on the success path clears the v1 lock,
+	// so giving up here leaves the datastore locked with no CR left to retry from.
 	if err := m.setV1ClusterInfoReady(logCtx, true); err != nil {
-		logCtx.WithError(err).Warn("Failed to restore v1 ClusterInformation during abort (may not exist)")
+		var doesNotExist cerrors.ErrorResourceDoesNotExist
+		if !errors.As(err, &doesNotExist) {
+			return fmt.Errorf("restoring v1 ClusterInformation: %w", err)
+		}
+		logCtx.WithError(err).Info("No v1 ClusterInformation to restore")
 	}
 
 	// Step 3: Delete the v3 ClusterInformation if it was created with
@@ -980,9 +1003,11 @@ func (m *migrationController) lockDatastore(logCtx *logrus.Entry) error {
 		logCtx.Debug("v3 ClusterInformation already locked")
 	}
 
-	// Lock v1 ClusterInformation via the backend client.
+	// Lock v1 ClusterInformation via the backend client. Every failure here,
+	// including not-found, has to be retried: migrating while v1 is still
+	// writable loses the IPAM allocations CNI makes in the meantime.
 	if err := m.setV1ClusterInfoReady(logCtx, false); err != nil {
-		logCtx.WithError(err).Warn("Failed to lock v1 ClusterInformation (may not exist)")
+		return fmt.Errorf("locking v1 ClusterInformation: %w", err)
 	}
 
 	return nil
@@ -1051,7 +1076,7 @@ func (m *migrationController) unlockV3CRDDatastore(logCtx *logrus.Entry) error {
 }
 
 // setV1ClusterInfoReady sets DatastoreReady on the v1 ClusterInformation via the
-// libcalico-go backend client. If the v1 resource doesn't exist, this is a no-op.
+// libcalico-go backend client.
 func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready bool) error {
 	key := model.ResourceKey{
 		Kind: apiv3.KindClusterInformation,
@@ -1071,9 +1096,13 @@ func (m *migrationController) setV1ClusterInfoReady(logCtx *logrus.Entry, ready 
 		return nil
 	}
 
+	// Write a copy so a failed update doesn't leave what Get returned claiming
+	// a state the datastore never reached.
+	ci = ci.DeepCopy()
 	ci.Spec.DatastoreReady = &ready
-	kvp.Value = ci
-	_, err = m.backendClient.Update(m.ctx, kvp)
+	updated := *kvp
+	updated.Value = ci
+	_, err = m.backendClient.Update(m.ctx, &updated)
 	if err != nil {
 		return fmt.Errorf("updating v1 ClusterInformation: %w", err)
 	}

@@ -35,7 +35,7 @@ type mockBackendClient struct {
 	resources   map[string][]*model.KVPair
 	clusterInfo *model.KVPair
 
-	// mu guards listErrors, listErrorAfter, and listCounts for concurrent
+	// mu guards clusterInfo and the error-injection fields for concurrent
 	// access from the controller goroutine and test assertions.
 	mu sync.Mutex
 
@@ -47,6 +47,26 @@ type mockBackendClient struct {
 	listErrors     map[string]error
 	listErrorAfter int
 	listCounts     map[string]int
+
+	// clusterInfoGetErr and clusterInfoUpdateErr, when set, are returned from
+	// Get/Update for the ClusterInformation resource.
+	clusterInfoGetErr    error
+	clusterInfoUpdateErr error
+}
+
+// getClusterInfo returns a copy of the stored v1 ClusterInformation KVPair, so callers
+// can read it without racing the controller goroutine.
+func (m *mockBackendClient) getClusterInfo() *model.KVPair {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.clusterInfo == nil {
+		return nil
+	}
+	copied := *m.clusterInfo
+	if ci, ok := m.clusterInfo.Value.(*apiv3.ClusterInformation); ok {
+		copied.Value = ci.DeepCopy()
+	}
+	return &copied
 }
 
 func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ string) (*model.KVPairList, error) {
@@ -76,16 +96,28 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 }
 
 func (m *mockBackendClient) Get(_ context.Context, key model.Key, _ string) (*model.KVPair, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	rk, ok := key.(model.ResourceKey)
-	if ok && rk.Kind == apiv3.KindClusterInformation && m.clusterInfo != nil {
-		return m.clusterInfo, nil
+	if ok && rk.Kind == apiv3.KindClusterInformation {
+		if m.clusterInfoGetErr != nil {
+			return nil, m.clusterInfoGetErr
+		}
+		if m.clusterInfo != nil {
+			return m.clusterInfo, nil
+		}
 	}
 	return nil, fmt.Errorf("not found: %v", key)
 }
 
 func (m *mockBackendClient) Update(_ context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	rk, ok := kvp.Key.(model.ResourceKey)
 	if ok && rk.Kind == apiv3.KindClusterInformation {
+		if m.clusterInfoUpdateErr != nil {
+			return nil, m.clusterInfoUpdateErr
+		}
 		m.clusterInfo = kvp
 		return kvp, nil
 	}
