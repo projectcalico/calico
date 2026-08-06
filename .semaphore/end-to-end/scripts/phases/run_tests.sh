@@ -12,7 +12,7 @@
 # Required env:
 #   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
 # Required for local builds:
-#   E2E_TEST_CONFIG
+#   E2E_TEST_CONFIG or K8S_E2E_FLAGS
 # Required for hashrelease downloads:
 #   RELEASE_STREAM
 #
@@ -44,6 +44,17 @@ fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
   echo "[INFO] starting e2e tests..."
+
+  # Pick one selection channel: an empty config runs the whole suite unfiltered.
+  if [[ -n "${E2E_TEST_CONFIG:-}" ]]; then
+    E2E_GINKGO_ARGS=""
+  elif [[ -n "${K8S_E2E_FLAGS:-}" ]]; then
+    E2E_GINKGO_ARGS="${K8S_E2E_FLAGS}"
+  else
+    echo "[ERROR] neither E2E_TEST_CONFIG nor K8S_E2E_FLAGS is set; refusing to run the whole suite"
+    exit 1
+  fi
+
   pushd "${HOME}/calico" || exit
 
   # Pick a runtime image. The local-build path already pulled
@@ -119,6 +130,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e E2E_GINKGO_ARGS="${E2E_GINKGO_ARGS}" \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
