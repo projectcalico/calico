@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package migration implements the v1-to-v3 CRD migration controller.
+// Package v1 contains the DatastoreMigration API types.
 //
 // +kubebuilder:object:generate=true
 // +groupName=migration.projectcalico.org
-// +versionName=v1beta1
-package migration
+// +versionName=v1
+package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,10 +37,17 @@ var (
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
+	return AddToSchemeForVersion(scheme, Version)
+}
+
+// AddToSchemeForVersion registers the types under the given migration group
+// version. v1beta1 is wire-identical to v1.
+func AddToSchemeForVersion(scheme *runtime.Scheme, version string) error {
+	gv := schema.GroupVersion{Group: Group, Version: version}
+	scheme.AddKnownTypes(gv,
 		&DatastoreMigration{},
 		&DatastoreMigrationList{},
 	)
-	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
+	metav1.AddToGroupVersion(scheme, gv)
 	return nil
 }
