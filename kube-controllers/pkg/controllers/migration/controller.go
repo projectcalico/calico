@@ -73,6 +73,9 @@ const (
 	// clusterInfoName is the well-known name of the ClusterInformation resource.
 	clusterInfoName = "default"
 
+	// datastoreMigrationCRDName is the object name of the DatastoreMigration CRD.
+	datastoreMigrationCRDName = "datastoremigrations.migration.projectcalico.org"
+
 	// Condition types used in DatastoreMigration status.
 	conditionTypeConflict = "Conflict"
 	conditionTypeFailed   = "Failed"
@@ -99,6 +102,10 @@ type ControllerConfig struct {
 	APIRegClient  apiregv1client.ApiregistrationV1Interface
 	CRDClient     apiextclient.Interface
 	Migrators     []migrators.ResourceMigrator
+
+	// RTClientForVersion returns a client registering DatastoreMigration under the
+	// given API version. Optional; RTClient is used as-is when nil.
+	RTClientForVersion func(version string) (rtclient.WithWatch, error)
 
 	// WaitingPollInterval controls how frequently the controller re-checks
 	// conflicts during WaitingForConflictResolution. Defaults to 10s.
@@ -128,17 +135,14 @@ func NewController(cfg ControllerConfig) controller.Controller {
 		k8sClient:           cfg.K8sClient,
 		backendClient:       cfg.BackendClient,
 		rtClient:            cfg.RTClient,
+		rtClientForVersion:  cfg.RTClientForVersion,
 		dynamicClient:       cfg.DynamicClient,
 		apiregClient:        cfg.APIRegClient,
 		migrators:           cfg.Migrators,
 		waitingPollInterval: pollInterval,
 		restartFunc:         restartFunc,
 	}
-	return controller.NewDeferredCRDController(
-		"datastoremigrations.migration.projectcalico.org",
-		cfg.CRDClient,
-		m,
-	)
+	return controller.NewDeferredCRDController(datastoreMigrationCRDName, cfg.CRDClient, m)
 }
 
 // resyncPeriod controls how frequently the informer re-lists all resources.
@@ -163,6 +167,7 @@ type migrationController struct {
 	k8sClient           kubernetes.Interface
 	backendClient       api.Client
 	rtClient            rtclient.WithWatch
+	rtClientForVersion  func(version string) (rtclient.WithWatch, error)
 	dynamicClient       dynamic.Interface
 	apiregClient        apiregv1client.ApiregistrationV1Interface
 	migrators           []migrators.ResourceMigrator
@@ -191,11 +196,31 @@ func (m *migrationController) RunWithContext(ctx context.Context) {
 	m.operatorManaged = operatorManaged
 	logrus.WithField("operatorManaged", operatorManaged).Info("Migration controller: detected install type")
 
+	version, err := m.waitForServedVersion(ctx)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to resolve the served DatastoreMigration API version")
+		return
+	}
+	gvr := migrationv1.DatastoreMigrationGVR
+	gvr.Version = version
+
+	if version != migrationv1.Version {
+		logrus.WithField("version", version).Warn("Cluster serves a pre-GA DatastoreMigration API, re-apply the CRD to pick up v1")
+		if m.rtClientForVersion != nil {
+			versionedClient, err := m.rtClientForVersion(version)
+			if err != nil {
+				logrus.WithError(err).Error("Failed to build a client for the served DatastoreMigration API version")
+				return
+			}
+			m.rtClient = versionedClient
+		}
+	}
+
 	m.queue = workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]())
 	defer m.queue.ShutDown()
 
 	factory := dynamicinformer.NewDynamicSharedInformerFactory(m.dynamicClient, resyncPeriod)
-	informer := factory.ForResource(migrationv1.DatastoreMigrationGVR).Informer()
+	informer := factory.ForResource(gvr).Informer()
 
 	handler := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
