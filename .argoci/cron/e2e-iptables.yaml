@@ -304,8 +304,10 @@ steps:
     matrix:
       - name: stable
         env:
+          # Floats onto the next k8s minor's beta/rc when one exists, else current
+          # stable. Cell name is historical — it no longer implies the stable channel.
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: usage-reporting
@@ -343,8 +345,10 @@ steps:
     matrix:
       - name: beta-calico-yaml-iptables
         env:
+          # Was `beta`, which errors outright when no pre-release exists. Falls back
+          # to current stable instead, so a no-beta window no longer burns the run.
           - name: K8S_VERSION
-            value: beta
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
           - name: KUBE_PROXY_MODE
@@ -391,8 +395,10 @@ steps:
     matrix:
       - name: stable
         env:
+          # Floats onto the next k8s minor's beta/rc when one exists, else current
+          # stable. Cell name is historical — it no longer implies the stable channel.
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: wireguard-k8s-e2e
@@ -769,23 +775,26 @@ steps:
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: PROVISIONER
         value: gcp-kubeadm
+    # These three float onto the next k8s minor's beta/rc when one exists, else
+    # current stable. Cell names are historical — they no longer imply the stable
+    # channel. The kdd-old and etcd steps stay pinned as the older-version contrast.
     matrix:
       - name: stable-calico-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
       - name: stable-calico-typha-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico-typha.yaml
       - name: stable-canal-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: canal.yaml
     commands: |
