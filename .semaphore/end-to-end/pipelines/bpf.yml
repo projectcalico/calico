@@ -620,6 +620,58 @@ blocks:
         - name: ENABLE_EXTERNAL_NODE
           value: "true"
 
+  # The only run that exercises Maglev. Maglev needs the BPF dataplane with
+  # DSR, an external node, every node on a single VPC subnet, and no
+  # encapsulation -- see felix/design/bpf-services.md -> Maglev. This job is
+  # dedicated to it so that requirement doesn't constrain any other run's
+  # dataplane mode.
+  - name: Maglev
+    dependencies: []
+    task:
+      jobs:
+        - name: aws-kubeadm - BPF DSR, single subnet
+          execution_time_limit:
+            hours: 2
+          commands:
+            - ~/calico/.semaphore/end-to-end/scripts/body_standard.sh
+          env_vars:
+            # Selects the Maglev tests and nothing else. The include is what
+            # makes them run at all: see e2e/config/maglev.yaml.
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/maglev.yaml"
+            # Only the config above is read on this path, but the value
+            # inherited from the pipeline skips Maglev, which would leave this
+            # run selecting nothing at all if it ever started being read.
+            # Override it so this run selects the Maglev tests either way.
+            - name: K8S_E2E_FLAGS
+              value: --ginkgo.focus=(\[Feature:Maglev\])
+            - name: PROVISIONER
+              value: "aws-kubeadm"
+            - name: ENABLE_EXTERNAL_NODE
+              value: "true"
+            - name: ENABLE_BPF_DSR
+              value: "true"
+            # The tests route through the second and third node by name, so the
+            # cluster needs at least three. Pinned because the default drops to
+            # one node on an AWS provisioner when the zone is a comma list.
+            - name: CLUSTER_NODES
+              value: "3"
+            - name: VPC_CIDR
+              value: "172.16.0.0/16"
+            # One subnet, so every node and the external node share an L2 segment.
+            - name: VPC_SUBNETS
+              value: '["172.16.101.0/24"]'
+            # Off for both families: the run asks for dual-stack, and left
+            # unset the v6 pool would keep whatever the installer defaults to.
+            - name: ENCAPSULATION_TYPE
+              value: "None"
+            - name: ENCAPSULATION_TYPE_V6
+              value: "None"
+            - name: BGP_STATUS
+              value: Enabled
+            - name: IP_FAMILY
+              value: dual
+
   - name: BPF mode switch
     dependencies: []
     task:
