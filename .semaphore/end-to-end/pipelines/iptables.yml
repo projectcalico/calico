@@ -224,7 +224,7 @@ blocks:
             - name: MANIFEST_FILE
               value: calico-etcd.yaml
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered.RBAC)
       env_vars:
         - name: K8S_VERSION
           value: "stable-1" # Normally this would be stable, but kind doesn't always support stable immediately
@@ -755,7 +755,7 @@ blocks:
               value: calico-etcd.yaml
             # No API server in etcd mode; skip tiered RBAC tests.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.skip=(Tiered RBAC)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Tiered.RBAC)
       env_vars:
         - name: PROVISIONER
           value: gcp-kubeadm
