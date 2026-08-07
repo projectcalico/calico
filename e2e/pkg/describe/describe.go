@@ -129,6 +129,26 @@ func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
 
+// RequiresBGP marks tests that need Calico to be doing BGP at all, i.e. BIRD is
+// running and programming routes. Weaker than RequiresBGPMesh, which additionally
+// needs the node-to-node mesh to be the *only* routing path.
+//
+// Clusters that fail this: Felix routing (no BIRD), and managed clusters using
+// their provider's CNI (AzureVNET, AmazonVPC), where Calico runs policy-only.
+// Carry this rather than leaving each config to know which spec files are
+// BGP-shaped -- that knowledge was previously spread across every lane.
+func RequiresBGP() any {
+	return framework.WithLabel("RequiresBGP")
+}
+
+// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
+// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
+// wait times out rather than skipping.
+func RequiresOperator() any {
+	return framework.WithLabel("RequiresOperator")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
