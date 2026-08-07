@@ -418,7 +418,29 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	}
 }
 
-func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
+// TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST verifies that a
+// live, established connection is included in the recount even though the BPF
+// fast path already decremented the counter for it and claimed
+// CALI_CT_FLAG_CONNLIMIT_DEC.
+//
+// The fast path decrements on any RST: conntrack.h reads tcp_header->rst
+// directly, nothing validates the sequence number, and the spurious-RST
+// reasoning alongside it can only reach a verdict two minutes later, in
+// hindsight. A spurious RST — out of window, ignored by both peers — therefore
+// decrements a connection that is still up. That much is recoverable on its
+// own, because the per-leg RST bits clear as soon as traffic resumes
+// (conntrack.h:571-576) and the entry becomes countable again.
+//
+// What was not recoverable was CONNLIMIT_DEC, which nothing ever clears. While
+// this scanner skipped entries carrying it, such a connection was excluded
+// from every future recount — and since the recount is the only mechanism that
+// can give a slot back, the under-count became permanent. N spurious RSTs
+// against N live connections parked current_count at 0 with all N still up,
+// letting the pod open N more.
+//
+// An established entry with no FIN and no RST is live, so it must be counted,
+// whatever CONNLIMIT_DEC says.
+func TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
 
@@ -430,11 +452,12 @@ func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
 		},
 	}
 
-	// Established connection with CONNLIMIT_DEC flag set — the BPF fast
-	// path already decremented the counter for this connection. The scanner
-	// must skip it to avoid recounting and overwriting the decremented value.
+	// Pod is AddrB (responder), remote is AddrA (opener), so this counts
+	// against the pod's ingress limit. Both legs established, no FIN and no
+	// RST bit — the shape a busy connection presents once the transient RST
+	// marks have cleared — but CONNLIMIT_DEC is set from the earlier RST.
 	key := makeKey(remoteIP, podIP, 54321, 8080)
-	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitDec,
+	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
 		established(true),
 		established(false),
 	)
@@ -443,8 +466,11 @@ func TestConnLimitScannerSkipsConnLimitDec(t *testing.T) {
 	if verdict != ScanVerdictOK {
 		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
 	}
-	if len(scanner.counts) != 0 {
-		t.Errorf("expected no counts for CONNLIMIT_DEC connection, got %v", scanner.counts)
+
+	expected := connlimitKey{ifindex: 9, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("live established connection was excluded from the recount: "+
+			"expected ingress count 1 for ifindex 9, got counts: %v", scanner.counts)
 	}
 }
 
