@@ -33,6 +33,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/rawcrdclient"
@@ -70,7 +71,7 @@ func TestLifecycle_RealV1CRDs(t *testing.T) {
 
 	// The migration runs unattended here; wait for it to converge.
 	g.Eventually(func(g Gomega) {
-		newFVHelper(t, g, ctx).expectPhase(DatastoreMigrationPhaseConverged)
+		newFVHelper(t, g, ctx).expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 	}, 60*time.Second, 250*time.Millisecond).Should(Succeed())
 
 	// Tiers migrate with the default tier's order normalised by the v3 API.
@@ -125,14 +126,14 @@ func TestLifecycle_RealV1CRDs(t *testing.T) {
 	// Drive to Complete, then delete the CR and check the finalizer removes v1 CRDs.
 	h.createReadyCalicoNodeDS()
 	g.Eventually(func(g Gomega) {
-		newFVHelper(t, g, ctx).expectPhase(DatastoreMigrationPhaseComplete)
+		newFVHelper(t, g, ctx).expectPhase(migrationv1.DatastoreMigrationPhaseComplete)
 	}, 30*time.Second, 250*time.Millisecond).Should(Succeed())
 
 	dm := h.getMigration()
 	g.Expect(fvRTClient.Delete(ctx, dm)).To(Succeed())
 
 	g.Eventually(func(g Gomega) {
-		err := fvRTClient.Get(ctx, dmKey, &DatastoreMigration{})
+		err := fvRTClient.Get(ctx, dmKey, &migrationv1.DatastoreMigration{})
 		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after cleanup, got: %v", err)
 		g.Expect(countV1CRDs(ctx)).To(Equal(0), "v1 CRDs should have been deleted by the finalizer")
 	}, 60*time.Second, 250*time.Millisecond).Should(Succeed())
