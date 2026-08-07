@@ -118,7 +118,7 @@ require (
 	k8s.io/kube-aggregator v0.37.0-beta.0
 	k8s.io/kube-openapi v0.31.0
 	k8s.io/kubectl v0.37.0-beta.0
-	k8s.io/kubernetes v1.37.0-beta.0
+	k8s.io/kubernetes v1.37.0-rc.0
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 	kubevirt.io/api v1.9.0
 	kubevirt.io/client-go v1.9.0-beta.0.0.20260731113834-b7f13e6a8fd7
