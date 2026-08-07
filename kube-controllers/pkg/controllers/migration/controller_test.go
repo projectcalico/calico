@@ -179,7 +179,7 @@ func TestAbortOnMigratedCluster(t *testing.T) {
 	err := m.reconcile()
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(isTerminal(err)).To(BeTrue(), "expected a terminal error, got %v", err)
-	m.handleTerminalError(err)
+	g.Expect(m.handleTerminalError(err)).To(Succeed())
 
 	failed := &migrationv1.DatastoreMigration{}
 	g.Expect(rt.Get(ctx, dmKey, failed)).To(Succeed())
