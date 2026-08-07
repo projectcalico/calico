@@ -157,7 +157,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_nat_lookup(ipv46_addr_t *i
 
 	if (count == 0) {
 		CALI_DEBUG("NAT: no backend");
-		*res = NAT_NO_BACKEND;
+		*res = nat_lv1_val->flags & NAT_FLG_NO_BACKEND_FORWARD ?
+			NAT_NO_BACKEND_FORWARD : NAT_NO_BACKEND;
 		return NULL;
 	}
 

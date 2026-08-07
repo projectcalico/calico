@@ -614,6 +614,9 @@ func (s *Syncer) applyDerived(
 			flags |= nat.NATFlgMaglev
 		}
 	}
+	if strings.EqualFold(sinfo.NoEndpointsAction(), NoEndpointsActionForward) && t == svcTypeLoadBalancer {
+		flags |= nat.NATFlgNoBackendForward
+	}
 
 	switch t {
 	case svcTypeNodePort, svcTypeLoadBalancer, svcTypeNodePortRemote:

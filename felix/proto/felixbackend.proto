@@ -813,6 +813,7 @@ message ServiceUpdate {
 	repeated string external_ips = 6;
 	repeated ServicePort ports = 7;
 	repeated string loadbalancer_ingress_ips = 8;
+	string no_endpoints_action = 9;
 }
 
 message ServiceRemove {
