@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -1030,4 +1031,111 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(err.Error()).To(ContainSubstring("CalicoWebhooksDeployment"))
 		})
 	})
+
+	Context("API server cutover", func() {
+		var r ReconcileAPIServer
+
+		BeforeEach(func() {
+			Expect(cli.Create(ctx, installation)).To(BeNil())
+			Expect(cli.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tigera-system"}})).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, &apiregv1.APIService{
+				ObjectMeta: metav1.ObjectMeta{Name: render.APIServiceName},
+				Spec: apiregv1.APIServiceSpec{
+					Group:   "projectcalico.org",
+					Version: "v3",
+					Service: &apiregv1.ServiceReference{Name: "tigera-api", Namespace: "tigera-system"},
+				},
+			})).NotTo(HaveOccurred())
+
+			r = ReconcileAPIServer{
+				client:              cli,
+				scheme:              scheme,
+				status:              mockStatus,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				opts: options.ControllerOptions{
+					EnterpriseCRDExists: true,
+					DetectedProvider:    operatorv1.ProviderNone,
+				},
+			}
+		})
+
+		apiService := func() *apiregv1.APIService {
+			s := &apiregv1.APIService{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: render.APIServiceName}, s)).NotTo(HaveOccurred())
+			return s
+		}
+
+		It("leaves the previous API server in service while the new one is not ready", func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(apiService().Spec.Service.Namespace).To(Equal("tigera-system"))
+			Expect(cli.Get(ctx, types.NamespacedName{Name: "tigera-system"}, &corev1.Namespace{})).NotTo(HaveOccurred())
+
+			// The workload it will hand over to is still created, so it has a chance to become ready.
+			d := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: render.APIServerName, Namespace: render.APIServerNamespace}, d)).NotTo(HaveOccurred())
+		})
+
+		It("repoints the APIService once the new API server is ready", func() {
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			d := &appsv1.Deployment{}
+			Expect(cli.Get(ctx, types.NamespacedName{Name: render.APIServerName, Namespace: render.APIServerNamespace}, d)).NotTo(HaveOccurred())
+			d.Status.ReadyReplicas = 2
+			Expect(cli.Status().Update(ctx, d)).NotTo(HaveOccurred())
+
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			Expect(apiService().Spec.Service.Namespace).To(Equal(render.APIServerNamespace))
+			err = cli.Get(ctx, types.NamespacedName{Name: "tigera-system"}, &corev1.Namespace{})
+			Expect(kerror.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("writes the API server's own policy before the workload while holding", func() {
+			r.client = &orderRecordingClient{Client: cli}
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			recorder, ok := r.client.(*orderRecordingClient)
+			Expect(ok).To(BeTrue())
+			Expect(recorder.created).To(ContainElement(render.APIServerPolicyName))
+			Expect(recorder.created).To(ContainElement(render.APIServerName))
+			Expect(indexOf(recorder.created, render.APIServerPolicyName)).To(BeNumerically("<", indexOf(recorder.created, render.APIServerName)))
+		})
+
+		It("does not hold on a cluster that has already migrated", func() {
+			s := apiService()
+			s.Spec.Service.Namespace = render.APIServerNamespace
+			Expect(cli.Update(ctx, s)).NotTo(HaveOccurred())
+
+			hold, err := holdAPIServiceCutover(ctx, cli)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hold).To(BeFalse())
+		})
+	})
 })
+
+// orderRecordingClient records the names of objects created through it, in order.
+type orderRecordingClient struct {
+	client.Client
+
+	created []string
+}
+
+func (c *orderRecordingClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	c.created = append(c.created, obj.GetName())
+	return c.Client.Create(ctx, obj, opts...)
+}
+
+func indexOf(names []string, name string) int {
+	for i, n := range names {
+		if n == name {
+			return i
+		}
+	}
+	return -1
+}
