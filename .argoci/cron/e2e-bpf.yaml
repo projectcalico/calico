@@ -217,7 +217,7 @@ steps:
       - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
-        value: ubuntu-2204-lts
+        value: ubuntu-2404-lts
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -235,10 +235,12 @@ steps:
         env:
           - name: USE_VXLAN
             value: "true"
-      - name: "false"
+      - name: false-netkit
         env:
           - name: USE_VXLAN
             value: "false"
+          - name: LINUX_POD_INTERFACE_TYPE
+            value: Netkit
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aks-w-aks-cni
