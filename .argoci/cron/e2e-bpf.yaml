@@ -217,7 +217,7 @@ steps:
       - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
-        value: ubuntu-2404-lts
+        value: ubuntu-2404-lts-amd64
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
