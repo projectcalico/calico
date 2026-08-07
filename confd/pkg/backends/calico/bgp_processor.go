@@ -84,6 +84,7 @@ func (c *client) GetBirdBGPConfig(ipVersion int) (*types.BirdBGPConfig, error) {
 		Peers:           make([]types.BirdBGPPeer, 0),
 		Filters:         make(map[string]string),
 		Communities:     make([]types.CommunityRule, 0),
+		ExternalIPs:     getServiceExternalIPs(pc.globalBGPConfig),
 		LoadBalancerIPs: getServiceLoadBalancerIPs(pc.globalBGPConfig),
 	}
 
