@@ -42,6 +42,8 @@ hack/test/kind/*kubeconfig.yaml
 hack/test/kind/external-node-key*
 hack/test/kind/external-node-ip
 hack/test/envtest/
+hack/test/kind/kind-authz.config
+hack/test/kind/authz-webhook-config/
 pod2daemon/node-driver-registrar/
 
 /networking-calico/upper-constraints*.txt
