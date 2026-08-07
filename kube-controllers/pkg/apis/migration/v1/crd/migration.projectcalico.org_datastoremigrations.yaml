@@ -154,6 +154,13 @@ spec:
                   type: object
                 maxItems: 64
                 type: array
+              datastoreLockedAt:
+                description: |-
+                  DatastoreLockedAt is the timestamp when the v1 datastore was locked
+                  (DatastoreReady=false) during the Pending phase. It also anchors the
+                  drain period the controller waits out before unregistering the APIService.
+                format: date-time
+                type: string
               message:
                 description: |-
                   Message is a human-readable status message describing what the controller
@@ -394,6 +401,13 @@ spec:
                   - type
                   type: object
                 type: array
+              datastoreLockedAt:
+                description: |-
+                  DatastoreLockedAt is the timestamp when the v1 datastore was locked
+                  (DatastoreReady=false) during the Pending phase. It also anchors the
+                  drain period the controller waits out before unregistering the APIService.
+                format: date-time
+                type: string
               message:
                 description: |-
                   Message is a human-readable status message describing what the controller
