@@ -118,10 +118,15 @@ blocks:
             - env_var: ENABLE_WIREGUARD
               values: ["true", "false"]
           env_vars:
-            # Skip/Focus are the same as the BPF-run block,
-            # but we *don't* skip Maglev for this environment.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+            # This run picks its tests with a config rather than a focus/skip
+            # pair: e2e/config/bpf-aws-single-subnet.yaml holds the same
+            # selection the focus/skip used to give, Maglev tests included.
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/bpf-aws-single-subnet.yaml"
+            # Maglev needs DSR, and this is the one run whose cluster otherwise
+            # suits it: BPF, an external node, one subnet, no encapsulation.
+            - name: ENABLE_BPF_DSR
+              value: "true"
             - name: IP_FAMILY
               value: dual
             - name: VPC_SUBNETS

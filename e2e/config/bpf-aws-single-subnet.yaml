@@ -1,0 +1,56 @@
+# bpf-aws-single-subnet.yaml - test selection for the AWS single-subnet BPF run.
+#
+# Standalone rather than extending base.yaml, for the same kind of reason
+# gcp-bpf.yaml is: extends only ever adds, so a child cannot put back anything
+# the parent takes away. base.yaml excludes ExternalNode, and this run is one
+# of the few with an external node -- extending it would drop the Maglev tests
+# (both are labelled ExternalNode) plus three external-node Datapath tests,
+# with no way to recover them.
+#
+# This reproduces the set of tests the run selected back when it used a
+# --ginkgo.focus/--ginkgo.skip pair, expressed the way the config loader wants
+# it. Adding or removing entries here changes what that run covers.
+#
+# The pre-testconfig filter was:
+#   --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy)
+#   --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+#
+# One deliberate departure from that filter: it also picked up tests needing
+# things this cluster hasn't got, which could only ever fail here. Those are
+# excluded by label below. Requirements the cluster does meet are left in, so
+# tests labelled RequiresAWS, RequiresBGPMesh, NoEncap, ExternalNode,
+# RequiresGoldmane and RequiresCalicoAPIServer all still run.
+
+include:
+  - sig-calico
+  - Conformance
+  # Upstream node and storage tests carrying [NodeConformance]. The old filter
+  # matched these because its bare "Conformance" also matched the longer label;
+  # naming it keeps the run's coverage unchanged and makes it a visible choice.
+  - NodeConformance
+  - Dataplane:BPF
+  - Feature:NetworkPolicy
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "no KubeVirt on this cluster; these run on the dedicated KubeVirt job (e2e/config/gcp-kubevirt.yaml)"
+
+    - label: RequiresXtables
+      reason: "requires iptables or nftables dataplane, but this cluster uses BPF"
+
+    - label: Feature:Istio
+      reason: "Istio is not installed here, and Calico policy is not enforced with Istio ambient on BPF"
+
+  # These stay regex patterns rather than label exclusions so they match the
+  # same tests the old filter did -- as text, "Feature:SCTP" also catches
+  # [Feature:SCTPConnectivity], which the label of that name does not.
+  namePatterns:
+    - group: "carried over from the run's own skip list"
+      patterns:
+        - Slow
+        - Disruptive
+        - calient
+        - allow.ingress.access.from.updated.pod
+        - Dataplane:LB
+        - Feature:SCTP
