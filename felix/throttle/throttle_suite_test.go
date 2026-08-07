@@ -30,6 +30,6 @@ func init() {
 func TestJitter(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_throttle_suite.xml"
+	testutils.RegisterJUnitReporter("felix_throttle_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/throttle", suiteConfig, reporterConfig)
 }
