@@ -354,7 +354,12 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 			return nil, nil, unix.ERANGE
 		}
 
+		// applyPolicyToWeps loads the ingress and egress programs
+		// concurrently, so this shared field needs the mock's lock like
+		// every other one.
+		m.mutex.Lock()
 		m.finalTrampolineStride = builder.TrampolineStride()
+		m.mutex.Unlock()
 	}
 
 	fdCounterLock.Lock()
