@@ -98,6 +98,23 @@ func (f *FakeCalicoClient) SetReleaseHostAffinityError(host string, err error) {
 	}
 }
 
+// SetColdGCError configures the fake IPAM client to return the given error for the
+// specified CIDR block, simulating a stale-revision conflict during the cold IP GC sweep
+func (f *FakeCalicoClient) SetColdGCError(blockCIDR string, err error) {
+	if fic, ok := f.ipamClient.(*fakeIPAMClient); ok {
+		fic.Lock()
+		defer fic.Unlock()
+		if fic.coldGCErrors == nil {
+			fic.coldGCErrors = make(map[string]error)
+		}
+		if err == nil {
+			delete(fic.coldGCErrors, blockCIDR)
+		} else {
+			fic.coldGCErrors[blockCIDR] = err
+		}
+	}
+}
+
 // StagedGlobalNetworkPolicies returns an interface for managing staged global network policy resources.
 func (f *FakeCalicoClient) StagedGlobalNetworkPolicies() clientv3.StagedGlobalNetworkPolicyInterface {
 	panic("not implemented") // TODO: Implement
@@ -299,6 +316,12 @@ type fakeIPAMClient struct {
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
 	releaseHostAffinityErrors map[string]error
+
+	// coldGCErrors maps cold IPs to errors that GarbageCollectColdIPs should
+	// return, simulating stale-revision conflicts during the cold IP GC sweep.
+	coldGCErrors map[string]error
+	// coldGCSeen records the cold IPs passed to GarbageCollectColdIPs.
+	coldGCSeen map[string]bool
 }
 
 // gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
@@ -306,6 +329,12 @@ func (f *fakeIPAMClient) gcBlocks() []string {
 	f.Lock()
 	defer f.Unlock()
 	return slices.Clone(f.garbageCollectedBlocks)
+}
+
+func (f *fakeIPAMClient) coldGCVisited(blockCIDR string) bool {
+	f.Lock()
+	defer f.Unlock()
+	return f.coldGCSeen[blockCIDR]
 }
 
 func (f *fakeIPAMClient) affinityReleased(aff string) bool {
@@ -467,7 +496,15 @@ func (f *fakeIPAMClient) GarbageCollectColdIPs(ctx context.Context, config *ipam
 	f.Lock()
 	defer f.Unlock()
 	f.garbageCollected = true
-	f.garbageCollectedBlocks = append(f.garbageCollectedBlocks, kvp.Key.(model.BlockKey).CIDR.String())
+	cidr := kvp.Key.(model.BlockKey).CIDR.String()
+	f.garbageCollectedBlocks = append(f.garbageCollectedBlocks, cidr)
+	if f.coldGCSeen == nil {
+		f.coldGCSeen = make(map[string]bool)
+	}
+	f.coldGCSeen[cidr] = true
+	if err, ok := f.coldGCErrors[cidr]; ok {
+		return err
+	}
 	return nil
 }
 
