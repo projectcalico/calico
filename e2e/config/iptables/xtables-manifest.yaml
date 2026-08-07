@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
-# nftables: xtables dataplane, encapsulated, Felix routing, v3 CRD mode, no external node.
+# iptables: xtables dataplane, unencapsulated routing, no external node, manifest install.
 #
 # Selection scope comes from pipeline.yaml; this file adds only what this
 # lane's cluster shape rules out.
@@ -15,13 +15,9 @@ exclude:
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
     - label: Feature:AutoHEPs
       reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
-    - label: Feature:BGPPeer
-      reason: "Felix routing (no BIRD) cannot peer"
-    - label: NoEncap
-      reason: "cluster uses encapsulation; these specs require unencapsulated routing"
     - label: RequiresAWS
       reason: "not an AWS lane; these specs need AWS VPC routing"
-    - label: RequiresBGPMesh
-      reason: "cluster routes over an overlay, so disabling the BGP mesh does not sever connectivity as these specs expect"
-    - label: RequiresCalicoAPIServer
-      reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresGoldmane
+      reason: "manifest install; goldmane/whisker ship enabled in the operator chart but the MANIFEST_FILE installers do not include them"
+    - label: RequiresOperator
+      reason: "manifest install (no tigera-operator), so a CR this test creates would never be reconciled"

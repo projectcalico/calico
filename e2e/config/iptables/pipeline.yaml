@@ -20,7 +20,3 @@ exclude:
   labels:
     - label: Feature:KubeVirt
       reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
-    - label: Feature:Istio
-      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
-    - label: RequiresGoldmane
-      reason: "nothing in .argoci installs Goldmane/Whisker"

@@ -216,28 +216,102 @@ func TestFragmentsAreNotUsedDirectly(t *testing.T) {
 	}
 }
 
-// TestNoOrphanedConfigs checks the reverse of TestReferencedConfigsExist: a
-// config nobody names sits in the tree looking authoritative.
-//
-// TODO: unskip once the per-cron wiring PRs have pointed every cell at its
-// config. Until then every config added ahead of its cell is legitimately
-// unreferenced, so enforcing this now would just fail.
-func TestNoOrphanedConfigs(t *testing.T) {
-	t.Skip("cells are wired to configs in follow-up PRs; nothing references them yet")
+// unwiredConfigs is the set of configs that no CI cell points at yet, because the
+// whole tree lands ahead of the per-cron wiring. It is an allowlist that shrinks:
+// each wiring PR deletes the entries it wires, and the last one deletes the map.
+// Asserted in both directions below, so a config added without a cell fails
+// immediately and a stale entry fails too.
+var unwiredConfigs = map[string]bool{
+	"bpf/aks-bpf-nobgp.yaml":                          true,
+	"bpf/aks-bpf.yaml":                                true,
+	"bpf/bpf-aws.yaml":                                true,
+	"bpf/bpf-encap-extnode-aws.yaml":                  true,
+	"bpf/bpf-encap-nobgp-extnode-aws.yaml":            true,
+	"bpf/bpf-extnode-aws.yaml":                        true,
+	"bpf/bpf-extnode.yaml":                            true,
+	"bpf/bpf-v3crd-extnode-aws.yaml":                  true,
+	"bpf/bpf-v3crd-extnode.yaml":                      true,
+	"bpf/bpf.yaml":                                    true,
+	"bpf/eks-bpf-encap-extnode-aws.yaml":              true,
+	"bpf/eks-bpf-nobgp-extnode-aws.yaml":              true,
+	"bpf/eks-xtables-encap-extnode-aws.yaml":          true,
+	"bpf/kops-bpf-encap-extnode-aws.yaml":             true,
+	"bpf/kops-bpf-extnode-aws.yaml":                   true,
+	"bpf/kops-xtables-encap-extnode-aws.yaml":         true,
+	"bpf/kops-xtables-extnode-aws.yaml":               true,
+	"bpf/xtables-encap-extnode-aws.yaml":              true,
+	"bpf/xtables-extnode-aws.yaml":                    true,
+	"iptables/aks-xtables-encap.yaml":                 true,
+	"iptables/aks-xtables-nobgp.yaml":                 true,
+	"iptables/aks-xtables.yaml":                       true,
+	"iptables/eks-xtables-aws.yaml":                   true,
+	"iptables/xtables-autohep.yaml":                   true,
+	"iptables/xtables-aws.yaml":                       true,
+	"iptables/xtables-encap-nobgp.yaml":               true,
+	"iptables/xtables-manifest.yaml":                  true,
+	"iptables/xtables-v3crd-aws.yaml":                 true,
+	"iptables/xtables-v3crd.yaml":                     true,
+	"iptables/xtables.yaml":                           true,
+	"nftables/eks-xtables-aws-autohep.yaml":           true,
+	"nftables/eks-xtables-nobgp-aws-autohep.yaml":     true,
+	"nftables/xtables-autohep.yaml":                   true,
+	"nftables/xtables-encap-autohep.yaml":             true,
+	"nftables/xtables-encap-aws-autohep.yaml":         true,
+	"nftables/xtables-encap-nobgp-v3crd-autohep.yaml": true,
+	"nftables/xtables-v3crd-aws-autohep.yaml":         true,
+	"patch-verification/aks-xtables-nobgp.yaml":       true,
+	"patch-verification/bpf-aws.yaml":                 true,
+	"patch-verification/bpf-encap-aws.yaml":           true,
+	"patch-verification/bpf-encap.yaml":               true,
+	"patch-verification/eks-bpf-encap-aws.yaml":       true,
+	"patch-verification/eks-bpf-nobgp-aws.yaml":       true,
+	"patch-verification/xtables-aws.yaml":             true,
+	"patch-verification/xtables-encap-manifest.yaml":  true,
+	"patch-verification/xtables-manifest.yaml":        true,
+	"patch-verification/xtables.yaml":                 true,
+	"test/bpf.yaml":                                   true,
+	"upgrade/aks-xtables.yaml":                        true,
+	"upgrade/bpf.yaml":                                true,
+	"upgrade/eks-bpf-aws-manifest.yaml":               true,
+	"upgrade/xtables-aws.yaml":                        true,
+	"upgrade/xtables.yaml":                            true,
+	"vpp/eks-vpp-encap-extnode-aws.yaml":              true,
+	"vpp/vpp-encap-extnode-aws.yaml":                  true,
+	"vpp/vpp-encap-extnode.yaml":                      true,
+	"vpp/xtables-encap-extnode-aws.yaml":              true,
+	"windows/aks-xtables-nobgp.yaml":                  true,
+	"windows/xtables-encap.yaml":                      true,
+}
 
+// TestNoOrphanedConfigs checks the reverse of TestReferencedConfigsExist: a config
+// nobody names is dead weight that still reads as authoritative.
+func TestNoOrphanedConfigs(t *testing.T) {
 	referenced := map[string]bool{}
 	for cfgPath := range configReferences(t) {
-		rel, err := filepath.Rel("e2e/config", cfgPath)
-		if err == nil {
+		if rel, err := filepath.Rel("e2e/config", cfgPath); err == nil {
 			referenced[rel] = true
 		}
 	}
+
+	seen := map[string]bool{}
 	eachConfig(t, func(t *testing.T, rel, abs string) {
-		if isFragment(rel) || isAbstractParent(rel) || referenced[rel] {
+		if isFragment(rel) || isAbstractParent(rel) {
 			return
 		}
-		t.Error("no CI cell, Makefile target or doc references this config")
+		seen[rel] = true
+		switch {
+		case referenced[rel] && unwiredConfigs[rel]:
+			t.Error("now referenced by CI, so drop it from unwiredConfigs")
+		case !referenced[rel] && !unwiredConfigs[rel]:
+			t.Error("no CI cell, Makefile target or doc references this config")
+		}
 	})
+
+	for rel := range unwiredConfigs {
+		if !seen[rel] {
+			t.Errorf("unwiredConfigs lists %q, which no longer exists", rel)
+		}
+	}
 }
 
 // TestExtendsStaysInTree keeps `extends` chains inside e2e/config. A config that
