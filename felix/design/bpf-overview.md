@@ -414,10 +414,12 @@ Several BPF features depend on kernel version:
 - Jump maps per TCX direction (kernel 6.12+) — the split into
   `cali_progs_ing` vs `cali_progs_egr` is the workaround ([bpf-tc-programs.md → TC program layout](./bpf-tc-programs.md)).
 - Netkit attach — used only when the workload interface is a
-  netkit device and the kernel supports the netkit attach API.
-  Felix probes at runtime (`tc.IsNetkitSupported`) and falls
+  netkit device, the kernel supports the netkit attach API, and
+  `BPFAttachType` has not selected TC or TCX outright. Felix
+  probes at runtime (`tc.IsNetkitSupported`) and falls
   back to TCX/clsact when not supported. See
-  [bpf-tc-programs.md → Attach mechanisms](./bpf-tc-programs.md).
+  [bpf-tc-programs.md → Attach mechanisms](./bpf-tc-programs.md)
+  and [→ Leaving netkit attachment](./bpf-tc-programs.md).
 - `bpf_redirect_neigh` availability — [bpf-host-networking.md → Host-networked workaround (bpfnat veth)](./bpf-host-networking.md)'s bpfnat turnaround falls
   back to bounce-off-the-veth when this helper isn't available.
 - IP defrag sub-program (`SubProgIPFrag`) — older verifiers reject

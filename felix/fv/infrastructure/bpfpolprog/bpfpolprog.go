@@ -49,7 +49,7 @@ func NumPolProgramsTotalByEntryPointFn(f *infrastructure.Felix, entryPointIdx in
 func NumPolProgramsByEntryPoint(f *infrastructure.Felix, entryPointIdx int, ingressOrEgress string) (contiguous, total int) {
 	gapSeen := false
 	var jmpMapName string
-	if infrastructure.NetkitMode() {
+	if infrastructure.NetkitAttachMode() {
 		jmpMapName = jump.NetkitEgressMapParameters.VersionedName()
 		if ingressOrEgress == "egress" {
 			jmpMapName = jump.NetkitIngressMapParameters.VersionedName()

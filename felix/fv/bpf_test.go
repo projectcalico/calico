@@ -296,10 +296,10 @@ func BPFAttachType() string {
 }
 
 // bpfProgPinDir returns the BPF program pin directory for the current
-// attach mode.  In netkit mode, workload programs are pinned under
-// NetkitPinDir; in TCX mode they use TcxPinDir.
+// attach mode.  Netkit-attached workload programs are pinned under
+// NetkitPinDir; TCX ones use TcxPinDir.
 func bpfProgPinDir() string {
-	if infrastructure.NetkitMode() {
+	if infrastructure.NetkitAttachMode() {
 		return bpfdefs.NetkitPinDir
 	}
 	return bpfdefs.TcxPinDir

@@ -1684,17 +1684,22 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 ### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
 
 Controls how are the BPF programs at the network interfaces attached.
-By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-`TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+instead of the netkit API, which is required before downgrading to a release without netkit
+support.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFAttachType` |
-| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> |
-| Default value (above encoding) | `TCX` |
+| Encoding (env var/config file) | One of: <code>Netkit</code>, <code>TCX</code>, <code>TC</code> |
+| Default value (above encoding) | `Netkit` |
 | `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"TC"</code>, <code>"TCX"</code>. |
-| Default value (YAML) | `TCX` |
+| `FelixConfiguration` schema | One of: <code>"Netkit"</code>, <code>"TC"</code>, <code>"TCX"</code>. |
+| Default value (YAML) | `Netkit` |
 | Notes | Required. | 
 
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
