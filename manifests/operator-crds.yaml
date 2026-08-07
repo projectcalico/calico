@@ -19758,7 +19758,7 @@ spec:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
                     TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                    Default: Calico
+                    If left unset, the operator fills in the variant it is running as.
                   enum:
                     - Calico
                     - CalicoEnterprise
@@ -29247,7 +29247,7 @@ spec:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.
                         TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                        Default: Calico
+                        If left unset, the operator fills in the variant it is running as.
                       enum:
                         - Calico
                         - CalicoEnterprise
@@ -35197,7 +35197,7 @@ spec:
                     routes; if neither is, there will be no cluster routes at all.
 
                     Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly values do, is
-                    deprecated as of v3.33 and will be removed in a future release.
+                    deprecated as of v3.33 and will be removed in v3.35.
 
                     [Default: EnabledNoEncapOnly]
                   enum:
@@ -38131,7 +38131,7 @@ spec:
                     routes; if neither is, there will be no cluster routes at all.
 
                     Note: leaving the IPIP cluster routes to confd and BIRD, which the Disabled and EnabledNoEncapOnly
-                    values do, is deprecated as of v3.33 and will be removed in a future release.
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
 
                     [Default: EnabledIPIPOnly]
                   enum:

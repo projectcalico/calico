@@ -971,7 +971,7 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 
 	if birdProgramsIPIPPool {
 		logCtx.Warn("BIRD is configured to program the cluster routes for one or more IPIP IP Pools. " +
-			"That is deprecated as of v3.33 and will be removed in a future release; set " +
+			"That is deprecated as of v3.33 and will be removed in v3.35; set " +
 			"BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or Disabled) and " +
 			"FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or Enabled) to let Felix " +
 			"program them instead.")

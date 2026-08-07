@@ -1303,8 +1303,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if !config.ProgramIPIPClusterRoutes {
 			log.Warn("IPIP is enabled but ProgramClusterRoutes leaves the IPIP cluster routes to " +
-				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in a future " +
-				"release; set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
+				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in v3.35; " +
+				"set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
 				"Enabled) and BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or " +
 				"Disabled) to let Felix program them instead.")
 		}

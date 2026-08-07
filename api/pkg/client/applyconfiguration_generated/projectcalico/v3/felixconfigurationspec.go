@@ -326,7 +326,7 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// routes; if neither is, there will be no cluster routes at all.
 	//
 	// Note: leaving the IPIP cluster routes to confd and BIRD, which the Disabled and EnabledNoEncapOnly
-	// values do, is deprecated as of v3.33 and will be removed in a future release.
+	// values do, is deprecated as of v3.33 and will be removed in v3.35.
 	//
 	// [Default: EnabledIPIPOnly]
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
