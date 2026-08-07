@@ -2627,9 +2627,9 @@ blocks:
         - name: RUN_LOCAL_TESTS
           value: "true"
         - name: E2E_TEST_CONFIG
-          # Test selection is driven by the config file; see gcp-bpf.yaml for the
+          # Test selection is driven by the config file; see gcp/bpf.yaml for the
           # include/exclude rationale.
-          value: "e2e/config/gcp-bpf.yaml"
+          value: "e2e/config/gcp/bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
         - name: ENABLE_EXTERNAL_NODE
@@ -3162,7 +3162,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -3172,7 +3172,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "projectcalico.org/v3"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: sig-calico (dataplane: BPF)"
           commands:
             - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
@@ -4655,7 +4655,7 @@ blocks:
         - name: BUILD_CACHE_GROUP
           value: "calico"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/kind-kubevirt.yaml"
+          value: "e2e/config/kind/kubevirt.yaml"
       agent:
         machine:
           type: f1-standard-4

@@ -196,7 +196,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.

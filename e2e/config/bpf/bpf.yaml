@@ -1,0 +1,19 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# bpf: BPF dataplane, unencapsulated routing, no external node.
+#
+# Selection scope comes from pipeline.yaml; this file adds only what this
+# lane's cluster shape rules out.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    - label: ExternalNode
+      reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
+    - label: Feature:AutoHEPs
+      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
+    - label: RequiresAWS
+      reason: "not an AWS lane; these specs need AWS VPC routing"
+    - label: RequiresXtables
+      reason: "BPF/VPP dataplane; these specs exercise iptables/nftables behaviour that does not exist here"

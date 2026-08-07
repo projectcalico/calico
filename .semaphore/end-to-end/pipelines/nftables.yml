@@ -220,7 +220,7 @@ blocks:
         - name: NUM_KUBEVIRT_VMS
           value: "2"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/gcp-kubevirt.yaml"
+          value: "e2e/config/gcp/kubevirt.yaml"
 
 promotions:
   - name: Cleanup jobs

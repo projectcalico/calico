@@ -10,7 +10,7 @@
       - name: BUILD_CACHE_GROUP
         value: "calico"
       - name: E2E_TEST_CONFIG
-        value: "e2e/config/kind-kubevirt.yaml"
+        value: "e2e/config/kind/kubevirt.yaml"
     agent:
       machine:
         type: f1-standard-4

@@ -1,4 +1,4 @@
-# kind-bpf.yaml - test selection for the kind e2e CI job running the BPF
+# kind/bpf.yaml - test selection for the kind e2e CI job running the BPF
 # dataplane (values-bpf.yaml overlay).
 #
 # This config is standalone (doesn't extend base.yaml) because it uses a
