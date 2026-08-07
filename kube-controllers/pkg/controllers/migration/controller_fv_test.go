@@ -490,6 +490,7 @@ func TestLifecycle_Rollback(t *testing.T) {
 	// where the phase hadn't been persisted as Converged yet.
 	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+	migrationID := string(dm.UID)
 	dm.Status.Phase = migrationv1.DatastoreMigrationPhaseMigrating
 	g.Expect(fvRTClient.Status().Update(ctx, dm)).To(Succeed())
 
@@ -521,12 +522,12 @@ func TestLifecycle_Rollback(t *testing.T) {
 	g.Expect(v1CI.Spec.DatastoreReady).To(Equal(ptr.To(true)), "v1 ClusterInformation should be unlocked after abort")
 
 	// Verify migrated v3 resources were cleaned up. The "default" and
-	// "security" tiers were created by migration (with the migrated-by
-	// annotation), so they should be deleted during abort.
+	// "security" tiers were stamped with this migration's UID, so they should
+	// be deleted during abort.
 	tierList := &apiv3.TierList{}
 	g.Expect(fvRTClient.List(ctx, tierList)).To(Succeed())
 	for _, tier := range tierList.Items {
-		g.Expect(tier.Annotations).NotTo(HaveKey(migratedByAnnotation), "tier %s should have been cleaned up", tier.Name)
+		g.Expect(tier.Annotations).NotTo(HaveKeyWithValue(migratedByAnnotation, migrationID), "tier %s should have been cleaned up", tier.Name)
 	}
 }
 
