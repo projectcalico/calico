@@ -74,96 +74,208 @@ var (
 	}
 )
 
-func Test_processIPPoolsV4(t *testing.T) {
-	forKernelStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
+// Kernel-programming filter statements expected for the IPv4 pool table above, split by class of
+// IP Pool and, for the classes that are configurable, by which component ends up owning the
+// cluster routes.
+var (
+	kernelIPIPByBIRDV4 = []string{
 		`  if (net ~ 10.10.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
 		`  if (net ~ 10.11.0.0/16) then { krt_tunnel="tunl0"; accept; }`,
 		`  if (net ~ 10.12.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
 		`  if (net ~ 10.13.0.0/16) then { if (defined(bgp_next_hop)&&(bgp_next_hop ~ 1.1.1.0/24)) then krt_tunnel=""; else krt_tunnel="tunl0"; accept; }`,
-		// IPv4 No-Encapsulation case.
+	}
+	kernelIPIPByFelixV4 = []string{
+		`  if (net ~ 10.10.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ 10.11.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ 10.12.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ 10.13.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+	}
+	kernelNoEncapByBIRDV4 = []string{
 		`  if (net ~ 10.14.0.0/16) then { accept; }`,
 		`  if (net ~ 10.15.0.0/16) then { accept; }`,
-		// IPv4 VXLAN Encapsulation cases.
+	}
+	kernelNoEncapByFelixV4 = []string{
+		`  if (net ~ 10.14.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ 10.15.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
+	}
+	kernelVXLANV4 = []string{
 		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
-	slices.Sort(forKernelStatements)
 
-	forExportStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
+	// The filters for exporting to BGP peers only depend on DisableBGPExport, so they are the same
+	// whichever component programs the cluster routes.
+	exportStatementsV4 = []string{
 		`  if (net ~ 10.10.0.0/16) then { accept; }`,
 		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
 		`  if (net ~ 10.12.0.0/16) then { accept; }`,
 		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 No-Encapsulation case.
 		`  if (net ~ 10.14.0.0/16) then { accept; }`,
 		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 VXLAN Encapsulation cases.
 		`  if (net ~ 10.16.0.0/16) then { accept; }`,
 		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
 		`  if (net ~ 10.18.0.0/16) then { accept; }`,
 		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
 	}
-	slices.Sort(forExportStatements)
+)
 
-	originalNodeName := NodeName
-	NodeName = "test-node-ippools"
-	defer func() {
-		NodeName = originalNodeName
-		_ = os.Unsetenv("CALICO_ROUTER_ID")
-	}()
-
-	cache := ippoolTestCasesToKVPairs(t, poolsTestsV4, 4)
-	key := fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)
-	cache[key] = "1.1.1.0/24"
-
-	c := newTestClient(cache, nil)
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
+// The same, for the IPv6 pool table.  There is no krt_tunnel for IPv6, so a BIRD-programmed pool
+// is a plain accept; and the IPv6 kernel filter only carries the reject statements, because the
+// template ends with a catch-all accept.
+var (
+	kernelIPIPByBIRDV6 = []string{
+		`  if (net ~ dead:beef:10::/64) then { accept; }`,
+		`  if (net ~ dead:beef:11::/64) then { accept; }`,
+		`  if (net ~ dead:beef:12::/64) then { accept; }`,
+		`  if (net ~ dead:beef:13::/64) then { accept; }`,
+	}
+	kernelIPIPByFelixV6 = []string{
+		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ dead:beef:11::/64) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ dead:beef:12::/64) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ dead:beef:13::/64) then { reject; } # Cluster routes are handled by Felix.`,
+	}
+	kernelNoEncapByBIRDV6 = []string{
+		`  if (net ~ dead:beef:14::/64) then { accept; }`,
+		`  if (net ~ dead:beef:15::/64) then { accept; }`,
+	}
+	kernelNoEncapByFelixV6 = []string{
+		`  if (net ~ dead:beef:14::/64) then { reject; } # Cluster routes are handled by Felix.`,
+		`  if (net ~ dead:beef:15::/64) then { reject; } # Cluster routes are handled by Felix.`,
+	}
+	kernelVXLANV6 = []string{
+		`  if (net ~ dead:beef:16::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:17::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:18::/64) then { reject; } # VXLAN routes are handled by Felix.`,
+		`  if (net ~ dead:beef:19::/64) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
 
-	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
-	require.NoError(t, err)
-
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, forKernelStatements)
+	exportStatementsV6 = []string{
+		`  if (net ~ dead:beef:10::/64) then { accept; }`,
+		`  if (net ~ dead:beef:11::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:12::/64) then { accept; }`,
+		`  if (net ~ dead:beef:13::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:14::/64) then { accept; }`,
+		`  if (net ~ dead:beef:15::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:16::/64) then { accept; }`,
+		`  if (net ~ dead:beef:17::/64) then { reject; } # BGP export is disabled.`,
+		`  if (net ~ dead:beef:18::/64) then { accept; }`,
+		`  if (net ~ dead:beef:19::/64) then { reject; } # BGP export is disabled.`,
 	}
+)
 
-	expected := filterExpectedStatements(forExportStatements, "reject")
-	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForDisabledIPPools, expected)
-	}
+// Test_processIPPools walks BGPConfiguration.programClusterRoutes over its whole enum, checking
+// which classes of IP Pool BIRD is left programming the cluster routes for.  The default is
+// EnabledNoEncapOnly: BIRD keeps the unencapsulated pools and Felix takes the IPIP ones.
+func Test_processIPPools(t *testing.T) {
+	for _, tc := range []struct {
+		name                 string
+		programClusterRoutes *string
+		ipVersion            int
+		wantKernel           []string
+	}{
+		{
+			name:       "IPv4, field unset: BIRD programs unencapsulated pools only",
+			ipVersion:  4,
+			wantKernel: slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+		},
+		{
+			name:                 "IPv4, EnabledNoEncapOnly: BIRD programs unencapsulated pools only",
+			programClusterRoutes: ptr.To("EnabledNoEncapOnly"),
+			ipVersion:            4,
+			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+		},
+		{
+			name:                 "IPv4, Enabled: BIRD programs both IPIP and unencapsulated pools",
+			programClusterRoutes: ptr.To("Enabled"),
+			ipVersion:            4,
+			wantKernel:           slices.Concat(kernelIPIPByBIRDV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+		},
+		{
+			name:                 "IPv4, EnabledIPIPOnly: BIRD programs IPIP pools only",
+			programClusterRoutes: ptr.To("EnabledIPIPOnly"),
+			ipVersion:            4,
+			wantKernel:           slices.Concat(kernelIPIPByBIRDV4, kernelNoEncapByFelixV4, kernelVXLANV4),
+		},
+		{
+			name:                 "IPv4, Disabled: Felix programs everything",
+			programClusterRoutes: ptr.To("Disabled"),
+			ipVersion:            4,
+			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByFelixV4, kernelVXLANV4),
+		},
+		{
+			name:                 "IPv4, unrecognised value: falls back to the default",
+			programClusterRoutes: ptr.To("SomethingFromANewerAPI"),
+			ipVersion:            4,
+			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+		},
+		{
+			name:       "IPv6, field unset: BIRD programs unencapsulated pools only",
+			ipVersion:  6,
+			wantKernel: slices.Concat(kernelIPIPByFelixV6, kernelNoEncapByBIRDV6, kernelVXLANV6),
+		},
+		{
+			name:                 "IPv6, Enabled: BIRD programs both IPIP and unencapsulated pools",
+			programClusterRoutes: ptr.To("Enabled"),
+			ipVersion:            6,
+			wantKernel:           slices.Concat(kernelIPIPByBIRDV6, kernelNoEncapByBIRDV6, kernelVXLANV6),
+		},
+		{
+			name:                 "IPv6, Disabled: Felix programs everything",
+			programClusterRoutes: ptr.To("Disabled"),
+			ipVersion:            6,
+			wantKernel:           slices.Concat(kernelIPIPByFelixV6, kernelNoEncapByFelixV6, kernelVXLANV6),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			originalNodeName := NodeName
+			NodeName = "test-node-ippools"
+			t.Cleanup(func() {
+				NodeName = originalNodeName
+				_ = os.Unsetenv("CALICO_ROUTER_ID")
+			})
 
-	expected = filterExpectedStatements(forExportStatements, "accept")
-	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForEnabledIPPools, expected)
+			pools, exportStatements := poolsTestsV4, exportStatementsV4
+			if tc.ipVersion == 6 {
+				pools, exportStatements = poolsTestsV6, exportStatementsV6
+			}
+
+			cache := ippoolTestCasesToKVPairs(t, pools, tc.ipVersion)
+			if tc.ipVersion == 4 {
+				// The local subnet is needed to render the ipipMode: CrossSubnet statements.
+				cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
+			}
+
+			c := newTestClient(cache, nil)
+			if tc.programClusterRoutes != nil {
+				c.globalBGPConfig = &v3.BGPConfiguration{
+					Spec: v3.BGPConfigurationSpec{
+						ProgramClusterRoutes: tc.programClusterRoutes,
+					},
+				}
+			}
+			config := &types.BirdBGPConfig{NodeName: NodeName}
+
+			require.NoError(t, c.processIPPools(c.getBGPProcessorContext(), config, tc.ipVersion))
+
+			wantKernel := slices.Clone(tc.wantKernel)
+			slices.Sort(wantKernel)
+			if tc.ipVersion == 6 {
+				wantKernel = filterExpectedStatements(wantKernel, "reject")
+			}
+			require.Equal(t, wantKernel, config.KernelFilterForIPPools)
+
+			wantExport := slices.Clone(exportStatements)
+			slices.Sort(wantExport)
+			require.Equal(t, filterExpectedStatements(wantExport, "reject"), config.BGPExportFilterForDisabledIPPools)
+			require.Equal(t, filterExpectedStatements(wantExport, "accept"), config.BGPExportFilterForEnabledIPPools)
+		})
 	}
 }
 
 func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
-	forExportStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.12.0.0/16) then { accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { accept; }`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.18.0.0/16) then { accept; }`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
-	}
-	slices.Sort(forExportStatements)
-
 	originalNodeName := NodeName
 	NodeName = "test-node-ippools"
 	defer func() {
@@ -185,240 +297,10 @@ func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {
 		t.Errorf("Expected BIRD filter for programming kernel to be nil")
 	}
 
-	expected := filterExpectedStatements(forExportStatements, "reject")
-	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForDisabledIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "accept")
-	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForEnabledIPPools, expected)
-	}
-}
-
-func Test_processIPPoolsV6(t *testing.T) {
-	forKernelStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { accept; }`,
-		`  if (net ~ dead:beef:11::/64) then { accept; }`,
-		`  if (net ~ dead:beef:12::/64) then { accept; }`,
-		`  if (net ~ dead:beef:13::/64) then { accept; }`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { accept; }`,
-		`  if (net ~ dead:beef:15::/64) then { accept; }`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:18::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	slices.Sort(forKernelStatements)
-
-	forExportStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { accept; }`,
-		`  if (net ~ dead:beef:11::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:12::/64) then { accept; }`,
-		`  if (net ~ dead:beef:13::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { accept; }`,
-		`  if (net ~ dead:beef:15::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { accept; }`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:18::/64) then { accept; }`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # BGP export is disabled.`,
-	}
-	slices.Sort(forExportStatements)
-
-	originalNodeName := NodeName
-	NodeName = "test-node-ippools"
-	defer func() {
-		NodeName = originalNodeName
-		_ = os.Unsetenv("CALICO_ROUTER_ID")
-	}()
-
-	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
-
-	c := newTestClient(cache, nil)
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
-	require.NoError(t, err)
-
-	expected := filterExpectedStatements(forKernelStatements, "reject")
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "reject")
-	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForDisabledIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "accept")
-	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForEnabledIPPools, expected)
-	}
-}
-
-func Test_processIPPoolsV4_FelixProgramsClusterRoutes(t *testing.T) {
-	forKernelStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ 10.11.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ 10.12.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ 10.13.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ 10.15.0.0/16) then { reject; } # Cluster routes are handled by Felix.`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.18.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	slices.Sort(forKernelStatements)
-
-	forExportStatements := []string{
-		// IPv4 IPIP Encapsulation cases.
-		`  if (net ~ 10.10.0.0/16) then { accept; }`,
-		`  if (net ~ 10.11.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.12.0.0/16) then { accept; }`,
-		`  if (net ~ 10.13.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 No-Encapsulation case.
-		`  if (net ~ 10.14.0.0/16) then { accept; }`,
-		`  if (net ~ 10.15.0.0/16) then { reject; } # BGP export is disabled.`,
-		// IPv4 VXLAN Encapsulation cases.
-		`  if (net ~ 10.16.0.0/16) then { accept; }`,
-		`  if (net ~ 10.17.0.0/16) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ 10.18.0.0/16) then { accept; }`,
-		`  if (net ~ 10.19.0.0/16) then { reject; } # BGP export is disabled.`,
-	}
-	slices.Sort(forExportStatements)
-
-	originalNodeName := NodeName
-	NodeName = "test-node-ippools"
-	defer func() {
-		NodeName = originalNodeName
-		_ = os.Unsetenv("CALICO_ROUTER_ID")
-	}()
-
-	cache := ippoolTestCasesToKVPairs(t, poolsTestsV4, 4)
-	cache[fmt.Sprintf("/calico/bgp/v1/host/%s/network_v4", NodeName)] = "1.1.1.0/24"
-
-	c := newTestClient(cache, nil)
-	c.globalBGPConfig = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: ptr.To("Disabled"),
-		},
-	}
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.processIPPools(c.getBGPProcessorContext(), config, 4)
-	require.NoError(t, err)
-
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, forKernelStatements) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, forKernelStatements)
-	}
-
-	expected := filterExpectedStatements(forExportStatements, "reject")
-	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForDisabledIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "accept")
-	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForEnabledIPPools, expected)
-	}
-}
-
-func Test_processIPPoolsV6_FelixProgramsClusterRoutes(t *testing.T) {
-	forKernelStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ dead:beef:11::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ dead:beef:12::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ dead:beef:13::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		`  if (net ~ dead:beef:15::/64) then { reject; } # Cluster routes are handled by Felix.`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:18::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # VXLAN routes are handled by Felix.`,
-	}
-	slices.Sort(forKernelStatements)
-
-	forExportStatements := []string{
-		// IPv6 IPIP Encapsulation cases.
-		`  if (net ~ dead:beef:10::/64) then { accept; }`,
-		`  if (net ~ dead:beef:11::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:12::/64) then { accept; }`,
-		`  if (net ~ dead:beef:13::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 No-Encapsulation case.
-		`  if (net ~ dead:beef:14::/64) then { accept; }`,
-		`  if (net ~ dead:beef:15::/64) then { reject; } # BGP export is disabled.`,
-		// IPv6 VXLAN Encapsulation cases.
-		`  if (net ~ dead:beef:16::/64) then { accept; }`,
-		`  if (net ~ dead:beef:17::/64) then { reject; } # BGP export is disabled.`,
-		`  if (net ~ dead:beef:18::/64) then { accept; }`,
-		`  if (net ~ dead:beef:19::/64) then { reject; } # BGP export is disabled.`,
-	}
-	slices.Sort(forExportStatements)
-
-	originalNodeName := NodeName
-	NodeName = "test-node-ippools"
-	defer func() {
-		NodeName = originalNodeName
-		_ = os.Unsetenv("CALICO_ROUTER_ID")
-	}()
-
-	cache := ippoolTestCasesToKVPairs(t, poolsTestsV6, 6)
-
-	c := newTestClient(cache, nil)
-	c.globalBGPConfig = &v3.BGPConfiguration{
-		Spec: v3.BGPConfigurationSpec{
-			ProgramClusterRoutes: ptr.To("Disabled"),
-		},
-	}
-	config := &types.BirdBGPConfig{
-		NodeName: NodeName,
-	}
-
-	err := c.processIPPools(c.getBGPProcessorContext(), config, 6)
-	require.NoError(t, err)
-
-	expected := filterExpectedStatements(forKernelStatements, "reject")
-	if !reflect.DeepEqual(config.KernelFilterForIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.KernelFilterForIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "reject")
-	if !reflect.DeepEqual(config.BGPExportFilterForDisabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForDisabledIPPools, expected)
-	}
-
-	expected = filterExpectedStatements(forExportStatements, "accept")
-	if !reflect.DeepEqual(config.BGPExportFilterForEnabledIPPools, expected) {
-		t.Errorf("Generated BIRD config differs from expectation:\n Generated=%#v,\n Expected=%#v",
-			config.BGPExportFilterForEnabledIPPools, expected)
-	}
+	expected := slices.Clone(exportStatementsV4)
+	slices.Sort(expected)
+	require.Equal(t, filterExpectedStatements(expected, "reject"), config.BGPExportFilterForDisabledIPPools)
+	require.Equal(t, filterExpectedStatements(expected, "accept"), config.BGPExportFilterForEnabledIPPools)
 }
 
 func Test_processWireguardPeerFilterV4(t *testing.T) {
