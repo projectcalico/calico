@@ -1,0 +1,24 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# windows pipeline: test selection scope.
+#
+# Only the Calico specs that can run against Windows nodes.
+# The old `--ginkgo.skip=(\[LinuxOnly\])` is dropped: the include already limits
+# this to the two WithWindows() specs.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - sig-calico && RunsOnWindows
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"

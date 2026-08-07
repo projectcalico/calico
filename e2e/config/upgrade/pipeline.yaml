@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# upgrade pipeline: test selection scope.
+#
+# As patch-verification: shows the cluster still works after an
+# upgrade.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - Conformance && sig-network
+  - Conformance && sig-calico
+  - Feature:Tiered-RBAC
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Istio
+      reason: "no lane provisions Istio ambient; istio.go has no self-skip so it would fail"
+    - label: RequiresGoldmane
+      reason: "nothing in .argoci installs Goldmane/Whisker"
