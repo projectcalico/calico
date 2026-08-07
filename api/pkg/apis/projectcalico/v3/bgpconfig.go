@@ -168,7 +168,7 @@ type BGPConfigurationSpec struct {
 	// routes; if neither is, there will be no cluster routes at all.
 	//
 	// Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly values do, is
-	// deprecated as of v3.33 and will be removed in a future release.
+	// deprecated as of v3.33 and will be removed in v3.35.
 	//
 	// [Default: EnabledNoEncapOnly]
 	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
