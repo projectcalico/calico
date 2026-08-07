@@ -296,7 +296,9 @@ fi
 ###############################################################################
 log "Step 6: Waiting for migration to complete"
 
-TIMEOUT=300
+# Converged to Complete waits on the operator rolling calico-node and typha,
+# which takes several minutes on a multi-node kind cluster.
+TIMEOUT=900
 INTERVAL=5
 elapsed=0
 
