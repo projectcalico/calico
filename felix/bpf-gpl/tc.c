@@ -1570,8 +1570,15 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	/* Check egress connection limit for new TCP connections from WEP.
 	 * Atomically check the limit and increment the counter in the QoS map.
 	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 *
+	 * Gated on EGRESS_CONN_LIMIT_CONFIGURED to match the CONNLIMIT_EGRESS
+	 * stamp below and the ingress check. Felix writes the cali_qos_conn
+	 * entry before the program is reattached with the new global, so
+	 * without this a connection opened in that window is counted but not
+	 * stamped, and nothing can decrement it until the next recount.
 	 */
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP &&
+			EGRESS_CONN_LIMIT_CONFIGURED &&
 			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
