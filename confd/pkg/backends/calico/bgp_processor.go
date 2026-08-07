@@ -930,15 +930,13 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
-	programClusterRoutes := true // Default is Enabled when ProgramClusterRoutes is unset in BGPConfiguration.
-	if pc.globalBGPConfig != nil && pc.globalBGPConfig.Spec.ProgramClusterRoutes != nil &&
-		*pc.globalBGPConfig.Spec.ProgramClusterRoutes == "Disabled" {
-		programClusterRoutes = false
-		logCtx.Debug("Programming cluster routes is disabled.")
-	} else {
-		logCtx.Debug("Programming cluster routes is enabled.")
-	}
+	policy := clusterRoutePolicyFromBGPConfig(pc.globalBGPConfig, logCtx)
+	logCtx.WithFields(map[string]any{
+		"ipip":    policy.ipip,
+		"noEncap": policy.noEncap,
+	}).Debug("BIRD's responsibility for programming cluster routes.")
 
+	birdProgramsIPIPPool := false
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -946,25 +944,37 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 			continue
 		}
 
+		if policy.ipip && !poolUsesVXLAN(&ippool) && poolUsesIPIP(&ippool) {
+			birdProgramsIPIPPool = true
+		}
+
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
-		statement := c.processIPPool(&ippool, programClusterRoutes, false, "reject", "", ipVersion)
+		statement := c.processIPPool(&ippool, policy, false, "reject", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForDisabledIPPools = append(config.BGPExportFilterForDisabledIPPools, statement)
 		}
 
 		// Generate statements for accepting enabled ippools in the filter for exporting routes to other peers.
-		statement = c.processIPPool(&ippool, programClusterRoutes, false, "accept", "", ipVersion)
+		statement = c.processIPPool(&ippool, policy, false, "accept", "", ipVersion)
 		if len(statement) != 0 {
 			config.BGPExportFilterForEnabledIPPools = append(config.BGPExportFilterForEnabledIPPools, statement)
 		}
 
 		if ipVersion == 6 || ipVersion == 4 && localSubnetErr == nil {
 			// Generate statements for kernel programming filter.
-			statement = c.processIPPool(&ippool, programClusterRoutes, true, filterActionForKernel, localSubnet, ipVersion)
+			statement = c.processIPPool(&ippool, policy, true, filterActionForKernel, localSubnet, ipVersion)
 			if len(statement) != 0 {
 				config.KernelFilterForIPPools = append(config.KernelFilterForIPPools, statement)
 			}
 		}
+	}
+
+	if birdProgramsIPIPPool {
+		logCtx.Warn("BIRD is configured to program the cluster routes for one or more IPIP IP Pools. " +
+			"That is deprecated as of v3.33 and will be removed in v3.35; set " +
+			"BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or Disabled) and " +
+			"FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or Enabled) to let Felix " +
+			"program them instead.")
 	}
 
 	// Sort statements.
@@ -1068,7 +1078,7 @@ func (c *client) processWireguardPeerFilter(config *types.BirdBGPConfig, ipVersi
 //	if (net ~ 10.10.0.0/16) then { accept; }
 func (c *client) processIPPool(
 	ippool *model.IPPool,
-	programClusterRoutes bool,
+	policy clusterRoutePolicy,
 	forProgrammingKernel bool,
 	filterAction string,
 	localSubnet string,
@@ -1082,7 +1092,7 @@ func (c *client) processIPPool(
 	}
 
 	// VXLAN encapsulation.
-	if ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet {
+	if poolUsesVXLAN(ippool) {
 		if forProgrammingKernel {
 			// Programming VXLAN routes is always handled by Felix.
 			return emitFilterStatementForIPPools(cidr, "", "reject", filterAction, "VXLAN routes are handled by Felix.")
@@ -1091,7 +1101,7 @@ func (c *client) processIPPool(
 	}
 
 	// IPIP encapsulation or No-Encap.
-	if programClusterRoutes {
+	if policy.programsPool(ippool) {
 		var extraStatement string
 		if forProgrammingKernel && ipVersion == 4 {
 			// For IPv4 IPIP routes, we need to set `krt_tunnel` variable which is needed by
@@ -1107,6 +1117,63 @@ func (c *client) processIPPool(
 	}
 
 	return emitFilterStatementForIPPools(cidr, "", "accept", filterAction, "")
+}
+
+// clusterRoutePolicy records which kinds of IP Pool BIRD is responsible for programming the cluster
+// routes of, as configured by BGPConfiguration.ProgramClusterRoutes.  Whatever BIRD does not
+// program here is expected to be programmed by Felix instead, under the control of the
+// corresponding FelixConfiguration.ProgramClusterRoutes field.
+type clusterRoutePolicy struct {
+	// ipip covers IP Pools with ipipMode Always or CrossSubnet.  Deprecated as of v3.33: Felix is
+	// taking over the programming of IPIP cluster routes.
+	ipip bool
+
+	// noEncap covers IP Pools with both ipipMode and vxlanMode Never.
+	noEncap bool
+}
+
+// clusterRoutePolicyFromBGPConfig reads the policy out of the default BGPConfiguration.  An unset
+// field, and an unrecognised value from a newer version of the API, both fall back to the default.
+func clusterRoutePolicyFromBGPConfig(cfg *v3.BGPConfiguration, logCtx *log.Entry) clusterRoutePolicy {
+	// Default is EnabledNoEncapOnly: BIRD programs the cluster routes for unencapsulated IP Pools,
+	// and Felix programs them for IPIP IP Pools.
+	defaultPolicy := clusterRoutePolicy{ipip: false, noEncap: true}
+
+	if cfg == nil || cfg.Spec.ProgramClusterRoutes == nil {
+		return defaultPolicy
+	}
+
+	switch *cfg.Spec.ProgramClusterRoutes {
+	case "Disabled":
+		return clusterRoutePolicy{ipip: false, noEncap: false}
+	case "Enabled":
+		return clusterRoutePolicy{ipip: true, noEncap: true}
+	case "EnabledIPIPOnly":
+		return clusterRoutePolicy{ipip: true, noEncap: false}
+	case "EnabledNoEncapOnly":
+		return clusterRoutePolicy{ipip: false, noEncap: true}
+	default:
+		logCtx.Warnf("Unrecognised BGPConfiguration.programClusterRoutes value %q; treating it as the default.",
+			*cfg.Spec.ProgramClusterRoutes)
+		return defaultPolicy
+	}
+}
+
+// programsPool says whether BIRD is responsible for the cluster routes of the given IP Pool.  It
+// must only be called for pools that are not VXLAN, since Felix always owns those.
+func (p clusterRoutePolicy) programsPool(ippool *model.IPPool) bool {
+	if poolUsesIPIP(ippool) {
+		return p.ipip
+	}
+	return p.noEncap
+}
+
+func poolUsesIPIP(ippool *model.IPPool) bool {
+	return ippool.IPIPMode == encap.Always || ippool.IPIPMode == encap.CrossSubnet
+}
+
+func poolUsesVXLAN(ippool *model.IPPool) bool {
+	return ippool.VXLANMode == encap.Always || ippool.VXLANMode == encap.CrossSubnet
 }
 
 func (c *client) localSubnet(ipVersion int) (string, error) {

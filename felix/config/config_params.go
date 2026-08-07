@@ -315,7 +315,7 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6       net.IP            `config:"ipv6;"`
 	DeviceRouteProtocol                int               `config:"int;3"`
 	RemoveExternalRoutes               bool              `config:"bool;true"`
-	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled);Disabled"`
+	ProgramClusterRoutes               string            `config:"oneof(Enabled,Disabled,EnabledIPIPOnly,EnabledNoEncapOnly);EnabledIPIPOnly"`
 	IPForwarding                       string            `config:"oneof(Enabled,Disabled);Enabled"`
 	IptablesRefreshInterval            time.Duration     `config:"seconds;180"`
 	IptablesPostWriteCheckIntervalSecs time.Duration     `config:"seconds;5"` //nolint:staticcheck // Ignore ST1011 don't use unit-specific suffix
@@ -601,8 +601,18 @@ func (config *Config) FlowLogsEnabled() bool {
 		config.FlowLogsLocalReporterEnabled()
 }
 
-func (config *Config) ProgramClusterRoutesEnabled() bool {
-	return config.ProgramClusterRoutes == "Enabled"
+// ProgramIPIPClusterRoutes returns whether Felix should program the cluster routes for IP Pools
+// with ipipMode Always or CrossSubnet.  When it returns false, confd and BIRD are expected to
+// program those routes instead; that is deprecated as of v3.33.
+func (config *Config) ProgramIPIPClusterRoutes() bool {
+	return config.ProgramClusterRoutes == "Enabled" || config.ProgramClusterRoutes == "EnabledIPIPOnly"
+}
+
+// ProgramNoEncapClusterRoutes returns whether Felix should program the cluster routes for
+// unencapsulated IP Pools (ipipMode and vxlanMode both Never).  When it returns false, confd and
+// BIRD are expected to program those routes instead.
+func (config *Config) ProgramNoEncapClusterRoutes() bool {
+	return config.ProgramClusterRoutes == "Enabled" || config.ProgramClusterRoutes == "EnabledNoEncapOnly"
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

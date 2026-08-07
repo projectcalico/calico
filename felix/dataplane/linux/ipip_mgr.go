@@ -144,21 +144,22 @@ func (m *ipipManager) OnUpdate(protoBufMsg any) {
 		delete(m.activeHostnameToIP, msg.Hostname)
 		m.maybeUpdateRoutes()
 	default:
-		if m.dpConfig.ProgramClusterRoutes {
+		if m.dpConfig.ProgramIPIPClusterRoutes {
 			m.routeMgr.OnUpdate(msg)
 		}
 	}
 }
 
 func (m *ipipManager) maybeUpdateRoutes() {
-	// Only update routes if only Felix is responsible for programming IPIP routes.
-	if m.dpConfig.ProgramClusterRoutes {
+	// Only update routes if Felix, rather than confd and BIRD, is responsible for programming the
+	// IPIP cluster routes.
+	if m.dpConfig.ProgramIPIPClusterRoutes {
 		m.routeMgr.triggerRouteUpdate()
 	}
 }
 
 func (m *ipipManager) CompleteDeferredWork() error {
-	if m.dpConfig.ProgramClusterRoutes {
+	if m.dpConfig.ProgramIPIPClusterRoutes {
 		return m.routeMgr.CompleteDeferredWork()
 	}
 	return nil

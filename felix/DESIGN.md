@@ -202,6 +202,17 @@ netlink-level design (resync grace periods, conntrack cleanup on
 IP moves) is reserved for a future `route-sync.md` sub-design.
 `flow-logs-collector.md` is likewise still to be written.
 
+### Cross-component designs Felix takes part in
+
+Some subsystems are split between Felix and another component, so
+their design lives at the repo level rather than under
+`felix/design/`:
+
+| Design | What it covers in Felix |
+|---|---|
+| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapEnabled`, and the `ProgramClusterRoutes` config parameter. |
+| [`design/ipam/DESIGN.md`](../design/ipam/DESIGN.md) | Felix is a read-only consumer of IPAM state (IPAM blocks feed the `L3RouteResolver`). |
+
 ## 2. Sub-design index
 
 Per-topic design docs under [`felix/design/`](./design/). Each is

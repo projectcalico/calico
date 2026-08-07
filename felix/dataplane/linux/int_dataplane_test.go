@@ -260,7 +260,7 @@ var _ = Describe("Constructor test", func() {
 
 		It("should register the no-encap route manager", func() {
 			dpConfig.IPv6Enabled = true
-			dpConfig.ProgramClusterRoutes = true
+			dpConfig.ProgramNoEncapClusterRoutes = true
 			dpConfig.NoEncapEnabled = true
 
 			dp := intdataplane.NewIntDataplaneDriver(dpConfig)

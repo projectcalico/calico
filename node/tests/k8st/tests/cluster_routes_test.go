@@ -16,7 +16,8 @@
 // cluster routes are programmed by the configured owner. With an IPIP-Always
 // pool, the route to a remote node's IPAM block must go out tunl0 and carry the
 // netlink protocol of whichever component owns in-cluster routing: Felix (proto
-// 80) when ProgramClusterRoutes is Enabled, otherwise BIRD (proto 12).
+// 80) by default, or BIRD (proto 12) if FelixConfiguration's
+// ProgramClusterRoutes hands IPIP back to BIRD.
 
 package k8stests
 
@@ -114,7 +115,7 @@ func TestClusterRouteOwnership(t *testing.T) {
 
 	// The client node's route to the server's block must be programmed by the
 	// configured owner, out tunl0.
-	utils.AssertRouteOwnership(t, clientNode, routeOwnerPoolPrefix, "tunl0", expectedClusterRouteProto(g, cli))
+	utils.AssertRouteOwnership(t, clientNode, routeOwnerPoolPrefix, "tunl0", expectedIPIPClusterRouteProto(g, cli))
 }
 
 // routeOwnerPod builds a pod pinned to nodeName and to the test IPPool. The
@@ -141,16 +142,21 @@ func routeOwnerPod(namespace, name, nodeName, poolName string, server bool) *cor
 	}
 }
 
-// expectedClusterRouteProto returns the route protocol owner that the cluster
-// is currently configured to use for IPIP and no-encap cluster routes.
-// "Enabled" => Felix (proto 80), anything else (including unset) => BIRD's
-// proto 12.
-func expectedClusterRouteProto(g *WithT, cli ctrlclient.Client) utils.RouteProto {
+// expectedIPIPClusterRouteProto returns the route protocol owner that the
+// cluster is currently configured to use for IPIP cluster routes: Felix (proto
+// 80) unless FelixConfiguration explicitly hands IPIP back to BIRD (proto 12).
+// The default, with the field unset, is EnabledIPIPOnly, i.e. Felix.
+func expectedIPIPClusterRouteProto(g *WithT, cli ctrlclient.Client) utils.RouteProto {
 	fc := &v3.FelixConfiguration{}
 	g.Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "querying default FelixConfiguration")
-	if fc.Spec.ProgramClusterRoutes != nil && *fc.Spec.ProgramClusterRoutes == "Enabled" {
+	if fc.Spec.ProgramClusterRoutes == nil {
 		return utils.RouteProtoFelix
 	}
-	return utils.RouteProtoBIRD
+	switch *fc.Spec.ProgramClusterRoutes {
+	case "Enabled", "EnabledIPIPOnly":
+		return utils.RouteProtoFelix
+	default:
+		return utils.RouteProtoBIRD
+	}
 }

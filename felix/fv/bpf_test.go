@@ -416,8 +416,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 				options.IPIPMode = api.IPIPModeAlways
 				if testOpts.ipv6 {
+					// SimulateBIRDRoutes makes the topology set
+					// FELIX_ProgramClusterRoutes=Disabled for us.
 					options.SimulateBIRDRoutes = true
-					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways

@@ -185,7 +185,7 @@ var _ = describe.CalicoDescribe(
 			// Routes should now be using tunl0 again, and be owned by whichever
 			// programmer (Felix or BIRD) the cluster is configured to use.
 			ginkgo.By("Verifying that node routes are using tunl0 with the expected protocol owner")
-			expectedProto := expectedClusterRouteProto(cli)
+			expectedProto := expectedIPIPClusterRouteProto(cli)
 			Eventually(func() error {
 				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {

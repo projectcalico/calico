@@ -227,7 +227,11 @@ func StartNNodeTopology(
 		opts.IPIPMode = api.IPIPModeNever
 	}
 
-	if !opts.SimulateBIRDRoutes {
+	// There is no real BIRD in the FV topology: either Felix programs all of the cluster routes, or
+	// the test simulates the ones BIRD would have programmed and Felix must keep out of the way.
+	if opts.SimulateBIRDRoutes {
+		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
+	} else {
 		opts.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Enabled"
 	}
 

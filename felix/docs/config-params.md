@@ -1238,19 +1238,32 @@ like Application layer policy.
 
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
-Controls how a cluster node gets a route to a workload on another node,
-when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.
+Controls which "cluster routes" Felix programs, i.e. the routes that a node needs in
+order to reach workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; Felix always
+programs the cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. The routes that
+Felix does not program here are expected to be programmed by confd and BIRD instead.
+
+- Disabled: Felix programs no cluster routes.
+- EnabledIPIPOnly: Felix programs cluster routes for IP Pools with ipipMode: Always or CrossSubnet.
+- EnabledNoEncapOnly: Felix programs cluster routes for unencapsulated IP Pools, i.e. those with
+ ipipMode: Never and vxlanMode: Never.
+- Enabled: Felix programs cluster routes for both IPIP and unencapsulated IP Pools.
+
+This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which makes the same choice
+from BIRD's side. If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the
+routes; if neither is, there will be no cluster routes at all.
+
+Note: leaving the IPIP cluster routes to confd and BIRD, which the Disabled and EnabledNoEncapOnly
+values do, is deprecated as of v3.33 and will be removed in v3.35.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_ProgramClusterRoutes` |
-| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>Enabled</code> |
-| Default value (above encoding) | `Disabled` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>EnabledIPIPOnly</code>, <code>EnabledNoEncapOnly</code>, <code>Enabled</code> |
+| Default value (above encoding) | `EnabledIPIPOnly` |
 | `FelixConfiguration` field | `programClusterRoutes` (YAML) `ProgramClusterRoutes` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>. |
-| Default value (YAML) | `Disabled` |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"Enabled"</code>, <code>"EnabledIPIPOnly"</code>, <code>"EnabledNoEncapOnly"</code>. |
+| Default value (YAML) | `EnabledIPIPOnly` |
 
 ### `RemoveExternalRoutes` (config file) / `removeExternalRoutes` (YAML)
 

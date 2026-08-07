@@ -65,8 +65,8 @@ var _ = Describe("IPIPManager", func() {
 				RulesConfig: rules.Config{
 					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
 				},
-				ProgramClusterRoutes: true,
-				DeviceRouteProtocol:  dataplanedefs.DefaultRouteProto,
+				ProgramIPIPClusterRoutes: true,
+				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
 			},
 			opRecorder,
 			dataplane,
@@ -456,5 +456,103 @@ var _ = Describe("IPIPManager", func() {
 
 		// Expect no routes.
 		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(HaveLen(0))
+	})
+})
+
+// The IPIP manager always runs, because it owns the tunnel device, but it must not program cluster
+// routes when confd and BIRD are the configured owner of them.
+var _ = Describe("IPIPManager with the IPIP cluster routes left to BIRD", func() {
+	var (
+		ipipMgr   *ipipManager
+		rt        *mockRouteTable
+		dataplane *mocknetlink.MockNetlinkDataplane
+	)
+
+	BeforeEach(func() {
+		rt = &mockRouteTable{
+			currentRoutes: map[string][]routetable.Target{},
+		}
+
+		dataplane = mocknetlink.New()
+		_, err := dataplane.NewMockNetlink()
+		Expect(err).NotTo(HaveOccurred())
+		dataplane.ImmediateLinkUp = true
+		eth0 := dataplane.AddIface(2, "eth0", true, true)
+		Expect(dataplane.AddrAdd(eth0, &netlink.Addr{IPNet: &net.IPNet{IP: net.IPv4(172, 0, 0, 2)}})).To(Succeed())
+		dataplane.ResetDeltas()
+
+		ipipMgr = newIPIPManagerWithShims(
+			rt, dataplanedefs.IPIPIfaceName,
+			4,
+			1400,
+			Config{
+				MaxIPSetSize:       1024,
+				Hostname:           "node1",
+				ExternalNodesCidrs: []string{"10.10.10.0/24"},
+				RulesConfig: rules.Config{
+					IPIPTunnelAddress: net.ParseIP("192.168.0.1"),
+				},
+				ProgramIPIPClusterRoutes: false,
+				DeviceRouteProtocol:      dataplanedefs.DefaultRouteProto,
+			},
+			logrusr.NewSummarizer("test"),
+			dataplane,
+		)
+	})
+
+	It("should program no routes at all", func() {
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node2",
+			Ipv4Addr: "172.0.2.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+
+		// A remote workload route, which Felix would program via the tunnel if it owned the IPIP
+		// cluster routes...
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIp:   "172.0.2.2",
+		})
+		// ...and a local one, which it would program as a blackhole.
+		ipipMgr.OnUpdate(&proto.RouteUpdate{
+			Types:       proto.RouteType_LOCAL_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_IPIP,
+			Dst:         "192.168.0.100/26",
+			DstNodeName: "node1",
+			DstNodeIp:   "172.0.0.2",
+			SameSubnet:  true,
+		})
+
+		Expect(ipipMgr.CompleteDeferredWork()).To(Succeed())
+
+		Expect(rt.currentRoutes[dataplanedefs.IPIPIfaceName]).To(BeEmpty())
+		Expect(rt.currentRoutes[routetable.InterfaceNone]).To(BeEmpty())
+		Expect(rt.currentRoutes["eth0"]).To(BeEmpty())
+	})
+
+	It("should still configure the tunnel device", func() {
+		// The local host's address still has to reach the route manager, even though it will not
+		// program any routes with it.
+		ipipMgr.OnUpdate(&proto.HostMetadataUpdate{
+			Hostname: "node1",
+			Ipv4Addr: "172.0.0.2",
+		})
+		ipipMgr.routeMgr.OnParentDeviceUpdate("eth0")
+		parentDev, err := ipipMgr.routeMgr.detectParentIface()
+		Expect(err).NotTo(HaveOccurred())
+
+		link, addr, err := ipipMgr.device(parentDev)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(link).NotTo(BeNil())
+		Expect(ipipMgr.routeMgr.configureTunnelDevice(link, addr, 1400, false)).To(Succeed())
+
+		Expect(dataplane.NameToLink).To(HaveKey(dataplanedefs.IPIPIfaceName))
 	})
 })

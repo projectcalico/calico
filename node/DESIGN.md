@@ -32,6 +32,11 @@ single container.
 - Dataplane details (eBPF / iptables / nftables / Windows)
   live in [`felix/DESIGN.md`](../felix/DESIGN.md) and the
   per-topic sub-designs under [`felix/design/`](../felix/design/).
+- Which component programs the routes to workloads on other
+  nodes — Felix, or confd and BIRD via the templates under
+  `node/filesystem/etc/calico/confd/templates/` — is a
+  cross-component decision documented in
+  [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md).
 
 ## Keep this doc in sync with the code
 
