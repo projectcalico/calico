@@ -354,7 +354,9 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 			return nil, nil, unix.ERANGE
 		}
 
+		m.mutex.Lock()
 		m.finalTrampolineStride = builder.TrampolineStride()
+		m.mutex.Unlock()
 	}
 
 	fdCounterLock.Lock()
