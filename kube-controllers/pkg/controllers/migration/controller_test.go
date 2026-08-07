@@ -338,7 +338,7 @@ func TestLockDatastoreMarksClusterInfo(t *testing.T) {
 	crds := []*unstructured.Unstructured{crdObj("tiers.crd.projectcalico.org", "crd.projectcalico.org")}
 
 	m, rt := newFakeController(t, []rtclient.Object{dm}, crds)
-	g.Expect(m.lockDatastore(logCtx, dm)).To(Succeed())
+	g.Expect(m.lockV3Datastore(logCtx, dm)).To(Succeed())
 
 	created := getV3ClusterInfo(g, rt)
 	g.Expect(created.Spec.DatastoreReady).To(Equal(ptr.To(false)))
@@ -347,7 +347,7 @@ func TestLockDatastoreMarksClusterInfo(t *testing.T) {
 	g.Expect(created.Annotations).NotTo(HaveKey(lockedByAnnotation))
 
 	m, rt = newFakeController(t, []rtclient.Object{dm, v3ClusterInfo(true, nil)}, crds)
-	g.Expect(m.lockDatastore(logCtx, dm)).To(Succeed())
+	g.Expect(m.lockV3Datastore(logCtx, dm)).To(Succeed())
 
 	existing := getV3ClusterInfo(g, rt)
 	g.Expect(existing.Spec.DatastoreReady).To(Equal(ptr.To(false)))
