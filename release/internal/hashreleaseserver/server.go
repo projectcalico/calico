@@ -33,7 +33,7 @@ import (
 const (
 
 	// BaseDomain is the base URL of the hashrelease
-	BaseDomain = "docs.eng.tigera.net"
+	BaseDomain = "hashrelease.tools.tigera.net"
 
 	releaseLibFileName = "all-releases"
 )
