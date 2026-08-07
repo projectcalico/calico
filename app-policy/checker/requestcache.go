@@ -49,6 +49,7 @@ type requestCache struct {
 	// allocation when many policies apply to an endpoint.
 	srcIPStr       string
 	dstIPStr       string
+	srcIPProtoPort string
 	dstIPProtoPort string
 }
 
@@ -127,10 +128,30 @@ func (r *requestCache) getDstIPStr() string {
 // IP+port set matching, memoized across the request.
 func (r *requestCache) getDstIPProtoPortStr() string {
 	if r.dstIPProtoPort == "" {
-		protocolStr := protocolMapL4[int32(r.GetProtocol())]
-		r.dstIPProtoPort = fmt.Sprintf("%s,%s:%d", r.getDstIPStr(), protocolStr, r.GetDestPort())
+		r.dstIPProtoPort = ipProtoPortStr(r.getDstIPStr(), r.GetProtocol(), r.GetDestPort())
 	}
 	return r.dstIPProtoPort
+}
+
+// getSrcIPProtoPortStr returns the source "<IP>,<protocol>:<port>" key used for IP+port
+// set matching, memoized across the request.
+func (r *requestCache) getSrcIPProtoPortStr() string {
+	if r.srcIPProtoPort == "" {
+		r.srcIPProtoPort = ipProtoPortStr(r.getSrcIPStr(), r.GetProtocol(), r.GetSourcePort())
+	}
+	return r.srcIPProtoPort
+}
+
+// ipProtoPortStr builds the "<IP>,<protocol>:<port>" member format that Felix uses for
+// IP_AND_PORT IP sets (named port sets and service IP+port sets).
+func ipProtoPortStr(ipStr string, protocol, port int) string {
+	protocolStr, ok := protocolMapL4[int32(protocol)]
+	if !ok {
+		// The set members only ever carry tcp/udp/sctp, so a flow on any other
+		// protocol cannot be a member. Log and let the lookup miss.
+		log.WithField("protocol", protocol).Debug("No IP/port set member format for protocol")
+	}
+	return fmt.Sprintf("%s,%s:%d", ipStr, protocolStr, port)
 }
 
 // getIPSet returns the IPSet with the given ID.
