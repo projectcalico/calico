@@ -142,6 +142,12 @@ type DatastoreMigrationStatus struct {
 	// +kubebuilder:validation:MaxLength=1024
 	Message string `json:"message,omitempty"`
 
+	// DatastoreLockedAt is the timestamp when the v1 datastore was locked
+	// (DatastoreReady=false) during the Pending phase. It also anchors the
+	// drain period the controller waits out before unregistering the APIService.
+	// +optional
+	DatastoreLockedAt *metav1.Time `json:"datastoreLockedAt,omitempty"`
+
 	// StartedAt is the timestamp when the migration transitioned to Migrating.
 	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
