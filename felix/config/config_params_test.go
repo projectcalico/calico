@@ -1000,3 +1000,35 @@ var _ = Describe("ParamForField", func() {
 		Expect(flags).To(Equal(""))
 	})
 })
+
+var _ = Describe("ProgramClusterRoutes", func() {
+	It("defaults to Felix owning the IPIP cluster routes and BIRD owning the rest", func() {
+		c := config.New()
+		Expect(c.ProgramClusterRoutes).To(Equal("EnabledIPIPOnly"))
+		Expect(c.ProgramIPIPClusterRoutes()).To(BeTrue())
+		Expect(c.ProgramNoEncapClusterRoutes()).To(BeFalse())
+	})
+
+	DescribeTable("splits the configured value into per-encapsulation ownership",
+		func(raw string, expectedIPIP, expectedNoEncap bool) {
+			c := config.New()
+			_, err := c.UpdateFrom(map[string]string{"ProgramClusterRoutes": raw}, config.DatastoreGlobal)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c.ProgramIPIPClusterRoutes()).To(Equal(expectedIPIP))
+			Expect(c.ProgramNoEncapClusterRoutes()).To(Equal(expectedNoEncap))
+		},
+		Entry("Disabled", "Disabled", false, false),
+		Entry("EnabledIPIPOnly", "EnabledIPIPOnly", true, false),
+		Entry("EnabledNoEncapOnly", "EnabledNoEncapOnly", false, true),
+		Entry("Enabled", "Enabled", true, true),
+		// Values are matched case-insensitively, as for every other oneof parameter.
+		Entry("enabledipiponly", "enabledipiponly", true, false),
+	)
+
+	It("falls back to the default if the value is not recognised", func() {
+		c := config.New()
+		_, err := c.UpdateFrom(map[string]string{"ProgramClusterRoutes": "NotAValue"}, config.DatastoreGlobal)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.ProgramClusterRoutes).To(Equal("EnabledIPIPOnly"))
+	})
+})
