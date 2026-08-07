@@ -592,6 +592,15 @@ func kubeControllersRoleEnterpriseCommonRules(cfg *KubeControllersConfiguration)
 			Verbs:     []string{"update"},
 		},
 		{
+			// The node controller watches Networks so that it can discount an L2
+			// network's subnet edges and gateways from the reserved-IP metric.
+			// The Network resource is only available in Enterprise / Cloud at
+			// this time.
+			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+			Resources: []string{"networks"},
+			Verbs:     []string{"list", "watch"},
+		},
+		{
 			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
 			Resources: []string{"deeppacketinspections"},
 			Verbs:     []string{"get", "watch", "list"},

@@ -327,7 +327,7 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(1))
 
 		clusterRole := rtest.GetResource(resources, kubecontrollers.KubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(38), "cluster role should have 38 rules")
+		Expect(clusterRole.Rules).To(HaveLen(39), "cluster role should have 39 rules")
 
 		// Application-layer reconciler RBAC: WAF CRDs (resources, /status, /finalizers).
 		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
@@ -552,7 +552,7 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(dp.Spec.Template.Spec.Volumes[0].ConfigMap.Name).To(Equal("tigera-ca-bundle"))
 
 		clusterRole := rtest.GetResource(resources, kubecontrollers.EsKubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(36), "cluster role should have 36 rules")
+		Expect(clusterRole.Rules).To(HaveLen(37), "cluster role should have 37 rules")
 		Expect(clusterRole.Rules).To(ContainElement(
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
@@ -851,7 +851,7 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
 
 		clusterRole := rtest.GetResource(resources, kubecontrollers.EsKubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(36), "cluster role should have 36 rules")
+		Expect(clusterRole.Rules).To(HaveLen(37), "cluster role should have 37 rules")
 		Expect(clusterRole.Rules).To(ContainElement(
 			rbacv1.PolicyRule{
 				APIGroups: []string{""},
