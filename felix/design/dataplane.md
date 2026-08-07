@@ -217,6 +217,23 @@ with care. The governing principles:
   node open. After retries are exhausted, Felix gives up and
   panics rather than run indefinitely in an unknown, possibly
   insecure state.
+- **…but only for tables Felix actually programs.** The one
+  exception is a **cleanup-only** table: one Felix doesn't program
+  and only reads so it can remove rules left behind by a previous
+  Felix that ran a different dataplane (the `iptables` tables when
+  running in nftables mode, and vice versa — see
+  [Restart, resync and mark-and-sweep](#restart-resync-and-mark-and-sweep)).
+  Nothing there is load-bearing for the node's security posture, so
+  failing to read it must **skip the table**, not panic. Concretely,
+  a third party (Tailscale, in
+  [#13263](https://github.com/projectcalico/calico/issues/13263))
+  can write native nft rules that `iptables-nft-save` refuses to
+  render; that failure is permanent, so retrying and then panicking
+  just crash-loops `calico-node` over a table Felix never writes.
+  `iptables.TableOptions.CleanupOnly` marks these tables;
+  `iptables.Table.loadDataplaneState()` returns an error instead of
+  panicking for them, and logs the reason rate-limited rather than
+  once per resync.
 
 ### Refresh timers vs error-triggered resync
 
@@ -250,7 +267,10 @@ These are distinct mechanisms with overlapping effect:
   keeping it dirty / eventually failing loudly) risks leaving the
   node silently open. The fail-closed-then-panic behaviour for
   persistent `*tables` failure is intentional; don't soften it
-  without a strong argument.
+  without a strong argument. Softening it for a **cleanup-only**
+  table is fine — Felix doesn't program those — but the change must
+  be scoped to them, not applied to the table for the active
+  dataplane.
 
 ## Restart, resync and mark-and-sweep
 
