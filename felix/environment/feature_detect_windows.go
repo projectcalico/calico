@@ -38,6 +38,10 @@ func (d *FeatureDetector) GetFeatures() *Features {
 // FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
 // of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
 // Panics if no binary can be found.
+func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersion uint8, backendMode string) bool {
+	return true
+}
+
 func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
 	return "iptables"
 }

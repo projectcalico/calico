@@ -1,0 +1,93 @@
+# Real ruleset from calico issue #13263 (ip filter/mangle/nat), in nft command form.
+# nixos-fw is the host firewall, ts-* Tailscale, KUBE-* kubelet, CNI-* the portmap plugin.
+# The fib and pkttype matches are what iptables-nft-save chokes on.
+# Base chains are left out: iptables has already created them.
+# nixos-fw default-denies, so port 9099 is added to its accept list for Felix's health port.
+add chain ip filter nixos-fw-accept
+add chain ip filter nixos-fw-refuse
+add chain ip filter nixos-fw-log-refuse
+add chain ip filter nixos-fw
+add chain ip filter KUBE-FIREWALL
+add chain ip filter KUBE-KUBELET-CANARY
+add chain ip filter ts-forward
+add chain ip filter ts-input
+add chain ip mangle nixos-fw-rpfilter
+add chain ip mangle KUBE-IPTABLES-HINT
+add chain ip mangle KUBE-KUBELET-CANARY
+add chain ip nat KUBE-KUBELET-CANARY
+add chain ip nat CNI-HOSTPORT-SETMARK
+add chain ip nat CNI-HOSTPORT-MASQ
+add chain ip nat CNI-HOSTPORT-DNAT
+add chain ip nat CNI-DN-e39780ea08b399fa3bc03
+add chain ip nat ts-postrouting
+add rule ip filter nixos-fw-accept counter accept
+add rule ip filter nixos-fw-refuse counter drop
+add rule ip filter nixos-fw-log-refuse pkttype != unicast counter jump nixos-fw-refuse
+add rule ip filter nixos-fw-log-refuse counter jump nixos-fw-refuse
+add rule ip filter nixos-fw iifname "lo" counter jump nixos-fw-accept
+add rule ip filter nixos-fw ct state related,established counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 22 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 25 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 53 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 80 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 110 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 143 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 179 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 443 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 465 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 587 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 993 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 995 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 2222 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 2379 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 2380 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 5473 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 6443 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 7946 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 9099 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 9100 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 10250 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 10254 counter jump nixos-fw-accept
+add rule ip filter nixos-fw tcp dport 32121 counter jump nixos-fw-accept
+add rule ip filter nixos-fw udp dport 53 counter jump nixos-fw-accept
+add rule ip filter nixos-fw udp dport 443 counter jump nixos-fw-accept
+add rule ip filter nixos-fw udp dport 51820 counter jump nixos-fw-accept
+add rule ip filter nixos-fw udp dport 51821 counter jump nixos-fw-accept
+add rule ip filter nixos-fw ip protocol icmp icmp type echo-request counter jump nixos-fw-accept
+add rule ip filter nixos-fw counter jump nixos-fw-log-refuse
+add rule ip filter INPUT counter jump ts-input
+add rule ip filter INPUT counter jump KUBE-FIREWALL
+add rule ip filter INPUT counter jump nixos-fw
+add rule ip filter KUBE-FIREWALL ip saddr != 127.0.0.0/8 ip daddr 127.0.0.0/8 ct status dnat counter drop
+add rule ip filter OUTPUT counter jump KUBE-FIREWALL
+add rule ip filter FORWARD counter jump ts-forward
+add rule ip filter ts-forward iifname "tailscale0*" counter meta mark set meta mark & 0xffff04ff | 0x00000400
+add rule ip filter ts-forward meta mark & 0x0000ff00 == 0x00000400 counter accept
+add rule ip filter ts-forward oifname "tailscale0*" ip saddr 100.64.0.0/10 counter drop
+add rule ip filter ts-forward oifname "tailscale0*" counter accept
+add rule ip filter ts-input iifname "lo*" ip saddr 100.78.40.24 counter accept
+add rule ip filter ts-input iifname "tailscale0*" counter accept
+add rule ip filter ts-input udp dport 49513 counter accept
+add rule ip filter ts-input iifname != "tailscale0*" ip saddr 100.115.92.0/23 counter return
+add rule ip filter ts-input iifname != "tailscale0*" ip saddr 100.64.0.0/10 counter drop
+add rule ip mangle nixos-fw-rpfilter fib saddr . mark . iif oif != 0 counter return
+add rule ip mangle nixos-fw-rpfilter udp sport 67 udp dport 68 counter return
+add rule ip mangle nixos-fw-rpfilter ip saddr 0.0.0.0 ip daddr 255.255.255.255 udp sport 68 udp dport 67 counter return
+add rule ip mangle nixos-fw-rpfilter counter drop
+add rule ip mangle PREROUTING ct state established,related meta mark set ct mark & 0x0000ff00
+add rule ip mangle PREROUTING counter jump nixos-fw-rpfilter
+add rule ip mangle OUTPUT ct state new meta mark & 0x0000ff00 != 0x00000000 ct mark set meta mark & 0x0000ff00
+add rule ip nat CNI-HOSTPORT-SETMARK counter meta mark set mark or 0x2000
+add rule ip nat CNI-HOSTPORT-MASQ meta mark & 0x00002000 == 0x00002000 counter masquerade
+add rule ip nat POSTROUTING counter jump ts-postrouting
+add rule ip nat POSTROUTING counter jump CNI-HOSTPORT-MASQ
+add rule ip nat CNI-HOSTPORT-DNAT ip protocol tcp tcp dport { 25, 587 } counter jump CNI-DN-e39780ea08b399fa3bc03
+add rule ip nat PREROUTING fib daddr type local counter jump CNI-HOSTPORT-DNAT
+add rule ip nat OUTPUT fib daddr type local counter jump CNI-HOSTPORT-DNAT
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 ip saddr 10.42.233.49 tcp dport 25 counter jump CNI-HOSTPORT-SETMARK
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 ip saddr 127.0.0.1 tcp dport 25 counter jump CNI-HOSTPORT-SETMARK
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 tcp dport 25 counter dnat to 10.42.233.49:25
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 ip saddr 10.42.233.49 tcp dport 587 counter jump CNI-HOSTPORT-SETMARK
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 ip saddr 127.0.0.1 tcp dport 587 counter jump CNI-HOSTPORT-SETMARK
+add rule ip nat CNI-DN-e39780ea08b399fa3bc03 tcp dport 587 counter dnat to 10.42.233.49:587
+add rule ip nat ts-postrouting meta mark & 0x0000ff00 == 0x00000400 counter masquerade
