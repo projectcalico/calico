@@ -471,9 +471,9 @@ func BackendMapMemV6Iter(m BackendMapMemV6) func(k, v []byte) {
 	}
 }
 
-// struct calico_nat_v4_affinity_key {
-//    struct calico_nat_v4 nat_key;
-// 	  uint32_t client_ip;
+// struct calico_nat_affinity_key {
+//    struct calico_nat nat_key;
+// 	  ipv6_addr_t client_ip;
 // 	  uint32_t padding;
 // };
 
@@ -494,7 +494,7 @@ func (k FrontEndAffinityKeyV6) String() string {
 }
 
 func (k FrontEndAffinityKeyV6) Proto() uint8 {
-	return k[6]
+	return k[18]
 }
 
 func (k FrontEndAffinityKeyV6) Addr() net.IP {
@@ -518,7 +518,7 @@ func NewAffinityKeyV6(clientIP net.IP, fEndKey FrontendKeyV6) AffinityKeyV6 {
 
 // ClientIP returns the ClientIP part of the key
 func (k AffinityKeyV6) ClientIP() net.IP {
-	return k[frontendAffKeyV6Size : frontendAffKeyV6Size+4]
+	return k[frontendAffKeyV6Size : frontendAffKeyV6Size+16]
 }
 
 // FrontendKeyV6 returns the FrontendKeyV6 part of the key
@@ -548,12 +548,16 @@ func AffinityKeyV6IntfFromBytes(b []byte) AffinityKeyInterface {
 	return AffinityKeyV6FromBytes(b)
 }
 
-// struct calico_nat_v4_affinity_val {
+// struct calico_nat_affinity_val {
 //    struct calico_nat_dest;
+//    uint32_t __pad;
 //    uint64_t ts;
 // };
 
-const affinityValueV6Size = backendValueV6Size + 4 + 8
+// affinityValueV6TsOffset skips the explicit padding that aligns the 64-bit ts
+// field after the 20-byte calico_nat_dest.
+const affinityValueV6TsOffset = backendValueV6Size + 4
+const affinityValueV6Size = affinityValueV6TsOffset + 8
 
 // AffinityValueV6 represents a backend picked by the affinity and the timestamp
 // of its creating
@@ -564,7 +568,7 @@ func NewAffinityValueV6(ts uint64, backend BackendValueV6) AffinityValueV6 {
 	var v AffinityValueV6
 
 	copy(v[:], backend[:])
-	binary.LittleEndian.PutUint64(v[backendValueV6Size:backendValueV6Size+8], ts)
+	binary.LittleEndian.PutUint64(v[affinityValueV6TsOffset:affinityValueV6TsOffset+8], ts)
 
 	return v
 }
@@ -574,7 +578,7 @@ func NewAffinityValueV6(ts uint64, backend BackendValueV6) AffinityValueV6 {
 // - it is the monotonic clock reading, which is compatible with time operations
 // in time package.
 func (v AffinityValueV6) Timestamp() time.Duration {
-	nano := binary.LittleEndian.Uint64(v[backendValueV6Size : backendValueV6Size+8])
+	nano := binary.LittleEndian.Uint64(v[affinityValueV6TsOffset : affinityValueV6TsOffset+8])
 	return time.Duration(nano) * time.Nanosecond
 }
 
