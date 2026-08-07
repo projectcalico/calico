@@ -174,8 +174,14 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6 net.IP
 	DeviceRouteProtocol          netlink.RouteProtocol
 	RemoveExternalRoutes         bool
-	ProgramClusterRoutes         bool
-	NoEncapEnabled               bool
+
+	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
+	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
+	// Pools respectively.  NoEncapEnabled already accounts for
+	// ProgramNoEncapClusterRoutes (see calc.EncapsulationCalculator.NoEncapEnabled).
+	ProgramIPIPClusterRoutes    bool
+	ProgramNoEncapClusterRoutes bool
+	NoEncapEnabled              bool
 
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
@@ -732,7 +738,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
-	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+	if config.ProgramNoEncapClusterRoutes && config.NoEncapEnabled {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
 		dp.noEncapManager = newNoEncapManager(
 			routeTableV4,
@@ -1294,6 +1300,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+
+		if !config.ProgramIPIPClusterRoutes {
+			log.Warn("IPIP is enabled but ProgramClusterRoutes leaves the IPIP cluster routes to " +
+				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in v3.35; " +
+				"set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
+				"Enabled) and BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or " +
+				"Disabled) to let Felix program them instead.")
+		}
+
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
 			routeTableV4,
