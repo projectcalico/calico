@@ -175,6 +175,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			NewRTCache(),
 			nil,
 			maglevLUTSize,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	} else {
@@ -194,6 +195,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			NewRTCache(),
 			nil,
 			maglevLUTSize,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	}
