@@ -23,6 +23,10 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
 
+// calicoNodePodLabel is the well-known label the node condition controller uses to identify
+// calico-node pods in the shared pod cache.
+const calicoNodePodLabel = "k8s-app"
+
 // podTransformer is passed to the pod informer used by kube-controllers in order to reduce the amount of
 // memory used by the pod cache.  It takes a full v1.Pod and returns a slimmed down version of the pod
 // that only contains the fields we care about.
@@ -53,10 +57,23 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 		}
 
 		if podControllerEnabled {
-			// We only need the full labels and service account name if we are running the Pod
-			// controller, as they are sync'd to etcd for policy matching.
+			// The Pod controller needs the full label set and service account name, as they
+			// are sync'd to etcd for policy matching.
 			p.Labels = pod.Labels
 			p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
+		} else if value, ok := pod.Labels[calicoNodePodLabel]; ok {
+			// The node condition controller only needs to identify calico-node pods, so when
+			// the Pod controller is disabled we keep just that one label to save cache memory.
+			p.Labels = map[string]string{calicoNodePodLabel: value}
+		}
+
+		// The node condition controller only reads the PodReady condition, so retain that one
+		// rather than the pod's full condition set.
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == v1.PodReady {
+				p.Status.Conditions = []v1.PodCondition{cond}
+				break
+			}
 		}
 
 		// Include the annotations we care about, if they exist.

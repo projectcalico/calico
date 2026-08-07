@@ -73,7 +73,14 @@ func Run() {
 			// The maximum execution time for the shutdown process is defined by terminationGracePeriod of calico-node.
 			// Depends on how we configure terminationGracePeriod (currently 5 seconds with operator install),
 			// this operation may not be successful if it takes too long to update node condition.
-			err := utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, true, hundredYears)
+			err := utils.SetNodeNetworkUnavailableCondition(
+				*clientset,
+				k8sNodeName,
+				true,
+				utils.NetworkDownReason,
+				utils.NetworkDownShutdown,
+				hundredYears,
+			)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to true")
 				return
