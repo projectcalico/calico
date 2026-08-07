@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -94,6 +95,10 @@ const (
 	// MaxItems (64 in types.go) so the cap here is what's actually hit, not the
 	// apiserver rejecting the write.
 	maxConflictConditions = 32
+
+	// tierDriftMessagePrefix opens the status message naming built-in tiers the
+	// v3 API would reject.
+	tierDriftMessagePrefix = "Correct the following v1 tiers before migration can start: "
 )
 
 // ControllerConfig holds all dependencies for creating the migration controller.
@@ -593,7 +598,101 @@ func (m *migrationController) runPendingPrechecks(logCtx *logrus.Entry, dm *migr
 		"installType":      installType,
 	}).Info("Detected installation details")
 
-	return false, m.ensureV3CRDs(logCtx)
+	if err := m.ensureV3CRDs(logCtx); err != nil {
+		return false, err
+	}
+
+	return m.checkBuiltInTiers(logCtx, dm)
+}
+
+// builtInTierRequirement is the order and default action that the v3 Tier CRD's
+// CEL rules pin a built-in tier to.
+type builtInTierRequirement struct {
+	order         float64
+	defaultAction apiv3.Action
+}
+
+var builtInTierRequirements = map[string]builtInTierRequirement{
+	names.DefaultTierName:      {order: apiv3.DefaultTierOrder, defaultAction: apiv3.Deny},
+	names.KubeAdminTierName:    {order: apiv3.KubeAdminTierOrder, defaultAction: apiv3.Pass},
+	names.KubeBaselineTierName: {order: apiv3.KubeBaselineTierOrder, defaultAction: apiv3.Pass},
+}
+
+// checkBuiltInTiers reports whether the caller should wait for a human to fix a
+// built-in v1 tier the v3 API rejects.
+func (m *migrationController) checkBuiltInTiers(logCtx *logrus.Entry, dm *migrationv1.DatastoreMigration) (bool, error) {
+	// The v3 Tier CRD pins order and defaultAction via CEL, so a drifted
+	// built-in fails mid-copy.
+	drift, err := m.builtInTierDrift()
+	if err != nil {
+		return false, fmt.Errorf("validating built-in tiers: %w", err)
+	}
+	if len(drift) == 0 {
+		// Don't leave the CR asking for a fix that has already landed.
+		if strings.HasPrefix(dm.Status.Message, tierDriftMessagePrefix) {
+			dm.Status.Message = ""
+			return false, m.updateStatus(dm)
+		}
+		return false, nil
+	}
+
+	logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
+	dm.Status.Message = tierDriftMessagePrefix + strings.Join(drift, "; ")
+	return true, m.updateStatus(dm)
+}
+
+// builtInTierDrift returns a description of every built-in tier in v1 that the
+// v3 API would reject.
+func (m *migrationController) builtInTierDrift() ([]string, error) {
+	var tierMigrator migrators.ResourceMigrator
+	for _, mig := range m.migrators {
+		if mig.Kind() == apiv3.KindTier {
+			tierMigrator = mig
+			break
+		}
+	}
+	if tierMigrator == nil {
+		return nil, nil
+	}
+
+	tiers, err := tierMigrator.ListV1(m.ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing v1 tiers: %w", err)
+	}
+
+	var drift []string
+	for _, obj := range tiers {
+		tier, ok := obj.(*apiv3.Tier)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for v1 Tier: %T", obj)
+		}
+		want, builtIn := builtInTierRequirements[tier.Name]
+		if !builtIn {
+			continue
+		}
+
+		// Name the value to set, not the value we read: the backend defaults
+		// unset fields on read.
+		if tier.Spec.Order == nil || *tier.Spec.Order != want.order {
+			drift = append(drift, fmt.Sprintf("tier %q must have order %s", tier.Name, formatTierOrder(want.order)))
+		}
+
+		action := apiv3.Deny
+		if tier.Spec.DefaultAction != nil {
+			action = *tier.Spec.DefaultAction
+		}
+		if action != want.defaultAction {
+			drift = append(drift, fmt.Sprintf("tier %q must have defaultAction %q", tier.Name, want.defaultAction))
+		}
+	}
+	sort.Strings(drift)
+	return drift, nil
+}
+
+// formatTierOrder renders a tier order without scientific notation, which %v
+// would produce for the large built-in values.
+func formatTierOrder(order float64) string {
+	return strconv.FormatFloat(order, 'f', -1, 64)
 }
 
 // handleMigrating runs the core migration logic.
