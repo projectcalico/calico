@@ -1588,6 +1588,48 @@ var _ = Describe("BPF Syncer NAT service ID conflicts", func() {
 		Expect([]uint32{svcs.m[apiFrontKey].ID(), svcs.m[otherFrontKey].ID()}).To(Equal(ids))
 	})
 
+	It("reprograms both services when their shared ID holds uneven backend counts", func() {
+		// The blocks differ in length, so only ordinal 0 is contested and the
+		// API server keeps its own backends at 1 and 2 - the shape in #13279.
+		apiIPs := []net.IP{apiServerIP, net.IPv4(10, 0, 1, 21), net.IPv4(10, 0, 1, 22)}
+
+		unevenState := state()
+		unevenState.EpsMap[apiSvcKey] = []k8sp.Endpoint{
+			ep(apiIPs[0].String(), apiTgtPort).build(),
+			ep(apiIPs[1].String(), apiTgtPort).build(),
+			ep(apiIPs[2].String(), apiTgtPort).build(),
+		}
+
+		By("seeding a shared ID whose ordinal 0 holds the other service's backend")
+		const shared = uint32(0)
+		Expect(svcs.Update(apiFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 3, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(svcs.Update(otherFrontKey.AsBytes(),
+			nat.NewNATValue(shared, 1, 0, 0).AsBytes())).NotTo(HaveOccurred())
+		Expect(eps.Update(nat.NewNATBackendKey(shared, 0).AsBytes(),
+			otherBackend.AsBytes())).NotTo(HaveOccurred())
+		for i, ip := range apiIPs[1:] {
+			Expect(eps.Update(nat.NewNATBackendKey(shared, uint32(i+1)).AsBytes(),
+				nat.NewNATBackendValue(ip, apiTgtPort).AsBytes())).NotTo(HaveOccurred())
+		}
+
+		By("syncing: each service gets a block of its own, whole")
+		Expect(s.Apply(unevenState)).NotTo(HaveOccurred())
+
+		apiFront := svcs.m[apiFrontKey]
+		otherFront := svcs.m[otherFrontKey]
+		Expect(apiFront.ID()).NotTo(Equal(otherFront.ID()),
+			"two services must not share a NAT service ID")
+
+		Expect(apiFront.Count()).To(Equal(uint32(3)))
+		for i, ip := range apiIPs {
+			Expect(eps.m[nat.NewNATBackendKey(apiFront.ID(), uint32(i))]).
+				To(Equal(nat.NewNATBackendValue(ip, apiTgtPort)))
+		}
+		Expect(otherFront.Count()).To(Equal(uint32(1)))
+		Expect(eps.m[nat.NewNATBackendKey(otherFront.ID(), 0)]).To(Equal(otherBackend))
+	})
+
 	It("keeps the IDs of a service that shares one with its own NodePort", func() {
 		By("programming a service that also has a NodePort")
 		npState := state(proxy.K8sSvcWithNodePort(otherNodePort))
