@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 )
 
@@ -124,12 +125,12 @@ func expectBlockedInPending(t *testing.T, ctx context.Context, g *WithT, bc *moc
 	createMigrationCR(t, ctx)
 
 	g.Eventually(func(g Gomega) {
-		dm := &DatastoreMigration{}
+		dm := &migrationv1.DatastoreMigration{}
 		g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
 		for _, s := range substrings {
 			g.Expect(dm.Status.Message).To(ContainSubstring(s))
 		}
-		g.Expect(dm.Status.Phase).To(BeElementOf(DatastoreMigrationPhase(""), DatastoreMigrationPhasePending))
+		g.Expect(dm.Status.Phase).To(BeElementOf(migrationv1.DatastoreMigrationPhase(""), migrationv1.DatastoreMigrationPhasePending))
 	}, 15*time.Second, 200*time.Millisecond).Should(Succeed())
 
 	// The block must happen before anything destructive, so the aggregated
@@ -138,13 +139,13 @@ func expectBlockedInPending(t *testing.T, ctx context.Context, g *WithT, bc *moc
 	g.Expect(err).NotTo(HaveOccurred(), "APIService should not be deleted while the pre-flight check is blocking")
 
 	// Stays blocked rather than sliding into Migrating on a later reconcile.
-	g.Consistently(func() DatastoreMigrationPhase {
-		dm := &DatastoreMigration{}
+	g.Consistently(func() migrationv1.DatastoreMigrationPhase {
+		dm := &migrationv1.DatastoreMigration{}
 		if err := fvRTClient.Get(ctx, dmKey, dm); err != nil {
-			return DatastoreMigrationPhaseFailed
+			return migrationv1.DatastoreMigrationPhaseFailed
 		}
 		return dm.Status.Phase
-	}, 2*time.Second, 200*time.Millisecond).Should(BeElementOf(DatastoreMigrationPhase(""), DatastoreMigrationPhasePending))
+	}, 2*time.Second, 200*time.Millisecond).Should(BeElementOf(migrationv1.DatastoreMigrationPhase(""), migrationv1.DatastoreMigrationPhasePending))
 }
 
 // TestPreflight_DriftedKubeAdminOrderBlocks verifies that a kube-admin tier
@@ -240,7 +241,7 @@ func TestPreflight_ConformantBuiltInTiersProceed(t *testing.T) {
 
 	g.Eventually(func(g Gomega) {
 		fvh := newFVHelper(t, g, ctx)
-		fvh.expectPhase(DatastoreMigrationPhaseConverged)
+		fvh.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
 
 	for _, name := range []string{"default", "kube-admin", "kube-baseline"} {
@@ -287,6 +288,40 @@ func TestPreflight_UnsetDefaultTierFieldsProceed(t *testing.T) {
 
 	g.Eventually(func(g Gomega) {
 		fvh := newFVHelper(t, g, ctx)
-		fvh.expectPhase(DatastoreMigrationPhaseConverged)
+		fvh.expectPhase(migrationv1.DatastoreMigrationPhaseConverged)
 	}, 30*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestPreflight_MessageClearedOnceTiersCorrected verifies that fixing the
+// drifted tier both unblocks the migration and drops the request to fix it.
+func TestPreflight_MessageClearedOnceTiersCorrected(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+
+	bc := &mockBackendClient{
+		resources: tierOnlyV1Resources(
+			v1TierKVP("default", ptr.To(apiv3.DefaultTierOrder), apiv3.Deny),
+			v1TierKVP("kube-admin", ptr.To(float64(42)), apiv3.Pass),
+		),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	ensureV1CRD(t, ctx)
+	startController(t, ctx, bc, nil)
+	createMigrationCR(t, ctx)
+
+	g.Eventually(func(g Gomega) {
+		dm := &migrationv1.DatastoreMigration{}
+		g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+		g.Expect(dm.Status.Message).To(ContainSubstring(`tier "kube-admin" must have order 1000`))
+	}, 15*time.Second, 200*time.Millisecond).Should(Succeed())
+
+	bc.setResources(apiv3.KindTier, conformantBuiltInTiers())
+
+	g.Eventually(func(g Gomega) {
+		dm := &migrationv1.DatastoreMigration{}
+		g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+		g.Expect(dm.Status.Message).NotTo(ContainSubstring("must have order"))
+		g.Expect(dm.Status.Phase).To(Equal(migrationv1.DatastoreMigrationPhaseConverged))
+	}, 45*time.Second, 200*time.Millisecond).Should(Succeed())
 }

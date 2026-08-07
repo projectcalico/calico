@@ -95,6 +95,10 @@ const (
 	// MaxItems (64 in types.go) so the cap here is what's actually hit, not the
 	// apiserver rejecting the write.
 	maxConflictConditions = 32
+
+	// tierDriftMessagePrefix opens the status message naming built-in tiers the
+	// v3 API would reject.
+	tierDriftMessagePrefix = "Correct the following v1 tiers before migration can start: "
 )
 
 // ControllerConfig holds all dependencies for creating the migration controller.
@@ -624,11 +628,16 @@ func (m *migrationController) checkBuiltInTiers(logCtx *logrus.Entry, dm *migrat
 		return false, fmt.Errorf("validating built-in tiers: %w", err)
 	}
 	if len(drift) == 0 {
+		// Don't leave the CR asking for a fix that has already landed.
+		if strings.HasPrefix(dm.Status.Message, tierDriftMessagePrefix) {
+			dm.Status.Message = ""
+			return false, m.updateStatus(dm)
+		}
 		return false, nil
 	}
 
 	logCtx.WithField("tiers", drift).Warn("Built-in tiers do not match the values the v3 API enforces")
-	dm.Status.Message = fmt.Sprintf("Correct the following v1 tiers before migration can start: %s", strings.Join(drift, "; "))
+	dm.Status.Message = tierDriftMessagePrefix + strings.Join(drift, "; ")
 	return true, m.updateStatus(dm)
 }
 

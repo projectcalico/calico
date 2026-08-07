@@ -100,13 +100,21 @@ func (m *mockBackendClient) List(_ context.Context, list model.ListInterface, _ 
 				return nil, err
 			}
 		}
-		m.mu.Unlock()
 		kvps := m.resources[rlo.Kind]
+		m.mu.Unlock()
 		if rlo.Kind == apiv3.KindTier {
 			kvps = defaultTierKVPs(kvps)
 		}
 		return &model.KVPairList{KVPairs: kvps}, nil
 	}
+}
+
+// setResources replaces the stored KVPairs for a kind while the controller is
+// running.
+func (m *mockBackendClient) setResources(kind string, kvps []*model.KVPair) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.resources[kind] = kvps
 }
 
 // defaultTierKVPs applies the defaulting the real backend does on the tier read
