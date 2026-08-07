@@ -344,6 +344,30 @@ on connection close.
   residual drift the fast/cleanup paths missed and skips entries
   with `CONNLIMIT_DEC` already set so it doesn't double-count.
 
+**Host-originated traffic is exempt from the ingress limit.** A packet
+from the local host to a workload takes the `skip_policy` path in
+`tc.c` ("host to workload traffic always allowed"), which sets
+`CALI_ST_SKIP_POLICY`; the ingress admission check is gated on
+`!policy_skipped`, so such a connection is neither counted nor
+limited. This includes traffic from host-networked pods, which are
+indistinguishable from the host at this point.
+
+**iptables and nftables behave the same**, by a different mechanism:
+the connlimit rule is rendered into the workload's `cali-tw-<iface>`
+chain (`felix/rules/endpoints.go`), and `StaticFilterOutputChains`
+(`felix/rules/static.go`) returns from the OUTPUT chain for traffic
+leaving a workload interface, so that chain is never reached for
+host-origin traffic. Dispatch to `cali-tw-` happens only from the
+FORWARD chain and the IPVS endpoint-mark chain.
+
+The exemption is thus consistent across all three dataplanes, but note
+that it is inherited from a *policy* rationale — policing host to
+workload traffic "doesn't really protect", since the host can bypass
+policy anyway — rather than one argued for a *resource* control.
+Host-origin connections consume a pod's sockets like any other. This
+is worth revisiting if host-networked clients ever need to count
+against a workload's limit.
+
 The per-direction `INGRESS_CONN_LIMIT_CONFIGURED` /
 `EGRESS_CONN_LIMIT_CONFIGURED` flags gate the BPF connlimit code
 path entirely when no limit is configured for that attach point.
@@ -392,6 +416,12 @@ global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
   `calico_ct_lookup`) and the cleanup path (BPF conntrack cleanup
   scanner) set it before decrementing, and the Go scanner skips
   entries that carry it. Without that, drift accumulates upward.
+- Extending the ingress limit to host-originated traffic requires a
+  change in every dataplane, and a different one in each: BPF exempts
+  it via the `skip_policy` path, iptables/nftables by returning from
+  the OUTPUT chain before the `cali-tw-` dispatch. Changing one and
+  not the others is a cross-dataplane divergence, which this feature
+  does not currently have.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
