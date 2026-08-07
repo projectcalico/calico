@@ -323,6 +323,7 @@ func (t *TyphaDaemon) CreateServer() {
 			PingInterval:                   t.ConfigParams.ServerPingIntervalSecs,
 			PongTimeout:                    t.ConfigParams.ServerPongTimeoutSecs,
 			HandshakeTimeout:               t.ConfigParams.ServerHandshakeTimeoutSecs,
+			WriteTimeout:                   t.ConfigParams.ServerWriteTimeoutSecs,
 			DropInterval:                   t.ConfigParams.ConnectionDropIntervalSecs,
 			ShutdownTimeout:                t.ConfigParams.ShutdownTimeoutSecs,
 			ShutdownMaxDropInterval:        t.ConfigParams.ShutdownConnectionDropIntervalMaxSecs,
