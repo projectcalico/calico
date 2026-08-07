@@ -1483,7 +1483,21 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 				}
 			default:
 				if m.v4 != nil {
-					if err := m.dp.setRPFilter(update.Name, 2); err != nil {
+					rpFilter := 2
+					if !m.bpfOverlayIPOnDevice &&
+						(iface.info.ifaceType == IfaceTypeIPIP || iface.info.ifaceType == IfaceTypeVXLAN) {
+						// In BPFOverlayHostSourceIP=HostAddress mode the overlay
+						// device has no IP address, and the kernel drops packets
+						// arriving on an address-less device unless their source
+						// routes back via that device, even in loose RPF mode.
+						// Replies of host-networked connections to remote service
+						// backends are reverse-NATted here on tunnel ingress, so
+						// their source is the service IP, routed via bpfin.cali.
+						// Turn kernel RPF off like on the bpfin/bpfout devices;
+						// BPF does the RPF on its own.
+						rpFilter = 0
+					}
+					if err := m.dp.setRPFilter(update.Name, rpFilter); err != nil {
 						logrus.WithError(err).Warnf("Failed to set rp_filter for %s.", update.Name)
 					}
 				}

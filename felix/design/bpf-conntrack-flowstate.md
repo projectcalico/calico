@@ -90,6 +90,18 @@ bpfnat feature is enabled; per-interface sysctls are set to loose
 (`2`) on interfaces where Calico forwards packets that may appear
 misrouted to the kernel. BPF does the real check.
 
+Loose is not relaxed enough on a device with **no IPv4 address**: the
+kernel's `__fib_validate_source()` short-circuits on such devices
+(`no_addr`) and drops any packet whose source does not route back out
+that device, for *any* non-zero `rp_filter` — the loose-mode fallback
+lookup is never reached. This bites the overlay device in
+`BPFOverlayHostSourceIP=HostAddress` mode (the tunnel deliberately has
+no IP): replies of host-networked connections to remote service
+backends are reverse-NATted on tunnel ingress, so they enter the stack
+with the service IP as source, which routes via `bpfin.cali`, not the
+tunnel. Felix therefore sets `rp_filter = 0` (like on the bpfnat veths)
+on IPIP/VXLAN devices in that mode.
+
 ### Review notes for this section
 
 - A change that makes a new interface type Calico-managed must decide
@@ -128,6 +140,45 @@ of entry (`TypeNormal`, `TypeNATForward`, `TypeNATReverse` in
 Creating a NAT'd flow means creating both. Destroying a NAT'd flow
 means destroying both — atomically enough that BPF never sees only
 one side. The cleanup pipeline is built around this requirement.
+
+#### Tunnel return address and overlay-reply re-encap
+
+Two mechanisms let a node send a reply back through the overlay,
+and it is important not to conflate them:
+
+- **`tun_ip` (NAT-reverse entries only).** The reverse entry of a
+  service/NodePort flow that crossed nodes stores the peer node's
+  address in `tun_ip`. On the forwarding node it is the backend
+  node to tunnel *to* (`CALI_CT_FLAG_NP_FWD`); on the backend node
+  it is the node the request came *from*, so the reply is tunneled
+  back the way it arrived. It is written only for
+  `CALI_CT_TYPE_NAT_REV` (`conntrack.h`) and consumed only by the
+  service/NodePort return-encap paths
+  (`dnat_return_should_encap()`). Normal (non-NAT) entries never
+  populate it.
+
+- **`CALI_CT_FLAG_OVERLAY_REPLY` (normal entries).** With
+  `BPFOverlayHostSourceIP=HostAddress` the tunnel device has no IP,
+  so a host-networked client's request arrives over the overlay
+  with the node IP as its inner source. The workload's reply then
+  targets a bare remote node IP — a `CALI_RT_HOST` route, which is
+  *not* tunneled — and would leave the node un-encapsulated with a
+  pod-CIDR source, which a source-checking fabric (e.g. GCP) drops.
+  The flag is set at conntrack creation on the overlay tunnel-ingress
+  programs — `from_vxlan` (`CALI_F_INGRESS && CALI_F_VXLAN`) for VXLAN,
+  and `from_l3` (`CALI_F_L3_INGRESS`) for the IPIP tunnel device, which
+  is an L3 device the kernel decaps onto. Gating on those flags scopes the flag
+  to overlay ingress and excludes `tunnel=none` (host→pod arrives on the
+  main host endpoint, with no tunnel to re-encapsulate into). It is
+  further gated on HostAddress mode (absent tunnel IP) and a remote-host
+  inner source, which restricts it to host-originated flows. It is read
+  on the reply's workload-egress path, where it forces the overlay encap
+  even though the destination route is a bare host. It carries no
+  address: a remote-host route already holds the node IP as its
+  `next_hop`, which is the tunnel endpoint (equivalently, the reply
+  re-encaps to its own destination). This is deliberately *not*
+  `tun_ip` — that field's meaning is NodePort/service-specific and must
+  stay so.
 
 ### Cleanup: three layers
 
