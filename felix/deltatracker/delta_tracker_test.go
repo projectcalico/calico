@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Tigera, Inc. All rights reserved.
+// Copyright (c) 2023-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -744,6 +744,44 @@ func TestPendingDeletesView_IterBatched_PartialApplication(t *testing.T) {
 	// For now, just validate that partial application behavior works at all
 	// and that multiple calls are made when items are only partially processed
 	Expect(len(deleteCalls)).To(BeNumerically(">", 1), "Should have multiple calls due to partial application")
+}
+
+// TestDeltaTracker_PendingUpdatesIterStopsEarly verifies that returning
+// IterActionNoOpStopIteration actually halts iteration rather than only
+// breaking out of the switch (CORE-13013).
+func TestDeltaTracker_PendingUpdatesIterStopsEarly(t *testing.T) {
+	dt := setupDeltaTrackerTest(t)
+	for i := 0; i < 10; i++ {
+		dt.Desired().Set(fmt.Sprintf("%d", i), "v")
+	}
+	Expect(dt.PendingUpdates().Len()).To(Equal(10))
+
+	calls := 0
+	dt.PendingUpdates().Iter(func(k string, v string) IterAction {
+		calls++
+		return IterActionNoOpStopIteration
+	})
+	Expect(calls).To(Equal(1), "iteration should stop after the first stop action")
+}
+
+// TestDeltaTracker_PendingDeletionsIterStopsEarly verifies the same early-stop
+// behavior for the pending deletions view (CORE-13013).
+func TestDeltaTracker_PendingDeletionsIterStopsEarly(t *testing.T) {
+	dt := setupDeltaTrackerTest(t)
+	kvs := map[string]string{}
+	for i := 0; i < 10; i++ {
+		kvs[fmt.Sprintf("%d", i)] = "v"
+	}
+	err := dt.Dataplane().ReplaceAllIter(mapIter(kvs))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(dt.PendingDeletions().Len()).To(Equal(10))
+
+	calls := 0
+	dt.PendingDeletions().Iter(func(k string) IterAction {
+		calls++
+		return IterActionNoOpStopIteration
+	})
+	Expect(calls).To(Equal(1), "iteration should stop after the first stop action")
 }
 
 func setupDeltaTrackerTest(t *testing.T) *DeltaTracker[string, string] {
