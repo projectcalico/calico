@@ -85,14 +85,16 @@ rejects an inconsistent pair; see the review notes below.
 In a manifest-installed cluster the defaults above are what a cluster gets,
 because nothing writes the fields.
 
-In an operator-installed cluster the two fields are derived by `tigera/operator`
-from `Installation.spec.calicoNetwork.clusterRoutingMode`, which is a single
-`BIRD` / `Felix` choice.  The operator writes both fields explicitly, so it —
-not the defaults in this repo — decides the outcome.  Changing the defaults here
-therefore has no effect on operator-installed clusters until
-`clusterRoutingMode` grows the per-encapsulation distinction and its own default
-moves; a change to either field's default or enum needs a matching
-`tigera/operator` PR and the `needs-operator-pr` label.
+In an operator-installed cluster, `tigera/operator` derives both fields from
+`Installation.spec.calicoNetwork.clusterRoutingMode` — but only when that field
+is set.  When it is unset, which is the common case, the operator writes neither
+field, so the defaults above are what the cluster gets.  Changing a default here
+therefore reaches operator-installed clusters too, and does so on upgrade.
+
+`clusterRoutingMode` was a single `BIRD` / `Felix` choice, which cannot express
+the split; tigera/operator#5150 adds a `FelixIPIPOnly` value that maps onto the
+complementary pair in the table above.  A change to either field's default or
+enum needs a matching `tigera/operator` PR and the `needs-operator-pr` label.
 
 ### Review notes — §1
 
