@@ -3683,6 +3683,10 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
+          type: string
         - jsonPath: .metadata.creationTimestamp
           name: Age
           type: date
@@ -4967,6 +4971,70 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+            status:
+              description: PolicyStatus contains the status of a Calico policy resource.
+              properties:
+                conditions:
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
@@ -4975,7 +5043,8 @@ spec:
         - jsonPath: .spec.tier
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -6438,6 +6507,10 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -7670,6 +7743,70 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+            status:
+              description: PolicyStatus contains the status of a Calico policy resource.
+              properties:
+                conditions:
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
@@ -7678,7 +7815,8 @@ spec:
         - jsonPath: .spec.tier
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -7763,6 +7901,10 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -9055,6 +9197,70 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+            status:
+              description: PolicyStatus contains the status of a Calico policy resource.
+              properties:
+                conditions:
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
@@ -9063,7 +9269,8 @@ spec:
         - jsonPath: .spec.tier
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -9083,10 +9290,15 @@ spec:
     singular: stagedkubernetesnetworkpolicy
   scope: Namespaced
   versions:
-    - name: v3
+    - additionalPrinterColumns:
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
+          type: string
+      name: v3
       schema:
         openAPIV3Schema:
-          description: StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
+          description: StagedKubernetesNetworkPolicy is a staged KubernetesNetworkPolicy.
           properties:
             apiVersion:
               description: |-
@@ -9595,12 +9807,78 @@ spec:
                     - Ignore
                   type: string
               type: object
+            status:
+              description: PolicyStatus contains the status of a Calico policy resource.
+              properties:
+                conditions:
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
           type: object
       served: true
       storage: true
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -9628,6 +9906,10 @@ spec:
         - jsonPath: .spec.order
           name: Order
           type: number
+        - description: Policy validation status
+          jsonPath: .status.conditions[?(@.type=='Valid')].message
+          name: Validation
+          type: string
       name: v3
       schema:
         openAPIV3Schema:
@@ -10874,6 +11156,70 @@ spec:
                 - message: global() can only be used in an EntityRule namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.serviceAccountSelector) || !self.serviceAccountSelector.contains('global(')"
+            status:
+              description: PolicyStatus contains the status of a Calico policy resource.
+              properties:
+                conditions:
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-map-keys:
+                    - type
+                  x-kubernetes-list-type: map
+              type: object
           required:
             - metadata
             - spec
@@ -10882,7 +11228,8 @@ spec:
         - jsonPath: .spec.tier
       served: true
       storage: true
-      subresources: {}
+      subresources:
+        status: {}
 ---
 # Source: calico/templates/kdd-crds.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -12373,13 +12720,14 @@ rules:
     verbs:
       - get
       - update
-  # Needed for policy name migrator.
+  # Needed for policy name migrator and policy validation controller.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - networkpolicies
       - stagednetworkpolicies
       - globalnetworkpolicies
       - stagedglobalnetworkpolicies
+      - stagedkubernetesnetworkpolicies
     verbs:
       - watch
       - list
@@ -12387,6 +12735,17 @@ rules:
       - create
       - update
       - delete
+  # Needed for the policy validation controller to update status conditions.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - networkpolicies/status
+      - stagednetworkpolicies/status
+      - globalnetworkpolicies/status
+      - stagedglobalnetworkpolicies/status
+      - stagedkubernetesnetworkpolicies/status
+    verbs:
+      - get
+      - update
   # Needed for migration controller to watch calico-node and calico-typha status.
   - apiGroups: ["apps"]
     resources:

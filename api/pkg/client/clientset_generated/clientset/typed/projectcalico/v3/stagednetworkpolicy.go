@@ -26,6 +26,8 @@ type StagedNetworkPoliciesGetter interface {
 type StagedNetworkPolicyInterface interface {
 	Create(ctx context.Context, stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.StagedNetworkPolicy, error)
 	Update(ctx context.Context, stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedNetworkPolicy, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, stagedNetworkPolicy *projectcalicov3.StagedNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.StagedNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.StagedNetworkPolicy, error)
@@ -33,6 +35,8 @@ type StagedNetworkPolicyInterface interface {
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.StagedNetworkPolicy, err error)
 	Apply(ctx context.Context, stagedNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedNetworkPolicy, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, stagedNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.StagedNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.StagedNetworkPolicy, err error)
 	StagedNetworkPolicyExpansion
 }
 

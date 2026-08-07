@@ -26,6 +26,8 @@ type GlobalNetworkPoliciesGetter interface {
 type GlobalNetworkPolicyInterface interface {
 	Create(ctx context.Context, globalNetworkPolicy *projectcalicov3.GlobalNetworkPolicy, opts v1.CreateOptions) (*projectcalicov3.GlobalNetworkPolicy, error)
 	Update(ctx context.Context, globalNetworkPolicy *projectcalicov3.GlobalNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.GlobalNetworkPolicy, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, globalNetworkPolicy *projectcalicov3.GlobalNetworkPolicy, opts v1.UpdateOptions) (*projectcalicov3.GlobalNetworkPolicy, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
 	Get(ctx context.Context, name string, opts v1.GetOptions) (*projectcalicov3.GlobalNetworkPolicy, error)
@@ -33,6 +35,8 @@ type GlobalNetworkPolicyInterface interface {
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
 	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *projectcalicov3.GlobalNetworkPolicy, err error)
 	Apply(ctx context.Context, globalNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.GlobalNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.GlobalNetworkPolicy, err error)
+	// Add a +genclient:noStatus comment above the type to avoid generating ApplyStatus().
+	ApplyStatus(ctx context.Context, globalNetworkPolicy *applyconfigurationgeneratedprojectcalicov3.GlobalNetworkPolicyApplyConfiguration, opts v1.ApplyOptions) (result *projectcalicov3.GlobalNetworkPolicy, err error)
 	GlobalNetworkPolicyExpansion
 }
 
