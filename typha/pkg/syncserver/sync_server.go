@@ -73,12 +73,18 @@ var (
 	gaugeVecNumConnectionsStreaming = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "typha_connections_streaming",
 		Help: "Number of client connections that completed the handshake and are streaming data.",
-	}, []string{"syncer"})
+	}, []string{"syncer", "compression"})
 	counterVecGracePeriodUsed = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "typha_connections_grace_used",
 		Help: "Total number of connections that made use of the grace period to catch up after sending the initial " +
 			"snapshot.",
 	}, []string{"syncer"})
+
+	// allCompressionMetricAlgorithms lists every algorithm value used for the
+	// "compression" metric label, including "" (reported as "none") for
+	// uncompressed connections.
+	allCompressionMetricAlgorithms = append(
+		[]syncproto.CompressionAlgorithm{""}, syncproto.AllCompressionAlgorithms...)
 )
 
 func init() {
@@ -87,7 +93,11 @@ func init() {
 	prometheus.MustRegister(gaugeNumConnections)
 
 	prometheus.MustRegister(gaugeVecNumConnectionsStreaming)
-	promutils.PreCreateGaugePerSyncer(gaugeVecNumConnectionsStreaming)
+	for _, st := range syncproto.AllSyncerTypes {
+		for _, alg := range allCompressionMetricAlgorithms {
+			gaugeVecNumConnectionsStreaming.WithLabelValues(string(st), alg.MetricLabelValue())
+		}
+	}
 	prometheus.MustRegister(counterVecGracePeriodUsed)
 	promutils.PreCreateCounterPerSyncer(counterVecGracePeriodUsed)
 }
@@ -806,6 +816,12 @@ type connection struct {
 	// of them to the unnamed field after the handshake.
 	allMetrics map[syncproto.SyncerType]perSyncerConnMetrics
 	perSyncerConnMetrics
+
+	// Metrics that carry the "compression" label as well as the "syncer"
+	// label; bound by bindCompressionMetrics once the handshake has chosen
+	// the compression algorithm.
+	summarySnapshotSendTime      prometheus.Summary
+	gaugeNumConnectionsStreaming prometheus.Gauge
 }
 
 type snapshotCache interface {
@@ -1106,6 +1122,7 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Warning("Client signalled compression but no support for decoder restart")
 		h.chosenCompression = ""
 	}
+	h.bindCompressionMetrics()
 
 	if !hello.SupportsModernPolicyKeys {
 		// The client is too old and we cannot support it. Reject the connection and wait for the
@@ -1128,6 +1145,14 @@ func (h *connection) doHandshake() error {
 		return err
 	}
 	return nil
+}
+
+// bindCompressionMetrics binds the metrics that carry the "compression"
+// label; the handshake must have chosen the compression algorithm already.
+func (h *connection) bindCompressionMetrics() {
+	h.gaugeNumConnectionsStreaming = gaugeVecNumConnectionsStreaming.WithLabelValues(
+		string(h.syncerType), h.chosenCompression.MetricLabelValue())
+	h.summarySnapshotSendTime = makeSnapshotSendTimeSummary(h.syncerType, h.chosenCompression)
 }
 
 // sendDecoderRestartAndWaitForAck signals the client to restart its decoder
@@ -1515,16 +1540,15 @@ func (h *connection) sendPingsToClient(logCxt *log.Entry) {
 }
 
 // perSyncerConnMetrics contains a set of Prometheus metrics that each connection needs to update.  There is one
-// set per syncer type.
+// set per syncer type.  Metrics that also carry the "compression" label are
+// bound per connection after the handshake instead (see bindCompressionMetrics).
 type perSyncerConnMetrics struct {
-	counterGracePeriodUsed       prometheus.Counter
-	summarySnapshotSendTime      prometheus.Summary
-	summaryClientLatency         prometheus.Summary
-	summaryWriteLatency          prometheus.Summary
-	summaryNextCatchupLatency    prometheus.Summary
-	summaryPingLatency           prometheus.Summary
-	summaryNumKVsPerMsg          prometheus.Summary
-	gaugeNumConnectionsStreaming prometheus.Gauge
+	counterGracePeriodUsed    prometheus.Counter
+	summaryClientLatency      prometheus.Summary
+	summaryWriteLatency       prometheus.Summary
+	summaryNextCatchupLatency prometheus.Summary
+	summaryPingLatency        prometheus.Summary
+	summaryNumKVsPerMsg       prometheus.Summary
 }
 
 func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetrics {
@@ -1532,11 +1556,11 @@ func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetr
 	syncerLabels := map[string]string{
 		"syncer": string(syncerType),
 	}
-	c.summarySnapshotSendTime = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
-		Name:        "typha_client_snapshot_send_secs",
-		Help:        "How long it took to send the initial snapshot to each client.",
-		ConstLabels: syncerLabels,
-	}))
+	// Pre-create the per-compression metrics for this syncer so that they
+	// exist (with zero values) before the first client connects.
+	for _, alg := range allCompressionMetricAlgorithms {
+		makeSnapshotSendTimeSummary(syncerType, alg)
+	}
 	c.summaryClientLatency = promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
 		Name: "typha_client_latency_secs",
 		Help: "Per-client latency.  I.e. how far behind the current state is each client.",
@@ -1566,6 +1590,18 @@ func makePerSyncerConnMetrics(syncerType syncproto.SyncerType) perSyncerConnMetr
 		ConstLabels: syncerLabels,
 	}))
 	c.counterGracePeriodUsed = counterVecGracePeriodUsed.WithLabelValues(string(syncerType))
-	c.gaugeNumConnectionsStreaming = gaugeVecNumConnectionsStreaming.WithLabelValues(string(syncerType))
 	return c
+}
+
+// makeSnapshotSendTimeSummary returns the snapshot-send-time summary for the
+// given syncer and compression algorithm, registering it on first use.
+func makeSnapshotSendTimeSummary(syncerType syncproto.SyncerType, alg syncproto.CompressionAlgorithm) prometheus.Summary {
+	return promutils.GetOrRegister(cprometheus.NewSummary(prometheus.SummaryOpts{
+		Name: "typha_client_snapshot_send_secs",
+		Help: "How long it took to send the initial snapshot to each client.",
+		ConstLabels: map[string]string{
+			"syncer":      string(syncerType),
+			"compression": alg.MetricLabelValue(),
+		},
+	}))
 }

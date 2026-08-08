@@ -251,6 +251,16 @@ var AllCompressionAlgorithms = []CompressionAlgorithm{
 	CompressionZstd,
 }
 
+// MetricLabelValue returns the value used for the "compression" label on
+// Prometheus metrics: the algorithm name, or "none" for the zero value
+// (uncompressed).
+func (a CompressionAlgorithm) MetricLabelValue() string {
+	if a == "" {
+		return "none"
+	}
+	return string(a)
+}
+
 // MsgClientHello is the first message sent by the client after it opens the connection.  It begins the handshake.
 // It includes a request to use a particular kind of syncer and tells the server what features are supported.
 type MsgClientHello struct {
