@@ -1591,6 +1591,12 @@ type FlowKey struct {
 	// SourceType is the type of the source, used to contextualize the source
 	// name and namespace fields.
 	SourceType EndpointType `protobuf:"varint,3,opt,name=source_type,json=sourceType,proto3,enum=goldmane.EndpointType" json:"source_type,omitempty"`
+	// SourceIP is the IP address of the source endpoint.
+	SourceIp string `protobuf:"bytes,16,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
+	// SourcePort is the source port number.
+	SourcePort int64 `protobuf:"varint,17,opt,name=source_port,json=sourcePort,proto3" json:"source_port,omitempty"`
+	// DestIP is the IP address of the destination endpoint.
+	DestIp string `protobuf:"bytes,18,opt,name=dest_ip,json=destIp,proto3" json:"dest_ip,omitempty"`
 	// DestName is the name of the destination for this Flow.
 	// The value is contextualized by the source_type field:
 	// - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
@@ -1676,6 +1682,27 @@ func (x *FlowKey) GetSourceType() EndpointType {
 		return x.SourceType
 	}
 	return EndpointType_EndpointTypeUnspecified
+}
+
+func (x *FlowKey) GetSourceIp() string {
+	if x != nil {
+		return x.SourceIp
+	}
+	return ""
+}
+
+func (x *FlowKey) GetSourcePort() int64 {
+	if x != nil {
+		return x.SourcePort
+	}
+	return 0
+}
+
+func (x *FlowKey) GetDestIp() string {
+	if x != nil {
+		return x.DestIp
+	}
+	return ""
 }
 
 func (x *FlowKey) GetDestName() string {
@@ -1794,8 +1821,14 @@ type Flow struct {
 	// NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
 	// connection that matches the FlowKey that was active at this Flow's EndTime.
 	NumConnectionsLive int64 `protobuf:"varint,12,opt,name=num_connections_live,json=numConnectionsLive,proto3" json:"num_connections_live,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// SourceIPs contains a list of source IP addresses that contributed to this flow.
+	// This array has a configurable size limit to cap memory usage.
+	SourceIps []string `protobuf:"bytes,13,rep,name=source_ips,json=sourceIps,proto3" json:"source_ips,omitempty"`
+	// SourcePorts contains a list of source ports that contributed to this flow.
+	// This array has a configurable size limit to cap memory usage.
+	SourcePorts   []int64 `protobuf:"varint,14,rep,packed,name=source_ports,json=sourcePorts,proto3" json:"source_ports,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Flow) Reset() {
@@ -1910,6 +1943,20 @@ func (x *Flow) GetNumConnectionsLive() int64 {
 		return x.NumConnectionsLive
 	}
 	return 0
+}
+
+func (x *Flow) GetSourceIps() []string {
+	if x != nil {
+		return x.SourceIps
+	}
+	return nil
+}
+
+func (x *Flow) GetSourcePorts() []int64 {
+	if x != nil {
+		return x.SourcePorts
+	}
+	return nil
 }
 
 type PolicyTrace struct {
@@ -2399,13 +2446,17 @@ const file_api_proto_rawDesc = "" +
 	"\vFlowReceipt\"0\n" +
 	"\n" +
 	"FlowUpdate\x12\"\n" +
-	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\x8a\x05\n" +
+	"\x04flow\x18\x01 \x01(\v2\x0e.goldmane.FlowR\x04flow\"\xe1\x05\n" +
 	"\aFlowKey\x12\x1f\n" +
 	"\vsource_name\x18\x01 \x01(\tR\n" +
 	"sourceName\x12)\n" +
 	"\x10source_namespace\x18\x02 \x01(\tR\x0fsourceNamespace\x127\n" +
 	"\vsource_type\x18\x03 \x01(\x0e2\x16.goldmane.EndpointTypeR\n" +
 	"sourceType\x12\x1b\n" +
+	"\tsource_ip\x18\x10 \x01(\tR\bsourceIp\x12\x1f\n" +
+	"\vsource_port\x18\x11 \x01(\x03R\n" +
+	"sourcePort\x12\x17\n" +
+	"\adest_ip\x18\x12 \x01(\tR\x06destIp\x12\x1b\n" +
 	"\tdest_name\x18\x04 \x01(\tR\bdestName\x12%\n" +
 	"\x0edest_namespace\x18\x05 \x01(\tR\rdestNamespace\x123\n" +
 	"\tdest_type\x18\x06 \x01(\x0e2\x16.goldmane.EndpointTypeR\bdestType\x12\x1b\n" +
@@ -2418,7 +2469,7 @@ const file_api_proto_rawDesc = "" +
 	"\x05proto\x18\f \x01(\tR\x05proto\x12.\n" +
 	"\breporter\x18\r \x01(\x0e2\x12.goldmane.ReporterR\breporter\x12(\n" +
 	"\x06action\x18\x0e \x01(\x0e2\x10.goldmane.ActionR\x06action\x121\n" +
-	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\"\xc9\x03\n" +
+	"\bpolicies\x18\x0f \x01(\v2\x15.goldmane.PolicyTraceR\bpolicies\"\x8b\x04\n" +
 	"\x04Flow\x12#\n" +
 	"\x03Key\x18\x01 \x01(\v2\x11.goldmane.FlowKeyR\x03Key\x12\x1d\n" +
 	"\n" +
@@ -2436,7 +2487,10 @@ const file_api_proto_rawDesc = "" +
 	"\x17num_connections_started\x18\n" +
 	" \x01(\x03R\x15numConnectionsStarted\x12:\n" +
 	"\x19num_connections_completed\x18\v \x01(\x03R\x17numConnectionsCompleted\x120\n" +
-	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\"\x8f\x01\n" +
+	"\x14num_connections_live\x18\f \x01(\x03R\x12numConnectionsLive\x12\x1d\n" +
+	"\n" +
+	"source_ips\x18\r \x03(\tR\tsourceIps\x12!\n" +
+	"\fsource_ports\x18\x0e \x03(\x03R\vsourcePorts\"\x8f\x01\n" +
 	"\vPolicyTrace\x12@\n" +
 	"\x11enforced_policies\x18\x01 \x03(\v2\x13.goldmane.PolicyHitR\x10enforcedPolicies\x12>\n" +
 	"\x10pending_policies\x18\x02 \x03(\v2\x13.goldmane.PolicyHitR\x0fpendingPolicies\"\x96\x02\n" +

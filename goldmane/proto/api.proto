@@ -344,6 +344,15 @@ message FlowKey {
   // name and namespace fields.
   EndpointType source_type = 3;
 
+  // SourceIP is the IP address of the source endpoint.
+  string source_ip = 16;
+
+  // SourcePort is the source port number.
+  int64 source_port = 17;
+
+  // DestIP is the IP address of the destination endpoint.
+  string dest_ip = 18;
+
   // DestName is the name of the destination for this Flow.
   // The value is contextualized by the source_type field:
   // - For WorkloadEndpoint, this represents a set of pods that share a GenerateName.
@@ -428,6 +437,14 @@ message Flow {
   // NumConnectionsLive tracks the total number of still active connections recorded for this Flow. It counts each
   // connection that matches the FlowKey that was active at this Flow's EndTime.
   int64 num_connections_live = 12;
+
+  // SourceIPs contains a list of source IP addresses that contributed to this flow.
+  // This array has a configurable size limit to cap memory usage.
+  repeated string source_ips = 13;
+
+  // SourcePorts contains a list of source ports that contributed to this flow.
+  // This array has a configurable size limit to cap memory usage.
+  repeated int64 source_ports = 14;
 }
 
 message PolicyTrace {
