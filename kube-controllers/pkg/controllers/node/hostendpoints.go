@@ -33,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/utils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
@@ -109,7 +108,7 @@ func (t *hostEndpointTracker) getAllHostEndpoints() []*api.HostEndpoint {
 	return hostEndpoints
 }
 
-func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interface) *autoHostEndpointController {
+func NewAutoHEPController(cfg api.NodeControllerConfig, client client.Interface) *autoHostEndpointController {
 	return &autoHostEndpointController{
 		config:         cfg,
 		client:         client,
@@ -122,7 +121,7 @@ func NewAutoHEPController(cfg config.NodeControllerConfig, client client.Interfa
 }
 
 type autoHostEndpointController struct {
-	config         config.NodeControllerConfig
+	config         api.NodeControllerConfig
 	client         client.Interface
 	syncStatus     bapi.SyncStatus
 	nodeCache      map[string]*internalapi.Node
@@ -258,7 +257,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 
 	logrus.Infof("Syncing all HostEndpoints")
 
-	if !c.config.AutoHostEndpointConfig.AutoCreate {
+	if c.config.HostEndpoint == nil || c.config.HostEndpoint.AutoCreate != api.Enabled {
 		// Create host endpoints is disabled, we need to delete all hostEndpoints that might still be left over after being created by this controller
 		for _, hep := range c.autoHEPTracker.getAllHostEndpoints() {
 			err := c.deleteHostEndpoint(hep.Name)
@@ -289,7 +288,7 @@ func (c *autoHostEndpointController) syncHostEndpoints() {
 // 4. Check that there are no extra HostEndpoints we created before that no longer match the kubecontrollersconfiguration or the template, we delete those HostEndpoints
 func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	node := c.nodeCache[nodeName]
-	if node == nil || !c.config.AutoHostEndpointConfig.AutoCreate {
+	if node == nil || c.config.HostEndpoint == nil || c.config.HostEndpoint.AutoCreate != api.Enabled {
 		// Node has been deleted clean up all HostEndpoints associated with this node
 		// or AutoCreate is Disabled, we only want try to create/update host endpoints if AutoCreate is enabled, if any host endpoints are already created for this node they will be deleted
 		c.deleteHostEndpointsForNode(nodeName)
@@ -299,7 +298,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	// We keep a list of hostEndpoints that should be created for this node to determine if any should be removed further down
 	hostEndpointsMatchingNode := make(map[string]bool)
 
-	if c.config.AutoHostEndpointConfig.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
+	if c.config.HostEndpoint.CreateDefaultHostEndpoint == api.DefaultHostEndpointsEnabled {
 		// First we check that the default hostEndpoint is deleted/not present if createDefaultHostEndpoint is disabled,
 		// if enabled we check that the hostEndpoint is created and up to date
 		defaultHostEndpointName, err := generateAutoHostEndpointName(nodeName, "", "")
@@ -315,7 +314,7 @@ func (c *autoHostEndpointController) syncHostEndpointsForNode(nodeName string) {
 	}
 
 	// We check that all hostEndpoints that match the template are created, we also check that they are up to date.
-	for _, template := range c.config.AutoHostEndpointConfig.Templates {
+	for _, template := range c.config.HostEndpoint.Templates {
 		nodeSelector, err := selector.Parse(template.NodeSelector)
 		if err != nil {
 			logrus.WithError(err).Errorf("failed to parse node selector, skipping host endpoint creation for %s template", template.GenerateName)
@@ -475,7 +474,7 @@ func (c *autoHostEndpointController) mergeExpectedIPsWithInterfaceIPs(expectedIP
 }
 
 // getExpectedIPsMatchingInterfaceCIDRs finds the matching node IPs to the CIDRs specified in the template
-func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *internalapi.Node, template config.AutoHostEndpointTemplate) []string {
+func (c *autoHostEndpointController) getExpectedIPsMatchingInterfaceCIDRs(node *internalapi.Node, template api.Template) []string {
 	filteredExpectedIPs := []string{}
 	expectedIPs := c.getExpectedIPs(node)
 

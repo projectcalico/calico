@@ -26,7 +26,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/lib/logrusr"
@@ -75,11 +74,7 @@ func TestMain(m *testing.M) {
 // The controller is stopped when the test ends.
 func startServiceAccountController(t *testing.T, ctx context.Context) {
 	t.Helper()
-	cfg := config.GenericControllerConfig{
-		ReconcilerPeriod: 2 * time.Second,
-		NumberOfWorkers:  1,
-	}
-	ctrl := serviceaccount.NewServiceAccountController(ctx, testEnv.K8sClient, calicoClient, cfg)
+	ctrl := serviceaccount.NewServiceAccountController(ctx, testEnv.K8sClient, calicoClient, 2*time.Second)
 	stop := make(chan struct{})
 	t.Cleanup(func() { close(stop) })
 	go ctrl.Run(stop)
