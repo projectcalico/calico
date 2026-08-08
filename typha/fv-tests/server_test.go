@@ -444,7 +444,9 @@ var _ = Describe("With an in-process Server", func() {
 
 		It("should report the correct number of connections", func() {
 			expectGlobalGaugeValue("typha_connections_active", 100.0)
-			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 100.0)
+			// These clients use the default options, so they negotiate zstd.
+			expectPerSyncerCompressionGaugeValue(
+				syncproto.SyncerTypeFelix, syncproto.CompressionZstd, "typha_connections_streaming", 100.0)
 		})
 
 		It("should report the correct number of connections after killing the clients", func() {
@@ -452,7 +454,8 @@ var _ = Describe("With an in-process Server", func() {
 				c.clientCancel()
 			}
 			expectGlobalGaugeValue("typha_connections_active", 0.0)
-			expectPerSyncerGaugeValue(syncproto.SyncerTypeFelix, "typha_connections_streaming", 0.0)
+			expectPerSyncerCompressionGaugeValue(
+				syncproto.SyncerTypeFelix, syncproto.CompressionZstd, "typha_connections_streaming", 0.0)
 		})
 
 		It("with churn, it should report the correct number of connections after killing the clients", func() {
@@ -608,6 +611,15 @@ var _ = Describe("With compression algorithm negotiation", func() {
 		c := h.CreateClient(0, syncproto.SyncerTypeFelix)
 		sendFoobarAndExpectInSync(h, c)
 		Expect(c.client.NegotiatedCompressionAlgorithm()).To(Equal(syncproto.CompressionZstd))
+
+		// The server-side metrics should carry the negotiated algorithm as
+		// the "compression" label.
+		expectPerSyncerCompressionGaugeValue(
+			syncproto.SyncerTypeFelix, syncproto.CompressionZstd, "typha_connections_streaming", 1.0)
+		count, err := getPerSyncerCompressionSummaryCount(
+			syncproto.SyncerTypeFelix, syncproto.CompressionZstd, "typha_client_snapshot_send_secs")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(BeNumerically(">=", 1))
 	})
 
 	It("should fall back to snappy for an old client that only supports snappy", func() {
@@ -626,6 +638,8 @@ var _ = Describe("With compression algorithm negotiation", func() {
 		})
 		sendFoobarAndExpectInSync(h, c)
 		Expect(c.client.NegotiatedCompressionAlgorithm()).To(Equal(syncproto.CompressionSnappy))
+		expectPerSyncerCompressionGaugeValue(
+			syncproto.SyncerTypeFelix, syncproto.CompressionSnappy, "typha_connections_streaming", 1.0)
 	})
 
 	It("should fall back to snappy when the server only supports snappy", func() {
@@ -684,6 +698,9 @@ var _ = Describe("With compression algorithm negotiation", func() {
 		})
 		sendFoobarAndExpectInSync(h, c)
 		Expect(c.client.NegotiatedCompressionAlgorithm()).To(Equal(syncproto.CompressionAlgorithm("")))
+		// Uncompressed connections report compression="none".
+		expectPerSyncerCompressionGaugeValue(
+			syncproto.SyncerTypeFelix, syncproto.CompressionAlgorithm(""), "typha_connections_streaming", 1.0)
 	})
 
 	It("should fall back to no compression with DisableDecoderRestart and zstd-only server", func() {
@@ -1507,6 +1524,53 @@ func expectPerSyncerGaugeValue(syncer syncproto.SyncerType, name string, value f
 	}).Should(Equal(value))
 }
 
+func expectPerSyncerCompressionGaugeValue(
+	syncer syncproto.SyncerType,
+	alg syncproto.CompressionAlgorithm,
+	name string,
+	value float64,
+) {
+	EventuallyWithOffset(1, func() (float64, error) {
+		return getPerSyncerCompressionGauge(syncer, alg, name)
+	}).Should(Equal(value))
+}
+
+func getPerSyncerCompressionGauge(
+	syncer syncproto.SyncerType,
+	alg syncproto.CompressionAlgorithm,
+	name string,
+) (float64, error) {
+	m, err := getLabelledMetric(name, map[string]string{
+		"syncer":      string(syncer),
+		"compression": alg.MetricLabelValue(),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.GetGauge().GetValue(), nil
+}
+
+func getPerSyncerCompressionSummaryCount(
+	syncer syncproto.SyncerType,
+	alg syncproto.CompressionAlgorithm,
+	name string,
+) (uint64, error) {
+	m, err := getLabelledMetric(name, map[string]string{
+		"syncer":      string(syncer),
+		"compression": alg.MetricLabelValue(),
+	})
+	if err != nil {
+		return 0, err
+	}
+	if m == nil {
+		return 0, nil
+	}
+	return m.GetSummary().GetSampleCount(), nil
+}
+
 func getPerSyncerGauge(syncer syncproto.SyncerType, name string) (float64, error) {
 	m, err := getPerSyncerMetric(name, syncer)
 	if err != nil {
@@ -1520,25 +1584,37 @@ func getPerSyncerGauge(syncer syncproto.SyncerType, name string) (float64, error
 
 // getPerSyncerMetric returns the first series of the named metric that has a
 // matching "syncer" label.  Beware: for metrics that also have a
-// "compression" label (the typha_snapshot* family), the choice of series is
-// arbitrary — don't assert on those without extending this helper.
+// "compression" label, the choice of series is arbitrary — use
+// getLabelledMetric for those.
 func getPerSyncerMetric(name string, syncer syncproto.SyncerType) (*io_prometheus_client.Metric, error) {
+	return getLabelledMetric(name, map[string]string{"syncer": string(syncer)})
+}
+
+// getLabelledMetric returns the first series of the named metric whose labels
+// include all of the given label values.  It returns nil if the metric exists
+// but no series matches.
+func getLabelledMetric(name string, labels map[string]string) (*io_prometheus_client.Metric, error) {
 	mfs, err := prometheus.DefaultGatherer.Gather()
 	if err != nil {
 		return nil, err
 	}
 	for _, mf := range mfs {
-		if mf.GetName() == name {
-			for _, m := range mf.Metric {
-				for _, l := range m.Label {
-					if l.GetName() == "syncer" && l.GetValue() == string(syncer) {
-						return m, nil
-					}
+		if mf.GetName() != name {
+			continue
+		}
+		for _, m := range mf.Metric {
+			matched := 0
+			for _, l := range m.Label {
+				if v, ok := labels[l.GetName()]; ok && v == l.GetValue() {
+					matched++
 				}
 			}
-			// Found the metric but no value for that syncer yet.
-			return nil, nil
+			if matched == len(labels) {
+				return m, nil
+			}
 		}
+		// Found the metric but no series with those labels yet.
+		return nil, nil
 	}
 	return nil, errors.New("metric not found")
 }
