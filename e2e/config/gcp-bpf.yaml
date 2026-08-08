@@ -27,7 +27,7 @@ exclude:
     - label: NoEncap
       reason: "requires non-encapsulated routing, but this cluster uses VXLAN"
 
-    - label: Feature:Istio
+    - label: RequiresAmbientPolicyEnforcement
       reason: "Calico policy not enforced with Istio ambient on BPF dataplane"
 
     - label: RequiresXtables
