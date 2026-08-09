@@ -57,6 +57,12 @@ uncompressed).
   per connection. The cached stream ends with an embedded
   `MsgDecoderRestart`; after the client ACKs it, the server starts a
   fresh compressed stream for delta updates on that connection.
+- **Trust boundaries.** The client drops the connection if a
+  `MsgDecoderRestart` names an algorithm it did not advertise, and its
+  zstd decoder rejects frames that declare a window larger than the cap
+  in `pkg/syncproto` (encoders there stay well under it). Both bound
+  what a misbehaving peer can make the other side do. The server never
+  decompresses client data, and it caps each inbound message at 1MiB.
 
 ## Keep this doc in sync with the code
 

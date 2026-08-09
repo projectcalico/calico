@@ -735,6 +735,85 @@ var _ = Describe("With compression algorithm negotiation", func() {
 		h.ExpectAllClientsToReachState(api.InSync, expectedEndState)
 		Expect(c.client.NegotiatedCompressionAlgorithm()).To(Equal(syncproto.CompressionZstd))
 	})
+
+	It("client should disconnect if the server picks an algorithm it didn't advertise", func() {
+		// A fake server that violates the negotiation contract: the client
+		// advertises snappy only, but the server names zstd in its
+		// MsgDecoderRestart.  The client must drop the connection without
+		// ACKing rather than decode with an algorithm it never offered.
+		log.SetLevel(log.InfoLevel)
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			_ = l.Close()
+		}()
+
+		serverDone := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(serverDone)
+			conn, err := l.Accept()
+			Expect(err).NotTo(HaveOccurred())
+			defer func() {
+				_ = conn.Close()
+			}()
+			dec := gob.NewDecoder(conn)
+			enc := gob.NewEncoder(conn)
+
+			var envelope syncproto.Envelope
+			Expect(dec.Decode(&envelope)).To(Succeed())
+			hello, ok := envelope.Message.(syncproto.MsgClientHello)
+			Expect(ok).To(BeTrue(), "expected client hello, got %#v", envelope.Message)
+			Expect(hello.SupportedCompressionAlgorithms).To(ConsistOf(syncproto.CompressionSnappy))
+
+			Expect(enc.Encode(syncproto.Envelope{Message: syncproto.MsgServerHello{
+				Version:                     "fake-server",
+				SyncerType:                  syncproto.SyncerTypeFelix,
+				SupportsNodeResourceUpdates: true,
+			}})).To(Succeed())
+			Expect(enc.Encode(syncproto.Envelope{Message: syncproto.MsgDecoderRestart{
+				Message:              "bogus switch",
+				CompressionAlgorithm: syncproto.CompressionZstd,
+			}})).To(Succeed())
+
+			// The client should hang up on us (read fails) without ACKing.
+			for {
+				var envelope syncproto.Envelope
+				if err := dec.Decode(&envelope); err != nil {
+					return
+				}
+				_, isAck := envelope.Message.(syncproto.MsgACK)
+				Expect(isAck).To(BeFalse(), "client ACKed a compression algorithm it didn't advertise")
+			}
+		}()
+
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+		defer clientCancel()
+		recorder := NewRecorder()
+		client := syncclient.New(
+			discovery.New(discovery.WithAddrOverride(l.Addr().String())),
+			"test-version", "test-host", "test-info",
+			recorder,
+			&syncclient.Options{
+				SyncerType: syncproto.SyncerTypeFelix,
+				PreferredCompressionAlgorithmOrder: []syncproto.CompressionAlgorithm{
+					syncproto.CompressionSnappy,
+				},
+			},
+		)
+		Expect(client.Start(clientCxt)).To(Succeed())
+
+		// The client tears the connection down itself; both sides should
+		// finish without the test cancelling anything.
+		Eventually(serverDone, 10*time.Second).Should(BeClosed())
+		clientFinished := make(chan struct{})
+		go func() {
+			defer close(clientFinished)
+			client.Finished.Wait()
+		}()
+		Eventually(clientFinished, 10*time.Second).Should(BeClosed())
+		Expect(client.NegotiatedCompressionAlgorithm()).To(Equal(syncproto.CompressionAlgorithm("")))
+	})
 })
 
 var _ = Describe("with no client connections", func() {
