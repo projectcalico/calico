@@ -48,6 +48,24 @@ import (
 // properties each side needs, for every algorithm (including "none").  The
 // server and client must access compression only through these interfaces.
 
+// zstd window sizes.  The decoder allocates a history buffer as large as the
+// window declared in the incoming frame header, so the cap bounds the memory
+// a peer can make us allocate; without it, the library accepts windows up to
+// 512MiB.  The encoder sizes must never exceed the decoder cap, or a client
+// would reject the server's frames.  The cap leaves 4x headroom so that a
+// future server can grow its windows without breaking existing clients.
+const (
+	// streamZstdWindowSize is the window for per-connection delta streams.
+	// Deltas are written in small, frequently-flushed batches, so a modest
+	// window is plenty, and the server holds one per connection.
+	streamZstdWindowSize = 1 << 20
+	// snapshotZstdWindowSize is the window for cached binary snapshots,
+	// which are compressed once and shared by many connections.
+	snapshotZstdWindowSize = 4 << 20
+	// maxZstdWindowSize is the largest window NewDecompressor accepts.
+	maxZstdWindowSize = 16 << 20
+)
+
 // Compressor is a compressing (or pass-through) writer with synchronous
 // flush and close semantics, suitable for the sender's side of a restart
 // boundary.
@@ -106,15 +124,14 @@ func NewStreamCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compresso
 	case CompressionSnappy:
 		return &streamCompressor{c: snappy.NewBufferedWriter(bw), bw: bw}, nil
 	case CompressionZstd:
-		// Bound per-connection resource usage: delta updates are written in
-		// small, frequently-flushed batches, so one encoder goroutine and a
-		// modest window are plenty.  The library defaults (GOMAXPROCS
-		// goroutines and an 8MiB window per Writer) add up quickly when the
-		// server has many connections.
+		// Bound per-connection resource usage: one encoder goroutine and a
+		// small window.  The library defaults (GOMAXPROCS goroutines and an
+		// 8MiB window per Writer) add up quickly when the server has many
+		// connections.
 		zw, err := zstd.NewWriter(bw,
 			zstd.WithEncoderLevel(zstd.SpeedFastest),
 			zstd.WithEncoderConcurrency(1),
-			zstd.WithWindowSize(1<<20),
+			zstd.WithWindowSize(streamZstdWindowSize),
 		)
 		if err != nil {
 			return nil, err
@@ -138,7 +155,12 @@ func NewSnapshotCompressor(algorithm CompressionAlgorithm, w io.Writer) (Compres
 	case CompressionSnappy:
 		return snappy.NewBufferedWriter(w), nil
 	case CompressionZstd:
-		return zstd.NewWriter(w, zstd.WithEncoderLevel(zstd.SpeedFastest))
+		// Pin the window size rather than relying on the level's default,
+		// which could drift past maxZstdWindowSize on a library upgrade.
+		return zstd.NewWriter(w,
+			zstd.WithEncoderLevel(zstd.SpeedFastest),
+			zstd.WithWindowSize(snapshotZstdWindowSize),
+		)
 	case "":
 		return passthroughCompressor{w}, nil
 	default:
@@ -162,7 +184,10 @@ func NewDecompressor(algorithm CompressionAlgorithm, r io.Reader) (Decompressor,
 		// returns the frame's final bytes.  The default asynchronous mode
 		// reads ahead and would steal bytes from the next stream at a
 		// restart boundary.
-		return zstd.NewReader(r, zstd.WithDecoderConcurrency(1))
+		return zstd.NewReader(r,
+			zstd.WithDecoderConcurrency(1),
+			zstd.WithDecoderMaxWindow(maxZstdWindowSize),
+		)
 	case "":
 		return nopCloserDecompressor{r}, nil
 	default:

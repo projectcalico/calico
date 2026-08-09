@@ -178,6 +178,12 @@ type SyncerClient struct {
 	// each decoder restart.
 	decompressor syncproto.Decompressor
 
+	// advertisedCompressionAlgs is the set of compression algorithms we
+	// offered in our hello message.  A MsgDecoderRestart naming any other
+	// algorithm is a protocol violation and drops the connection.  Only
+	// touched by the loop goroutine.
+	advertisedCompressionAlgs map[syncproto.CompressionAlgorithm]bool
+
 	// negotiatedCompression holds the syncproto.CompressionAlgorithm the
 	// server selected for the current connection ("" if uncompressed).
 	negotiatedCompression atomic.Value
@@ -469,6 +475,10 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc, co
 		// Compression requires decoder restart.
 		compAlgs = nil
 	}
+	s.advertisedCompressionAlgs = make(map[syncproto.CompressionAlgorithm]bool, len(compAlgs))
+	for _, alg := range compAlgs {
+		s.advertisedCompressionAlgs[alg] = true
+	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
 			Hostname:                       s.myHostname,
@@ -587,6 +597,15 @@ func (s *SyncerClient) restartDecoder(cxt context.Context, logCxt *log.Entry, ms
 		"msg":         msg,
 		"compression": msg.CompressionAlgorithm,
 	}).Info("Server asked us to restart our decoder")
+	// The server must pick from the algorithms we advertised (or none).
+	// Anything else is a protocol violation; don't decode with an algorithm
+	// we never offered.
+	if msg.CompressionAlgorithm != "" && !s.advertisedCompressionAlgs[msg.CompressionAlgorithm] {
+		logCxt.WithField("compression", msg.CompressionAlgorithm).Error(
+			"Server selected a compression algorithm that we didn't advertise.")
+		return fmt.Errorf("server selected compression algorithm %q, which we didn't advertise",
+			msg.CompressionAlgorithm)
+	}
 	// The restart message is the last data in the old stream and the server
 	// terminated the stream right after it, so the old decompressor has
 	// consumed exactly the old stream's bytes from the connection.  Discard

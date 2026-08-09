@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
 	. "github.com/onsi/gomega"
 )
 
@@ -262,6 +263,61 @@ func TestCompressionBlockAlignedBoundary(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestCompressionUnknownAlgorithm verifies that every constructor rejects an
+// algorithm it does not recognise instead of silently passing data through.
+func TestCompressionUnknownAlgorithm(t *testing.T) {
+	RegisterTestingT(t)
+
+	var buf bytes.Buffer
+	_, err := NewStreamCompressor("bogus", &buf)
+	Expect(err).To(HaveOccurred())
+	_, err = NewSnapshotCompressor("bogus", &buf)
+	Expect(err).To(HaveOccurred())
+	_, err = NewDecompressor("bogus", &buf)
+	Expect(err).To(HaveOccurred())
+}
+
+// TestZstdDecoderWindowCap verifies that the decoder rejects zstd frames that
+// declare a window larger than maxZstdWindowSize (bounding the memory a
+// malicious peer can make us allocate), while accepting frames up to the cap.
+func TestZstdDecoderWindowCap(t *testing.T) {
+	// More than one block of compressible data, so the streaming encoder
+	// must declare its configured window in the frame header rather than
+	// falling back to a single-segment frame sized by the content.
+	payload := bytes.Repeat([]byte("payload "), 32*1024)
+
+	encode := func(windowSize int) *bytes.Buffer {
+		var buf bytes.Buffer
+		zw, err := zstd.NewWriter(&buf, zstd.WithWindowSize(windowSize))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = zw.Write(payload)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(zw.Close()).To(Succeed())
+		return &buf
+	}
+
+	t.Run("accepts a window at the cap", func(t *testing.T) {
+		RegisterTestingT(t)
+		buf := encode(maxZstdWindowSize)
+		d, err := NewDecompressor(CompressionZstd, struct{ io.Reader }{buf})
+		Expect(err).NotTo(HaveOccurred())
+		defer d.Close()
+		got, err := io.ReadAll(d)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(got).To(Equal(payload))
+	})
+
+	t.Run("rejects a window above the cap", func(t *testing.T) {
+		RegisterTestingT(t)
+		buf := encode(2 * maxZstdWindowSize)
+		d, err := NewDecompressor(CompressionZstd, struct{ io.Reader }{buf})
+		Expect(err).NotTo(HaveOccurred())
+		defer d.Close()
+		_, err = io.ReadAll(d)
+		Expect(err).To(MatchError(zstd.ErrWindowSizeExceeded))
+	})
 }
 
 // readTestStream plays the receiver's side for one stream: a fresh
