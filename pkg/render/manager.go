@@ -1162,6 +1162,8 @@ func managerClusterRole(managedCluster bool, kubernetesProvider operatorv1.Provi
 					"l7flows",
 					"l7logs",
 					"l7logs-multi-cluster",
+					"waflogs",
+					"waflogs-multi-cluster",
 					"events",
 					"processes",
 					"policyactivity",
