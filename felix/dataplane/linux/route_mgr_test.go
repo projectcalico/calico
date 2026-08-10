@@ -213,7 +213,7 @@ var _ = Describe("Route manager", func() {
 		// device change would tear down the same-subnet routes of the device we
 		// are actually using.
 		It("should ignore an empty parent device name", func() {
-			routeMgr.OnParentDeviceUpdate("")
+			Expect(routeMgr.OnParentDeviceUpdate("")).To(BeFalse())
 
 			Expect(routeMgr.parentDevice).To(Equal("eth0"))
 			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(
@@ -221,7 +221,7 @@ var _ = Describe("Route manager", func() {
 		})
 
 		It("should move the same-subnet routes when the parent device changes", func() {
-			routeMgr.OnParentDeviceUpdate("eth1")
+			Expect(routeMgr.OnParentDeviceUpdate("eth1")).To(BeTrue())
 			Expect(routeMgr.CompleteDeferredWork()).To(Succeed())
 
 			Expect(rt.cidrsForClass(routetable.RouteClassVXLANSameSubnet, "eth0")).To(BeEmpty())

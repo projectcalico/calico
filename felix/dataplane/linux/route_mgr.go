@@ -363,15 +363,17 @@ func (m *routeManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *routeManager) OnParentDeviceUpdate(name string) {
+// OnParentDeviceUpdate records a new parent device, reporting whether anything changed so the
+// caller knows to kick an apply.
+func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
 		// Not a device we can program routes to; keep what we have rather than
 		// tearing down the same-subnet routes below.
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
-		return
+		return false
 	}
 	if name == m.parentDevice {
-		return
+		return false
 	}
 	if m.parentDevice != "" {
 		// We're changing parent interface, remove the old routes.
@@ -379,6 +381,7 @@ func (m *routeManager) OnParentDeviceUpdate(name string) {
 	}
 	m.parentDevice = name
 	m.routesDirty = true
+	return true
 }
 
 func (m *routeManager) updateRoutes() {

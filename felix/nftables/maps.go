@@ -47,6 +47,10 @@ type MapsDataplane interface {
 	MapUpdates() *MapUpdates
 	FinishMapUpdates(updates *MapUpdates)
 	LoadDataplaneState(ctx context.Context, mapNames []string) error
+
+	// InvalidateMapsCache discards our view of what is programmed, so that everything is
+	// reprogrammed. Used when the whole table is about to be recreated underneath us.
+	InvalidateMapsCache()
 }
 
 var _ MapsDataplane = &Maps{}
@@ -407,6 +411,15 @@ func (s *Maps) LoadDataplaneState(ctx context.Context, maps []string) error {
 	}
 
 	return nil
+}
+
+func (s *Maps) InvalidateMapsCache() {
+	s.logCxt.Debug("Discarding cached view of programmed maps.")
+	s.mapNameToProgrammedMetadata.Dataplane().DeleteAll()
+	for name, members := range s.mapNameToMembers {
+		members.Dataplane().DeleteAll()
+		s.updateDirtiness(name)
+	}
 }
 
 func (s *Maps) NFTablesMap(name string) *knftables.Map {
