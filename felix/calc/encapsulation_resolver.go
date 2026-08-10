@@ -286,8 +286,11 @@ func (c *EncapsulationCalculator) VXLANEnabledV6() bool {
 	return len(c.vxlanPoolsv6) > 0
 }
 
+// NoEncapEnabled reports whether Felix has unencapsulated cluster routes to program, i.e. whether
+// there is at least one unencapsulated IP Pool *and* Felix, rather than confd and BIRD, is the
+// component responsible for its cluster routes.
 func (c *EncapsulationCalculator) NoEncapEnabled() bool {
-	if c.config == nil || !c.config.ProgramClusterRoutesEnabled() {
+	if c.config == nil || !c.config.ProgramNoEncapClusterRoutes() {
 		return false
 	}
 	return len(c.noEncapPools) > 0
