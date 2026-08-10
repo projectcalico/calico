@@ -299,11 +299,14 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	// migration state changes (e.g., Converged → triggers env var injection on components).
 	// Uses ResourceVersionChangedPredicate because migration phase transitions
 	// are status-only updates that don't bump generation.
-	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, log, ri.migrationWatchReady, []client.Object{
-		&datastoremigration.DatastoreMigration{
-			TypeMeta: metav1.TypeMeta{Kind: "DatastoreMigration", APIVersion: "migration.projectcalico.org/v1beta1"},
-		},
-	}, predicate.ResourceVersionChangedPredicate{})
+	go func() {
+		// Calico v3.32 serves DatastoreMigration at v1beta1 and v3.33 at v1, so wait for the
+		// CRD before picking a version.
+		datastoremigration.WaitForServedVersion(opts.ShutdownContext, opts.K8sClientset.Discovery())
+		utils.WaitToAddResourceWatch(c, opts.K8sClientset, log, ri.migrationWatchReady, []client.Object{
+			datastoremigration.WatchObject(),
+		}, predicate.ResourceVersionChangedPredicate{})
+	}()
 
 	return nil
 }

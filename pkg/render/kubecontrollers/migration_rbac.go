@@ -60,6 +60,13 @@ func migrationRBACObjects() []client.Object {
 					Resources: []string{"daemonsets", "deployments"},
 					Verbs:     []string{"get", "list", "watch"},
 				},
+				{
+					// Without this the migration controller reads the cluster as manifest
+					// managed and tells the user to do the cutover by hand.
+					APIGroups: []string{"operator.tigera.io"},
+					Resources: []string{"installations"},
+					Verbs:     []string{"get", "list", "watch"},
+				},
 			},
 		},
 		&rbacv1.ClusterRoleBinding{

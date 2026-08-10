@@ -32,6 +32,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -581,6 +582,22 @@ var _ = Describe("WaitToAddResourceWatch with custom predicates", func() {
 		// generation-based one). The custom predicate is wrapped via predicate.And(), so we
 		// just verify it was called and fires on resource version changes.
 		ctrl.AssertCalled(GinkgoT(), "WatchObject", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	It("should watch an unstructured object", func() {
+		u := &unstructured.Unstructured{}
+		u.SetGroupVersionKind(schema.GroupVersionKind{Group: "test.example.com", Version: "v1", Kind: "TestResource"})
+		u.SetName("default")
+
+		disc.On("ServerResourcesForGroupVersion", testGV).Return(&metav1.APIResourceList{
+			APIResources: []metav1.APIResource{{Kind: "TestResource"}},
+		})
+		ctrl.On("WatchObject", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+		flag := &ReadyFlag{}
+		WaitToAddResourceWatch(ctrl, k8sClient, log, flag, []client.Object{u}, predicate.ResourceVersionChangedPredicate{})
+
+		Expect(flag.IsReady()).To(BeTrue())
 	})
 
 	It("should work with a nil flag", func() {

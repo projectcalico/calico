@@ -15,70 +15,21 @@
 package datastoremigration
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-var (
-	SchemeGroupVersion = schema.GroupVersion{Group: "migration.projectcalico.org", Version: "v1beta1"}
-	SchemeBuilder      = runtime.NewSchemeBuilder(addKnownTypes)
-	AddToScheme        = SchemeBuilder.AddToScheme
+const (
+	GroupName = "migration.projectcalico.org"
+	Kind      = "DatastoreMigration"
+	ListKind  = "DatastoreMigrationList"
+	Resource  = "datastoremigrations"
 )
 
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
-		&DatastoreMigration{},
-		&DatastoreMigrationList{},
-	)
-	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
-	return nil
-}
+var (
+	// GroupVersionV1 is the GA group/version, the storage version from Calico v3.33.
+	GroupVersionV1 = schema.GroupVersion{Group: GroupName, Version: "v1"}
 
-// DatastoreMigration is a minimal stub for the migration.projectcalico.org/v1beta1
-// DatastoreMigration CR. It contains only the fields the operator needs to read,
-// allowing controller-runtime to cache these objects via a typed watch.
-type DatastoreMigration struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Status            DatastoreMigrationStatus `json:"status,omitempty"`
-}
-
-type DatastoreMigrationStatus struct {
-	Phase string `json:"phase,omitempty"`
-}
-
-func (in *DatastoreMigration) DeepCopyObject() runtime.Object {
-	if in == nil {
-		return nil
-	}
-	out := new(DatastoreMigration)
-	in.DeepCopyInto(&out.ObjectMeta)
-	out.TypeMeta = in.TypeMeta
-	out.Status = in.Status
-	return out
-}
-
-// DatastoreMigrationList is a list of DatastoreMigration resources.
-type DatastoreMigrationList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []DatastoreMigration `json:"items"`
-}
-
-func (in *DatastoreMigrationList) DeepCopyObject() runtime.Object {
-	if in == nil {
-		return nil
-	}
-	out := new(DatastoreMigrationList)
-	out.TypeMeta = in.TypeMeta
-	in.DeepCopyInto(&out.ListMeta)
-	if in.Items != nil {
-		out.Items = make([]DatastoreMigration, len(in.Items))
-		for i := range in.Items {
-			item := in.Items[i].DeepCopyObject().(*DatastoreMigration)
-			out.Items[i] = *item
-		}
-	}
-	return out
-}
+	// GroupVersionV1beta1 is the pre-GA group/version, deprecated but still served in v3.33.
+	// TODO: remove in v3.34.
+	GroupVersionV1beta1 = schema.GroupVersion{Group: GroupName, Version: "v1beta1"}
+)

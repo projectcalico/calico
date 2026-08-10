@@ -19,6 +19,7 @@ package datastoremigration
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -38,14 +39,22 @@ func get(c client.Client) (string, bool) {
 	if c == nil {
 		return "", false
 	}
-	list := &DatastoreMigrationList{}
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(ServedVersion().WithKind(ListKind))
 	if err := c.List(context.Background(), list, client.Limit(1)); err != nil {
+		log.V(1).Info("Failed to list DatastoreMigrations", "error", err)
 		return "", false
 	}
 	if len(list.Items) == 0 {
 		return "", false
 	}
-	return list.Items[0].Status.Phase, true
+
+	phase, _, err := unstructured.NestedString(list.Items[0].Object, "status", "phase")
+	if err != nil {
+		log.V(1).Info("DatastoreMigration has a malformed phase", "error", err)
+		return "", true
+	}
+	return phase, true
 }
 
 // GetPhase returns the phase of the first DatastoreMigration CR, or empty

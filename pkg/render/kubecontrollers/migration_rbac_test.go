@@ -79,6 +79,15 @@ var _ = Describe("MigrationRBACComponent", func() {
 			}))
 		})
 
+		It("should grant access to Installations", func() {
+			cr := rtest.GetResource(toCreate, "calico-kube-controllers-migration", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+			Expect(cr.Rules).To(ContainElement(rbacv1.PolicyRule{
+				APIGroups: []string{"operator.tigera.io"},
+				Resources: []string{"installations"},
+				Verbs:     []string{"get", "list", "watch"},
+			}))
+		})
+
 		It("should bind to the calico-kube-controllers service account", func() {
 			crb := rtest.GetResource(toCreate, "calico-kube-controllers-migration", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
 			Expect(crb.RoleRef).To(Equal(rbacv1.RoleRef{

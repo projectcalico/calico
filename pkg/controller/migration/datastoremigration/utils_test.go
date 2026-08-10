@@ -19,17 +19,22 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func newFakeClient(t *testing.T, objects ...*DatastoreMigration) client.Client {
+func newFakeClient(t *testing.T, gv schema.GroupVersion, objects ...*unstructured.Unstructured) client.Client {
 	t.Helper()
 	scheme := runtime.NewScheme()
-	if err := AddToScheme(scheme); err != nil {
-		t.Fatalf("failed to add scheme: %v", err)
+	for _, v := range []schema.GroupVersion{GroupVersionV1, GroupVersionV1beta1} {
+		scheme.AddKnownTypeWithName(v.WithKind(Kind), &unstructured.Unstructured{})
+		scheme.AddKnownTypeWithName(v.WithKind(ListKind), &unstructured.UnstructuredList{})
+		metav1.AddToGroupVersion(scheme, v)
 	}
+
 	b := fake.NewClientBuilder().WithScheme(scheme)
 	for _, obj := range objects {
 		b = b.WithObjects(obj)
@@ -37,16 +42,14 @@ func newFakeClient(t *testing.T, objects ...*DatastoreMigration) client.Client {
 	return b.Build()
 }
 
-func migrationCR(name, phase string) *DatastoreMigration {
-	obj := &DatastoreMigration{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "DatastoreMigration",
-			APIVersion: "migration.projectcalico.org/v1beta1",
-		},
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-	}
+func migrationCR(gv schema.GroupVersion, name, phase string) *unstructured.Unstructured {
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(gv.WithKind(Kind))
+	obj.SetName(name)
 	if phase != "" {
-		obj.Status.Phase = phase
+		if err := unstructured.SetNestedField(obj.Object, phase, "status", "phase"); err != nil {
+			panic(err)
+		}
 	}
 	return obj
 }
@@ -54,7 +57,8 @@ func migrationCR(name, phase string) *DatastoreMigration {
 func TestGetPhaseAndExists(t *testing.T) {
 	tests := []struct {
 		name      string
-		objects   []*DatastoreMigration
+		phase     string
+		noCR      bool
 		nilClient bool
 		wantPhase string
 		wantExist bool
@@ -67,48 +71,78 @@ func TestGetPhaseAndExists(t *testing.T) {
 		},
 		{
 			name:      "no CRs",
+			noCR:      true,
 			wantPhase: "",
 			wantExist: false,
 		},
 		{
 			name:      "CR with no status",
-			objects:   []*DatastoreMigration{migrationCR("default", "")},
 			wantPhase: "",
 			wantExist: true,
 		},
 		{
 			name:      "CR in Migrating phase",
-			objects:   []*DatastoreMigration{migrationCR("default", PhaseMigrating)},
+			phase:     PhaseMigrating,
 			wantPhase: PhaseMigrating,
 			wantExist: true,
 		},
 		{
 			name:      "CR in Converged phase",
-			objects:   []*DatastoreMigration{migrationCR("default", PhaseConverged)},
+			phase:     PhaseConverged,
 			wantPhase: PhaseConverged,
 			wantExist: true,
 		},
 		{
 			name:      "CR in Complete phase",
-			objects:   []*DatastoreMigration{migrationCR("default", PhaseComplete)},
+			phase:     PhaseComplete,
 			wantPhase: PhaseComplete,
 			wantExist: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
+	// Both served versions are read through the same unstructured path, so run each case twice.
+	for _, gv := range []schema.GroupVersion{GroupVersionV1, GroupVersionV1beta1} {
+		for _, tt := range tests {
+			t.Run(gv.Version+"/"+tt.name, func(t *testing.T) {
+				g := NewWithT(t)
+				defer withServedVersion(t, gv)()
 
-			if tt.nilClient {
-				g.Expect(GetPhase(nil)).To(Equal(tt.wantPhase))
-				g.Expect(Exists(nil)).To(Equal(tt.wantExist))
-				return
-			}
+				if tt.nilClient {
+					g.Expect(GetPhase(nil)).To(Equal(tt.wantPhase))
+					g.Expect(Exists(nil)).To(Equal(tt.wantExist))
+					return
+				}
 
-			c := newFakeClient(t, tt.objects...)
-			g.Expect(GetPhase(c)).To(Equal(tt.wantPhase))
-			g.Expect(Exists(c)).To(Equal(tt.wantExist))
-		})
+				var objects []*unstructured.Unstructured
+				if !tt.noCR {
+					objects = append(objects, migrationCR(gv, "default", tt.phase))
+				}
+
+				c := newFakeClient(t, gv, objects...)
+				g.Expect(GetPhase(c)).To(Equal(tt.wantPhase))
+				g.Expect(Exists(c)).To(Equal(tt.wantExist))
+			})
+		}
 	}
+}
+
+// A CR written at the version the cluster doesn't serve must not be read as present.
+func TestGetPhaseUsesTheServedVersion(t *testing.T) {
+	g := NewWithT(t)
+	defer withServedVersion(t, GroupVersionV1)()
+
+	c := newFakeClient(t, GroupVersionV1beta1, migrationCR(GroupVersionV1beta1, "default", PhaseMigrating))
+	g.Expect(GetPhase(c)).To(BeEmpty())
+
+	defer withServedVersion(t, GroupVersionV1beta1)()
+	g.Expect(GetPhase(c)).To(Equal(PhaseMigrating))
+}
+
+func withServedVersion(t *testing.T, gv schema.GroupVersion) func() {
+	t.Helper()
+	restore := restoreServedVersion(t)
+	servedMutex.Lock()
+	servedVersion = gv
+	servedMutex.Unlock()
+	return restore
 }

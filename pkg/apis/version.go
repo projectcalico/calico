@@ -31,12 +31,6 @@ import (
 	"github.com/tigera/operator/pkg/controller/migration/datastoremigration"
 )
 
-var datastoreMigrationGVR = schema.GroupVersionResource{
-	Group:    "migration.projectcalico.org",
-	Version:  "v1beta1",
-	Resource: "datastoremigrations",
-}
-
 const (
 	mutatingAdmissionPolicyGroup = "admissionregistration.k8s.io"
 	mutatingAdmissionPolicyKind  = "MutatingAdmissionPolicy"
@@ -82,7 +76,7 @@ func useV3CRDs(disco discovery.DiscoveryInterface, dyn dynamic.Interface) (bool,
 	// should be used. This handles operator restarts during or after migration.
 	// This runs before the manager cache is started, so we use a dynamic client
 	// directly rather than the cached datastoremigration.GetPhase().
-	if migrated, err := checkDatastoreMigration(dyn); err != nil {
+	if migrated, err := checkDatastoreMigration(disco, dyn); err != nil {
 		log.Info("Failed to check DatastoreMigration CR, falling through to API discovery", "error", err)
 	} else if migrated {
 		return requireMAPForV3(true, disco)
@@ -136,11 +130,18 @@ func requireMAPForV3(useV3 bool, disco discovery.DiscoveryInterface) (bool, erro
 	return useV3, nil
 }
 
-// checkDatastoreMigration uses a dynamic client to look for a DatastoreMigration CR
-// and returns true if one exists in a phase that indicates v3 CRDs should be used.
-// This is used at startup before the manager cache is available.
-func checkDatastoreMigration(dyn dynamic.Interface) (bool, error) {
-	list, err := dyn.Resource(datastoreMigrationGVR).List(context.Background(), metav1.ListOptions{})
+// checkDatastoreMigration reports whether a DatastoreMigration CR exists in a phase that
+// means v3 CRDs. Runs before the manager cache exists.
+func checkDatastoreMigration(disco discovery.DiscoveryInterface, dyn dynamic.Interface) (bool, error) {
+	gv, ok, err := datastoremigration.ServedGroupVersion(disco)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+
+	list, err := dyn.Resource(gv.WithResource(datastoremigration.Resource)).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return false, err
 	}
