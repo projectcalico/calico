@@ -116,12 +116,9 @@ func newRouteManager(
 	}
 }
 
-// blackholeRouteClass returns the route class to use for the blackhole routes
-// that cover this manager's local IPAM blocks.  Each encapsulation type gets its own class:
-// the blackhole routes all hang off the InterfaceNone pseudo-interface, and the
-// RouteTable keys its desired state on (class, interface), so sharing a class between
-// the managers would make each manager's SetRoutes() call delete the blackhole routes
-// belonging to the other managers that share the same RouteTable.
+// ipamBlockDropRouteClass returns the route class to use for the blackhole "drop" routes programmed
+// by this manager. For example, to cover local affine blocks. Each encap type gets its own class to
+// avoid conflicts when multiple encapsulation types are enabled.
 func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
 	switch ippoolType {
 	case proto.IPPoolType_VXLAN:
@@ -131,9 +128,6 @@ func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
 	case proto.IPPoolType_NO_ENCAP:
 		return routetable.RouteClassBlackholeNoEncap
 	default:
-		// Only the three managers above program IPAM block routes; if a new
-		// pool type turns up it needs its own class, otherwise it would share
-		// (and so clobber) the no-encap manager's routes.
 		logrus.WithField("ippoolType", ippoolType).Error(
 			"Unexpected IP pool type for IPAM block blackhole routes; blackhole routes may be missing.")
 		return routetable.RouteClassBlackholeNoEncap
@@ -246,12 +240,8 @@ func (m *routeManager) updateParentIfaceAddr(addr string) {
 	m.parentDeviceLock.Unlock()
 
 	// Kick the device-sync goroutine so that it picks up the new address without
-	// waiting for its next poll.  The kick must not block: the channel is only
-	// drained by that goroutine, which takes parentDeviceLock itself (via
-	// parentIfaceAddr), so a blocking send would deadlock the dataplane main loop
-	// against it once the channel's single buffer slot is full.  Dropping the kick
-	// is safe because a kick is already pending and the goroutine always re-reads
-	// the latest address.
+	// waiting for its next poll. The kick must not block to avoid a deadlock. If there's already
+	// a kick pending, we can just ride that one.
 	select {
 	case m.tunnelChangedC <- struct{}{}:
 	default:
@@ -291,9 +281,6 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	// Check the valid suffix depending on IP version.
 	cidr, err := ip.CIDRFromString(msg.Dst)
 	if err != nil {
-		// CIDRFromString returns a nil CIDR on error, so we can't do anything
-		// useful with this route; treat it as not-a-local-block rather than
-		// dereferencing the nil below.
 		logrus.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
 		return false
@@ -367,8 +354,6 @@ func (m *routeManager) CompleteDeferredWork() error {
 // caller knows to kick an apply.
 func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
-		// Not a device we can program routes to; keep what we have rather than
-		// tearing down the same-subnet routes below.
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
 		return false
 	}
@@ -603,7 +588,8 @@ func (m *routeManager) keepDeviceInSync(
 func (m *routeManager) configureTunnelDevice(
 	newLink netlink.Link,
 	addr string,
-	mtu int, xsumBroken bool) error {
+	mtu int, xsumBroken bool,
+) error {
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}

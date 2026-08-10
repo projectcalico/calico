@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,11 +42,6 @@ const (
 	RouteClassIPIPSameSubnet
 	RouteClassIPIPTunnel
 	RouteClassNoEncap
-	// The IPAM-block blackhole routes are split by encapsulation type because
-	// each encap's route manager owns (and programs) only the local blocks
-	// from its own type of IP pool.  They all share the InterfaceNone
-	// pseudo-interface, so a shared class would make each manager's
-	// SetRoutes() call wipe out the other managers' blackhole routes.
 	RouteClassBlackholeVXLAN
 	RouteClassBlackholeIPIP
 	RouteClassBlackholeNoEncap
