@@ -47,7 +47,7 @@ const (
 
 // NewMigrators returns migrators for all OSS Calico resource types.
 // ClusterInformation is intentionally excluded — the controller manages it
-// directly via lockDatastore/unlockV3CRDDatastore with special DatastoreReady
+// directly via lockV3Datastore/unlockV3CRDDatastore with special DatastoreReady
 // handling.
 func NewMigrators(bc api.Client, rt client.Client) []migrators.ResourceMigrator {
 	return []migrators.ResourceMigrator{
