@@ -3186,6 +3186,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "int32",
 						},
 					},
+					"logConnectionStateTransitions": {
+						SchemaProps: spec.SchemaProps{
+							Description: "LogConnectionStateTransitions enables an additional kernel log recording the first observed response for each connection that matched a policy rule with a Log action: \"<prefix>-est\" when the first reply packet is seen, \"<prefix>-rst\" when the response is a TCP RST (connection refused), or \"<prefix>-icmp-err\" when the response is a related ICMP error (e.g. port unreachable), where <prefix> is LogPrefix with any %-specifiers removed. A connection with no follow-up log never received a response. Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: false]",
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
 					"logFilePath": {
 						SchemaProps: spec.SchemaProps{
 							Description: "LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]",

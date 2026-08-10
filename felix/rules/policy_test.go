@@ -476,6 +476,39 @@ var _ = Describe("Protobuf rule to iptables rule conversion", func() {
 	)
 
 	DescribeTable(
+		"Log rules should set the connmark bit when connection state transition logging is enabled",
+		func(ipVer int, in *proto.Rule, expMatch string) {
+			rrConfigConnState := rrConfigNormal
+			rrConfigConnState.FlowLogsEnabled = false
+			rrConfigConnState.LogConnectionStateTransitions = true
+			rrConfigConnState.ConnStateLogMark = 0x100000
+			rrConfigConnState.LogActionRateLimit = "50/minute"
+			renderer := NewRenderer(rrConfigConnState, false)
+			logRule := in
+			logRule.Action = "log"
+			rules := renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, false)
+			// Should be the LOG rule followed by a rule that sets the "no response seen
+			// yet" connmark bit.
+			Expect(len(rules)).To(Equal(2))
+			Expect(rules[0].Match.Render()).To(ContainSubstring(expMatch))
+			Expect(rules[0].Match.Render()).To(ContainSubstring("-m limit --limit 50/minute"))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+			// The connmark rule must not carry the rate-limit match: the bit needs to be
+			// set even when the LOG is rate-limit-suppressed.
+			Expect(rules[1].Match.Render()).To(Equal(expMatch))
+			Expect(rules[1].Action).To(Equal(iptables.SetConnMarkAction{Mark: 0x100000, Mask: 0x100000}))
+
+			// Untracked rules must not attempt to set a connmark (no conntrack entry).
+			rules = renderer.ProtoRuleToIptablesRules(logRule, uint8(ipVer),
+				RuleOwnerTypePolicy, RuleDirIngress, 0, fooPolicyID, defaultTier, true)
+			Expect(len(rules)).To(Equal(1))
+			Expect(rules[0].Action).To(Equal(iptables.LogAction{Prefix: "calico-packet"}))
+		},
+		ruleTestData,
+	)
+
+	DescribeTable(
 		"Deny (DROP) rules should be correctly rendered",
 		func(ipVer int, in *proto.Rule, expMatch string) {
 			rrConfigNormal.FlowLogsEnabled = false
