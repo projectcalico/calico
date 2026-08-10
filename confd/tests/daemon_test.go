@@ -17,6 +17,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -432,48 +433,87 @@ func TestBGPFilterDeletion(t *testing.T) {
 // the old shell suite's execute_tests_daemon function. KDD mode runs through
 // Typha to match the old test topology.
 func TestDaemonModeRendering(t *testing.T) {
-	meshScenarios := []string{
-		"mesh/bgp-export",
-		"mesh/ipip-always",
-		"mesh/communities",
-		"mesh/restart-time",
-	}
-	explicitScenarios := []string{
-		"explicit_peering/global",
-		"explicit_peering/selectors",
-		"explicit_peering/route_reflector",
-	}
-	filterScenarios := []string{
-		"bgpfilter/single_filter/global_peer",
+	scenarios := []daemonScenario{
+		{goldenDir: "mesh/bgp-export"},
+		{goldenDir: "mesh/ipip-always"},
+		{goldenDir: "mesh/communities", steps: []string{"step2"}},
+		{goldenDir: "mesh/restart-time"},
+		{goldenDir: "mesh/static-routes", steps: []string{"step2"}, kddOnly: true},
+		{goldenDir: "mesh/static-routes-exclude-node", steps: []string{"step2"}, kddOnly: true},
+		{goldenDir: "explicit_peering/global"},
+		{goldenDir: "explicit_peering/selectors", steps: []string{"step2"}},
+		{goldenDir: "explicit_peering/route_reflector"},
+		{goldenDir: "bgpfilter/single_filter/global_peer"},
 	}
 
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
 			d := startConfdDaemon(t, be)
 
-			for _, sc := range meshScenarios {
-				runDaemonScenario(t, d, be, sc)
-			}
-			for _, sc := range explicitScenarios {
-				runDaemonScenario(t, d, be, sc)
-			}
-			for _, sc := range filterScenarios {
+			for _, sc := range scenarios {
+				if sc.kddOnly && be.ctrlClient == nil {
+					continue
+				}
 				runDaemonScenario(t, d, be, sc)
 			}
 		})
 	}
 }
 
-// runDaemonScenario applies resources for a single scenario, verifies that
-// confd renders the expected output, then cleans up all resources so the next
-// scenario starts from a clean state.
-func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, goldenDir string) {
+// daemonScenario is one scenario for the daemon-mode test: a base config, and optionally follow-up
+// steps applied on top of it.
+type daemonScenario struct {
+	// goldenDir is both the mock_data sub-directory to read resources from and the
+	// compiled_templates sub-directory to compare the rendered output against.
+	goldenDir string
+
+	// steps name sub-directories of goldenDir, applied in order after the base config. They are
+	// deltas -- a step's input.yaml is applied on top of what is already there, not instead of
+	// it -- so they exercise confd re-rendering in response to a change, which is the thing
+	// daemon mode is for and oneshot mode cannot show.
+	steps []string
+
+	// kddOnly marks a scenario that needs Kubernetes resources and so cannot run against etcd.
+	kddOnly bool
+}
+
+// runDaemonScenario applies resources for a single scenario, verifies that confd renders the
+// expected output, then does the same for each follow-up step, before cleaning up all resources so
+// the next scenario starts from a clean state.
+func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, sc daemonScenario) {
 	t.Helper()
 
-	inputPath := filepath.Join("mock_data", "calicoctl", goldenDir, "input.yaml")
-	cleanup := applyResources(t, be, inputPath)
-	d.expectOutput(goldenDir)
-	cleanup()
+	// Clean up in reverse, so the base config outlives the steps layered on top of it.
+	var cleanups []func()
+	defer func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
+	}()
+
+	apply := func(dir string, isStep bool) {
+		inputPath := filepath.Join("mock_data", "calicoctl", dir, "input.yaml")
+		if isStep {
+			// A step's resources are a delta on the base: some of them modify what the base
+			// already created, so they have to be applied as an upsert.
+			cleanups = append(cleanups, upsertResources(t, be, inputPath))
+		} else {
+			cleanups = append(cleanups, applyResources(t, be, inputPath))
+		}
+
+		// Some scenarios need Kubernetes resources alongside the Calico ones.
+		kubectlPath := filepath.Join(filepath.Dir(inputPath), "kubectl-input.yaml")
+		if _, err := os.Stat(kubectlPath); err == nil {
+			cleanups = append(cleanups, applyResources(t, be, kubectlPath))
+		}
+
+		d.expectOutput(dir)
+	}
+
+	apply(sc.goldenDir, false)
+	for _, step := range sc.steps {
+		apply(filepath.Join(sc.goldenDir, step), true)
+	}
 }
 
 func TestProgramClusterRoutes(t *testing.T) {
