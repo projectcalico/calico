@@ -406,6 +406,24 @@ var _ = Describe("Webhooks rendering tests", func() {
 		Expect(dep.Spec.Template.Spec.NodeSelector).To(HaveKeyWithValue("foo", "bar"))
 	})
 
+	It("should render a readiness probe on the webhook container", func() {
+		component := webhooks.Component(cfg)
+		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
+		resources, _ := component.Objects()
+
+		dep := rtest.GetResource(resources, webhooks.WebhooksName, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+		probe := dep.Spec.Template.Spec.Containers[0].ReadinessProbe
+		Expect(probe).NotTo(BeNil())
+		Expect(probe.HTTPGet).NotTo(BeNil())
+		Expect(probe.HTTPGet.Path).To(Equal("/readyz"))
+		Expect(probe.HTTPGet.Port.IntValue()).To(Equal(6443))
+		Expect(probe.HTTPGet.Scheme).To(Equal(corev1.URISchemeHTTPS))
+		Expect(probe.PeriodSeconds).To(Equal(int32(10)))
+		Expect(probe.TimeoutSeconds).To(Equal(int32(5)))
+
+		Expect(dep.Spec.Template.Spec.Containers[0].LivenessProbe).To(BeNil())
+	})
+
 	It("should use default container port (6443) when no override is set", func() {
 		component := webhooks.Component(cfg)
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
@@ -468,6 +486,8 @@ var _ = Describe("Webhooks rendering tests", func() {
 		// Verify the container port is set to the custom value.
 		dep := rtest.GetResource(resources, webhooks.WebhooksName, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
 		Expect(dep.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort).To(Equal(customPort))
+		Expect(dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port.IntValue()).To(Equal(int(customPort)))
+		Expect(dep.Spec.Template.Spec.Containers[0].Args).To(ContainElement(fmt.Sprintf("--port=%d", customPort)))
 
 		// Verify the service target port uses the custom value.
 		svc, err := rtest.GetResourceOfType[*corev1.Service](resources, webhooks.WebhooksName, common.CalicoNamespace)

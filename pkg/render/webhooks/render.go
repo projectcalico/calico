@@ -45,6 +45,8 @@ const (
 
 	WebhooksName            = "calico-webhooks"
 	WebhooksSecretsRBACName = "calico-webhooks-secrets-access"
+
+	webhooksContainerPort int32 = 6443
 )
 
 var WebhooksPolicyName = fmt.Sprintf("%s.%s", networkpolicy.CalicoTierName, WebhooksName)
@@ -143,9 +145,23 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 							fmt.Sprintf("--tls-private-key-file=%s", c.cfg.KeyPair.VolumeMountKeyFilePath()),
 						},
 						Ports: []corev1.ContainerPort{{
-							ContainerPort: 6443,
+							ContainerPort: webhooksContainerPort,
 							Protocol:      corev1.ProtocolTCP,
 						}},
+
+						// Keep the pod out of the Service endpoints until the TLS listener is up, so a
+						// rollout doesn't reject policy writes against the FailurePolicy=Fail webhook.
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path:   "/readyz",
+									Port:   intstr.FromInt32(webhooksContainerPort),
+									Scheme: corev1.URISchemeHTTPS,
+								},
+							},
+							PeriodSeconds:  10,
+							TimeoutSeconds: 5,
+						},
 						VolumeMounts: []corev1.VolumeMount{
 							c.cfg.KeyPair.VolumeMount(c.SupportedOSType()),
 							{
@@ -222,6 +238,13 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 
 	// Read the final container port from the deployment (after overrides) for use in the Service.
 	containerPort := dep.Spec.Template.Spec.Containers[0].Ports[0].ContainerPort
+	dep.Spec.Template.Spec.Containers[0].ReadinessProbe.HTTPGet.Port = intstr.FromInt32(containerPort)
+
+	// The binary picks its own listen port, so pass the final value rather than let it default.
+	dep.Spec.Template.Spec.Containers[0].Args = append(
+		dep.Spec.Template.Spec.Containers[0].Args,
+		fmt.Sprintf("--port=%d", containerPort),
+	)
 
 	// Network policy to allow traffic to/from the webhook pod. Skip if host networking is
 	// enabled, since network policy is ineffective for host-networked pods.
