@@ -81,6 +81,9 @@ spec:
               completedAt:
                 format: date-time
                 type: string
+              datastoreLockedAt:
+                format: date-time
+                type: string
               message:
                 type: string
               conditions:
