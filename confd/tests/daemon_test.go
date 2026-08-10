@@ -477,23 +477,29 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, golde
 }
 
 // TestProgramClusterRoutes checks that the running daemon re-renders BIRD's config as
-// BGPConfiguration.programClusterRoutes is moved around its enum.  The mesh/restart-time input has
-// only unencapsulated IP Pools, so the two values that cover no-encap (Enabled and
-// EnabledNoEncapOnly) render as the base golden, and the two that do not (Disabled and
-// EnabledIPIPOnly) render as the pcr-disabled golden.  The IPIP side of the split is covered by the
-// oneshot cluster_routes scenarios.
+// BGPConfiguration.programClusterRoutes is moved around its enum.  Each value renders differently,
+// along two independent axes:
+//
+//   - whether BIRD programs the routes for the unencapsulated pools in the mesh/restart-time input,
+//     which decides whether the kernel filter accepts or rejects them; and
+//   - whether BIRD programs the IPIP routes, which decides whether the export filter's
+//     tunnel-route reject includes tunl0.  This axis shows up even though the input has no IPIP
+//     pool, because the reject is built from the BGPConfiguration alone.
+//
+// So all four values, plus the unset default, need their own golden.  Only the second axis is about
+// IPIP, and the pools side of it is covered by the oneshot cluster_routes scenarios.
 func TestProgramClusterRoutes(t *testing.T) {
 	steps := []struct {
 		value  *string
 		golden string
 	}{
-		// Step 1 leaves the field unset: the default, EnabledNoEncapOnly, means BIRD keeps
-		// programming the routes for these unencapsulated pools.
+		// Unset is the default, EnabledNoEncapOnly: BIRD keeps programming the routes for these
+		// unencapsulated pools, and Felix has the IPIP ones, so tunl0 is rejected on export.
 		{value: nil, golden: "mesh/restart-time"},
-		{value: ptr.To("Disabled"), golden: "mesh/restart-time/pcr-disabled"},
-		{value: ptr.To("Enabled"), golden: "mesh/restart-time"},
-		{value: ptr.To("EnabledIPIPOnly"), golden: "mesh/restart-time/pcr-disabled"},
 		{value: ptr.To("EnabledNoEncapOnly"), golden: "mesh/restart-time"},
+		{value: ptr.To("Disabled"), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To("Enabled"), golden: "mesh/restart-time/pcr-enabled"},
+		{value: ptr.To("EnabledIPIPOnly"), golden: "mesh/restart-time/pcr-ipip-only"},
 	}
 
 	for _, be := range activeBackends {

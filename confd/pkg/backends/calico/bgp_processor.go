@@ -913,6 +913,37 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		"path":      poolKey,
 	})
 
+	policy := clusterRoutePolicyFromBGPConfig(pc.globalBGPConfig, logCtx)
+	logCtx.WithFields(map[string]any{
+		"ipip":    policy.ipip,
+		"noEncap": policy.noEncap,
+	}).Debug("BIRD's responsibility for programming cluster routes.")
+
+	// Don't export Felix-programmed tunnel routes to other nodes over BGP.  This always
+	// includes VXLAN and Wireguard routes.  When Felix is responsible for programming remote
+	// IPIP routes it also includes those.
+	//
+	// Built before the IP pools are read, and so before the early return below, because the
+	// template renders this block unconditionally: leaving it unset would emit an empty
+	// `if (internal_peer) then { }`, which is at best pointless and at worst config BIRD
+	// refuses to load.  It depends only on the BGPConfiguration, not on the pools.
+	felixTunnelIntfPatterns := []string{"*.cali", "*.calico"}
+	if !policy.ipip {
+		// Felix is programming remote IPIP routes.
+		felixTunnelIntfPatterns = append(felixTunnelIntfPatterns, "tunl0")
+	}
+	conditions := make([]string, len(felixTunnelIntfPatterns))
+	for i := range felixTunnelIntfPatterns {
+		conditions[i] = "(ifname ~ \"" + felixTunnelIntfPatterns[i] + "\")"
+	}
+	config.BGPExportFilterForTunnelRoutes = []string{
+		"if (defined(ifname)) then {",
+		"  if (" + strings.Join(conditions, " || ") + ") then {",
+		"    reject;",
+		"  }",
+		"}",
+	}
+
 	kvPairs, err := c.GetValues([]string{poolKey})
 	if err != nil {
 		logCtx.WithError(err).Debug("No ippool found or error retrieving them")
@@ -929,12 +960,6 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 	if localSubnetErr != nil {
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
-
-	policy := clusterRoutePolicyFromBGPConfig(pc.globalBGPConfig, logCtx)
-	logCtx.WithFields(map[string]any{
-		"ipip":    policy.ipip,
-		"noEncap": policy.noEncap,
-	}).Debug("BIRD's responsibility for programming cluster routes.")
 
 	birdProgramsIPIPPool := false
 	for key, value := range kvPairs {
