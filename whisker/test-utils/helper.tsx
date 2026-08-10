@@ -24,7 +24,7 @@ const queryClientProvider = ({ children }: any) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 );
 
-export const renderHookWithQueryClient = (hook: () => unknown) =>
+export const renderHookWithQueryClient = <T,>(hook: () => T) =>
     renderHook(hook, { wrapper: queryClientProvider });
 
 export const Providers = ({ children }: { children: React.ReactNode }) => {

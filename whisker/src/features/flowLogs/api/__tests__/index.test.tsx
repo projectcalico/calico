@@ -95,6 +95,36 @@ describe('useInfiniteFilterQuery', () => {
             }),
         );
     });
+
+    it('should fall back to the default page size and omit filters for a null query', async () => {
+        jest.mocked(api.get).mockClear();
+        jest.mocked(api.get).mockResolvedValue({
+            items: [],
+            total: {
+                totalResults: 0,
+            },
+        });
+
+        const { result } = renderHookWithQueryClient(() =>
+            useInfiniteFilterQuery(ListOmniFilterKeys.reporter, null),
+        );
+
+        // the query is disabled while there is no query string
+        expect(api.get).not.toHaveBeenCalled();
+
+        (result.current as any).refetch();
+
+        // reporter has no limit configured and a null query sends no filters
+        await waitFor(() =>
+            expect(api.get).toHaveBeenCalledWith('flows-filter-hints', {
+                queryParams: {
+                    type: FilterHintTypes.reporter,
+                    pageSize: 1,
+                    page: 0,
+                },
+            }),
+        );
+    });
 });
 
 describe('useFlowLogsStream', () => {

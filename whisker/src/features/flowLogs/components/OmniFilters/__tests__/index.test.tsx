@@ -71,12 +71,14 @@ jest.mock(
 
 const PolicyOmniFilterMock = {
     onChange: jest.fn(),
+    onClear: jest.fn(),
 };
 jest.mock(
     '@/features/flowLogs/components/PolicyOmniFilter',
     () =>
-        ({ filterLabel, onChange }: any) => {
+        ({ filterLabel, onChange, onClear }: any) => {
             PolicyOmniFilterMock.onChange = onChange;
+            PolicyOmniFilterMock.onClear = onClear;
             return <div>{filterLabel} filter</div>;
         },
 );
@@ -87,9 +89,35 @@ const ActionOmniFilterMock = {
 jest.mock(
     '@/features/flowLogs/components/ActionOmniFilter',
     () =>
-        ({ onChange }: any) => {
+        ({ onChange, value }: any) => {
             ActionOmniFilterMock.onChange = onChange;
-            return <div>Mock ActionOmniFilter</div>;
+            return (
+                <div>
+                    Mock ActionOmniFilter {value.action ?? 'no action'}{' '}
+                    {value.staged_action ?? 'no staged action'}
+                </div>
+            );
+        },
+);
+
+const StartTimeOmniFilterMock = {
+    onChange: jest.fn(),
+    onReset: jest.fn(),
+};
+jest.mock(
+    '@/features/flowLogs/components/StartTimeOmniFilter',
+    () =>
+        ({ filterLabel, onChange, onReset, selectedFilters, value }: any) => {
+            StartTimeOmniFilterMock.onChange = onChange;
+            StartTimeOmniFilterMock.onReset = onReset;
+            return (
+                <div>
+                    {filterLabel} value={value} selected=
+                    {selectedFilters === null
+                        ? 'none'
+                        : selectedFilters.join(',')}
+                </div>
+            );
         },
 );
 
@@ -335,5 +363,110 @@ describe('<OmniFilters />', () => {
             action: [],
             staged_action: [],
         });
+    });
+
+    it('should clear the policy filter', () => {
+        const mockOnChange = jest.fn();
+        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+
+        act(() => {
+            PolicyOmniFilterMock.onClear();
+        });
+
+        expect(mockOnChange).toHaveBeenCalledWith('policy', []);
+    });
+
+    it('should show the reset button and call onReset when a filter is selected', () => {
+        const mockOnReset = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onReset={mockOnReset}
+                selectedValues={{
+                    policy: [{ name: 'allow-nginx', namespace: 'prod' }],
+                }}
+            />,
+        );
+
+        fireEvent.click(screen.getByTestId('omnifilterlist-reset'));
+
+        expect(mockOnReset).toHaveBeenCalled();
+    });
+
+    it('should clear port and protocol when the port filter is emptied', () => {
+        const mockOnMultiChange = jest.fn();
+        render(
+            <OmniFilters {...defaultProps} onMultiChange={mockOnMultiChange} />,
+        );
+
+        act(() => {
+            PortOmniFilterMock.onChange({ port: '', protocol: '' });
+        });
+
+        expect(mockOnMultiChange).toHaveBeenCalledWith({
+            [OmniFilterKeys.protocol]: [],
+            [OmniFilterKeys.dest_port]: [],
+        });
+    });
+
+    it('should pass selected action values to the action filter', () => {
+        render(
+            <OmniFilters
+                {...defaultProps}
+                selectedValues={{
+                    action: ['Allow'],
+                    staged_action: ['Deny'],
+                }}
+            />,
+        );
+
+        expect(
+            screen.getByText('Mock ActionOmniFilter Allow Deny'),
+        ).toBeInTheDocument();
+    });
+
+    it('should pass the selected start time to the start time filter', () => {
+        render(
+            <OmniFilters
+                {...defaultProps}
+                selectedValues={{ start_time: ['15'] }}
+                startTime={15}
+            />,
+        );
+
+        expect(
+            screen.getByText('Start Time value=15 selected=15'),
+        ).toBeInTheDocument();
+    });
+
+    it('should clear the start time filter on reset', () => {
+        const mockOnChange = jest.fn();
+        render(
+            <OmniFilters
+                {...defaultProps}
+                onChange={mockOnChange}
+                selectedValues={{ start_time: ['15'] }}
+            />,
+        );
+
+        act(() => {
+            StartTimeOmniFilterMock.onReset();
+        });
+
+        expect(mockOnChange).toHaveBeenCalledWith('start_time', []);
+    });
+
+    it('should call onChange with the new start time', () => {
+        const mockOnChange = jest.fn();
+        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+
+        act(() => {
+            StartTimeOmniFilterMock.onChange({
+                filterId: 'start_time',
+                filters: [{ label: '30', value: '30' }],
+            });
+        });
+
+        expect(mockOnChange).toHaveBeenCalledWith('start_time', ['30']);
     });
 });

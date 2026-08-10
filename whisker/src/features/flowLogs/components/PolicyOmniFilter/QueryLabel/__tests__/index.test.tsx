@@ -61,6 +61,17 @@ describe('<QueryLabel />', () => {
         render(<QueryLabel query={{}} />);
 
         expect(screen.getByText('No filters applied')).toBeInTheDocument();
+        expect(screen.getByText('No filters applied')).toHaveClass(
+            'opacity-100',
+        );
+    });
+
+    it('hides the placeholder when showEmptyMessage is false', () => {
+        render(<QueryLabel query={{}} showEmptyMessage={false} />);
+
+        const placeholder = screen.getByText('No filters applied');
+        expect(placeholder).toHaveClass('opacity-0');
+        expect(placeholder).not.toHaveClass('opacity-100');
     });
 
     it('renders a badge for a single field', () => {

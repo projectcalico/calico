@@ -3,24 +3,17 @@ import { FilterKey } from '@/utils/omniFilter';
 import PolicySelect from '..';
 
 const mockFetchData = jest.fn();
+let mockData: Record<string, any> = {};
 jest.mock('@/hooks/omniFilters', () => ({
     useOmniFilterQuery: () => ({
-        data: {
-            filters: [
-                { label: 'NetworkPolicy', value: 'NetworkPolicy' },
-                { label: 'GlobalNetworkPolicy', value: 'GlobalNetworkPolicy' },
-            ],
-            isLoading: false,
-            total: 2,
-        },
+        data: mockData,
         fetchData: mockFetchData,
     }),
 }));
 
+const mockDebounce = jest.fn((_key: string, fn: () => void) => fn());
 jest.mock('@/hooks', () => ({
-    useDebouncedCallback: () => {
-        return (_key: string, fn: () => void) => fn();
-    },
+    useDebouncedCallback: () => mockDebounce,
 }));
 
 let omniFilterProps: Record<string, any> = {};
@@ -60,6 +53,10 @@ jest.mock('@/libs/tigera/ui-components/components/common/OmniFilter', () => {
                     }
                 />
                 <button
+                    data-testid='search-empty-btn'
+                    onClick={() => props.onRequestSearch?.(props.filterId, '')}
+                />
+                <button
                     data-testid='more-btn'
                     onClick={() => props.onRequestMore?.(props.filterId, '')}
                 />
@@ -80,6 +77,14 @@ const defaultProps = {
 describe('<PolicySelect />', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        mockData = {
+            filters: [
+                { label: 'NetworkPolicy', value: 'NetworkPolicy' },
+                { label: 'GlobalNetworkPolicy', value: 'GlobalNetworkPolicy' },
+            ],
+            isLoading: false,
+            total: 2,
+        };
     });
 
     it('renders the OmniFilter', () => {
@@ -158,7 +163,31 @@ describe('<PolicySelect />', () => {
             screen.getByTestId('search-btn').click();
         });
 
+        expect(mockDebounce).toHaveBeenCalledWith('net', expect.any(Function));
         expect(mockFetchData).toHaveBeenCalled();
+    });
+
+    it('calls fetchData immediately without debouncing when search is cleared', () => {
+        render(<PolicySelect {...defaultProps} />);
+
+        act(() => {
+            screen.getByTestId('search-empty-btn').click();
+        });
+
+        expect(mockDebounce).not.toHaveBeenCalled();
+        expect(mockFetchData).toHaveBeenCalled();
+    });
+
+    it('defaults filters and totalItems when data is not loaded yet', () => {
+        mockData = {
+            filters: undefined,
+            isLoading: true,
+            total: undefined,
+        };
+        render(<PolicySelect {...defaultProps} />);
+
+        expect(omniFilterProps.filters).toEqual([]);
+        expect(omniFilterProps.totalItems).toBe(0);
     });
 
     it('passes showSearch to OmniFilter', () => {

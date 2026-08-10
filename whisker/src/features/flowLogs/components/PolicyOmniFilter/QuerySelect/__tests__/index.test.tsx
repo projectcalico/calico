@@ -38,4 +38,21 @@ describe('<QuerySelect />', () => {
         expect(select).toHaveAttribute('data-value', 'NetworkPolicy');
         expect(select).toHaveAttribute('data-show-search', 'false');
     });
+
+    it('defaults showSearch to true when not provided', () => {
+        render(
+            <QuerySelect
+                label='Kind'
+                filterKey={FilterKey.policyKind}
+                value={null}
+                onChange={jest.fn()}
+                placeholder='Select a kind...'
+            />,
+        );
+
+        expect(screen.getByTestId('policy-select')).toHaveAttribute(
+            'data-show-search',
+            'true',
+        );
+    });
 });

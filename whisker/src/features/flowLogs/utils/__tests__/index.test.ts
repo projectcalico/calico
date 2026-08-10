@@ -1,10 +1,75 @@
 import {
+    buildStreamPath,
     computeNextSort,
+    getSeconds,
     getTimeInSeconds,
     getV1Columns,
     getV2Columns,
+    transformFlowLogsResponse,
+    transformStartTime,
     updateFirstFlowStartTime,
 } from '..';
+
+describe('transformFlowLogsResponse', () => {
+    const apiFlowLog = {
+        start_time: '2024-01-01T12:00:00Z',
+        end_time: '2024-01-01T12:00:30Z',
+        action: 'Allow',
+        source_name: 'nginx',
+        dest_name: 'api',
+    } as any;
+
+    it('should convert the times to dates and keep the other fields', () => {
+        const result = transformFlowLogsResponse(apiFlowLog);
+
+        expect(result).toEqual(
+            expect.objectContaining({
+                start_time: new Date('2024-01-01T12:00:00Z'),
+                end_time: new Date('2024-01-01T12:00:30Z'),
+                action: 'Allow',
+                source_name: 'nginx',
+                dest_name: 'api',
+            }),
+        );
+    });
+
+    it('should assign each flow log a unique id', () => {
+        const first = transformFlowLogsResponse(apiFlowLog);
+        const second = transformFlowLogsResponse(apiFlowLog);
+
+        expect(first.id).toEqual(expect.any(String));
+        expect(first.id).not.toEqual(second.id);
+    });
+});
+
+describe('buildStreamPath', () => {
+    it('should build the watch path with filters and a start time', () => {
+        expect(buildStreamPath(-60, '{"actions":["deny"]}')).toBe(
+            'flows?watch=true&filters={"actions":["deny"]}&startTimeGte=-60',
+        );
+    });
+
+    it('should omit empty filters and an undefined start time', () => {
+        expect(buildStreamPath(undefined, '')).toBe('flows?watch=true');
+    });
+});
+
+describe('transformStartTime', () => {
+    it('should turn a lookback in minutes into a negative offset in seconds', () => {
+        expect(transformStartTime(15)).toBe(-900);
+        expect(transformStartTime(0)).toBe(-0);
+    });
+});
+
+describe('getSeconds', () => {
+    it('should convert a date to seconds', () => {
+        expect(getSeconds(new Date(5000))).toBe(5);
+    });
+
+    it('should treat a null date as the epoch', () => {
+        expect(getSeconds(null)).toBe(0);
+    });
+});
 
 describe('utils', () => {
     describe('getV1Columns', () => {

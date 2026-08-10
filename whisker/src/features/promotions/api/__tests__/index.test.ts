@@ -51,4 +51,33 @@ describe('usePromotionsContent', () => {
 
         expect(fetchMock).not.toHaveBeenCalled();
     });
+
+    it('should not call fetch when there is no config', () => {
+        fetchMock.mockClear();
+        jest.mocked(useAppConfig).mockReturnValue(undefined);
+
+        renderHookWithQueryClient(() => usePromotionsContent(true));
+
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('should send fallback values when config properties are missing', async () => {
+        fetchMock.mockClear();
+        jest.mocked(useAppConfig).mockReturnValue({ config: null } as any);
+        fetchMock.mockResolvedValue({
+            json: () => Promise.resolve({}),
+            ok: true,
+        } as any);
+
+        renderHookWithQueryClient(() => usePromotionsContent(true));
+
+        await waitFor(() =>
+            expect(fetchMock).toHaveBeenCalledWith(
+                'undefined/whisker/content',
+                expect.objectContaining({
+                    body: JSON.stringify({}),
+                }),
+            ),
+        );
+    });
 });

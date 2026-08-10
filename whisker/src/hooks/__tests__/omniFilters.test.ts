@@ -6,7 +6,7 @@ import {
     SelectedOmniFilterData,
     ListOmniFilterKeys,
 } from '@/utils/omniFilter';
-import { useOmniFilterData } from '../omniFilters';
+import { useOmniFilterData, useOmniFilterQuery } from '../omniFilters';
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 
 jest.mock('@/features/flowLogs/api', () => ({
@@ -145,6 +145,105 @@ describe('useSelectedListOmniFilters', () => {
             source_name: [],
             source_namespace: [],
             reporter: [],
+        });
+    });
+
+    it('should create an option from the value when omniFilterData filters are null', () => {
+        const omniFilterData: ListOmniFiltersData = {
+            source_namespace: {
+                filters: [],
+                isLoading: false,
+            },
+            dest_namespace: {
+                filters: null,
+                isLoading: true,
+            },
+            dest_name: {
+                filters: [],
+                isLoading: false,
+            },
+            source_name: {
+                filters: [],
+                isLoading: false,
+            },
+        };
+        const selectedOmniFilterData: SelectedOmniFilterData = {};
+
+        const { result } = renderHook(() =>
+            useSelectedListOmniFilters(
+                urlFilterParams,
+                omniFilterData,
+                selectedOmniFilterData,
+            ),
+        );
+
+        expect(result.current).toEqual({
+            dest_namespace: [{ label: 'foo', value: 'foo' }],
+            dest_name: [],
+            source_name: [],
+            source_namespace: [],
+            reporter: [],
+        });
+    });
+});
+
+describe('useOmniFilterQuery', () => {
+    it('should return null filters and a total of 0 when there is no data', () => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            data: undefined,
+            fetchNextPage: jest.fn(),
+            refetch: jest.fn(),
+            isLoading: true,
+            isFetchingNextPage: false,
+        } as any);
+
+        const { result } = renderHook(() =>
+            useOmniFilterQuery(ListOmniFilterKeys.source_namespace),
+        );
+
+        expect(result.current.data).toEqual({
+            filters: null,
+            isLoading: true,
+            total: 0,
+        });
+    });
+
+    it('should flatten the pages into filters and return the total', () => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            data: {
+                pageParams: [],
+                pages: [
+                    {
+                        items: [{ label: 'Foo', value: 'foo' }],
+                        total: 3,
+                    },
+                    {
+                        items: [
+                            { label: 'Bar', value: 'bar' },
+                            { label: 'Baz', value: 'baz' },
+                        ],
+                        total: 3,
+                    },
+                ],
+            },
+            fetchNextPage: jest.fn(),
+            refetch: jest.fn(),
+            isLoading: false,
+            isFetchingNextPage: false,
+        } as any);
+
+        const { result } = renderHook(() =>
+            useOmniFilterQuery(ListOmniFilterKeys.source_namespace),
+        );
+
+        expect(result.current.data).toEqual({
+            filters: [
+                { label: 'Foo', value: 'foo' },
+                { label: 'Bar', value: 'bar' },
+                { label: 'Baz', value: 'baz' },
+            ],
+            isLoading: false,
+            total: 3,
         });
     });
 });

@@ -286,6 +286,41 @@ describe('<FilterChecklist />', () => {
         expect(screen.getByTestId('page-counter')).toHaveTextContent('3 of 3');
     });
 
+    it('handles undefined selectedValues', () => {
+        render(
+            <FilterChecklist
+                {...defaultProps}
+                selectedValues={undefined as any}
+            />,
+        );
+
+        expect(
+            screen.getByTestId('test-filter-selected-count'),
+        ).toHaveTextContent('0');
+        expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
+    });
+
+    it('defaults filters and total when the data has not loaded', () => {
+        jest.mocked(useOmniFilterQuery).mockReturnValue({
+            data: {
+                filters: undefined,
+                isLoading: false,
+                total: undefined,
+            },
+            fetchData: fetchDataMock,
+        } as any);
+
+        render(<FilterChecklist {...defaultProps} selectedValues={[]} />);
+
+        expect(
+            screen.getByTestId('test-filter-options-count'),
+        ).toHaveTextContent('0');
+        expect(screen.getByTestId('test-filter-has-filters')).toHaveTextContent(
+            'false',
+        );
+        expect(screen.queryByTestId('page-counter')).not.toBeInTheDocument();
+    });
+
     it('handles loading state', () => {
         jest.mocked(useOmniFilterQuery).mockReturnValue({
             data: {

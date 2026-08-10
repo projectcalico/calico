@@ -56,4 +56,10 @@ describe('FlowLogDetails', () => {
         expect(screen.getByText('start_time')).toBeInTheDocument();
         expect(screen.getByText('source_labels')).toBeInTheDocument();
     });
+
+    it('should render when a height is provided', () => {
+        render(<FlowLogDetails flowLog={flowLog} height={400} />);
+        expect(screen.getByText('start_time')).toBeInTheDocument();
+        expect(screen.getByText('source_labels')).toBeInTheDocument();
+    });
 });

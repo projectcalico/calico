@@ -1,6 +1,7 @@
 import { useFlowLogsStream } from '@/features/flowLogs/api';
 import { fireEvent, render, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
+import { streamButtonStyles, tabStyles } from '../styles';
 
 import { useOmniFilterData } from '@/hooks/omniFilters';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
@@ -325,5 +326,85 @@ describe('FlowLogsPage', () => {
         act(() => MockFlowLogsContainer.onSortClicked());
 
         expect(closeVirtualizedRowMock).toHaveBeenCalled();
+    });
+
+    it('should handle a sort click when no row is expanded', () => {
+        render(<FlowLogsPage />);
+
+        expect(() =>
+            act(() => MockFlowLogsContainer.onSortClicked()),
+        ).not.toThrow();
+    });
+
+    it('should parse the start time filter and exclude it from the filter hint values', () => {
+        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
+            filters: {
+                start_time: ['30'],
+                source_name: ['foo'],
+            } as any,
+            setFilter: jest.fn(),
+            clearFilters: jest.fn(),
+            setMultiFilter: jest.fn(),
+        });
+
+        render(<FlowLogsPage />);
+
+        expect(useFlowLogsStream).toHaveBeenCalledWith(30, {
+            source_name: ['foo'],
+        });
+    });
+
+    it('should close an expanded row when the data changes', () => {
+        const closeVirtualizedRowMock = jest.fn();
+        const { rerender } = render(<FlowLogsPage />);
+
+        act(() =>
+            MockFlowLogsContainer.onRowClicked({
+                id: '1',
+                closeVirtualizedRow: closeVirtualizedRowMock,
+            }),
+        );
+
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            data: [{ start_time: new Date(), end_time: new Date() } as any],
+            totalItems: 1,
+        });
+
+        rerender(<FlowLogsPage />);
+
+        expect(closeVirtualizedRowMock).toHaveBeenCalled();
+    });
+
+    it('should close the expanded row and restart the stream when clicking play', () => {
+        const closeVirtualizedRowMock = jest.fn();
+        const mockStartStream = jest.fn();
+        jest.mocked(useFlowLogsStream).mockReturnValue({
+            ...useStreamStub,
+            startStream: mockStartStream,
+            hasStoppedStreaming: true,
+            totalItems: 0,
+        });
+
+        render(<FlowLogsPage />);
+
+        act(() =>
+            MockFlowLogsContainer.onRowClicked({
+                id: '1',
+                closeVirtualizedRow: closeVirtualizedRowMock,
+            }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+
+        expect(closeVirtualizedRowMock).toHaveBeenCalled();
+        expect(mockStartStream).toHaveBeenCalled();
+    });
+});
+
+describe('FlowLogsPage styles', () => {
+    it('should define the shared button and tab styles', () => {
+        expect(streamButtonStyles).toMatchObject({ fontSize: 'sm' });
+        expect(tabStyles).toEqual({ fontSize: 'sm' });
     });
 });
