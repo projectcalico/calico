@@ -163,6 +163,13 @@ what retires the fork.
 - confd renders both the IPv4 and IPv6 templates from the same policy.  IPIP is
   IPv4-only in practice, but `processIPPool` must not assume that: it keys off
   the pool's `ipipMode`, not the IP version.
+- Any test that disables BGP and then expects cross-node connectivity to break
+  is implicitly asserting that BIRD owns the routes.  Felix derives its routes
+  from the datastore, so they outlive the BGP session and the assertion fails.
+  Such a lane must pin the mode — in CI, via the
+  `hack/test/kind/infra/values-bird-routing.yaml` overlay — rather than rely on
+  the default, which no longer means BIRD for IPIP.  The `bgp` e2e suite guards
+  this itself in `requireBGPIsSoleRoutingMechanism`.
 
 ## 3. Deprecation of BIRD-programmed IPIP cluster routes
 
