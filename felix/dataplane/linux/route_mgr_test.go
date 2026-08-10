@@ -137,11 +137,11 @@ var _ = Describe("Route manager", func() {
 		It("should keep the blackhole routes of every manager", func() {
 			// Each manager owns its own route class, so no manager's SetRoutes
 			// call can delete another manager's blackhole routes.
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropVXLAN, routetable.InterfaceNone)).To(
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.1.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropIPIP, routetable.InterfaceNone)).To(
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.2.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropNoEncap, routetable.InterfaceNone)).To(
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.3.0/26"))
 		})
 
@@ -153,10 +153,10 @@ var _ = Describe("Route manager", func() {
 				Expect(m.CompleteDeferredWork()).To(Succeed())
 			}
 
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropIPIP, routetable.InterfaceNone)).To(BeEmpty())
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropVXLAN, routetable.InterfaceNone)).To(
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeIPIP, routetable.InterfaceNone)).To(BeEmpty())
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeVXLAN, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.1.0/26"))
-			Expect(rt.cidrsForClass(routetable.RouteClassIPAMBlockDropNoEncap, routetable.InterfaceNone)).To(
+			Expect(rt.cidrsForClass(routetable.RouteClassBlackholeNoEncap, routetable.InterfaceNone)).To(
 				ConsistOf("10.0.3.0/26"))
 		})
 	})

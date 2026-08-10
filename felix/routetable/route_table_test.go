@@ -2748,7 +2748,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a throw route and then replacing it with a blackhole route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(RouteClassIPAMBlockDropVXLAN, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassBlackholeVXLAN, InterfaceNone, Target{
 					RouteKey: RouteKey{
 						CIDR:     ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Priority: routePriorityForTest,
@@ -2757,7 +2757,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteUpdate(RouteClassIPAMBlockDropVXLAN, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassBlackholeVXLAN, InterfaceNone, Target{
 					RouteKey: RouteKey{
 						CIDR:     ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Priority: routePriorityForTest,
@@ -2785,7 +2785,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 
 		Describe("after configuring a blackhole route and then replacing it with a prohibit route", func() {
 			JustBeforeEach(func() {
-				rt.RouteUpdate(RouteClassIPAMBlockDropVXLAN, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassBlackholeVXLAN, InterfaceNone, Target{
 					RouteKey: RouteKey{
 						CIDR:     ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Priority: routePriorityForTest,
@@ -2794,7 +2794,7 @@ var _ = Describe("RouteTable (table 100)", func() {
 				})
 				err := rt.Apply()
 				Expect(err).ToNot(HaveOccurred())
-				rt.RouteUpdate(RouteClassIPAMBlockDropVXLAN, InterfaceNone, Target{
+				rt.RouteUpdate(RouteClassBlackholeVXLAN, InterfaceNone, Target{
 					RouteKey: RouteKey{
 						CIDR:     ip.MustParseCIDROrIP("10.10.10.10/32"),
 						Priority: routePriorityForTest,

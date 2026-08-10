@@ -42,14 +42,14 @@ const (
 	RouteClassIPIPSameSubnet
 	RouteClassIPIPTunnel
 	RouteClassNoEncap
-	// The IPAM-block "drop" routes are split by encapsulation type because
+	// The IPAM-block blackhole routes are split by encapsulation type because
 	// each encap's route manager owns (and programs) only the local blocks
 	// from its own type of IP pool.  They all share the InterfaceNone
 	// pseudo-interface, so a shared class would make each manager's
 	// SetRoutes() call wipe out the other managers' blackhole routes.
-	RouteClassIPAMBlockDropVXLAN
-	RouteClassIPAMBlockDropIPIP
-	RouteClassIPAMBlockDropNoEncap
+	RouteClassBlackholeVXLAN
+	RouteClassBlackholeIPIP
+	RouteClassBlackholeNoEncap
 
 	RouteClassMax
 )
