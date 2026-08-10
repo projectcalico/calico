@@ -292,6 +292,10 @@ type fakeIPAMClient struct {
 	upgradeErrors    []error // returned in order on successive calls
 	garbageCollected bool
 
+	// getConfigCalls counts calls to GetIPAMConfig, so tests can assert the
+	// controller caches the config rather than reading it on every sync.
+	getConfigCalls int
+
 	// garbageCollectedBlocks records the CIDR of every block passed to
 	// GarbageCollectColdIPs, so tests can assert which blocks the GC visited.
 	garbageCollectedBlocks []string
@@ -299,6 +303,13 @@ type fakeIPAMClient struct {
 	// releaseHostAffinityErrors maps host names to errors that ReleaseHostAffinities
 	// should return, simulating per-node "block not empty" failures during cleanup.
 	releaseHostAffinityErrors map[string]error
+}
+
+// getIPAMConfigCallCount returns the number of times GetIPAMConfig was called.
+func (f *fakeIPAMClient) getIPAMConfigCallCount() int {
+	f.Lock()
+	defer f.Unlock()
+	return f.getConfigCalls
 }
 
 // gcBlocks returns the CIDRs of the blocks GarbageCollectColdIPs was called with.
@@ -433,7 +444,11 @@ func (f *fakeIPAMClient) ReleasePoolAffinities(ctx context.Context, pool cnet.IP
 // has been set, returns a default configuration with StrictAffinity disabled
 // and AutoAllocateBlocks enabled.
 func (f *fakeIPAMClient) GetIPAMConfig(ctx context.Context) (*ipam.IPAMConfig, error) {
-	return &f.config, nil
+	f.Lock()
+	defer f.Unlock()
+	f.getConfigCalls++
+	cfg := f.config
+	return &cfg, nil
 }
 
 // SetIPAMConfig sets global IPAM configuration.  This can only

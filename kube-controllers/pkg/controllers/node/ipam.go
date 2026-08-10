@@ -273,6 +273,10 @@ type IPAMController struct {
 	// Cache datastoreReady to avoid too much API queries.
 	datastoreReady bool
 
+	// ipamConfig caches the global IPAM configuration. It is refreshed on the
+	// periodic sync rather than read from the datastore on every triggered sync.
+	ipamConfig *ipam.IPAMConfig
+
 	// Channel for indicating that Kubernetes nodes have been deleted.
 	nodeDeletionChan chan struct{}
 	podDeletionChan  chan *v1.Pod
@@ -406,6 +410,12 @@ func (c *IPAMController) acceptScheduleRequests(stopCh <-chan struct{}) {
 		case <-t.C:
 			// Periodic IPAM sync, queue a full scan of the IPAM data.
 			c.fullScanNextSync("periodic sync")
+
+			// Refresh the cached IPAM config so config changes are picked up, and
+			// triggered syncs in between don't need to read it from the datastore.
+			if err := c.refreshIPAMConfig(); err != nil {
+				log.WithError(err).Warn("Failed to refresh IPAM config")
+			}
 
 			log.Debug("Periodic IPAM sync")
 			err := c.syncIPAM()
@@ -1412,12 +1422,15 @@ func (c *IPAMController) garbageCollectColdIPs() error {
 	ctx, cancelCtx := context.WithTimeout(context.TODO(), 10*time.Second)
 	defer cancelCtx()
 
-	ipamConfig, err := c.client.IPAM().GetIPAMConfig(ctx)
-	if err != nil {
-		return err
+	// Use the cached config, populating it on first use. The periodic sync keeps it
+	// fresh after that, so triggered syncs don't read it from the datastore.
+	if c.ipamConfig == nil {
+		if err := c.refreshIPAMConfig(); err != nil {
+			return err
+		}
 	}
 
-	cooldown := time.Duration(ipamConfig.IPCooldownSeconds) * time.Second
+	cooldown := time.Duration(c.ipamConfig.IPCooldownSeconds) * time.Second
 	now := time.Now()
 	for cidr, earliestReleasedAt := range c.coldBlocks {
 		if earliestReleasedAt.Add(cooldown).After(now) {
@@ -1431,10 +1444,23 @@ func (c *IPAMController) garbageCollectColdIPs() error {
 			log.WithField("block", cidr).Warn("Block tracked as having cooldown IPs is missing from the block cache")
 			continue
 		}
-		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, ipamConfig, &kvp); err != nil {
+		if err := c.client.IPAM().GarbageCollectColdIPs(ctx, c.ipamConfig, &kvp); err != nil {
 			return err
 		}
 	}
+	return nil
+}
+
+// refreshIPAMConfig reads the global IPAM config from the datastore and caches it.
+func (c *IPAMController) refreshIPAMConfig() error {
+	ctx, cancelCtx := context.WithTimeout(context.TODO(), 10*time.Second)
+	defer cancelCtx()
+
+	cfg, err := c.client.IPAM().GetIPAMConfig(ctx)
+	if err != nil {
+		return err
+	}
+	c.ipamConfig = cfg
 	return nil
 }
 
