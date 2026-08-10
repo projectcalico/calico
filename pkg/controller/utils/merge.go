@@ -119,6 +119,16 @@ func OverrideInstallationSpec(cfg, override operatorv1.InstallationSpec) operato
 		inst.FlexVolumePath = override.FlexVolumePath
 	}
 
+	switch compareFields(inst.CalicoRunHostPath, override.CalicoRunHostPath) {
+	case BOnlySet, Different:
+		inst.CalicoRunHostPath = override.CalicoRunHostPath
+	}
+
+	switch compareFields(inst.CalicoLibHostPath, override.CalicoLibHostPath) {
+	case BOnlySet, Different:
+		inst.CalicoLibHostPath = override.CalicoLibHostPath
+	}
+
 	switch compareFields(inst.KubeletVolumePluginPath, override.KubeletVolumePluginPath) {
 	case BOnlySet, Different:
 		inst.KubeletVolumePluginPath = override.KubeletVolumePluginPath

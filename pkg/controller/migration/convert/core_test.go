@@ -564,6 +564,39 @@ var _ = Describe("core handler", func() {
 		})
 	})
 
+	Context("calico host paths", func() {
+		It("should accept default var-run/var-lib calico hostPaths without setting Installation fields", func() {
+			Expect(handleCore(&comps, i)).ToNot(HaveOccurred())
+			Expect(i.Spec.CalicoRunHostPath).To(BeEmpty())
+			Expect(i.Spec.CalicoLibHostPath).To(BeEmpty())
+		})
+
+		It("should accept microk8s-style hostPaths and record them on Installation", func() {
+			for idx, vol := range comps.node.Spec.Template.Spec.Volumes {
+				switch vol.Name {
+				case "var-run-calico":
+					comps.node.Spec.Template.Spec.Volumes[idx].HostPath.Path = "/var/snap/microk8s/current/var/run/calico"
+				case "var-lib-calico":
+					comps.node.Spec.Template.Spec.Volumes[idx].HostPath.Path = "/var/snap/microk8s/current/var/lib/calico"
+				}
+			}
+			Expect(handleCore(&comps, i)).ToNot(HaveOccurred())
+			Expect(i.Spec.CalicoRunHostPath).To(Equal("/var/snap/microk8s/current/var/run/calico"))
+			Expect(i.Spec.CalicoLibHostPath).To(Equal("/var/snap/microk8s/current/var/lib/calico"))
+		})
+
+		It("should reject hostPaths that do not end with the expected suffix", func() {
+			for idx, vol := range comps.node.Spec.Template.Spec.Volumes {
+				if vol.Name == "var-run-calico" {
+					comps.node.Spec.Template.Spec.Volumes[idx].HostPath.Path = "/opt/other/calico-run"
+				}
+			}
+			err := handleCore(&comps, i)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("var-run-calico"))
+		})
+	})
+
 	Context("cni", func() {
 		It("should not raise an error if CNI_CONF_NAME is 10-calico.conflist", func() {
 			comps.node.Spec.Template.Spec.InitContainers[0].Env = []v1.EnvVar{{

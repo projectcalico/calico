@@ -587,6 +587,44 @@ var _ = Describe("Installation merge tests", func() {
 		Entry("Both set not matching", "pathx", "pathy", "pathy"),
 	)
 
+	DescribeTable("merge CalicoRunHostPath", func(main, second, expect string) {
+		m := opv1.InstallationSpec{}
+		s := opv1.InstallationSpec{}
+		if main != "" {
+			m.CalicoRunHostPath = main
+		}
+		if second != "" {
+			s.CalicoRunHostPath = second
+		}
+		inst := OverrideInstallationSpec(m, s)
+		Expect(inst.CalicoRunHostPath).To(Equal(expect))
+	},
+		Entry("Both unset", nil, nil, nil),
+		Entry("Main only set", "pathx", nil, "pathx"),
+		Entry("Second only set", nil, "pathx", "pathx"),
+		Entry("Both set equal", "pathx", "pathx", "pathx"),
+		Entry("Both set not matching", "pathx", "pathy", "pathy"),
+	)
+
+	DescribeTable("merge CalicoLibHostPath", func(main, second, expect string) {
+		m := opv1.InstallationSpec{}
+		s := opv1.InstallationSpec{}
+		if main != "" {
+			m.CalicoLibHostPath = main
+		}
+		if second != "" {
+			s.CalicoLibHostPath = second
+		}
+		inst := OverrideInstallationSpec(m, s)
+		Expect(inst.CalicoLibHostPath).To(Equal(expect))
+	},
+		Entry("Both unset", nil, nil, nil),
+		Entry("Main only set", "pathx", nil, "pathx"),
+		Entry("Second only set", nil, "pathx", "pathx"),
+		Entry("Both set equal", "pathx", "pathx", "pathx"),
+		Entry("Both set not matching", "pathx", "pathy", "pathy"),
+	)
+
 	_1 := intstr.FromInt(1)
 	_roll1 := appsv1.DaemonSetUpdateStrategy{
 		Type:          appsv1.RollingUpdateDaemonSetStrategyType,

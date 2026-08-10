@@ -1112,7 +1112,7 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 		c.cfg.TLS.TrustedBundle.Volume(),
 		c.cfg.TLS.NodeSecret.Volume(),
 		c.varRunCalicoVolume(),
-		corev1.Volume{Name: "var-lib-calico", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/lib/calico", Type: &dirOrCreate}}},
+		c.varLibCalicoVolume(),
 		// Volume for the containing directory so that the init container can mount the child bpf directory if needed.
 		corev1.Volume{Name: "sys-fs", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/sys/fs", Type: &dirOrCreate}}},
 		// Volume for the bpffs itself, used by the main node container.
@@ -1128,7 +1128,7 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 	if c.vppDataplaneEnabled() {
 		volumes = append(volumes,
 			// Volume that contains the felix dataplane binary
-			corev1.Volume{Name: "felix-plugins", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/lib/calico/felix-plugins"}}},
+			corev1.Volume{Name: "felix-plugins", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: filepath.Join(c.calicoLibHostPath(), "felix-plugins")}}},
 		)
 	}
 
@@ -1197,12 +1197,36 @@ func (c *nodeComponent) nodeVolumes() []corev1.Volume {
 	return volumes
 }
 
+func (c *nodeComponent) calicoRunHostPath() string {
+	if c.cfg.Installation != nil && c.cfg.Installation.CalicoRunHostPath != "" {
+		return c.cfg.Installation.CalicoRunHostPath
+	}
+	return "/var/run/calico"
+}
+
+func (c *nodeComponent) calicoLibHostPath() string {
+	if c.cfg.Installation != nil && c.cfg.Installation.CalicoLibHostPath != "" {
+		return c.cfg.Installation.CalicoLibHostPath
+	}
+	return "/var/lib/calico"
+}
+
 func (c *nodeComponent) varRunCalicoVolume() corev1.Volume {
 	dirOrCreate := corev1.HostPathDirectoryOrCreate
 	return corev1.Volume{
 		Name: "var-run-calico",
 		VolumeSource: corev1.VolumeSource{
-			HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/calico", Type: &dirOrCreate},
+			HostPath: &corev1.HostPathVolumeSource{Path: c.calicoRunHostPath(), Type: &dirOrCreate},
+		},
+	}
+}
+
+func (c *nodeComponent) varLibCalicoVolume() corev1.Volume {
+	dirOrCreate := corev1.HostPathDirectoryOrCreate
+	return corev1.Volume{
+		Name: "var-lib-calico",
+		VolumeSource: corev1.VolumeSource{
+			HostPath: &corev1.HostPathVolumeSource{Path: c.calicoLibHostPath(), Type: &dirOrCreate},
 		},
 	}
 }

@@ -156,6 +156,23 @@ type InstallationSpec struct {
 	// +optional
 	FlexVolumePath string `json:"flexVolumePath,omitempty"`
 
+	// CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+	// /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+	// host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+	// operator continues using that path after a manifest-to-operator migration.
+	// +optional
+	// +kubebuilder:default:="/var/run/calico"
+	// +kubebuilder:validation:MaxLength=1024
+	CalicoRunHostPath string `json:"calicoRunHostPath,omitempty"`
+
+	// CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+	// /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+	// host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+	// +optional
+	// +kubebuilder:default:="/var/lib/calico"
+	// +kubebuilder:validation:MaxLength=1024
+	CalicoLibHostPath string `json:"calicoLibHostPath,omitempty"`
+
 	// KubeletVolumePluginPath optionally specifies enablement of Calico CSI plugin. If not specified,
 	// CSI will be enabled by default. If set to 'None', CSI will be disabled.
 	// Default: /var/lib/kubelet

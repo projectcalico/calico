@@ -140,10 +140,12 @@ func handleCore(c *components, install *operatorv1.Installation) error {
 	if err := checkNodeHostPathVolume(c.node.Spec.Template.Spec, "lib-modules", "/lib/modules"); err != nil {
 		return err
 	}
-	if err := checkNodeHostPathVolume(c.node.Spec.Template.Spec, "var-run-calico", "/var/run/calico"); err != nil {
+	// var-run-calico / var-lib-calico may use non-default hostPaths (e.g. microk8s snap paths).
+	// Capture them onto Installation so the operator continues rendering the same host paths.
+	if err := handleCalicoHostPathVolume(c.node.Spec.Template.Spec, "var-run-calico", "/var/run/calico", &install.Spec.CalicoRunHostPath); err != nil {
 		return err
 	}
-	if err := checkNodeHostPathVolume(c.node.Spec.Template.Spec, "var-lib-calico", "/var/lib/calico"); err != nil {
+	if err := handleCalicoHostPathVolume(c.node.Spec.Template.Spec, "var-lib-calico", "/var/lib/calico", &install.Spec.CalicoLibHostPath); err != nil {
 		return err
 	}
 	if err := checkNodeHostPathVolume(c.node.Spec.Template.Spec, "xtables-lock", "/run/xtables.lock"); err != nil {
@@ -217,6 +219,36 @@ func checkNodeHostPathVolume(spec corev1.PodSpec, name, path string) error {
 			component: ComponentCalicoNode,
 			fix:       fmt.Sprintf("add the expected volume to %s", ComponentCalicoNode),
 		}
+	}
+	return nil
+}
+
+// handleCalicoHostPathVolume verifies that a hostPath volume with the given name exists.
+// When the host path matches defaultPath, dest is left empty so the operator uses its default.
+// When the host path differs (for example microk8s snap-prefixed paths that still end with the
+// standard suffix), dest is set so the operator continues using the existing path after migration.
+func handleCalicoHostPathVolume(spec corev1.PodSpec, name, defaultPath string, dest *string) error {
+	v := getVolume(spec, name)
+	if v == nil || v.HostPath == nil || v.HostPath.Path == "" {
+		return ErrIncompatibleCluster{
+			err:       fmt.Sprintf("missing expected volume '%s' with hostPath '%s'", name, defaultPath),
+			component: ComponentCalicoNode,
+			fix:       fmt.Sprintf("add the expected volume to %s", ComponentCalicoNode),
+		}
+	}
+	path := v.HostPath.Path
+	// Accept the standard path, or a path that ends with it (microk8s: /var/snap/.../var/run/calico).
+	if path != defaultPath && !strings.HasSuffix(path, defaultPath) {
+		return ErrIncompatibleCluster{
+			err: fmt.Sprintf("volume '%s' has unsupported hostPath '%s' (expected '%s' or a path ending with it)",
+				name, path, defaultPath),
+			component: ComponentCalicoNode,
+			fix: fmt.Sprintf("set volume '%s' hostPath to '%s' (or a path ending with '%s'), or set Installation.spec accordingly",
+				name, defaultPath, defaultPath),
+		}
+	}
+	if path != defaultPath {
+		*dest = path
 	}
 	return nil
 }
