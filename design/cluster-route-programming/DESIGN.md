@@ -249,19 +249,30 @@ possible future improvement; it is not implemented.
 These are recorded so that a future change does not mistake them for solved
 problems.
 
-**Felix-programmed cluster routes and BGP re-advertisement.**  BIRD's kernel
-protocol is configured with `learn`, so it learns alien kernel routes —
+**Felix-programmed no-encap cluster routes and BGP re-advertisement.**  BIRD's
+kernel protocol is configured with `learn`, so it learns alien kernel routes —
 including the cluster routes Felix programs.  `calico_export_to_bgp_peers`
-rejects the ones that leave via a Calico tunnel device matching `*.cali` /
-`*.calico` (VXLAN, WireGuard), and only for internal peers.  Felix-programmed
-IPIP routes leave via `tunl0` and Felix-programmed no-encap routes leave via an
-ordinary NIC, so neither is caught: a node can end up advertising other nodes'
-blocks to its peers.  This predates the change of default — it already applies
-to Felix-programmed no-encap routes — but changing the IPIP default makes it the
-default path for IPIP clusters with BGP peers.  It has not been reproduced or
-measured, and no fix is implemented.  Any fix needs to distinguish "route this
-node owns" from "route this node learned or synthesised", which the current
-ifname-matching heuristic cannot do in general.
+rejects the ones that leave via a Calico tunnel device: `*.cali` / `*.calico`
+(VXLAN, WireGuard) and, since the IPIP default moved, `tunl0`.  Felix-programmed
+*no-encap* routes leave via an ordinary NIC, so they are still not caught, and a
+node can end up advertising other nodes' blocks to its peers.  This predates the
+change of default and is not fixed here.
+
+Two further limits of the current filter, both of which the eventual fix should
+address rather than extend:
+
+- `reject_tunnel_routes()` is only applied to internal peers, so nothing stops
+  these routes reaching an external peer — a ToR learning every node's blocks
+  from every node is the more damaging shape of the bug.
+- Matching on interface name is a proxy for the property we actually want, which
+  is "a route this node owns" versus "a route this node learned or synthesised".
+  A route protocol test (`krt_source` against Felix's `DeviceRouteProtocol`)
+  combined with "has a next hop" would express that directly and cover every
+  encapsulation at once; doing it in the kernel protocol's *import* filter would
+  keep the routes out of BIRD's table entirely.  Note that BIRD learning Felix's
+  *local* workload routes is load-bearing — `calico_aggr()` reads their
+  `krt_metric` to advertise the elevated-priority /32 during live migration — so
+  any such filter must exclude only the remote ones.
 
 **KubeVirt live migration.**  Route-priority propagation for live migration was
 designed and tested for confd/BIRD-programmed routes.  Whether the elevated
