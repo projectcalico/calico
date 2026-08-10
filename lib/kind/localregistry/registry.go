@@ -40,6 +40,7 @@ package localregistry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	stdlog "log"
 	"net"
@@ -82,6 +83,12 @@ type Config struct {
 	// For tests and local dev against an http registry only; real upstreams
 	// are https and this must stay false.
 	InsecureUpstream bool
+	// ExtraAuthConfigPath, if set and readable, is a docker config.json whose
+	// `auths` supplement the host keychain (authn.DefaultKeychain) — e.g. a
+	// fetched enterprise pull secret — so private upstream pulls work without
+	// the user editing their own ~/.docker/config.json. A missing or
+	// unparseable file is ignored (the facade falls back to the host keychain).
+	ExtraAuthConfigPath string
 }
 
 // Registry is the running registry. Create it with Start; shut it down with
@@ -125,10 +132,19 @@ func Start(ctx context.Context, cfg Config) (*Registry, error) {
 		return nil, fmt.Errorf("create cache dir %s: %w", cfg.CacheDir, err)
 	}
 
+	// The facade authenticates to upstreams with the host docker keychain
+	// (live, so rotated gcloud/registry tokens are picked up). An optional
+	// extra config (e.g. a fetched enterprise pull secret) is layered on so
+	// private upstreams work without the user editing their own ~/.docker.
+	keychain := authn.Keychain(authn.DefaultKeychain)
+	if extra := loadExtraKeychain(cfg.ExtraAuthConfigPath); extra != nil {
+		keychain = authn.NewMultiKeychain(authn.DefaultKeychain, extra)
+	}
+
 	f := &Registry{
 		cfg:      cfg,
 		log:      log.With("component", "kind-mirror"),
-		keychain: authn.DefaultKeychain,
+		keychain: keychain,
 		cached:   map[string]bool{},
 	}
 
@@ -317,6 +333,76 @@ func (f *Registry) Stop() error {
 		}
 	}
 	return firstErr
+}
+
+// loadExtraKeychain builds an authn.Keychain over the static `auths` in a
+// docker config.json at path. Returns nil (the caller then uses only the host
+// keychain) when path is empty, the file is absent, it doesn't parse, or it
+// yields no usable credential — so wiring it in is always safe. Entries whose
+// key normalises to an empty host, or that carry no credential material, are
+// skipped so they can't shadow the host keychain with an empty AuthConfig.
+func loadExtraKeychain(path string) authn.Keychain {
+	if path == "" {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var dc struct {
+		Auths map[string]struct {
+			Auth          string `json:"auth"`
+			Username      string `json:"username"`
+			Password      string `json:"password"`
+			IdentityToken string `json:"identitytoken"`
+			RegistryToken string `json:"registrytoken"`
+		} `json:"auths"`
+	}
+	if err := json.Unmarshal(b, &dc); err != nil {
+		return nil
+	}
+	auths := make(map[string]authn.AuthConfig, len(dc.Auths))
+	for reg, a := range dc.Auths {
+		host := registryHost(reg)
+		ac := authn.AuthConfig{
+			Auth:          a.Auth,
+			Username:      a.Username,
+			Password:      a.Password,
+			IdentityToken: a.IdentityToken,
+			RegistryToken: a.RegistryToken,
+		}
+		if host == "" || ac == (authn.AuthConfig{}) {
+			continue
+		}
+		auths[host] = ac
+	}
+	if len(auths) == 0 {
+		return nil
+	}
+	return staticKeychain(auths)
+}
+
+// registryHost normalises a docker-config auths key — which may be a bare host
+// ("quay.io") or a legacy URL ("https://quay.io/v1/") — to the host that
+// authn.Resource.RegistryStr reports, so lookups match.
+func registryHost(key string) string {
+	k := strings.TrimPrefix(key, "https://")
+	k = strings.TrimPrefix(k, "http://")
+	if i := strings.IndexByte(k, '/'); i >= 0 {
+		k = k[:i]
+	}
+	return k
+}
+
+// staticKeychain resolves credentials from a fixed registry-host -> AuthConfig
+// map (e.g. one parsed from a pull-secret file).
+type staticKeychain map[string]authn.AuthConfig
+
+func (s staticKeychain) Resolve(res authn.Resource) (authn.Authenticator, error) {
+	if ac, ok := s[res.RegistryStr()]; ok {
+		return authn.FromConfig(ac), nil
+	}
+	return authn.Anonymous, nil
 }
 
 func (f *Registry) pullOpts(ctx context.Context) []crane.Option {
