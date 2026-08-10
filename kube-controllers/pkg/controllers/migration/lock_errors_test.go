@@ -157,14 +157,19 @@ func newErrorTestController(
 // finalizer and a saved APIService annotation.
 func migratingCR(t *testing.T) *DatastoreMigration {
 	t.Helper()
+	// StartedAt is written by the same status update that sets Migrating.
+	startedAt := metav1.Now()
 	return &DatastoreMigration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        defaultMigrationName,
 			Finalizers:  []string{finalizerName},
 			Annotations: map[string]string{savedAPIServiceAnnotation: savedAPIServiceJSON(t)},
 		},
-		Spec:   DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
-		Status: DatastoreMigrationStatus{Phase: DatastoreMigrationPhaseMigrating},
+		Spec: DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
+		Status: DatastoreMigrationStatus{
+			Phase:     DatastoreMigrationPhaseMigrating,
+			StartedAt: &startedAt,
+		},
 	}
 }
 
