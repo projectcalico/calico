@@ -128,6 +128,19 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		}
 	})
 
+	It("should let the IPAM syncer watch IPReservations", func() {
+		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := component.Objects()
+
+		role := rtest.GetResource(resources, "calico-kube-controllers", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+		Expect(role.Rules).To(ContainElement(rbacv1.PolicyRule{
+			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+			Resources: []string{"ipreservations"},
+			Verbs:     []string{"list", "watch"},
+		}))
+	})
+
 	It("should render SecurityContextConstrains properly when provider is OpenShift", func() {
 		cfg.Installation.KubernetesProvider = operatorv1.ProviderOpenShift
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
