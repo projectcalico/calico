@@ -3153,6 +3153,12 @@ blocks:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
+          env_vars:
+            # Pin the mode: leaving it unset now means Felix owns the IPIP routes,
+            # and this lane's Feature:BGPPeer tests require BGP to be the sole
+            # routing mechanism.
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-bird-routing.yaml"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -4656,6 +4662,12 @@ blocks:
           value: "calico"
         - name: E2E_TEST_CONFIG
           value: "e2e/config/kind-kubevirt.yaml"
+        # Live migration's route-priority propagation is built on confd and BIRD
+        # programming the cluster routes, and IPIP is not going to gain support
+        # for Felix-programmed live migration. Pin the mode rather than rely on
+        # the default, which from v3.33 gives Felix the IPIP routes.
+        - name: EXTRA_VALUES_FILES
+          value: "hack/test/kind/infra/values-bird-routing.yaml"
       agent:
         machine:
           type: f1-standard-4
