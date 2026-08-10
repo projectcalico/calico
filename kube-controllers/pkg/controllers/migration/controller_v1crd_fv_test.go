@@ -47,7 +47,7 @@ import (
 const seedNamespace = "migration-test"
 
 // TestLifecycle_RealV1CRDs migrates real v1 CRDs seeded as the API server
-// stores them. Runs last: the cleanup path deletes those CRDs.
+// stores them. Cleanup deletes those CRDs, so it reinstalls them on entry.
 func TestLifecycle_RealV1CRDs(t *testing.T) {
 	g := NewWithT(t)
 	ctx := context.Background()
@@ -372,14 +372,20 @@ func cleanupV1SeedResources(t *testing.T, ctx context.Context) {
 	for _, obj := range []rtclient.Object{
 		&apiv3.Tier{},
 		&apiv3.GlobalNetworkPolicy{},
-		&apiv3.NetworkPolicy{},
 		&apiv3.HostEndpoint{},
 		&apiv3.GlobalNetworkSet{},
-		&apiv3.NetworkSet{},
 		&apiv3.BGPPeer{},
 		&apiv3.ClusterInformation{},
 	} {
 		if err := fvRTClient.DeleteAllOf(ctx, obj); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
+	}
+
+	// DeleteAllOf is namespace-scoped, so the namespaced kinds need the seed
+	// namespace naming them explicitly.
+	for _, obj := range []rtclient.Object{&apiv3.NetworkPolicy{}, &apiv3.NetworkSet{}} {
+		if err := fvRTClient.DeleteAllOf(ctx, obj, rtclient.InNamespace(seedNamespace)); err != nil {
 			t.Logf("cleanup: %v", err)
 		}
 	}
