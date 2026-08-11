@@ -501,10 +501,14 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, sc da
 			cleanups = append(cleanups, applyResources(t, be, inputPath))
 		}
 
-		// Some scenarios need Kubernetes resources alongside the Calico ones.
+		// Some scenarios need Kubernetes resources alongside the Calico ones. Absent is fine;
+		// any other stat error means we cannot tell whether they exist, so say so rather than
+		// carrying on and failing later on a confusing golden mismatch.
 		kubectlPath := filepath.Join(filepath.Dir(inputPath), "kubectl-input.yaml")
 		if _, err := os.Stat(kubectlPath); err == nil {
 			cleanups = append(cleanups, applyResources(t, be, kubectlPath))
+		} else {
+			require.True(t, os.IsNotExist(err), "checking for %s: %v", kubectlPath, err)
 		}
 
 		d.expectOutput(dir)

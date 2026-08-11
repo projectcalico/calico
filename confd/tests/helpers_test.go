@@ -538,7 +538,7 @@ func applyCalicoIPPool(t *testing.T, cc client.Interface, yamlBytes []byte, path
 	t.Helper()
 	if upsert {
 		t.Fatalf("upsert is not implemented for IPPool (needed by %s); add it alongside the "+
-			"BGPConfiguration one if a scenario step needs to modify a IPPool", path)
+			"BGPConfiguration one if a scenario step needs to modify one", path)
 	}
 	ctx := context.Background()
 	var obj apiv3.IPPool
@@ -557,7 +557,7 @@ func applyCalicoBGPPeer(t *testing.T, cc client.Interface, yamlBytes []byte, pat
 	t.Helper()
 	if upsert {
 		t.Fatalf("upsert is not implemented for BGPPeer (needed by %s); add it alongside the "+
-			"BGPConfiguration one if a scenario step needs to modify a BGPPeer", path)
+			"BGPConfiguration one if a scenario step needs to modify one", path)
 	}
 	ctx := context.Background()
 	var obj apiv3.BGPPeer
@@ -576,7 +576,7 @@ func applyCalicoBGPFilter(t *testing.T, cc client.Interface, yamlBytes []byte, p
 	t.Helper()
 	if upsert {
 		t.Fatalf("upsert is not implemented for BGPFilter (needed by %s); add it alongside the "+
-			"BGPConfiguration one if a scenario step needs to modify a BGPFilter", path)
+			"BGPConfiguration one if a scenario step needs to modify one", path)
 	}
 	ctx := context.Background()
 	var obj apiv3.BGPFilter
