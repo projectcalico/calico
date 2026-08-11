@@ -240,22 +240,9 @@ var _ = describe.CalicoDescribe(
 			Expect(egressResult.AverageRate).To(BeNumerically("<=", maxRate), "egress packet rate limit not effective")
 		})
 
-		// Verifies that Calico's QoS connection-limit annotation
-		// (qos.projectcalico.org/ingressMaxConnections) caps the number of
-		// concurrent TCP connections a workload accepts, and that closing a
-		// connection frees a slot for a new one. This mirrors the FV case in
-		// felix/fv/qos_controls_test.go ("should limit connections correctly"):
-		// hold N connections open, confirm the (N+1)th is refused, then free
-		// one and confirm a new connection is admitted.
-		//
-		// The connlimit counter only manifests when N connections are held
-		// concurrently, which the conncheck ConnectionTester's one-shot
-		// Execute() model does not express on its own. We therefore hold the N
-		// connections open with ExecStream (the e2e analog of the FV's
-		// StartPersistentConnection) and use a TCPConnect target (the analog of
-		// CanConnectTo) for the one-shot (N+1)th probe. Egress limits use the
-		// identical counter and are covered at FV level, so this e2e exercises
-		// ingress only.
+		// Verifies that the qos.projectcalico.org/ingressMaxConnections annotation
+		// caps concurrent TCP connections to a workload, and that closing one frees
+		// a slot. Egress uses the same counter and is covered by the FV suite.
 		It("should limit concurrent connections with QoS annotations", func() {
 			const (
 				connLimitPort = 8080
@@ -271,17 +258,8 @@ var _ = describe.CalicoDescribe(
 			checker := conncheck.NewConnectionTester(f)
 			defer checker.Stop()
 
-			// Server: a netshoot pod running a socat listener that accepts and
-			// holds many concurrent connections (fork spawns a child per
-			// connection; each child bridges to a `sleep` so the connection is
-			// never closed from the server side), annotated to cap ingress
-			// connections at maxConns. socat is used rather than netcat because
-			// netshoot's OpenBSD `nc -k` only accepts connections sequentially,
-			// whereas this test needs several held open at once. No Service is
-			// created — the client dials the pod IP directly, keeping the
-			// connlimit semantics clear of any kube-proxy/NAT interaction. socat
-			// is not an HTTP server, so the default HTTP readiness probe is
-			// dropped.
+			// socat rather than netcat: netshoot's OpenBSD `nc -k` accepts
+			// connections sequentially, and this test needs several held at once.
 			listenAddr := fmt.Sprintf("TCP-LISTEN:%d,fork,reuseaddr", connLimitPort)
 			server := conncheck.NewServer("qos-connlimit-server", f.Namespace,
 				conncheck.WithPorts(connLimitPort),
@@ -300,9 +278,6 @@ var _ = describe.CalicoDescribe(
 				}),
 			)
 
-			// Client: a netshoot pod on a different node, so the test exercises
-			// the cross-node ingress path (from-hep/tunnel) rather than the
-			// same-node shortcut.
 			client := conncheck.NewClient("qos-connlimit-client", f.Namespace,
 				conncheck.WithClientCustomizer(conncheck.WithNodeName(clientNode)),
 				conncheck.WithClientCustomizer(func(pod *corev1.Pod) {
@@ -321,20 +296,12 @@ var _ = describe.CalicoDescribe(
 
 			probeTarget := conncheck.NewTCPConnectTarget(serverIP, connLimitPort)
 
-			// Confirm the server is reachable before saturating the limit. This
-			// also gives the pods a moment to settle; the meaningful assertions
-			// are the refusal and reuse steps below, which Execute() retries
-			// until the limit is programmed by Felix.
 			By("Verifying the server is reachable")
 			checker.ExpectSuccess(client, probeTarget)
 			checker.Execute()
 
-			// Hold maxConns connections open concurrently. Each holder is a
-			// socat that connects to the server and bridges to a `sleep`, so
-			// neither end ever closes the socket — it stays ESTABLISHED,
-			// occupying a connlimit slot until stopped. This is the e2e analog
-			// of the FV's StartPersistentConnection; ExecStream's stop() (the
-			// analog of pc.Stop()) terminates socat and closes the connection.
+			// Each holder bridges to a sleep so neither end closes the socket; it
+			// stays ESTABLISHED, occupying a slot until stop() is called.
 			By(fmt.Sprintf("Holding %d concurrent connections open", maxConns))
 			connectAddr := fmt.Sprintf("TCP:%s:%d", serverIP, connLimitPort)
 			var holders []func() error
@@ -353,17 +320,11 @@ var _ = describe.CalicoDescribe(
 				holders = append(holders, stop)
 			}
 
-			// With maxConns connections held, the (N+1)th must be refused.
-			// Execute() retries for up to 30s, which absorbs both the window
-			// where Felix is still programming the limit and the time for the
-			// held connections' handshakes to complete.
 			By("Verifying the (N+1)th connection is refused")
 			checker.ResetExpectations()
 			checker.ExpectFailure(client, probeTarget)
 			checker.Execute()
 
-			// Free one slot and confirm a new connection is admitted. This
-			// exercises the counter decrement on connection close.
 			By("Freeing one connection and verifying a new one is admitted")
 			Expect(holders[len(holders)-1]()).To(Succeed(), "failed to stop a held connection")
 			holders = holders[:len(holders)-1]
