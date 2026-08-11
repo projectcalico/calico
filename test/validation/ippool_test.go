@@ -230,6 +230,171 @@ func TestIPPool_Validation(t *testing.T) {
 			},
 			wantErr: "global() selector is not valid for IPPool namespaceSelector",
 		},
+		{
+			name: "CIDR that is not strictly masked is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "192.168.0.1/24",
+				},
+			},
+			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
+		},
+		{
+			name: "IPv6 CIDR that is not strictly masked is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fd00::1/112",
+				},
+			},
+			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
+		},
+		{
+			name: "IPv6 CIDR that is not in canonical form is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "FD00::/112",
+				},
+			},
+			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
+		},
+		{
+			name: "CIDR equal to the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.0.0/16",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR inside the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.10.0/24",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR containing the IPv4 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "169.254.0.0/15",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",
+		},
+		{
+			name: "CIDR inside the IPv6 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fe80::/112",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv6 link local range fe80::/10",
+		},
+		{
+			name: "CIDR containing the IPv6 link local range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fe00::/8",
+				},
+			},
+			wantErr: "IPPool CIDR overlaps with IPv6 link local range fe80::/10",
+		},
+		{
+			name: "IPv4 blockSize below the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.100.0.0/16",
+					BlockSize: 19,
+				},
+			},
+			wantErr: "blockSize must be between 20 and 32 for IPv4 pools",
+		},
+		{
+			name: "IPv4 blockSize above the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.101.0.0/16",
+					BlockSize: 33,
+				},
+			},
+			wantErr: "blockSize must be between 20 and 32 for IPv4 pools",
+		},
+		{
+			name: "IPv6 blockSize below the supported range is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "fd10::/48",
+					BlockSize: 64,
+				},
+			},
+			wantErr: "between 116 and 128 for IPv6 pools",
+		},
+		{
+			name: "IPv4 blockSize within the supported range is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      nextPoolCIDR(),
+					BlockSize: 26,
+				},
+			},
+		},
+		{
+			name: "IPv6 blockSize within the supported range is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      nextPoolCIDRv6(),
+					BlockSize: 122,
+				},
+			},
+		},
+		{
+			name: "blockSize larger than the pool CIDR is rejected",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.102.0.0/28",
+					BlockSize: 26,
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
+			name: "blockSize larger than the pool CIDR is accepted on a disabled pool",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.103.0.0/28",
+					BlockSize: 26,
+					Disabled:  true,
+				},
+			},
+		},
+		{
+			name: "blockSize equal to the pool CIDR is accepted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR:      "10.104.0.0/26",
+					BlockSize: 26,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
