@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# s3-cmd: thin wrapper around s3cmd for Calico CI object storage. It replaces
+# the `gcloud storage` / `gsutil` calls that previously cached build artifacts
+# to, and restored them from, Google Cloud Storage.
+#
+# The S3 destination and credentials are configurable entirely through
+# environment variables:
+#
+#   CALICO_S3_ACCESS_KEY   - S3 access key id              (optional*)
+#   CALICO_S3_SECRET_KEY   - S3 secret access key          (optional*)
+#
+#     *When both are set, s3-cmd reads from and writes to the cache. When either
+#      is unset/empty, s3-cmd falls back to anonymous (unsigned) access: reads
+#      are attempted against a publicly-readable bucket, and writes are skipped
+#      with a logged notification rather than failing the build. This lets forks
+#      and other credential-less builds still consume the shared cache.
+#      s3cmd signs every request it makes and has no unsigned mode, so the
+#      anonymous reads go over plain HTTPS with curl instead, against the URL
+#      built from CALICO_S3_HOST / CALICO_S3_HOST_BUCKET.
+#   CALICO_S3_BUCKET       - destination bucket name       (required by callers
+#                            that build s3:// URLs from it; not used directly
+#                            here)
+#   CALICO_S3_KEY_PREFIX   - key prefix within the bucket  (optional, used by
+#                            callers when building s3:// URLs)
+#   CALICO_S3_HOST         - S3 endpoint host base         (optional; default is
+#                            s3cmd's built-in AWS endpoint)
+#   CALICO_S3_HOST_BUCKET  - host-bucket template          (optional; defaults to
+#                            "%(bucket)s.${CALICO_S3_HOST}" when a host is set)
+#   CALICO_S3_EXPIRY_DAYS  - default object expiry in days  (optional). When set,
+#                            uploads carry an "Expires: <now + N days>" header.
+#                            NOTE: the Expires header is object metadata; it does
+#                            not by itself delete the object on most S3 backends.
+#                            Configure a matching bucket lifecycle rule (e.g.
+#                            `s3cmd expire s3://bucket --expiry-days=N`) for the
+#                            objects to actually be reclaimed.
+#
+# Callers refer to objects with s3:// URLs, typically via $S3_WORKFLOW_DIR or
+# $S3_CACHE_DIR, which the Semaphore global job config builds from
+# CALICO_S3_BUCKET / CALICO_S3_KEY_PREFIX.
+#
+# Usage mirrors the subset of `gcloud storage` that CI used:
+#
+#   s3-cmd cp [-r] <src>... <dst>   Upload (dst is an s3:// URL), download (the
+#                                   single src is an s3:// URL) or server-side
+#                                   copy (both are s3:// URLs). A trailing "/*"
+#                                   on an s3:// source is treated as a recursive
+#                                   fetch of that prefix (s3cmd has no glob).
+#                                   Without credentials, uploads and server-side
+#                                   copies are skipped and recursive fetches are
+#                                   refused (anonymous mode cannot list).
+#   s3-cmd ls <s3url>               List; exits non-zero when nothing matches, so
+#                                   `if s3-cmd ls ...` behaves like `gcloud
+#                                   storage ls`.
+#   s3-cmd write-config <path>      Write an s3cmd config file built from the
+#                                   environment, for shipping the credentials to
+#                                   a remote test VM that runs s3cmd directly.
+
+set -euo pipefail
+
+# True when both credentials are available. Everything that talks to S3 branches
+# on this: with credentials we go through s3cmd, without them we drop to
+# read-only mode (anonymous HTTPS reads, skipped writes).
+have_credentials() {
+  [[ -n "${CALICO_S3_ACCESS_KEY:-}" && -n "${CALICO_S3_SECRET_KEY:-}" ]]
+}
+
+# Assemble the common s3cmd flags (credentials and, optionally, a non-AWS
+# endpoint) into the S3CMD_ARGS array. Only valid once have_credentials passes.
+build_s3cmd_args() {
+  S3CMD_ARGS=(
+    --no-progress
+    "--access_key=${CALICO_S3_ACCESS_KEY:?CALICO_S3_ACCESS_KEY must be set}"
+    "--secret_key=${CALICO_S3_SECRET_KEY:?CALICO_S3_SECRET_KEY must be set}"
+  )
+  if [[ -n "${CALICO_S3_HOST:-}" ]]; then
+    S3CMD_ARGS+=(
+      "--host=${CALICO_S3_HOST}"
+      "--host-bucket=${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}"
+    )
+  fi
+}
+
+# Populate EXPIRY_ARGS with the --add-header flag for the configured default
+# object expiry, or leave it empty when CALICO_S3_EXPIRY_DAYS is unset.
+build_expiry_args() {
+  EXPIRY_ARGS=()
+  if [[ -n "${CALICO_S3_EXPIRY_DAYS:-}" ]]; then
+    local expires
+    if ! expires="$(date -u -d "+${CALICO_S3_EXPIRY_DAYS} days" '+%a, %d %b %Y %H:%M:%S GMT' 2>/dev/null)"; then
+      echo "s3-cmd: invalid CALICO_S3_EXPIRY_DAYS='${CALICO_S3_EXPIRY_DAYS}' (want an integer number of days)" >&2
+      exit 2
+    fi
+    EXPIRY_ARGS=("--add-header=Expires:${expires}")
+  fi
+}
+
+is_s3() { [[ "$1" == s3://* ]]; }
+
+cmd_cp() {
+  local recursive=()
+  while [[ "${1:-}" == -* ]]; do
+    case "$1" in
+      -r | -R | --recursive)
+        recursive=(--recursive)
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        echo "s3-cmd cp: unknown flag $1" >&2
+        exit 2
+        ;;
+    esac
+  done
+
+  if [[ $# -lt 2 ]]; then
+    echo "s3-cmd cp: expected <src>... <dst>" >&2
+    exit 2
+  fi
+
+  # The last argument is the destination; everything before it is a source.
+  local dst="${*: -1}"
+  local srcs=("${@:1:$#-1}")
+
+  if is_s3 "$dst"; then
+    # Writing needs credentials. A credential-less build (a fork, or a run with
+    # the keys deliberately withheld) is read-only: log and carry on rather than
+    # failing the job.
+    if ! have_credentials; then
+      echo "s3-cmd: no S3 credentials, skipping upload of ${srcs[*]} to $dst (read-only mode)" >&2
+      return 0
+    fi
+    build_s3cmd_args
+    if is_s3 "${srcs[0]}"; then
+      # Server-side copy (single source).
+      s3cmd "${S3CMD_ARGS[@]}" cp "${recursive[@]}" "${srcs[0]}" "$dst"
+    else
+      # Upload one or more local sources, applying the default expiry (if any).
+      build_expiry_args
+      s3cmd "${S3CMD_ARGS[@]}" put "${recursive[@]}" "${EXPIRY_ARGS[@]}" "${srcs[@]}" "$dst"
+    fi
+  else
+    # Download. s3cmd get has no wildcard support, so a trailing "/*" on the
+    # source becomes a recursive fetch of the prefix.
+    local src="${srcs[0]}"
+    if ! have_credentials; then
+      anon_get "$src" "$dst"
+      return
+    fi
+    build_s3cmd_args
+    if [[ "$src" == */\* ]]; then
+      src="${src%\*}"
+      recursive=(--recursive)
+    fi
+    s3cmd "${S3CMD_ARGS[@]}" get --force "${recursive[@]}" "$src" "$dst"
+  fi
+}
+
+# Fetch a single object over anonymous HTTPS, for credential-less builds reading
+# from a publicly-readable bucket.
+anon_get() {
+  local src="$1" dst="$2"
+  if [[ "$src" == */\* ]]; then
+    echo "s3-cmd: cannot fetch $src without credentials: anonymous mode cannot list a prefix" >&2
+    return 1
+  fi
+  require_curl
+  split_s3_url "$src"
+  if [[ -z "$S3_KEY" ]]; then
+    echo "s3-cmd: $src does not name an object" >&2
+    exit 2
+  fi
+  # `s3cmd get` into a directory keeps the object's basename; curl needs the
+  # full path, so expand it here to match.
+  if [[ -d "$dst" ]]; then
+    dst="${dst%/}/${S3_KEY##*/}"
+  fi
+  local url
+  url="$(public_origin "$S3_BUCKET")/${S3_KEY}"
+  echo "s3-cmd: no S3 credentials, fetching $src anonymously from $url" >&2
+  # -f makes an HTTP error (404 on a cache miss, 403 on a non-public bucket) a
+  # non-zero exit rather than an error body written to $dst.
+  curl -fsS -L --retry 3 -o "$dst" "$url"
+}
+
+# Split an s3://bucket/key URL into S3_BUCKET and S3_KEY. S3_KEY is empty when
+# the URL names only a bucket.
+split_s3_url() {
+  local rest="${1#s3://}"
+  S3_BUCKET="${rest%%/*}"
+  if [[ "$rest" == */* ]]; then
+    S3_KEY="${rest#*/}"
+  else
+    S3_KEY=""
+  fi
+}
+
+# Expand the s3cmd host-bucket template into the public HTTPS origin for a
+# bucket, so anonymous reads hit the same endpoint build_s3cmd_args points
+# s3cmd at.
+public_origin() {
+  local bucket="$1" template
+  template="${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST:-s3.amazonaws.com}}"
+  printf 'https://%s\n' "${template//%\(bucket\)s/$bucket}"
+}
+
+require_curl() {
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "s3-cmd: curl is required for credential-less (read-only) access" >&2
+    return 1
+  fi
+}
+
+cmd_ls() {
+  if ! have_credentials; then
+    anon_ls "$1"
+    return
+  fi
+  build_s3cmd_args
+  local out
+  out="$(s3cmd "${S3CMD_ARGS[@]}" ls "$1")" || return 1
+  [[ -n "$out" ]] || return 1
+  printf '%s\n' "$out"
+}
+
+# List the keys under a prefix over anonymous HTTPS, calling the ListObjectsV2
+# API directly. Like cmd_ls, exits non-zero when nothing matches.
+anon_ls() {
+  require_curl
+  split_s3_url "$1"
+  local body keys
+  body="$(curl -fsS -L --retry 3 --get \
+    --data-urlencode "list-type=2" \
+    --data-urlencode "prefix=${S3_KEY}" \
+    "$(public_origin "$S3_BUCKET")/")" || return 1
+  keys="$(grep -o '<Key>[^<]*</Key>' <<<"$body" | sed 's|</\?Key>||g')" || return 1
+  [[ -n "$keys" ]] || return 1
+  while IFS= read -r key; do
+    printf 's3://%s/%s\n' "$S3_BUCKET" "$key"
+  done <<<"$keys"
+}
+
+cmd_write_config() {
+  local path="$1"
+  local old_umask
+  old_umask="$(umask)"
+  umask 077
+  {
+    echo "[default]"
+    echo "access_key = ${CALICO_S3_ACCESS_KEY:-}"
+    echo "secret_key = ${CALICO_S3_SECRET_KEY:-}"
+    if [[ -n "${CALICO_S3_HOST:-}" ]]; then
+      echo "host_base = ${CALICO_S3_HOST}"
+      echo "host_bucket = ${CALICO_S3_HOST_BUCKET:-%(bucket)s.${CALICO_S3_HOST}}"
+    fi
+  } >"$path"
+  umask "$old_umask"
+  # Still write the endpoint settings without credentials so the remote side has
+  # a usable config file, but say plainly that its s3cmd calls will not work.
+  have_credentials ||
+    echo "s3-cmd: no S3 credentials, wrote $path without them; s3cmd runs using it will fail" >&2
+}
+
+case "${1:-}" in
+  cp)
+    shift
+    cmd_cp "$@"
+    ;;
+  ls)
+    shift
+    cmd_ls "$@"
+    ;;
+  write-config)
+    shift
+    cmd_write_config "$@"
+    ;;
+  *)
+    echo "usage: s3-cmd {cp [-r] <src>... <dst> | ls <s3url> | write-config <path>}" >&2
+    exit 2
+    ;;
+esac
