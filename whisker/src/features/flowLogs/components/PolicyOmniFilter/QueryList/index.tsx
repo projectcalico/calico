@@ -11,7 +11,6 @@ import { Box, Button, Tooltip } from '@chakra-ui/react';
 import React from 'react';
 import QuerySelect from '../QuerySelect';
 import QueryLabel from '../QueryLabel';
-import { FilterKey } from '@/utils/omniFilter';
 import { getDefaultExpanded, updateQueryField } from '../utils';
 
 export type Query = {
@@ -115,7 +114,7 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
 
                                     <QuerySelect
                                         label='Kind'
-                                        filterKey={FilterKey.policyKind}
+                                        filterKey='policyKind'
                                         value={query.kind}
                                         onChange={updateField(index, 'kind')}
                                         showSearch={false}
@@ -123,14 +122,14 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                     />
                                     <QuerySelect
                                         label='Tier'
-                                        filterKey={FilterKey.policyTier}
+                                        filterKey='policyTier'
                                         value={query.tier}
                                         onChange={updateField(index, 'tier')}
                                         placeholder='Select a tier...'
                                     />
                                     <QuerySelect
                                         label='Namespace'
-                                        filterKey={FilterKey.policyNamespace}
+                                        filterKey='policyNamespace'
                                         value={query.namespace}
                                         onChange={updateField(
                                             index,
@@ -140,7 +139,7 @@ const QueryList = ({ queries, onChange }: QueryListProps) => {
                                     />
                                     <QuerySelect
                                         label='Name'
-                                        filterKey={FilterKey.policyName}
+                                        filterKey='policyName'
                                         value={query.name}
                                         onChange={updateField(index, 'name')}
                                         placeholder='Select a name...'

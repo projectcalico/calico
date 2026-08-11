@@ -50,9 +50,7 @@ export const useOmniFilterQuery = (
  */
 export const useOmniFilterOptions = (
     filterId: FilterHintKey,
-    {
-        narrowByActiveFilters = true,
-    }: { narrowByActiveFilters?: boolean } = {},
+    { narrowByActiveFilters = true }: { narrowByActiveFilters?: boolean } = {},
 ) => {
     const { filters } = useFlowLogsUrlFilters();
     const { data, fetchData } = useOmniFilterQuery(filterId);

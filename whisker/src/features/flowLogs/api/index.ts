@@ -9,10 +9,9 @@ import { FlowLog } from '@/types/render';
 import {
     FilterHintKey,
     FilterHintType,
-    FilterHintTypes,
     OmniFilterProperties,
     SelectedOmniFilterValues,
-    transformToFlowsFilterQuery,
+    toFlowsFilterQuery,
     transformToQueryPage,
 } from '@/utils/omniFilter';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -69,7 +68,7 @@ export const useInfiniteFilterQuery = (
         queryFn: ({ pageParam }) =>
             fetchFilters({
                 page: pageParam as number,
-                type: FilterHintTypes[filterParam],
+                type: OmniFilterProperties[filterParam].hintType,
                 pageSize: OmniFilterProperties[filterParam].limit ?? 1,
                 filters: query ?? undefined,
             }).then((response) =>
@@ -86,7 +85,7 @@ export const useFlowLogsStream = (
     const firstFlowStartTime = React.useRef<number | null>(null);
     const restartTime = React.useRef<number | null>(null);
     const streamGeneration = React.useRef(0);
-    const filters = transformToFlowsFilterQuery(filterHintValues);
+    const filters = toFlowsFilterQuery(filterHintValues);
     const startTimeGte = transformStartTime(startTime);
     const path = buildStreamPath(startTimeGte, filters);
     const resetStreamState = React.useCallback(() => {

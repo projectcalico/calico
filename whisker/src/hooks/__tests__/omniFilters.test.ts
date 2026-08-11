@@ -1,6 +1,5 @@
 import { act, renderHookWithRouter, waitFor } from '@/test-utils/helper';
 import { renderHook } from '@testing-library/react';
-import { ListOmniFilterKeys } from '@/utils/omniFilter';
 import { useOmniFilterOptions, useOmniFilterQuery } from '../omniFilters';
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 
@@ -24,7 +23,7 @@ describe('useOmniFilterQuery', () => {
         });
 
         const { result } = renderHook(() =>
-            useOmniFilterQuery(ListOmniFilterKeys.source_namespace),
+            useOmniFilterQuery('source_namespace'),
         );
 
         expect(result.current.data).toEqual({
@@ -56,7 +55,7 @@ describe('useOmniFilterQuery', () => {
         });
 
         const { result } = renderHook(() =>
-            useOmniFilterQuery(ListOmniFilterKeys.source_namespace),
+            useOmniFilterQuery('source_namespace'),
         );
 
         expect(result.current.data).toEqual({
@@ -73,8 +72,8 @@ describe('useOmniFilterQuery', () => {
 
 describe('useOmniFilterOptions', () => {
     const lastRequestedQuery = () => {
-        const [filterId, query] =
-            jest.mocked(useInfiniteFilterQuery).mock.lastCall!;
+        const [filterId, query] = jest.mocked(useInfiniteFilterQuery).mock
+            .lastCall!;
         return { filterId, query };
     };
 
@@ -84,7 +83,7 @@ describe('useOmniFilterOptions', () => {
 
     it('should narrow the request by other active filters, excluding its own selection', () => {
         const { result } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/?source_namespace=default&dest_name=api'] },
         );
 
@@ -99,7 +98,7 @@ describe('useOmniFilterOptions', () => {
 
     it('should include the search term as a fuzzy match', () => {
         const { result } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/?dest_name=api'] },
         );
 
@@ -113,7 +112,7 @@ describe('useOmniFilterOptions', () => {
 
     it('should not contribute start_time to the request', () => {
         const { result } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/?start_time=15'] },
         );
 
@@ -148,7 +147,7 @@ describe('useOmniFilterOptions', () => {
         });
 
         const { result } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/'] },
         );
 
@@ -165,7 +164,7 @@ describe('useOmniFilterOptions', () => {
         });
 
         const { result, rerender } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/'] },
         );
 
@@ -181,14 +180,12 @@ describe('useOmniFilterOptions', () => {
             ...queryResponse,
             data: {
                 pageParams: [],
-                pages: [
-                    { items: [{ label: 'Foo', value: 'foo' }], total: 1 },
-                ],
+                pages: [{ items: [{ label: 'Foo', value: 'foo' }], total: 1 }],
             },
         });
 
         const { result } = renderHookWithRouter(
-            () => useOmniFilterOptions(ListOmniFilterKeys.source_namespace),
+            () => useOmniFilterOptions('source_namespace'),
             { routes: ['/'] },
         );
 

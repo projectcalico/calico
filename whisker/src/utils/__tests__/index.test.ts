@@ -1,7 +1,7 @@
 import { createEventSource } from '..';
 import {
-    ListOmniFilterKeys,
-    transformToFlowsFilterQuery,
+    toFlowsFilterQuery,
+    toHintFilterQuery,
     transformToPolicyFilterToRequest,
 } from '../omniFilter';
 
@@ -10,7 +10,7 @@ describe('transformToFilterHintsQuery', () => {
         const destName = 'dest-1';
         const searchText = 'search';
         expect(
-            transformToFlowsFilterQuery(
+            toHintFilterQuery(
                 {
                     dest_name: [destName],
                     dest_namespace: [],
@@ -19,7 +19,7 @@ describe('transformToFilterHintsQuery', () => {
                     reporter: [],
                     policy: [],
                 },
-                ListOmniFilterKeys.dest_namespace,
+                'dest_namespace',
                 searchText,
             ),
         ).toEqual(
@@ -39,7 +39,7 @@ describe('transformToFilterHintsQuery', () => {
         };
 
         expect(
-            transformToFlowsFilterQuery({
+            toFlowsFilterQuery({
                 dest_name: [],
                 dest_namespace: [],
                 source_name: [],
@@ -65,7 +65,7 @@ describe('transformToFilterHintsQuery', () => {
         const destName = 'dest-1';
         const searchText = 'search';
         expect(
-            transformToFlowsFilterQuery(
+            toHintFilterQuery(
                 {
                     dest_name: [destName],
                     dest_namespace: [],
@@ -74,7 +74,7 @@ describe('transformToFilterHintsQuery', () => {
                     policy: [],
                     reporter: [],
                 },
-                ListOmniFilterKeys.dest_name,
+                'dest_name',
                 searchText,
             ),
         ).toEqual(

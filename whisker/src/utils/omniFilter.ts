@@ -136,7 +136,7 @@ export const transformToPolicyFilterToRequest = (values: PolicyFilter[]) =>
 
 export const transformToList = (filters: string[]) => [filters[0]];
 
-export const transformToSinlgeValue = (filters: string[]) => filters[0];
+export const transformToSingleValue = (filters: string[]) => filters[0];
 
 const requestPageSize = 20;
 
@@ -157,33 +157,11 @@ const listFilter = (
     }) as const;
 
 /**
- * @deprecated Use the string-literal FilterId union instead; this enum only
- * remains while call sites migrate to registry-derived types.
- */
-export enum FilterKey {
-    source_name = 'source_name',
-    source_namespace = 'source_namespace',
-    dest_name = 'dest_name',
-    dest_namespace = 'dest_namespace',
-    protocol = 'protocol',
-    dest_port = 'dest_port',
-    policy = 'policy',
-    policyName = 'policyName',
-    policyNamespace = 'policyNamespace',
-    policyTier = 'policyTier',
-    policyKind = 'policyKind',
-    reporter = 'reporter',
-    start_time = 'start_time',
-    action = 'action',
-    staged_action = 'staged_action',
-}
-
-/**
  * Preserves each entry's literal `kind`/`hintType` for the derived types
  * below while exposing every optional OmniFilterProperty field on every
- * entry, and enforces that all FilterKey members are described.
+ * entry.
  */
-const defineFilters = <T extends Record<FilterKey, OmniFilterProperty>>(
+const defineFilters = <T extends Record<string, OmniFilterProperty>>(
     filters: T,
 ) => filters as { [K in keyof T]: T[K] & OmniFilterProperty };
 
@@ -227,7 +205,7 @@ export const OmniFilterProperties = defineFilters({
         // reporter never fetches hints; its option list is fixed below.
         hintType: 'Reporter',
         filterHintsKey: 'reporter',
-        transformToFilterHintRequest: transformToSinlgeValue,
+        transformToFilterHintRequest: transformToSingleValue,
         filterComponentProps: {
             filters: [
                 { label: ReporterLabels.Src, value: 'Src' },
@@ -366,19 +344,15 @@ export type StaticFilterId = IdsOfKind<'static'>;
 /** Every key that can appear as a URL search param. */
 export type UrlFilterKey = Exclude<FilterId, IdsOfKind<'hint'>>;
 
+/** Filters with a bespoke chip component or a bespoke-chip-owned URL param. */
+export type CustomFilterId = IdsOfKind<'custom'>;
+
 /** Filters whose option values can be fetched from flows-filter-hints. */
 export type FilterHintKey = {
     [P in FilterId]: Registry[P] extends { hintType: FilterHintType }
         ? P
         : never;
 }[FilterId];
-
-/** URL params that restart the stream rather than joining the filters blob. */
-export type StreamFilterKey = {
-    [P in UrlFilterKey]: Registry[P] extends { filterHintsKey: string }
-        ? never
-        : P;
-}[UrlFilterKey];
 
 export const filterIds = Object.keys(OmniFilterProperties) as FilterId[];
 
@@ -389,63 +363,11 @@ export const listFilterIds = idsOfKind('list') as ListFilterId[];
 
 export const staticFilterIds = idsOfKind('static') as StaticFilterId[];
 
+export const customFilterIds = idsOfKind('custom') as CustomFilterId[];
+
 export const urlFilterKeys = filterIds.filter(
     (id) => OmniFilterProperties[id].kind !== 'hint',
 ) as UrlFilterKey[];
-
-const filterHintKeyIds = filterIds.filter(
-    (id) => OmniFilterProperties[id].hintType !== undefined,
-) as FilterHintKey[];
-
-const toKeyRecord = <T extends string>(keys: T[]) =>
-    Object.fromEntries(keys.map((key) => [key, key])) as { [P in T]: P };
-
-/** @deprecated Use listFilterIds/staticFilterIds derived from the registry. */
-export const ListOmniFilterKeys = toKeyRecord([
-    ...listFilterIds,
-    ...staticFilterIds,
-]);
-
-/** @deprecated Use ListFilterId. */
-export type DataListOmniFilterParam = ListFilterId;
-
-/** @deprecated Use FilterHintKey and OmniFilterProperties[id].hintType. */
-export const FilterHintKeys = toKeyRecord(filterHintKeyIds);
-
-/** @deprecated Read OmniFilterProperties[id].hintType instead. */
-export const FilterHintTypes = Object.fromEntries(
-    filterHintKeyIds.map((id) => [id, OmniFilterProperties[id].hintType]),
-) as Record<FilterHintKey, FilterHintType>;
-
-/** @deprecated Use StreamFilterKey / the absence of filterHintsKey. */
-export const StreamFilterKeys = toKeyRecord(
-    urlFilterKeys.filter(
-        (id) => OmniFilterProperties[id].filterHintsKey === undefined,
-    ) as StreamFilterKey[],
-);
-
-/** @deprecated Use filterIds. */
-export const OmniFilterKeys = toKeyRecord(filterIds);
-
-/** @deprecated Use FilterId. */
-export type OmniFilterParam = FilterId;
-
-/**
- * @deprecated UI-placement list for the filter bar; the custom chips are
- * hand-placed in OmniFilters and this set disappears with them.
- */
-export const CustomOmniFilterKeys: Pick<
-    typeof FilterKey,
-    'dest_port' | 'policy' | 'reporter' | 'start_time' | 'action'
-> = {
-    [FilterKey.dest_port]: FilterKey.dest_port,
-    [FilterKey.policy]: FilterKey.policy,
-    [FilterKey.reporter]: FilterKey.reporter,
-    [FilterKey.start_time]: FilterKey.start_time,
-    [FilterKey.action]: FilterKey.action,
-} as const;
-
-export type CustomOmniFilterParam = keyof typeof CustomOmniFilterKeys;
 
 export type SelectedOmniFilterValues = Partial<
     Record<Exclude<UrlFilterKey, 'policy'>, string[]>
@@ -453,7 +375,7 @@ export type SelectedOmniFilterValues = Partial<
     policy?: PolicyFilter[];
 };
 
-export type SelectedOmniFilterValuesKey = keyof SelectedOmniFilterValues;
+type SelectedOmniFilterValuesKey = keyof SelectedOmniFilterValues;
 
 /**
  * Folds selected filter values into a FlowsFilter, keyed by each filter's
@@ -518,33 +440,11 @@ export const toHintFilterQuery = (
     return toQueryString(filterHintsQuery);
 };
 
-/** @deprecated Use toFlowsFilterQuery / toHintFilterQuery. */
-export const transformToFlowsFilterQuery = (
-    omniFilterValues: SelectedOmniFilterValues,
-    listFilterId?: FilterHintKey,
-    searchInput?: string,
-) =>
-    listFilterId
-        ? toHintFilterQuery(omniFilterValues, listFilterId, searchInput)
-        : toFlowsFilterQuery(omniFilterValues);
-
-export type ListOmniFiltersData = Record<
-    DataListOmniFilterParam,
-    ListOmniFilterData
->;
-
 export type ListOmniFilterData = {
     filters: ListOmniFilterOption[] | null;
     isLoading: boolean;
     total?: number;
 };
-
-export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
-
-export type SelectedOmniFilterOptions = Record<
-    DataListOmniFilterParam,
-    ListOmniFilterOption[]
->;
 
 export const transformToQueryPage = (
     { items, total }: ApiFilterResponse,

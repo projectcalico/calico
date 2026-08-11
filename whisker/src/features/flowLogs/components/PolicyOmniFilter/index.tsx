@@ -6,7 +6,7 @@ import {
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
-import { FilterKey, OmniFilterProperties } from '@/utils/omniFilter';
+import { OmniFilterProperties, UrlFilterKey } from '@/utils/omniFilter';
 import { Text as ChakraText, Flex } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
@@ -25,10 +25,10 @@ const checkIsNoPolicy = (selectedValues: PolicyFilter[]) =>
     selectedValues[0].kind === NO_POLICY_KIND;
 
 type PolicyOmniFilterProps = {
-    onChange: (filterId: FilterKey, value: string) => void;
+    onChange: (filterId: UrlFilterKey, value: string) => void;
     onClear: () => void;
     selectedFilters: PolicyFilter[];
-    filterId: FilterKey;
+    filterId: UrlFilterKey;
 };
 
 const testId = 'policy-omni-filter';
@@ -49,10 +49,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
         const filterOptions = transformToFilterOptions(queryState);
 
         if (noPolicyChecked) {
-            onChange(FilterKey.policy, NO_POLICY_VALUE);
+            onChange('policy', NO_POLICY_VALUE);
         } else {
             onChange(
-                FilterKey.policy,
+                'policy',
                 filterOptions.length ? JSON.stringify(filterOptions) : '',
             );
         }
@@ -76,7 +76,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
             {({ onClose }) => (
                 <>
                     <OmniFilterTrigger
-                        label={OmniFilterProperties[FilterKey.policy].label}
+                        label={OmniFilterProperties.policy.label}
                         testId={testId}
                         onClick={handleTriggerClick}
                         isActive={isActive}

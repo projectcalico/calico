@@ -1,5 +1,4 @@
 import { act, render, screen } from '@/test-utils/helper';
-import { FilterKey } from '@/utils/omniFilter';
 import PolicySelect from '..';
 
 const mockRequestOptions = jest.fn();
@@ -73,7 +72,7 @@ jest.mock('@/libs/tigera/ui-components/components/common/OmniFilter', () => {
 });
 
 const defaultProps = {
-    filterKey: FilterKey.policyKind as any,
+    filterKey: 'policyKind' as any,
     value: null as any,
     onChange: jest.fn(),
     placeholder: 'Select...',
@@ -101,7 +100,7 @@ describe('<PolicySelect />', () => {
     it('passes filterId and filterLabel to OmniFilter', () => {
         render(<PolicySelect {...defaultProps} />);
 
-        expect(omniFilterProps.filterId).toBe(FilterKey.policyKind);
+        expect(omniFilterProps.filterId).toBe('policyKind');
         expect(omniFilterProps.filterLabel).toBe('');
     });
 
@@ -145,7 +144,7 @@ describe('<PolicySelect />', () => {
         render(<PolicySelect {...defaultProps} />);
 
         expect(mockHookArgs).toEqual([
-            FilterKey.policyKind,
+            'policyKind',
             { narrowByActiveFilters: false },
         ]);
     });

@@ -1,8 +1,4 @@
 import { act, render, screen, waitFor } from '@/test-utils/helper';
-import {
-    CustomOmniFilterKeys,
-    CustomOmniFilterParam,
-} from '@/utils/omniFilter';
 import userEvent from '@testing-library/user-event';
 import PortOmniFilter from '..';
 
@@ -23,7 +19,7 @@ const defaultProps = {
     protocol: undefined as any,
     selectedFilters: null,
     filterLabel: '',
-    filterId: CustomOmniFilterKeys.dest_port as CustomOmniFilterParam,
+    filterId: 'dest_port' as const,
     onChange: jest.fn(),
 };
 

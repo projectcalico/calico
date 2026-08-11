@@ -1,5 +1,4 @@
 import { act, fireEvent, render, screen } from '@/test-utils/helper';
-import { FilterKey } from '@/utils/omniFilter';
 import PolicyOmniFilter from '..';
 import { transformToFilterOptions, transformToQueries } from '../utils';
 
@@ -36,7 +35,7 @@ const defaultProps = {
     onChange: jest.fn(),
     onClear: jest.fn(),
     selectedFilters: [] as any[],
-    filterId: FilterKey.policy,
+    filterId: 'policy' as const,
 };
 
 const openPopover = () => {
@@ -114,7 +113,7 @@ describe('<PolicyOmniFilter />', () => {
         fireEvent.click(screen.getByText('Update'));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith(
-            FilterKey.policy,
+            'policy',
             JSON.stringify(mockFilters),
         );
     });
@@ -127,10 +126,7 @@ describe('<PolicyOmniFilter />', () => {
 
         fireEvent.click(screen.getByText('Update'));
 
-        expect(defaultProps.onChange).toHaveBeenCalledWith(
-            FilterKey.policy,
-            '',
-        );
+        expect(defaultProps.onChange).toHaveBeenCalledWith('policy', '');
     });
 
     it('calls onChange with no-policy value when no-policy is checked', () => {
@@ -145,7 +141,7 @@ describe('<PolicyOmniFilter />', () => {
         fireEvent.click(screen.getByText('Update'));
 
         expect(defaultProps.onChange).toHaveBeenCalledWith(
-            FilterKey.policy,
+            'policy',
             '[{"kind": "Profile"}]',
         );
     });

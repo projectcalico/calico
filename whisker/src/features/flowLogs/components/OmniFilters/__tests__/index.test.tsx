@@ -106,9 +106,9 @@ describe('<OmniFilters />', () => {
     it('should render a list filter chip with its selection from the URL', () => {
         renderOmniFilters('/?source_name=web&source_name=api');
 
-        expect(
-            screen.getByTestId('list-filter-source_name'),
-        ).toHaveTextContent('Source selected=web,api');
+        expect(screen.getByTestId('list-filter-source_name')).toHaveTextContent(
+            'Source selected=web,api',
+        );
     });
 
     it('should render every generic filter chip', () => {

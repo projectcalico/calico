@@ -4,11 +4,10 @@ import { OmniFilterList } from '@/libs/tigera/ui-components/components/common';
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { parseStartTime } from '@/utils';
 import {
-    CustomOmniFilterKeys,
-    FilterKey,
-    ListOmniFilterKeys,
-    OmniFilterKeys,
+    customFilterIds,
+    listFilterIds,
     OmniFilterProperties,
+    staticFilterIds,
 } from '@/utils/omniFilter';
 import React from 'react';
 import ActionOmniFilter from '../ActionOmniFilter';
@@ -16,12 +15,9 @@ import ListOmniFilter from '../ListOmniFilter';
 import PolicyOmniFilter from '../PolicyOmniFilter';
 import StartTimeOmniFilter from '../StartTimeOmniFilter';
 
-const listOmniFilterIds = Object.values(ListOmniFilterKeys);
+const listOmniFilterIds = [...listFilterIds, ...staticFilterIds];
 
-const omniFilterIds = [
-    ...listOmniFilterIds,
-    ...Object.values(CustomOmniFilterKeys),
-];
+const omniFilterIds = [...listOmniFilterIds, ...customFilterIds];
 
 const OmniFilters: React.FC = () => {
     const {
@@ -56,9 +52,9 @@ const OmniFilters: React.FC = () => {
                 <PolicyOmniFilter
                     key='policy-omni-filter'
                     onChange={handlePolicyFilterChange}
-                    filterId={CustomOmniFilterKeys.policy}
+                    filterId='policy'
                     selectedFilters={selectedValues.policy ?? []}
-                    onClear={() => handleClear(FilterKey.policy)}
+                    onClear={() => handleClear('policy')}
                 />
 
                 {listOmniFilterIds.map((filterId) => (
@@ -82,23 +78,17 @@ const OmniFilters: React.FC = () => {
                     ]}
                     onChange={({ protocol, port }) =>
                         setMultiFilter({
-                            [OmniFilterKeys.protocol]: protocol
-                                ? [protocol]
-                                : [],
-                            [OmniFilterKeys.dest_port]: port ? [port] : [],
+                            protocol: protocol ? [protocol] : [],
+                            dest_port: port ? [port] : [],
                         })
                     }
-                    filterId={CustomOmniFilterKeys.dest_port}
-                    filterLabel={
-                        OmniFilterProperties[OmniFilterKeys.dest_port].label
-                    }
+                    filterId='dest_port'
+                    filterLabel={OmniFilterProperties.dest_port.label}
                 />
 
                 <ActionOmniFilter
-                    filterId={CustomOmniFilterKeys.action}
-                    filterLabel={
-                        OmniFilterProperties[CustomOmniFilterKeys.action].label
-                    }
+                    filterId='action'
+                    filterLabel={OmniFilterProperties.action.label}
                     value={{
                         action: selectedValues.action?.[0],
                         staged_action: selectedValues.staged_action?.[0],
@@ -109,24 +99,19 @@ const OmniFilters: React.FC = () => {
                     ]}
                     onChange={({ action, staged_action }) =>
                         setMultiFilter({
-                            [OmniFilterKeys.action]: action ? [action] : [],
-                            [OmniFilterKeys.staged_action]: staged_action
-                                ? [staged_action]
-                                : [],
+                            action: action ? [action] : [],
+                            staged_action: staged_action ? [staged_action] : [],
                         })
                     }
                 />
 
                 <StartTimeOmniFilter
-                    filterId={CustomOmniFilterKeys.start_time}
-                    filterLabel={
-                        OmniFilterProperties[CustomOmniFilterKeys.start_time]
-                            .label
-                    }
+                    filterId='start_time'
+                    filterLabel={OmniFilterProperties.start_time.label}
                     selectedFilters={selectedValues.start_time ?? null}
                     value={startTime.toString()}
                     onChange={handleChange}
-                    onReset={() => handleClear(CustomOmniFilterKeys.start_time)}
+                    onReset={() => handleClear('start_time')}
                 />
             </OmniFilterList>
         </>

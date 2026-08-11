@@ -92,12 +92,11 @@ const renderListOmniFilter = (
         { routes: [route] },
     );
 
-const currentSearch = () =>
-    screen.getByTestId('location-search').textContent;
+const currentSearch = () => screen.getByTestId('location-search').textContent;
 
 const lastRequestedQuery = () => {
-    const [filterId, query] =
-        jest.mocked(useInfiniteFilterQuery).mock.lastCall!;
+    const [filterId, query] = jest.mocked(useInfiniteFilterQuery).mock
+        .lastCall!;
     return { filterId, query };
 };
 

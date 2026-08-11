@@ -1,6 +1,6 @@
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { CustomOmniFilterParam } from '@/utils/omniFilter';
+import { UrlFilterKey } from '@/utils/omniFilter';
 import React from 'react';
 import StartTimeFilter from './components/StartTimeFilter';
 
@@ -25,7 +25,7 @@ const options = [
 type StartTimeOmniFilterProps = {
     selectedFilters: string[] | null;
     filterLabel: string;
-    filterId: CustomOmniFilterParam;
+    filterId: UrlFilterKey;
     onChange: (event: OmniFilterChangeEvent) => void;
     onReset: () => void;
     value: string;

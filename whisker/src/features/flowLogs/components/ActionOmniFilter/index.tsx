@@ -7,11 +7,7 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
-import {
-    CustomOmniFilterParam,
-    FilterKey,
-    OmniFilterProperties,
-} from '@/utils/omniFilter';
+import { OmniFilterProperties, UrlFilterKey } from '@/utils/omniFilter';
 import { InfoOutlineIcon } from '@chakra-ui/icons';
 import {
     Flex,
@@ -27,7 +23,7 @@ import { radioStyles } from './styles';
 
 const testId = 'action-omni-filter';
 
-type ActionKeys = FilterKey.action | FilterKey.staged_action;
+type ActionKeys = 'action' | 'staged_action';
 
 type ActionOmniFilterProps = {
     onChange: (event: {
@@ -36,7 +32,7 @@ type ActionOmniFilterProps = {
     }) => void;
     selectedFilters: string[];
     filterLabel: string;
-    filterId: CustomOmniFilterParam;
+    filterId: UrlFilterKey;
     value: Record<ActionKeys, string | undefined>;
 };
 
@@ -77,15 +73,13 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
             <OmniFilterTrigger
                 isOpen={isOpen}
                 onClick={onToggle}
-                label={OmniFilterProperties[FilterKey.action].label}
+                label={OmniFilterProperties.action.label}
                 isActive={isActive}
                 testId={testId}
                 selectedValueLabel=''
                 customContent={
                     <Flex>
-                        <Text>
-                            {OmniFilterProperties[FilterKey.action].label}
-                        </Text>
+                        <Text>{OmniFilterProperties.action.label}</Text>
                         {isActive && <Badge ml={2}>{filterCount}</Badge>}
                     </Flex>
                 }
@@ -96,17 +90,17 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                     <FormControl>
                         <FormLabel
                             showClearButton={!!actions.action}
-                            onClear={() => handleClear(FilterKey.action)}
+                            onClear={() => handleClear('action')}
                             clearButtonAriaLabel='Clear Action'
-                            htmlFor={FilterKey.action}
+                            htmlFor='action'
                         >
                             <Text lineHeight='1'>Action</Text>
                         </FormLabel>
                         <RadioToggle
-                            name={FilterKey.action}
+                            name='action'
                             value={actions.action}
                             onChange={(action) =>
-                                handleChange(FilterKey.action, action)
+                                handleChange('action', action)
                             }
                             options={radioOptions}
                             containerStyles={radioStyles}
@@ -117,9 +111,9 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                     <FormControl mt={4}>
                         <FormLabel
                             showClearButton={!!actions.staged_action}
-                            onClear={() => handleClear(FilterKey.staged_action)}
+                            onClear={() => handleClear('staged_action')}
                             clearButtonAriaLabel='Clear Staged Action'
-                            htmlFor={FilterKey.staged_action}
+                            htmlFor='staged_action'
                         >
                             <Flex alignItems='center' gap={1}>
                                 <Text lineHeight='1'>Staged Action</Text>
@@ -131,12 +125,9 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
 
                         <RadioToggle
                             value={actions.staged_action}
-                            name={FilterKey.staged_action}
+                            name='staged_action'
                             onChange={(staged_action) =>
-                                handleChange(
-                                    FilterKey.staged_action,
-                                    staged_action,
-                                )
+                                handleChange('staged_action', staged_action)
                             }
                             options={radioOptions}
                             containerStyles={radioStyles}

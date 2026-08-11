@@ -7,20 +7,16 @@ import {
 import { FlowsFilter } from '@/types/api';
 import { parseStartTime } from '..';
 import {
-    CustomOmniFilterKeys,
-    FilterHintKeys,
-    FilterHintTypes,
-    FilterKey,
-    ListOmniFilterKeys,
-    OmniFilterKeys,
+    filterIds,
+    listFilterIds,
     OmniFilterProperties,
     SelectedOmniFilterValues,
-    StreamFilterKeys,
-    transformToFlowsFilterQuery,
+    toFlowsFilterQuery,
+    toHintFilterQuery,
     transformToList,
     transformToPolicyFilterToRequest,
     transformToQueryPage,
-    transformToSinlgeValue,
+    transformToSingleValue,
     urlFilterKeys,
 } from '../omniFilter';
 
@@ -54,7 +50,7 @@ const urlToStreamPath = (url: string) => {
 
     return buildStreamPath(
         transformStartTime(startTime),
-        transformToFlowsFilterQuery(filterHintValues),
+        toFlowsFilterQuery(filterHintValues),
     );
 };
 
@@ -62,7 +58,7 @@ const urlToStreamPath = (url: string) => {
 const urlToFlowsFilter = (url: string): FlowsFilter => {
     const { start_time: _startTime, ...filterHintValues } =
         parseFiltersFromParams(new URLSearchParams(url));
-    const query = transformToFlowsFilterQuery(filterHintValues);
+    const query = toFlowsFilterQuery(filterHintValues);
 
     return query === '' ? {} : JSON.parse(query);
 };
@@ -340,7 +336,7 @@ describe('URL -> flows filter query', () => {
 
     it('should omit a filter whose value list is empty', () => {
         expect(
-            transformToFlowsFilterQuery({
+            toFlowsFilterQuery({
                 source_name: [],
                 dest_name: undefined,
             }),
@@ -352,11 +348,11 @@ describe('URL -> flows filter query', () => {
         // hint. FlowLogsPage strips it before building the query, but if it
         // slips through, the query must not gain a start_time constraint:
         // keys without a wire key are skipped, leaving an empty query.
-        expect(transformToFlowsFilterQuery({ start_time: ['15'] })).toBe('');
+        expect(toFlowsFilterQuery({ start_time: ['15'] })).toBe('');
     });
 
     it('should return an empty string when nothing is filtered', () => {
-        expect(transformToFlowsFilterQuery({})).toBe('');
+        expect(toFlowsFilterQuery({})).toBe('');
     });
 
     it('should ignore a URL carrying the unsupported pending_action param', () => {
@@ -398,7 +394,7 @@ describe('URL -> flows filter query', () => {
             };
 
             const query = JSON.parse(
-                transformToFlowsFilterQuery(values, 'source_namespace', 'kube'),
+                toHintFilterQuery(values, 'source_namespace', 'kube'),
             );
 
             expect(query).toEqual({
@@ -414,9 +410,7 @@ describe('URL -> flows filter query', () => {
             };
 
             expect(
-                JSON.parse(
-                    transformToFlowsFilterQuery(values, 'source_namespace'),
-                ),
+                JSON.parse(toHintFilterQuery(values, 'source_namespace')),
             ).toEqual({ dest_names: [{ type: 'Exact', value: 'api' }] });
         });
 
@@ -436,11 +430,9 @@ describe('URL -> flows filter query', () => {
                 searchesByFilter,
             )) {
                 const query = JSON.parse(
-                    transformToFlowsFilterQuery(
+                    toHintFilterQuery(
                         {},
-                        filterId as Parameters<
-                            typeof transformToFlowsFilterQuery
-                        >[1],
+                        filterId as Parameters<typeof toHintFilterQuery>[1],
                         'allow',
                     ),
                 );
@@ -495,16 +487,10 @@ describe('URL -> flows stream path', () => {
 });
 
 describe('filter key metadata', () => {
-    // Structural invariants over OmniFilterProperties. A refactor that adds a
-    // filter key or renames a wire key trips these instead of silently
+    // Structural invariants over the filter registry. A registry edit that
+    // renames a wire key or forgets a field trips these instead of silently
     // shipping a filter that never reaches the backend.
-    const allKeys = Object.values(OmniFilterKeys);
-
-    it('should describe every omni filter key', () => {
-        expect(allKeys.sort()).toEqual(
-            Object.keys(OmniFilterProperties).sort(),
-        );
-    });
+    const allKeys = filterIds;
 
     it.each(allKeys)('should give %s a label', (key) => {
         expect(OmniFilterProperties[key].label).toBeTruthy();
@@ -514,32 +500,33 @@ describe('filter key metadata', () => {
         allKeys.filter(
             (key) =>
                 // start_time is applied as startTimeGte, not as a filter hint.
-                key !== FilterKey.start_time,
+                key !== 'start_time',
         ),
     )('should give %s a filter hints key', (key) => {
         expect(OmniFilterProperties[key].filterHintsKey).toBeTruthy();
     });
 
-    it('should map every filter hint key to a hint type', () => {
-        expect(Object.keys(FilterHintTypes).sort()).toEqual(
-            Object.keys(FilterHintKeys).sort(),
-        );
+    it('should give every fetching filter a hint type', () => {
+        // 'list' chips and 'hint' lookups autocomplete their values from
+        // flows-filter-hints, so they must name the ?type= to request.
+        for (const key of allKeys) {
+            const { kind, hintType } = OmniFilterProperties[key];
+
+            if (kind === 'list' || kind === 'hint') {
+                expect(hintType).toBeTruthy();
+            }
+        }
     });
 
     it('should give every list filter a page size', () => {
-        for (const key of Object.values(ListOmniFilterKeys)) {
-            if (key === FilterKey.reporter) {
-                // reporter is a fixed radio list, not a paged data list.
-                continue;
-            }
-
+        for (const key of listFilterIds) {
             expect(OmniFilterProperties[key].limit).toBeGreaterThan(0);
         }
     });
 
     it('should not reuse a filter hints key for two different filters', () => {
         const hintKeys = allKeys
-            .filter((key) => key !== FilterKey.start_time)
+            .filter((key) => key !== 'start_time')
             .map((key) => OmniFilterProperties[key].filterHintsKey);
 
         expect(new Set(hintKeys).size).toBe(hintKeys.length);
@@ -569,26 +556,26 @@ describe('filter key metadata', () => {
         // registry entry and crashed the page; it must stay unaccepted
         // (staged_action is the filter that maps onto pending_actions).
         expect(
-            parseFiltersFromParams(
-                new URLSearchParams('pending_action=Allow'),
-            ),
+            parseFiltersFromParams(new URLSearchParams('pending_action=Allow')),
         ).toEqual({});
     });
 
-    it('should classify start_time as a stream filter and a custom filter', () => {
+    it('should classify start_time as a stream-only custom filter', () => {
         // start_time restarts the stream (startTimeGte) rather than being a
-        // filter hint, and it renders as a custom omni filter component.
-        expect(Object.values(StreamFilterKeys)).toEqual([FilterKey.start_time]);
-        expect(CustomOmniFilterKeys.start_time).toBe(FilterKey.start_time);
+        // filter hint - it has no wire key - and it renders as a custom omni
+        // filter component while still living on the URL.
+        expect(OmniFilterProperties.start_time.kind).toBe('custom');
+        expect(OmniFilterProperties.start_time.filterHintsKey).toBeUndefined();
+        expect(urlFilterKeys).toContain('start_time');
     });
 
     it('should point every policy sub-filter at the policies parent key', () => {
         for (const key of [
-            FilterKey.policyName,
-            FilterKey.policyNamespace,
-            FilterKey.policyTier,
-            FilterKey.policyKind,
-        ]) {
+            'policyName',
+            'policyNamespace',
+            'policyTier',
+            'policyKind',
+        ] as const) {
             expect(OmniFilterProperties[key].parentFilterKey).toBe('policies');
         }
     });
@@ -597,8 +584,7 @@ describe('filter key metadata', () => {
 describe('reporter filter component props', () => {
     // The reporter omni filter is a fixed radio list rather than a paged data
     // list, so its behaviour lives in filterComponentProps.
-    const componentProps =
-        OmniFilterProperties[FilterKey.reporter].filterComponentProps!;
+    const componentProps = OmniFilterProperties.reporter.filterComponentProps!;
 
     it('should offer exactly the Source and Destination options', () => {
         expect(componentProps.filters).toEqual([
@@ -635,8 +621,7 @@ describe('transformToListFilter', () => {
         // List filters share this transform; an absent value must behave the
         // same as an empty selection and produce no query fragment.
         expect(
-            OmniFilterProperties[FilterKey.protocol]
-                .transformToFilterHintRequest!(
+            OmniFilterProperties.protocol.transformToFilterHintRequest!(
                 undefined as unknown as string[],
             ),
         ).toBeUndefined();
@@ -679,9 +664,9 @@ describe('transformToList', () => {
     });
 });
 
-describe('transformToSinlgeValue', () => {
+describe('transformToSingleValue', () => {
     it('should unwrap the first value', () => {
-        expect(transformToSinlgeValue(['Src', 'Dst'])).toBe('Src');
+        expect(transformToSingleValue(['Src', 'Dst'])).toBe('Src');
     });
 });
 

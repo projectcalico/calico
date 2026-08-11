@@ -43,10 +43,9 @@ jest.mock(
     },
 );
 
-jest.mock(
-    '@/features/flowLogs/components/OmniFilters',
-    () => () => <>MockOmniFilters</>,
-);
+jest.mock('@/features/flowLogs/components/OmniFilters', () => () => (
+    <>MockOmniFilters</>
+));
 
 const useStreamStub = {
     stopStream: jest.fn(),
