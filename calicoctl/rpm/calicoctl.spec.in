@@ -1,0 +1,47 @@
+Name:           calicoctl
+Summary:        CLI tool for Project Calico
+Version:        -- filled in by 'make rpm' when building packages --
+Release:        -- filled in by 'make rpm' when building packages --
+License:        ASL 2.0
+URL:            http://projectcalico.org
+Source0:        calicoctl-%{version}.tar.gz
+Group:          Applications/Engineering
+
+
+%define _unpackaged_files_terminate_build 0
+
+
+%description
+Project Calico is an open source solution for virtual networking in
+cloud data centers. Its IP-centric architecture offers numerous
+advantages over other cloud networking approaches such as VLANs and
+overlays, including scalability, efficiency, and simplicity. It is
+designed for a wide range of environments including OpenStack,
+lightweight Linux containers (LXCs), bare metal, and Network Functions
+Virtualization (NFV).
+
+This package provides the calicoctl command line tool.
+
+
+%prep
+%setup -q
+
+%build
+
+%install
+rm -rf $RPM_BUILD_ROOT
+install -d $RPM_BUILD_ROOT%{_bindir}
+install -m 755 bin/calicoctl $RPM_BUILD_ROOT%{_bindir}/
+
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+
+%files
+%defattr(-,root,root,-)
+%{_bindir}/calicoctl
+%doc
+
+
+%changelog

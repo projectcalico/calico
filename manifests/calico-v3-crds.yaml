@@ -66,7 +66,7 @@ data:
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
+      "cniVersion": "1.0.0",
       "plugins": [
         {
           "type": "calico",
@@ -2430,17 +2430,13 @@ spec:
                     packets from external sources are dropped. [Default: true]
                   type: boolean
                 bpfJITHardening:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Strict
-                    - enum:
-                        - Auto
-                        - Strict
                   description: |-
                     BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
+                  enum:
+                    - Auto
+                    - Strict
                   type: string
                 bpfKubeProxyHealthzPort:
                   description: |-
@@ -3351,6 +3347,11 @@ spec:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
                     This determines how the server validates client certificates. Default is "NoClientCert".
+                  enum:
+                    - RequireAndVerifyClientCert
+                    - RequireAnyClientCert
+                    - VerifyClientCertIfGiven
+                    - NoClientCert
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -5887,8 +5888,8 @@ spec:
                   description: |-
                     ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
                     Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -12309,6 +12310,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -13517,9 +13519,39 @@ webhooks:
           - CREATE
           - UPDATE
           - DELETE
+          - CONNECT
         resources:
           - networkpolicies
           - globalnetworkpolicies
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
+        scope: '*'
+  # Blocks user writes to ClusterInformation, which is managed by Calico system components.
+  # This mirrors the write protection provided by the aggregated API server.
+  - name: cluster-info.api.projectcalico.org
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      # Replace with the CA bundle for the webhook TLS certificate.
+      caBundle: ""
+      service:
+        name: calico-webhooks
+        namespace: kube-system
+        path: /cluster-info
+    # Ignore rather than Fail: calico-node and typha write ClusterInformation at startup,
+    # so a cluster restart must not depend on the webhook being up.
+    failurePolicy: Ignore
+    sideEffects: None
+    timeoutSeconds: 5
+    rules:
+      - apiGroups:
+          - projectcalico.org
+        apiVersions:
+          - v3
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - clusterinformations
+        scope: '*'

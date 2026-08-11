@@ -316,6 +316,13 @@ why the identification mechanism differs per driver:
 - A change that makes a driver mutate the kernel before in-sync
   defeats the deferred-cleanup safety and risks deleting
   not-yet-seen state.
+- Among Felix's *own* producers, `(RouteClass, ifaceName)` is the
+  ownership key: `RouteTable.SetRoutes()` **replaces** the whole
+  desired set for that pair, so two managers that write to the same
+  pair silently delete each other's routes. Each independent producer
+  therefore needs its own class — which is why the same-subnet routes
+  (shared parent device) and the IPAM-block drop routes (shared
+  `InterfaceNone`) are split per encapsulation type.
 
 ### Fail closed while Felix isn't running
 
@@ -413,6 +420,17 @@ reconciliation of `*tables` chains and rules. The model:
   free: Felix still computes the hash delta and reprograms only
   changed rules, partly to avoid resetting iptables packet/byte
   counters on rules that didn't change.
+- **nftables rebuilds the table atomically after repeated
+  failures.** When `Apply()` has failed several times in a row, the
+  nftables backend recreates the table in case the change it is
+  trying to make is incompatible with the current state. The
+  `delete table` and `add table` go in the *same* transaction as
+  the rewrite of every chain and rule, and the sets and maps in the
+  table are marked for reprogramming at the same time. A failed
+  attempt therefore leaves the existing ruleset alone rather than
+  stripping the base chains and their hooks, which would leave
+  traffic unfiltered. iptables has no equivalent; its retry loop
+  only backs off.
 
 ### iptables vs nftables: parity and divergence
 
@@ -597,11 +615,45 @@ Legitimate asymmetries are rare on the `*tables` path. Two notes:
   table, but was kept as two to track the iptables structure for
   porting ease.
 
+### Cross-cutting components that feed the per-family managers
+
+Not everything is duplicated per family. Some components are
+deliberately **single instances that feed the per-family managers**.
+The live migration monitor (`dataplane/linux/live_migration.go`) is
+the model: one FSM per workload, driven by GARP detection and timers
+that have nothing to do with IP family, whose state changes are then
+pushed into the endpoint managers — which own the per-family route
+programming.
+
+For those components the dual-stack trap is not "did you duplicate
+the code" but **"did you fan out to every family's manager"**. A
+singleton holding a *single* reference to its downstream manager
+silently serves IPv4 only, and nothing fails loudly: the IPv6
+manager simply never learns the state, so its routes keep their
+default behaviour. That was CORE-12806 — the live migration
+monitor's `listener` field was assigned the IPv4 endpoint manager
+only, so IPv6 workload routes were never suppressed on a migration
+target nor elevated after cutover, and IPv6 traffic to a migrating
+VM could black-hole for the duration of the migration. Prefer a list
+plus an explicit registration call (`registerListener`) over a
+single-valued field: a missing family then shows up as a missing
+call at the construction site in `int_dataplane.go`, alongside the
+`RegisterManager` call it belongs with.
+
 ### Review notes for this section
 
 - A dataplane change must be applied symmetrically to the IPv4 and
   IPv6 manager/driver instances unless there's a specific reason not
   to. "Works on v4, forgot v6" is a recurring bug.
+- A cross-cutting (non-per-family) component that pushes state into
+  the per-family managers must be wired to **all** of them. Check the
+  construction site in `int_dataplane.go`: every per-family manager
+  the component needs should have a matching registration call. A
+  single-valued reference field where a list belongs is the smell.
+- Dual-stack behaviour needs dual-stack tests. A per-family manager's
+  own unit tests may already run for both families and still pass
+  while the family is disconnected upstream; the registration itself
+  and at least one FV path need explicit IPv6 coverage.
 
 ## Windows (contrast)
 

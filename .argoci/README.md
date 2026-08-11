@@ -32,6 +32,29 @@ handler also reads crons from a fixed `.argoci/cron/` path, so nesting would
 require a handler change for no gain. Scope ownership with path-specific
 `CODEOWNERS` entries (e.g. `.argoci/cron/`) rather than directories.
 
+## CI-account env must be set here, not left to banzai-core
+
+banzai-core's `Taskvars` defaults point at the **tigera-dev developer** account.
+The CI IAM user can't use them, so any variable whose default names an account
+resource has to be exported by this prologue — Semaphore did the same in its
+own prologue, and a missing one fails at provision time, not at startup:
+
+| Variable | banzai-core default | Needed by CI |
+|---|---|---|
+| `KOPS_STATE_STORE_NAME` | `kops-tigera-dev` (403) | `kops-tigera-dev-ci` |
+| `KOPS_AWS_DNS_ZONE` | `kops.crc.aws.eng.tigera.net` (no zone) | `kops.ci.aws.eng.tigera.net` |
+| `OPENSHIFT_BASE_DOMAIN` | `openshift.crc.aws.eng.tigera.net` (no zone) | `openshift.ci.aws.eng.tigera.net` |
+| `AZ_PROJECT` (a subscription *name*) | `tigera-dev` | `tigera-dev-ci` |
+
+Semaphore vars deliberately **not** ported, so the next audit doesn't re-add
+them: `KOPS_VERSION`/`RKE_VERSION` (banzai-core resolves or pins these, and
+Semaphore's GitHub-API lookup is rate-limit-prone); `DOCKER_EE_*` /
+`DOCKER_UCP_VERSION` (superseded by banzai-core's newer `MKE_VERSION`);
+`AZ_LOCATION`, `ENABLE_ALP` (defaults already match); `NUM_INFRA_NODES`,
+`TEST_TYPE`, `GOOGLE_REGION`, `GOOGLE_ZONE` (set per-job by the crons);
+`BZ_*`, `BANZAI_CORE_BRANCH`, `SEMAPHORE_*` (Semaphore-runner specific — the
+ArgoCI equivalents are `BZ_HOME`/`BZ_LOCAL_DIR`/`BZ_GLOBAL_BIN`).
+
 ## Cron naming (branchless)
 
 Cron filenames and their `generateName` carry **no branch** —
