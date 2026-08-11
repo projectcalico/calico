@@ -152,66 +152,64 @@ var _ = describe.CalicoDescribe(
 		})
 
 		ginkgo.It("should not be advertised over BGP by nodes that do not own them", func() {
-			// Work out which node owns which block out of the test pool.
-			blocks := &v3.IPAMBlockList{}
-			err = cli.List(context.Background(), blocks)
-			Expect(err).NotTo(HaveOccurred(), "Error listing IPAM blocks")
-
-			ownerByBlock := map[string]string{}
-			for _, b := range blocks.Items {
-				if !strings.HasPrefix(b.Spec.CIDR, poolCIDRPrefix(poolCIDR)) {
-					continue
-				}
-				if b.Spec.Affinity == nil {
-					continue
-				}
-				// Affinity is "host:<nodename>".
-				owner := strings.TrimPrefix(*b.Spec.Affinity, "host:")
-				if owner == *b.Spec.Affinity {
-					continue
-				}
-				ownerByBlock[b.Spec.CIDR] = owner
-			}
-			Expect(len(ownerByBlock)).To(BeNumerically(">=", 2),
-				"expected at least two nodes to own a block out of %s, got %v", poolCIDR, ownerByBlock)
-			logrus.Infof("Block ownership under test: %v", ownerByBlock)
-
 			nodes := &corev1.NodeList{}
 			err = cli.List(context.Background(), nodes)
 			Expect(err).NotTo(HaveOccurred(), "Error listing nodes")
 
-			// Guard against asserting nothing: pick a node and one of the blocks it does not own,
-			// and require that node's route to it to be Felix's rather than BIRD's.
-			for blockCIDR, owner := range ownerByBlock {
-				for _, node := range nodes.Items {
-					if node.Name != owner {
-						expectFelixOwnsRemoteRoutes(f, node.Name, blockCIDR)
-						break
-					}
-				}
-				break
-			}
+			// Guard against asserting nothing: somewhere in the cluster Felix has to be
+			// programming a route to a block it does not own, or there is nothing to leak.
+			expectFelixProgramsARemoteBlockRoute(f, nodes, poolCIDR)
 
-			// For each node, every block it is exporting must be one it owns. Give BIRD a moment
-			// to converge after the ownership switch before holding it to that.
+			// A node's own block reaches its BGP peers as the blackhole route that confd puts
+			// in bird_aggr.cfg from the block affinity. Anything else it exports for this pool
+			// -- in practice a "via <node> on tunl0" -- is a route it learned from the kernel
+			// because Felix programmed it, and is not this node's to advertise.
 			Eventually(func(g Gomega) {
 				for _, node := range nodes.Items {
-					exported := blocksExportedByNode(f, node.Name, poolCIDR)
-					for _, cidr := range exported {
-						owner, known := ownerByBlock[cidr]
-						g.Expect(known).To(BeTrue(),
-							"node %s is exporting %s, which is not a block of pool %s",
-							node.Name, cidr, poolCIDR)
-						g.Expect(owner).To(Equal(node.Name),
-							"node %s is exporting %s, which is owned by %s; a node must only "+
-								"advertise its own blocks, but Felix's route to a remote block is "+
-								"learned by BIRD from the kernel and re-advertised",
-							node.Name, cidr, owner)
-					}
+					leaked := nonBlackholePoolExports(f, node.Name, poolCIDR)
+					g.Expect(leaked).To(BeEmpty(),
+						"node %s is exporting %v over BGP. A node should only advertise its own "+
+							"blocks, which it does as blackhole routes; these are Felix's routes "+
+							"to other nodes' blocks, learned by BIRD from the kernel and "+
+							"re-advertised", node.Name, leaked)
 				}
 			}, 60*time.Second, 5*time.Second).Should(Succeed())
 		})
 	})
+
+// expectFelixProgramsARemoteBlockRoute fails unless some node has a route to a block of poolCIDR
+// that it does not own -- a "via" route rather than a blackhole -- and that route is Felix's
+// rather than BIRD's. Without that there is nothing for the export assertion to catch, and it
+// would pass on a cluster where Felix never programmed anything.
+func expectFelixProgramsARemoteBlockRoute(f *framework.Framework, nodes *corev1.NodeList, poolCIDR string) {
+	ginkgo.GinkgoHelper()
+
+	prefix := poolCIDRPrefix(poolCIDR)
+	Eventually(func(g Gomega) {
+		for _, node := range nodes.Items {
+			pod := utils.GetCalicoNodePodOnNode(f.ClientSet, node.Name)
+			if pod == nil {
+				continue
+			}
+			out, err := utils.ExecInCalicoNode(pod, "ip route show")
+			if err != nil {
+				continue
+			}
+			for _, line := range strings.Split(out, "\n") {
+				if !strings.HasPrefix(strings.TrimSpace(line), prefix) || !strings.Contains(line, " via ") {
+					continue
+				}
+				g.Expect(line).NotTo(ContainSubstring("proto bird"),
+					"node %s's route to a remote block is BIRD's, not Felix's (%s); this test "+
+						"needs a Felix-routed cluster", node.Name, strings.TrimSpace(line))
+				logrus.Infof("Felix-programmed remote block route on %s: %s", node.Name, strings.TrimSpace(line))
+				return
+			}
+		}
+		g.Expect(false).To(BeTrue(),
+			"no node has a route to a remote block of %s, so there is nothing to leak", poolCIDR)
+	}, 2*time.Minute, 5*time.Second).Should(Succeed())
+}
 
 // requireFelixOwnsIPIPClusterRoutes fails unless the cluster is configured with Felix, rather than
 // confd and BIRD, programming the cluster routes for IPIP IP pools. This test has nothing to say
@@ -251,9 +249,14 @@ func expectFelixOwnsRemoteRoutes(f *framework.Framework, nodeName, remoteBlockCI
 	}, 2*time.Minute, 5*time.Second).Should(Succeed())
 }
 
-// blocksExportedByNode returns the CIDRs within poolCIDR that the given node's BIRD is exporting
-// to its BGP peers, by asking BIRD directly rather than inferring it from connectivity.
-func blocksExportedByNode(f *framework.Framework, nodeName, poolCIDR string) []string {
+// nonBlackholePoolExports returns the routes within poolCIDR that the given node's BIRD is
+// exporting to its BGP peers other than as a blackhole, by asking BIRD directly rather than
+// inferring it from connectivity.
+//
+// Only lines that start with a CIDR are considered: BIRD prints additional paths for the same
+// prefix as continuation lines, and a node's own block legitimately has a second, kernel-sourced
+// path behind the static one.
+func nonBlackholePoolExports(f *framework.Framework, nodeName, poolCIDR string) []string {
 	pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
 	ExpectWithOffset(1, pod).NotTo(BeNil(), "calico-node pod not found on node %s", nodeName)
 
@@ -266,8 +269,7 @@ func blocksExportedByNode(f *framework.Framework, nodeName, poolCIDR string) []s
 	prefix := poolCIDRPrefix(poolCIDR)
 	seen := map[string]struct{}{}
 	for _, proto := range bgpProtocolNames(protoOut) {
-		out, err := utils.ExecInCalicoNode(pod,
-			fmt.Sprintf("birdcl show route export %s", proto))
+		out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("birdcl show route export %s", proto))
 		if err != nil {
 			// A peering that is down has no export table; that is not a failure for this test.
 			logrus.WithError(err).Infof("Could not read exports for protocol %s on %s", proto, nodeName)
@@ -279,18 +281,23 @@ func blocksExportedByNode(f *framework.Framework, nodeName, poolCIDR string) []s
 				continue
 			}
 			cidr := fields[0]
-			if strings.HasPrefix(cidr, prefix) && strings.Contains(cidr, "/") {
-				seen[cidr] = struct{}{}
+			if !strings.HasPrefix(cidr, prefix) || !strings.Contains(cidr, "/") {
+				continue
 			}
+			if strings.Contains(line, "blackhole") {
+				// The node's own block, advertised from its block affinity. Expected.
+				continue
+			}
+			seen[strings.TrimSpace(line)] = struct{}{}
 		}
 	}
 
-	exported := make([]string, 0, len(seen))
-	for cidr := range seen {
-		exported = append(exported, cidr)
+	leaked := make([]string, 0, len(seen))
+	for line := range seen {
+		leaked = append(leaked, line)
 	}
-	logrus.Infof("Node %s is exporting these %s blocks: %v", nodeName, poolCIDR, exported)
-	return exported
+	logrus.Infof("Node %s exports these non-blackhole %s routes: %v", nodeName, poolCIDR, leaked)
+	return leaked
 }
 
 // bgpProtocolNames picks the BGP protocol names out of "birdcl show protocols" output, whose
