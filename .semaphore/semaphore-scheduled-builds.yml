@@ -435,14 +435,17 @@ blocks:
     # Publishing to Docker Hub happens in a separate post-build promotion
     # (push-images/nft-rpms.yml) so PR workflows never receive the push credential.
     #
-    # Consumers (untolerated gcloud cp): "Build: node image" (10-prerequisites.yml),
-    # "Node: multi-arch build" (20-node.yml), "Istio" (20-istio.yml) — every block
-    # that lists this one in its `dependencies:`. If a consumer fires but this
-    # producer is skipped, the consumer hard-fails on
-    # `gcloud storage cp: URL matched no objects` (Semaphore treats a skipped
-    # dependency as passed). To prevent that, this block's trigger must be a
-    # superset of the union of all consumer triggers. That superset is derived
-    # automatically by the CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
+    # Consumers: "Build: node image" (10-prerequisites.yml), "Node: multi-arch
+    # build" (20-node.yml), "Istio" (20-istio.yml) — every block that lists this
+    # one in its `dependencies:`. They all go through
+    # .semaphore/scripts/load-nft-rpms.sh, which falls back to a Docker Hub pull
+    # when the tarball is missing; that covers a credential-less (read-only)
+    # build, but only for a tag that has already been published. If a consumer
+    # fires on an unpublished tag while this producer is skipped (Semaphore treats
+    # a skipped dependency as passed), the consumer still hard-fails. To prevent
+    # that, this block's trigger must be a superset of the union of all consumer
+    # triggers. That superset is derived automatically by the
+    # CHANGE_IN_WITH_DEPENDENTS() macro: it merges the arg
     # below (this block's own intrinsic trigger — the RPM build inputs) with the
     # resolved trigger of every block that depends on it. DO NOT hand-maintain a
     # list of consumer paths here; just keep the producer in the consumers'
@@ -601,11 +604,7 @@ blocks:
             # Load the patched nftables RPMs producer image (built/cached by
             # "Build: nftables RPMs") so the node Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            # - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-            - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - .semaphore/scripts/load-nft-rpms.sh amd64
             - make -C node image
             - docker save calico/node:latest-amd64 -o /tmp/node-image.tar
             - zstd -3 --rm /tmp/node-image.tar
@@ -1539,10 +1538,7 @@ blocks:
           commands:
             # Load the amd64 patched nftables RPMs producer image so the
             # install-cni Dockerfile's FROM ${NFT_RPMS_IMAGE} resolves locally.
-            - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-amd64.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - ../.semaphore/scripts/load-nft-rpms.sh amd64
             # Include the istio ztunnel build in the amd64 CI job.
             - ../.semaphore/run-and-monitor ci.log make ci
         - name: "Istio: build arm64"
@@ -1751,10 +1747,7 @@ blocks:
             # Load the per-arch patched nftables RPMs producer image (built/cached
             # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
             # resolves locally without re-pulling from Docker Hub.
-            - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
-            - zstd -d --rm /tmp/nft-rpms.tar.zst
-            - docker load -i /tmp/nft-rpms.tar
-            - rm -f /tmp/nft-rpms.tar
+            - ../.semaphore/scripts/load-nft-rpms.sh "${ARCH}"
             - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
         - name: "Node: build Windows archive"
           commands:

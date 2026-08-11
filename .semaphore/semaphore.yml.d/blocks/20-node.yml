@@ -58,10 +58,7 @@
           # Load the per-arch patched nftables RPMs producer image (built/cached
           # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
-          - zstd -d --rm /tmp/nft-rpms.tar.zst
-          - docker load -i /tmp/nft-rpms.tar
-          - rm -f /tmp/nft-rpms.tar
+          - ../.semaphore/scripts/load-nft-rpms.sh "${ARCH}"
           - ../.semaphore/run-and-monitor image-$ARCH.log make image ARCH=$ARCH
       - name: "Node: build Windows archive"
         commands:
