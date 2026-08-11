@@ -22,6 +22,7 @@ global_job_config:
     # and the cache restore/store steps below: CALICO_S3_ACCESS_KEY,
     # CALICO_S3_SECRET_KEY and (optionally, for a non-AWS endpoint)
     # CALICO_S3_HOST / CALICO_S3_HOST_BUCKET.
+    - name: go-build-cache-hetzner-s3-parameters
     - name: go-build-cache-hetzner-s3-credentials
   env_vars:
     - name: GOOGLE_PROJECT
@@ -2405,7 +2406,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd cni-plugin
       jobs:
         - name: "CNI Plugin: CI"
@@ -3182,7 +3183,7 @@ blocks:
         commands:
           # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
           - docker system prune -af
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node whisker
       jobs:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
@@ -3424,21 +3425,12 @@ blocks:
       prologue:
         commands:
           # Load the pre-built calico image (touches the marker so the nested
-          # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op)
-          # and pull the cgo + race binaries into place so build-calico-cgo /
-          # build-calico-race skip their rebuilds.
-          - .semaphore/load-cached-images
-          - mkdir -p cmd/calico/bin
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
-          - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
-          # Extract the pre-built libbpf (clone + compiled amd64/libbpf.a)
-          # produced by "Build: calico image". Verify the compiled static
-          # lib landed so a broken tarball fails fast rather than triggering
-          # the NO_LIBBPF_CLONE guard mid-build.
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
-          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
+          # `make -C cmd/calico image` invocation inside fv-prereqs is a no-op),
+          # then put the cgo + race binaries and the pre-built libbpf in place so
+          # build-calico-cgo / build-calico-race and the libbpf clone are all
+          # skipped.
+          - .semaphore/load-cached-images calico
+          - .semaphore/scripts/load-felix-prereqs.sh
           - cd felix
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
@@ -3616,14 +3608,8 @@ blocks:
         commands:
           - gcloud config set project unique-caldron-775
           - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
-          - .semaphore/load-cached-images
-          - mkdir -p cmd/calico/bin
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-cgo-amd64" cmd/calico/bin/calico-cgo-amd64
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/calico-race-amd64" cmd/calico/bin/calico-race-amd64
-          - chmod +x cmd/calico/bin/calico-cgo-amd64 cmd/calico/bin/calico-race-amd64
-          - .semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/libbpf-amd64.tar.zst" /tmp/libbpf-amd64.tar.zst
-          - tar --use-compress-program="zstd -d" -xf /tmp/libbpf-amd64.tar.zst -C felix/bpf-gpl
-          - test -f felix/bpf-gpl/libbpf/src/amd64/libbpf.a || (echo "ERROR libbpf tarball missing compiled libbpf.a" >&2; exit 1)
+          - .semaphore/load-cached-images calico
+          - .semaphore/scripts/load-felix-prereqs.sh
           - cd felix
       secrets:
         - name: google-service-account-for-gce
@@ -3899,7 +3885,7 @@ blocks:
         commands:
           # Load the locally-built calico + node images from the S3 cache so the
           # local-build install uses images from the commit under test.
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node
           - az login --service-principal -u "${AZ_SP_ID}" -p "${AZ_SP_PASSWORD}" --tenant "${AZ_TENANT_ID}" --output none
           - export REPORT_DIR=/home/semaphore/report
           - export AZURE_SUBSCRIPTION_ID=$AZ_SUBSCRIPTION_ID
@@ -4499,7 +4485,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd kube-controllers
       jobs:
         - name: "kube-controllers: CI"
@@ -4694,7 +4680,7 @@ blocks:
       prologue:
         commands:
           - docker system prune -af
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico node
       jobs:
         - name: "KubeVirt live migration (KIND)"
           commands:
@@ -5992,7 +5978,7 @@ blocks:
           value: "calico"
       prologue:
         commands:
-          - .semaphore/load-cached-images
+          - .semaphore/load-cached-images calico
           - cd typha
       jobs:
         - name: "Typha: UT and FV tests"
