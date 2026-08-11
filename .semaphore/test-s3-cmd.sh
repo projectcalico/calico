@@ -73,10 +73,15 @@ check "no-creds download wrote file" test -s "$work/got.bin"
 check "no-creds download does not call s3cmd" test "$(grep -c '^s3cmd ' "$stub_log")" = 0
 
 # 3. A missing object in read-only mode fails, so callers can fall back to
-#    building from source rather than loading a truncated file.
+#    building from source rather than loading a truncated file. curl creates the
+#    output file before it sees the response, so the empty one it leaves behind
+#    must go too: callers test for the file, or decompress into a path derived
+#    from it (where a stale .zst would make zstd refuse to overwrite).
+: >"$work/missing.bin"
 CURL_FAIL=1 run cp s3://test-bucket/ci/missing.tar.zst "$work/missing.bin" >/dev/null 2>&1
 rc=$?
 check "no-creds download of missing object fails" [ "$rc" != 0 ]
+check "no-creds download of missing object leaves no file" test ! -e "$work/missing.bin"
 
 # 4. CALICO_S3_HOST_BUCKET overrides the origin (path-style endpoints).
 out=$(CALICO_S3_HOST_BUCKET=s3.example.com/%\(bucket\)s run cp \

@@ -37,7 +37,17 @@ docker save -o /tmp/calico-felix-test.tar calico/felix-test:latest-amd64
 # "Build: calico image" prerequisite block. Fetch it from S3 and re-upload it
 # into this component's GCS fv-artifacts directory so the test VM sees it
 # alongside the working copy and felix-test image.
-"$S3_CMD" cp "${S3_WORKFLOW_DIR}/calico-image.tar.zst" /tmp/calico-image.tar.zst
+#
+# A build without S3 credentials runs read-only (see .semaphore/s3-cmd), so that
+# block had nowhere to publish it and the prologue's load-cached-images built
+# the image locally instead — save it straight out of the daemon. load-test-artifacts
+# on the VM needs this tarball unconditionally, so `docker save` failing here
+# (no cached copy and no local image) is the right loud failure.
+if ! "$S3_CMD" cp "${S3_WORKFLOW_DIR}/calico-image.tar.zst" /tmp/calico-image.tar.zst; then
+  echo "No calico image in the S3 workflow cache; saving the local image instead"
+  docker save -o /tmp/calico-image.tar calico/calico:latest-amd64
+  zstd -3 --rm /tmp/calico-image.tar
+fi
 gcloud storage cp /tmp/calico-image.tar.zst "${GCS_WORKFLOW_DIR}/felix/fv-artifacts/calico-image.tar.zst"
 
 cd ../..
