@@ -33,6 +33,7 @@ type BirdBGPConfig struct {
 
 	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
+	BGPExportFilterForTunnelRoutes    []string
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string
