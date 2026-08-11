@@ -1,5 +1,4 @@
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { DataListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
 export type Policy = {
@@ -48,16 +47,6 @@ export type QueryPage = {
     currentPage?: number;
     nextPage?: number;
 };
-
-export type OmniFilterDataQuery = {
-    searchOption?: string;
-    filterParam: DataListOmniFilterParam;
-};
-
-export type OmniFilterDataQueries = Record<
-    OmniFilterParam,
-    OmniFilterDataQuery | null
->;
 
 export type FilterHint = {
     value: string;

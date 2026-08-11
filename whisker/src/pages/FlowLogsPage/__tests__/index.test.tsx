@@ -3,9 +3,7 @@ import { fireEvent, render, screen } from '@/test-utils/helper';
 import FlowLogsPage from '..';
 import { streamButtonStyles, tabStyles } from '../styles';
 
-import { useOmniFilterData } from '@/hooks/omniFilters';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
-import { ListOmniFilterKeys, OmniFilterKeys } from '@/utils/omniFilter';
 import { act } from 'react';
 
 const MockFlowLogsContainer = {
@@ -36,8 +34,6 @@ jest.mock('@/hooks/useFlowLogsUrlFilters', () => ({
     useFlowLogsUrlFilters: jest.fn(),
 }));
 
-jest.mock('@/hooks/omniFilters', () => ({ useOmniFilterData: jest.fn() }));
-
 jest.mock(
     '@/features/flowLogs/components/FlowLogsContainer',
     () => (props: any) => {
@@ -47,31 +43,10 @@ jest.mock(
     },
 );
 
-const MockOmniFilters = {
-    onReset: jest.fn(),
-    onChange: jest.fn(),
-    onRequestFilterData: jest.fn(),
-    onRequestNextPage: jest.fn(),
-};
-
 jest.mock(
     '@/features/flowLogs/components/OmniFilters',
-    () =>
-        ({
-            onReset,
-            onChange,
-            onRequestFilterData,
-            onRequestNextPage,
-        }: any) => {
-            MockOmniFilters.onReset = onReset;
-            MockOmniFilters.onChange = onChange;
-            MockOmniFilters.onRequestFilterData = onRequestFilterData;
-            MockOmniFilters.onRequestNextPage = onRequestNextPage;
-            return <>MockOmniFilters</>;
-        },
+    () => () => <>MockOmniFilters</>,
 );
-
-jest.mock('@/hooks', () => ({ useSelectedListOmniFilters: jest.fn() }));
 
 const useStreamStub = {
     stopStream: jest.fn(),
@@ -85,40 +60,9 @@ const useStreamStub = {
     totalItems: 0,
 };
 
-const omniFilterData = {
-    namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    policy: {
-        filters: [],
-        isLoading: false,
-    },
-    source_name: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_name: {
-        filters: [],
-        isLoading: false,
-    },
-    dest_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-};
-
 describe('FlowLogsPage', () => {
     beforeEach(() => {
         jest.mocked(useFlowLogsStream).mockReturnValue(useStreamStub);
-        jest.mocked(useOmniFilterData).mockReturnValue([
-            omniFilterData,
-            jest.fn(),
-        ]);
         jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
             filters: {},
             setFilter: jest.fn(),
@@ -169,73 +113,6 @@ describe('FlowLogsPage', () => {
         render(<FlowLogsPage />);
 
         expect(screen.getByText('Waiting for flows')).toBeInTheDocument();
-    });
-
-    it('should test <OmniFilters /> clears filter params', () => {
-        const mockClearFilters = jest.fn();
-        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
-            filters: {},
-            setFilter: jest.fn(),
-            clearFilters: mockClearFilters,
-            setMultiFilter: jest.fn(),
-        });
-        render(<FlowLogsPage />);
-
-        MockOmniFilters.onReset();
-
-        expect(mockClearFilters).toHaveBeenCalledTimes(1);
-    });
-
-    it('should test <OmniFilters /> sets a new filter param on change', () => {
-        const mockSetFilter = jest.fn();
-        jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
-            filters: {},
-            setFilter: mockSetFilter,
-            clearFilters: jest.fn(),
-            setMultiFilter: jest.fn(),
-        });
-        render(<FlowLogsPage />);
-
-        MockOmniFilters.onChange('mock-filter', []);
-
-        expect(mockSetFilter).toHaveBeenCalledWith('mock-filter', []);
-    });
-
-    it('should request data for <OmniFilters />', () => {
-        const fetchDataMock = jest.fn();
-        jest.mocked(useOmniFilterData).mockReturnValue([
-            omniFilterData,
-            fetchDataMock,
-        ]);
-
-        render(<FlowLogsPage />);
-
-        const userText = 'user-text';
-        MockOmniFilters.onRequestFilterData({
-            filterParam: OmniFilterKeys.dest_namespace,
-            searchOption: userText,
-        });
-
-        expect(fetchDataMock).toHaveBeenCalledWith(
-            ListOmniFilterKeys.dest_namespace,
-            JSON.stringify({
-                dest_namespaces: [{ type: 'Fuzzy', value: userText }],
-            }),
-        );
-    });
-
-    it('should fetch the next page for <OmniFilters />', () => {
-        const filterParam = 'xyz';
-        const fetchDataMock = jest.fn();
-        jest.mocked(useOmniFilterData).mockReturnValue([
-            omniFilterData,
-            fetchDataMock,
-        ]);
-        render(<FlowLogsPage />);
-
-        MockOmniFilters.onRequestNextPage(filterParam);
-
-        expect(fetchDataMock).toHaveBeenCalledWith(filterParam, null);
     });
 
     it('should show a toast message when opening a row', () => {

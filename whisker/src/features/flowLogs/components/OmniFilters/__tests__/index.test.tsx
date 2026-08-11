@@ -1,55 +1,18 @@
-import { act, fireEvent, render, screen, within } from '@/test-utils/helper';
-import { OmniFilterKeys } from '@/utils/omniFilter';
+import { act, fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
+import { useLocation } from 'react-router-dom';
 import OmniFilters from '..';
 
 jest.mock(
-    '@/libs/tigera/ui-components/components/common/OmniFilter',
+    '@/features/flowLogs/components/ListOmniFilter',
     () =>
-        ({
-            filterLabel,
-            onClear,
-            onReady,
-            onRequestSearch,
-            filterId,
-            onRequestMore,
-            onChange,
-        }: any) => {
-            return (
-                <div data-testid={filterLabel}>
-                    <div>{filterLabel}</div>
-                    <span onClick={onClear}>on clear</span>
-                    <button onClick={onReady}>on ready</button>
-                    <button onClick={() => onRequestMore(filterId)}>
-                        request more
-                    </button>
-                    <button
-                        onClick={() =>
-                            onRequestSearch(filterId, 'search-criteria')
-                        }
-                    >
-                        on search
-                    </button>
-                    <button onClick={() => onRequestSearch(filterId, '')}>
-                        on clear search
-                    </button>
-                    <button
-                        onClick={() =>
-                            onChange({
-                                filterId,
-                                filterLabel,
-                                operator: undefined,
-                                filters: [
-                                    { value: 'filter-1', label: 'filter-1' },
-                                    { value: 'filter-2', label: 'filter-2' },
-                                ],
-                            })
-                        }
-                    >
-                        on change
-                    </button>
-                </div>
-            );
-        },
+        ({ filterId, filterLabel, selectedFilters }: any) => (
+            <div data-testid={`list-filter-${filterId}`}>
+                {filterLabel} selected=
+                {selectedFilters
+                    .map(({ label }: { label: string }) => label)
+                    .join(',')}
+            </div>
+        ),
 );
 
 const PortOmniFilterMock = {
@@ -121,213 +84,111 @@ jest.mock(
         },
 );
 
-const defaultProps = {
-    omniFilterData: {
-        source_namespace: {
-            filters: [],
-            isLoading: false,
-        },
-        dest_namespace: {
-            filters: [],
-            isLoading: false,
-        },
-        policy: {
-            filters: [],
-            isLoading: false,
-        },
-        source_name: {
-            filters: [],
-            isLoading: false,
-        },
-        dest_name: {
-            filters: [],
-            isLoading: false,
-        },
-    },
-    selectedListOmniFilters: {
-        source_namespace: [],
-        dest_namespace: [],
-        policy: [],
-        source_name: [],
-        dest_name: [],
-    },
-    onChange: jest.fn(),
-    onReset: jest.fn(),
-    onRequestFilterData: jest.fn(),
-    onRequestNextPage: jest.fn(),
-    onMultiChange: jest.fn(),
-    selectedValues: {},
-    startTime: 0,
-};
+const LocationProbe = () => (
+    <div data-testid='location-search'>{useLocation().search}</div>
+);
 
-jest.useFakeTimers();
+const renderOmniFilters = (route = '/') =>
+    renderWithRouter(
+        <>
+            <OmniFilters />
+            <LocationProbe />
+        </>,
+        { routes: [route] },
+    );
+
+const currentParams = () =>
+    new URLSearchParams(
+        screen.getByTestId('location-search').textContent ?? '',
+    );
 
 describe('<OmniFilters />', () => {
-    it('should clear the filter', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+    it('should render a list filter chip with its selection from the URL', () => {
+        renderOmniFilters('/?source_name=web&source_name=api');
 
-        const omniFilter = within(screen.getByTestId('Source'));
-        fireEvent.click(omniFilter.getByText('on clear'));
-
-        expect(mockOnChange).toHaveBeenCalledWith('source_name', []);
+        expect(
+            screen.getByTestId('list-filter-source_name'),
+        ).toHaveTextContent('Source selected=web,api');
     });
 
-    it('should call onChange with filterId and mapped filter values', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+    it('should render every generic filter chip', () => {
+        renderOmniFilters();
 
-        const omniFilter = within(screen.getByTestId('Source'));
-        fireEvent.click(omniFilter.getByText('on change'));
-
-        expect(mockOnChange).toHaveBeenCalledWith('source_name', [
-            'filter-1',
-            'filter-2',
-        ]);
+        for (const filterId of [
+            'source_namespace',
+            'source_name',
+            'dest_namespace',
+            'dest_name',
+            'reporter',
+        ]) {
+            expect(
+                screen.getByTestId(`list-filter-${filterId}`),
+            ).toBeInTheDocument();
+        }
     });
 
-    it('should call onChange with value wrapped in an array when policy filter changes', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+    it('should write the policy filter value to the URL', () => {
+        renderOmniFilters();
 
         act(() => {
             PolicyOmniFilterMock.onChange('policy', 'my-policy');
         });
 
-        expect(mockOnChange).toHaveBeenCalledWith('policy', ['my-policy']);
+        expect(currentParams().getAll('policy')).toEqual(['my-policy']);
     });
 
-    it('should call onChange with null when policy filter value is empty', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+    it('should remove the policy param when its value is empty', () => {
+        renderOmniFilters('/?policy=%5B%5D');
 
         act(() => {
             PolicyOmniFilterMock.onChange('policy', '');
         });
 
-        expect(mockOnChange).toHaveBeenCalledWith('policy', null);
+        expect(currentParams().has('policy')).toBe(false);
     });
 
-    it('should call onReady', () => {
-        const mockOnRequestFilterData = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onRequestFilterData={mockOnRequestFilterData}
-                omniFilterData={{
-                    ...defaultProps.omniFilterData,
-                    source_name: { filters: null, isLoading: false },
-                }}
-            />,
-        );
-
-        const omniFilter = within(screen.getByTestId('Source'));
-        fireEvent.click(omniFilter.getByText('on ready'));
-
-        expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'source_name',
-            searchOption: '',
-        });
-    });
-
-    it('should handle search criteria', () => {
-        const mockOnRequestFilterData = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onRequestFilterData={mockOnRequestFilterData}
-            />,
-        );
-
-        const omniFilter = within(screen.getByTestId('Destination'));
-        act(() => {
-            fireEvent.click(omniFilter.getByText('on search'));
-            jest.advanceTimersByTime(1000);
-        });
+    it('should clear the policy filter', () => {
+        renderOmniFilters('/?policy=%5B%5D');
 
         act(() => {
-            fireEvent.click(omniFilter.getByText('on search'));
-            jest.advanceTimersByTime(1000);
+            PolicyOmniFilterMock.onClear();
         });
 
-        expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'dest_name',
-            searchOption: 'search-criteria',
+        expect(currentParams().has('policy')).toBe(false);
+    });
+
+    it('should write port and protocol to the URL together', () => {
+        renderOmniFilters();
+
+        act(() => {
+            PortOmniFilterMock.onChange({ port: '8080', protocol: 'tcp' });
         });
+
+        const params = currentParams();
+        expect(params.getAll('dest_port')).toEqual(['8080']);
+        expect(params.getAll('protocol')).toEqual(['tcp']);
     });
 
-    it('should handle empty search criteria', () => {
-        const mockOnRequestFilterData = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onRequestFilterData={mockOnRequestFilterData}
-            />,
-        );
+    it('should clear port and protocol when the port filter is emptied', () => {
+        renderOmniFilters('/?dest_port=8080&protocol=tcp');
 
-        const omniFilter = within(screen.getByTestId('Destination'));
-        fireEvent.click(omniFilter.getByText('on clear search'));
-
-        expect(mockOnRequestFilterData).toHaveBeenCalledWith({
-            filterParam: 'dest_name',
-            searchOption: '',
+        act(() => {
+            PortOmniFilterMock.onChange({ port: '', protocol: '' });
         });
+
+        const params = currentParams();
+        expect(params.has('dest_port')).toBe(false);
+        expect(params.has('protocol')).toBe(false);
     });
 
-    it('should request more data', () => {
-        const mockOnRequestNextPage = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onRequestNextPage={mockOnRequestNextPage}
-            />,
-        );
+    it('should pass selected port and protocol values to the port filter', () => {
+        renderOmniFilters('/?dest_port=1234&protocol=tcp');
 
-        const omniFilter = within(screen.getByTestId('Source'));
-        fireEvent.click(omniFilter.getByText('request more'));
-
-        expect(mockOnRequestNextPage).toHaveBeenCalledWith('source_name');
+        expect(screen.getByText('Port 1234 tcp')).toBeInTheDocument();
     });
 
-    it('should call onMultiChange when port/ protocol changes', () => {
-        const mockOnMultiChange = jest.fn();
-        render(
-            <OmniFilters {...defaultProps} onMultiChange={mockOnMultiChange} />,
-        );
-
-        const event = { port: 8080, protocol: 'proto' };
-        PortOmniFilterMock.onChange(event);
-
-        expect(mockOnMultiChange).toHaveBeenCalledWith({
-            [OmniFilterKeys.protocol]: [event.protocol],
-            [OmniFilterKeys.dest_port]: [event.port],
-        });
-    });
-
-    it('should handle when port/ protocol values are provided', () => {
-        const port = '1234';
-        const protocol = 'tcp';
-        const mockOnMultiChange = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onMultiChange={mockOnMultiChange}
-                selectedValues={{ dest_port: [port], protocol: [protocol] }}
-            />,
-        );
-
-        expect(screen.getByText(`Port ${port} ${protocol}`));
-    });
-
-    it('should handle when action values are provided', () => {
-        const mockOnMultiChange = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onMultiChange={mockOnMultiChange}
-                selectedValues={{}}
-            />,
-        );
+    it('should write action and staged action to the URL together', () => {
+        renderOmniFilters();
 
         act(() => {
             ActionOmniFilterMock.onChange({
@@ -336,103 +197,48 @@ describe('<OmniFilters />', () => {
             });
         });
 
-        expect(mockOnMultiChange).toHaveBeenCalledWith({
-            action: ['Allow'],
-            staged_action: ['Deny'],
-        });
+        const params = currentParams();
+        expect(params.getAll('action')).toEqual(['Allow']);
+        expect(params.getAll('staged_action')).toEqual(['Deny']);
     });
 
-    it('should handle when action values are cleared', () => {
-        const mockOnMultiChange = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onMultiChange={mockOnMultiChange}
-                selectedValues={{}}
-            />,
-        );
+    it('should clear action and staged action when emptied', () => {
+        renderOmniFilters('/?action=Allow&staged_action=Deny');
 
         act(() => {
-            ActionOmniFilterMock.onChange({
-                action: '',
-                staged_action: '',
-            });
+            ActionOmniFilterMock.onChange({ action: '', staged_action: '' });
         });
 
-        expect(mockOnMultiChange).toHaveBeenCalledWith({
-            action: [],
-            staged_action: [],
-        });
-    });
-
-    it('should clear the policy filter', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
-
-        act(() => {
-            PolicyOmniFilterMock.onClear();
-        });
-
-        expect(mockOnChange).toHaveBeenCalledWith('policy', []);
-    });
-
-    it('should show the reset button and call onReset when a filter is selected', () => {
-        const mockOnReset = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onReset={mockOnReset}
-                selectedValues={{
-                    policy: [{ name: 'allow-nginx', namespace: 'prod' }],
-                }}
-            />,
-        );
-
-        fireEvent.click(screen.getByTestId('omnifilterlist-reset'));
-
-        expect(mockOnReset).toHaveBeenCalled();
-    });
-
-    it('should clear port and protocol when the port filter is emptied', () => {
-        const mockOnMultiChange = jest.fn();
-        render(
-            <OmniFilters {...defaultProps} onMultiChange={mockOnMultiChange} />,
-        );
-
-        act(() => {
-            PortOmniFilterMock.onChange({ port: '', protocol: '' });
-        });
-
-        expect(mockOnMultiChange).toHaveBeenCalledWith({
-            [OmniFilterKeys.protocol]: [],
-            [OmniFilterKeys.dest_port]: [],
-        });
+        const params = currentParams();
+        expect(params.has('action')).toBe(false);
+        expect(params.has('staged_action')).toBe(false);
     });
 
     it('should pass selected action values to the action filter', () => {
-        render(
-            <OmniFilters
-                {...defaultProps}
-                selectedValues={{
-                    action: ['Allow'],
-                    staged_action: ['Deny'],
-                }}
-            />,
-        );
+        renderOmniFilters('/?action=Allow&staged_action=Deny');
 
         expect(
             screen.getByText('Mock ActionOmniFilter Allow Deny'),
         ).toBeInTheDocument();
     });
 
-    it('should pass the selected start time to the start time filter', () => {
-        render(
-            <OmniFilters
-                {...defaultProps}
-                selectedValues={{ start_time: ['15'] }}
-                startTime={15}
-            />,
+    it('should show the reset button and clear all filters', () => {
+        const policies = encodeURIComponent(
+            JSON.stringify([{ name: 'allow-nginx', namespace: 'prod' }]),
         );
+        renderOmniFilters(`/?policy=${policies}&source_name=web&ref=docs`);
+
+        fireEvent.click(screen.getByTestId('omnifilterlist-reset'));
+
+        const params = currentParams();
+        expect(params.has('policy')).toBe(false);
+        expect(params.has('source_name')).toBe(false);
+        // Non-filter params survive a reset.
+        expect(params.get('ref')).toBe('docs');
+    });
+
+    it('should pass the selected start time to the start time filter', () => {
+        renderOmniFilters('/?start_time=15');
 
         expect(
             screen.getByText('Start Time value=15 selected=15'),
@@ -440,25 +246,17 @@ describe('<OmniFilters />', () => {
     });
 
     it('should clear the start time filter on reset', () => {
-        const mockOnChange = jest.fn();
-        render(
-            <OmniFilters
-                {...defaultProps}
-                onChange={mockOnChange}
-                selectedValues={{ start_time: ['15'] }}
-            />,
-        );
+        renderOmniFilters('/?start_time=15');
 
         act(() => {
             StartTimeOmniFilterMock.onReset();
         });
 
-        expect(mockOnChange).toHaveBeenCalledWith('start_time', []);
+        expect(currentParams().has('start_time')).toBe(false);
     });
 
-    it('should call onChange with the new start time', () => {
-        const mockOnChange = jest.fn();
-        render(<OmniFilters {...defaultProps} onChange={mockOnChange} />);
+    it('should write the new start time to the URL', () => {
+        renderOmniFilters();
 
         act(() => {
             StartTimeOmniFilterMock.onChange({
@@ -467,6 +265,6 @@ describe('<OmniFilters />', () => {
             });
         });
 
-        expect(mockOnChange).toHaveBeenCalledWith('start_time', ['30']);
+        expect(currentParams().getAll('start_time')).toEqual(['30']);
     });
 });

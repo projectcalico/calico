@@ -1,5 +1,4 @@
 import React from 'react';
-import { useSelectedListOmniFilters } from './omniFilters';
 import { useAppConfig } from '@/context/AppConfig';
 import { version } from '../../package.json';
 
@@ -42,5 +41,3 @@ export const useBuildInfo = () => {
         console.groupEnd();
     }, []);
 };
-
-export { useSelectedListOmniFilters };

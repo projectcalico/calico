@@ -1,24 +1,18 @@
 import PortOmniFilter from '@/features/flowLogs/components/PortOmniFilter';
-import { useDebouncedCallback } from '@/hooks';
-import {
-    OmniFilter,
-    OmniFilterList,
-} from '@/libs/tigera/ui-components/components/common';
+import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
+import { OmniFilterList } from '@/libs/tigera/ui-components/components/common';
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import { OmniFilterDataQuery } from '@/types/api';
+import { parseStartTime } from '@/utils';
 import {
     CustomOmniFilterKeys,
-    DataListOmniFilterParam,
     FilterKey,
     ListOmniFilterKeys,
-    ListOmniFiltersData,
     OmniFilterKeys,
     OmniFilterProperties,
-    SelectedOmniFilterOptions,
-    SelectedOmniFilterValues,
 } from '@/utils/omniFilter';
 import React from 'react';
 import ActionOmniFilter from '../ActionOmniFilter';
+import ListOmniFilter from '../ListOmniFilter';
 import PolicyOmniFilter from '../PolicyOmniFilter';
 import StartTimeOmniFilter from '../StartTimeOmniFilter';
 
@@ -29,44 +23,26 @@ const omniFilterIds = [
     ...Object.values(CustomOmniFilterKeys),
 ];
 
-type OmniFiltersProps = {
-    onChange: (filterId: string, filters: string[] | null) => void;
-    onMultiChange: (change: Partial<Record<FilterKey, string[]>>) => void;
-    onReset: () => void;
-    omniFilterData: ListOmniFiltersData;
-    selectedValues: SelectedOmniFilterValues;
-    selectedListOmniFilters: SelectedOmniFilterOptions;
-    onRequestFilterData: (query: OmniFilterDataQuery) => void;
-    onRequestNextPage: (filterId: DataListOmniFilterParam) => void;
-    startTime: number;
-};
+const OmniFilters: React.FC = () => {
+    const {
+        filters: selectedValues,
+        setFilter,
+        setMultiFilter,
+        clearFilters,
+    } = useFlowLogsUrlFilters();
 
-const OmniFilters: React.FC<OmniFiltersProps> = ({
-    onChange,
-    onMultiChange,
-    onReset,
-    omniFilterData,
-    selectedListOmniFilters,
-    selectedValues,
-    onRequestFilterData,
-    onRequestNextPage,
-    startTime,
-}) => {
-    const handleClear = (filterId: string) => onChange(filterId, []);
+    const startTime = parseStartTime(selectedValues.start_time?.[0]);
 
-    const debounce = useDebouncedCallback();
-    const [isLoading, setIsLoading] = React.useState(false);
+    const handleClear = (filterId: string) => setFilter(filterId, []);
 
-    const handleChange = (omniFilterChangeEvent: OmniFilterChangeEvent) => {
-        onChange(
-            omniFilterChangeEvent.filterId,
-            omniFilterChangeEvent.filters.map((filter) => filter.value),
+    const handleChange = (event: OmniFilterChangeEvent) =>
+        setFilter(
+            event.filterId,
+            event.filters.map((filter) => filter.value),
         );
-    };
 
-    const handlePolicyFilterChange = (filterId: string, value: string) => {
-        onChange(filterId, value ? [value] : null);
-    };
+    const handlePolicyFilterChange = (filterId: string, value: string) =>
+        setFilter(filterId, value ? [value] : null);
 
     return (
         <>
@@ -75,7 +51,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                 defaultFilterIds={omniFilterIds}
                 visibleFilterIds={omniFilterIds}
                 onChangeVisible={() => undefined}
-                onResetVisible={onReset}
+                onResetVisible={clearFilters}
             >
                 <PolicyOmniFilter
                     key='policy-omni-filter'
@@ -85,60 +61,16 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                     onClear={() => handleClear(FilterKey.policy)}
                 />
 
-                {listOmniFilterIds.map((id) => {
-                    const filterId = id as DataListOmniFilterParam;
-                    return (
-                        <OmniFilter
-                            key={filterId}
-                            filterId={filterId}
-                            filterLabel={OmniFilterProperties[filterId].label}
-                            filters={omniFilterData[filterId]?.filters ?? []}
-                            selectedFilters={selectedListOmniFilters[filterId]}
-                            onChange={handleChange}
-                            onClear={() => handleClear(filterId)}
-                            showOperatorSelect={false}
-                            listType='checkbox'
-                            isLoading={
-                                omniFilterData[filterId]?.isLoading || isLoading
-                            }
-                            totalItems={omniFilterData[filterId]?.total}
-                            onReady={() =>
-                                onRequestFilterData({
-                                    filterParam: filterId,
-                                    searchOption: '',
-                                })
-                            }
-                            onRequestSearch={(filterId, searchOption) => {
-                                const requestData = () => {
-                                    onRequestFilterData({
-                                        filterParam:
-                                            filterId as DataListOmniFilterParam,
-                                        searchOption,
-                                    });
-                                    setIsLoading(false);
-                                };
-
-                                if (searchOption.length >= 1) {
-                                    setIsLoading(true);
-                                    debounce(searchOption, requestData);
-                                } else {
-                                    requestData();
-                                }
-                            }}
-                            onRequestMore={(filterId) =>
-                                onRequestNextPage(
-                                    filterId as DataListOmniFilterParam,
-                                )
-                            }
-                            showSelectedList
-                            isCreatable
-                            labelSelectedListHeader=''
-                            labelListHeader='Filters'
-                            {...OmniFilterProperties[filterId]
-                                .filterComponentProps}
-                        />
-                    );
-                })}
+                {listOmniFilterIds.map((filterId) => (
+                    <ListOmniFilter
+                        key={filterId}
+                        filterId={filterId}
+                        filterLabel={OmniFilterProperties[filterId].label}
+                        selectedFilters={(selectedValues[filterId] ?? []).map(
+                            (value) => ({ label: value, value }),
+                        )}
+                    />
+                ))}
 
                 <PortOmniFilter
                     key='port-omni-filter'
@@ -149,7 +81,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                         ...(selectedValues.protocol ?? []),
                     ]}
                     onChange={({ protocol, port }) =>
-                        onMultiChange({
+                        setMultiFilter({
                             [OmniFilterKeys.protocol]: protocol
                                 ? [protocol]
                                 : [],
@@ -176,7 +108,7 @@ const OmniFilters: React.FC<OmniFiltersProps> = ({
                         ...(selectedValues.staged_action ?? []),
                     ]}
                     onChange={({ action, staged_action }) =>
-                        onMultiChange({
+                        setMultiFilter({
                             [OmniFilterKeys.action]: action ? [action] : [],
                             [OmniFilterKeys.staged_action]: staged_action
                                 ? [staged_action]
