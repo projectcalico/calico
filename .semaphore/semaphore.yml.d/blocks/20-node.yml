@@ -58,7 +58,7 @@
           # Load the per-arch patched nftables RPMs producer image (built/cached
           # by "Build: nftables RPMs") so Dockerfile's FROM ${NFT_RPMS_IMAGE}
           # resolves locally without re-pulling from Docker Hub.
-          - gcloud storage cp "${GCS_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
+          - ../.semaphore/s3-cmd cp "${S3_WORKFLOW_DIR}/nft-rpms-${ARCH}.tar.zst" /tmp/nft-rpms.tar.zst
           - zstd -d --rm /tmp/nft-rpms.tar.zst
           - docker load -i /tmp/nft-rpms.tar
           - rm -f /tmp/nft-rpms.tar
@@ -85,7 +85,8 @@
         value: "kind-cluster-tests"
     prologue:
       commands:
-        # Set up access to GCP buckets.
+        # Authenticate gcloud for the test-VM (gcloud compute) calls in
+        # .semaphore/vms; object storage is handled separately via s3cmd.
         - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
         - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
         - gcloud config set project unique-caldron-775
