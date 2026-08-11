@@ -435,8 +435,16 @@ replace (
 	k8s.io/externaljwt => k8s.io/externaljwt v0.37.0-beta.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.37.0-beta.0
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.37.0-beta.0
-	// kubevirt.io/client-go requires a tagged kube-openapi version that doesn't
-	// exist; pin to the pseudo-version used by the rest of our k8s dependencies.
+
+	// kubevirt.io/client-go requires k8s.io/kube-openapi v0.31.0, which does not
+	// exist: kube-openapi publishes only pseudo-versions.  KubeVirt papers over
+	// that with a replace in their own go.mod, but Go ignores replace directives
+	// from dependency modules, so we have to repeat it here.  Raising our own
+	// require does not help either: MVS takes the maximum, and v0.31.0 sorts
+	// above every v0.0.0-<pseudo>, so the phantom version always wins.  Pin to
+	// the version k8s.io/kubernetes v1.37.0-beta.0 requires.  This is unrelated
+	// to the former Tigera fork of client-go and predates it, so removing the
+	// fork did not make it redundant.  Upstream bug: kubevirt/kubevirt#18792.
 	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.37.0-beta.0
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.37.0-beta.0
