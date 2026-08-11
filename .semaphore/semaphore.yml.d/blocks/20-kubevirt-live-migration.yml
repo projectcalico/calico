@@ -25,7 +25,7 @@
     prologue:
       commands:
         - docker system prune -af
-        - .semaphore/load-cached-images
+        - .semaphore/load-cached-images calico node
     jobs:
       - name: "KubeVirt live migration (KIND)"
         commands:

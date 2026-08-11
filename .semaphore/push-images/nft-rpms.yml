@@ -10,6 +10,7 @@ global_job_config:
   secrets:
     - name: docker
     # S3 object-storage credentials for the .semaphore/s3-cmd download below.
+    - name: go-build-cache-hetzner-s3-parameters
     - name: go-build-cache-hetzner-s3-credentials
   prologue:
     commands:
