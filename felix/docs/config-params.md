@@ -557,7 +557,7 @@ This determines how the server validates client certificates. Default is "NoClie
 | Encoding (env var/config file) | One of: <code>NoClientCert</code>, <code>RequireAndVerifyClientCert</code>, <code>RequireAnyClientCert</code>, <code>VerifyClientCertIfGiven</code> |
 | Default value (above encoding) | `NoClientCert` |
 | `FelixConfiguration` field | `prometheusMetricsClientAuth` (YAML) `PrometheusMetricsClientAuth` (Go API) |
-| `FelixConfiguration` schema | `string` |
+| `FelixConfiguration` schema | One of: <code>"NoClientCert"</code>, <code>"RequireAndVerifyClientCert"</code>, <code>"RequireAnyClientCert"</code>, <code>"VerifyClientCertIfGiven"</code>. |
 | Default value (YAML) | `NoClientCert` |
 
 ### `PrometheusMetricsEnabled` (config file) / `prometheusMetricsEnabled` (YAML)
@@ -2060,7 +2060,7 @@ Felix will not modify the JIT hardening setting.
 | Encoding (env var/config file) | One of: <code>Auto</code>, <code>Strict</code> |
 | Default value (above encoding) | `Auto` |
 | `FelixConfiguration` field | `bpfJITHardening` (YAML) `BPFJITHardening` (Go API) |
-| `FelixConfiguration` schema | `string` |
+| `FelixConfiguration` schema | One of: <code>"Auto"</code>, <code>"Strict"</code>. |
 | Default value (YAML) | `Auto` |
 | Notes | Required. | 
 

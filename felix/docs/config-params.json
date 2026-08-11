@@ -1052,9 +1052,14 @@
           "ParsedDefaultJSON": "\"NoClientCert\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "",
-          "YAMLEnumValues": null,
-          "YAMLSchemaHTML": "",
+          "YAMLSchema": "One of: `\"NoClientCert\"`, `\"RequireAndVerifyClientCert\"`, `\"RequireAnyClientCert\"`, `\"VerifyClientCertIfGiven\"`.",
+          "YAMLEnumValues": [
+            "`\"NoClientCert\"`",
+            "`\"RequireAndVerifyClientCert\"`",
+            "`\"RequireAnyClientCert\"`",
+            "`\"VerifyClientCertIfGiven\"`"
+          ],
+          "YAMLSchemaHTML": "One of: <code>\"NoClientCert\"</code>, <code>\"RequireAndVerifyClientCert\"</code>, <code>\"RequireAnyClientCert\"</code>, <code>\"VerifyClientCertIfGiven\"</code>.",
           "YAMLDefault": "NoClientCert",
           "Required": false,
           "OnParseFailure": "ReplaceWithDefault",
@@ -3684,9 +3689,12 @@
           "ParsedDefaultJSON": "\"Auto\"",
           "ParsedType": "string",
           "YAMLType": "string",
-          "YAMLSchema": "",
-          "YAMLEnumValues": null,
-          "YAMLSchemaHTML": "",
+          "YAMLSchema": "One of: `\"Auto\"`, `\"Strict\"`.",
+          "YAMLEnumValues": [
+            "`\"Auto\"`",
+            "`\"Strict\"`"
+          ],
+          "YAMLSchemaHTML": "One of: <code>\"Auto\"</code>, <code>\"Strict\"</code>.",
           "YAMLDefault": "Auto",
           "Required": true,
           "OnParseFailure": "ReplaceWithDefault",

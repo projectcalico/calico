@@ -13479,6 +13479,23 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoNodeWindowsDaemonSet:
                   description:
                     CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -22865,6 +22882,23 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoNodeWindowsDaemonSet:
                       description:
                         CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -37221,17 +37255,13 @@ spec:
                     packets from external sources are dropped. [Default: true]
                   type: boolean
                 bpfJITHardening:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Strict
-                    - enum:
-                        - Auto
-                        - Strict
                   description: |-
                     BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
+                  enum:
+                    - Auto
+                    - Strict
                   type: string
                 bpfKubeProxyHealthzPort:
                   description: |-
@@ -38159,6 +38189,11 @@ spec:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
                     This determines how the server validates client certificates. Default is "NoClientCert".
+                  enum:
+                    - RequireAndVerifyClientCert
+                    - RequireAnyClientCert
+                    - VerifyClientCertIfGiven
+                    - NoClientCert
                   type: string
                 prometheusMetricsEnabled:
                   description:
