@@ -1,8 +1,5 @@
 import { OmniFilterProps } from '@/libs/tigera/ui-components/components/common/OmniFilter';
-import {
-    OmniFilterOption as ListOmniFilterOption,
-    OperatorType,
-} from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
+import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
     ApiFilterResponse,
     FlowsFilterKeys,
@@ -243,8 +240,6 @@ export const FilterHintTypes: Record<
 };
 
 type OmniFilterProperty = {
-    selectOptions?: ListOmniFilterOption[];
-    defaultOperatorType?: OperatorType;
     label: string;
     limit?: number;
     filterHintsKey: string;
@@ -431,8 +426,6 @@ export type ListOmniFilterData = {
 };
 
 export type SelectedOmniFilterData = Partial<ListOmniFiltersData>;
-
-export type SelectedOmniFilters = Partial<Record<OmniFilterParam, string[]>>;
 
 export type SelectedOmniFilterValues = Partial<
     Record<Exclude<UrlFilterKey, 'policy'>, string[]>

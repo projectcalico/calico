@@ -16,7 +16,6 @@ export const transformToQueries = (selectedValues: PolicyFilter[]) => {
 };
 
 export const transformToFilterOptions = (queryState: PolicyQuery[]) => {
-    console.log({ queryState });
     return queryState
         .map((query) =>
             Object.fromEntries(

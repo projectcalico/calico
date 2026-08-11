@@ -1,4 +1,3 @@
-import { FilterHintKey, StreamFilterKey } from '@/utils/omniFilter';
 import { FlowLog as ApiFlowLog } from './api';
 
 export enum Action {
@@ -26,10 +25,6 @@ export type AppConfig = {
     };
     features: Record<string, boolean>;
 };
-
-export type StreamFilters = Partial<Record<StreamFilterKey, string>>;
-
-export type FilterHintValues = Record<FilterHintKey, string[]>;
 
 export const ReporterLabels = {
     Src: 'Source',
