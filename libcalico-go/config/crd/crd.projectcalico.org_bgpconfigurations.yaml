@@ -207,13 +207,14 @@ spec:
                     ProgramClusterRoutes controls which "cluster routes" confd and BIRD program, i.e. the routes that a node
                     needs in order to reach workloads on other nodes.  It only applies to IP Pools with vxlanMode: Never; the
                     cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
-                    The routes that BIRD does not program here are expected to be programmed by Felix instead.
+                    The routes that BIRD does not program here are expected to be programmed by Felix instead.  Below, an IPIP IP
+                    Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and vxlanMode both
+                    Never.
 
                     - Disabled: BIRD programs no cluster routes.
-                    - EnabledNoEncapOnly: BIRD programs cluster routes for unencapsulated IP Pools, i.e. those with
-                      ipipMode: Never and vxlanMode: Never.
-                    - EnabledIPIPOnly: BIRD programs cluster routes for IP Pools with ipipMode: Always or CrossSubnet.
-                    - Enabled: BIRD programs cluster routes for both IPIP and unencapsulated IP Pools.
+                    - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools.
+                    - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools.
+                    - Enabled: BIRD programs them for both.
 
                     This field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which makes the same choice
                     from Felix's side.  If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the

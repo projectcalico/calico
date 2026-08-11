@@ -182,10 +182,13 @@ func expectedIPIPClusterRouteProto(cli ctrlclient.Client) RouteProto {
 		return RouteProtoFelix
 	}
 	switch *fc.Spec.ProgramClusterRoutes {
-	case "Enabled", "EnabledIPIPOnly":
-		return RouteProtoFelix
-	default:
+	case "Disabled", "EnabledNoEncapOnly":
 		return RouteProtoBIRD
+	default:
+		// Enabled and EnabledIPIPOnly, but also anything this binary does not recognise:
+		// Felix replaces an unparseable value with the parameter's default, which is
+		// EnabledIPIPOnly, so a newer value than we know about still means Felix here.
+		return RouteProtoFelix
 	}
 }
 
