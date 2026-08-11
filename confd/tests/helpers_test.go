@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -54,6 +55,7 @@ import (
 	backendapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
+	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/typha/pkg/syncclientutils"
 )
@@ -347,6 +349,20 @@ func objectMeta(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: 
 // in KDD mode and require a two-step create. In etcd mode they're created directly.
 func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 	t.Helper()
+	return applyOrUpdateResources(t, be, path, false)
+}
+
+// upsertResources is applyResources for a file that may modify resources an earlier file already
+// created -- as the follow-up steps of a multi-step scenario do. Where applyResources fails on a
+// resource that already exists, this updates it, and its cleanup restores what was there before
+// rather than deleting it.
+func upsertResources(t *testing.T, be *datastoreBackend, path string) func() {
+	t.Helper()
+	return applyOrUpdateResources(t, be, path, true)
+}
+
+func applyOrUpdateResources(t *testing.T, be *datastoreBackend, path string, upsert bool) func() {
+	t.Helper()
 	data, err := os.ReadFile(path)
 	require.NoError(t, err, "reading %s", path)
 
@@ -393,7 +409,7 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 		// For CRD types (BGPConfiguration, IPPool, etc.) in etcd mode, use the
 		// Calico client since there's no K8s API server.
 		if be.ctrlClient == nil {
-			cleanups = append(cleanups, applyCalicoResource(t, be.calicoClient, kind, yamlBytes, path))
+			cleanups = append(cleanups, applyCalicoResource(t, be.calicoClient, kind, yamlBytes, path, upsert))
 			continue
 		}
 
@@ -411,6 +427,30 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 		}
 
 		err = be.ctrlClient.Create(ctx, clientObj)
+		if upsert && apierrors.IsAlreadyExists(err) {
+			// Modify what is already there, and put it back as it was on cleanup.
+			existing := clientObj.DeepCopyObject().(ctrlclient.Object)
+			require.NoError(t, be.ctrlClient.Get(ctx, ctrlclient.ObjectKeyFromObject(clientObj), existing),
+				"reading existing %s %s to update it from %s", kind, clientObj.GetName(), path)
+			restore := existing.DeepCopyObject().(ctrlclient.Object)
+
+			clientObj.SetResourceVersion(existing.GetResourceVersion())
+			require.NoError(t, be.ctrlClient.Update(ctx, clientObj),
+				"updating %s %s from %s", kind, clientObj.GetName(), path)
+
+			cleanups = append(cleanups, func() {
+				current := restore.DeepCopyObject().(ctrlclient.Object)
+				if err := be.ctrlClient.Get(ctx, ctrlclient.ObjectKeyFromObject(restore), current); err != nil {
+					t.Logf("cleanup: failed to read %s %s back: %v", kind, restore.GetName(), err)
+					return
+				}
+				restore.SetResourceVersion(current.GetResourceVersion())
+				if err := be.ctrlClient.Update(ctx, restore); err != nil {
+					t.Logf("cleanup: failed to restore %s %s: %v", kind, restore.GetName(), err)
+				}
+			})
+			continue
+		}
 		require.NoError(t, err, "creating %s %s from %s", kind, clientObj.GetName(), path)
 
 		cleanupObj := clientObj.DeepCopyObject().(ctrlclient.Object)
@@ -429,8 +469,10 @@ func applyResources(t *testing.T, be *datastoreBackend, path string) func() {
 }
 
 // calicoResourceApplier creates a Calico resource via the clientv3 and returns
-// a cleanup function. Used by applyCalicoResource for extensibility.
-type calicoResourceApplier func(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func()
+// a cleanup function. Used by applyCalicoResource for extensibility. When upsert is set the
+// applier must update the resource if it already exists, rather than failing; an applier that
+// does not support that should fail the test rather than silently create-only.
+type calicoResourceApplier func(t *testing.T, cc client.Interface, yamlBytes []byte, path string, upsert bool) func()
 
 func init() {
 	calicoResourceHandlers["BGPConfiguration"] = applyCalicoBGPConfiguration
@@ -442,24 +484,49 @@ func init() {
 // applyCalicoResource creates a Calico CRD resource via the Calico clientv3.
 // Used in etcd mode where there's no controller-runtime client. Handlers are
 // registered in calicoResourceHandlers; downstream forks can add more.
-func applyCalicoResource(t *testing.T, cc client.Interface, kind string, yamlBytes []byte, path string) func() {
+func applyCalicoResource(t *testing.T, cc client.Interface, kind string, yamlBytes []byte, path string, upsert bool) func() {
 	t.Helper()
 	handler, ok := calicoResourceHandlers[kind]
 	if !ok {
 		t.Fatalf("unsupported Calico resource kind %q in %s", kind, path)
 		return nil
 	}
-	return handler(t, cc, yamlBytes, path)
+	return handler(t, cc, yamlBytes, path, upsert)
 }
 
-func applyCalicoBGPConfiguration(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+func applyCalicoBGPConfiguration(t *testing.T, cc client.Interface, yamlBytes []byte, path string, upsert bool) func() {
 	t.Helper()
 	ctx := context.Background()
 	var obj apiv3.BGPConfiguration
 	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
-	_, err := cc.BGPConfigurations().Create(ctx, &obj, options.SetOptions{})
-	require.NoError(t, err, "creating BGPConfiguration %s from %s", obj.Name, path)
 	name := obj.Name
+
+	_, err := cc.BGPConfigurations().Create(ctx, &obj, options.SetOptions{})
+	if upsert && err != nil {
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+			// Modify what is already there, and put it back as it was on cleanup.
+			existing, getErr := cc.BGPConfigurations().Get(ctx, name, options.GetOptions{})
+			require.NoError(t, getErr, "reading existing BGPConfiguration %s to update it from %s", name, path)
+			restore := existing.DeepCopy()
+
+			obj.ResourceVersion = existing.ResourceVersion
+			_, updErr := cc.BGPConfigurations().Update(ctx, &obj, options.SetOptions{})
+			require.NoError(t, updErr, "updating BGPConfiguration %s from %s", name, path)
+
+			return func() {
+				current, err := cc.BGPConfigurations().Get(ctx, name, options.GetOptions{})
+				if err != nil {
+					t.Logf("cleanup: failed to read BGPConfiguration %s back: %v", name, err)
+					return
+				}
+				restore.ResourceVersion = current.ResourceVersion
+				if _, err := cc.BGPConfigurations().Update(ctx, restore, options.SetOptions{}); err != nil {
+					t.Logf("cleanup: failed to restore BGPConfiguration %s: %v", name, err)
+				}
+			}
+		}
+	}
+	require.NoError(t, err, "creating BGPConfiguration %s from %s", name, path)
 	return func() {
 		if _, err := cc.BGPConfigurations().Delete(ctx, name, options.DeleteOptions{}); err != nil {
 			t.Logf("cleanup: failed to delete BGPConfiguration %s: %v", name, err)
@@ -467,8 +534,12 @@ func applyCalicoBGPConfiguration(t *testing.T, cc client.Interface, yamlBytes []
 	}
 }
 
-func applyCalicoIPPool(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+func applyCalicoIPPool(t *testing.T, cc client.Interface, yamlBytes []byte, path string, upsert bool) func() {
 	t.Helper()
+	if upsert {
+		t.Fatalf("upsert is not implemented for IPPool (needed by %s); add it alongside the "+
+			"BGPConfiguration one if a scenario step needs to modify one", path)
+	}
 	ctx := context.Background()
 	var obj apiv3.IPPool
 	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
@@ -482,8 +553,12 @@ func applyCalicoIPPool(t *testing.T, cc client.Interface, yamlBytes []byte, path
 	}
 }
 
-func applyCalicoBGPPeer(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+func applyCalicoBGPPeer(t *testing.T, cc client.Interface, yamlBytes []byte, path string, upsert bool) func() {
 	t.Helper()
+	if upsert {
+		t.Fatalf("upsert is not implemented for BGPPeer (needed by %s); add it alongside the "+
+			"BGPConfiguration one if a scenario step needs to modify one", path)
+	}
 	ctx := context.Background()
 	var obj apiv3.BGPPeer
 	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
@@ -497,8 +572,12 @@ func applyCalicoBGPPeer(t *testing.T, cc client.Interface, yamlBytes []byte, pat
 	}
 }
 
-func applyCalicoBGPFilter(t *testing.T, cc client.Interface, yamlBytes []byte, path string) func() {
+func applyCalicoBGPFilter(t *testing.T, cc client.Interface, yamlBytes []byte, path string, upsert bool) func() {
 	t.Helper()
+	if upsert {
+		t.Fatalf("upsert is not implemented for BGPFilter (needed by %s); add it alongside the "+
+			"BGPConfiguration one if a scenario step needs to modify one", path)
+	}
 	ctx := context.Background()
 	var obj apiv3.BGPFilter
 	require.NoError(t, sigyaml.Unmarshal(yamlBytes, &obj))
