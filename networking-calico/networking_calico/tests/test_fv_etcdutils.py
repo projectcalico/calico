@@ -21,12 +21,29 @@ Tests for etcdutils with a real etcd server.
 
 from __future__ import print_function
 
-# It's advised always to do eventlet monkey-patching as early as possible; but
-# __future__ imports are required to be at the very top of the file, so we must come
-# after those.  https://eventlet.readthedocs.io/en/latest/patching.html
+# These are functional-verification tests: they need a real etcd binary on
+# disk and use eventlet's cooperative I/O.  Running them under the standard
+# tox / subunit unit-test discovery is problematic for two reasons:
+#
+#  - ``eventlet.monkey_patch()`` at module import time patches socket /
+#    threading globally for the test process, even if these tests are
+#    skipped, which interacts badly with subunit's runner and hangs the run.
+#  - Other unit tests in the same process suddenly find themselves under a
+#    monkey-patched interpreter, which can change their behaviour subtly.
+#
+# So this entire file is opt-in via the CALICO_RUN_FV_TESTS=1 environment
+# variable.  Without it, the module imports cleanly (no monkey_patch) and
+# the test class is marked skipped at class-decoration time by
+# @unittest.skipUnless -- no setUpClass needs to run.  See the eventlet docs:
+# https://eventlet.readthedocs.io/en/latest/patching.html
+import os
+
+_FV_ENABLED = os.environ.get("CALICO_RUN_FV_TESTS") == "1"
+
 import eventlet
 
-eventlet.monkey_patch()
+if _FV_ENABLED:
+    eventlet.monkey_patch()
 
 import logging  # noqa: I100
 import shutil
@@ -42,6 +59,7 @@ from networking_calico.common import config as calico_config
 _log = logging.getLogger(__name__)
 
 
+@unittest.skipUnless(_FV_ENABLED, "set CALICO_RUN_FV_TESTS=1 to run FV tests")
 class TestFVEtcdutils(unittest.TestCase):
     def setUp(self):
         super(TestFVEtcdutils, self).setUp()
