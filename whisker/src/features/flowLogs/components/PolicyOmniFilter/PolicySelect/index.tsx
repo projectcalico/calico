@@ -1,16 +1,10 @@
-import { useDebouncedCallback } from '@/hooks';
-import { useOmniFilterQuery } from '@/hooks/omniFilters';
+import { useOmniFilterOptions } from '@/hooks/omniFilters';
 import OmniFilter, {
     OmniFilterChangeEvent,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import { SelectOption } from '@/libs/tigera/ui-components/components/common/Select';
-import {
-    DataListOmniFilterParam,
-    FilterHintKey,
-    SelectedOmniFilterValues,
-    transformToFlowsFilterQuery,
-} from '@/utils/omniFilter';
+import { FilterHintKey } from '@/utils/omniFilter';
 import React from 'react';
 
 type PolicySelectProps = {
@@ -28,44 +22,21 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
     showSearch = true,
     placeholder,
 }) => {
-    const { data, fetchData } = useOmniFilterQuery(filterKey);
-    const debounce = useDebouncedCallback();
-    const { filters, isLoading, total } = data;
-    const [isTyping, setIsTyping] = React.useState(false);
-
-    const getData = (searchOption?: string) => {
-        const query = transformToFlowsFilterQuery(
-            {} as SelectedOmniFilterValues,
-            filterKey as DataListOmniFilterParam,
-            searchOption,
-        );
-        fetchData(query);
-    };
-
-    const handleRequestMore = () => {
-        fetchData(null);
-    };
+    // TODO: policy sub-filter lookups are deliberately not narrowed by the
+    // other active filters, unlike the list filter chips; changing this is a
+    // product decision (flip narrowByActiveFilters to true).
+    const {
+        options,
+        isLoading,
+        total,
+        requestOptions,
+        requestSearch,
+        requestNextPage,
+    } = useOmniFilterOptions(filterKey, { narrowByActiveFilters: false });
 
     const handleChange = (change: OmniFilterChangeEvent) => {
         onChange(change.filters[0]);
     };
-
-    const onRequestSearch = React.useCallback(
-        (_filterId: string, searchOption: string) => {
-            const requestData = () => {
-                setIsTyping(false);
-                getData(searchOption);
-            };
-
-            if (searchOption.length >= 1) {
-                setIsTyping(true);
-                debounce(searchOption, requestData);
-            } else {
-                requestData();
-            }
-        },
-        [],
-    );
 
     const partsProps = React.useMemo(
         () => ({
@@ -98,17 +69,19 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
             key={filterKey}
             filterId={filterKey}
             filterLabel=''
-            filters={filters ?? []}
+            filters={options ?? []}
             selectedFilters={value ? [value] : []}
             onChange={handleChange}
             onClear={() => onChange(null)}
             showOperatorSelect={false}
             listType='select'
-            isLoading={isLoading || isTyping}
+            isLoading={isLoading}
             totalItems={total ?? 0}
-            onReady={() => getData('')}
-            onRequestSearch={onRequestSearch}
-            onRequestMore={handleRequestMore}
+            onReady={() => requestOptions('')}
+            onRequestSearch={(_filterId, searchOption) =>
+                requestSearch(searchOption)
+            }
+            onRequestMore={requestNextPage}
             showSelectedList
             isCreatable
             showSearch={showSearch}

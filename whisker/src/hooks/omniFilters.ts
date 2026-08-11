@@ -1,4 +1,5 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
+import { useDebouncedCallback } from '@/hooks';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import {
@@ -55,6 +56,8 @@ export const useOmniFilterOptions = (
 ) => {
     const { filters } = useFlowLogsUrlFilters();
     const { data, fetchData } = useOmniFilterQuery(filterId);
+    const debounce = useDebouncedCallback();
+    const [isTyping, setIsTyping] = React.useState(false);
 
     const requestOptions = (searchOption?: string) =>
         fetchData(
@@ -65,13 +68,28 @@ export const useOmniFilterOptions = (
             ),
         );
 
+    const requestSearch = (searchOption: string) => {
+        const requestData = () => {
+            requestOptions(searchOption);
+            setIsTyping(false);
+        };
+
+        if (searchOption.length >= 1) {
+            setIsTyping(true);
+            debounce(searchOption, requestData);
+        } else {
+            requestData();
+        }
+    };
+
     const requestNextPage = () => fetchData(null);
 
     return {
         options: data.filters,
-        isLoading: data.isLoading,
+        isLoading: data.isLoading || isTyping,
         total: data.total,
         requestOptions,
+        requestSearch,
         requestNextPage,
     };
 };

@@ -2,18 +2,23 @@ import { act, render, screen } from '@/test-utils/helper';
 import { FilterKey } from '@/utils/omniFilter';
 import PolicySelect from '..';
 
-const mockFetchData = jest.fn();
+const mockRequestOptions = jest.fn();
+const mockRequestSearch = jest.fn();
+const mockRequestNextPage = jest.fn();
+let mockHookArgs: any[] = [];
 let mockData: Record<string, any> = {};
 jest.mock('@/hooks/omniFilters', () => ({
-    useOmniFilterQuery: () => ({
-        data: mockData,
-        fetchData: mockFetchData,
-    }),
-}));
-
-const mockDebounce = jest.fn((_key: string, fn: () => void) => fn());
-jest.mock('@/hooks', () => ({
-    useDebouncedCallback: () => mockDebounce,
+    useOmniFilterOptions: (...args: any[]) => {
+        mockHookArgs = args;
+        return {
+            options: mockData.filters,
+            isLoading: mockData.isLoading,
+            total: mockData.total,
+            requestOptions: mockRequestOptions,
+            requestSearch: mockRequestSearch,
+            requestNextPage: mockRequestNextPage,
+        };
+    },
 }));
 
 let omniFilterProps: Record<string, any> = {};
@@ -136,46 +141,53 @@ describe('<PolicySelect />', () => {
         expect(defaultProps.onChange).toHaveBeenCalledWith(null);
     });
 
-    it('calls fetchData on ready', () => {
+    it('does not narrow its lookups by the active filters', () => {
+        render(<PolicySelect {...defaultProps} />);
+
+        expect(mockHookArgs).toEqual([
+            FilterKey.policyKind,
+            { narrowByActiveFilters: false },
+        ]);
+    });
+
+    it('requests options on ready', () => {
         render(<PolicySelect {...defaultProps} />);
 
         act(() => {
             screen.getByTestId('ready-btn').click();
         });
 
-        expect(mockFetchData).toHaveBeenCalled();
+        expect(mockRequestOptions).toHaveBeenCalledWith('');
     });
 
-    it('calls fetchData(null) on request more', () => {
+    it('requests the next page on request more', () => {
         render(<PolicySelect {...defaultProps} />);
 
         act(() => {
             screen.getByTestId('more-btn').click();
         });
 
-        expect(mockFetchData).toHaveBeenCalledWith(null);
+        expect(mockRequestNextPage).toHaveBeenCalledTimes(1);
     });
 
-    it('calls fetchData via debounce on search', () => {
+    it('forwards a search to requestSearch', () => {
         render(<PolicySelect {...defaultProps} />);
 
         act(() => {
             screen.getByTestId('search-btn').click();
         });
 
-        expect(mockDebounce).toHaveBeenCalledWith('net', expect.any(Function));
-        expect(mockFetchData).toHaveBeenCalled();
+        expect(mockRequestSearch).toHaveBeenCalledWith('net');
     });
 
-    it('calls fetchData immediately without debouncing when search is cleared', () => {
+    it('forwards a cleared search to requestSearch', () => {
         render(<PolicySelect {...defaultProps} />);
 
         act(() => {
             screen.getByTestId('search-empty-btn').click();
         });
 
-        expect(mockDebounce).not.toHaveBeenCalled();
-        expect(mockFetchData).toHaveBeenCalled();
+        expect(mockRequestSearch).toHaveBeenCalledWith('');
     });
 
     it('defaults filters and totalItems when data is not loaded yet', () => {

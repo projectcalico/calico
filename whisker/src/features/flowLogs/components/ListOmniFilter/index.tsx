@@ -1,4 +1,3 @@
-import { useDebouncedCallback } from '@/hooks';
 import { useOmniFilterOptions } from '@/hooks/omniFilters';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import { OmniFilter } from '@/libs/tigera/ui-components/components/common';
@@ -32,30 +31,20 @@ const ListOmniFilter: React.FC<ListOmniFilterProps> = ({
     selectedFilters,
 }) => {
     const { setFilter } = useFlowLogsUrlFilters();
-    const { options, isLoading, total, requestOptions, requestNextPage } =
-        useOmniFilterOptions(filterId);
-    const debounce = useDebouncedCallback();
-    const [isTyping, setIsTyping] = React.useState(false);
+    const {
+        options,
+        isLoading,
+        total,
+        requestOptions,
+        requestSearch,
+        requestNextPage,
+    } = useOmniFilterOptions(filterId);
 
     const handleChange = (event: OmniFilterChangeEvent) =>
         setFilter(
             filterId,
             event.filters.map((filter) => filter.value),
         );
-
-    const handleRequestSearch = (_filterId: string, searchOption: string) => {
-        const requestData = () => {
-            requestOptions(searchOption);
-            setIsTyping(false);
-        };
-
-        if (searchOption.length >= 1) {
-            setIsTyping(true);
-            debounce(searchOption, requestData);
-        } else {
-            requestData();
-        }
-    };
 
     return (
         <OmniFilter
@@ -67,10 +56,12 @@ const ListOmniFilter: React.FC<ListOmniFilterProps> = ({
             onClear={() => setFilter(filterId, [])}
             showOperatorSelect={false}
             listType='checkbox'
-            isLoading={isLoading || isTyping}
+            isLoading={isLoading}
             totalItems={total}
             onReady={() => requestOptions('')}
-            onRequestSearch={handleRequestSearch}
+            onRequestSearch={(_filterId, searchOption) =>
+                requestSearch(searchOption)
+            }
             onRequestMore={requestNextPage}
             showSelectedList
             isCreatable
