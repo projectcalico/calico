@@ -195,8 +195,13 @@ anon_get() {
   url="$(public_origin "$S3_BUCKET")/${S3_KEY}"
   echo "s3-cmd: no S3 credentials, fetching $src anonymously from $url" >&2
   # -f makes an HTTP error (404 on a cache miss, 403 on a non-public bucket) a
-  # non-zero exit rather than an error body written to $dst.
-  curl -fsS -L --retry 3 -o "$dst" "$url"
+  # non-zero exit rather than an error body written to $dst. curl still creates
+  # $dst before it sees the response, so clear the empty file it leaves behind —
+  # callers test for the file, or decompress into a path derived from it.
+  if ! curl -fsS -L --retry 3 -o "$dst" "$url"; then
+    rm -f "$dst"
+    return 1
+  fi
 }
 
 # Split an s3://bucket/key URL into S3_BUCKET and S3_KEY. S3_KEY is empty when
