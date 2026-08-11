@@ -152,11 +152,27 @@ type BGPConfigurationSpec struct {
 	// +optional
 	LocalWorkloadPeeringIPV6 string `json:"localWorkloadPeeringIPV6,omitempty" validate:"omitempty,ipv6"`
 
-	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
-	// confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
-	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// ProgramClusterRoutes controls which "cluster routes" confd and BIRD program, i.e. the routes that a node
+	// needs in order to reach workloads on other nodes.  It only applies to IP Pools with vxlanMode: Never; the
+	// cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
+	// The routes that BIRD does not program here are expected to be programmed by Felix instead.  Below, an IPIP IP
+	// Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and vxlanMode both
+	// Never.
+	//
+	// - Disabled: BIRD programs no cluster routes.
+	// - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools.
+	// - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools.
+	// - Enabled: BIRD programs them for both.
+	//
+	// This field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which makes the same choice
+	// from Felix's side.  If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the
+	// routes; if neither is, there will be no cluster routes at all.
+	//
+	// Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly values do, is
+	// deprecated as of v3.33 and will be removed in v3.35.
+	//
+	// [Default: EnabledNoEncapOnly]
+	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
 	// +optional
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
