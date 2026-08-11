@@ -386,6 +386,26 @@ func TestIPPool_Validation(t *testing.T) {
 			},
 		},
 		{
+			name: "pool smaller than the default IPv4 blockSize is rejected when blockSize is omitted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "10.105.0.0/28",
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
+			name: "pool smaller than the default IPv6 blockSize is rejected when blockSize is omitted",
+			obj: &v3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
+				Spec: v3.IPPoolSpec{
+					CIDR: "fd20::/124",
+				},
+			},
+			wantErr: "IP pool size is too small for use with Calico IPAM",
+		},
+		{
 			name: "blockSize equal to the pool CIDR is accepted",
 			obj: &v3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},

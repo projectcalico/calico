@@ -5828,8 +5828,9 @@ spec:
                     be equal to or greater than the block size.
                   reason: FieldValueInvalid
                   rule:
-                    "!has(self.blockSize) || self.blockSize == 0 || (has(self.disabled)
-                    && self.disabled) || cidr(self.cidr).prefixLength() <= self.blockSize"
+                    "(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength()
+                    <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize :
+                    (cidr(self.cidr).ip().family() == 4 ? 26 : 122))"
             status:
               properties:
                 conditions:

@@ -96,7 +96,7 @@ type IPPoolStatus struct {
 // +kubebuilder:validation:XValidation:rule="!cidr('169.254.0.0/16').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('169.254.0.0')",message="IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!cidr('fe80::/10').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('fe80::')",message="IPPool CIDR overlaps with IPv6 link local range fe80::/10",reason=FieldValueInvalid
 // +kubebuilder:validation:XValidation:rule="!has(self.blockSize) || self.blockSize == 0 || (cidr(self.cidr).ip().family() == 4 ? self.blockSize >= 20 && self.blockSize <= 32 : self.blockSize >= 116 && self.blockSize <= 128)",message="blockSize must be between 20 and 32 for IPv4 pools, and between 116 and 128 for IPv6 pools",reason=FieldValueInvalid
-// +kubebuilder:validation:XValidation:rule="!has(self.blockSize) || self.blockSize == 0 || (has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength() <= self.blockSize",message="IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.",reason=FieldValueInvalid
+// +kubebuilder:validation:XValidation:rule="(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength() <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize : (cidr(self.cidr).ip().family() == 4 ? 26 : 122))",message="IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.",reason=FieldValueInvalid
 type IPPoolSpec struct {
 	// The pool CIDR.
 	// +kubebuilder:validation:Required
