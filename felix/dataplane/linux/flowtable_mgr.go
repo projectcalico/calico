@@ -5,11 +5,17 @@ package intdataplane
 import (
 	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 
+	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
+	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -116,5 +122,126 @@ func (m *flowtableManager) CompleteDeferredWork() error {
 		"external": external,
 		"overlay":  m.activeOverlay.Slice(),
 	}).Debug("Updated flowtable devices")
+	return nil
+}
+
+// flowtableExclusionManager tracks the endpoints that must not take the flowtable fast path.
+// See felix/design/dataplane.md.
+type flowtableExclusionManager struct {
+	ipVersion       uint8
+	ipsetsDataplane dpsets.IPSetsDataplane
+	ipSetMetadata   ipsets.IPSetMetadata
+
+	// IPs of each excluded endpoint, keyed by endpoint ID.
+	wepIPs map[types.WorkloadEndpointID][]string
+	hepIPs map[types.HostEndpointID][]string
+	dirty  bool
+
+	logCtx *logrus.Entry
+}
+
+func newFlowtableExclusionManager(
+	ipsetsDataplane dpsets.IPSetsDataplane,
+	ipVersion uint8,
+	maxIPSetSize int,
+) *flowtableExclusionManager {
+	return &flowtableExclusionManager{
+		ipVersion:       ipVersion,
+		ipsetsDataplane: ipsetsDataplane,
+		ipSetMetadata: ipsets.IPSetMetadata{
+			MaxSize: maxIPSetSize,
+			SetID:   rules.IPSetIDNoFlowOffload,
+			Type:    ipsets.IPSetTypeHashIP,
+		},
+		wepIPs: map[types.WorkloadEndpointID][]string{},
+		hepIPs: map[types.HostEndpointID][]string{},
+		dirty:  true,
+		logCtx: logrus.WithField("ipVersion", ipVersion),
+	}
+}
+
+func (m *flowtableExclusionManager) OnUpdate(protoBufMsg any) {
+	switch msg := protoBufMsg.(type) {
+	case *proto.WorkloadEndpointUpdate:
+		id := types.ProtoToWorkloadEndpointID(msg.GetId())
+		if !workloadNeedsForwardHooks(msg.Endpoint) {
+			m.removeWorkload(id)
+			return
+		}
+		nets := msg.Endpoint.Ipv4Nets
+		if m.ipVersion == 6 {
+			nets = msg.Endpoint.Ipv6Nets
+		}
+		m.wepIPs[id] = stripSubnetMasks(nets)
+		m.dirty = true
+	case *proto.WorkloadEndpointRemove:
+		m.removeWorkload(types.ProtoToWorkloadEndpointID(msg.GetId()))
+	case *proto.HostEndpointUpdate:
+		id := types.ProtoToHostEndpointID(msg.GetId())
+		if len(msg.Endpoint.QosPolicies) == 0 {
+			m.removeHost(id)
+			return
+		}
+		ips := msg.Endpoint.ExpectedIpv4Addrs
+		if m.ipVersion == 6 {
+			ips = msg.Endpoint.ExpectedIpv6Addrs
+		}
+		m.hepIPs[id] = stripSubnetMasks(ips)
+		m.dirty = true
+	case *proto.HostEndpointRemove:
+		m.removeHost(types.ProtoToHostEndpointID(msg.GetId()))
+	}
+}
+
+// Bandwidth QoS is deliberately absent: it runs in tc, which the fast path still traverses.
+func workloadNeedsForwardHooks(wep *proto.WorkloadEndpoint) bool {
+	if wep == nil {
+		return false
+	}
+	if len(wep.QosPolicies) > 0 {
+		return true
+	}
+	qos := wep.QosControls
+	return qos != nil && (qos.IngressMaxConnections != 0 || qos.EgressMaxConnections != 0)
+}
+
+func stripSubnetMasks(addrs []string) []string {
+	ips := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		ips = append(ips, strings.Split(addr, "/")[0])
+	}
+	return ips
+}
+
+func (m *flowtableExclusionManager) removeWorkload(id types.WorkloadEndpointID) {
+	if _, exists := m.wepIPs[id]; exists {
+		delete(m.wepIPs, id)
+		m.dirty = true
+	}
+}
+
+func (m *flowtableExclusionManager) removeHost(id types.HostEndpointID) {
+	if _, exists := m.hepIPs[id]; exists {
+		delete(m.hepIPs, id)
+		m.dirty = true
+	}
+}
+
+func (m *flowtableExclusionManager) CompleteDeferredWork() error {
+	if !m.dirty {
+		return nil
+	}
+
+	members := make([]string, 0, len(m.wepIPs)+len(m.hepIPs))
+	for _, ips := range m.wepIPs {
+		members = append(members, ips...)
+	}
+	for _, ips := range m.hepIPs {
+		members = append(members, ips...)
+	}
+	m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, members)
+	m.dirty = false
+
+	m.logCtx.WithField("members", members).Debug("Updated flowtable exclusion IP set")
 	return nil
 }
