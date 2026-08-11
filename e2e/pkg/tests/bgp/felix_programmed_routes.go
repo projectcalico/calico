@@ -49,10 +49,14 @@ import (
 // What stops it is the tunnel-route reject that confd builds in
 // BGPExportFilterForTunnelRoutes (confd/pkg/backends/calico/bgp_processor.go) and the ipam
 // templates render into calico_export_to_bgp_peers. The tunl0 arm of that reject is only emitted
-// when BIRD is *not* the one programming the IPIP cluster routes, so this test has to put the
-// cluster into that state to exercise it -- which is what the setup below does. In a BIRD-routed
-// cluster the arm is absent, correctly, because there the routes are BGP-learned and the iBGP rule
-// already covers them.
+// when BIRD is *not* the one programming the IPIP cluster routes. In a BIRD-routed cluster the arm
+// is absent, correctly, because there the routes are BGP-learned and the iBGP rule already covers
+// them.
+//
+// So this needs a Felix-routed cluster, which is why it carries Feature:ClusterRoutes and is
+// included only by e2e/config/kind-felix-routing.yaml. Earlier it ran in the BIRD lane and
+// switched the cluster over itself; that left clusterRoutingMode changed for whatever Serial spec
+// ran next, and broke the BGPPeer tests. Take the lane as it is rather than reconfiguring it.
 //
 // This test pins that down for IPIP, which is the encapsulation whose ownership moved to Felix by
 // default in v3.33. The unencapsulated case has the same shape and is not covered here -- see the
@@ -60,7 +64,7 @@ import (
 // design/cluster-route-programming/DESIGN.md.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
-	describe.WithFeature("BGPPeer"),
+	describe.WithFeature("ClusterRoutes"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresBGPMesh(),
 	describe.WithSerial(),
@@ -75,7 +79,6 @@ var _ = describe.CalicoDescribe(
 		var server1 conncheck.Server
 		var client1 conncheck.Client
 		var restoreBGPConfig func()
-		var restoreOwnership func()
 		var bgpStatus *BGPStatusMonitor
 
 		f := utils.NewDefaultFramework("felix-routes")
@@ -96,10 +99,11 @@ var _ = describe.CalicoDescribe(
 			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
 			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
 
-			// Deliberately no requireBGPIsSoleRoutingMechanism() here: this test wants Felix to own
-			// the IPIP routes, and sets that up itself below.
+			// The inverse of requireBGPIsSoleRoutingMechanism, which the other specs in this
+			// package use: this one needs a cluster where Felix, not BIRD, owns the routes.
+			requireFelixOwnsIPIPClusterRoutes(cli)
+
 			restoreBGPConfig = ensureInitialBGPConfig(cli)
-			restoreOwnership = giveFelixTheClusterRoutes(cli)
 			bgpStatus = NewBGPStatusMonitor(cli)
 
 			// A dedicated IPIP pool, so the blocks under test are easy to identify in BIRD's
@@ -144,7 +148,6 @@ var _ = describe.CalicoDescribe(
 
 		ginkgo.AfterEach(func() {
 			checker.Stop()
-			restoreOwnership()
 			restoreBGPConfig()
 		})
 
@@ -210,48 +213,25 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
-// giveFelixTheClusterRoutes switches the cluster to Felix-programmed cluster routes and waits
-// until that has actually taken effect. Returns a function that puts it back.
-//
-// It goes through Installation.spec.calicoNetwork.clusterRoutingMode rather than writing
-// FelixConfiguration directly: on an operator-managed cluster the operator reconciles
-// FelixConfiguration.programClusterRoutes from clusterRoutingMode, so a direct write is reverted
-// within seconds -- and a test that did that would quietly assert nothing.
-func giveFelixTheClusterRoutes(cli ctrlclient.Client) func() {
-	ginkgo.By("Switching the cluster to Felix-programmed cluster routes")
+// requireFelixOwnsIPIPClusterRoutes fails unless the cluster is configured with Felix, rather than
+// confd and BIRD, programming the cluster routes for IPIP IP pools. This test has nothing to say
+// about a BIRD-routed cluster, and asserting against one would pass trivially.
+func requireFelixOwnsIPIPClusterRoutes(cli ctrlclient.Client) {
+	ginkgo.GinkgoHelper()
 
-	installation := &v1.Installation{}
-	err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying Installation")
-	original := installation.Spec.CalicoNetwork.ClusterRoutingMode
+	fc := &v3.FelixConfiguration{}
+	Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
+		To(Succeed(), "Error querying default FelixConfiguration")
 
-	felixMode := v1.ClusterRoutingModeFelix
-	installation.Spec.CalicoNetwork.ClusterRoutingMode = &felixMode
-	err = cli.Update(context.Background(), installation)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error updating Installation")
-
-	// Wait for the operator to have pushed the change through to both config resources.
-	EventuallyWithOffset(1, func(g Gomega) {
-		fc := &v3.FelixConfiguration{}
-		g.Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).To(Succeed())
-		g.Expect(fc.Spec.ProgramClusterRoutes).NotTo(BeNil())
-		g.Expect(*fc.Spec.ProgramClusterRoutes).To(Equal("Enabled"))
-
-		bc := &v3.BGPConfiguration{}
-		g.Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, bc)).To(Succeed())
-		g.Expect(bc.Spec.ProgramClusterRoutes).NotTo(BeNil())
-		g.Expect(*bc.Spec.ProgramClusterRoutes).To(Equal("Disabled"))
-	}, 2*time.Minute, 5*time.Second).Should(Succeed(),
-		"operator did not reconcile clusterRoutingMode through to the programClusterRoutes fields")
-
-	return func() {
-		ginkgo.By("Restoring the cluster's routing mode")
-		installation := &v1.Installation{}
-		if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation); err == nil {
-			installation.Spec.CalicoNetwork.ClusterRoutingMode = original
-			_ = cli.Update(context.Background(), installation)
-		}
+	// An unset field means Calico's own default, which is EnabledIPIPOnly.
+	programClusterRoutes := "EnabledIPIPOnly"
+	if fc.Spec.ProgramClusterRoutes != nil {
+		programClusterRoutes = *fc.Spec.ProgramClusterRoutes
 	}
+	Expect(programClusterRoutes).To(BeElementOf("Enabled", "EnabledIPIPOnly"),
+		"this test needs Felix to own the IPIP cluster routes, but FelixConfiguration's "+
+			"programClusterRoutes is %s. In CI it runs in the Felix-routing lane; locally, "+
+			"deploy with hack/test/kind/infra/values-felix-routing.yaml.", programClusterRoutes)
 }
 
 // expectFelixOwnsRemoteRoutes fails unless the kernel route to a remote block really is
