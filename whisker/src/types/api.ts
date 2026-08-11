@@ -112,7 +112,6 @@ export type FlowsFilter = Partial<{
     policies: FlowsFilterQuery[];
     reporter: FlowsFilterQuery[];
     actions: FlowsFilterQuery[];
-    staged_actions: FlowsFilterQuery[];
     pending_actions: FlowsFilterQuery[];
 }>;
 

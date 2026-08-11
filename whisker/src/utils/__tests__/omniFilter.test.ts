@@ -21,6 +21,7 @@ import {
     transformToPolicyFilterToRequest,
     transformToQueryPage,
     transformToSinlgeValue,
+    urlFilterKeys,
 } from '../omniFilter';
 
 /**
@@ -101,7 +102,6 @@ describe('URL <-> filter state round trip', () => {
                 protocol: ['udp'],
                 action: ['allow'],
                 staged_action: ['Deny'],
-                pending_action: ['Allow'],
                 reporter: ['Src'],
                 start_time: ['15'],
             },
@@ -350,31 +350,22 @@ describe('URL -> flows filter query', () => {
     it('should contribute no filter hints for start_time', () => {
         // start_time reaches the backend as startTimeGte, not as a filter
         // hint. FlowLogsPage strips it before building the query, but if it
-        // slips through, the query must not gain a start_time constraint.
-        const query = transformToFlowsFilterQuery({ start_time: ['15'] });
-
-        expect(JSON.parse(query)).toEqual({});
+        // slips through, the query must not gain a start_time constraint:
+        // keys without a wire key are skipped, leaving an empty query.
+        expect(transformToFlowsFilterQuery({ start_time: ['15'] })).toBe('');
     });
 
     it('should return an empty string when nothing is filtered', () => {
         expect(transformToFlowsFilterQuery({})).toBe('');
     });
 
-    // KNOWN DEFECT, pinned with it.failing so CI stays green but the test
-    // starts failing (i.e. demands attention) the moment it is fixed.
-    //
-    // `pending_action` is accepted by parseFiltersFromParams but has no entry
-    // in OmniFilterProperties, so reading its filterHintsKey throws. A URL
-    // carrying ?pending_action=... therefore blanks the page via
-    // FlowLogsErrorBoundary instead of rendering flows.
-    it.failing(
-        'should not throw on a URL carrying the pending_action filter',
-        () => {
-            expect(() =>
-                urlToFlowsFilter('pending_action=Allow'),
-            ).not.toThrow();
-        },
-    );
+    it('should ignore a URL carrying the unsupported pending_action param', () => {
+        // pending_action used to be accepted off the URL without an
+        // OmniFilterProperties entry, which crashed the query builder and
+        // blanked the page. URL keys are now derived from the registry, so
+        // an unsupported param is ignored like any other unknown param.
+        expect(urlToFlowsFilter('pending_action=Allow')).toEqual({});
+    });
 
     describe('dest_port coercion', () => {
         // dest_port is the only filter that changes type on the wire, and the
@@ -554,32 +545,35 @@ describe('filter key metadata', () => {
         expect(new Set(hintKeys).size).toBe(hintKeys.length);
     });
 
-    // KNOWN DEFECT (root cause of the pending_action crash above): every key
-    // that parseFiltersFromParams will accept off the URL has to have an
-    // OmniFilterProperties entry, or transformToFlowsFilterQuery throws on it.
-    it.failing(
-        'should describe every filter key that can appear in the URL',
-        () => {
-            const urlFilterKeys = [
-                'source_name',
-                'source_namespace',
-                'dest_name',
-                'dest_namespace',
-                'policy',
-                'dest_port',
-                'protocol',
-                'action',
-                'staged_action',
-                'pending_action',
-                'reporter',
-                'start_time',
-            ];
+    it('should accept exactly the supported URL filter keys', () => {
+        // The URL surface is derived from the registry, so a registry edit
+        // that adds, drops, or renames a URL param trips this pin. Deep links
+        // in the wild depend on these exact names.
+        expect([...urlFilterKeys].sort()).toEqual([
+            'action',
+            'dest_name',
+            'dest_namespace',
+            'dest_port',
+            'policy',
+            'protocol',
+            'reporter',
+            'source_name',
+            'source_namespace',
+            'staged_action',
+            'start_time',
+        ]);
+    });
 
-            expect(
-                urlFilterKeys.filter((key) => !(key in OmniFilterProperties)),
-            ).toEqual([]);
-        },
-    );
+    it('should not accept the unsupported pending_action key off the URL', () => {
+        // pending_action once slipped into the URL key list without a
+        // registry entry and crashed the page; it must stay unaccepted
+        // (staged_action is the filter that maps onto pending_actions).
+        expect(
+            parseFiltersFromParams(
+                new URLSearchParams('pending_action=Allow'),
+            ),
+        ).toEqual({});
+    });
 
     it('should classify start_time as a stream filter and a custom filter', () => {
         // start_time restarts the stream (startTimeGte) rather than being a
