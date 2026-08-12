@@ -857,7 +857,7 @@ var _ = Describe("Gateway API controller tests", func() {
 
 var fakeComponentHandlers []*fakeComponentHandler
 
-func FakeComponentHandler(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object) utils.ComponentHandler {
+func FakeComponentHandler(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler {
 	h := &fakeComponentHandler{
 		client: client,
 		scheme: scheme,

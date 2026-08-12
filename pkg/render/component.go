@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,10 @@
 package render
 
 import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	operatorv1 "github.com/tigera/operator/api/v1"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Component interface {
@@ -39,3 +40,58 @@ type Component interface {
 	// that create pods. Return OSTypeAny means that no node selector should be set for the "kubernetes.io/os" label.
 	SupportedOSType() rmeta.OSType
 }
+
+// A component that exposes an extension point hands a variant the config it rendered
+// from. The accessor names differ per component, so an unrelated one can't match.
+type (
+	NodeComponent interface {
+		Component
+		NodeConfig() *NodeConfiguration
+	}
+
+	TyphaComponent interface {
+		Component
+		TyphaConfig() *TyphaConfiguration
+	}
+
+	WindowsComponent interface {
+		Component
+		WindowsConfig() *WindowsConfiguration
+	}
+
+	GuardianComponent interface {
+		Component
+		GuardianConfig() *GuardianConfiguration
+	}
+
+	GuardianPolicyComponent interface {
+		Component
+		GuardianPolicyConfig() *GuardianConfiguration
+	}
+
+	APIServerComponent interface {
+		Component
+		APIServerConfig() *APIServerConfiguration
+	}
+
+	APIServerPolicyComponent interface {
+		Component
+		APIServerPolicyConfig() *APIServerConfiguration
+	}
+)
+
+// Component names, which key the image overrides a variant resolves through.
+const (
+	ComponentNameNode = "node"
+
+	// ComponentNameCNIPlugins keys the upstream CNI plugins image. The node
+	// component renders the cni-plugins init container, so the image resolves
+	// through its own override key.
+	ComponentNameCNIPlugins = "cni-plugins"
+
+	// The two windows images get their own keys, since one component renders both.
+	ComponentNameWindowsNodeImg = "windows-node-image"
+	ComponentNameWindowsCNIImg  = "windows-cni-image"
+
+	ComponentNameKubeControllers = "kube-controllers"
+)

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package kubecontrollers_test
+package installation_test
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
+	"github.com/tigera/operator/pkg/enterprise/installation"
 )
 
 func dockerConfigJSONSecret(name string, auths map[string]any) *corev1.Secret {
@@ -49,7 +49,7 @@ func mergedAuths(t *testing.T, s *corev1.Secret) map[string]map[string]string {
 }
 
 func TestMergeWAFPullSecret_MergesDisjointRegistries(t *testing.T) {
-	merged, skipped := kubecontrollers.MergeWAFPullSecret([]*corev1.Secret{
+	merged, skipped := installation.MergeWAFPullSecret([]*corev1.Secret{
 		dockerConfigJSONSecret("tigera-pull-secret", map[string]any{"quay.io": map[string]string{"auth": "dGlnZXJh"}}),
 		dockerConfigJSONSecret("mirror-pull-secret", map[string]any{"registry.example.com": map[string]string{"auth": "bWlycm9y"}}),
 	})
@@ -59,7 +59,7 @@ func TestMergeWAFPullSecret_MergesDisjointRegistries(t *testing.T) {
 	if merged == nil {
 		t.Fatal("expected a merged secret")
 	}
-	if merged.Name != kubecontrollers.WASMPullSecretName || merged.Namespace != common.CalicoNamespace {
+	if merged.Name != installation.WASMPullSecretName || merged.Namespace != common.CalicoNamespace {
 		t.Fatalf("unexpected name/namespace: %s/%s", merged.Namespace, merged.Name)
 	}
 	if merged.Type != corev1.SecretTypeDockerConfigJson {
@@ -72,7 +72,7 @@ func TestMergeWAFPullSecret_MergesDisjointRegistries(t *testing.T) {
 }
 
 func TestMergeWAFPullSecret_FirstSecretWinsOnDuplicateRegistry(t *testing.T) {
-	merged, _ := kubecontrollers.MergeWAFPullSecret([]*corev1.Secret{
+	merged, _ := installation.MergeWAFPullSecret([]*corev1.Secret{
 		dockerConfigJSONSecret("first", map[string]any{"quay.io": map[string]string{"auth": "Zmlyc3Q="}}),
 		dockerConfigJSONSecret("second", map[string]any{"quay.io": map[string]string{"auth": "c2Vjb25k"}}),
 	})
@@ -88,7 +88,7 @@ func TestMergeWAFPullSecret_SkipsUnparseableSecrets(t *testing.T) {
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: []byte("not-json")},
 	}
-	merged, skipped := kubecontrollers.MergeWAFPullSecret([]*corev1.Secret{
+	merged, skipped := installation.MergeWAFPullSecret([]*corev1.Secret{
 		bad,
 		dockerConfigJSONSecret("good", map[string]any{"quay.io": map[string]string{"auth": "Z29vZA=="}}),
 	})
@@ -111,7 +111,7 @@ func TestMergeWAFPullSecret_LegacyDockercfg(t *testing.T) {
 		Type:       corev1.SecretTypeDockercfg,
 		Data:       map[string][]byte{corev1.DockerConfigKey: cfg},
 	}
-	merged, skipped := kubecontrollers.MergeWAFPullSecret([]*corev1.Secret{legacy})
+	merged, skipped := installation.MergeWAFPullSecret([]*corev1.Secret{legacy})
 	if len(skipped) != 0 {
 		t.Fatalf("expected no skipped secrets, got %v", skipped)
 	}
@@ -127,7 +127,7 @@ func TestMergeWAFPullSecret_NothingUsableReturnsNil(t *testing.T) {
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: []byte("not-json")},
 	}
-	merged, skipped := kubecontrollers.MergeWAFPullSecret([]*corev1.Secret{bad})
+	merged, skipped := installation.MergeWAFPullSecret([]*corev1.Secret{bad})
 	if merged != nil {
 		t.Fatalf("expected nil secret, got %v", merged)
 	}
@@ -141,8 +141,8 @@ func TestMergeWAFPullSecret_DeterministicOutput(t *testing.T) {
 		dockerConfigJSONSecret("a", map[string]any{"z.example.com": map[string]string{"auth": "eg=="}, "a.example.com": map[string]string{"auth": "YQ=="}}),
 		dockerConfigJSONSecret("b", map[string]any{"m.example.com": map[string]string{"auth": "bQ=="}}),
 	}
-	first, _ := kubecontrollers.MergeWAFPullSecret(in)
-	second, _ := kubecontrollers.MergeWAFPullSecret(in)
+	first, _ := installation.MergeWAFPullSecret(in)
+	second, _ := installation.MergeWAFPullSecret(in)
 	if string(first.Data[corev1.DockerConfigJsonKey]) != string(second.Data[corev1.DockerConfigJsonKey]) {
 		t.Fatal("merged secret bytes must be deterministic across reconciles")
 	}

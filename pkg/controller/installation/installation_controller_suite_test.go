@@ -25,7 +25,17 @@ import (
 	clientfeaturestesting "k8s.io/client-go/features/testing"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	operatorv1 "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 )
+
+// testExtensions is the enterprise extension Set the installation controller
+// tests reconcile with, mirroring how main wires it in production. Reconcilers
+// built in these tests put it on their options so the node image overrides and
+// modifiers apply.
+var testExtensions = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{})
 
 func TestInstallation(t *testing.T) {
 	// Disable WatchListClient for tests. In client-go v0.35+, this feature defaults to true and

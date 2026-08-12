@@ -278,10 +278,10 @@ func (c *managerComponent) Objects() ([]client.Object, []client.Object) {
 		// For multi-tenant environments, the management cluster itself isn't shown in the UI so we only need to create these
 		// when there is no tenant.
 		objsToCreate = append(objsToCreate,
-			managerClusterWideSettingsGroup(),
-			managerUserSpecificSettingsGroup(),
-			managerClusterWideTigeraLayer(),
-			managerClusterWideDefaultView(),
+			ManagerClusterWideSettingsGroup(),
+			ManagerUserSpecificSettingsGroup(),
+			ManagerClusterWideTigeraLayer(),
+			ManagerClusterWideDefaultView(),
 		)
 		// Continue to create the legacy namespace so that we can create our external name service that points to the new
 		// manager service. This will help ease transition for customers and avoid outages caused by the name and namespace
@@ -1496,10 +1496,10 @@ func (c *managerComponent) multiTenantManagedClustersAccess() []client.Object {
 	return objects
 }
 
-// managerClusterWideSettingsGroup returns a UISettingsGroup with the description "cluster-wide settings"
+// ManagerClusterWideSettingsGroup returns a UISettingsGroup with the description "cluster-wide settings"
 //
 // Calico Enterprise only
-func managerClusterWideSettingsGroup() *v3.UISettingsGroup {
+func ManagerClusterWideSettingsGroup() *v3.UISettingsGroup {
 	return &v3.UISettingsGroup{
 		TypeMeta: metav1.TypeMeta{Kind: "UISettingsGroup", APIVersion: "projectcalico.org/v3"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -1511,10 +1511,10 @@ func managerClusterWideSettingsGroup() *v3.UISettingsGroup {
 	}
 }
 
-// managerUserSpecificSettingsGroup returns a UISettingsGroup with the description "user settings"
+// ManagerUserSpecificSettingsGroup returns a UISettingsGroup with the description "user settings"
 //
 // Calico Enterprise only
-func managerUserSpecificSettingsGroup() *v3.UISettingsGroup {
+func ManagerUserSpecificSettingsGroup() *v3.UISettingsGroup {
 	return &v3.UISettingsGroup{
 		TypeMeta: metav1.TypeMeta{Kind: "UISettingsGroup", APIVersion: "projectcalico.org/v3"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -1527,11 +1527,11 @@ func managerUserSpecificSettingsGroup() *v3.UISettingsGroup {
 	}
 }
 
-// managerClusterWideTigeraLayer returns a UISettings layer belonging to the cluster-wide settings group that contains
+// ManagerClusterWideTigeraLayer returns a UISettings layer belonging to the cluster-wide settings group that contains
 // all of the tigera namespaces.
 //
 // Calico Enterprise only
-func managerClusterWideTigeraLayer() *v3.UISettings {
+func ManagerClusterWideTigeraLayer() *v3.UISettings {
 	namespaces := []string{
 		"tigera-dex",
 		"tigera-dpi",
@@ -1575,11 +1575,11 @@ func managerClusterWideTigeraLayer() *v3.UISettings {
 	}
 }
 
-// managerClusterWideDefaultView returns a UISettings view belonging to the cluster-wide settings group that shows
+// ManagerClusterWideDefaultView returns a UISettings view belonging to the cluster-wide settings group that shows
 // everything and uses the tigera-infrastructure layer.
 //
 // Calico Enterprise only
-func managerClusterWideDefaultView() *v3.UISettings {
+func ManagerClusterWideDefaultView() *v3.UISettings {
 	return &v3.UISettings{
 		TypeMeta: metav1.TypeMeta{Kind: "UISettings", APIVersion: "projectcalico.org/v3"},
 		ObjectMeta: metav1.ObjectMeta{

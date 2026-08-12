@@ -27,6 +27,7 @@ import (
 
 	netv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
@@ -42,12 +43,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apigroup"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/status"
+	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 )
@@ -79,16 +85,32 @@ type ComponentHandler interface {
 	SetCreateOnly()
 }
 
+// ComponentHandlerOption configures a componentHandler.
+type ComponentHandlerOption func(*componentHandler)
+
+// ComponentModifier post-processes a component before the handler renders it. The
+// handler applies it to every component, and never learns what it does.
+type ComponentModifier func(render.Component) render.Component
+
+// WithModifier supplies the modifier the handler runs each component through.
+func WithModifier(m ComponentModifier) ComponentHandlerOption {
+	return func(c *componentHandler) { c.modify = m }
+}
+
 // cr is allowed to be nil in the case we don't want to put ownership on a resource,
 // this is useful for CRD management so that they are not removed automatically.
-func NewComponentHandler(log logr.Logger, cli client.Client, scheme *runtime.Scheme, cr metav1.Object) ComponentHandler {
-	return &componentHandler{
+func NewComponentHandler(log logr.Logger, cli client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...ComponentHandlerOption) ComponentHandler {
+	h := &componentHandler{
 		client:       cli,
 		scheme:       scheme,
 		cr:           cr,
 		log:          log,
 		apiGroupEnvs: apigroup.EnvVars(),
 	}
+	for _, o := range opts {
+		o(h)
+	}
+	return h
 }
 
 type componentHandler struct {
@@ -98,6 +120,7 @@ type componentHandler struct {
 	log          logr.Logger
 	createOnly   bool
 	apiGroupEnvs []v1.EnvVar
+	modify       ComponentModifier
 }
 
 func (c *componentHandler) SetCreateOnly() {
@@ -440,6 +463,10 @@ func resetMetadataForCreate(obj client.Object) {
 }
 
 func (c *componentHandler) CreateOrUpdateOrDelete(ctx context.Context, component render.Component, status status.StatusManager) error {
+	if c.modify != nil {
+		component = c.modify(component)
+	}
+
 	// Before creating the component, make sure that it is ready. This provides a hook to do
 	// dependency checking for the component.
 	cmpLog := c.log.WithValues("component", reflect.TypeOf(component))
@@ -1173,7 +1200,6 @@ func addComponentLabel(obj metav1.Object, cr metav1.Object) {
 		owner, ok := cr.(runtime.Object)
 		if ok && owner.GetObjectKind() != nil && owner.GetObjectKind() != nil {
 			obj.GetLabels()["app.kubernetes.io/component"] = sanitizeLabel(owner.GetObjectKind().GroupVersionKind().GroupKind().String())
-
 		}
 	}
 }
@@ -1278,4 +1304,21 @@ func policyManagementDisabled(installation *operatorv1.InstallationSpec) bool {
 	return installation.NetworkPolicy != nil &&
 		installation.NetworkPolicy.ManagePolicies != nil &&
 		*installation.NetworkPolicy.ManagePolicies == operatorv1.NetworkPolicyManagementDisabled
+}
+
+// AddCRDWatches watches the given CRDs, so the operator notices a managed CRD being
+// changed out from under it. A variant extension calls it for the CRDs it adds.
+func AddCRDWatches(c ctrlruntime.Controller, defs []*apiextenv1.CustomResourceDefinition) error {
+	pred := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			// Create occurs because we've created it, so we can safely ignore it.
+			return false
+		},
+	}
+	for _, x := range defs {
+		if err := c.WatchObject(x, &handler.EnqueueRequestForObject{}, pred); err != nil {
+			return err
+		}
+	}
+	return nil
 }

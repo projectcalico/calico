@@ -45,17 +45,6 @@
             12388
           ]
         }
-      },
-      {
-        "action": "Allow",
-        "protocol": "TCP",
-        "destination": {
-          "selector": "k8s-app == 'calico-manager'",
-          "namespaceSelector": "kubernetes.io/metadata.name == 'calico-system'",
-          "ports": [
-            9443
-          ]
-        }
       }
     ],
     "ingress": [

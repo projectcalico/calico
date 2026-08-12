@@ -24,7 +24,18 @@ import (
 
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	operatorv1 "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 )
+
+// testExtensions is the registry the API server controller tests reconcile with, so
+// the componentHandler applies the API server modifier.
+var testExtensions = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{})
+
+// multiTenantExtensions is the same registry in multi-tenant mode.
+var multiTenantExtensions = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{MultiTenant: true})
 
 func TestStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))

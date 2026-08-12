@@ -43,6 +43,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/imports/admission"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
@@ -607,6 +609,14 @@ admission policy installation; once an Installation exists it is the authority o
 		os.Exit(1)
 	}
 
+	// Build the extensions for the variant we resolved above.
+	extensionRegistry := enterprise.New(variant, eoptions.Options{
+		MultiTenant: multiTenant,
+		Cloud:       isCloudBuild(),
+		ManageCRDs:  manageCRDs,
+		UseV3CRDs:   v3CRDs,
+	})
+
 	options := options.ControllerOptions{
 		DetectedProvider:  provider,
 		Variant:           variant,
@@ -621,6 +631,7 @@ admission policy installation; once an Installation exists it is the authority o
 		ESMigration:       elasticIsMigrating,
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
+		Extensions:        extensionRegistry,
 	}
 
 	// Before we start any controllers, make sure our options are valid.

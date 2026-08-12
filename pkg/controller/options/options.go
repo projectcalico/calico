@@ -20,6 +20,7 @@ import (
 	v1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/common/discovery"
+	"github.com/tigera/operator/pkg/extensions"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -68,4 +69,8 @@ type ControllerOptions struct {
 	// the operator cares about. Populated once at startup so controllers can branch on API
 	// availability without issuing further discovery requests at reconcile time.
 	APIDiscovery *discovery.APIDiscovery
+
+	// Extensions are the variant extensions the operator runs with, for the Variant
+	// above. The core operator leaves them unset and runs the base behavior.
+	Extensions extensions.Extensions
 }

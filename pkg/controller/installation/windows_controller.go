@@ -16,7 +16,6 @@ package installation
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 
@@ -28,7 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -43,6 +42,7 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/active"
 	"github.com/tigera/operator/pkg/common"
+	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
 	"github.com/tigera/operator/pkg/controller/options"
@@ -50,10 +50,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/monitor"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
 var logw = logf.Log.WithName("controller_windows")
@@ -66,7 +64,7 @@ func AddWindowsController(mgr manager.Manager, opts options.ControllerOptions) e
 		return fmt.Errorf("failed to create Windows Reconciler: %w", err)
 	}
 
-	c, err := ctrlruntime.NewController("tigera-windows-controller", mgr, controller.Options{Reconciler: ri})
+	c, err := ctrlruntime.NewController("tigera-windows-controller", mgr, ctrl.Options{Reconciler: ri})
 	if err != nil {
 		return fmt.Errorf("failed to create tigera-windows-controller: %w", err)
 	}
@@ -82,7 +80,7 @@ func AddWindowsController(mgr manager.Manager, opts options.ControllerOptions) e
 		return fmt.Errorf("tigera-windows-controller failed to watch calico Tigerastatus: %w", err)
 	}
 
-	if ri.autoDetectedProvider.IsOpenShift() {
+	if ri.opts.DetectedProvider.IsOpenShift() {
 		// Watch for openshift network configuration as well. If we're running in OpenShift, we need to
 		// merge this configuration with our own and the write back the status object.
 		err = c.WatchObject(&configv1.Network{}, &handler.EnqueueRequestForObject{})
@@ -150,15 +148,8 @@ func AddWindowsController(mgr manager.Manager, opts options.ControllerOptions) e
 	// Watch for changes to IPAMConfiguration.
 	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, logw, ri.ipamConfigWatchReady, []client.Object{&v3.IPAMConfiguration{TypeMeta: metav1.TypeMeta{Kind: v3.KindIPAMConfiguration}}})
 
-	if ri.variant.IsEnterprise() {
-		for _, ns := range []string{common.CalicoNamespace, common.OperatorNamespace()} {
-			if err = utils.AddSecretsWatch(c, render.NodePrometheusTLSServerSecret, ns); err != nil {
-				return fmt.Errorf("tigera-windows-controller failed to watch secret '%s' in '%s' namespace: %w", render.NodePrometheusTLSServerSecret, ns, err)
-			}
-			if err = utils.AddSecretsWatch(c, monitor.PrometheusClientTLSSecretName, ns); err != nil {
-				return fmt.Errorf("tigera-windows-controller failed to watch secret '%s' in '%s' namespace: %w", monitor.PrometheusClientTLSSecretName, ns, err)
-			}
-		}
+	if err = opts.Extensions.Windows().Watches(c); err != nil {
+		return fmt.Errorf("tigera-windows-controller failed to set up extension watches: %w", err)
 	}
 
 	// Perform periodic reconciliation. This acts as a backstop to catch reconcile issues,
@@ -176,11 +167,10 @@ type ReconcileWindows struct {
 	client               client.Client
 	scheme               *runtime.Scheme
 	watches              map[runtime.Object]struct{}
-	autoDetectedProvider operatorv1.Provider
 	status               status.StatusManager
-	variant              operatorv1.ProductVariant
-	clusterDomain        string
 	ipamConfigWatchReady *utils.ReadyFlag
+	opts                 options.ControllerOptions
+	ext                  extensions.WindowsExtension
 }
 
 // newWindowsReconciler returns a new reconcile.Reconciler
@@ -192,11 +182,10 @@ func newWindowsReconciler(mgr manager.Manager, opts options.ControllerOptions) (
 		client:               mgr.GetClient(),
 		scheme:               mgr.GetScheme(),
 		watches:              make(map[runtime.Object]struct{}),
-		autoDetectedProvider: opts.DetectedProvider,
 		status:               statusManager,
-		variant:              opts.Variant,
-		clusterDomain:        opts.ClusterDomain,
 		ipamConfigWatchReady: &utils.ReadyFlag{},
+		opts:                 opts,
+		ext:                  opts.Extensions.Windows(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	return r, nil
@@ -288,7 +277,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	certificateManager, err := certificatemanager.Create(r.client, &instance.Spec, r.clusterDomain, common.OperatorNamespace())
+	certificateManager, err := certificatemanager.Create(r.client, &instance.Spec, r.opts.ClusterDomain, common.OperatorNamespace())
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
@@ -328,36 +317,9 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		}
 	}
 
-	// nodeReporterMetricsPort is a port used in Enterprise to host internal metrics.
-	// Operator is responsible for creating a service which maps to that port.
-	// Here, we'll check the default felixconfiguration to see if the user is specifying
-	// a non-default port, and use that value if they are.
-	nodeReporterMetricsPort := defaultNodeReporterPort
-	var nodePrometheusTLS certificatemanagement.KeyPairInterface
-	if instance.Spec.Variant.IsEnterprise() {
-
-		// Determine the port to use for nodeReporter metrics.
-		if felixConfiguration.Spec.PrometheusReporterPort != nil {
-			nodeReporterMetricsPort = *felixConfiguration.Spec.PrometheusReporterPort
-		}
-
-		if nodeReporterMetricsPort == 0 {
-			err := errors.New("felixConfiguration prometheusReporterPort=0 not supported")
-			r.status.SetDegraded(operatorv1.InvalidConfigurationError, "invalid metrics port", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-
-		// The key pair is created by the core controller, so if it isn't set, requeue to wait until it is
-		nodePrometheusTLS, err = certificateManager.GetKeyPair(r.client, render.NodePrometheusTLSServerSecret, common.OperatorNamespace(), dns.GetServiceDNSNames(render.WindowsNodeMetricsService, common.CalicoNamespace, r.clusterDomain))
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceCreateError, "Error getting TLS certificate", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-	}
-
 	var component render.Component
 
-	kubeDNSServiceName := utils.GetDNSServiceName(r.autoDetectedProvider)
+	kubeDNSServiceName := utils.GetDNSServiceName(r.opts.DetectedProvider)
 	kubeDNSService := &corev1.Service{}
 	err = r.client.Get(ctx, kubeDNSServiceName, kubeDNSService)
 	if err != nil {
@@ -377,15 +339,39 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
+	// Run the variant's windows controller extension to build the render inputs
+	// (creating no enterprise artifacts in core).
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{
+			Installation:       &instance.Spec,
+			FelixConfiguration: felixConfiguration,
+			ClusterDomain:      r.opts.ClusterDomain,
+			TrustedBundle:      typhaNodeTLS.TrustedBundle,
+		},
+		Client:             r.client,
+		CertificateManager: certificateManager,
+	}
+	ci, _, err = r.ext.ExtendInputs(ctx, ci)
+	if err != nil {
+		if reason, ok := extensions.DegradedReason(err); ok {
+			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
+			if reason == operatorv1.ResourceNotReady {
+				return reconcile.Result{}, nil
+			}
+			return reconcile.Result{}, err
+		}
+		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing windows extension", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	windowsCfg := render.WindowsConfiguration{
-		K8sServiceEp:            k8sapi.Endpoint,
-		K8sDNSServers:           kubeDNSIPs,
-		Installation:            &instance.Spec,
-		ClusterDomain:           r.clusterDomain,
-		TLS:                     typhaNodeTLS,
-		PrometheusServerTLS:     nodePrometheusTLS,
-		NodeReporterMetricsPort: nodeReporterMetricsPort,
-		VXLANVNI:                *felixConfiguration.Spec.VXLANVNI,
+		K8sServiceEp:   k8sapi.Endpoint,
+		K8sDNSServers:  kubeDNSIPs,
+		Installation:   &instance.Spec,
+		ClusterDomain:  r.opts.ClusterDomain,
+		TLS:            typhaNodeTLS,
+		VXLANVNI:       *felixConfiguration.Spec.VXLANVNI,
+		ImageOverrides: r.ext.Images(),
 	}
 	component = render.Windows(&windowsCfg)
 
@@ -406,7 +392,15 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Create a component handler to create or update the rendered components.
-	handler := utils.NewComponentHandler(logw, r.client, r.scheme, instance)
+	handler := utils.NewComponentHandler(
+		logw,
+		r.client,
+		r.scheme,
+		instance,
+		utils.WithModifier(func(c render.Component) render.Component {
+			return r.ext.Modify(c, ci.RenderInputs)
+		}),
+	)
 	if err := handler.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)
 		return reconcile.Result{}, err

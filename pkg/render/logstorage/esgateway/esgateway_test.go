@@ -37,12 +37,12 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	entkubecontrollers "github.com/tigera/operator/pkg/enterprise/kubecontrollers"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/podaffinity"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/testutils"
 	"github.com/tigera/operator/pkg/tls"
@@ -82,9 +82,9 @@ var _ = Describe("ES Gateway rendering tests", func() {
 				ESGatewayKeyPair: kp,
 				TrustedBundle:    bundle,
 				KubeControllersUserSecrets: []*corev1.Secret{
-					{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
-					{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
-					{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
+					{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
+					{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
+					{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
 				},
 				ClusterDomain:   clusterDomain,
 				EsAdminUserName: "elastic",
@@ -96,9 +96,9 @@ var _ = Describe("ES Gateway rendering tests", func() {
 		It("should render an ES Gateway deployment and all supporting resources", func() {
 			expectedResources := []client.Object{
 				&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: PolicyName, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
 				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},
@@ -143,9 +143,9 @@ var _ = Describe("ES Gateway rendering tests", func() {
 
 			expectedResources := []client.Object{
 				&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: PolicyName, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
 				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},
@@ -182,9 +182,9 @@ var _ = Describe("ES Gateway rendering tests", func() {
 			installation.CertificateManagement = &operatorv1.CertificateManagement{CACert: secret.Data[corev1.TLSCertKey]}
 			expectedResources := []client.Object{
 				&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: PolicyName, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
-				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersUserSecret, Namespace: common.OperatorNamespace()}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersVerificationUserSecret, Namespace: render.ElasticsearchNamespace}},
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: entkubecontrollers.ElasticsearchKubeControllersSecureUserSecret, Namespace: render.ElasticsearchNamespace}},
 				&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},
 				&rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: RoleName, Namespace: render.ElasticsearchNamespace}},

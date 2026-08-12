@@ -24,23 +24,34 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
+	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
 const (
 	WindowsNodeObjectName     = "calico-node-windows"
 	WindowsNodeMetricsService = "calico-node-metrics-windows"
+
+	WindowsInstallCNIContainerName = "install-cni"
+	WindowsNodeContainerName       = "node"
+	WindowsFelixContainerName      = "felix"
+	WindowsConfdContainerName      = "confd"
 )
+
+// WindowsNodeContainerNames are the calico-node-windows containers that always
+// render. Confd is gated on BGP, so callers add it separately.
+var WindowsNodeContainerNames = []string{
+	WindowsNodeContainerName,
+	WindowsFelixContainerName,
+}
 
 func Windows(
 	cfg *WindowsConfiguration,
@@ -49,14 +60,17 @@ func Windows(
 }
 
 type WindowsConfiguration struct {
-	K8sServiceEp            k8sapi.ServiceEndpoint
-	K8sDNSServers           []string
-	Installation            *operatorv1.InstallationSpec
-	ClusterDomain           string
-	TLS                     *TyphaNodeTLS
-	PrometheusServerTLS     certificatemanagement.KeyPairInterface
-	NodeReporterMetricsPort int
-	VXLANVNI                int
+	K8sServiceEp  k8sapi.ServiceEndpoint
+	K8sDNSServers []string
+	Installation  *operatorv1.InstallationSpec
+	ClusterDomain string
+	TLS           *TyphaNodeTLS
+	VXLANVNI      int
+
+	// ImageOverrides lets a variant swap the windows node and CNI images. The
+	// controller wires in the operator's image overrides; nil resolves to the
+	// core images.
+	ImageOverrides *imageoverride.Overrides
 }
 
 type windowsComponent struct {
@@ -77,18 +91,19 @@ func (c *windowsComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		c.cniImage = appendIfErr(components.GetReference(components.ComponentTigeraCNIWindows, reg, path, prefix, is))
-		c.nodeImage = appendIfErr(components.GetReference(components.ComponentTigeraNodeWindows, reg, path, prefix, is))
-	} else {
-		c.cniImage = appendIfErr(components.GetReference(components.ComponentCalicoCNIWindows, reg, path, prefix, is))
-		c.nodeImage = appendIfErr(components.GetReference(components.ComponentCalicoNodeWindows, reg, path, prefix, is))
-	}
+	cniImage := c.cfg.ImageOverrides.Resolve(ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, c.cfg.Installation)
+	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, c.cfg.Installation)
+	c.cniImage = appendIfErr(components.GetReference(cniImage, reg, path, prefix, is))
+	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
 
 	if len(errMsgs) != 0 {
 		return fmt.Errorf("%s", strings.Join(errMsgs, ","))
 	}
 	return nil
+}
+
+func (c *windowsComponent) WindowsConfig() *WindowsConfiguration {
+	return c.cfg
 }
 
 func (c *windowsComponent) SupportedOSType() rmeta.OSType {
@@ -116,11 +131,6 @@ func (c *windowsComponent) Objects() ([]client.Object, []client.Object) {
 
 	objs := []client.Object{}
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		// Include Service for exposing node metrics.
-		objs = append(objs, c.nodeMetricsService())
-	}
-
 	cniConfig := c.windowsCNIConfigMap()
 	if cniConfig != nil {
 		objs = append(objs, cniConfig)
@@ -133,43 +143,6 @@ func (c *windowsComponent) Objects() ([]client.Object, []client.Object) {
 
 func (c *windowsComponent) Ready() bool {
 	return true
-}
-
-// nodeMetricsService creates a Service which exposes two endpoints on calico/node for
-// reporting Prometheus metrics (for policy enforcement activity and BGP stats).
-// This service is used internally by Calico Enterprise and is separate from general
-// Prometheus metrics which are user-configurable.
-func (c *windowsComponent) nodeMetricsService() *corev1.Service {
-	return &corev1.Service{
-		TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      WindowsNodeMetricsService,
-			Namespace: common.CalicoNamespace,
-			Labels:    map[string]string{"k8s-app": WindowsNodeObjectName},
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"k8s-app": WindowsNodeObjectName},
-			// Important: "None" tells Kubernetes that we want a headless service with
-			// no kube-proxy load balancer.  If we omit this then kube-proxy will render
-			// a huge set of iptables rules for this service since there's an instance
-			// on every node.
-			ClusterIP: "None",
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "calico-metrics-port",
-					Port:       int32(c.cfg.NodeReporterMetricsPort),
-					TargetPort: intstr.FromInt(c.cfg.NodeReporterMetricsPort),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "calico-bgp-metrics-port",
-					Port:       nodeBGPReporterPort,
-					TargetPort: intstr.FromInt(int(nodeBGPReporterPort)),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
 }
 
 // windowsCNIConfigMap returns a config map containing the CNI network config to be installed on each node.
@@ -380,8 +353,8 @@ func (c *windowsComponent) windowsVolumes() []corev1.Volume {
 		{Name: "policysync", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/nodeagent", Type: &dirOrCreate}}},
 		c.cfg.TLS.TrustedBundle.Volume(),
 		c.cfg.TLS.NodeSecret.Volume(),
-		corev1.Volume{Name: "var-run-calico", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/calico", Type: &dirOrCreate}}},
-		corev1.Volume{Name: "var-lib-calico", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/lib/calico", Type: &dirOrCreate}}},
+		{Name: "var-run-calico", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/run/calico", Type: &dirOrCreate}}},
+		{Name: "var-lib-calico", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/lib/calico", Type: &dirOrCreate}}},
 	}
 
 	// If needed for this configuration, then include the CNI volumes.
@@ -390,20 +363,6 @@ func (c *windowsComponent) windowsVolumes() []corev1.Volume {
 		volumes = append(volumes, corev1.Volume{Name: "cni-bin-dir", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: c.cfg.Installation.WindowsNodes.CNIBinDir, Type: &dirOrCreate}}})
 		volumes = append(volumes, corev1.Volume{Name: "cni-net-dir", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: c.cfg.Installation.WindowsNodes.CNIConfigDir}}})
 		volumes = append(volumes, corev1.Volume{Name: "cni-log-dir", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: c.cfg.Installation.WindowsNodes.CNILogDir, Type: &dirOrCreate}}})
-	}
-
-	// Override with Tigera-specific config.
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		// Add volume for calico logs.
-		calicoLogVol := corev1.Volume{
-			Name:         "var-log-calico",
-			VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/var/log/calico", Type: &dirOrCreate}},
-		}
-		volumes = append(volumes, calicoLogVol)
-	}
-
-	if c.cfg.PrometheusServerTLS != nil {
-		volumes = append(volumes, c.cfg.PrometheusServerTLS.Volume())
 	}
 
 	return volumes
@@ -458,7 +417,7 @@ func (c *windowsComponent) cniContainer() corev1.Container {
 	// which ships the same binary at /CalicoWindows/calico.exe. Keep each
 	// command's path in sync with the image it runs in.
 	return corev1.Container{
-		Name:            "install-cni",
+		Name:            WindowsInstallCNIContainerName,
 		Image:           c.cniImage,
 		Command:         []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/opt/cni/bin/calico.exe", "component", "cni", "install"},
 		Env:             cniEnv,
@@ -470,7 +429,7 @@ func (c *windowsComponent) cniContainer() corev1.Container {
 // nodeContainer creates the windows node startup container.
 func (c *windowsComponent) nodeContainer() corev1.Container {
 	return corev1.Container{
-		Name:            "node",
+		Name:            WindowsNodeContainerName,
 		Image:           c.nodeImage,
 		Args:            []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/node-service.ps1"},
 		WorkingDir:      "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/",
@@ -483,11 +442,10 @@ func (c *windowsComponent) nodeContainer() corev1.Container {
 
 // felixContainer creates the windows felix container.
 func (c *windowsComponent) felixContainer() corev1.Container {
-
 	lp, rp := c.windowsLivenessReadinessProbes()
 
 	return corev1.Container{
-		Name:            "felix",
+		Name:            WindowsFelixContainerName,
 		Image:           c.nodeImage,
 		Args:            []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/felix-service.ps1"},
 		WorkingDir:      "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/",
@@ -504,7 +462,7 @@ func (c *windowsComponent) felixContainer() corev1.Container {
 // confdContainer creates the windows confd container (used only for the windows-bgp backend).
 func (c *windowsComponent) confdContainer() corev1.Container {
 	return corev1.Container{
-		Name:            "confd",
+		Name:            WindowsConfdContainerName,
 		Image:           c.nodeImage,
 		Args:            []string{"$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/confd/confd-service.ps1"},
 		WorkingDir:      "$env:CONTAINER_SANDBOX_MOUNT_POINT/CalicoWindows/",
@@ -663,31 +621,6 @@ func (c *windowsComponent) windowsEnvVars() []corev1.EnvVar {
 		windowsEnv = append(windowsEnv, corev1.EnvVar{Name: "FELIX_IPV6SUPPORT", Value: "false"})
 	}
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		// Add in Calico Enterprise specific configuration.
-		extraNodeEnv := []corev1.EnvVar{
-			{Name: "FELIX_PROMETHEUSREPORTERENABLED", Value: "true"},
-			{Name: "FELIX_PROMETHEUSREPORTERPORT", Value: fmt.Sprintf("%d", c.cfg.NodeReporterMetricsPort)},
-			{Name: "FELIX_FLOWLOGSFILEENABLED", Value: "true"},
-			{Name: "FELIX_FLOWLOGSFILEINCLUDELABELS", Value: "true"},
-			{Name: "FELIX_FLOWLOGSFILEINCLUDEPOLICIES", Value: "true"},
-			{Name: "FELIX_FLOWLOGSFILEINCLUDESERVICE", Value: "true"},
-			{Name: "FELIX_FLOWLOGSENABLENETWORKSETS", Value: "true"},
-			{Name: "FELIX_FLOWLOGSCOLLECTPROCESSINFO", Value: "true"},
-			{Name: "FELIX_DNSLOGSFILEENABLED", Value: "true"},
-			{Name: "FELIX_DNSLOGSFILEPERNODELIMIT", Value: "1000"},
-		}
-
-		if c.cfg.PrometheusServerTLS != nil {
-			extraNodeEnv = append(extraNodeEnv,
-				corev1.EnvVar{Name: "FELIX_PROMETHEUSREPORTERCERTFILE", Value: c.cfg.PrometheusServerTLS.VolumeMountCertificateFilePath()},
-				corev1.EnvVar{Name: "FELIX_PROMETHEUSREPORTERKEYFILE", Value: c.cfg.PrometheusServerTLS.VolumeMountKeyFilePath()},
-				corev1.EnvVar{Name: "FELIX_PROMETHEUSREPORTERCAFILE", Value: c.cfg.TLS.TrustedBundle.MountPath()},
-			)
-		}
-		windowsEnv = append(windowsEnv, extraNodeEnv...)
-	}
-
 	if c.cfg.Installation.NodeMetricsPort != nil {
 		// If a node metrics port was given, then enable felix prometheus metrics and set the port.
 		// Note that this takes precedence over any FelixConfiguration resources in the cluster.
@@ -696,20 +629,6 @@ func (c *windowsComponent) windowsEnvVars() []corev1.EnvVar {
 			{Name: "FELIX_PROMETHEUSMETRICSPORT", Value: fmt.Sprintf("%d", *c.cfg.Installation.NodeMetricsPort)},
 		}
 		windowsEnv = append(windowsEnv, extraNodeEnv...)
-	}
-
-	// Configure provider specific environment variables here.
-	switch c.cfg.Installation.KubernetesProvider {
-	case operatorv1.ProviderOpenShift:
-		if c.cfg.Installation.Variant.IsEnterprise() {
-			// We need to configure a non-default trusted DNS server, since there's no kube-dns.
-			windowsEnv = append(windowsEnv, corev1.EnvVar{Name: "FELIX_DNSTRUSTEDSERVERS", Value: "k8s-service:openshift-dns/dns-default"})
-		}
-	case operatorv1.ProviderRKE2:
-		// For RKE2, configure a non-default trusted DNS server, as the DNS service is not named "kube-dns".
-		if c.cfg.Installation.Variant.IsEnterprise() {
-			windowsEnv = append(windowsEnv, corev1.EnvVar{Name: "FELIX_DNSTRUSTEDSERVERS", Value: "k8s-service:kube-system/rke2-coredns-rke2-coredns"})
-		}
 	}
 
 	if c.cfg.Installation.CNI.Type != operatorv1.PluginCalico {
@@ -730,12 +649,7 @@ func (c *windowsComponent) windowsVolumeMounts() []corev1.VolumeMount {
 		corev1.VolumeMount{MountPath: "/var/run/calico", Name: "var-run-calico"},
 		corev1.VolumeMount{MountPath: "/var/lib/calico", Name: "var-lib-calico"})
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		extraNodeMounts := []corev1.VolumeMount{
-			{MountPath: "/var/log/calico", Name: "var-log-calico"},
-		}
-		windowsVolumeMounts = append(windowsVolumeMounts, extraNodeMounts...)
-	} else if c.cfg.Installation.CNI.Type == operatorv1.PluginCalico {
+	if c.cfg.Installation.CNI.Type == operatorv1.PluginCalico {
 		windowsVolumeMounts = append(windowsVolumeMounts, corev1.VolumeMount{MountPath: "/var/log/calico/cni", Name: "cni-log-dir", ReadOnly: false})
 	}
 
@@ -743,9 +657,6 @@ func (c *windowsComponent) windowsVolumeMounts() []corev1.VolumeMount {
 		windowsVolumeMounts = append(windowsVolumeMounts, corev1.VolumeMount{MountPath: "/host/etc/cni/net.d", Name: "cni-net-dir"})
 	}
 
-	if c.cfg.PrometheusServerTLS != nil {
-		windowsVolumeMounts = append(windowsVolumeMounts, c.cfg.PrometheusServerTLS.VolumeMount(c.SupportedOSType()))
-	}
 	return windowsVolumeMounts
 }
 
@@ -801,9 +712,6 @@ func (c *windowsComponent) windowsDaemonset(cniCfgMap *corev1.ConfigMap) *appsv1
 	initContainers := []corev1.Container{c.uninstallContainer()}
 
 	annotations := c.cfg.TLS.TrustedBundle.HashAnnotations()
-	if c.cfg.PrometheusServerTLS != nil {
-		annotations[c.cfg.PrometheusServerTLS.HashAnnotationKey()] = c.cfg.PrometheusServerTLS.HashAnnotationValue()
-	}
 
 	if cniCfgMap != nil {
 		annotations[nodeCniConfigAnnotation] = rmeta.AnnotationHash(cniCfgMap.Data)

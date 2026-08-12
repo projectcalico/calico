@@ -27,6 +27,7 @@ import (
 func TestStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter)))
 	gomega.RegisterFailHandler(ginkgo.Fail)
+
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reporterConfig.JUnitReport = "../../../report/ut/clusterconnection_controller_suite.xml"
 	ginkgo.RunSpecs(t, "pkg/controller/Management Cluster Connection Suite", suiteConfig, reporterConfig)

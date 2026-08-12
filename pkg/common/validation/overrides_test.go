@@ -298,7 +298,7 @@ var _ = Describe("Test overrides validation (APIServerDeployment - Container.Por
 	It("should accept custom valid ContainerPorts", func() {
 		overrides.Spec.Template.Spec.Containers = []opv1.APIServerDeploymentContainer{
 			{
-				Name: string(render.APIServerContainerName),
+				Name: render.APIServerContainerName,
 				Ports: []opv1.APIServerDeploymentContainerPort{
 					{
 						Name:          render.APIServerPortName,
@@ -307,7 +307,7 @@ var _ = Describe("Test overrides validation (APIServerDeployment - Container.Por
 				},
 			},
 			{
-				Name: string(render.TigeraAPIServerQueryServerContainerName),
+				Name: render.TigeraAPIServerQueryServerContainerName,
 				Ports: []opv1.APIServerDeploymentContainerPort{
 					{
 						Name:          render.QueryServerPortName,
@@ -316,7 +316,7 @@ var _ = Describe("Test overrides validation (APIServerDeployment - Container.Por
 				},
 			},
 			{
-				Name: string(render.L7AdmissionControllerContainerName),
+				Name: render.L7AdmissionControllerContainerName,
 				Ports: []opv1.APIServerDeploymentContainerPort{
 					{
 						Name:          render.L7AdmissionControllerPortName,
@@ -351,7 +351,7 @@ var _ = Describe("Test overrides validation (APIServerDeployment - Container.Por
 		),
 		Entry("queryserver PortName specified in the wrong container",
 			opv1.APIServerDeploymentContainer{
-				Name: string(render.APIServerContainerName),
+				Name: render.APIServerContainerName,
 				Ports: []opv1.APIServerDeploymentContainerPort{
 					{
 						Name:          render.QueryServerPortName,
@@ -363,7 +363,7 @@ var _ = Describe("Test overrides validation (APIServerDeployment - Container.Por
 		),
 		Entry("l7admctrl PortName specified in the wrong container",
 			opv1.APIServerDeploymentContainer{
-				Name: string(render.APIServerContainerName),
+				Name: render.APIServerContainerName,
 				Ports: []opv1.APIServerDeploymentContainerPort{
 					{
 						Name:          render.L7AdmissionControllerPortName,

@@ -182,7 +182,7 @@ type ReconcileGatewayAPI struct {
 	clusterDomain       string
 	variant             operatorv1.ProductVariant
 	multiTenant         bool
-	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object) utils.ComponentHandler
+	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
 	watchEnvoyProxy     func(namespacedName operatorv1.NamespacedName) error
 	watchEnvoyGateway   func(namespacedName operatorv1.NamespacedName) error
 	watchGateways       func() error

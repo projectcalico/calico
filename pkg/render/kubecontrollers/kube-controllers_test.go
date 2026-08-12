@@ -16,12 +16,10 @@ package kubecontrollers_test
 
 import (
 	"fmt"
-	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -41,16 +39,13 @@ import (
 	"github.com/tigera/operator/pkg/controller/k8sapi"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/testutils"
-	"github.com/tigera/operator/pkg/tls"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("kube-controllers rendering tests", func() {
@@ -61,40 +56,10 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		cli          client.Client
 	)
 
-	esEnvs := []corev1.EnvVar{
-		{Name: "ELASTIC_HOST", Value: "tigera-secure-es-gateway-http.tigera-elasticsearch.svc"},
-		{Name: "ELASTIC_PORT", Value: "9200", ValueFrom: nil},
-		{
-			Name: "ELASTIC_USERNAME", Value: "",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "tigera-ee-kube-controllers-elasticsearch-access",
-					},
-					Key: "username",
-				},
-			},
-		},
-		{
-			Name: "ELASTIC_PASSWORD", Value: "",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "tigera-ee-kube-controllers-elasticsearch-access",
-					},
-					Key: "password",
-				},
-			},
-		},
-		{Name: "ELASTIC_CA", Value: certificatemanagement.TrustedCertBundleMountPath},
-	}
-
 	expectedPolicyForUnmanaged := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/kubecontrollers.json")
 	expectedPolicyForUnmanagedOCP := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/kubecontrollers_ocp.json")
 	expectedPolicyForManaged := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/kubecontrollers_managed.json")
 	expectedPolicyForManagedOCP := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/kubecontrollers_managed_ocp.json")
-	expectedESPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/es-kubecontrollers.json")
-	expectedESPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/es-kubecontrollers_ocp.json")
 
 	BeforeEach(func() {
 		// Initialize a default instance to use. Each test can override this to its
@@ -156,9 +121,12 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		}))
 	})
 
-	It("should use the tesla calico image for kube-controllers when Cloud is enabled (TSLA-11580)", func() {
+	It("resolves the kube-controllers image through the image overrides", func() {
 		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.Cloud = true
+		overrides := imageoverride.New()
+		overrides.Register(operatorv1.CalicoEnterprise, render.ComponentNameKubeControllers, components.CalicoCloudImage())
+		cfg.ImageOverrides = overrides
+
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())
 		resources, _ := component.Objects()
@@ -264,176 +232,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		Expect(ds.Spec.Template.Spec.Tolerations).To(ConsistOf(rmeta.TolerateCriticalAddonsAndControlPlane))
 	})
 
-	It("should render all calico kube-controllers resources for a default configuration (standalone) using CalicoEnterprise", func() {
-		expectedResources := []struct {
-			name    string
-			ns      string
-			group   string
-			version string
-			kind    string
-		}{
-			{name: kubecontrollers.KubeControllerServiceAccount, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
-			{name: kubecontrollers.KubeControllerRole, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
-			{name: kubecontrollers.KubeControllerRoleBinding, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.KubeController, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "Deployment"},
-			{name: kubecontrollers.WASMPullSecretName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Secret"},
-			{name: kubecontrollers.WASMCACertName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ConfigMap"},
-			{name: applicationlayer.WAFWebhookServiceName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-			{name: "tigera-waf.applicationlayer.projectcalico.org", ns: "", group: "admissionregistration.k8s.io", version: "v1", kind: "ValidatingWebhookConfiguration"},
-			{name: kubecontrollers.KubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-		}
-
-		instance.Variant = operatorv1.CalicoEnterprise
-		instance.ImagePullSecrets = []corev1.LocalObjectReference{{Name: "tigera-pull-secret"}}
-		cfg.MetricsPort = 9094
-		// Opt in to the WAF Gateway API add-on so the WAF env vars + RBAC are rendered.
-		cfg.WAFGatewayExtensionEnabled = true
-		cfg.GatewayAPIPresent = true
-		cfg.WAFWebhookCABundle = []byte("fake-ca-bundle")
-		// core_controller provisions a dedicated WAF wasm pull secret (a renamed
-		// copy of the install pull secret) so the reconciler can replicate it into
-		// WAFPolicy namespaces without clashing with the operator-managed
-		// tigera-pull-secret; surface it here so it renders and WASM_PULL_SECRET is set.
-		cfg.WASMPullSecret = &corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}, ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.WASMPullSecretName, Namespace: common.CalicoNamespace}}
-		// Likewise core_controller provisions the dedicated WAF wasm CA-bundle
-		// ConfigMap (a renamed copy of the trusted bundle); surface it here so it
-		// renders and WASM_CA_CERT is set.
-		cfg.WASMCACert = &corev1.ConfigMap{TypeMeta: metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"}, ObjectMeta: metav1.ObjectMeta{Name: kubecontrollers.WASMCACertName, Namespace: common.CalicoNamespace}}
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-		Expect(len(resources)).To(Equal(len(expectedResources)))
-
-		// Should render the correct resources.
-		i := 0
-		for _, expectedRes := range expectedResources {
-			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
-			i++
-		}
-
-		// The Deployment should have the correct configuration.
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
-		Expect(dp.Spec.Template.Spec.ImagePullSecrets).To(ContainElement(corev1.LocalObjectReference{Name: "tigera-pull-secret"}))
-		envs := dp.Spec.Template.Spec.Containers[0].Env
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name: "ENABLED_CONTROLLERS", Value: "node,loadbalancer,service,federatedservices,usage,applicationlayer",
-		}))
-		// Application-layer reconcilers consume these env vars to program WAF
-		// EnvoyExtensionPolicy attachments.
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name: "WASM_IMAGE", Value: "test-reg/tigera/envoy-proxy:" + components.ComponentGatewayAPIEnvoyProxy.Version,
-		}))
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name: "WASM_PULL_SECRET", Value: kubecontrollers.WASMPullSecretName,
-		}))
-		// WASM_CA_CERT names the dedicated WAF trusted-bundle ConfigMap that the
-		// reconciler replicates into WAFPolicy namespaces (kept separate from the
-		// operator-managed tigera-ca-bundle the GatewayAPI render also copies there).
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name: "WASM_CA_CERT", Value: kubecontrollers.WASMCACertName,
-		}))
-
-		Expect(len(dp.Spec.Template.Spec.Containers[0].VolumeMounts)).To(Equal(1))
-		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(1))
-
-		clusterRole := rtest.GetResource(resources, kubecontrollers.KubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(39), "cluster role should have 39 rules")
-
-		// Application-layer reconciler RBAC: WAF CRDs (resources, /status, /finalizers).
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"applicationlayer.projectcalico.org"},
-			Resources: []string{
-				"wafpolicies", "globalwafpolicies",
-				"wafplugins", "globalwafplugins",
-				"wafvalidationpolicies", "globalwafvalidationpolicies",
-			},
-			Verbs: []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-		}))
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"applicationlayer.projectcalico.org"},
-			Resources: []string{
-				"wafpolicies/status", "globalwafpolicies/status",
-				"wafplugins/status", "globalwafplugins/status",
-				"wafvalidationpolicies/status", "globalwafvalidationpolicies/status",
-			},
-			Verbs: []string{"get", "update", "patch"},
-		}))
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"applicationlayer.projectcalico.org"},
-			Resources: []string{
-				"wafpolicies/finalizers", "globalwafpolicies/finalizers",
-				"wafplugins/finalizers", "globalwafplugins/finalizers",
-				"wafvalidationpolicies/finalizers", "globalwafvalidationpolicies/finalizers",
-			},
-			Verbs: []string{"update"},
-		}))
-		// Gateway API targetRef validation + status patching.
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"gateway.networking.k8s.io"},
-			Resources: []string{"gateways", "httproutes", "tcproutes", "tlsroutes", "grpcroutes"},
-			Verbs:     []string{"get", "list", "watch", "update", "patch"},
-		}))
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"gateway.networking.k8s.io"},
-			Resources: []string{"gateways/status", "httproutes/status", "tcproutes/status", "tlsroutes/status", "grpcroutes/status"},
-			Verbs:     []string{"get", "update", "patch"},
-		}))
-		// Recorder.Eventf emits to both core/events and events.k8s.io/events.
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{""},
-			Resources: []string{"events"},
-			Verbs:     []string{"create", "patch"},
-		}))
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"events.k8s.io"},
-			Resources: []string{"events"},
-			Verbs:     []string{"create", "patch"},
-		}))
-		// Cluster-wide secrets+configmaps CRUD: reconciler replicates pull
-		// secrets and CA bundles from the controller namespace into target
-		// WAFPolicy namespaces.
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{""},
-			Resources: []string{"secrets", "configmaps"},
-			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-		}))
-		// EnvoyExtensionPolicy CRUD: reconciler renders one EEP per WAF targetRef.
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"gateway.envoyproxy.io"},
-			Resources: []string{"envoyextensionpolicies"},
-			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-		}))
-
-		ms := rtest.GetResource(resources, kubecontrollers.KubeControllerMetrics, common.CalicoNamespace, "", "v1", "Service").(*corev1.Service)
-		Expect(ms.Spec.ClusterIP).To(Equal("None"), "metrics service should be headless")
-
-		// The webhook surface is rendered with the operator CA stamped into the
-		// ValidatingWebhookConfiguration caBundle.
-		vwc := rtest.GetResource(resources, "tigera-waf.applicationlayer.projectcalico.org", "", "admissionregistration.k8s.io", "v1", "ValidatingWebhookConfiguration").(*admissionregistrationv1.ValidatingWebhookConfiguration)
-		Expect(vwc.Webhooks).To(HaveLen(1))
-		Expect(vwc.Webhooks[0].ClientConfig.CABundle).To(Equal([]byte("fake-ca-bundle")))
-	})
-
-	It("should delete the WAF admission webhook surface when the WAF Gateway API add-on is disabled", func() {
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.WAFGatewayExtensionEnabled = false
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		toCreate, toDelete := component.Objects()
-
-		// Neither webhook object is created...
-		Expect(rtest.GetResource(toCreate, applicationlayer.WAFWebhookServiceName, common.CalicoNamespace, "", "v1", "Service")).To(BeNil())
-		Expect(rtest.GetResource(toCreate, "tigera-waf.applicationlayer.projectcalico.org", "", "admissionregistration.k8s.io", "v1", "ValidatingWebhookConfiguration")).To(BeNil())
-		// ...and both are queued for deletion, so disabling the feature (or
-		// removing the GatewayAPI CR) cleans up an earlier enabled render.
-		Expect(rtest.GetResource(toDelete, applicationlayer.WAFWebhookServiceName, common.CalicoNamespace, "", "v1", "Service")).NotTo(BeNil())
-		Expect(rtest.GetResource(toDelete, "tigera-waf.applicationlayer.projectcalico.org", "", "admissionregistration.k8s.io", "v1", "ValidatingWebhookConfiguration")).NotTo(BeNil())
-	})
-
 	It("should render all calico kube-controllers resources using CalicoEnterprise on Openshift", func() {
 		expectedResources := []struct {
 			name    string
@@ -462,179 +260,7 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		}
 	})
 
-	Context("RBAC management UI", func() {
-		BeforeEach(func() {
-			instance.Variant = operatorv1.CalicoEnterprise
-		})
-
-		It("does not enable rbacsync or grant its RBAC while the feature gate is off", func() {
-			component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-			Expect(component.ResolveImages(nil)).To(BeNil())
-			resources, _ := component.Objects()
-
-			dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-			envs := dp.Spec.Template.Spec.Containers[0].Env
-			Expect(envs).To(ContainElement(corev1.EnvVar{
-				Name: "ENABLED_CONTROLLERS", Value: "node,loadbalancer,service,federatedservices,usage",
-			}))
-
-			Expect(rtest.GetResource(resources, "calico-kube-controllers-rbac-sync", common.CalicoNamespace, "rbac.authorization.k8s.io", "v1", "Role")).To(BeNil())
-		})
-
-		It("enables rbacsync and grants it read access to both ConfigMaps it depends on", func() {
-			cfg.RBACManagementEnabled = true
-			component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-			Expect(component.ResolveImages(nil)).To(BeNil())
-			resources, _ := component.Objects()
-
-			dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-			envs := dp.Spec.Template.Spec.Containers[0].Env
-			Expect(envs).To(ContainElement(corev1.EnvVar{
-				Name: "ENABLED_CONTROLLERS", Value: "node,loadbalancer,service,federatedservices,usage,rbacsync",
-			}))
-
-			nsRole := rtest.GetResource(resources, "calico-kube-controllers-rbac-sync", common.CalicoNamespace, "rbac.authorization.k8s.io", "v1", "Role").(*rbacv1.Role)
-			Expect(nsRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-				APIGroups:     []string{""},
-				Resources:     []string{"configmaps"},
-				ResourceNames: []string{rbacmanagement.GroupsConfigMapName},
-				Verbs:         []string{"get", "list", "watch"},
-			}), "expected read-only access to tigera-idp-groups in calico-system")
-			Expect(nsRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-				APIGroups:     []string{""},
-				Resources:     []string{"configmaps"},
-				ResourceNames: []string{rbacmanagement.ConfigMapName},
-				Verbs:         []string{"get", "list", "watch"},
-			}), "expected read-only access to the feature gate in calico-system")
-		})
-	})
-
-	It("should render all es-calico-kube-controllers resources for a default configuration (standalone) using CalicoEnterprise when logstorage and secrets exist", func() {
-		expectedResources := []struct {
-			name    string
-			ns      string
-			group   string
-			version string
-			kind    string
-		}{
-			{name: kubecontrollers.EsKubeControllerNetworkPolicyName, ns: common.CalicoNamespace, group: "projectcalico.org", version: "v3", kind: "NetworkPolicy"},
-			{name: "calico-kube-controllers", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
-			{name: kubecontrollers.EsKubeControllerRole, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
-			{name: kubecontrollers.EsKubeControllerRoleBinding, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.EsKubeController, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "Deployment"},
-			{name: kubecontrollers.ElasticsearchKubeControllersUserSecret, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Secret"},
-			{name: kubecontrollers.EsKubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-		}
-
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.LogStorageExists = true
-		cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
-		cfg.MetricsPort = 9094
-		// Opt in to the WAF Gateway API add-on so the WAF env vars + RBAC are rendered.
-		cfg.WAFGatewayExtensionEnabled = true
-		cfg.GatewayAPIPresent = true
-
-		component := kubecontrollers.NewElasticsearchKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-		Expect(len(resources)).To(Equal(len(expectedResources)))
-
-		// Should render the correct resources.
-		i := 0
-		for _, expectedRes := range expectedResources {
-			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
-			i++
-		}
-
-		// The Deployment should have the correct configuration.
-		dp := rtest.GetResource(resources, kubecontrollers.EsKubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
-		envs := dp.Spec.Template.Spec.Containers[0].Env
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name: "ENABLED_CONTROLLERS", Value: "authorization,elasticsearchconfiguration",
-		}))
-		Expect(envs).To(ContainElements(esEnvs))
-
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(1))
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal("tigera-ca-bundle"))
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath).To(Equal("/etc/pki/tls/certs"))
-
-		Expect(dp.Spec.Template.Spec.Volumes).To(HaveLen(1))
-		Expect(dp.Spec.Template.Spec.Volumes[0].Name).To(Equal("tigera-ca-bundle"))
-		Expect(dp.Spec.Template.Spec.Volumes[0].ConfigMap.Name).To(Equal("tigera-ca-bundle"))
-
-		clusterRole := rtest.GetResource(resources, kubecontrollers.EsKubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(37), "cluster role should have 37 rules")
-		Expect(clusterRole.Rules).To(ContainElement(
-			rbacv1.PolicyRule{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"watch", "list", "get", "update", "create", "delete"},
-			}))
-		Expect(clusterRole.Rules).To(ContainElement(
-			rbacv1.PolicyRule{
-				APIGroups: []string{""},
-				Resources: []string{"secrets"},
-				Verbs:     []string{"watch", "list", "get"},
-			}))
-	})
-
-	It("should render all calico-kube-controllers resources for a default configuration using CalicoEnterprise and ClusterType is Management", func() {
-		expectedResources := []struct {
-			name    string
-			ns      string
-			group   string
-			version string
-			kind    string
-		}{
-			{name: kubecontrollers.KubeControllerServiceAccount, ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
-			{name: kubecontrollers.KubeControllerRole, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
-			{name: kubecontrollers.KubeControllerRoleBinding, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.ManagedClustersWatchRoleBindingName, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.KubeController, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "Deployment"},
-			{name: applicationlayer.WAFWebhookServiceName, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-			{name: "tigera-waf.applicationlayer.projectcalico.org", ns: "", group: "admissionregistration.k8s.io", version: "v1", kind: "ValidatingWebhookConfiguration"},
-			{name: kubecontrollers.KubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-		}
-
-		// Override configuration to match expected Enterprise config.
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.ManagementCluster = &operatorv1.ManagementCluster{}
-		cfg.MetricsPort = 9094
-		// Opt in to the WAF Gateway API add-on so the WAF env vars + RBAC are rendered.
-		cfg.WAFGatewayExtensionEnabled = true
-		cfg.GatewayAPIPresent = true
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-		Expect(len(resources)).To(Equal(len(expectedResources)))
-
-		// Should render the correct resources.
-		i := 0
-		for _, expectedRes := range expectedResources {
-			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
-			i++
-		}
-
-		// The Deployment should have the correct configuration.
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-
-		envs := dp.Spec.Template.Spec.Containers[0].Env
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name:  "ENABLED_CONTROLLERS",
-			Value: "node,loadbalancer,service,federatedservices,usage,applicationlayer",
-		}))
-
-		Expect(len(dp.Spec.Template.Spec.Containers[0].VolumeMounts)).To(Equal(1))
-
-		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(1))
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
-	})
 	It("should render all calico-kube-controllers resources for a default configuration using CalicoEnterprise", func() {
-		var defaultMode int32 = 420
-		var kubeControllerTLS certificatemanagement.KeyPairInterface
 		expectedResources := []struct {
 			name    string
 			ns      string
@@ -649,15 +275,14 @@ var _ = Describe("kube-controllers rendering tests", func() {
 			{name: kubecontrollers.KubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
 		}
 
+		// The metrics serving TLS (TLS_KEY_PATH/TLS_CRT_PATH/CLIENT_COMMON_NAME env,
+		// the keypair volume + mount) is layered on by the enterprise modifier, so
+		// the base render here carries only the trusted bundle.
 		expectedEnv := []corev1.EnvVar{
-			{Name: "TLS_KEY_PATH", Value: "/calico-kube-controllers-metrics-tls/tls.key"},
-			{Name: "TLS_CRT_PATH", Value: "/calico-kube-controllers-metrics-tls/tls.crt"},
-			{Name: "CLIENT_COMMON_NAME", Value: "calico-node-prometheus-client-tls"},
 			{Name: "CA_CRT_PATH", Value: "/etc/pki/tls/certs/tigera-ca-bundle.crt"},
 		}
 		expectedVolumeMounts := []corev1.VolumeMount{
 			{Name: "tigera-ca-bundle", MountPath: "/etc/pki/tls/certs", ReadOnly: true},
-			{Name: "calico-kube-controllers-metrics-tls", MountPath: "/calico-kube-controllers-metrics-tls", ReadOnly: true},
 		}
 		expectedVolume := []corev1.Volume{
 			{
@@ -668,34 +293,11 @@ var _ = Describe("kube-controllers rendering tests", func() {
 					},
 				},
 			},
-			{
-				Name: "calico-kube-controllers-metrics-tls",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName:  "calico-kube-controllers-metrics-tls",
-						DefaultMode: &defaultMode,
-					},
-				},
-			},
 		}
-
-		scheme := runtime.NewScheme()
-		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
-		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
-
-		certificateManager, err := certificatemanager.Create(cli, nil, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
-		Expect(err).NotTo(HaveOccurred())
-
-		kubeControllerTLS, err = certificateManager.GetOrCreateKeyPair(cli,
-			kubecontrollers.KubeControllerPrometheusTLSSecret,
-			common.OperatorNamespace(),
-			dns.GetServiceDNSNames(kubecontrollers.KubeControllerMetrics, common.CalicoNamespace, dns.DefaultClusterDomain))
-		Expect(err).NotTo(HaveOccurred())
 
 		// Override configuration to match expected Enterprise config.
 		instance.Variant = operatorv1.CalicoEnterprise
 		cfg.MetricsPort = 9094
-		cfg.MetricsServerTLS = kubeControllerTLS
 
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())
@@ -715,177 +317,13 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		envs := dp.Spec.Template.Spec.Containers[0].Env
 		Expect(envs).To(ContainElements(expectedEnv))
 
-		Expect(len(dp.Spec.Template.Spec.Containers[0].VolumeMounts)).To(Equal(2))
+		Expect(len(dp.Spec.Template.Spec.Containers[0].VolumeMounts)).To(Equal(1))
 		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElements(expectedVolumeMounts))
 
-		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(2))
+		Expect(len(dp.Spec.Template.Spec.Volumes)).To(Equal(1))
 		Expect(dp.Spec.Template.Spec.Volumes).To(ContainElements(expectedVolume))
 
 		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
-	})
-
-	It("should mount the WAF admission webhook serving cert and expose its port when WAF is enabled", func() {
-		certificateManager, err := certificatemanager.Create(cli, nil, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
-		Expect(err).NotTo(HaveOccurred())
-		wafTLS, err := certificateManager.GetOrCreateKeyPair(cli,
-			applicationlayer.WAFWebhookServerTLSSecretName,
-			common.OperatorNamespace(),
-			dns.GetServiceDNSNames(applicationlayer.WAFWebhookServiceName, common.CalicoNamespace, dns.DefaultClusterDomain))
-		Expect(err).NotTo(HaveOccurred())
-
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.WAFGatewayExtensionEnabled = true
-		cfg.GatewayAPIPresent = true
-		cfg.WAFWebhookServerTLS = wafTLS
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-		c := dp.Spec.Template.Spec.Containers[0]
-
-		// Serving cert is mounted and advertised to the in-process webhook server.
-		Expect(dp.Spec.Template.Spec.Volumes).To(ContainElement(wafTLS.Volume()))
-		Expect(c.VolumeMounts).To(ContainElement(wafTLS.VolumeMount(rmeta.OSTypeLinux)))
-		Expect(c.Env).To(ContainElement(corev1.EnvVar{
-			Name:  "WAF_WEBHOOK_CERT_DIR",
-			Value: filepath.Dir(wafTLS.VolumeMountCertificateFilePath()),
-		}))
-
-		// In-process webhook port exposed for the tigera-waf-webhook Service.
-		Expect(c.Ports).To(ContainElement(corev1.ContainerPort{
-			Name:          "waf-webhook",
-			ContainerPort: int32(9443),
-			Protocol:      corev1.ProtocolTCP,
-		}))
-
-		// namespaces patch/update RBAC for the waf-id-range annotation.
-		clusterRole := rtest.GetResource(resources, "calico-kube-controllers", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{""},
-			Resources: []string{"namespaces"},
-			Verbs:     []string{"get", "patch", "update"},
-		}))
-	})
-
-	It("should keep the WAF controller wired for teardown but render no active WAF surface when WAF is disabled (EV-6751)", func() {
-		instance.Variant = operatorv1.CalicoEnterprise
-		// GatewayAPI present but WAF turned off: the applicationlayer controller
-		// must stay wired (with its EnvoyExtensionPolicy delete RBAC) so it can
-		// tear down the EEPs it generated, and be told it is disabled via the env.
-		cfg.GatewayAPIPresent = true
-		cfg.WAFGatewayExtensionEnabled = false
-
-		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-		c := dp.Spec.Template.Spec.Containers[0]
-
-		// Controller stays wired.
-		Expect(c.Env).To(ContainElement(corev1.EnvVar{
-			Name: "ENABLED_CONTROLLERS", Value: "node,loadbalancer,service,federatedservices,usage,applicationlayer",
-		}))
-		// Told it is disabled → the reconciler de-programs rather than attaches.
-		Expect(c.Env).To(ContainElement(corev1.EnvVar{Name: "WAF_GATEWAY_EXTENSION_ENABLED", Value: "false"}))
-		// No active WAF surface: no WASM image env, no webhook cert dir.
-		for _, e := range c.Env {
-			Expect(e.Name).NotTo(Equal("WASM_IMAGE"))
-			Expect(e.Name).NotTo(Equal("WAF_WEBHOOK_CERT_DIR"))
-		}
-		// But it keeps the EnvoyExtensionPolicy delete RBAC to run the teardown.
-		clusterRole := rtest.GetResource(resources, "calico-kube-controllers", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(ContainElement(rbacv1.PolicyRule{
-			APIGroups: []string{"gateway.envoyproxy.io"},
-			Resources: []string{"envoyextensionpolicies"},
-			Verbs:     []string{"get", "list", "watch", "create", "update", "patch", "delete"},
-		}))
-	})
-
-	It("should render all es-calico-kube-controllers resources for a default configuration using CalicoEnterprise and ClusterType is Management", func() {
-		expectedResources := []struct {
-			name    string
-			ns      string
-			group   string
-			version string
-			kind    string
-		}{
-			{name: kubecontrollers.EsKubeControllerNetworkPolicyName, ns: common.CalicoNamespace, group: "projectcalico.org", version: "v3", kind: "NetworkPolicy"},
-			{name: "calico-kube-controllers", ns: common.CalicoNamespace, group: "", version: "v1", kind: "ServiceAccount"},
-			{name: kubecontrollers.EsKubeControllerRole, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRole"},
-			{name: kubecontrollers.EsKubeControllerRoleBinding, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.ManagedClustersWatchRoleBindingName, ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
-			{name: kubecontrollers.EsKubeController, ns: common.CalicoNamespace, group: "apps", version: "v1", kind: "Deployment"},
-			{name: kubecontrollers.ElasticsearchKubeControllersUserSecret, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Secret"},
-			{name: kubecontrollers.EsKubeControllerMetrics, ns: common.CalicoNamespace, group: "", version: "v1", kind: "Service"},
-		}
-
-		// Override configuration to match expected Enterprise config.
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.LogStorageExists = true
-		cfg.ManagementCluster = &operatorv1.ManagementCluster{}
-		cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
-		cfg.MetricsPort = 9094
-		// Opt in to the WAF Gateway API add-on so the WAF env vars + RBAC are rendered.
-		cfg.WAFGatewayExtensionEnabled = true
-		cfg.GatewayAPIPresent = true
-
-		component := kubecontrollers.NewElasticsearchKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-		Expect(len(resources)).To(Equal(len(expectedResources)))
-
-		// Should render the correct resources.
-		i := 0
-		for _, expectedRes := range expectedResources {
-			rtest.ExpectResourceTypeAndObjectMetadata(resources[i], expectedRes.name, expectedRes.ns, expectedRes.group, expectedRes.version, expectedRes.kind)
-			i++
-		}
-
-		// The Deployment should have the correct configuration.
-		dp := rtest.GetResource(resources, kubecontrollers.EsKubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-
-		envs := dp.Spec.Template.Spec.Containers[0].Env
-		Expect(envs).To(ContainElement(corev1.EnvVar{
-			Name:  "ENABLED_CONTROLLERS",
-			Value: "authorization,elasticsearchconfiguration,managedcluster",
-		}))
-
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(1))
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal("tigera-ca-bundle"))
-		Expect(dp.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath).To(Equal("/etc/pki/tls/certs"))
-
-		Expect(dp.Spec.Template.Spec.Volumes).To(HaveLen(1))
-		Expect(dp.Spec.Template.Spec.Volumes[0].Name).To(Equal("tigera-ca-bundle"))
-		Expect(dp.Spec.Template.Spec.Volumes[0].ConfigMap.Name).To(Equal("tigera-ca-bundle"))
-
-		Expect(dp.Spec.Template.Spec.Containers[0].Image).To(Equal("test-reg/tigera/calico:" + components.ComponentTigeraCalico.Version))
-
-		clusterRole := rtest.GetResource(resources, kubecontrollers.EsKubeControllerRole, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(clusterRole.Rules).To(HaveLen(37), "cluster role should have 37 rules")
-		Expect(clusterRole.Rules).To(ContainElement(
-			rbacv1.PolicyRule{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"watch", "list", "get", "update", "create", "delete"},
-			}))
-		Expect(clusterRole.Rules).To(ContainElement(
-			rbacv1.PolicyRule{
-				APIGroups: []string{""},
-				Resources: []string{"secrets"},
-				Verbs:     []string{"watch", "list", "get"},
-			}))
-		roleBindingWatch := rtest.GetResource(resources, kubecontrollers.ManagedClustersWatchRoleBindingName, "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
-		Expect(roleBindingWatch.RoleRef.Name).To(Equal(render.ManagedClustersWatchClusterRoleName))
-		Expect(roleBindingWatch.Subjects).To(ConsistOf([]rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      kubecontrollers.KubeControllerServiceAccount,
-				Namespace: common.CalicoNamespace,
-			},
-		}))
 	})
 
 	It("should include a ControlPlaneNodeSelector when specified", func() {
@@ -981,44 +419,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 			}
 		}
 		Expect(passed).To(Equal(true))
-	})
-
-	It("should add the OIDC prefix env variables", func() {
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.LogStorageExists = true
-		cfg.ManagementCluster = &operatorv1.ManagementCluster{}
-		cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
-		cfg.MetricsPort = 9094
-		cfg.Authentication = &operatorv1.Authentication{Spec: operatorv1.AuthenticationSpec{
-			UsernamePrefix: "uOIDC:",
-			GroupsPrefix:   "gOIDC:",
-			Openshift:      &operatorv1.AuthenticationOpenshift{IssuerURL: "https://api.example.com"},
-		}}
-
-		component := kubecontrollers.NewElasticsearchKubeControllers(&cfg)
-		Expect(component.ResolveImages(nil)).To(BeNil())
-		resources, _ := component.Objects()
-
-		depResource := rtest.GetResource(resources, kubecontrollers.EsKubeController, common.CalicoNamespace, "apps", "v1", "Deployment")
-		Expect(depResource).ToNot(BeNil())
-		deployment := depResource.(*appsv1.Deployment)
-
-		var usernamePrefix, groupPrefix string
-		for _, container := range deployment.Spec.Template.Spec.Containers {
-			if container.Name == kubecontrollers.EsKubeController {
-				for _, env := range container.Env {
-					switch env.Name {
-					case "OIDC_AUTH_USERNAME_PREFIX":
-						usernamePrefix = env.Value
-					case "OIDC_AUTH_GROUP_PREFIX":
-						groupPrefix = env.Value
-					}
-				}
-			}
-		}
-
-		Expect(usernamePrefix).To(Equal("uOIDC:"))
-		Expect(groupPrefix).To(Equal("gOIDC:"))
 	})
 
 	Context("With calico-kube-controllers overrides", func() {
@@ -1251,35 +651,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		})
 	})
 
-	When("enableESOIDCWorkaround is true", func() {
-		It("should set the ENABLE_ELASTICSEARCH_OIDC_WORKAROUND env variable to true", func() {
-			instance.Variant = operatorv1.CalicoEnterprise
-			cfg.LogStorageExists = true
-			cfg.ManagementCluster = &operatorv1.ManagementCluster{}
-			cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
-			cfg.MetricsPort = 9094
-			component := kubecontrollers.NewElasticsearchKubeControllers(&cfg)
-			resources, _ := component.Objects()
-
-			depResource := rtest.GetResource(resources, kubecontrollers.EsKubeController, common.CalicoNamespace, "apps", "v1", "Deployment")
-			Expect(depResource).ToNot(BeNil())
-			deployment := depResource.(*appsv1.Deployment)
-
-			var esLicenseType string
-			for _, container := range deployment.Spec.Template.Spec.Containers {
-				if container.Name == kubecontrollers.EsKubeController {
-					for _, env := range container.Env {
-						if env.Name == "ENABLE_ELASTICSEARCH_OIDC_WORKAROUND" {
-							esLicenseType = env.Value
-						}
-					}
-				}
-			}
-
-			Expect(esLicenseType).To(Equal("true"))
-		})
-	})
-
 	It("should add the KUBERNETES_SERVICE_... variables", func() {
 		cfg.K8sServiceEpPodNetwork = k8sapi.ServiceEndpoint{
 			Host: "k8shost",
@@ -1385,70 +756,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 
 			Expect(len(zeroedPolicy.Spec.Ingress)).To(Equal(len(baselinePolicy.Spec.Ingress) - 1))
 		})
-	})
-
-	Context("es-kube-controllers calico-system rendering", func() {
-		policyName := types.NamespacedName{Name: "calico-system.es-kube-controller-access", Namespace: common.CalicoNamespace}
-
-		getExpectedPolicy := func(scenario testutils.CalicoSystemScenario) *v3.NetworkPolicy {
-			if scenario.ManagedCluster {
-				return nil
-			}
-
-			return testutils.SelectPolicyByProvider(scenario, expectedESPolicy, expectedESPolicyForOpenshift)
-		}
-
-		DescribeTable("should render calico-system policy",
-			func(scenario testutils.CalicoSystemScenario) {
-				if scenario.OpenShift {
-					cfg.Installation.KubernetesProvider = operatorv1.ProviderOpenShift
-				} else {
-					cfg.Installation.KubernetesProvider = operatorv1.ProviderNone
-				}
-				if scenario.ManagedCluster {
-					cfg.ManagementClusterConnection = &operatorv1.ManagementClusterConnection{}
-				} else {
-					cfg.ManagementClusterConnection = nil
-				}
-				instance.Variant = operatorv1.CalicoEnterprise
-				cfg.LogStorageExists = true
-				cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
-
-				component := kubecontrollers.NewElasticsearchKubeControllers(&cfg)
-				resources, _ := component.Objects()
-
-				policy := testutils.GetCalicoSystemPolicyFromResources(policyName, resources)
-				expectedPolicy := getExpectedPolicy(scenario)
-				Expect(policy).To(Equal(expectedPolicy))
-			},
-			Entry("for management/standalone, kube-dns", testutils.CalicoSystemScenario{ManagedCluster: false, OpenShift: false}),
-			Entry("for management/standalone, openshift-dns", testutils.CalicoSystemScenario{ManagedCluster: false, OpenShift: true}),
-			Entry("for managed, kube-dns", testutils.CalicoSystemScenario{ManagedCluster: true, OpenShift: false}),
-			Entry("for managed, openshift-dns", testutils.CalicoSystemScenario{ManagedCluster: true, OpenShift: true}),
-		)
-	})
-
-	It("should render init containers when certificate management is enabled", func() {
-		instance.Variant = operatorv1.CalicoEnterprise
-		cfg.MetricsPort = 9094
-		ca, _ := tls.MakeCA(rmeta.DefaultOperatorCASignerName())
-		cert, _, _ := ca.Config.GetPEMBytes() // create a valid pem block
-		cfg.Installation.CertificateManagement = &operatorv1.CertificateManagement{CACert: cert}
-
-		certificateManager, err := certificatemanager.Create(cli, cfg.Installation, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
-		Expect(err).NotTo(HaveOccurred())
-
-		tls, err := certificateManager.GetOrCreateKeyPair(cli, kubecontrollers.KubeControllerPrometheusTLSSecret, common.OperatorNamespace(), []string{""})
-		Expect(err).NotTo(HaveOccurred())
-
-		cfg.MetricsServerTLS = tls
-
-		resources, _ := kubecontrollers.NewCalicoKubeControllers(&cfg).Objects()
-
-		dp := rtest.GetResource(resources, kubecontrollers.KubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
-		Expect(dp.Spec.Template.Spec.InitContainers).To(HaveLen(1))
-		csrInitContainer := dp.Spec.Template.Spec.InitContainers[0]
-		Expect(csrInitContainer.Name).To(Equal(fmt.Sprintf("%v-key-cert-provisioner", kubecontrollers.KubeControllerPrometheusTLSSecret)))
 	})
 
 	It("should add egress policy with Enterprise variant and K8SServiceEndpoint defined", func() {

@@ -46,8 +46,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	entkubecontrollers "github.com/tigera/operator/pkg/enterprise/kubecontrollers"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
@@ -239,7 +239,7 @@ var _ = Describe("LogStorage ES kube-controllers controller", func() {
 		dep := appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      kubecontrollers.EsKubeController,
+				Name:      entkubecontrollers.EsKubeController,
 				Namespace: common.CalicoNamespace,
 			},
 		}
@@ -279,12 +279,12 @@ var _ = Describe("LogStorage ES kube-controllers controller", func() {
 		dep := appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      kubecontrollers.EsKubeController,
+				Name:      entkubecontrollers.EsKubeController,
 				Namespace: common.CalicoNamespace,
 			},
 		}
 		Expect(test.GetResource(cli, &dep)).To(BeNil())
-		kc := test.GetContainer(dep.Spec.Template.Spec.Containers, kubecontrollers.EsKubeController)
+		kc := test.GetContainer(dep.Spec.Template.Spec.Containers, entkubecontrollers.EsKubeController)
 		Expect(kc).ToNot(BeNil())
 		Expect(kc.Image).To(Equal(fmt.Sprintf("some.registry.org/%s%s@%s", components.TigeraImagePath, components.ComponentTigeraCalico.Image, "sha256:kubecontrollershash")))
 	})
@@ -329,7 +329,7 @@ var _ = Describe("LogStorage ES kube-controllers controller", func() {
 			dep := appsv1.Deployment{
 				TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      kubecontrollers.EsKubeController,
+					Name:      entkubecontrollers.EsKubeController,
 					Namespace: common.CalicoNamespace,
 				},
 			}

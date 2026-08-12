@@ -36,7 +36,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	schedv1 "k8s.io/api/scheduling/v1"
 	storagev1 "k8s.io/api/storage/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -57,6 +56,7 @@ import (
 	"github.com/tigera/operator/pkg/common/discovery"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
+	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
@@ -192,18 +192,22 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				config:               nil, // there is no fake for config
-				client:               c,
-				scheme:               scheme,
-				autoDetectedProvider: operator.ProviderNone,
-				status:               mockStatus,
-				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
-				namespaceMigration:   &fakeNamespaceMigration{},
-				variant:              operator.CalicoEnterprise,
-				migrationChecked:     true,
-				tierWatchReady:       ready,
-				migrationWatchReady:  &utils.ReadyFlag{},
-				newComponentHandler:  utils.NewComponentHandler,
+				ext: testExtensions.Installation(),
+				opts: options.ControllerOptions{
+					Extensions:       testExtensions,
+					DetectedProvider: operator.ProviderNone,
+					Variant:          operator.CalicoEnterprise,
+				},
+				config:              nil, // there is no fake for config
+				client:              c,
+				scheme:              scheme,
+				status:              mockStatus,
+				typhaAutoscaler:     newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
+				namespaceMigration:  &fakeNamespaceMigration{},
+				migrationChecked:    true,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				newComponentHandler: utils.NewComponentHandler,
 			}
 
 			r.typhaAutoscaler.start(ctx)
@@ -393,6 +397,20 @@ var _ = Describe("Testing core-controller installation", func() {
 				Expect(ds.Spec.Template.Spec.HostAliases).To(HaveLen(1))
 				Expect(ds.Spec.Template.Spec.HostAliases[0].IP).To(Equal("1.2.3.4"))
 			})
+		})
+
+		It("degrades with a validation reason when the extension rejects the configuration", func() {
+			mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+
+			port := 0
+			Expect(c.Create(ctx, &v3.FelixConfiguration{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec:       v3.FelixConfigurationSpec{PrometheusReporterPort: &port},
+			})).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).To(HaveOccurred())
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.ResourceValidationError, "felixConfiguration prometheusReporterPort=0 not supported", mock.Anything, mock.Anything)
 		})
 
 		Context("image tests", func() {
@@ -821,19 +839,23 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				config:               nil, // there is no fake for config
-				client:               c,
-				scheme:               scheme,
-				autoDetectedProvider: operator.ProviderNone,
-				status:               mockStatus,
-				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
-				namespaceMigration:   &fakeNamespaceMigration{},
-				variant:              operator.CalicoEnterprise,
-				migrationChecked:     true,
-				clusterDomain:        dns.DefaultClusterDomain,
-				tierWatchReady:       ready,
-				migrationWatchReady:  &utils.ReadyFlag{},
-				newComponentHandler:  utils.NewComponentHandler,
+				ext: testExtensions.Installation(),
+				opts: options.ControllerOptions{
+					Extensions:       testExtensions,
+					DetectedProvider: operator.ProviderNone,
+					Variant:          operator.CalicoEnterprise,
+					ClusterDomain:    dns.DefaultClusterDomain,
+				},
+				config:              nil, // there is no fake for config
+				client:              c,
+				scheme:              scheme,
+				status:              mockStatus,
+				typhaAutoscaler:     newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
+				namespaceMigration:  &fakeNamespaceMigration{},
+				migrationChecked:    true,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				newComponentHandler: utils.NewComponentHandler,
 			}
 			r.typhaAutoscaler.start(ctx)
 
@@ -1043,18 +1065,22 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				config:               nil, // there is no fake for config
-				client:               c,
-				scheme:               scheme,
-				autoDetectedProvider: operator.ProviderNone,
-				status:               mockStatus,
-				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
-				namespaceMigration:   &fakeNamespaceMigration{},
-				variant:              operator.CalicoEnterprise,
-				migrationChecked:     true,
-				tierWatchReady:       ready,
-				migrationWatchReady:  &utils.ReadyFlag{},
-				newComponentHandler:  utils.NewComponentHandler,
+				ext: testExtensions.Installation(),
+				opts: options.ControllerOptions{
+					Extensions:       testExtensions,
+					DetectedProvider: operator.ProviderNone,
+					Variant:          operator.CalicoEnterprise,
+				},
+				config:              nil, // there is no fake for config
+				client:              c,
+				scheme:              scheme,
+				status:              mockStatus,
+				typhaAutoscaler:     newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
+				namespaceMigration:  &fakeNamespaceMigration{},
+				migrationChecked:    true,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				newComponentHandler: utils.NewComponentHandler,
 			}
 
 			r.typhaAutoscaler.start(ctx)
@@ -2246,7 +2272,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			cr.Spec.Variant = operator.Calico
 			cr.Status.Variant = operator.Calico
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
-			r.variant = operator.Calico
+			r.opts.Variant = operator.Calico
 			Expect(c.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
 			_, err := r.Reconcile(ctx, reconcile.Request{})
@@ -2358,19 +2384,23 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				config:               nil, // there is no fake for config
-				client:               c,
-				scheme:               scheme,
-				autoDetectedProvider: operator.ProviderNone,
-				status:               mockStatus,
-				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
-				namespaceMigration:   &fakeNamespaceMigration{},
-				variant:              operator.CalicoEnterprise,
-				migrationChecked:     true,
-				clusterDomain:        dns.DefaultClusterDomain,
-				tierWatchReady:       ready,
-				migrationWatchReady:  &utils.ReadyFlag{},
-				newComponentHandler:  utils.NewComponentHandler,
+				ext: testExtensions.Installation(),
+				opts: options.ControllerOptions{
+					Extensions:       testExtensions,
+					DetectedProvider: operator.ProviderNone,
+					Variant:          operator.CalicoEnterprise,
+					ClusterDomain:    dns.DefaultClusterDomain,
+				},
+				config:              nil, // there is no fake for config
+				client:              c,
+				scheme:              scheme,
+				status:              mockStatus,
+				typhaAutoscaler:     newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
+				namespaceMigration:  &fakeNamespaceMigration{},
+				migrationChecked:    true,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				newComponentHandler: utils.NewComponentHandler,
 			}
 			r.typhaAutoscaler.start(ctx)
 
@@ -2431,119 +2461,6 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(secret.GetOwnerReferences()).To(HaveLen(1))
 		})
 
-		// The admin owns whether the ConfigMap exists and what it says; the operator only
-		// reads it.
-		Context("RBAC management UI feature gate", func() {
-			gateKey := client.ObjectKey{Name: rbacmanagement.ConfigMapName, Namespace: common.CalicoNamespace}
-
-			// enabledControllers is where the gate's value is observable.
-			enabledControllers := func() string {
-				d := &appsv1.Deployment{}
-				Expect(c.Get(ctx, client.ObjectKey{
-					Name: "calico-kube-controllers", Namespace: common.CalicoNamespace,
-				}, d)).ShouldNot(HaveOccurred())
-
-				container := test.GetContainer(d.Spec.Template.Spec.Containers, "calico-kube-controllers")
-				Expect(container).NotTo(BeNil())
-				for _, env := range container.Env {
-					if env.Name == "ENABLED_CONTROLLERS" {
-						return env.Value
-					}
-				}
-				Fail("calico-kube-controllers has no ENABLED_CONTROLLERS env var")
-				return ""
-			}
-
-			writeGate := func(value string) {
-				cm := &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{Name: gateKey.Name, Namespace: gateKey.Namespace},
-					Data:       map[string]string{rbacmanagement.ConfigMapKey: value},
-				}
-				Expect(c.Create(ctx, cm)).ShouldNot(HaveOccurred())
-			}
-
-			It("does not create the ConfigMap", func() {
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				err = c.Get(ctx, gateKey, &corev1.ConfigMap{})
-				Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected the operator not to create rbac-ui-config")
-			})
-
-			It("reads a missing ConfigMap as disabled", func() {
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				Expect(enabledControllers()).NotTo(ContainSubstring("rbacsync"))
-			})
-
-			It("follows the admin's value once they create the ConfigMap", func() {
-				writeGate("true")
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				Expect(enabledControllers()).To(ContainSubstring("rbacsync"))
-			})
-
-			// Multi-tenant force-disables the feature on the ui-apis side.
-			It("withholds rbacsync on a multi-tenant management cluster even with the gate on", func() {
-				r.multiTenant = true
-				writeGate("true")
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				Expect(enabledControllers()).NotTo(ContainSubstring("rbacsync"))
-			})
-
-			It("leaves the admin's value untouched across reconciles", func() {
-				writeGate("true")
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				cm := &corev1.ConfigMap{}
-				Expect(c.Get(ctx, gateKey, cm)).ShouldNot(HaveOccurred())
-				Expect(cm.Data).To(HaveKeyWithValue(rbacmanagement.ConfigMapKey, "true"))
-				// Deleting the Installation must not take the admin's toggle with it.
-				Expect(cm.GetOwnerReferences()).To(BeEmpty())
-			})
-
-			It("switches the feature back off when the admin deletes the ConfigMap", func() {
-				writeGate("true")
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(enabledControllers()).To(ContainSubstring("rbacsync"))
-
-				cm := &corev1.ConfigMap{}
-				Expect(c.Get(ctx, gateKey, cm)).ShouldNot(HaveOccurred())
-				Expect(c.Delete(ctx, cm)).ShouldNot(HaveOccurred())
-
-				// Fail-closed, and the operator does not put the ConfigMap back.
-				_, err = r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(enabledControllers()).NotTo(ContainSubstring("rbacsync"))
-				Expect(apierrors.IsNotFound(c.Get(ctx, gateKey, cm))).To(BeTrue())
-			})
-
-			// An unreadable ConfigMap is unknown state, not absent, so it degrades rather
-			// than rendering as disabled.
-			It("degrades and requeues when the ConfigMap cannot be read", func() {
-				readErr := fmt.Errorf("the API server is having a bad day")
-				r.client = failingGateReadClient{Client: c, err: readErr}
-				mockStatus.On("SetDegraded", operator.ResourceReadError,
-					"Error reading the RBAC management UI ConfigMap", readErr.Error(), mock.Anything).Return().Once()
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).To(MatchError(readErr))
-				// The shared mockStatus expects a full reconcile, which this returns early
-				// from, so assert the one call.
-				mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.ResourceReadError,
-					"Error reading the RBAC management UI ConfigMap", readErr.Error(), mock.Anything)
-			})
-		})
 	})
 
 	Context("with a fake component handler", func() {
@@ -2609,18 +2526,22 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			componentHandler = newFakeComponentHandler()
 			r = ReconcileInstallation{
-				config:               nil, // there is no fake for config
-				client:               c,
-				scheme:               scheme,
-				autoDetectedProvider: operator.ProviderNone,
-				status:               mockStatus,
-				typhaAutoscaler:      newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
-				namespaceMigration:   &fakeNamespaceMigration{},
-				variant:              operator.CalicoEnterprise,
-				migrationChecked:     true,
-				tierWatchReady:       ready,
-				migrationWatchReady:  &utils.ReadyFlag{},
-				newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+				ext: testExtensions.Installation(),
+				opts: options.ControllerOptions{
+					Extensions:       testExtensions,
+					DetectedProvider: operator.ProviderNone,
+					Variant:          operator.CalicoEnterprise,
+				},
+				config:              nil, // there is no fake for config
+				client:              c,
+				scheme:              scheme,
+				status:              mockStatus,
+				typhaAutoscaler:     newTyphaAutoscaler(cs, nodeIndexInformer, test.NewTyphaListWatch(cs), mockStatus),
+				namespaceMigration:  &fakeNamespaceMigration{},
+				migrationChecked:    true,
+				tierWatchReady:      ready,
+				migrationWatchReady: &utils.ReadyFlag{},
+				newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 					return componentHandler
 				},
 			}
@@ -2772,13 +2693,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1 MAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2803,13 +2728,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1Beta1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2832,13 +2761,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1Alpha1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2861,13 +2794,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(""),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(""),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2879,13 +2816,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       false,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    false,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2896,13 +2837,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when manageCRDs=false", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   false,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   false,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2926,13 +2871,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			client:       clientFor(staleMAP, staleMAPB),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(staleMAP, staleMAPB),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2968,13 +2917,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			client:       clientFor(initial...),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(initial...),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -2986,13 +2939,17 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3057,13 +3014,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1 VAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3088,13 +3049,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 VAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1Beta1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1Beta1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3117,13 +3082,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 VAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1Alpha1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1Alpha1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3134,13 +3103,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should skip without degrading when no served version exists", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(""),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(""),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3152,13 +3125,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should not create VAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       false,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    false,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3182,13 +3159,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			client:       clientFor(staleVAP, staleVAPB),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(staleVAP, staleVAPB),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3206,13 +3187,17 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			client:       clientFor(),
-			scheme:       scheme,
-			status:       mockStatus,
-			manageCRDs:   true,
-			v3CRDs:       true,
-			apiDiscovery: discoveryFor(admission.VersionV1),
-			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object) utils.ComponentHandler {
+			ext: testExtensions.Installation(),
+			opts: options.ControllerOptions{
+				Extensions:   testExtensions,
+				ManageCRDs:   true,
+				UseV3CRDs:    true,
+				APIDiscovery: discoveryFor(admission.VersionV1),
+			},
+			client: clientFor(),
+			scheme: scheme,
+			status: mockStatus,
+			newComponentHandler: func(logr.Logger, client.Client, *runtime.Scheme, metav1.Object, ...utils.ComponentHandlerOption) utils.ComponentHandler {
 				return componentHandler
 			},
 		}
@@ -3223,17 +3208,3 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
 	})
 })
-
-// failingGateReadClient fails the read of the gate ConfigMap and passes everything else
-// through, to distinguish an unreadable ConfigMap from an absent one.
-type failingGateReadClient struct {
-	client.Client
-	err error
-}
-
-func (f failingGateReadClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	if _, ok := obj.(*corev1.ConfigMap); ok && key.Name == rbacmanagement.ConfigMapName {
-		return f.err
-	}
-	return f.Client.Get(ctx, key, obj, opts...)
-}

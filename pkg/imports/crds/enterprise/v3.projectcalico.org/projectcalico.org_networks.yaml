@@ -93,6 +93,12 @@ spec:
                                 required:
                                   - name
                                 type: object
+                                x-kubernetes-validations:
+                                  - message:
+                                      "name must not start with calb- or calq-:
+                                      those prefixes are reserved for devices Calico creates
+                                      and deletes"
+                                    rule: "!self.name.startsWith('calb-') && !self.name.startsWith('calq-')"
                               managedBridge:
                                 description: |-
                                   ManagedBridge instructs Calico to create and fully manage the

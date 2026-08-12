@@ -18,12 +18,8 @@ package render
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 
 	"golang.org/x/net/http/httpproxy"
-
-	operatorurl "github.com/tigera/operator/pkg/url"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,8 +31,6 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	"github.com/tigera/api/pkg/lib/numorstring"
-
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
@@ -45,7 +39,6 @@ import (
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
-	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -80,32 +73,34 @@ var (
 )
 
 func Guardian(cfg *GuardianConfiguration) Component {
-	return &GuardianComponent{
+	return &guardianComponent{
 		cfg: cfg,
 	}
 }
 
+// GuardianPolicy renders the OSS guardian network policy. A variant may replace it
+// with its own. The error return is always nil, and is kept for callers.
 func GuardianPolicy(cfg *GuardianConfiguration) (Component, error) {
-	var policies []client.Object
+	return &guardianPolicyComponent{cfg: cfg}, nil
+}
 
-	guardianAccessPolicy, err := guardianCalicoSystemPolicy(cfg)
-	if err != nil {
-		return nil, err
-	}
-	if guardianAccessPolicy != nil {
-		policies = []client.Object{
-			guardianAccessPolicy,
-		}
-	}
+type guardianPolicyComponent struct {
+	cfg *GuardianConfiguration
+}
 
-	return NewPassthrough(
-		policies,
-		[]client.Object{
-			// allow-tigera Tier was renamed to calico-system
-			networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("guardian-access", GuardianNamespace),
-			networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("default-deny", GuardianNamespace),
-		},
-	), nil
+func (c *guardianPolicyComponent) ResolveImages(*operatorv1.ImageSet) error { return nil }
+func (c *guardianPolicyComponent) SupportedOSType() rmeta.OSType            { return rmeta.OSTypeAny }
+func (c *guardianPolicyComponent) Ready() bool                              { return true }
+func (c *guardianPolicyComponent) GuardianPolicyConfig() *GuardianConfiguration {
+	return c.cfg
+}
+
+func (c *guardianPolicyComponent) Objects() ([]client.Object, []client.Object) {
+	return []client.Object{ossNetworkPolicy(c.cfg)}, []client.Object{
+		// allow-tigera Tier was renamed to calico-system
+		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("guardian-access", GuardianNamespace),
+		networkpolicy.DeprecatedAllowTigeraNetworkPolicyObject("default-deny", GuardianNamespace),
+	}
 }
 
 // GuardianConfiguration contains all the config information needed to render the component.
@@ -132,12 +127,37 @@ type GuardianConfiguration struct {
 	Version string
 }
 
-type GuardianComponent struct {
+// GuardianRenderData is the variant-specific Guardian input a controller extension
+// computes during reconcile and stashes in Inputs.Extension. The
+// clusterconnection controller reads it back to fill GuardianConfiguration without
+// depending on the extension: when present it carries the enterprise values
+// (the management-cluster version and the license-gated egress policy flag) and
+// signals that the controller should not create the OSS Guardian client keypair.
+// It lives in render so the controller can read it generically.
+type GuardianRenderData struct {
+	// Version is the managed cluster version reported by ClusterInformation
+	// (CNXVersion for Enterprise, CalicoVersion for the OSS default).
+	Version string
+
+	// IncludeEgressNetworkPolicy enables the domain-based egress rules in the
+	// Guardian policy, gated on an Enterprise license feature.
+	IncludeEgressNetworkPolicy bool
+}
+
+// GuardianRenderDataFromInputs returns the GuardianRenderData a controller
+// extension stashed in the render inputs, and whether it was present. Absent
+// means the OSS path: the controller applies its own defaults.
+func GuardianRenderDataFromInputs(ri Inputs) (GuardianRenderData, bool) {
+	data, ok := ri.Extension.(GuardianRenderData)
+	return data, ok
+}
+
+type guardianComponent struct {
 	cfg         *GuardianConfiguration
 	calicoImage string
 }
 
-func (c *GuardianComponent) ResolveImages(is *operatorv1.ImageSet) error {
+func (c *guardianComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	reg := c.cfg.Installation.Registry
 	path := c.cfg.Installation.ImagePath
 	prefix := c.cfg.Installation.ImagePrefix
@@ -146,45 +166,32 @@ func (c *GuardianComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	return err
 }
 
-func (c *GuardianComponent) SupportedOSType() rmeta.OSType {
+func (c *guardianComponent) GuardianConfig() *GuardianConfiguration {
+	return c.cfg
+}
+
+func (c *guardianComponent) SupportedOSType() rmeta.OSType {
 	return rmeta.OSTypeLinux
 }
 
-func (c *GuardianComponent) Objects() ([]client.Object, []client.Object) {
+func (c *guardianComponent) Objects() ([]client.Object, []client.Object) {
 	objs := []client.Object{
-		// common RBAC for EE and OSS
 		c.serviceAccount(),
 		c.clusterRole(),
 		c.clusterRoleBinding(),
-	}
-
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		// Enterprise-specific RBAC and settings
-		objs = append(objs,
-			c.secretsRole(),
-			c.secretRoleBinding(),
-			// Install default UI settings for this managed cluster.
-			managerClusterWideSettingsGroup(),
-			managerUserSpecificSettingsGroup(),
-			managerClusterWideTigeraLayer(),
-			managerClusterWideDefaultView(),
-		)
-	}
-
-	objs = append(objs,
 		c.deployment(),
 		c.service(),
 		secret.CopyToNamespace(GuardianNamespace, c.cfg.TunnelSecret)[0],
-	)
+	}
 
 	return objs, deprecatedObjects()
 }
 
-func (c *GuardianComponent) Ready() bool {
+func (c *guardianComponent) Ready() bool {
 	return true
 }
 
-func (c *GuardianComponent) service() *corev1.Service {
+func (c *guardianComponent) service() *corev1.Service {
 	ports := []corev1.ServicePort{
 		{
 			Name: "https",
@@ -197,28 +204,6 @@ func (c *GuardianComponent) service() *corev1.Service {
 		},
 	}
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		ports = append(ports,
-			corev1.ServicePort{
-				Name: "elasticsearch",
-				Port: 9200,
-				TargetPort: intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: 8080,
-				},
-				Protocol: corev1.ProtocolTCP,
-			},
-			corev1.ServicePort{
-				Name: "kibana",
-				Port: 5601,
-				TargetPort: intstr.IntOrString{
-					Type:   intstr.Int,
-					IntVal: 8080,
-				},
-				Protocol: corev1.ProtocolTCP,
-			},
-		)
-	}
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      GuardianServiceName,
@@ -233,95 +218,50 @@ func (c *GuardianComponent) service() *corev1.Service {
 	}
 }
 
-func (c *GuardianComponent) serviceAccount() *corev1.ServiceAccount {
+func (c *guardianComponent) serviceAccount() *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		TypeMeta:   metav1.TypeMeta{Kind: "ServiceAccount", APIVersion: "v1"},
 		ObjectMeta: metav1.ObjectMeta{Name: GuardianServiceAccountName, Namespace: GuardianNamespace},
 	}
 }
 
-func (c *GuardianComponent) clusterRole() *rbacv1.ClusterRole {
-	var policyRules []rbacv1.PolicyRule
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		impersonation := c.cfg.ManagementClusterConnection.Spec.Impersonation
-		if impersonation != nil {
-			if impersonation.Users != nil {
-				policyRules = append(policyRules,
-					rbacv1.PolicyRule{
-						APIGroups:     []string{""},
-						Resources:     []string{"users"},
-						ResourceNames: impersonation.Users,
-						Verbs:         []string{"impersonate"},
-					})
-			}
-			if impersonation.Groups != nil {
-				policyRules = append(policyRules,
-					rbacv1.PolicyRule{
-						APIGroups:     []string{""},
-						Resources:     []string{"groups"},
-						ResourceNames: impersonation.Groups,
-						Verbs:         []string{"impersonate"},
-					})
-			}
-			if impersonation.ServiceAccounts != nil {
-				policyRules = append(policyRules,
-					rbacv1.PolicyRule{
-						APIGroups:     []string{""},
-						Resources:     []string{"serviceaccounts"},
-						ResourceNames: impersonation.ServiceAccounts,
-						Verbs:         []string{"impersonate"},
-					})
-			}
-		}
-
-		policyRules = append(policyRules, rulesForManagementClusterRequests(c.cfg.OpenShift)...)
-
-		if c.cfg.OpenShift {
-			policyRules = append(policyRules, rbacv1.PolicyRule{
-				APIGroups:     []string{"security.openshift.io"},
-				Resources:     []string{"securitycontextconstraints"},
-				Verbs:         []string{"use"},
-				ResourceNames: []string{securitycontextconstraints.NonRootV2},
-			})
-		}
-	} else {
-		policyRules = append(policyRules,
-			rbacv1.PolicyRule{
-				APIGroups: []string{""},
-				Resources: []string{"namespaces", "services", "pods"},
-				Verbs:     []string{"get", "list", "watch"},
+func (c *guardianComponent) clusterRole() *rbacv1.ClusterRole {
+	policyRules := []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{""},
+			Resources: []string{"namespaces", "services", "pods"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{"apps"},
+			Resources: []string{"deployments", "replicasets", "statefulsets", "daemonsets"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{"networking.k8s.io"},
+			Resources: []string{"networkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{
+				"clusterinformations",
+				"tiers",
+				"stagednetworkpolicies",
+				"tier.stagednetworkpolicies",
+				"stagedglobalnetworkpolicies",
+				"tier.stagedglobalnetworkpolicies",
+				"stagedkubernetesnetworkpolicies",
+				"tier.stagedkubernetesnetworkpolicies",
+				"networkpolicies",
+				"tier.networkpolicies",
+				"globalnetworkpolicies",
+				"tier.globalnetworkpolicies",
+				"globalnetworksets",
+				"networksets",
 			},
-			rbacv1.PolicyRule{
-				APIGroups: []string{"apps"},
-				Resources: []string{"deployments", "replicasets", "statefulsets", "daemonsets"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-			rbacv1.PolicyRule{
-				APIGroups: []string{"networking.k8s.io"},
-				Resources: []string{"networkpolicies"},
-				Verbs:     []string{"get", "list", "watch"},
-			},
-			rbacv1.PolicyRule{
-				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{
-					"clusterinformations",
-					"tiers",
-					"stagednetworkpolicies",
-					"tier.stagednetworkpolicies",
-					"stagedglobalnetworkpolicies",
-					"tier.stagedglobalnetworkpolicies",
-					"stagedkubernetesnetworkpolicies",
-					"tier.stagedkubernetesnetworkpolicies",
-					"networkpolicies",
-					"tier.networkpolicies",
-					"globalnetworkpolicies",
-					"tier.globalnetworkpolicies",
-					"globalnetworksets",
-					"networksets",
-				},
-				Verbs: []string{"get", "list", "watch"},
-			},
-		)
+			Verbs: []string{"get", "list", "watch"},
+		},
 	}
 
 	return &rbacv1.ClusterRole{
@@ -333,7 +273,7 @@ func (c *GuardianComponent) clusterRole() *rbacv1.ClusterRole {
 	}
 }
 
-func (c *GuardianComponent) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
+func (c *guardianComponent) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	return &rbacv1.ClusterRoleBinding{
 		TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
 		ObjectMeta: metav1.ObjectMeta{
@@ -354,48 +294,7 @@ func (c *GuardianComponent) clusterRoleBinding() *rbacv1.ClusterRoleBinding {
 	}
 }
 
-// secretRole creates a Role that allows the management cluster to provision secrets to the tigera-operator Namespace.
-// This is used to push secrets used by the managed cluster to access / authenticate with the management cluster.
-func (c *GuardianComponent) secretsRole() *rbacv1.Role {
-	return &rbacv1.Role{
-		TypeMeta: metav1.TypeMeta{Kind: "Role", APIVersion: "rbac.authorization.k8s.io/v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GuardianSecretsRole,
-			Namespace: common.OperatorNamespace(),
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"secrets"},
-				Verbs:     []string{"create", "delete", "deletecollection", "update"},
-			},
-		},
-	}
-}
-
-func (c *GuardianComponent) secretRoleBinding() *rbacv1.RoleBinding {
-	return &rbacv1.RoleBinding{
-		TypeMeta: metav1.TypeMeta{Kind: "RoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GuardianSecretsRoleBindingName,
-			Namespace: common.OperatorNamespace(),
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     GuardianSecretsRole,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				Kind:      "ServiceAccount",
-				Name:      GuardianServiceAccountName,
-				Namespace: GuardianNamespace,
-			},
-		},
-	}
-}
-
-func (c *GuardianComponent) deployment() *appsv1.Deployment {
+func (c *guardianComponent) deployment() *appsv1.Deployment {
 	var replicas int32 = 1
 
 	tolerations := append(c.cfg.Installation.ControlPlaneTolerations, rmeta.TolerateCriticalAddonsAndControlPlane...)
@@ -440,7 +339,7 @@ func (c *GuardianComponent) deployment() *appsv1.Deployment {
 	return d
 }
 
-func (c *GuardianComponent) volumes() []corev1.Volume {
+func (c *guardianComponent) volumes() []corev1.Volume {
 	volumes := []corev1.Volume{
 		c.cfg.TrustedCertBundle.Volume(),
 		{
@@ -458,7 +357,7 @@ func (c *GuardianComponent) volumes() []corev1.Volume {
 	return volumes
 }
 
-func (c *GuardianComponent) container() []corev1.Container {
+func (c *guardianComponent) container() []corev1.Container {
 	envVars := []corev1.EnvVar{
 		{Name: "GUARDIAN_PORT", Value: "9443"},
 		{Name: "GUARDIAN_LOGLEVEL", Value: "INFO"},
@@ -467,14 +366,6 @@ func (c *GuardianComponent) container() []corev1.Container {
 		{Name: "GUARDIAN_CA_FILE", Value: "/etc/pki/tls/certs/tigera-ca-bundle.crt"},
 	}
 	envVars = append(envVars, c.cfg.Installation.Proxy.EnvVars()...)
-
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		envVars = append(envVars,
-			corev1.EnvVar{Name: "GUARDIAN_PACKET_CAPTURE_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
-			corev1.EnvVar{Name: "GUARDIAN_PROMETHEUS_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
-			corev1.EnvVar{Name: "GUARDIAN_QUERYSERVER_CA_BUNDLE_PATH", Value: c.cfg.TrustedCertBundle.MountPath()},
-		)
-	}
 
 	if c.cfg.GuardianClientKeyPair != nil {
 		envVars = append(envVars,
@@ -523,7 +414,7 @@ func (c *GuardianComponent) container() []corev1.Container {
 	}
 }
 
-func (c *GuardianComponent) volumeMounts() []corev1.VolumeMount {
+func (c *guardianComponent) volumeMounts() []corev1.VolumeMount {
 	volumeMounts := append(
 		c.cfg.TrustedCertBundle.VolumeMounts(c.SupportedOSType()),
 		corev1.VolumeMount{Name: GuardianVolumeName, MountPath: "/certs/", ReadOnly: true},
@@ -534,7 +425,7 @@ func (c *GuardianComponent) volumeMounts() []corev1.VolumeMount {
 	return volumeMounts
 }
 
-func (c *GuardianComponent) annotations() map[string]string {
+func (c *guardianComponent) annotations() map[string]string {
 	annotations := c.cfg.TrustedCertBundle.HashAnnotations()
 	annotations["hash.operator.tigera.io/tigera-managed-cluster-connection"] = rmeta.AnnotationHash(c.cfg.TunnelSecret.Data)
 
@@ -585,173 +476,6 @@ func ossNetworkPolicy(cfg *GuardianConfiguration) *v3.NetworkPolicy {
 	}
 }
 
-func guardianCalicoSystemPolicy(cfg *GuardianConfiguration) (*v3.NetworkPolicy, error) {
-	if !cfg.Installation.Variant.IsEnterprise() {
-		return ossNetworkPolicy(cfg), nil
-	}
-
-	egressRules := []v3.Rule{
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: PacketCaptureEntityRule,
-		},
-	}
-	egressRules = networkpolicy.AppendDNSEgressRules(egressRules, cfg.OpenShift)
-	egressRules = append(egressRules, []v3.Rule{
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicy.KubeAPIServerEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicy.PrometheusEntityRule,
-		},
-		{
-			Action:      v3.Allow,
-			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: TigeraAPIServerEntityRule,
-		},
-	}...)
-
-	// The loop below creates an egress rule for each unique destination that the Guardian pods connect to. If there are
-	// multiple guardian pods and their proxy  settings differ, then there are multiple destinations that must have egress allowed.
-	allowedDestinations := map[string]bool{}
-	processedPodProxies := ProcessPodProxies(cfg.PodProxies)
-	for _, podProxyConfig := range processedPodProxies {
-		var proxyURL *url.URL
-		var err error
-		if podProxyConfig != nil && podProxyConfig.HTTPSProxy != "" {
-			targetURL := &url.URL{
-				// The scheme should be HTTPS, as we are establishing an mTLS session with the target.
-				Scheme: "https",
-
-				// We expect `target` to be of the form host:port.
-				Host: cfg.URL,
-			}
-
-			proxyURL, err = podProxyConfig.ProxyFunc()(targetURL)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		var tunnelDestinationHostPort string
-		if proxyURL != nil {
-			proxyHostPort, err := operatorurl.ParseHostPortFromHTTPProxyURL(proxyURL)
-			if err != nil {
-				return nil, err
-			}
-
-			tunnelDestinationHostPort = proxyHostPort
-		} else {
-			// cfg.URL has host:port form
-			tunnelDestinationHostPort = cfg.URL
-		}
-
-		// Check if we've already created an egress rule for this destination.
-		if allowedDestinations[tunnelDestinationHostPort] {
-			continue
-		}
-
-		host, port, err := net.SplitHostPort(tunnelDestinationHostPort)
-		if err != nil {
-			return nil, err
-		}
-		parsedPort, err := numorstring.PortFromString(port)
-		if err != nil {
-			return nil, err
-		}
-		parsedIp := net.ParseIP(host)
-		if parsedIp == nil {
-			// Domain-based egress rules require the EgressAccessControl license feature.
-			if !cfg.IncludeEgressNetworkPolicy {
-				continue
-			}
-			// Assume host is a valid hostname.
-			egressRules = append(egressRules, v3.Rule{
-				Action:   v3.Allow,
-				Protocol: &networkpolicy.TCPProtocol,
-				Destination: v3.EntityRule{
-					Domains: []string{host},
-					Ports:   []numorstring.Port{parsedPort},
-				},
-			})
-			allowedDestinations[tunnelDestinationHostPort] = true
-
-		} else {
-			var netSuffix string
-			if parsedIp.To4() != nil {
-				netSuffix = "/32"
-			} else {
-				netSuffix = "/128"
-			}
-
-			egressRules = append(egressRules, v3.Rule{
-				Action:   v3.Allow,
-				Protocol: &networkpolicy.TCPProtocol,
-				Destination: v3.EntityRule{
-					Nets:  []string{parsedIp.String() + netSuffix},
-					Ports: []numorstring.Port{parsedPort},
-				},
-			})
-			allowedDestinations[tunnelDestinationHostPort] = true
-		}
-	}
-
-	egressRules = append(egressRules, v3.Rule{Action: v3.Pass})
-
-	guardianIngressDestinationEntityRule := v3.EntityRule{Ports: networkpolicy.Ports(GuardianTargetPort)}
-	var ingressRules []v3.Rule
-	if cfg.Installation.Variant.IsEnterprise() {
-		ingressRules = append(ingressRules, []v3.Rule{
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      FluentBitSourceEntityRule,
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      IntrusionDetectionSourceEntityRule,
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Source:      IntrusionDetectionInstallerSourceEntityRule,
-				Destination: guardianIngressDestinationEntityRule,
-			},
-			{
-				Action:      v3.Allow,
-				Protocol:    &networkpolicy.TCPProtocol,
-				Destination: guardianIngressDestinationEntityRule,
-			},
-		}...)
-	}
-
-	policy := &v3.NetworkPolicy{
-		TypeMeta: metav1.TypeMeta{Kind: "NetworkPolicy", APIVersion: "projectcalico.org/v3"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      GuardianPolicyName,
-			Namespace: GuardianNamespace,
-		},
-		Spec: v3.NetworkPolicySpec{
-			Order:    &networkpolicy.HighPrecedenceOrder,
-			Tier:     networkpolicy.CalicoTierName,
-			Selector: networkpolicy.KubernetesAppSelector(GuardianName),
-			Types:    []v3.PolicyType{v3.PolicyTypeIngress, v3.PolicyTypeEgress},
-			Ingress:  ingressRules,
-			Egress:   egressRules,
-		},
-	}
-
-	return policy, nil
-}
-
 func ProcessPodProxies(podProxies []*httpproxy.Config) []*httpproxy.Config {
 	// If pod proxies are empty, then pod proxy resolution has not yet occurred.
 	// Assume that a single Guardian pod is running without a proxy.
@@ -764,304 +488,6 @@ func ProcessPodProxies(podProxies []*httpproxy.Config) []*httpproxy.Config {
 
 func GuardianService(clusterDomain string) string {
 	return fmt.Sprintf("https://%s.%s.svc.%s:%d", GuardianServiceName, GuardianNamespace, clusterDomain, 443)
-}
-
-// rulesForManagementClusterRequests returns the set of RBAC rules needed by Guardian in order to
-// satisfy requests from the management cluster over the tunnel.
-func rulesForManagementClusterRequests(isOpenShift bool) []rbacv1.PolicyRule {
-	rules := []rbacv1.PolicyRule{
-		// Common rules required to handle requests from multiple components in the management cluster.
-		{
-			// ID uses read-only permissions and kube-controllers uses both read and write verbs.
-			APIGroups: []string{""},
-			Resources: []string{"configmaps"},
-			Verbs:     []string{"create", "delete", "get", "list", "update", "watch"},
-		},
-		{
-			// Allows Linseed to watch namespaces before copying its token.
-			// Also enables PolicyRecommendation to watch namespaces,
-			// and Manager/kube-controllers to list them.
-			APIGroups: []string{""},
-			Resources: []string{"namespaces"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			// kube-controllers watches Nodes to monitor for deletions.
-			// Manager performs a list operation on Nodes.
-			APIGroups: []string{""},
-			Resources: []string{"nodes"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			// kube-controllers watches Pods to verify existence for IPAM garbage collection.
-			// Manager performs get operations on Pods.
-			APIGroups: []string{""},
-			Resources: []string{"pods"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			// The Federated Services Controller needs access to the remote kubeconfig secret
-			// in order to create a remote syncer.
-			APIGroups: []string{""},
-			Resources: []string{"secrets"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			// Manager uses list; kube-controllers uses 'get', 'list', 'watch', 'update'.
-			APIGroups: []string{""},
-			Resources: []string{"services"},
-			Verbs:     []string{"get", "list", "update", "watch"},
-		},
-		{
-			// Needed by kube-controllers to validate licenses; also used by ID.
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"licensekeys"},
-			Verbs:     []string{"get", "watch"},
-		},
-		{
-			// Manager uses list; PolicyRecommendation & ID uses all verbs.
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{
-				"globalnetworksets",
-				"networkpolicies",
-				"tier.networkpolicies",
-				"stagednetworkpolicies",
-				"tier.stagednetworkpolicies",
-			},
-			Verbs: []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-		},
-		{
-			// Manager uses list; PolicyRecommendation uses all verbs.
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"tiers"},
-			Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-		},
-		// Rules needed by guardian to handle manager authorization reviews.
-		{
-			APIGroups: []string{"rbac.authorization.k8s.io"},
-			Resources: []string{"clusterroles", "clusterrolebindings", "roles", "rolebindings"},
-			Verbs:     []string{"list", "get"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"uisettings", "uisettingsgroups"},
-			Verbs:     []string{"list", "get"},
-		},
-
-		// Rules needed by guardian to handle other manager requests.
-		{
-			APIGroups: []string{""},
-			Resources: []string{"events"},
-			Verbs:     []string{"list"},
-		},
-		{
-			APIGroups: []string{""},
-			Resources: []string{"serviceaccounts"},
-			Verbs:     []string{"list"},
-		},
-		{
-			// Allow query server talk to Prometheus via the manager user.
-			APIGroups: []string{""},
-			Resources: []string{"services/proxy"},
-			ResourceNames: []string{
-				"calico-node-prometheus:9090",
-				"https:calico-api:8080",
-			},
-			Verbs: []string{"create", "get"},
-		},
-		{
-			APIGroups: []string{"apps"},
-			Resources: []string{"daemonsets", "replicasets", "statefulsets"},
-			Verbs:     []string{"list"},
-		},
-		{
-			APIGroups: []string{"authentication.k8s.io"},
-			Resources: []string{"tokenreviews"},
-			Verbs:     []string{"create"},
-		},
-		{
-			APIGroups: []string{"authorization.k8s.io"},
-			Resources: []string{"subjectaccessreviews"},
-			Verbs:     []string{"create"},
-		},
-		{
-			APIGroups: []string{"networking.k8s.io"},
-			Resources: []string{"networkpolicies"},
-			Verbs:     []string{"get", "list"},
-		},
-		{
-			APIGroups: []string{"policy.networking.k8s.io"},
-			Resources: []string{
-				"clusternetworkpolicies",
-				"adminnetworkpolicies",
-				"baselineadminnetworkpolicies",
-			},
-			Verbs: []string{"list"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"alertexceptions"},
-			Verbs:     []string{"get", "list", "update"},
-		},
-		{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"felixconfigurations"},
-			ResourceNames: []string{"default"},
-			Verbs:         []string{"get"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{
-				"globalnetworkpolicies",
-				"networksets",
-				"stagedglobalnetworkpolicies",
-				"stagedkubernetesnetworkpolicies",
-				"tier.globalnetworkpolicies",
-				"tier.stagedglobalnetworkpolicies",
-			},
-			Verbs: []string{"list"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"hostendpoints"},
-			Verbs:     []string{"list"},
-		},
-
-		// Rules needed by guardian to handle policy recommendation requests.
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{
-				"policyrecommendationscopes",
-				"policyrecommendationscopes/status",
-			},
-			Verbs: []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-		},
-
-		// Rules needed by guardian to handle calico-kube-controller requests.
-		{
-			// Nodes are watched to monitor for deletions.
-			APIGroups: []string{""},
-			Resources: []string{"endpoints"},
-			Verbs:     []string{"create", "delete", "get", "list", "update", "watch"},
-		},
-		{
-			APIGroups: []string{""},
-			Resources: []string{"services/status"},
-			Verbs:     []string{"get", "list", "update", "watch"},
-		},
-		{
-			// Needs to manage hostendpoints.
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"hostendpoints"},
-			Verbs:     []string{"create", "delete", "get", "list", "update", "watch"},
-		},
-		{
-			// Needs access to update clusterinformations.
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"clusterinformations"},
-			Verbs:     []string{"create", "get", "list", "update", "watch"},
-		},
-		{
-			// Needs to manipulate kubecontrollersconfiguration, which contains its config.
-			// It creates a default if none exists, and updates status as well.
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"kubecontrollersconfigurations"},
-			Verbs:     []string{"create", "get", "list", "update", "watch"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"tiers"},
-			Verbs:     []string{"create"},
-		},
-		{
-			APIGroups: []string{"crd.projectcalico.org", "projectcalico.org"},
-			Resources: []string{"deeppacketinspections"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"deeppacketinspections/status"},
-			Verbs:     []string{"update"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"packetcaptures"},
-			Verbs:     []string{"get", "list", "update"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"remoteclusterconfigurations"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"licensekeys"},
-			Verbs:     []string{"create", "get", "list", "update", "watch"},
-		},
-		{
-			// Grant permissions to access ClusterInformation resources in managed clusters.
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"clusterinformations"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-		{
-			APIGroups: []string{"usage.tigera.io"},
-			Resources: []string{"licenseusagereports"},
-			Verbs:     []string{"create", "delete", "get", "list", "update", "watch"},
-		},
-
-		// Rules needed by guardian to handle Intrusion detection requests.
-		{
-			APIGroups: []string{""},
-			Resources: []string{"podtemplates"},
-			Verbs:     []string{"get"},
-		},
-		{
-			APIGroups: []string{"apps"},
-			Resources: []string{"deployments"},
-			Verbs:     []string{"get"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"alertexceptions"},
-			Verbs:     []string{"get", "list"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"securityeventwebhooks"},
-			Verbs:     []string{"get", "list", "update", "watch"},
-		},
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{
-				"globalalerts",
-				"globalalerts/status",
-				"globalthreatfeeds",
-				"globalthreatfeeds/status",
-			},
-			Verbs: []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-		},
-		// Rules needed to fetch the compliance reports
-		{
-			APIGroups: []string{"projectcalico.org"},
-			Resources: []string{"globalreporttypes", "globalreports"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-	}
-
-	// Rules needed by policy recommendation in openshift.
-	if isOpenShift {
-		rules = append(rules,
-			rbacv1.PolicyRule{
-				APIGroups:     []string{"security.openshift.io"},
-				Resources:     []string{"securitycontextconstraints"},
-				Verbs:         []string{"use"},
-				ResourceNames: []string{securitycontextconstraints.HostNetworkV2},
-			},
-		)
-	}
-
-	return rules
 }
 
 func deprecatedObjects() []client.Object {

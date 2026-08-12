@@ -44,9 +44,9 @@ func validateContainerPorts(container corev1.Container) field.ErrorList {
 	ports := container.Ports
 	// Validate if the port name can be attributed to the container.
 	for _, port := range ports {
-		if (port.Name == render.APIServerPortName && container.Name != string(render.APIServerContainerName)) ||
-			(port.Name == render.QueryServerPortName && container.Name != string(render.TigeraAPIServerQueryServerContainerName)) ||
-			(port.Name == render.L7AdmissionControllerPortName && container.Name != string(render.L7AdmissionControllerContainerName)) {
+		if (port.Name == render.APIServerPortName && container.Name != render.APIServerContainerName) ||
+			(port.Name == render.QueryServerPortName && container.Name != render.TigeraAPIServerQueryServerContainerName) ||
+			(port.Name == render.L7AdmissionControllerPortName && container.Name != render.L7AdmissionControllerContainerName) {
 			msg := fmt.Sprintf("port name %s is not valid for container %s", port.Name, container.Name)
 			allErrs = append(allErrs, field.Invalid(fldPath, port.Name, msg))
 		}
