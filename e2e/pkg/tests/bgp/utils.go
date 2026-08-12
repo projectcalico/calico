@@ -50,8 +50,7 @@ func requireBGPIsSoleRoutingMechanism(cli ctrlclient.Client) {
 	fail := func(pool v3.IPPool, why string) {
 		framework.Failf(
 			"This test requires BGP full mesh as the sole routing mechanism, but Felix owns the cluster "+
-				"routes for pool %s (%s). Pin the cluster to BIRD routing -- in CI, add the "+
-				"hack/test/kind/infra/values-bird-routing.yaml overlay.",
+				"routes for pool %s (%s).",
 			pool.Name, why,
 		)
 	}

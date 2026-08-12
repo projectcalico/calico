@@ -223,8 +223,7 @@ func requireFelixOwnsIPIPClusterRoutes(cli ctrlclient.Client) {
 	}
 	Expect(programClusterRoutes).To(BeElementOf("Enabled", "EnabledIPIPOnly"),
 		"this test needs Felix to own the IPIP cluster routes, but FelixConfiguration's "+
-			"programClusterRoutes is %s. In CI it runs in the Felix-routing lane; locally, "+
-			"deploy with hack/test/kind/infra/values-felix-routing.yaml.", programClusterRoutes)
+			"programClusterRoutes is %s.", programClusterRoutes)
 }
 
 // nonBlackholePoolExports returns the routes within poolCIDR that the given node's BIRD is
