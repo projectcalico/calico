@@ -58,6 +58,7 @@ import (
 	"github.com/projectcalico/calico/felix/collector"
 	collectortypes "github.com/projectcalico/calico/felix/collector/types"
 	felixconfig "github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/cri"
 	"github.com/projectcalico/calico/felix/dataplane/common"
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
@@ -233,6 +234,7 @@ type Config struct {
 	BPFConntrackCleanupMode            apiv3.BPFConntrackMode
 	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
+	CRISocketPath                      string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
 	BPFHostNetworkedNAT                string
@@ -359,6 +361,11 @@ type InternalDataplane struct {
 
 	ipipParentIfaceC chan string
 	ipipManager      *ipipManager
+
+	// netnsResolverWakeupC is signalled by netnsManager's background
+	// resolver after it caches a newly-resolved netns path/cookie, so
+	// the apply loop re-runs and consumer managers pick up the result.
+	netnsResolverWakeupC chan struct{}
 
 	noEncapManager        *noEncapManager
 	noEncapManagerV6      *noEncapManager
@@ -1066,6 +1073,35 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		dp.RegisterManager(bpfEndpointManager)
+
+		// netnsManager resolves every local pod WEP's netns path +
+		// cookie so any consumer can fetch it cheaply by WEP ID. The
+		// CRI tier is enabled when a socket path is available
+		// (FelixConfiguration override, else a well-known-path probe);
+		// otherwise the /proc-cgroup scan still covers fallback.
+		criSocket := config.CRISocketPath
+		if criSocket == "" {
+			if detected, derr := cri.DetectSocketPath(); derr == nil {
+				criSocket = detected
+				log.WithField("path", criSocket).Info("Autodetected CRI socket at well-known path")
+			} else {
+				log.WithError(derr).Debug("CRI socket autodetect failed; CRI tier disabled")
+			}
+		}
+		var criResolver netnsCRIResolver
+		if criSocket != "" {
+			if cc, cerr := cri.New(criSocket); cerr == nil {
+				criResolver = cc.NetnsPathForPodUID
+				log.WithField("path", cc.SocketPath()).Info("netnsManager CRI tier enabled")
+			} else {
+				log.WithError(cerr).WithField("path", criSocket).
+					Warn("Failed to open CRI client; CRI tier disabled")
+			}
+		}
+		dp.netnsResolverWakeupC = make(chan struct{}, 1)
+		netnsMgr := newNetnsManager(criResolver, dp.netnsResolverWakeupC)
+		netnsMgr.Start()
+		dp.RegisterManager(netnsMgr)
 
 		// HostNetworkedNAT is Enabled and CTLB enabled.
 		// HostNetworkedNAT is Disabled and CTLB is either disabled/TCP.
@@ -2446,6 +2482,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onParentDeviceUpdate(d.vxlanManager.routeMgr, name)
 		case name := <-d.vxlanParentIfaceCV6:
 			d.onParentDeviceUpdate(d.vxlanManagerV6.routeMgr, name)
+		case <-d.netnsResolverWakeupC:
+			// netnsManager's background resolver cached a new result;
+			// re-run apply so consumer managers re-read its cache.
+			log.Debug("netns resolver produced a result; scheduling dataplane sync")
+			d.dataplaneNeedsSync = true
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true

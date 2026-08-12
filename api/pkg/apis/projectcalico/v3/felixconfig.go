@@ -898,6 +898,11 @@ type FelixConfigurationSpec struct {
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
 
+	// CRISocketPath is the path to the local container-runtime CRI socket
+	// (e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+	// small set of well-known paths at startup.
+	CRISocketPath string `json:"criSocketPath,omitempty" validate:"omitempty,file"`
+
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,
 	// external IP and each port in each service.

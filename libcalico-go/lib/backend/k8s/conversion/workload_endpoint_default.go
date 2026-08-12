@@ -267,6 +267,16 @@ func (wc defaultWorkloadEndpointConverter) podToDefaultWorkloadEndpoint(pod *kap
 		wep.Annotations["k8s.v1.cni.cncf.io/network-status"] = v
 	}
 
+	// Propagate the pod-netns annotation written by Calico CNI at cmdAdd. Felix
+	// reads it off the WEP to resolve the netns cookie for CTLB skip, avoiding a
+	// /proc scan and the hostPID requirement.
+	if v, ok := pod.Annotations[AnnotationPodNetns]; ok && v != "" {
+		if wep.Annotations == nil {
+			wep.Annotations = make(map[string]string)
+		}
+		wep.Annotations[AnnotationPodNetns] = v
+	}
+
 	// Embed the workload endpoint into a KVPair.
 	kvp := model.KVPair{
 		Key: model.ResourceKey{
