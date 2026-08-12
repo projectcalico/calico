@@ -11930,6 +11930,14 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
                 calicoNetwork:
                   description:
                     CalicoNetwork specifies networking configuration options
@@ -13653,23 +13661,6 @@ spec:
                           type: object
                       type: object
                   type: object
-                calicoLibHostPath:
-                  default: /var/lib/calico
-                  description: |-
-                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                  maxLength: 1024
-                  type: string
-                calicoRunHostPath:
-                  default: /var/run/calico
-                  description: |-
-                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                    operator continues using that path after a manifest-to-operator migration.
-                  maxLength: 1024
-                  type: string
                 calicoNodeWindowsDaemonSet:
                   description:
                     CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -15016,6 +15007,15 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoWindowsUpgradeDaemonSet:
                   description: |-
                     Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -21306,6 +21306,14 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
                     calicoNetwork:
                       description:
                         CalicoNetwork specifies networking configuration
@@ -23056,23 +23064,6 @@ spec:
                               type: object
                           type: object
                       type: object
-                    calicoLibHostPath:
-                      default: /var/lib/calico
-                      description: |-
-                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                      maxLength: 1024
-                      type: string
-                    calicoRunHostPath:
-                      default: /var/run/calico
-                      description: |-
-                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                        operator continues using that path after a manifest-to-operator migration.
-                      maxLength: 1024
-                      type: string
                     calicoNodeWindowsDaemonSet:
                       description:
                         CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -24442,6 +24433,15 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoWindowsUpgradeDaemonSet:
                       description: |-
                         Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -38216,6 +38216,28 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each such connection gets one follow-up log:
+                    "<prefix>-est" when the first reply packet is seen, "<prefix>-rst" when the response is a
+                    TCP RST (connection refused), or "<prefix>-icmp-err" when the response is a related ICMP
+                    error (e.g. port unreachable), where <prefix> is LogConnectionTransitionsPrefix. A
+                    connection with no follow-up log never received a response. Enabling this consumes one bit
+                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.

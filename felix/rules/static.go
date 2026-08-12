@@ -31,6 +31,9 @@ func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains [
 	chains = append(chains, r.StaticFilterForwardChains()...)
 	chains = append(chains, r.StaticFilterInputChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterOutputChains(ipVersion)...)
+	if r.LogConnectionTransitions {
+		chains = append(chains, r.connStateLogChain(ipVersion))
+	}
 	return
 }
 
@@ -723,6 +726,13 @@ func (r *DefaultRuleRenderer) StaticFilterOutputChains(ipVersion uint8) []*gener
 func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.Chain {
 	var rules []generictables.Rule
 
+	if r.LogConnectionTransitions {
+		// Replies to workload-to-host connections leave via this chain and return to the
+		// workload interface below without traversing any per-endpoint chain, so the
+		// connection state log check must happen here.
+		rules = append(rules, r.connStateLogRule())
+	}
+
 	// Accept immediately if we've already accepted this packet in the raw or mangle table.
 	rules = append(rules, r.acceptAlreadyAccepted()...)
 
@@ -1050,6 +1060,97 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generict
 	}}
 }
 
+// connStateLogRule returns the rule used at the top of the per-endpoint conntrack rules
+// (and the filter OUTPUT chain) to divert the first response packet of a connection that
+// matched a Log rule to the connection state log chain.  The ctstate match ensures that
+// only response (or related) packets are diverted; same-direction packets such as a
+// retransmitted SYN still carry the connmark bit but are ctstate NEW.
+func (r *DefaultRuleRenderer) connStateLogRule() generictables.Rule {
+	return generictables.Rule{
+		Match: r.NewMatch().
+			ConnMarkMatchesWithMask(r.ConnStateLogMark, r.ConnStateLogMark).
+			ConntrackState("RELATED,ESTABLISHED"),
+		Action: r.Jump(ChainConnStateLog),
+	}
+}
+
+// connStateLogChain builds the chain that receives the first response packet of each
+// connection that matched a policy Log rule.  It writes a single LOG recording how the
+// connection was answered, clears the "no response seen yet" connmark bit and returns.
+// Three mutually exclusive branches, each a LOG/clear/RETURN triplet (LOG is
+// non-terminating, so each branch must return before the next branch's LOG):
+//
+//   - TCP RST: the connection was refused.
+//   - Related ICMP error (e.g. port unreachable): conntrack associates ICMP errors with
+//     the original connection's conntrack entry, so they carry its connmark.  Any other
+//     ctstate RELATED packet (conntrack-helper child flows) falls through to the branch
+//     below rather than being logged as an ICMP error.
+//   - Anything else is the first genuine reply: the connection is established.
+//
+// The clear rules deliberately do not carry the LOG rate limit, so a rate-limited LOG
+// still consumes the state transition.
+func (r *DefaultRuleRenderer) connStateLogChain(ipVersion uint8) *generictables.Chain {
+	icmpProtocol := "icmp"
+	if ipVersion == 6 {
+		icmpProtocol = "ipv6-icmp"
+	}
+	var rules []generictables.Rule
+	appendBranch := func(match func() generictables.MatchCriteria, logSuffix string) {
+		logMatch := match()
+		if len(r.LogActionRateLimit) != 0 {
+			logMatch = logMatch.Limit(r.LogActionRateLimit, uint16(r.LogActionRateLimitBurst))
+		}
+		rules = append(rules,
+			generictables.Rule{
+				Match:  logMatch,
+				Action: r.Log(r.connStateLogPrefix(logSuffix)),
+			},
+			generictables.Rule{
+				Match:  match(),
+				Action: r.SetConnmark(0, r.ConnStateLogMark),
+			},
+			generictables.Rule{
+				Match:  match(),
+				Action: r.Return(),
+			},
+		)
+	}
+	appendBranch(func() generictables.MatchCriteria {
+		return r.NewMatch().TCPFlagsSet("RST")
+	}, "-rst")
+	appendBranch(func() generictables.MatchCriteria {
+		return r.NewMatch().Protocol(icmpProtocol).ConntrackState("RELATED")
+	}, "-icmp-err")
+	appendBranch(func() generictables.MatchCriteria {
+		return r.NewMatch()
+	}, "-est")
+	return &generictables.Chain{
+		Name:  ChainConnStateLog,
+		Rules: rules,
+	}
+}
+
+// connStateLogPrefix generates the log prefix for a connection transition log by
+// appending the transition suffix to LogConnectionTransitionsPrefix.  The prefix is used
+// verbatim (the chain is shared by all endpoints so, unlike generateLogPrefix, per-policy
+// %-specifiers cannot be resolved) and truncated so that the suffix and the ": " appended
+// by the Log action stay within the backend's log prefix limit.
+func (r *DefaultRuleRenderer) connStateLogPrefix(suffix string) string {
+	base := r.LogConnectionTransitionsPrefix
+	if len(base) == 0 {
+		base = "calico-response"
+	}
+	maxLen := 29 // iptables shows at most 29 characters of log prefix.
+	if r.nft {
+		maxLen = 127 // nftables allows up to 127 characters.
+	}
+	maxBase := maxLen - len(suffix) - len(": ")
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+	return base + suffix
+}
+
 func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*generictables.Chain {
 	var chains []*generictables.Chain
 
@@ -1059,6 +1160,11 @@ func (r *DefaultRuleRenderer) StaticMangleTableChains(ipVersion uint8) []*generi
 		r.StaticManglePreroutingChain(ipVersion),
 		r.StaticManglePostroutingChain(ipVersion),
 	)
+
+	if r.LogConnectionTransitions {
+		// The per-endpoint chains in this table jump to the connection state log chain.
+		chains = append(chains, r.connStateLogChain(ipVersion))
+	}
 
 	return chains
 }
