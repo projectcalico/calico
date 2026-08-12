@@ -555,7 +555,7 @@ func (e *esGateway) cloudAccessNetworkPolicy() *v3.NetworkPolicy {
 				Action:   v3.Allow,
 				Protocol: &networkpolicy.TCPProtocol,
 				Source: v3.EntityRule{
-					NamespaceSelector: "projectcalico.org/name == 'monitoring'",
+					NamespaceSelector: "kubernetes.io/metadata.name == 'monitoring'",
 					Selector:          "app == 'prometheus'",
 				},
 				// Allow prometheus to scrape the metrics endpoint, which is enabled only on

@@ -32,7 +32,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'",
           "ports": [
             9300

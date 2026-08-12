@@ -150,7 +150,7 @@ func (c *fluentBitComponent) calicoSystemPolicy() *v3.NetworkPolicy {
 			Protocol: &networkpolicy.TCPProtocol,
 			Source:   v3.EntityRule{},
 			Destination: v3.EntityRule{
-				NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", render.GuardianNamespace),
+				NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", render.GuardianNamespace),
 				Selector:          networkpolicy.KubernetesAppSelector(render.GuardianServiceName),
 				NotPorts:          networkpolicy.Ports(8080),
 			},
@@ -161,7 +161,7 @@ func (c *fluentBitComponent) calicoSystemPolicy() *v3.NetworkPolicy {
 			Protocol: &networkpolicy.TCPProtocol,
 			Source:   v3.EntityRule{},
 			Destination: v3.EntityRule{
-				NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", render.ElasticsearchNamespace),
+				NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", render.ElasticsearchNamespace),
 				Selector:          networkpolicy.KubernetesAppSelector("tigera-secure-es-gateway"),
 				NotPorts:          networkpolicy.Ports(5554),
 			},
@@ -171,7 +171,7 @@ func (c *fluentBitComponent) calicoSystemPolicy() *v3.NetworkPolicy {
 			Protocol: &networkpolicy.TCPProtocol,
 			Source:   v3.EntityRule{},
 			Destination: v3.EntityRule{
-				NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", render.ElasticsearchNamespace),
+				NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", render.ElasticsearchNamespace),
 				Selector:          networkpolicy.KubernetesAppSelector("tigera-linseed"),
 				NotPorts:          networkpolicy.Ports(8444),
 			},

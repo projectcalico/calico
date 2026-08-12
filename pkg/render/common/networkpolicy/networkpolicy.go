@@ -49,7 +49,7 @@ func AppendDNSEgressRules(egressRules []v3.Rule, openShift bool) []v3.Rule {
 				Action:   v3.Allow,
 				Protocol: &UDPProtocol,
 				Destination: v3.EntityRule{
-					NamespaceSelector: "projectcalico.org/name == 'openshift-dns'",
+					NamespaceSelector: "kubernetes.io/metadata.name == 'openshift-dns'",
 					Selector:          "dns.operator.openshift.io/daemonset-dns == 'default'",
 					Ports:             Ports(5353),
 				},
@@ -58,7 +58,7 @@ func AppendDNSEgressRules(egressRules []v3.Rule, openShift bool) []v3.Rule {
 				Action:   v3.Allow,
 				Protocol: &TCPProtocol,
 				Destination: v3.EntityRule{
-					NamespaceSelector: "projectcalico.org/name == 'openshift-dns'",
+					NamespaceSelector: "kubernetes.io/metadata.name == 'openshift-dns'",
 					Selector:          "dns.operator.openshift.io/daemonset-dns == 'default'",
 					Ports:             Ports(5353),
 				},
@@ -69,7 +69,7 @@ func AppendDNSEgressRules(egressRules []v3.Rule, openShift bool) []v3.Rule {
 			Action:   v3.Allow,
 			Protocol: &UDPProtocol,
 			Destination: v3.EntityRule{
-				NamespaceSelector: "projectcalico.org/name == 'kube-system'",
+				NamespaceSelector: "kubernetes.io/metadata.name == 'kube-system'",
 				// In most Kubernetes distros the label is for kube-dns, but in Canonical it is for coredns.
 				Selector: "k8s-app in { 'kube-dns', 'coredns' }",
 				Ports:    Ports(53),
@@ -83,7 +83,7 @@ func AppendDNSEgressRules(egressRules []v3.Rule, openShift bool) []v3.Rule {
 // CreateEntityRule creates an entity rule that matches traffic using label selectors based on namespace, deployment name, and port.
 func CreateEntityRule(namespace string, deploymentName string, ports ...uint16) v3.EntityRule {
 	return v3.EntityRule{
-		NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", namespace),
+		NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", namespace),
 		Selector:          fmt.Sprintf("k8s-app == '%s'", deploymentName),
 		Ports:             Ports(ports...),
 	}
@@ -93,7 +93,7 @@ func CreateEntityRule(namespace string, deploymentName string, ports ...uint16) 
 func CreateSourceEntityRule(namespace string, deploymentName string) v3.EntityRule {
 	return v3.EntityRule{
 		Selector:          fmt.Sprintf("k8s-app == '%s'", deploymentName),
-		NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", namespace),
+		NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", namespace),
 	}
 }
 
@@ -320,7 +320,7 @@ func DeprecatedAllowTigeraNetworkPolicyObject(name, namespace string) client.Obj
 const PrometheusSelector = "k8s-app == 'tigera-prometheus'"
 
 var PrometheusEntityRule = v3.EntityRule{
-	NamespaceSelector: "projectcalico.org/name == 'tigera-prometheus'",
+	NamespaceSelector: "kubernetes.io/metadata.name == 'tigera-prometheus'",
 	Selector:          PrometheusSelector,
 	Ports:             Ports(9095),
 }

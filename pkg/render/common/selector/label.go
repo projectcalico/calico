@@ -19,7 +19,7 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 const (
 	OpenShiftDNSDaemonsetLabel = "dns.operator.openshift.io/daemonset-dns"
 	K8sNameLabel               = "app.kubernetes.io/name"
-	CalicoNameLabel            = "projectcalico.org/name"
+	CalicoNameLabel            = "kubernetes.io/metadata.name"
 )
 
 func PodLabelSelector(name string) *metav1.LabelSelector {

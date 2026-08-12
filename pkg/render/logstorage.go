@@ -128,14 +128,14 @@ const (
 var (
 	ElasticsearchSelector   = fmt.Sprintf("elasticsearch.k8s.elastic.co/cluster-name == '%s'", ElasticsearchName)
 	ElasticsearchEntityRule = v3.EntityRule{
-		NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", ElasticsearchNamespace),
+		NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ElasticsearchNamespace),
 		Selector:          ElasticsearchSelector,
 		Ports:             []numorstring.Port{{MinPort: ElasticsearchDefaultPort, MaxPort: ElasticsearchDefaultPort}},
 	}
 )
 
 var InternalElasticsearchEntityRule = v3.EntityRule{
-	NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", ElasticsearchNamespace),
+	NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", ElasticsearchNamespace),
 	Selector:          ElasticsearchSelector,
 	Ports:             []numorstring.Port{{MinPort: ElasticsearchInternalPort, MaxPort: ElasticsearchInternalPort}},
 }

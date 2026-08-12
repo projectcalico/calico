@@ -1387,7 +1387,7 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 				Protocol: &networkpolicy.TCPProtocol,
 				Source: v3.EntityRule{
 					Selector:          fmt.Sprintf("k8s-app == '%s'", render.ManagerDeploymentName),
-					NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", render.ManagerNamespace),
+					NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", render.ManagerNamespace),
 				},
 				Destination: v3.EntityRule{
 					Ports: networkpolicy.Ports(logcollector.FluentBitInputPort),

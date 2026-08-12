@@ -19,7 +19,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "job-name == 'intrusion-detection-es-job-installer'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-intrusion-detection'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'"
         },
         "destination": {
           "ports": [
@@ -32,7 +32,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'calico-manager'",
-          "namespaceSelector": "projectcalico.org/name == 'calico-system'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'calico-system'"
         },
         "destination": {
           "ports": [
@@ -50,7 +50,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'intrusion-detection-controller'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-intrusion-detection'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'"
         }
       },
       {
@@ -63,7 +63,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'elastic-operator'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-eck-operator'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-eck-operator'"
         }
       },
       {
@@ -76,7 +76,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'tigera-elasticsearch-metrics'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         }
       },
       {
@@ -94,7 +94,7 @@
         "action": "Allow",
         "protocol": "UDP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'kube-system'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
           "selector": "k8s-app in { 'kube-dns', 'coredns' }",
           "ports": [
             53
@@ -105,7 +105,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-dex'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-dex'",
           "selector": "k8s-app == 'tigera-dex'",
           "ports": [
             5556
@@ -126,7 +126,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'",
           "ports": [
             9200
@@ -137,7 +137,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-kibana'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-kibana'",
           "selector": "k8s-app == 'tigera-secure'",
           "ports": [
             5601

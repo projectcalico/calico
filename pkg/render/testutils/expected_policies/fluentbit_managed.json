@@ -36,7 +36,7 @@
         },
         "destination": {
           "selector": "k8s-app == 'guardian'",
-          "namespaceSelector": "projectcalico.org/name == 'calico-system'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'calico-system'",
           "notPorts": [
             8080
           ]

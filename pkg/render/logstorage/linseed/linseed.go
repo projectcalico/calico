@@ -749,7 +749,7 @@ func (l *linseed) cloudAccessNetworkPolicy() *v3.NetworkPolicy {
 				Action:   v3.Allow,
 				Protocol: &networkpolicy.TCPProtocol,
 				Source: v3.EntityRule{
-					NamespaceSelector: "projectcalico.org/name == 'monitoring'",
+					NamespaceSelector: "kubernetes.io/metadata.name == 'monitoring'",
 					Selector:          "app == 'prometheus'",
 				},
 				Destination: v3.EntityRule{

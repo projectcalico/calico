@@ -540,10 +540,10 @@ func (r *ReconcilePolicyRecommendation) createDefaultPolicyRecommendationScope(c
 	prs.Name = "default"
 	prs.Spec.NamespaceSpec = &v3.PolicyRecommendationScopeNamespaceSpec{
 		RecStatus: "Disabled",
-		Selector:  "!(projectcalico.org/name starts with 'tigera-') && !(projectcalico.org/name starts with 'calico-') && !(projectcalico.org/name starts with 'kube-')",
+		Selector:  "!(kubernetes.io/metadata.name starts with 'tigera-') && !(kubernetes.io/metadata.name starts with 'calico-') && !(kubernetes.io/metadata.name starts with 'kube-')",
 	}
 	if r.opts.DetectedProvider.IsOpenShift() {
-		prs.Spec.NamespaceSpec.Selector += " && !(projectcalico.org/name starts with 'openshift-')"
+		prs.Spec.NamespaceSpec.Selector += " && !(kubernetes.io/metadata.name starts with 'openshift-')"
 	}
 
 	if err := r.client.Create(ctx, prs); err != nil {

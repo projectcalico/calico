@@ -47,7 +47,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'tigera-secure-es-gateway'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         },
         "destination": {
           "ports": [
@@ -60,7 +60,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'dashboards-installer'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         },
         "destination": {
           "ports": [
@@ -78,7 +78,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'elastic-operator'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-eck-operator'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-eck-operator'"
         }
       }
     ],
@@ -90,7 +90,7 @@
         },
         "destination": {
           "selector": "elasticsearch.k8s.elastic.co/cluster-name == 'tigera-secure'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "ports": [
             9200
           ]
@@ -100,7 +100,7 @@
         "action": "Allow",
         "protocol": "UDP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'openshift-dns'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
           "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
           "ports": [
             5353
@@ -111,7 +111,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'openshift-dns'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
           "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
           "ports": [
             5353
@@ -135,7 +135,7 @@
             5554
           ],
           "selector": "k8s-app == 'tigera-secure-es-gateway'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         },
         "protocol": "TCP"
       }

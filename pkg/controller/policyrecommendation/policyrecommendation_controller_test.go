@@ -545,7 +545,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 
 			// Verify the values of the created PolicyRecommendationScope object.
 			Expect(prs.Spec.NamespaceSpec.RecStatus).To(Equal(v3.PolicyRecommendationDisabled))
-			Expect(prs.Spec.NamespaceSpec.Selector).To(Equal("!(projectcalico.org/name starts with 'tigera-') && !(projectcalico.org/name starts with 'calico-') && !(projectcalico.org/name starts with 'kube-')"))
+			Expect(prs.Spec.NamespaceSpec.Selector).To(Equal("!(kubernetes.io/metadata.name starts with 'tigera-') && !(kubernetes.io/metadata.name starts with 'calico-') && !(kubernetes.io/metadata.name starts with 'kube-')"))
 		})
 
 		It("should create default PolicyRecommendationScope for openshift", func() {
@@ -584,7 +584,7 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 
 			// Verify the values of the created PolicyRecommendationScope object.
 			Expect(prs.Spec.NamespaceSpec.RecStatus).To(Equal(v3.PolicyRecommendationDisabled))
-			Expect(prs.Spec.NamespaceSpec.Selector).To(Equal("!(projectcalico.org/name starts with 'tigera-') && !(projectcalico.org/name starts with 'calico-') && !(projectcalico.org/name starts with 'kube-') && !(projectcalico.org/name starts with 'openshift-')"))
+			Expect(prs.Spec.NamespaceSpec.Selector).To(Equal("!(kubernetes.io/metadata.name starts with 'tigera-') && !(kubernetes.io/metadata.name starts with 'calico-') && !(kubernetes.io/metadata.name starts with 'kube-') && !(kubernetes.io/metadata.name starts with 'openshift-')"))
 		})
 	})
 })

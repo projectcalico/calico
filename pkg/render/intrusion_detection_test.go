@@ -745,7 +745,7 @@ var _ = Describe("Intrusion Detection rendering tests", func() {
 					Action:   v3.Allow,
 					Protocol: &networkpolicy.UDPProtocol,
 					Destination: v3.EntityRule{
-						NamespaceSelector: "projectcalico.org/name == 'kube-system'",
+						NamespaceSelector: "kubernetes.io/metadata.name == 'kube-system'",
 						Selector:          "k8s-app in { 'kube-dns', 'coredns' }",
 						Ports:             networkpolicy.Ports(53),
 					},
@@ -759,7 +759,7 @@ var _ = Describe("Intrusion Detection rendering tests", func() {
 					Action:   v3.Allow,
 					Protocol: &networkpolicy.TCPProtocol,
 					Destination: v3.EntityRule{
-						NamespaceSelector: fmt.Sprintf("projectcalico.org/name == '%s'", tenantANamespace),
+						NamespaceSelector: fmt.Sprintf("kubernetes.io/metadata.name == '%s'", tenantANamespace),
 						Selector:          "k8s-app == 'calico-manager'",
 						Ports:             networkpolicy.Ports(9443),
 					},

@@ -41,7 +41,7 @@
         "action": "Allow",
         "protocol": "UDP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'kube-system'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
           "selector": "k8s-app in { 'kube-dns', 'coredns' }",
           "ports": [
             53
@@ -53,7 +53,7 @@
         "protocol": "TCP",
         "destination": {
           "selector": "k8s-app == 'tigera-linseed'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "ports": [
             8444
           ]
@@ -63,7 +63,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == '<MANAGER_NAMESPACE>'",
+          "namespaceSelector": "kubernetes.io/metadata.name == '<MANAGER_NAMESPACE>'",
           "selector": "k8s-app == '<MANAGER_NAME>'",
           "ports": [
             9443

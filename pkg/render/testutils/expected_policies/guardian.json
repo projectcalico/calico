@@ -36,7 +36,7 @@
         },
         "protocol": "TCP",
         "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-intrusion-detection'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'",
           "selector": "k8s-app == 'intrusion-detection-controller'"
         }
       },
@@ -49,7 +49,7 @@
         },
         "protocol": "TCP",
         "source": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-intrusion-detection'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'",
           "selector": "job-name == 'intrusion-detection-es-job-installer'"
         }
       },
@@ -68,7 +68,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-packetcapture'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-packetcapture'",
           "selector": "k8s-app == 'tigera-packetcapture'",
           "ports": [
             8444
@@ -79,7 +79,7 @@
         "action": "Allow",
         "protocol": "UDP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'kube-system'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
           "selector": "k8s-app in { 'kube-dns', 'coredns' }",
           "ports": [
             53
@@ -101,7 +101,7 @@
         "protocol": "TCP",
         "destination": {
           "selector": "k8s-app == 'tigera-prometheus'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-prometheus'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-prometheus'",
           "ports": [
             9095
           ]

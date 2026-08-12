@@ -19,7 +19,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'tigera-secure'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-kibana'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-kibana'"
         },
         "destination": {
           "ports": [
@@ -32,7 +32,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'tigera-secure-es-gateway'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         },
         "destination": {
           "ports": [
@@ -45,7 +45,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'tigera-linseed'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'"
         },
         "destination": {
           "ports": [
@@ -63,7 +63,7 @@
         "protocol": "TCP",
         "source": {
           "selector": "k8s-app == 'elastic-operator'",
-          "namespaceSelector": "projectcalico.org/name == 'tigera-eck-operator'"
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-eck-operator'"
         }
       },
       {
@@ -81,7 +81,7 @@
         "action": "Allow",
         "protocol": "UDP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'openshift-dns'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
           "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
           "ports": [
             5353
@@ -92,7 +92,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'openshift-dns'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
           "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
           "ports": [
             5353
@@ -103,7 +103,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-dex'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-dex'",
           "selector": "k8s-app == 'tigera-dex'",
           "ports": [
             5556
@@ -114,7 +114,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "selector": "k8s-app == 'tigera-secure-es-gateway'",
           "ports": [
             5554
@@ -125,7 +125,7 @@
         "action": "Allow",
         "protocol": "TCP",
         "destination": {
-          "namespaceSelector": "projectcalico.org/name == 'tigera-elasticsearch'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
           "selector": "k8s-app == 'tigera-linseed'",
           "ports": [
             8444

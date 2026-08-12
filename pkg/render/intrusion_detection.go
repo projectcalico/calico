@@ -73,7 +73,7 @@ const (
 
 // Register secret/certs that need Server and Client Key usage
 var (
-	intrusionDetectionNamespaceSelector = fmt.Sprintf("projectcalico.org/name == '%s'", IntrusionDetectionNamespace)
+	intrusionDetectionNamespaceSelector = fmt.Sprintf("kubernetes.io/metadata.name == '%s'", IntrusionDetectionNamespace)
 	IntrusionDetectionSourceEntityRule  = v3.EntityRule{
 		NamespaceSelector: intrusionDetectionNamespaceSelector,
 		Selector:          fmt.Sprintf("k8s-app == '%s'", IntrusionDetectionControllerName),
