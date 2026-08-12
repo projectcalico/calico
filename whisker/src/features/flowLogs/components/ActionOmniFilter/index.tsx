@@ -7,7 +7,11 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
-import { OmniFilterProperties, UrlFilterKey } from '@/utils/omniFilter';
+import {
+    FilterKeys,
+    OmniFilterProperties,
+    UrlFilterKey,
+} from '@/utils/omniFilter';
 import { InfoOutlineIcon } from '@chakra-ui/icons';
 import {
     Flex,
@@ -90,17 +94,17 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                     <FormControl>
                         <FormLabel
                             showClearButton={!!actions.action}
-                            onClear={() => handleClear('action')}
+                            onClear={() => handleClear(FilterKeys.action)}
                             clearButtonAriaLabel='Clear Action'
-                            htmlFor='action'
+                            htmlFor={FilterKeys.action}
                         >
                             <Text lineHeight='1'>Action</Text>
                         </FormLabel>
                         <RadioToggle
-                            name='action'
+                            name={FilterKeys.action}
                             value={actions.action}
                             onChange={(action) =>
-                                handleChange('action', action)
+                                handleChange(FilterKeys.action, action)
                             }
                             options={radioOptions}
                             containerStyles={radioStyles}
@@ -111,9 +115,11 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
                     <FormControl mt={4}>
                         <FormLabel
                             showClearButton={!!actions.staged_action}
-                            onClear={() => handleClear('staged_action')}
+                            onClear={() =>
+                                handleClear(FilterKeys.staged_action)
+                            }
                             clearButtonAriaLabel='Clear Staged Action'
-                            htmlFor='staged_action'
+                            htmlFor={FilterKeys.staged_action}
                         >
                             <Flex alignItems='center' gap={1}>
                                 <Text lineHeight='1'>Staged Action</Text>
@@ -125,9 +131,12 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
 
                         <RadioToggle
                             value={actions.staged_action}
-                            name='staged_action'
+                            name={FilterKeys.staged_action}
                             onChange={(staged_action) =>
-                                handleChange('staged_action', staged_action)
+                                handleChange(
+                                    FilterKeys.staged_action,
+                                    staged_action,
+                                )
                             }
                             options={radioOptions}
                             containerStyles={radioStyles}

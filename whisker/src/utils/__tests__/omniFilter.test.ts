@@ -505,7 +505,7 @@ describe('filter key metadata', () => {
         for (const key of allKeys) {
             const { kind, hintType } = OmniFilterProperties[key];
 
-            if (kind === 'list' || kind === 'hint') {
+            if (kind === 'list' || kind === 'nestedList') {
                 expect(hintType).toBeTruthy();
             }
         }

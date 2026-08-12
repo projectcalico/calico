@@ -11,7 +11,7 @@ import {
 import { ReporterLabels } from '@/types/render';
 import { PolicyFilter } from '@/features/flowLogs/components/PolicyOmniFilter';
 
-type FilterKind = 'list' | 'static' | 'custom' | 'hint';
+type FilterKind = 'list' | 'static' | 'custom' | 'nestedList';
 
 export type FilterHintType =
     | 'SourceName'
@@ -216,7 +216,7 @@ export const OmniFilterProperties = defineFilters({
         label: 'Start Time',
     },
     policyName: {
-        kind: 'hint',
+        kind: 'nestedList',
         label: 'Name',
         hintType: 'PolicyName',
         filterHintsKey: 'name',
@@ -231,7 +231,7 @@ export const OmniFilterProperties = defineFilters({
         },
     },
     policyNamespace: {
-        kind: 'hint',
+        kind: 'nestedList',
         label: 'Namespace',
         hintType: 'PolicyNamespace',
         filterHintsKey: 'namespace',
@@ -246,7 +246,7 @@ export const OmniFilterProperties = defineFilters({
         },
     },
     policyTier: {
-        kind: 'hint',
+        kind: 'nestedList',
         label: 'Tier',
         hintType: 'PolicyTier',
         filterHintsKey: 'tier',
@@ -261,7 +261,7 @@ export const OmniFilterProperties = defineFilters({
         },
     },
     policyKind: {
-        kind: 'hint',
+        kind: 'nestedList',
         label: 'Kind',
         hintType: 'PolicyKind',
         filterHintsKey: 'kind',
@@ -289,7 +289,7 @@ export type ListFilterId = IdsOfKind<'list'>;
 
 export type StaticFilterId = IdsOfKind<'static'>;
 
-export type UrlFilterKey = Exclude<FilterId, IdsOfKind<'hint'>>;
+export type UrlFilterKey = Exclude<FilterId, IdsOfKind<'nestedList'>>;
 
 export type CustomFilterId = IdsOfKind<'custom'>;
 
@@ -301,6 +301,14 @@ export type FilterHintKey = {
 
 export const filterIds = Object.keys(OmniFilterProperties) as FilterId[];
 
+// Named handles for the filter keys, for call sites that would otherwise carry
+// a bare string literal (form field names, htmlFor, filterId props). Derived
+// from the registry rather than hand-written, so it cannot drift out of sync:
+// FilterKeys.action is typed as the literal 'action'.
+export const FilterKeys = Object.fromEntries(
+    filterIds.map((id) => [id, id]),
+) as { [K in FilterId]: K };
+
 const idsOfKind = (kind: FilterKind) =>
     filterIds.filter((id) => OmniFilterProperties[id].kind === kind);
 
@@ -311,7 +319,7 @@ export const staticFilterIds = idsOfKind('static') as StaticFilterId[];
 export const customFilterIds = idsOfKind('custom') as CustomFilterId[];
 
 export const urlFilterKeys = filterIds.filter(
-    (id) => OmniFilterProperties[id].kind !== 'hint',
+    (id) => OmniFilterProperties[id].kind !== 'nestedList',
 ) as UrlFilterKey[];
 
 export type SelectedOmniFilterValues = Partial<

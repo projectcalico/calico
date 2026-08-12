@@ -6,7 +6,11 @@ import {
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
-import { OmniFilterProperties, UrlFilterKey } from '@/utils/omniFilter';
+import {
+    FilterKeys,
+    OmniFilterProperties,
+    UrlFilterKey,
+} from '@/utils/omniFilter';
 import { Text as ChakraText, Flex } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
@@ -49,10 +53,10 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
         const filterOptions = transformToFilterOptions(queryState);
 
         if (noPolicyChecked) {
-            onChange('policy', NO_POLICY_VALUE);
+            onChange(FilterKeys.policy, NO_POLICY_VALUE);
         } else {
             onChange(
-                'policy',
+                FilterKeys.policy,
                 filterOptions.length ? JSON.stringify(filterOptions) : '',
             );
         }

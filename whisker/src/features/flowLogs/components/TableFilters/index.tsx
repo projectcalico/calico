@@ -4,6 +4,7 @@ import { OmniFilterList } from '@/libs/tigera/ui-components/components/common';
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import {
     customFilterIds,
+    FilterKeys,
     listFilterIds,
     OmniFilterProperties,
     staticFilterIds,
@@ -49,9 +50,9 @@ const TableFilters: React.FC = () => {
             <PolicyOmniFilter
                 key='policy-omni-filter'
                 onChange={handlePolicyFilterChange}
-                filterId='policy'
+                filterId={FilterKeys.policy}
                 selectedFilters={selectedValues.policy ?? []}
-                onClear={() => handleClear('policy')}
+                onClear={() => handleClear(FilterKeys.policy)}
             />
 
             {listOmniFilterIds.map((filterId) => (
@@ -79,12 +80,12 @@ const TableFilters: React.FC = () => {
                         dest_port: port ? [port] : [],
                     })
                 }
-                filterId='dest_port'
+                filterId={FilterKeys.dest_port}
                 filterLabel={OmniFilterProperties.dest_port.label}
             />
 
             <ActionOmniFilter
-                filterId='action'
+                filterId={FilterKeys.action}
                 filterLabel={OmniFilterProperties.action.label}
                 value={{
                     action: selectedValues.action?.[0],
@@ -103,12 +104,12 @@ const TableFilters: React.FC = () => {
             />
 
             <StartTimeOmniFilter
-                filterId='start_time'
+                filterId={FilterKeys.start_time}
                 filterLabel={OmniFilterProperties.start_time.label}
                 selectedFilters={selectedValues.start_time ?? null}
                 value={startTime.toString()}
                 onChange={handleChange}
-                onReset={() => handleClear('start_time')}
+                onReset={() => handleClear(FilterKeys.start_time)}
             />
         </OmniFilterList>
     );
