@@ -920,14 +920,9 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		"noEncap": policy.noEncap,
 	}).Debug("BIRD's responsibility for programming cluster routes.")
 
-	// Don't export Felix-programmed tunnel routes to other nodes over BGP.  This always
+	// Don't export Felix-programmed tunnel routes to other nodes over iBGP.  This always
 	// includes VXLAN and Wireguard routes.  When Felix is responsible for programming remote
 	// IPIP routes it also includes those.
-	//
-	// Built before the IP pools are read, and so before the early return below, because the
-	// template renders this block unconditionally: leaving it unset would emit an empty
-	// `if (internal_peer) then { }`, which is at best pointless and at worst config BIRD
-	// refuses to load.  It depends only on the BGPConfiguration, not on the pools.
 	felixTunnelIntfPatterns := []string{"*.cali", "*.calico"}
 	if !policy.ipip {
 		// Felix is programming remote IPIP routes.
@@ -937,7 +932,7 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 	for i := range felixTunnelIntfPatterns {
 		conditions[i] = "(ifname ~ \"" + felixTunnelIntfPatterns[i] + "\")"
 	}
-	config.BGPExportFilterForTunnelRoutes = []string{
+	config.IBGPExportFilterForTunnelRoutes = []string{
 		"if (defined(ifname)) then {",
 		"  if (" + strings.Join(conditions, " || ") + ") then {",
 		"    reject;",
@@ -962,7 +957,7 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		logCtx.WithError(localSubnetErr).Debug("Failed to get local host subnet")
 	}
 
-	birdProgramsIPIPPool := false
+	birdIPIPInUse := false
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -970,8 +965,8 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 			continue
 		}
 
-		if policy.ipip && !poolUsesVXLAN(&ippool) && poolUsesIPIP(&ippool) {
-			birdProgramsIPIPPool = true
+		if policy.programsPool(&ippool) && poolUsesIPIP(&ippool) {
+			birdIPIPInUse = true
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
@@ -995,7 +990,7 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		}
 	}
 
-	if birdProgramsIPIPPool {
+	if birdIPIPInUse {
 		logCtx.Warn("BIRD is configured to program the cluster routes for one or more IPIP IP Pools. " +
 			"That is deprecated as of v3.33 and will be removed in v3.35; set " +
 			"BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or Disabled) and " +
@@ -1185,9 +1180,11 @@ func clusterRoutePolicyFromBGPConfig(cfg *v3.BGPConfiguration, logCtx *log.Entry
 	}
 }
 
-// programsPool says whether BIRD is responsible for the cluster routes of the given IP Pool.  It
-// must only be called for pools that are not VXLAN, since Felix always owns those.
+// programsPool says whether BIRD is responsible for the cluster routes of the given IP Pool.
 func (p clusterRoutePolicy) programsPool(ippool *model.IPPool) bool {
+	if poolUsesVXLAN(ippool) {
+		return false
+	}
 	if poolUsesIPIP(ippool) {
 		return p.ipip
 	}

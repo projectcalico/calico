@@ -31,7 +31,6 @@ exclude:
 
     - label: Feature:BGPPeer
       reason: >-
-        these tests disable the BGP mesh and require connectivity to break with
-        it, which only holds while BIRD is the sole routing mechanism. BIRD does
-        still run in this lane, so the peerings themselves are fine; it is the
-        premise of those particular tests that does not hold.
+        most of the Feature:BGPPeer tests disable the BGP mesh and expect that to cause loss of
+        connectivity - but that is only true when BGP is required for cluster routing, which is not
+        true in this lane; hence we exclude the Feature:BGPPeer tests.

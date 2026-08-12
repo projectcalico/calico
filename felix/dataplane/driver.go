@@ -345,7 +345,7 @@ func StartDataplaneDriver(
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
 			ProgramIPIPClusterRoutes:       configParams.ProgramIPIPClusterRoutes(),
 			ProgramNoEncapClusterRoutes:    configParams.ProgramNoEncapClusterRoutes(),
-			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
+			NoEncapNeeded:                  configParams.Encapsulation.NoEncapNeeded,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,

@@ -1352,5 +1352,5 @@ type Encapsulation struct {
 	IPIPEnabled    bool
 	VXLANEnabled   bool
 	VXLANEnabledV6 bool
-	NoEncapEnabled bool
+	NoEncapNeeded  bool
 }

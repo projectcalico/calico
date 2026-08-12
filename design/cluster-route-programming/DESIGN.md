@@ -68,12 +68,12 @@ that component is responsible for:
 The two fields are independent, so the operator (human or `tigera/operator`) is
 responsible for keeping them complementary.  The supported combinations are:
 
-| FelixConfiguration   | BGPConfiguration     | Result                                                              |
-|----------------------|----------------------|---------------------------------------------------------------------|
-| `EnabledIPIPOnly`    | `EnabledNoEncapOnly` | **The default from v3.33.** Felix owns IPIP, BIRD owns no-encap.    |
-| `Enabled`            | `Disabled`           | Felix owns everything; BIRD programs no cluster routes.             |
-| `Disabled`           | `Enabled`            | The pre-v3.33 default.  BIRD owns everything.  Deprecated for IPIP. |
-| `EnabledNoEncapOnly` | `EnabledIPIPOnly`    | Felix owns no-encap, BIRD owns IPIP.  Deprecated for IPIP.          |
+| FelixConfiguration   | BGPConfiguration     | Result                                                                                             |
+|----------------------|----------------------|----------------------------------------------------------------------------------------------------|
+| `EnabledIPIPOnly`    | `EnabledNoEncapOnly` | **The default from v3.33.** Felix owns IPIP, BIRD owns no-encap.                                   |
+| `Enabled`            | `Disabled`           | Felix owns everything; BIRD programs no cluster routes.                                            |
+| `Disabled`           | `Enabled`            | The pre-v3.33 default.  BIRD owns everything.  Deprecated in v3.33 when IPIP pools are configured. |
+| `EnabledNoEncapOnly` | `EnabledIPIPOnly`    | Felix owns no-encap, BIRD owns IPIP.  Deprecated in v3.33.                                         |
 
 Any other pairing either double-programs a class (both components fight over the
 same CIDRs, and the route flaps) or leaves a class unprogrammed (no cluster
@@ -115,14 +115,14 @@ enum needs a matching `tigera/operator` PR and the `needs-operator-pr` label.
 
 ### Felix
 
-| Location                                 | Role                                                                                                                                                                                                                                                                               |
-|------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `felix/config/config_params.go`          | `ProgramClusterRoutes` param (`oneof`, default `EnabledIPIPOnly`) and the `ProgramIPIPClusterRoutes()` / `ProgramNoEncapClusterRoutes()` accessors.  Nothing outside config should compare the raw string.                                                                         |
-| `felix/calc/encapsulation_resolver.go`   | `NoEncapEnabled()` folds `ProgramNoEncapClusterRoutes()` into the encap summary: it means "there are unencapsulated pools *and* Felix owns their cluster routes".  `IPIPEnabled()` does **not** fold ownership in, because the IPIP tunnel device is Felix's to manage either way. |
-| `felix/calc/calc_graph.go`               | Gates construction of the `L3RouteResolver` on there being some encapsulation whose routes Felix owns.                                                                                                                                                                             |
-| `felix/dataplane/driver.go`              | Copies the two booleans into the dataplane `Config`.                                                                                                                                                                                                                               |
-| `felix/dataplane/linux/int_dataplane.go` | `ProgramIPIPClusterRoutes` / `ProgramNoEncapClusterRoutes`; the no-encap managers are only created when Felix owns no-encap.                                                                                                                                                       |
-| `felix/dataplane/linux/ipip_mgr.go`      | The IPIP manager always runs (it owns `tunl0`), but only feeds its route manager when Felix owns IPIP cluster routes.                                                                                                                                                              |
+| Location                                 | Role                                                                                                                                                                                                                                                              |
+|------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `felix/config/config_params.go`          | `ProgramClusterRoutes` param (`oneof`, default `EnabledIPIPOnly`) and the `ProgramIPIPClusterRoutes()` / `ProgramNoEncapClusterRoutes()` accessors.  Nothing outside config should compare the raw string.                                                        |
+| `felix/calc/encapsulation_resolver.go`   | `NoEncapNeeded()` incorporates `ProgramNoEncapClusterRoutes()`: it means "there are unencapsulated pools *and* Felix owns their cluster routes".  `IPIPEnabled()` does **not** fold ownership in, because the IPIP tunnel device is Felix's to manage either way. |
+| `felix/calc/calc_graph.go`               | Gates construction of the `L3RouteResolver` on there being some encapsulation whose routes Felix owns.                                                                                                                                                            |
+| `felix/dataplane/driver.go`              | Copies the two booleans into the dataplane `Config`.                                                                                                                                                                                                              |
+| `felix/dataplane/linux/int_dataplane.go` | `ProgramIPIPClusterRoutes` / `ProgramNoEncapClusterRoutes`; the no-encap managers are only created when Felix owns no-encap.                                                                                                                                      |
+| `felix/dataplane/linux/ipip_mgr.go`      | The IPIP manager always runs (it owns `tunl0`), but only feeds its route manager when Felix owns IPIP cluster routes.                                                                                                                                             |
 
 The asymmetry between IPIP and no-encap in Felix is deliberate and worth
 restating: `noEncapManager` exists *only* to program cluster routes, so it is
@@ -154,7 +154,7 @@ what retires the fork.
 - Felix must never compare `config.ProgramClusterRoutes` directly outside
   `felix/config`; use the two accessors, so that adding a value later is a
   one-file change.
-- `NoEncapEnabled` conflating "pools exist" with "Felix owns them" is a trap
+- `NoEncapNeeded` conflating "pools exist" with "Felix owns them" is a trap
   for new code.  If you need "unencapsulated pools exist" irrespective of
   ownership, add a separate accessor rather than un-conflating this one — the
   encap summary is compared field-by-field to decide whether Felix must restart
@@ -255,15 +255,14 @@ including the cluster routes Felix programs.  `calico_export_to_bgp_peers`
 rejects the ones that leave via a Calico tunnel device: `*.cali` / `*.calico`
 (VXLAN, WireGuard) and, since the IPIP default moved, `tunl0`.  Felix-programmed
 *no-encap* routes leave via an ordinary NIC, so they are still not caught, and a
-node can end up advertising other nodes' blocks to its peers.  This predates the
-change of default and is not fixed here.
+node can end up advertising other nodes' blocks to its peers.
 
 Two further limits of the current filter, both of which the eventual fix should
 address rather than extend:
 
 - `reject_tunnel_routes()` is only applied to internal peers, so nothing stops
-  these routes reaching an external peer — a ToR learning every node's blocks
-  from every node is the more damaging shape of the bug.
+  these routes reaching an external peer — a ToR can learn every node's blocks
+  from every node, instead of just once from the owning node.
 - Matching on interface name is a proxy for the property we actually want, which
   is "a route this node owns" versus "a route this node learned or synthesised".
   A route protocol test (`krt_source` against Felix's `DeviceRouteProtocol`)

@@ -210,7 +210,7 @@ their design lives at the repo level rather than under
 
 | Design | What it covers in Felix |
 |---|---|
-| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapEnabled`, and the `ProgramClusterRoutes` config parameter. |
+| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapNeeded`, and the `ProgramClusterRoutes` config parameter. |
 | [`design/ipam/DESIGN.md`](../design/ipam/DESIGN.md) | Felix is a read-only consumer of IPAM state (IPAM blocks feed the `L3RouteResolver`). |
 
 ## 2. Sub-design index

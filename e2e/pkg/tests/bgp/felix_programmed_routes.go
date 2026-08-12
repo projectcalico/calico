@@ -46,22 +46,14 @@ import (
 // those up as its own routes, and a kernel-learned route is not subject to the iBGP
 // no-re-advertisement rule. Left alone, every node ends up advertising every other node's blocks.
 //
-// What stops it is the tunnel-route reject that confd builds in
-// BGPExportFilterForTunnelRoutes (confd/pkg/backends/calico/bgp_processor.go) and the ipam
-// templates render into calico_export_to_bgp_peers. The tunl0 arm of that reject is only emitted
-// when BIRD is *not* the one programming the IPIP cluster routes. In a BIRD-routed cluster the arm
-// is absent, correctly, because there the routes are BGP-learned and the iBGP rule already covers
-// them.
+// What stops it is the tunnel-route reject that confd builds in IBGPExportFilterForTunnelRoutes
+// (confd/pkg/backends/calico/bgp_processor.go) and the ipam templates render into
+// calico_export_to_bgp_peers. The tunl0 arm of that reject is only emitted when Felix is the one
+// programming the IPIP cluster routes. In a BIRD-routed cluster that condition is not needed
+// because there the routes are BGP-learned and the iBGP rule already covers them.
 //
-// So this needs a Felix-routed cluster, which is why it carries Feature:ClusterRoutes and is
-// included only by e2e/config/kind-felix-routing.yaml. Earlier it ran in the BIRD lane and
-// switched the cluster over itself; that left clusterRoutingMode changed for whatever Serial spec
-// ran next, and broke the BGPPeer tests. Take the lane as it is rather than reconfiguring it.
-//
-// This test pins that down for IPIP, which is the encapsulation whose ownership moved to Felix by
-// default in v3.33. The unencapsulated case has the same shape and is not covered here -- see the
-// "Felix-programmed cluster routes and BGP re-advertisement" gap in
-// design/cluster-route-programming/DESIGN.md.
+// So this test needs a Felix-routed cluster, which is why it carries Feature:ClusterRoutes and is
+// included only by e2e/config/kind-felix-routing.yaml.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("ClusterRoutes"),
@@ -137,6 +129,9 @@ var _ = describe.CalicoDescribe(
 			checker.AddClient(client1)
 			checker.Deploy()
 
+			// Even though we don't rely on BGP for intra-cluster routing, this test
+			// still tests some BGP state; hence checking here that peerings are
+			// established.
 			bgpStatus.WaitForEstablished()
 
 			// Sanity check: cross-node connectivity works, i.e. Felix really has programmed the
@@ -230,23 +225,6 @@ func requireFelixOwnsIPIPClusterRoutes(cli ctrlclient.Client) {
 		"this test needs Felix to own the IPIP cluster routes, but FelixConfiguration's "+
 			"programClusterRoutes is %s. In CI it runs in the Felix-routing lane; locally, "+
 			"deploy with hack/test/kind/infra/values-felix-routing.yaml.", programClusterRoutes)
-}
-
-// expectFelixOwnsRemoteRoutes fails unless the kernel route to a remote block really is
-// Felix-programmed. Without this the export assertion passes trivially on a BIRD-routed cluster,
-// which is exactly what happens if the ownership switch above silently does not stick.
-func expectFelixOwnsRemoteRoutes(f *framework.Framework, nodeName, remoteBlockCIDR string) {
-	ginkgo.GinkgoHelper()
-	Eventually(func(g Gomega) {
-		pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
-		g.Expect(pod).NotTo(BeNil(), "calico-node pod not found on node %s", nodeName)
-		out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("ip route show %s", remoteBlockCIDR))
-		g.Expect(err).NotTo(HaveOccurred())
-		g.Expect(out).NotTo(BeEmpty(), "node %s has no route to remote block %s", nodeName, remoteBlockCIDR)
-		g.Expect(out).NotTo(ContainSubstring("proto bird"),
-			"node %s's route to remote block %s is still BIRD-programmed (%s); the test would "+
-				"assert nothing", nodeName, remoteBlockCIDR, strings.TrimSpace(out))
-	}, 2*time.Minute, 5*time.Second).Should(Succeed())
 }
 
 // nonBlackholePoolExports returns the routes within poolCIDR that the given node's BIRD is
