@@ -62,7 +62,6 @@ func newNoEncapManagerWithSims(
 	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *noEncapManager {
-
 	m := &noEncapManager{
 		hostname:  dpConfig.Hostname,
 		ipVersion: ipVersion,
@@ -101,13 +100,6 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 			addrStr = msg.Ipv4Addr
 		} else {
 			addrStr = msg.Ipv6Addr
-		}
-		if addrStr == "" {
-			m.logCtx.WithFields(logrus.Fields{
-				"hostname":  msg.Hostname,
-				"ipVersion": m.ipVersion,
-			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
-			return
 		}
 		m.routesNeedUpdate(addrStr)
 	case *proto.HostMetadataRemove:
