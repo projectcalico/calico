@@ -26,6 +26,48 @@ describe('useFlowLogsUrlFilters', () => {
         expect(result.current.filters).toEqual({});
     });
 
+    describe('startTime', () => {
+        it('should parse start_time from the URL', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30'] },
+            );
+
+            expect(result.current.startTime).toEqual(30);
+        });
+
+        it('should fall back to the default when start_time is absent', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/'] },
+            );
+
+            expect(result.current.startTime).toEqual(1);
+        });
+    });
+
+    describe('filterHintValues', () => {
+        it('should exclude start_time and keep the other filters', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30&source_name=nginx'] },
+            );
+
+            expect(result.current.filterHintValues).toEqual({
+                source_name: ['nginx'],
+            });
+        });
+
+        it('should be empty when only start_time is set', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30'] },
+            );
+
+            expect(result.current.filterHintValues).toEqual({});
+        });
+    });
+
     describe('setFilter', () => {
         it('should add filter values to the URL', () => {
             const { result } = renderHookWithRouter(

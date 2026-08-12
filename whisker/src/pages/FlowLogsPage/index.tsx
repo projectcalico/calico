@@ -1,12 +1,11 @@
 import { useFlowLogsStream } from '@/features/flowLogs/api';
 import FlowLogsContainer from '@/features/flowLogs/components/FlowLogsContainer';
-import OmniFilters from '@/features/flowLogs/components/OmniFilters';
+import TableFilters from '@/features/flowLogs/components/TableFilters';
 import { useMaxStartTime } from '@/features/flowLogs/hooks';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import PauseIcon from '@/icons/PauseIcon';
 import PlayIcon from '@/icons/PlayIcon';
 import { VirtualizedRow } from '@/libs/tigera/ui-components/components/common/DataTable';
-import { parseStartTime } from '@/utils';
 import {
     AlertStatus,
     Box,
@@ -28,13 +27,7 @@ const toastProps = {
 };
 
 const FlowLogsPage: React.FC = () => {
-    const { filters } = useFlowLogsUrlFilters();
-
-    const startTime = parseStartTime(filters.start_time?.[0]);
-    const filterHintValues = React.useMemo(() => {
-        const { start_time: _startTimeFilter, ...rest } = filters;
-        return rest;
-    }, [filters]);
+    const { startTime, filterHintValues } = useFlowLogsUrlFilters();
 
     const {
         stopStream,
@@ -104,9 +97,8 @@ const FlowLogsPage: React.FC = () => {
     return (
         <Box pt={1}>
             <Flex justifyContent='space-between' alignItems='center' p={2}>
-                <Flex gap={2}>
-                    <OmniFilters />
-                </Flex>
+                <TableFilters />
+
                 <Flex>
                     {isWaiting && (
                         <Flex gap={2} alignItems='center'>
@@ -132,6 +124,7 @@ const FlowLogsPage: React.FC = () => {
                             Play
                         </Button>
                     )}
+
                     {isDataStreaming && (
                         <Button
                             variant='ghost'

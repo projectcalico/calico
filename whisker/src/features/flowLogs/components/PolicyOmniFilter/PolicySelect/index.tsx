@@ -22,9 +22,6 @@ const PolicySelect: React.FC<PolicySelectProps> = ({
     showSearch = true,
     placeholder,
 }) => {
-    // TODO: policy sub-filter lookups are deliberately not narrowed by the
-    // other active filters, unlike the list filter chips; changing this is a
-    // product decision (flip narrowByActiveFilters to true).
     const {
         options,
         isLoading,

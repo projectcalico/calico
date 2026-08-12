@@ -346,8 +346,7 @@ describe('URL -> flows filter query', () => {
     it('should contribute no filter hints for start_time', () => {
         // start_time reaches the backend as startTimeGte, not as a filter
         // hint. FlowLogsPage strips it before building the query, but if it
-        // slips through, the query must not gain a start_time constraint:
-        // keys without a wire key are skipped, leaving an empty query.
+        // slips through, the query must not gain a start_time constraint.
         expect(toFlowsFilterQuery({ start_time: ['15'] })).toBe('');
     });
 
@@ -356,10 +355,6 @@ describe('URL -> flows filter query', () => {
     });
 
     it('should ignore a URL carrying the unsupported pending_action param', () => {
-        // pending_action used to be accepted off the URL without an
-        // OmniFilterProperties entry, which crashed the query builder and
-        // blanked the page. URL keys are now derived from the registry, so
-        // an unsupported param is ignored like any other unknown param.
         expect(urlToFlowsFilter('pending_action=Allow')).toEqual({});
     });
 
@@ -487,8 +482,8 @@ describe('URL -> flows stream path', () => {
 });
 
 describe('filter key metadata', () => {
-    // Structural invariants over the filter registry. A registry edit that
-    // renames a wire key or forgets a field trips these instead of silently
+    // Structural invariants over OmniFilterProperties. A refactor that adds a
+    // filter key or renames a wire key trips these instead of silently
     // shipping a filter that never reaches the backend.
     const allKeys = filterIds;
 
@@ -507,8 +502,6 @@ describe('filter key metadata', () => {
     });
 
     it('should give every fetching filter a hint type', () => {
-        // 'list' chips and 'hint' lookups autocomplete their values from
-        // flows-filter-hints, so they must name the ?type= to request.
         for (const key of allKeys) {
             const { kind, hintType } = OmniFilterProperties[key];
 
@@ -533,9 +526,6 @@ describe('filter key metadata', () => {
     });
 
     it('should accept exactly the supported URL filter keys', () => {
-        // The URL surface is derived from the registry, so a registry edit
-        // that adds, drops, or renames a URL param trips this pin. Deep links
-        // in the wild depend on these exact names.
         expect([...urlFilterKeys].sort()).toEqual([
             'action',
             'dest_name',
@@ -552,9 +542,6 @@ describe('filter key metadata', () => {
     });
 
     it('should not accept the unsupported pending_action key off the URL', () => {
-        // pending_action once slipped into the URL key list without a
-        // registry entry and crashed the page; it must stay unaccepted
-        // (staged_action is the filter that maps onto pending_actions).
         expect(
             parseFiltersFromParams(new URLSearchParams('pending_action=Allow')),
         ).toEqual({});
@@ -562,8 +549,7 @@ describe('filter key metadata', () => {
 
     it('should classify start_time as a stream-only custom filter', () => {
         // start_time restarts the stream (startTimeGte) rather than being a
-        // filter hint - it has no wire key - and it renders as a custom omni
-        // filter component while still living on the URL.
+        // filter hint, and it renders as a custom omni filter component.
         expect(OmniFilterProperties.start_time.kind).toBe('custom');
         expect(OmniFilterProperties.start_time.filterHintsKey).toBeUndefined();
         expect(urlFilterKeys).toContain('start_time');

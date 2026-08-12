@@ -43,7 +43,7 @@ jest.mock(
     },
 );
 
-jest.mock('@/features/flowLogs/components/OmniFilters', () => () => (
+jest.mock('@/features/flowLogs/components/TableFilters', () => () => (
     <>MockOmniFilters</>
 ));
 
@@ -64,6 +64,8 @@ describe('FlowLogsPage', () => {
         jest.mocked(useFlowLogsStream).mockReturnValue(useStreamStub);
         jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
             filters: {},
+            startTime: 1,
+            filterHintValues: {},
             setFilter: jest.fn(),
             clearFilters: jest.fn(),
             setMultiFilter: jest.fn(),
@@ -212,12 +214,14 @@ describe('FlowLogsPage', () => {
         ).not.toThrow();
     });
 
-    it('should parse the start time filter and exclude it from the filter hint values', () => {
+    it('should pass the start time and filter hint values to the stream', () => {
         jest.mocked(useFlowLogsUrlFilters).mockReturnValue({
             filters: {
                 start_time: ['30'],
                 source_name: ['foo'],
-            } as any,
+            },
+            startTime: 30,
+            filterHintValues: { source_name: ['foo'] },
             setFilter: jest.fn(),
             clearFilters: jest.fn(),
             setMultiFilter: jest.fn(),

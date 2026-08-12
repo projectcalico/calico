@@ -13,18 +13,9 @@ import React from 'react';
 type ListOmniFilterProps = {
     filterId: ListFilterId | StaticFilterId;
     filterLabel: string;
-    // The selection is owned by the URL and passed in by the filter bar
-    // rather than read here: OmniFilterList inspects its children's
-    // selectedFilters props to decide whether to show the Reset button.
     selectedFilters: OmniFilterOption[];
 };
 
-/**
- * A generic paged autocomplete filter chip that fetches its own options
- * from flows-filter-hints and writes its selection to the URL. 'static'
- * filters (reporter) render through it too, overriding the fetching
- * behaviour via their registry filterComponentProps.
- */
 const ListOmniFilter: React.FC<ListOmniFilterProps> = ({
     filterId,
     filterLabel,

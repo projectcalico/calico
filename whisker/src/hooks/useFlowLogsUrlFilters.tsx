@@ -1,3 +1,4 @@
+import { parseStartTime } from '@/utils';
 import {
     OmniFilterProperties,
     SelectedOmniFilterValues,
@@ -55,6 +56,13 @@ export const useFlowLogsUrlFilters = () => {
         [searchParams.toString()],
     );
 
+    const startTime = parseStartTime(filters.start_time?.[0]);
+
+    const filterHintValues = useMemo(() => {
+        const { start_time: _startTime, ...rest } = filters;
+        return rest;
+    }, [filters]);
+
     const setMultiFilter = (
         filters: Partial<Record<UrlFilterKey, string[] | null>>,
     ) => {
@@ -76,6 +84,8 @@ export const useFlowLogsUrlFilters = () => {
 
     return {
         filters,
+        startTime,
+        filterHintValues,
         setFilter,
         setMultiFilter,
         clearFilters,

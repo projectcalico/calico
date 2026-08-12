@@ -11,28 +11,8 @@ import {
 import { ReporterLabels } from '@/types/render';
 import { PolicyFilter } from '@/features/flowLogs/components/PolicyOmniFilter';
 
-/**
- * This module is the single source of truth for the app's filters. Every
- * filter is one entry in `OmniFilterProperties`; the URL keys, wire keys,
- * autocomplete (filter-hint) requests, and key-set types are all derived from
- * it. To add a standard paged list filter, add one `listFilter(...)` entry —
- * nothing else. To add a bespoke filter, add an entry with `kind: 'custom'`
- * and hand-place its component in OmniFilters.
- */
-
-/**
- * How a filter participates in the app:
- * - 'list':   a paged autocomplete checkbox chip, rendered generically and
- *             fetching its options from flows-filter-hints.
- * - 'static': rendered generically with a fixed option list; never fetches.
- * - 'custom': a URL param owned by a bespoke chip component (some chips own
- *             several params, e.g. the Port chip writes dest_port + protocol).
- * - 'hint':   not a URL param at all; describes an autocomplete source used
- *             inside a custom chip (the policy sub-selects).
- */
 type FilterKind = 'list' | 'static' | 'custom' | 'hint';
 
-/** The ?type= values accepted by the flows-filter-hints endpoint. */
 export type FilterHintType =
     | 'SourceName'
     | 'DestName'
@@ -45,27 +25,14 @@ export type FilterHintType =
     | 'PolicyKind'
     | 'Reporter';
 
-/** Fields of a PolicyMatch object inside the `policies` wire key. */
 type PolicyMatchKey = 'name' | 'namespace' | 'tier' | 'kind';
 
 export type OmniFilterProperty = {
     kind: FilterKind;
     label: string;
-    /**
-     * The ?type= param sent to flows-filter-hints. Present only on filters
-     * whose option values can be autocompleted.
-     */
     hintType?: FilterHintType;
-    /**
-     * The key this filter's value lives under in the `filters` JSON blob sent
-     * to the backend. Absent for params that never appear there — start_time
-     * reaches the backend as the stream's startTimeGte query param instead.
-     * 'hint' entries name the field they search inside `parentFilterKey`.
-     */
     filterHintsKey?: FlowsFilterKeys | PolicyMatchKey;
-    /** Page size for filter-hint requests. */
     limit?: number;
-    /** Selected URL values -> the value stored under filterHintsKey. */
     transformToFilterHintRequest?: (
         filters: any[],
     ) =>
@@ -74,18 +41,14 @@ export type OmniFilterProperty = {
         | string[]
         | string
         | undefined;
-    /** Search text -> the fragment injected into a filter-hint request. */
     transformToFilterSearchRequest?: (
         search: string,
     ) =>
         | FlowsFilterQuery[]
         | Record<string, FlowsFilterQuery[]>[]
         | Record<string, string>[];
-    /** Extra props for the generic OmniFilter chip (reporter's radio setup). */
     filterComponentProps?: Partial<OmniFilterProps>;
-    /** Wire key the search fragment nests under (policy sub-filters). */
     parentFilterKey?: FlowsFilterKeys;
-    /** Decodes the single URL value when it is not a plain string list. */
     parseUrlValue?: (value: string) => unknown;
 };
 
@@ -140,7 +103,6 @@ export const transformToSingleValue = (filters: string[]) => filters[0];
 
 const requestPageSize = 20;
 
-/** The shared shape of a standard paged autocomplete list filter. */
 const listFilter = (
     label: string,
     hintType: FilterHintType,
@@ -156,19 +118,10 @@ const listFilter = (
         transformToFilterSearchRequest: transformToListFilterSearchRequest,
     }) as const;
 
-/**
- * Preserves each entry's literal `kind`/`hintType` for the derived types
- * below while exposing every optional OmniFilterProperty field on every
- * entry.
- */
 const defineFilters = <T extends Record<string, OmniFilterProperty>>(
     filters: T,
 ) => filters as { [K in keyof T]: T[K] & OmniFilterProperty };
 
-/**
- * The filter registry. Non-'hint' entry keys are the URL search params;
- * 'list'/'static' entries render in the filter bar in object order.
- */
 export const OmniFilterProperties = defineFilters({
     policy: {
         kind: 'custom',
@@ -178,7 +131,6 @@ export const OmniFilterProperties = defineFilters({
         limit: requestPageSize,
         transformToFilterHintRequest: transformToPolicyFilterToRequest,
         transformToFilterSearchRequest: transformToListFilterSearchRequest,
-        // The policy URL param carries the PolicyFilter[] as a JSON blob.
         parseUrlValue: (value: string) => {
             try {
                 return JSON.parse(value);
@@ -202,7 +154,6 @@ export const OmniFilterProperties = defineFilters({
     reporter: {
         kind: 'static',
         label: 'Reporter',
-        // reporter never fetches hints; its option list is fixed below.
         hintType: 'Reporter',
         filterHintsKey: 'reporter',
         transformToFilterHintRequest: transformToSingleValue,
@@ -328,26 +279,20 @@ export const OmniFilterProperties = defineFilters({
 
 type Registry = typeof OmniFilterProperties;
 
-/** Every filter id in the registry. */
 export type FilterId = keyof Registry;
 
 type IdsOfKind<K extends FilterKind> = {
     [P in FilterId]: Registry[P]['kind'] extends K ? P : never;
 }[FilterId];
 
-/** Filters rendered as generic paged autocomplete chips. */
 export type ListFilterId = IdsOfKind<'list'>;
 
-/** Filters rendered as generic chips with a fixed option list. */
 export type StaticFilterId = IdsOfKind<'static'>;
 
-/** Every key that can appear as a URL search param. */
 export type UrlFilterKey = Exclude<FilterId, IdsOfKind<'hint'>>;
 
-/** Filters with a bespoke chip component or a bespoke-chip-owned URL param. */
 export type CustomFilterId = IdsOfKind<'custom'>;
 
-/** Filters whose option values can be fetched from flows-filter-hints. */
 export type FilterHintKey = {
     [P in FilterId]: Registry[P] extends { hintType: FilterHintType }
         ? P
@@ -377,11 +322,6 @@ export type SelectedOmniFilterValues = Partial<
 
 type SelectedOmniFilterValuesKey = keyof SelectedOmniFilterValues;
 
-/**
- * Folds selected filter values into a FlowsFilter, keyed by each filter's
- * filterHintsKey. Values without a registry entry or without a wire key
- * (start_time) contribute nothing.
- */
 const toFlowsFilter = (
     omniFilterValues: SelectedOmniFilterValues,
     excludeFilterId?: FilterId,
@@ -411,17 +351,10 @@ const toFlowsFilter = (
 const toQueryString = (filters: FlowsFilter) =>
     Object.keys(filters).length ? JSON.stringify(filters) : '';
 
-/** Selected filter values -> the `filters` blob for the flows stream. */
 export const toFlowsFilterQuery = (
     omniFilterValues: SelectedOmniFilterValues,
 ): string => toQueryString(toFlowsFilter(omniFilterValues));
 
-/**
- * Builds the `filters` blob for a flows-filter-hints request: the other
- * active filters as narrowing context — the filter being populated is
- * excluded so users can widen their selection — plus the search term,
- * nested under parentFilterKey for the policy sub-filters.
- */
 export const toHintFilterQuery = (
     omniFilterValues: SelectedOmniFilterValues,
     filterId: FilterHintKey,

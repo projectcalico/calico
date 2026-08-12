@@ -154,7 +154,6 @@ describe('<ListOmniFilter />', () => {
             );
         });
 
-        // Nothing is requested until the debounce elapses.
         expect(lastRequestedQuery().query).toBe(null);
 
         act(() => {
@@ -201,8 +200,6 @@ describe('<ListOmniFilter />', () => {
             filterLabel: 'Reporter',
         });
 
-        // reporter's registry entry stubs onReady out; opening the filter
-        // must not trigger a hint request.
         fireEvent.click(
             within(screen.getByTestId('Reporter')).getByText('on ready'),
         );

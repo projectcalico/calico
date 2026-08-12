@@ -1,6 +1,6 @@
 import { act, fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
 import { useLocation } from 'react-router-dom';
-import OmniFilters from '..';
+import TableFilters from '..';
 
 jest.mock(
     '@/features/flowLogs/components/ListOmniFilter',
@@ -91,7 +91,7 @@ const LocationProbe = () => (
 const renderOmniFilters = (route = '/') =>
     renderWithRouter(
         <>
-            <OmniFilters />
+            <TableFilters />
             <LocationProbe />
         </>,
         { routes: [route] },
@@ -102,7 +102,7 @@ const currentParams = () =>
         screen.getByTestId('location-search').textContent ?? '',
     );
 
-describe('<OmniFilters />', () => {
+describe('<TableFilters />', () => {
     it('should render a list filter chip with its selection from the URL', () => {
         renderOmniFilters('/?source_name=web&source_name=api');
 
@@ -233,7 +233,6 @@ describe('<OmniFilters />', () => {
         const params = currentParams();
         expect(params.has('policy')).toBe(false);
         expect(params.has('source_name')).toBe(false);
-        // Non-filter params survive a reset.
         expect(params.get('ref')).toBe('docs');
     });
 

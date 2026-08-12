@@ -42,12 +42,6 @@ export const useOmniFilterQuery = (
     };
 };
 
-/**
- * Fetches the selectable options for a filter from flows-filter-hints,
- * reading the current URL filter state directly so filter components can
- * fetch their own data. Options are narrowed by the other active filters —
- * the filter's own selection is excluded so users can widen it.
- */
 export const useOmniFilterOptions = (
     filterId: FilterHintKey,
     { narrowByActiveFilters = true }: { narrowByActiveFilters?: boolean } = {},

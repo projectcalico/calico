@@ -1,4 +1,4 @@
 import FlowLogsContainer from './FlowLogsContainer';
-import OmniFilters from './OmniFilters';
+import TableFilters from './TableFilters';
 
-export { FlowLogsContainer, OmniFilters };
+export { FlowLogsContainer, TableFilters };
