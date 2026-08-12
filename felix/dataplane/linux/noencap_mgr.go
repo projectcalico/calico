@@ -102,13 +102,12 @@ func (m *noEncapManager) OnUpdate(protoBufMsg any) {
 		} else {
 			addrStr = msg.Ipv6Addr
 		}
-		if addrStr == "" {
-			m.logCtx.WithFields(logrus.Fields{
-				"hostname":  msg.Hostname,
-				"ipVersion": m.ipVersion,
-			}).Debug("Ignoring HostMetadataUpdate with no address for this IP version")
-			return
-		}
+		// An empty address means the local host genuinely has no address of
+		// this IP version; the calc graph recomputes both families from the
+		// same Node on every update, so it never sends a partial one.  Pass it
+		// through rather than skipping it: holding on to a stale parent address
+		// leaves the device-sync goroutine hunting for an address that is no
+		// longer on any link, retrying (and logging) once a second forever.
 		m.routesNeedUpdate(addrStr)
 	case *proto.HostMetadataRemove:
 		m.logCtx.WithField("hostname", msg.Hostname).Debug("Host removed")
