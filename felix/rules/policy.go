@@ -628,6 +628,17 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			Match:  logMatch,
 			Action: r.Log(r.generateLogPrefix(id, tier)),
 		})
+		if r.LogConnectionTransitions && !untracked {
+			// Set the "no response seen yet" connmark bit so that the first response
+			// packet triggers a state-transition log (see ChainConnStateLog).  This rule
+			// must not carry the rate-limit match: the bit needs to be set even when the
+			// LOG above is rate-limit-suppressed.  CONNMARK has no effect on untracked
+			// packets, so skip it there.
+			rules = append(rules, generictables.Rule{
+				Match:  r.NewMatch(),
+				Action: r.SetConnmark(r.ConnStateLogMark, r.ConnStateLogMark),
+			})
+		}
 	}
 
 	nflogGroup := NFLOGOutboundGroup
