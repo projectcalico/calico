@@ -947,6 +947,11 @@ func normalizeBlankLines(s string) string {
 			result = append(result, line)
 		}
 	}
+	// If there is any content at all ...
+	if len(result) > 0 {
+		// ... arrange to add a final newline.
+		result = append(result, "")
+	}
 	return strings.Join(result, "\n")
 }
 
