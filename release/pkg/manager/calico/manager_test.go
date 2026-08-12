@@ -149,12 +149,12 @@ func TestTagRelease(t *testing.T) {
 			f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), tt.tagCommit, tt.tagErr)
 			f.on(fmt.Sprintf("git tag -a -m Release %s %s", ver, ver), "", nil)
 
-			r := &CalicoManager{runner: f}
-			err := r.TagRelease(ver)
+			r := &CalicoManager{runner: f, calicoVersion: ver}
+			err := r.TagRelease()
 
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("TagRelease(%q) = nil, want error", ver)
+					t.Fatalf("TagRelease() = nil, want error")
 				}
 				for _, sub := range tt.errContains {
 					if !strings.Contains(err.Error(), sub) {
@@ -164,7 +164,7 @@ func TestTagRelease(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Fatalf("TagRelease(%q) unexpected error: %v", ver, err)
+				t.Fatalf("TagRelease() unexpected error: %v", err)
 			}
 			if got := f.ran("git tag -a "); got != tt.wantTag {
 				t.Errorf("git tag issued = %v, want %v (calls: %v)", got, tt.wantTag, f.calls)
@@ -181,10 +181,10 @@ func TestTagStateMemoized(t *testing.T) {
 	f.on(fmt.Sprintf("git rev-parse -q --verify refs/tags/%s^{commit}", ver), "", fmt.Errorf("exit status 1"))
 
 	r := &CalicoManager{runner: f, calicoVersion: ver}
-	if tc := r.tagState(ver); tc.err != nil {
+	if tc := r.tagState(); tc.err != nil {
 		t.Fatal(tc.err)
 	}
-	if tc := r.tagState(ver); tc.err != nil {
+	if tc := r.tagState(); tc.err != nil {
 		t.Fatal(tc.err)
 	}
 	if got := f.count("git rev-parse -q --verify refs/tags/" + ver); got != 1 {
