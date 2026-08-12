@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.authors="Daniel Fox <dan.fox@tigera.io>"
 RUN \
     --mount=type=cache,sharing=locked,id=${STREAM}-${ARCH}-archives,target=/var/cache/apt/archives \
     --mount=type=cache,sharing=locked,id=${STREAM}-${ARCH}-lists,target=/var/lib/apt/lists \
-    --mount=type=bind,source=install-ubuntu-build-deps,target=/install-ubuntu-build-deps \
+    --mount=type=bind,source=docker-build-images/install-ubuntu-build-deps,target=/install-ubuntu-build-deps \
     /install-ubuntu-build-deps
 
 WORKDIR /code
