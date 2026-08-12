@@ -300,14 +300,6 @@ $(FELIX_GPL_SOURCE): .felix-gpl-source.created
 ###############################################################################
 # FV Tests
 ###############################################################################
-ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
-# Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir node/')
-else
-# By default, run all tests.
-WHAT=$(shell find . -name "*_test.go" | xargs dirname | sort -u)
-endif
-
 # Packages to exclude from the UT run. tests/k8st holds the Go k8st system
 # tests, which need a live kind cluster (run via kind-k8st-run-test).
 UT_PACKAGES_TO_SKIP?=tests/k8st
