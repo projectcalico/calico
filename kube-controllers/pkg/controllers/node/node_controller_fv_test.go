@@ -85,11 +85,8 @@ var _ = Describe("Calico node controller FV tests (KDD mode)", Ordered, Continue
 		testutils.ApplyCRDs(apiserver)
 
 		// Make a Calico client and backend client.
-		type accessor interface {
-			Backend() backend.Client
-		}
 		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
-		bc = calicoClient.(accessor).Backend()
+		bc = calicoClient.(backend.BackendAccessor).Backend()
 
 		// In KDD mode, we only support the node controller right now.
 		kubeControllers = testutils.RunKubeControllers(apiconfig.Kubernetes, "", kconfigfile, "node")

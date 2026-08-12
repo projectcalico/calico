@@ -982,6 +982,17 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
 
+	// Enforce the pool's AllowedUses against the caller's intended use, mirroring
+	// what the auto-assign path already does via filterPoolsByUse.  AutoAssign
+	// filters candidate pools by use, but AssignIP historically skipped the check,
+	// so a specific-IP request (e.g. the CNI ipAddrs annotation) could draw from a
+	// pool not sanctioned for that use.  Only enforce when the caller declares a
+	// use; callers that leave IntendedUse empty are unaffected.
+	if args.IntendedUse != "" && !slices.Contains(pool.Spec.AllowedUses, args.IntendedUse) {
+		return fmt.Errorf("IP address %s is in IP pool %q, which is not allowed for use %q (allowedUses: %v)",
+			args.IP, pool.Name, args.IntendedUse, pool.Spec.AllowedUses)
+	}
+
 	cfg, err := c.GetIPAMConfig(ctx)
 	if err != nil {
 		log.Errorf("Error getting IPAM Config: %v", err)
@@ -2395,11 +2406,20 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 	// blocks for which there is no longer an IP pool.  Note: following code depends
 	// on this being at the end of the list; otherwise it will suck in allocation
 	// blocks that should be reported under other pools.
+	var orphanedBlocks *PoolUtilization
 	if wantAllPools {
-		usage = append(usage, &PoolUtilization{
+		orphanedBlocks = &PoolUtilization{
 			Name: "orphaned allocation blocks",
 			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
-		})
+		}
+		usage = append(usage, orphanedBlocks)
+	}
+
+	// IPReservations make addresses unassignable without allocating them, so
+	// they have to be discounted here as well as on the allocation path.
+	reservations, err := c.getReservedCIDRs(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Read all allocation blocks.
@@ -2415,14 +2435,42 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 		for _, poolUse := range usage {
 			if b.CIDR.IsNetOverlap(poolUse.CIDR) {
 				log.Debugf("Block CIDR %v belongs to pool %v", b.CIDR, poolUse.Name)
+				block := allocationBlock{b}
+				capacity := b.NumAddresses()
 				poolUse.Blocks = append(poolUse.Blocks, BlockUtilization{
 					CIDR:      b.CIDR.IPNet,
-					Capacity:  b.NumAddresses(),
-					Available: len(b.Unallocated),
+					Capacity:  capacity,
+					InUse:     capacity - len(b.Unallocated),
+					Reserved:  block.NumReservedAddresses(reservations),
+					Available: block.NumFreeAddresses(reservations),
 				})
 				break
 			}
 		}
+	}
+
+	// Total up each pool.  Capacity and Reserved cover the whole pool CIDR,
+	// including space that no block has been carved from yet, so they come from
+	// the pool's own arithmetic rather than from a sum over the blocks: a
+	// reservation over unblocked space is still unassignable.
+	for _, poolUse := range usage {
+		if poolUse == orphanedBlocks {
+			// Not a real pool.  Its blocks are listed so that stray allocations
+			// stay visible, but totals over its 0.0.0.0/0 "CIDR" would be
+			// meaningless.
+			continue
+		}
+		for _, b := range poolUse.Blocks {
+			poolUse.InUse += b.InUse
+			poolUse.Available += b.Available
+		}
+		capacity, reserved, availableOutsideBlocks, err := countPoolSpace(poolUse.CIDR, reservations, poolUse.Blocks)
+		if err != nil {
+			return nil, err
+		}
+		poolUse.Capacity = capacity
+		poolUse.Reserved = reserved
+		poolUse.Available += availableOutsideBlocks
 	}
 	return usage, nil
 }
@@ -2465,7 +2513,7 @@ func (c ipamClient) EnsureBlock(ctx context.Context, args BlockArgs) (*net.IPNet
 				return nil, nil, fmt.Errorf("provided IPv6 IPPools list contains one or more IPv4 IPPools")
 			}
 		}
-		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv4Pools, 6, affinityCfg)
+		v6Net, err = c.ensureBlock(ctx, args.HostReservedAttrIPv6s, args.IPv6Pools, 6, affinityCfg)
 		if err != nil {
 			log.Errorf("Error ensure IPv6 block: %v", err)
 			return nil, nil, err
@@ -2557,30 +2605,30 @@ func (c ipamClient) ensureBlock(ctx context.Context, rsvdAttr *HostReservedAttr,
 }
 
 func (c ipamClient) getReservedIPs(ctx context.Context) (addrFilter, error) {
+	cidrs, err := c.getReservedCIDRs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(cidrs) == 0 {
+		return nilAddrFilter{}, nil
+	}
+	return cidrs, nil
+}
+
+// getReservedCIDRs returns the CIDRs of every IPReservation.  Callers that only
+// need to test individual addresses should use getReservedIPs; the CIDRs
+// themselves are for callers that need to measure how much space is reserved
+// (see countPoolSpace).
+func (c ipamClient) getReservedCIDRs(ctx context.Context) (cidrSliceFilter, error) {
 	reservations, err := c.reservations.List(ctx, options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	if len(reservations.Items) == 0 {
-		return nilAddrFilter{}, nil
+	items := make([]*v3.IPReservation, len(reservations.Items))
+	for i := range reservations.Items {
+		items[i] = &reservations.Items[i]
 	}
-	var cidrs cidrSliceFilter
-	for _, r := range reservations.Items {
-		for _, cidrVal := range r.Spec.ReservedCIDRs {
-			cidrStr := strings.TrimSpace(string(cidrVal))
-			if len(cidrVal) == 0 {
-				// Defensive, validation should prevent.
-				continue
-			}
-			_, cidr, err := net.ParseCIDROrIP(cidrStr)
-			if err != nil {
-				// Defensive, validation should prevent.
-				log.WithError(err).WithField("cidr", cidr).Error("Ignoring malformed CIDR in IPReservation.")
-			}
-			cidrs = append(cidrs, *cidr)
-		}
-	}
-	return cidrs, nil
+	return reservedCIDRs(items), nil
 }
 
 func (c ipamClient) UpgradeHost(ctx context.Context, nodeName string) error {

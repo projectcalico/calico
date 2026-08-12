@@ -363,6 +363,9 @@ type Data struct {
 
 	updatedAt     time.Duration
 	ruleUpdatedAt time.Duration
+	// lastPolicyEvalAt is the monotime of this flow's last pending-rule-trace evaluation, used
+	// to skip flows a sweep re-reaches too soon. Zero means never evaluated.
+	lastPolicyEvalAt time.Duration
 
 	Reported             bool
 	UnreportedPacketInfo bool
@@ -480,9 +483,13 @@ func (d *Data) ConntrackBytesCounterReverse() counter.Counter {
 }
 
 // Set In Counters' values to packets and bytes. Use the SetConntrackCounters* methods
-// when the source if packets/bytes are absolute values.
+// when the packet/byte counts are absolute values.
 func (d *Data) SetConntrackCounters(packets int, bytes int) {
-	if d.conntrackPktsCtr.Set(packets) && d.conntrackBytesCtr.Set(bytes) {
+	// Evaluate both counters before testing them: && would skip the bytes update whenever the
+	// packet count happens to be unchanged.
+	pktsChanged := d.conntrackPktsCtr.Set(packets)
+	bytesChanged := d.conntrackBytesCtr.Set(bytes)
+	if pktsChanged || bytesChanged {
 		d.setDirtyFlag()
 	}
 	d.IsConnection = true
@@ -522,7 +529,11 @@ func (d *Data) VerdictFound() bool {
 // Set In Counters' values to packets and bytes. Use the SetConntrackCounters* methods
 // when the source if packets/bytes are absolute values.
 func (d *Data) SetConntrackCountersReverse(packets int, bytes int) {
-	if d.conntrackPktsCtrReverse.Set(packets) && d.conntrackBytesCtrReverse.Set(bytes) {
+	// Evaluate both counters before testing them: && would skip the bytes update whenever the
+	// packet count happens to be unchanged.
+	pktsChanged := d.conntrackPktsCtrReverse.Set(packets)
+	bytesChanged := d.conntrackBytesCtrReverse.Set(bytes)
+	if pktsChanged || bytesChanged {
 		d.setDirtyFlag()
 	}
 	d.IsConnection = true

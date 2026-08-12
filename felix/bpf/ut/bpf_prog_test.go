@@ -63,15 +63,21 @@ import (
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var canTestMarks bool
 
 func init() {
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 	log.SetLevel(log.DebugLevel)
+
+	// These tests use port 666 as an arbitrary NAT backend port and expect
+	// gopacket to leave the UDP payload opaque. gopacket v1.6.1 started
+	// dissecting port 666 as AGUE, which leaves the packet with no
+	// application layer.
+	layers.RegisterUDPPortLayerType(666, gopacket.LayerTypePayload)
 
 	fd := environment.NewFeatureDetector(make(map[string]string))
 	if ok, err := fd.KernelIsAtLeast("5.9.0"); err == nil && ok {
@@ -97,14 +103,12 @@ var (
 			}},
 		}},
 	}
-	node1ip    = net.IPv4(10, 10, 0, 1).To4()
-	node1ip2   = net.IPv4(10, 10, 2, 1).To4()
-	node1tunIP = net.IPv4(11, 11, 0, 1).To4()
-	node2ip    = net.IPv4(10, 10, 0, 2).To4()
-	node3ip    = net.IPv4(10, 10, 0, 3).To4()
-	node3tunIP = net.IPv4(11, 11, 0, 3).To4()
-	intfIP     = net.IPv4(10, 10, 0, 3).To4()
-	node1CIDR  = net.IPNet{
+	node1ip   = net.IPv4(10, 10, 0, 1).To4()
+	node1ip2  = net.IPv4(10, 10, 2, 1).To4()
+	node2ip   = net.IPv4(10, 10, 0, 2).To4()
+	node3ip   = net.IPv4(10, 10, 0, 3).To4()
+	intfIP    = net.IPv4(10, 10, 0, 3).To4()
+	node1CIDR = net.IPNet{
 		IP:   node1ip,
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
@@ -117,14 +121,12 @@ var (
 		Mask: net.IPv4Mask(255, 255, 255, 255),
 	}
 
-	node1ipV6    = net.ParseIP("abcd::ffff:0a0a:0001").To16()
-	node1ip2V6   = net.ParseIP("abcd::ffff:0a0a:0201").To16()
-	node1tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0001").To16()
-	node2ipV6    = net.ParseIP("abcd::ffff:0a0a:0002").To16()
-	node3ipV6    = net.ParseIP("abcd::ffff:0a0a:0004").To16()
-	node3tunIPV6 = net.ParseIP("abcd::ffff:0b0b:0004").To16()
-	intfIPV6     = net.ParseIP("abcd::ffff:0a0a:0003").To16()
-	node1CIDRV6  = net.IPNet{
+	node1ipV6   = net.ParseIP("abcd::ffff:0a0a:0001").To16()
+	node1ip2V6  = net.ParseIP("abcd::ffff:0a0a:0201").To16()
+	node2ipV6   = net.ParseIP("abcd::ffff:0a0a:0002").To16()
+	node3ipV6   = net.ParseIP("abcd::ffff:0a0a:0004").To16()
+	intfIPV6    = net.ParseIP("abcd::ffff:0a0a:0003").To16()
+	node1CIDRV6 = net.IPNet{
 		IP:   node1ipV6,
 		Mask: net.CIDRMask(128, 128),
 	}
@@ -368,10 +370,6 @@ func setupAndRun(logger testLogger, loglevel, section string, rules *polprog.Rul
 	err = os.Mkdir(bpfFsDir, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
-
-	err = os.Mkdir(bpfFsDir+"_v6", os.ModePerm)
-	Expect(err).NotTo(HaveOccurred())
-	defer os.RemoveAll(bpfFsDir + "v6")
 
 	obj := "../../bpf-gpl/bin/test_xdp_debug"
 	if !topts.xdp {
@@ -929,6 +927,10 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 					globals.Flags |= libbpf.GlobalsWorkloadSrcSpoofingConfigured
 				}
 
+				if topts.redirectPeer {
+					globals.Flags |= libbpf.GlobalsRedirectPeer
+				}
+
 				globals.DSCP = -1
 				if topts.dscp >= 0 {
 					globals.DSCP = topts.dscp
@@ -937,7 +939,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				globals.IstioDSCP = topts.istioDSCP
 
 				if topts.ipv6 {
-					copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 					copy(globals.HostIPv6[:], hostIP.To16())
 					copy(globals.IntfIPv6[:], intfIPV6.To16())
 
@@ -949,7 +950,6 @@ func objLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHostC
 				} else {
 					copy(globals.HostIPv4[0:4], hostIP)
 					copy(globals.IntfIPv4[0:4], intfIP)
-					copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 
 					for i := range tcdefs.ProgIndexEnd {
 						globals.Jumps[i] = uint32(i)
@@ -1071,11 +1071,9 @@ func objUTLoad(fname, bpfFsDir, ipFamily string, topts testOpts, polProg, hasHos
 				MaglevLUTSize: testMaglevLUTSize,
 			}
 			if topts.ipv6 {
-				copy(globals.HostTunnelIPv6[:], node1tunIPV6.To16())
 				copy(globals.HostIPv6[:], hostIP.To16())
 				copy(globals.IntfIPv6[:], intfIPV6.To16())
 			} else {
-				copy(globals.HostTunnelIPv4[0:4], node1tunIP.To4())
 				copy(globals.HostIPv4[0:4], hostIP.To4())
 				copy(globals.IntfIPv4[0:4], intfIP.To4())
 			}
@@ -1317,6 +1315,7 @@ type testOpts struct {
 	workloadSrcSpoofingConfigured bool
 	ipfragTimeout                 uint32
 	wgPort                        uint16
+	redirectPeer                  bool
 }
 
 type testOption func(opts *testOpts)
@@ -1441,6 +1440,12 @@ func withIPFragTimeout(timeout uint32) testOption {
 func withWgPort(port uint16) testOption {
 	return func(o *testOpts) {
 		o.wgPort = port
+	}
+}
+
+func withRedirectPeer() testOption {
+	return func(o *testOpts) {
+		o.redirectPeer = true
 	}
 }
 

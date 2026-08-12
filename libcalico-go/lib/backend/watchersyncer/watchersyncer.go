@@ -97,7 +97,8 @@ func New(client api.Client, resourceTypes []ResourceType, callbacks api.SyncerCa
 func NewMultiClient(clients map[string]api.Client, resourceTypes []ResourceType, callbacks api.SyncerCallbacks, options ...Option) api.Syncer {
 	rs := &watcherSyncer{
 		watcherCaches:     make([]*watcherCache, 0, len(resourceTypes)),
-		results:           make(chan any, 2000),
+		cacheStatuses:     make([]api.SyncStatus, 0, len(resourceTypes)),
+		results:           make(chan resultWithID, 2000),
 		callbacks:         callbacks,
 		watchRetryTimeout: DefaultWatchRetryTimeout,
 	}
@@ -106,7 +107,9 @@ func NewMultiClient(clients map[string]api.Client, resourceTypes []ResourceType,
 	}
 	for _, r := range resourceTypes {
 		if client, ok := clients[r.ClientID]; ok {
-			rs.watcherCaches = append(rs.watcherCaches, newWatcherCache(client, r, rs.results, rs.watchRetryTimeout))
+			cacheID := len(rs.watcherCaches)
+			rs.cacheStatuses = append(rs.cacheStatuses, api.WaitForDatastore)
+			rs.watcherCaches = append(rs.watcherCaches, newWatcherCache(client, r, rs.results, rs.watchRetryTimeout, cacheID))
 		} else {
 			log.WithFields(log.Fields{
 				"ClientID":      r.ClientID,
@@ -121,8 +124,8 @@ func NewMultiClient(clients map[string]api.Client, resourceTypes []ResourceType,
 type watcherSyncer struct {
 	status            api.SyncStatus
 	watcherCaches     []*watcherCache
-	results           chan any
-	numSynced         int
+	results           chan resultWithID
+	cacheStatuses     []api.SyncStatus
 	callbacks         api.SyncerCallbacks
 	wgwc              *sync.WaitGroup
 	wgws              *sync.WaitGroup
@@ -171,7 +174,10 @@ func (ws *watcherSyncer) Stop() {
 
 // Send a status update and store the status.
 func (ws *watcherSyncer) sendStatusUpdate(status api.SyncStatus) {
-	log.WithField("Status", status).Info("Sending status update")
+	log.WithFields(log.Fields{
+		"from": ws.status,
+		"to":   status,
+	}).Info("watchersyncer transition")
 	ws.callbacks.OnStatusUpdated(status)
 	ws.status = status
 }
@@ -199,18 +205,20 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 
 		// Append results into the one update until we either flush the channel or we
 		// hit our fixed limit per update.
-	consolidatationloop:
+	consolidationLoop:
 		for range maxUpdatesToConsolidate {
 			select {
-			case next := <-ws.results:
+			case next, ok := <-ws.results:
+				if !ok {
+					break consolidationLoop
+				}
 				updates = ws.processResult(updates, next)
 			default:
-				break consolidatationloop
+				break consolidationLoop
 			}
 		}
 
-		// Perform final processing (pass in a nil result) before we loop and hit the blocking
-		// call again.
+		// Consolidation done, send any remaining buffered updates.
 		updates = ws.sendUpdates(updates)
 	}
 }
@@ -218,17 +226,10 @@ func (ws *watcherSyncer) run(ctx context.Context) {
 // Process a result from the result channel.  We don't immediately action updates, but
 // instead start grouping them together so that we can send a larger single update to
 // Felix.
-func (ws *watcherSyncer) processResult(updates []api.Update, result any) []api.Update {
-	// Switch on the result type.
-	switch r := result.(type) {
+func (ws *watcherSyncer) processResult(updates []api.Update, r resultWithID) []api.Update {
+	switch v := r.value.(type) {
 	case []api.Update:
-		// This is an update.  If we don't have previous updates then also check to see
-		// if we need to shift the status into Resync.
-		// We append these updates to the previous if there were any.
-		if len(updates) == 0 && ws.status == api.WaitForDatastore {
-			ws.sendStatusUpdate(api.ResyncInProgress)
-		}
-		updates = append(updates, r...)
+		updates = append(updates, v...)
 
 	case error:
 		// Received an error.  Firstly, send any updates that we have grouped.
@@ -236,15 +237,15 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result any) []api.U
 
 		// If this is a parsing error, and if the callbacks support
 		// it, then send the error update.
-		log.WithError(r).Debug("Error received in main syncer event processing loop")
-		if pe, ok := r.(cerrors.ErrorParsingDatastoreEntry); ok {
+		log.WithError(v).Debug("Error received in main syncer event processing loop")
+		if pe, ok := v.(cerrors.ErrorParsingDatastoreEntry); ok {
 			if ec, ok := ws.callbacks.(api.SyncerParseFailCallbacks); ok {
 				log.Debug("syncer receiver can receive parse failed callbacks")
 				ec.ParseFailed(pe.RawKey, pe.RawValue)
 			}
 		}
 
-		if se, ok := r.(errorSyncBackendError); ok {
+		if se, ok := v.(errorSyncBackendError); ok {
 			if ec, ok := ws.callbacks.(api.SyncFailCallbacks); ok {
 				log.Debug("syncer receiver can receive sync failed callbacks")
 				ec.SyncFailed(se.Err)
@@ -252,30 +253,41 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result any) []api.U
 		}
 
 	case api.SyncStatus:
-		// Received a synced event.  If we are still waiting for datastore, send a
-		// ResyncInProgress since at least one watcher has connected.
-		log.WithField("SyncUpdate", r).Debug("Received sync status event from watcher")
-		if r == api.InSync {
-			log.Info("Received InSync event from one of the watcher caches")
+		log.WithFields(log.Fields{
+			"cacheID": r.cacheID,
+			"status":  v,
+		}).Debug("Received status event from watcher cache")
 
-			if ws.status == api.WaitForDatastore {
-				ws.sendStatusUpdate(api.ResyncInProgress)
+		ws.cacheStatuses[r.cacheID] = v
+
+		var numWaiting, numSynced int
+		for _, s := range ws.cacheStatuses {
+			switch s {
+			case api.WaitForDatastore:
+				numWaiting++
+			case api.InSync:
+				numSynced++
 			}
+		}
 
-			// Increment the count of synced events.
-			ws.numSynced++
+		var newStatus api.SyncStatus
+		switch {
+		case numSynced == len(ws.cacheStatuses):
+			newStatus = api.InSync
+		case numWaiting == len(ws.cacheStatuses):
+			newStatus = api.WaitForDatastore
+		default:
+			newStatus = api.ResyncInProgress
+		}
 
-			// If we have now received synced events from all of our watchers then we are in
-			// sync.  If we have any updates, send them first and then send the status update.
-			if ws.numSynced == len(ws.watcherCaches) {
-				log.Info("All watchers have sync'd data - sending data and final sync")
-				updates = ws.sendUpdates(updates)
-				ws.sendStatusUpdate(api.InSync)
-			}
+		if newStatus != ws.status {
+			// Flush before announcing the transition so the consumer sees events
+			// ahead of the boundary they belong to.
+			updates = ws.sendUpdates(updates)
+			ws.sendStatusUpdate(newStatus)
 		}
 	}
 
-	// Return the accumulated or processed updated.
 	return updates
 }
 

@@ -25,11 +25,11 @@ import (
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 var _ = Describe("IPIPManager", func() {
@@ -44,7 +44,7 @@ var _ = Describe("IPIPManager", func() {
 			currentRoutes: map[string][]routetable.Target{},
 		}
 
-		opRecorder := logutils.NewSummarizer("test")
+		opRecorder := logrusr.NewSummarizer("test")
 
 		dataplane = mocknetlink.New()
 		_, err := dataplane.NewMockNetlink()
@@ -71,6 +71,30 @@ var _ = Describe("IPIPManager", func() {
 			opRecorder,
 			dataplane,
 		)
+	})
+
+	It("should mark the dataplane dirty when the parent device changes", func() {
+		dp := &InternalDataplane{}
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "bond0")
+		Expect(dp.dataplaneNeedsSync).To(BeTrue())
+	})
+
+	It("should leave the parent device alone when handed an empty name", func() {
+		dp := &InternalDataplane{}
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "eth0")
+
+		dp.dataplaneNeedsSync = false
+		dp.onParentDeviceUpdate(ipipMgr.routeMgr, "")
+		Expect(dp.dataplaneNeedsSync).To(BeFalse())
+		Expect(ipipMgr.routeMgr.parentDevice).To(Equal("eth0"))
 	})
 
 	It("should configure tunnel properly", func() {
@@ -123,16 +147,33 @@ var _ = Describe("IPIPManager", func() {
 		Expect(tunnelLink.Addrs).To(HaveLen(1))
 		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
 
+		// Seed a kernel-managed IPv6 link-local address; reconciling to "no address" must remove the
+		// Calico-assigned global address but leave the link-local one in place.
+		llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("fe80::1"), Mask: net.CIDRMask(64, 128)}}
+		Expect(dataplane.AddrAdd(link, llAddr)).To(Succeed())
+
+		// Seed an IPv4 link-local (169.254.0.0/16) address too. Unlike the IPv6 link-local it is not
+		// kernel-managed on the tunnel device, so reconciling to "no address" must remove it.
+		v4llAddr := &netlink.Addr{IPNet: &net.IPNet{IP: net.ParseIP("169.254.1.1"), Mask: net.CIDRMask(32, 32)}}
+		Expect(dataplane.AddrAdd(link, v4llAddr)).To(Succeed())
+
 		dataplane.ResetDeltas()
 		err = ipipMgr.routeMgr.configureTunnelDevice(link, "", 1500, false)
-		Expect(err).To(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		Expect(dataplane.NameToLink[dataplanedefs.IPIPIfaceName]).ToNot(BeNil())
 		Expect(dataplane.NumLinkAddCalls).To(BeZero())
 		Expect(dataplane.NumLinkSetUpCalls).To(BeZero())
 		Expect(tunnelLink.LinkAttrs.MTU).To(Equal(1500))
 		Expect(tunnelLink.LinkAttrs.Flags).To(Equal(net.FlagUp))
+		// Empty addr means no Calico address is wanted: the existing global address and the IPv4
+		// link-local address are removed (clean break) so they can't linger and influence source-IP
+		// selection, while the kernel-managed IPv6 link-local address is preserved.
+		Expect(dataplane.AddedAddrs.Len()).To(BeZero())
+		Expect(dataplane.DeletedAddrs.Contains("192.168.0.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Contains("169.254.1.1/32")).To(BeTrue())
+		Expect(dataplane.DeletedAddrs.Len()).To(Equal(2))
 		Expect(tunnelLink.Addrs).To(HaveLen(1))
-		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("192.168.0.1"))
+		Expect(tunnelLink.Addrs[0].IP.String()).To(Equal("fe80::1"))
 	})
 
 	It("successfully adds a route to the noEncap interface", func() {

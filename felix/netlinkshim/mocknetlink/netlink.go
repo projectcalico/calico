@@ -628,7 +628,9 @@ func (d *MockNetlinkDataplane) AddrList(link netlink.Link, family int) ([]netlin
 		return nil, ErrSimulated
 	}
 	if link, ok := d.NameToLink[link.Attrs().Name]; ok {
-		return link.Addrs, nil
+		// Return a copy, matching the real netlink which allocates a fresh slice per call. This
+		// keeps a caller ranging over the result unaffected by concurrent AddrDel/AddrAdd calls.
+		return append([]netlink.Addr(nil), link.Addrs...), nil
 	}
 	return nil, ErrNotFound
 }

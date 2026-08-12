@@ -3039,6 +3039,23 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoNodeWindowsDaemonSet:
                   description:
                     CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -5751,6 +5768,21 @@ spec:
                       required:
                         - type
                       type: object
+                    specVersion:
+                      description: |-
+                        SpecVersion configures the CNI specification version declared in the
+                        CNI configuration ("cniVersion") that the operator generates. Auto
+                        (the default) lets the operator choose an appropriate version, which
+                        may increase across operator upgrades. Pin an explicit version if a
+                        chained CNI plugin or container runtime in your environment requires
+                        one. Only relevant when using the Calico CNI plugin.
+                        Default: Auto
+                      enum:
+                        - Auto
+                        - 0.3.1
+                        - 0.4.0
+                        - 1.0.0
+                      type: string
                     type:
                       description: |-
                         Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -9303,7 +9335,7 @@ spec:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
                     TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                    Default: Calico
+                    If left unset, the operator fills in the variant it is running as.
                   enum:
                     - Calico
                     - CalicoEnterprise
@@ -12410,6 +12442,23 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoNodeWindowsDaemonSet:
                       description:
                         CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -15168,6 +15217,21 @@ spec:
                           required:
                             - type
                           type: object
+                        specVersion:
+                          description: |-
+                            SpecVersion configures the CNI specification version declared in the
+                            CNI configuration ("cniVersion") that the operator generates. Auto
+                            (the default) lets the operator choose an appropriate version, which
+                            may increase across operator upgrades. Pin an explicit version if a
+                            chained CNI plugin or container runtime in your environment requires
+                            one. Only relevant when using the Calico CNI plugin.
+                            Default: Auto
+                          enum:
+                            - Auto
+                            - 0.3.1
+                            - 0.4.0
+                            - 1.0.0
+                          type: string
                         type:
                           description: |-
                             Specifies the CNI plugin that will be used in the Calico or Calico Enterprise installation.
@@ -18777,7 +18841,7 @@ spec:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.
                         TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                        Default: Calico
+                        If left unset, the operator fills in the variant it is running as.
                       enum:
                         - Calico
                         - CalicoEnterprise

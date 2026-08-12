@@ -194,7 +194,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		}
 		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Kubernetes node labels.
@@ -210,7 +210,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect the hostendpoint labels to sync.
 		expectedHepLabels["label1"] = "value2"
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the Calico node with new IPs.
@@ -224,7 +224,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect the hostendpoint's expectedIPs to sync the new node IPs.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the wireguard IPs.
@@ -238,7 +238,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect the HEP to include the wireguard IPs.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1", "dead:beef::100:1"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Add an internal IP and an external IP to the Addresses in the node spec.
@@ -290,7 +290,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect the HEP to include the internal IP from Addresses.
 		expectedIPs = []string{"172.100.2.3", "fe80::1", "10.10.20.1", "dead:beef::1", "192.168.100.1", "dead:beef::100:1", "192.168.200.1", "192.168.200.3", "192.168.200.4", "192.168.200.5"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the Kubernetes node.
@@ -331,7 +331,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		expectedHepLabels["projectcalico.org/created-by"] = "calico-kube-controllers"
 		expectedIPs := []string{"172.16.1.1", "fe80::1", "192.168.100.1"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -407,7 +407,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		var noExpectedIPs []string
 		var noProfiles []string
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, userHep.Name, map[string]string{"env": "staging"}, noExpectedIPs, noProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, userHep.Name, map[string]string{"env": "staging"}, nil, noExpectedIPs, noProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect an auto hostendpoint was created for the Calico node.
@@ -418,7 +418,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, autoHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, autoHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -459,7 +459,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller but with auto hostendpoints disabled.
@@ -493,7 +493,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
@@ -505,7 +505,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller but with auto hostendpoints disabled.
@@ -523,7 +523,61 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the template hostendpoint to be unchanged
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+	})
+
+	It("should set template annotations on generated host endpoints and keep them in sync", func() {
+		kcc := autoHepInterfaceTemplateKcc.DeepCopy()
+		kcc.Spec.Controllers.Node.HostEndpoint.Templates[0].Annotations = map[string]string{"template.projectcalico.org/annotation": "annotation-value"}
+		_, err := c.KubeControllersConfiguration().Create(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		nodeController = testutils.RunNodeController(apiconfig.EtcdV3, etcd.IP, kconfigFile)
+
+		cn := internalapi.NewNode()
+		cn.Name = "node"
+		cn.Spec = internalapi.NodeSpec{
+			Interfaces: []internalapi.NodeInterface{
+				{Name: "eth0", Addresses: []string{"5.5.5.5"}},
+			},
+		}
+		_, err = c.Nodes().Create(context.Background(), cn, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// The generated template host endpoint should carry the template annotations.
+		expectedHepName := cn.Name + "-template-eth0-auto-hep"
+		expectedIPs := []string{"5.5.5.5"}
+		expectedHepLabels := map[string]string{
+			"projectcalico.org/created-by": "calico-kube-controllers",
+			"template-label":               "template-value",
+		}
+		expectedHepAnnotations := map[string]string{"template.projectcalico.org/annotation": "annotation-value"}
+		expectedInterface := "eth0"
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedHepAnnotations, expectedIPs, autoHepProfiles, expectedInterface)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Updating the template annotations should update the host endpoint.
+		expectedHepAnnotations["template.projectcalico.org/annotation2"] = "annotation-value2"
+		kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		kcc.Spec.Controllers.Node.HostEndpoint.Templates[0].Annotations = expectedHepAnnotations
+		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, expectedHepAnnotations, expectedIPs, autoHepProfiles, expectedInterface)
+		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
+
+		// Removing all template annotations should clear them from the host endpoint.
+		kcc, err = c.KubeControllersConfiguration().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		kcc.Spec.Controllers.Node.HostEndpoint.Templates[0].Annotations = nil
+		_, err = c.KubeControllersConfiguration().Update(context.Background(), kcc, options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() error {
+			return testutils.ExpectHostendpoint(c, expectedHepName, expectedHepLabels, nil, expectedIPs, autoHepProfiles, expectedInterface)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -544,7 +598,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
@@ -556,7 +610,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update node labels
@@ -571,7 +625,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"calico-label1":                "calico-value1",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Template host endpoint labels should be updated
@@ -582,7 +636,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"calico-label1":                "calico-value1",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -603,7 +657,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
@@ -615,7 +669,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller with updated template name
@@ -635,13 +689,13 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect default hostendpoint to be unchanged
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect template hostendpoint to have new name
 		expectedTemplateHepName = cn.Name + "-template-new-name-auto-hep"
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -670,7 +724,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"node1":                        "test-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, nil, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a wildcard hostendpoint to be created for node 2.
@@ -681,7 +735,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, nil, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created for node 1.
@@ -694,7 +748,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"node1":                        "test-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, nil, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created for node 2.
@@ -706,7 +760,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, nil, expectedTemplateIPs2, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller with updated template
@@ -732,10 +786,10 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the default hostendpoints to be present
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName1, expectedDefaultHepLabels1, nil, expectedDefaultIPs1, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName2, expectedDefaultHepLabels2, nil, expectedDefaultIPs2, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect the template hostendpoint for node2 to be deleted
@@ -751,7 +805,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"node1":                        "test-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName1, expectedTemplateHepLabels1, nil, expectedTemplateIPs1, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a new template hostendpoint to be created for node 1.
@@ -763,7 +817,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"node1":                        "test-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName3, expectedTemplateHepLabels3, expectedTemplateIPs3, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName3, expectedTemplateHepLabels3, nil, expectedTemplateIPs3, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller with autoCreate Disabled, should clean up all created hostendpoints
@@ -805,7 +859,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a template hostendpoint to be created.
@@ -817,7 +871,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the default host endpoint
@@ -829,7 +883,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the default host endpoint to be synced correctly after external update
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Update the template host endpoint
@@ -841,7 +895,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the template host endpoint to be synced correctly after external update
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Manually delete the default host endpoint, kube-controller should recreate it
@@ -850,7 +904,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the default host endpoint to be recreated when deleted manually
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Manually delete the template host endpoint, kube-controller should recreate it
@@ -859,7 +913,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the template host endpoint to be recreated when deleted manually
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -887,7 +941,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"projectcalico.org/created-by": "calico-kube-controllers",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedDefaultHepName, expectedDefaultHepLabels, nil, expectedDefaultIPs, autoHepProfiles, defaultInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -909,7 +963,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 			"template-label":               "template-value",
 		}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Restart the controller with updated template name
@@ -930,7 +984,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect template hostendpoint to have new hashed name
 		expectedTemplateHepName = "2vhzifmgzoee1hgruafve8iewjr1cabezq3o51myej0-auto-hep"
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, templateInterfaceName)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 	})
 
@@ -969,7 +1023,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		}
 		expectedTemplateInterface := "eth0"
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect one hostendpoint to be created
@@ -994,7 +1048,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		// Expect the eth0 host endpoint to be unchanged
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect a hostendpoint to be created for eth1.
@@ -1006,7 +1060,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		}
 		expectedTemplateInterface2 := "eth1"
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, nil, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect two host endpoints to be created
@@ -1032,12 +1086,12 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 
 		expectedTemplateIPs = []string{"172.16.1.1", "5.5.5.5"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName, expectedTemplateHepLabels, nil, expectedTemplateIPs, autoHepProfiles, expectedTemplateInterface)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		expectedTemplateIPs2 = []string{"172.16.1.1", "6.6.6.6"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, nil, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect two host endpoints to be created
@@ -1067,7 +1121,7 @@ var _ = Describe("Auto Hostendpoint FV tests", Ordered, ContinueOnFailure, func(
 		// Expect the eth1 host endpoint to be updated
 		expectedTemplateIPs2 = []string{"6.6.6.6"}
 		Eventually(func() error {
-			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
+			return testutils.ExpectHostendpoint(c, expectedTemplateHepName2, expectedTemplateHepLabels2, nil, expectedTemplateIPs2, autoHepProfiles, expectedTemplateInterface2)
 		}, time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Expect one host endpoint to be created

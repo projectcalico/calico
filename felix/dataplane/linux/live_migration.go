@@ -45,7 +45,7 @@ type garpHandle interface {
 }
 
 // liveMigrationStateUpdate records a per-workload FSM state change that the
-// liveMigrationMonitor needs to forward to its listener (the endpoint manager).
+// liveMigrationMonitor needs to forward to its listeners (the endpoint managers).
 type liveMigrationStateUpdate struct {
 	ID    types.WorkloadEndpointID
 	State liveMigrationState
@@ -53,13 +53,17 @@ type liveMigrationStateUpdate struct {
 
 // liveMigrationMonitor tracks per-workload live migration state that cannot be inferred
 // statelessly from the datastore.  It sees WorkloadEndpoint updates, extracts the live
-// migration role, and drives a per-workload FSM whose state changes are forwarded to
-// the endpoint manager via the liveMigrationListener interface during ResolveUpdateBatch.
+// migration role, and drives a per-workload FSM whose state changes are forwarded to the
+// endpoint managers via the liveMigrationListener interface during ResolveUpdateBatch.
+//
+// There is one endpoint manager per IP version, and each keeps its own live migration state,
+// so every state change must be forwarded to all of them: a monitor with only the IPv4
+// manager registered would leave IPv6 workload routes unsuppressed and unelevated.
 type liveMigrationMonitor struct {
 	roles           map[types.WorkloadEndpointID]proto.LiveMigrationRole
 	fsms            map[types.WorkloadEndpointID]*liveMigrationFSM
 	pendingUpdates  []liveMigrationStateUpdate
-	listener        liveMigrationListener
+	listeners       []liveMigrationListener
 	timerC          chan types.WorkloadEndpointID
 	garpC           chan types.WorkloadEndpointID
 	ifaceNames      map[types.WorkloadEndpointID]string
@@ -99,13 +103,21 @@ func newLiveMigrationMonitor(convergenceTime time.Duration, ipamClient ipam.Inte
 	}
 }
 
-// ResolveUpdateBatch drains accumulated FSM state changes and forwards them
-// to the endpoint manager via the liveMigrationListener interface.  This runs
-// before CompleteDeferredWork, so the endpoint manager sees the state changes
-// before it programs the dataplane.
+// registerListener adds a listener - in production, one endpoint manager per IP version -
+// that should be told about every FSM state change.
+func (m *liveMigrationMonitor) registerListener(l liveMigrationListener) {
+	m.listeners = append(m.listeners, l)
+}
+
+// ResolveUpdateBatch drains accumulated FSM state changes and forwards them to each
+// registered listener via the liveMigrationListener interface.  This runs before
+// CompleteDeferredWork, so the endpoint managers see the state changes before they
+// program the dataplane.
 func (m *liveMigrationMonitor) ResolveUpdateBatch() error {
 	for _, update := range m.pendingUpdates {
-		m.listener.OnLiveMigrationStateUpdate(update.ID, update.State)
+		for _, l := range m.listeners {
+			l.OnLiveMigrationStateUpdate(update.ID, update.State)
+		}
 	}
 	m.pendingUpdates = m.pendingUpdates[:0]
 	return nil
@@ -241,7 +253,8 @@ type liveMigrationFSM struct {
 	monitor      *liveMigrationMonitor
 	currentState liveMigrationState
 	migrationUID string
-	timer        *time.Timer
+	timerStopC   chan struct{}
+	timerWG      sync.WaitGroup
 	pcapHandle   garpHandle
 	garpStopC    chan struct{}
 	garpWG       sync.WaitGroup
@@ -384,16 +397,52 @@ func (f *liveMigrationFSM) stopGARPDetection() {
 func (f *liveMigrationFSM) startElevatedRoutingTimer() {
 	f.logCtx.WithField("duration", f.monitor.convergenceTime).Debug("Starting elevated routing timer")
 	id := f.id
-	f.timer = time.AfterFunc(f.monitor.convergenceTime, func() {
-		f.monitor.timerC <- id
-	})
+
+	if f.timerStopC != nil {
+		// This shouldn't happen: the FSM never enters TimeWait twice without leaving it in
+		// between.  But an overwritten stop channel would leave the previous goroutine
+		// unstoppable and wedge a later Wait(), so stop the old one properly rather than
+		// leak it.
+		f.logCtx.Warn("Elevated routing timer already running; stopping it before restart")
+		f.stopElevatedRoutingTimer()
+	}
+
+	// Deliver the pop from a goroutine whose send stopElevatedRoutingTimer() can
+	// cancel and reap, so that a stale pop can never be delivered after TimeWait
+	// is exited and misattributed to a later TimeWait episode (see OnTimerPop).
+	stopC := make(chan struct{})
+	f.timerStopC = stopC
+	f.timerWG.Add(1)
+	go func() {
+		defer f.timerWG.Done()
+		fireC := time.After(f.monitor.convergenceTime)
+
+		// The send case is disabled (nil channel) until the timer fires.
+		var popC chan<- types.WorkloadEndpointID
+		for {
+			select {
+			case <-fireC:
+				popC = f.monitor.timerC
+			case popC <- id:
+				return
+			case <-stopC:
+				return
+			}
+		}
+	}()
 }
 
 func (f *liveMigrationFSM) stopElevatedRoutingTimer() {
-	if f.timer != nil {
+	if f.timerStopC != nil {
 		f.logCtx.Debug("Stopping elevated routing timer")
-		f.timer.Stop()
-		f.timer = nil
+		close(f.timerStopC)
+
+		// Must wait for the goroutine to exit, to stop a just-cancelled timer from
+		// delivering a stale pop: with both stopC and a pop receiver ready, select
+		// picks at random.  Waiting here is what closes that race - we run on the
+		// main loop, timerC's only reader, so no receiver exists until we return.
+		f.timerWG.Wait()
+		f.timerStopC = nil
 	}
 }
 
@@ -403,10 +452,10 @@ func (m *liveMigrationMonitor) OnGARPDetected(id types.WorkloadEndpointID) {
 	m.executeFSM(id, liveMigrationInputGARPDetected)
 }
 
-// OnTimerPop is called by the main loop when a timer fires for a workload.
-// The timer may fire just before stopElevatedRoutingTimer() is called, so we
-// guard against stale deliveries by checking the FSM still exists and is in
-// TimeWait before driving it.
+// OnTimerPop is called by the main loop when a timer fires for a workload.  Stale deliveries are
+// prevented at source: stopElevatedRoutingTimer() waits for the timer goroutine to exit before
+// returning, so a pop that does get through here was sent by a timer that had not been stopped.
+// The state check here is kept as cheap defence in depth.
 func (m *liveMigrationMonitor) OnTimerPop(id types.WorkloadEndpointID) {
 	fsm, exists := m.fsms[id]
 	if !exists || fsm.currentState != liveMigrationStateTimeWait {

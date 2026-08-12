@@ -313,6 +313,29 @@ func GetSvcHostIP(t testing.TB, app, ns string) string {
 	return pods.Items[0].Status.HostIP
 }
 
+// GetSvcHostIPv6 returns the static IPv6 address (from ipv6Map) of the node
+// hosting the first pod backing the service (matched by label app=<app>).
+// Kubernetes does not expose an IPv6 address on the Node, so we look it up from
+// the pod's spec.nodeName.
+func GetSvcHostIPv6(t testing.TB, app, ns string) string {
+	t.Helper()
+	pods, err := K8sClient(t).CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{
+		LabelSelector: "app=" + app,
+	})
+	if err != nil {
+		t.Fatalf("listing pods app=%s in %s: %v", app, ns, err)
+	}
+	if len(pods.Items) == 0 {
+		t.Fatalf("no pods found with app=%s in %s", app, ns)
+	}
+	nodeName := pods.Items[0].Spec.NodeName
+	ip6, ok := ipv6Map[nodeName]
+	if !ok {
+		t.Fatalf("no IPv6 address known for node %q hosting app=%s", nodeName, app)
+	}
+	return ip6
+}
+
 // AddSvcExternalIPs sets the service's spec.externalIPs.
 func AddSvcExternalIPs(t testing.TB, svc, ns string, ips []string) {
 	t.Helper()

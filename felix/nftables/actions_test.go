@@ -52,4 +52,5 @@ var _ = DescribeTable("Actions",
 	Entry("LimitNumConnectionsAction", environment.Features{}, LimitNumConnectionsAction{Num: 10, RejectWith: generictables.RejectWithTCPReset}, "ct count over 10 reject with tcp reset"),
 	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 0}, "<IPV> dscp set 0"),
 	Entry("DSCPAction", environment.Features{}, DSCPAction{Value: 20}, "<IPV> dscp set 20"),
+	Entry("FlowOffloadAction", environment.Features{}, FlowOffloadAction{}, "flow offload @calico"),
 )

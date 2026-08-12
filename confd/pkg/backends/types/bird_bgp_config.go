@@ -31,11 +31,13 @@ type BirdBGPConfig struct {
 	ListenPort       string
 	DirectInterfaces string // Complete interface pattern string for protocol direct
 
+	ExternalIPs                       []string
 	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string
+	WireguardPeerKernelFilter         []string
 	NormalRoutePriority               int // IPv4 or IPv6 normal route priority (default 1024)
 }
 

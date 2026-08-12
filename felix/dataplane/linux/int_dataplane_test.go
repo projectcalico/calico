@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,20 @@ import (
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 )
+
+type mockCollector struct{}
+
+func (*mockCollector) ReportingChannel() chan<- *proto.DataplaneStats { return nil }
+
+func (*mockCollector) Start() error { return nil }
+
+func (*mockCollector) RegisterMetricsReporter(types.Reporter) {}
+
+func (*mockCollector) SetDataplaneInfoReader(types.DataplaneInfoReader) {}
+
+func (*mockCollector) SetPacketInfoReader(types.PacketInfoReader) {}
+
+func (*mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}
 
 var _ = Describe("Constructor test", func() {
 	var configParams *config.Config
@@ -124,6 +138,27 @@ var _ = Describe("Constructor test", func() {
 		Expect(dp).ToNot(BeNil())
 	})
 
+	// The live migration monitor drives per-workload route suppression and priority
+	// elevation through the endpoint managers, of which there is one per IP version.
+	// Each manager tracks its own live migration state, so all of them must be
+	// registered as listeners; registering only the IPv4 one leaves IPv6 workload
+	// routes unsuppressed on a migration target and unelevated after cutover
+	// (CORE-12806).
+	It("should register an endpoint manager per IP version with the live migration monitor", func() {
+		dpConfig.IPv6Enabled = true
+
+		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+		Expect(dp.LiveMigrationListenerCount()).To(Equal(2),
+			"both endpoint managers should listen for live migration state changes")
+	})
+
+	It("should register only the IPv4 endpoint manager when IPv6 is disabled", func() {
+		dpConfig.IPv6Enabled = false
+
+		dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+		Expect(dp.LiveMigrationListenerCount()).To(Equal(1))
+	})
+
 	Context("when nft is not available", func() {
 		BeforeEach(func() {
 			nftablesDataplane = func(knftables.Family, string, ...knftables.Option) (knftables.Interface, error) {
@@ -204,18 +239,47 @@ var _ = Describe("Constructor test", func() {
 			Expect(dpConfig.Wireguard.MTU).To(Equal(1440))
 		})
 	})
+
+	Context("on a cluster node with encapsulation configured", func() {
+		// Baseline: with encapsulation configured and this host as a cluster
+		// node, the route-programming managers are registered. This is the
+		// counterpoint that makes the non-cluster-host assertions below
+		// meaningful (they must be suppressed by NonClusterHost, not by a
+		// missing config).
+		It("should register the VXLAN and IPIP route managers", func() {
+			dpConfig.IPv6Enabled = true
+			dpConfig.RulesConfig.VXLANEnabled = true
+			dpConfig.RulesConfig.VXLANEnabledV6 = true
+			dpConfig.RulesConfig.IPIPEnabled = true
+
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp.VXLANManagerActive()).To(BeTrue())
+			Expect(dp.VXLANManagerV6Active()).To(BeTrue())
+			Expect(dp.IPIPManagerActive()).To(BeTrue())
+		})
+
+		It("should register the no-encap route manager", func() {
+			dpConfig.IPv6Enabled = true
+			dpConfig.ProgramClusterRoutes = true
+			dpConfig.NoEncapEnabled = true
+
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp.NoEncapManagerActive()).To(BeTrue())
+			Expect(dp.NoEncapManagerV6Active()).To(BeTrue())
+		})
+
+		It("should leave WireGuard enabled when configured", func() {
+			dpConfig.IPv6Enabled = true
+			dpConfig.Wireguard.Enabled = true
+			dpConfig.Wireguard.EnabledV6 = true
+			// A routing table index is required whenever WireGuard is enabled;
+			// the real driver always allocates one.
+			dpConfig.Wireguard.RoutingTableIndex = 1
+			dpConfig.Wireguard.RoutingTableIndexV6 = 2
+
+			dp := intdataplane.NewIntDataplaneDriver(dpConfig)
+			Expect(dp.WireguardEnabled()).To(BeTrue())
+			Expect(dp.WireguardEnabledV6()).To(BeTrue())
+		})
+	})
 })
-
-type mockCollector struct{}
-
-func (*mockCollector) ReportingChannel() chan<- *proto.DataplaneStats { return nil }
-
-func (*mockCollector) Start() error { return nil }
-
-func (*mockCollector) RegisterMetricsReporter(types.Reporter) {}
-
-func (*mockCollector) SetDataplaneInfoReader(types.DataplaneInfoReader) {}
-
-func (*mockCollector) SetPacketInfoReader(types.PacketInfoReader) {}
-
-func (*mockCollector) SetConntrackInfoReader(types.ConntrackInfoReader) {}

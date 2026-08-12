@@ -79,14 +79,13 @@ import (
 	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -303,8 +302,13 @@ type bpfEndpointManager struct {
 
 	dirtyIfaceNames set.Set[string]
 
-	logFilters              map[string]string
-	bpfLogLevel             string
+	logFilters  map[string]string
+	bpfLogLevel string
+	// bpfNoTracePrintk selects the trace-printk-free preamble variants; set
+	// when the kernel is running with lockdown=confidentiality (ftrace
+	// disabled), where loading a preamble that references bpf_trace_printk
+	// spams the kernel log on every attach.
+	bpfNoTracePrintk        bool
 	hostname                string
 	dataIfaceRegex          *regexp.Regexp
 	l3IfaceRegex            *regexp.Regexp
@@ -360,7 +364,7 @@ type bpfEndpointManager struct {
 	// UT-able BPF dataplane interface.
 	dp bpfDataplane
 
-	opReporter logutils.OpRecorder
+	opReporter logrusr.OpRecorder
 
 	// XDP
 	xdpModes []bpf.XDPMode
@@ -381,6 +385,7 @@ type bpfEndpointManager struct {
 	hostNetworkedNATMode hostNetworkedNATMode
 
 	bpfPolicyDebugEnabled  bool
+	bpfOverlayIPOnDevice   bool
 	bpfRedirectToPeer      string
 	bpfAttachType          apiv3.BPFAttachOption
 	policyTrampolineStride atomic.Int32
@@ -416,7 +421,7 @@ type bpfEndpointManager struct {
 	disabledOptionalProgs   set.Typed[hook.SubProg]
 	failedOptionalProgsLock sync.Mutex
 	failedOptionalProgs     map[string]*hook.OptionalSubProgInfo // keyed by FeatureName; guarded by failedOptionalProgsLock
-	updateRateLimitedLog    *logutilslc.RateLimitedLogger
+	updateRateLimitedLog    *logrusr.RateLimitedLogger
 	istioDSCP               uint8
 
 	QoSMap     maps.MapWithUpdateWithFlags
@@ -532,7 +537,7 @@ func NewBPFEndpointManager(
 	iptablesFilterTableV4 Table,
 	iptablesFilterTableV6 Table,
 	livenessCallback func(),
-	opReporter logutils.OpRecorder,
+	opReporter logrusr.OpRecorder,
 	mainRouteTableV4 routetable.Interface,
 	mainRouteTableV6 routetable.Interface,
 	lookupsCache *calc.LookupsCache,
@@ -543,6 +548,21 @@ func NewBPFEndpointManager(
 ) (*bpfEndpointManager, error) {
 	if livenessCallback == nil {
 		livenessCallback = func() {}
+	}
+
+	// Under kernel lockdown=confidentiality, ftrace is disabled at boot, so any
+	// BPF program that references bpf_trace_printk makes the kernel log "could
+	// not enable bpf_trace_printk events" on every load. Load the
+	// trace-printk-free preamble variants, and drop debug logging (which cannot
+	// work anyway) so the debug programs — which carry the helper — are not
+	// loaded either.
+	bpfLogLevel := strings.ToLower(config.BPFLogLevel)
+	bpfNoTracePrintk := bpf.KernelLockdownConfidentiality()
+	if bpfNoTracePrintk && bpfLogLevel == "debug" {
+		logrus.Warn("Kernel lockdown=confidentiality detected: BPF debug logging and the " +
+			"policy Log action are unavailable on this node (ftrace is disabled); " +
+			"forcing BPFLogLevel to off.")
+		bpfLogLevel = "off"
 	}
 
 	m := &bpfEndpointManager{
@@ -558,7 +578,8 @@ func NewBPFEndpointManager(
 		profilesToWorkloads:     map[types.ProfileID]set.Set[any]{},
 		dirtyIfaceNames:         set.New[string](),
 		hostIfaceTrees:          make(bpfIfaceTrees),
-		bpfLogLevel:             config.BPFLogLevel,
+		bpfLogLevel:             bpfLogLevel,
+		bpfNoTracePrintk:        bpfNoTracePrintk,
 		logFilters:              config.BPFLogFilters,
 		hostname:                config.Hostname,
 		l3IfaceRegex:            config.BPFL3IfacePattern,
@@ -603,6 +624,7 @@ func NewBPFEndpointManager(
 		rpfEnforceOption:       config.BPFEnforceRPF,
 		bpfDisableGROForIfaces: config.BPFDisableGROForIfaces,
 		bpfPolicyDebugEnabled:  config.BPFPolicyDebugEnabled,
+		bpfOverlayIPOnDevice:   config.BPFOverlayIPOnDevice,
 		bpfRedirectToPeer:      config.BPFRedirectToPeer,
 		polNameToMatchIDs:      map[string]set.Set[polprog.RuleMatchID]{},
 		dirtyRules:             set.New[polprog.RuleMatchID](),
@@ -682,9 +704,9 @@ func NewBPFEndpointManager(
 		})
 	}
 
-	m.updateRateLimitedLog = logutilslc.NewRateLimitedLogger(
-		logutilslc.OptInterval(30*time.Second),
-		logutilslc.OptBurst(10),
+	m.updateRateLimitedLog = logrusr.NewRateLimitedLogger(
+		logrusr.OptInterval(30*time.Second),
+		logrusr.OptBurst(10),
 	)
 
 	// Calculate allowed XDP attachment modes.  Note, in BPF mode untracked ingress policy is
@@ -1065,6 +1087,21 @@ func (m *bpfEndpointManager) OnUpdate(msg any) {
 
 func (m *bpfEndpointManager) onRouteUpdate(update *proto.RouteUpdate) {
 	if update.Types&proto.RouteType_LOCAL_TUNNEL == proto.RouteType_LOCAL_TUNNEL {
+		// By default, only set the host tunnel IP for WireGuard tunnels.
+		// WireGuard needs HOST_TUNNEL_IP in BPF globals for SNAT conflict
+		// resolution when host-networked traffic to remote tunneled workloads
+		// conflicts with existing conntrack entries. For IPIP/VXLAN in BPF
+		// mode, BPF handles encap directly and setting HOST_TUNNEL_IP would
+		// incorrectly SNAT host-networked traffic source from the node IP to
+		// the tunnel IP.
+		//
+		// When BPFOverlayIPOnDevice is enabled, we also set HOST_TUNNEL_IP
+		// for IPIP/VXLAN tunnels to restore the legacy behavior where the
+		// overlay device IP is used as the encapsulation source.
+		isWireguard := update.TunnelType != nil && update.TunnelType.Wireguard
+		if !isWireguard && !m.bpfOverlayIPOnDevice {
+			return
+		}
 		ip, _, err := net.ParseCIDR(update.Dst)
 		if err != nil {
 			logrus.WithField("local tunnel cidr", update.Dst).WithError(err).Warn("not parsable")
@@ -1697,7 +1734,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 		if err != nil {
 			// "net" does not export the strings or err types :(
 			if strings.Contains(err.Error(), "no such network interface") {
-				m.ifStateMap.Desired().Delete(k)
 				// Device does not exist anymore so delete all associated policies we know
 				// about as we will not hear about that device again.
 				for _, fn := range []func() int{
@@ -1735,9 +1771,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 			}
 		} else if m.isDataIface(netiface.Name) || m.isWorkloadIface(netiface.Name) || m.isL3Iface(netiface.Name) {
 			// We only add iface that we still manage as configuration could have changed.
-
-			m.ifStateMap.Desired().Set(k, v)
-
 			m.withIface(netiface.Name, func(iface *bpfInterface) bool {
 				if netiface.Flags&net.FlagUp != 0 {
 					iface.info.ifIndex = netiface.Index
@@ -1812,9 +1845,6 @@ func (m *bpfEndpointManager) syncIfStateMap() {
 				// the new jump maps!
 				return true
 			})
-		} else {
-			// We no longer manage this device
-			m.ifStateMap.Desired().Delete(k)
 		}
 	})
 }
@@ -2266,10 +2296,11 @@ func (m *bpfEndpointManager) doApplyPolicyToDataIface(iface, masterIface string,
 
 	xdpAttachPoint := &xdp.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			IfIndex:  ifIndex,
-			Hook:     hook.XDP,
-			Iface:    iface,
-			LogLevel: m.bpfLogLevel,
+			IfIndex:       ifIndex,
+			Hook:          hook.XDP,
+			Iface:         iface,
+			LogLevel:      m.bpfLogLevel,
+			NoTracePrintk: m.bpfNoTracePrintk,
 		},
 		Modes: m.xdpModes,
 	}
@@ -3536,7 +3567,8 @@ func (m *bpfEndpointManager) getEndpointType(ifaceName string) tcdefs.EndpointTy
 func (m *bpfEndpointManager) calculateTCAttachPoint(ifaceName string) *tc.AttachPoint {
 	ap := &tc.AttachPoint{
 		AttachPoint: bpf.AttachPoint{
-			Iface: ifaceName,
+			Iface:         ifaceName,
+			NoTracePrintk: m.bpfNoTracePrintk,
 		},
 		MaglevLUTSize: uint32(m.maglevLUTSize),
 	}
