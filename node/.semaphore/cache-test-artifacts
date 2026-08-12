@@ -28,6 +28,8 @@ for img in calico-image.tar.zst node-image.tar.zst whisker-image.tar.zst; do
   if gcloud storage cp "${GCS_WORKFLOW_DIR}/${img}" "/tmp/${img}" 2>/dev/null; then
     echo "Found pre-built ${img}, including in artifacts."
     gcloud storage cp "/tmp/${img}" "${GCS_WORKFLOW_DIR}/node/fv-artifacts/${img}"
+  else
+    echo "WARNING: ${img} not in ${GCS_WORKFLOW_DIR}; the test VMs will build it from source."
   fi
 done
 
