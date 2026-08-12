@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"net"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -190,6 +191,46 @@ var _ = Describe("Route manager", func() {
 			routeMgr.updateParentIfaceAddr("172.0.0.2")
 			Expect(routeMgr.tunnelChangedC).To(Receive())
 			Expect(routeMgr.parentIfaceAddr()).To(Equal("172.0.0.2"))
+		})
+	})
+
+	Describe("tunnel device sync retries", func() {
+		// Each failed attempt costs a netlink LinkList plus an AddrList per
+		// link, and the commonest failure — a host address that isn't on any
+		// local link — is permanent.  Retrying that once a second forever is
+		// both a netlink load and a stream of warnings, so the delay grows.
+		It("should back off up to the healthy poll interval", func() {
+			delay := tunnelSyncMinRetryDelay
+			delays := []time.Duration{delay}
+			for range 5 {
+				delay = nextTunnelSyncRetryDelay(delay, 10*time.Second)
+				delays = append(delays, delay)
+			}
+			Expect(delays).To(Equal([]time.Duration{
+				1 * time.Second,
+				2 * time.Second,
+				4 * time.Second,
+				8 * time.Second,
+				10 * time.Second,
+				10 * time.Second,
+			}))
+		})
+
+		// The loop polls every "wait" once it is healthy; retrying a failure
+		// less often than that would leave the device unconfigured for longer
+		// than a working node goes unchecked.
+		It("should not back off beyond the poll interval", func() {
+			Expect(nextTunnelSyncRetryDelay(10*time.Second, 10*time.Second)).
+				To(Equal(10 * time.Second))
+		})
+
+		// A caller with a short (or unset) poll interval must not end up
+		// spinning: the minimum delay wins over the cap.
+		It("should not retry faster than the minimum delay", func() {
+			Expect(nextTunnelSyncRetryDelay(tunnelSyncMinRetryDelay, 0)).
+				To(Equal(tunnelSyncMinRetryDelay))
+			Expect(nextTunnelSyncRetryDelay(tunnelSyncMinRetryDelay, 100*time.Millisecond)).
+				To(Equal(tunnelSyncMinRetryDelay))
 		})
 	})
 
