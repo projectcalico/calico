@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2621,6 +2621,8 @@ var _ = Describe("IPAM controller UTs", func() {
 			{"node-gc-a", "10.1.0.0/30", "vxlan-tunnel-addr-node-gc-a"},
 			{"node-gc-b", "10.1.1.0/30", "vxlan-tunnel-addr-node-gc-b"},
 		}
+		// The cold IP GC sweep only visits blocks with an elapsed cooldown IP.
+		releasedAt := metav1.NewTime(time.Now().Add(-2 * time.Hour))
 		for _, n := range nodes {
 			cidr := net.MustParseCIDR(n.cidr)
 			aff := fmt.Sprintf("host:%s", n.name)
@@ -2633,7 +2635,8 @@ var _ = Describe("IPAM controller UTs", func() {
 				Unallocated: []int{1, 2, 3},
 				Attributes: []model.AllocationAttribute{
 					{
-						HandleID: &handle,
+						HandleID:   &handle,
+						ReleasedAt: &releasedAt,
 						ActiveOwnerAttrs: map[string]string{
 							ipam.AttributeNode: n.name,
 							ipam.AttributeType: ipam.AttributeTypeVXLAN,
