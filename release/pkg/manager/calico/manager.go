@@ -288,7 +288,7 @@ func (r *CalicoManager) Build() error {
 	if !r.isHashRelease {
 		// Only tag release if this is not a hashrelease.
 		// TODO: Option to skip producing a tag, for development.
-		if err = r.TagRelease(ver); err != nil {
+		if err = r.TagRelease(); err != nil {
 			return err
 		}
 
@@ -514,14 +514,15 @@ func (r *CalicoManager) DeleteTag(ver string) error {
 	return nil
 }
 
-func (r *CalicoManager) TagRelease(ver string) error {
+func (r *CalicoManager) TagRelease() error {
+	ver := r.calicoVersion
 	branch, err := r.determineBranch()
 	if err != nil {
-		return fmt.Errorf("failed to determine branch: %s", err)
+		return fmt.Errorf("failed to determine branch: %w", err)
 	}
 	logrus.WithFields(logrus.Fields{"branch": branch, "version": ver}).Infof("Creating Calico release from branch")
 
-	tc := r.tagState(ver)
+	tc := r.tagState()
 	if tc.err != nil {
 		return fmt.Errorf("checking %s tag matches HEAD: %w", ver, tc.err)
 	}
@@ -541,15 +542,15 @@ type tagCheck struct {
 	err    error
 }
 
-// tagState reports whether the tag already exists and points at HEAD.
+// tagState reports whether the release tag already exists and points at HEAD.
 // A tag at a different commit is a conflict, surfaced via err.
 // The result is memoized as both releasePrereqs and TagRelease consult it.
-func (r *CalicoManager) tagState(ver string) *tagCheck {
+func (r *CalicoManager) tagState() *tagCheck {
 	if r.tagAtHEAD != nil {
 		return r.tagAtHEAD
 	}
 	tc := &tagCheck{}
-	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+ver+"^{commit}")
+	tagCommit, err := r.git("rev-parse", "-q", "--verify", "refs/tags/"+r.calicoVersion+"^{commit}")
 	if err != nil || strings.TrimSpace(tagCommit) == "" {
 		r.tagAtHEAD = tc
 		return tc
@@ -563,7 +564,7 @@ func (r *CalicoManager) tagState(ver string) *tagCheck {
 	}
 	headCommit = strings.TrimSpace(headCommit)
 	if tagCommit != headCommit {
-		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", ver, tagCommit, headCommit)
+		tc.err = fmt.Errorf("tag %s already exists at %s but HEAD is %s", r.calicoVersion, tagCommit, headCommit)
 		r.tagAtHEAD = tc
 		return tc
 	}
@@ -829,7 +830,7 @@ func (r *CalicoManager) releasePrereqs() error {
 	}
 
 	// Check if the tag exist and that it does not point at a different commit.
-	if tc := r.tagState(r.calicoVersion); tc.err != nil {
+	if tc := r.tagState(); tc.err != nil {
 		return fmt.Errorf("checking %s tag matches HEAD: %w", r.calicoVersion, tc.err)
 	}
 
@@ -1353,8 +1354,8 @@ func (r *CalicoManager) publishGitTag() error {
 	return nil
 }
 
-// remoteTagCommit returns the commit a remote tag points at
-// For annotated tags, used the peeled reference (refs/tags/<tag>^{}) to get the commit SHA.
+// remoteTagCommit returns the commit a remote tag points at.
+// For annotated tags, use the peeled reference (refs/tags/<tag>^{}) to get the commit SHA.
 func remoteTagCommit(lsRemoteOutput, ver string) string {
 	tagRef := "refs/tags/" + ver
 	peeledRef := tagRef + "^{}"
