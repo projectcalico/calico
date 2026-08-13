@@ -109,12 +109,7 @@ CI selects the BPF runs by test *name*, using two markers:
   `FV_FOCUS='_BPF_.*ct=true'`), so a BPF-specific test wants it.
 
 `_BPF_` **implies** `_BPF-SAFE_`: the full BPF job's focus is
-`BPF-SAFE|_BPF_` (`felix/.semaphore/fv-prologue`). Without that,
-a test named `_BPF_` but not `_BPF-SAFE_` would run in no job at
-all — the BPF jobs would skip it by focus, and the other jobs skip
-it because a BPF-specific test self-gates on
-`infrastructure.BPFMode()`. Nothing else catches that: an empty
-focus match is a silent pass.
+`BPF-SAFE|_BPF_` (`felix/.semaphore/fv-prologue`).
 
 Ginkgo matches the focus against a spec's full text — every
 enclosing `Describe`/`Context` heading concatenated — so a marker

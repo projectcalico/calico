@@ -23,9 +23,7 @@ JOB_TAG=""
 TEST_REPORT_NAME=""
 
 # In BPF runs, only run BPF-SAFE tagged tests.  _BPF_ (i.e. "BPF-specific test")
-# implies BPF-SAFE: it is easy to write a _BPF_ test and forget the BPF-SAFE
-# marker, and such a test would then run in no CI job at all (BPF jobs would
-# skip it by focus; other jobs skip it because it self-gates on BPFMode()).
+# implies BPF-SAFE.
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
   export FV_FOCUS='BPF-SAFE|_BPF_'
   JOB_TAG+="bpf"
