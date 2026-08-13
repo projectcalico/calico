@@ -3,16 +3,18 @@
 # to bz tests.
 #
 # release-v3.32 has no `make e2e-run` target and no structured E2E_TEST_CONFIG
-# (both are master-only). Selection matches v3.32's Semaphore body_standard.sh:
-#   - RUN_LOCAL_TESTS set → build the e2e binary from local source and run it
-#     via ginkgo, selecting specs with K8S_E2E_FLAGS (regex focus/skip). On
-#     v3.32 only the `windows` pipeline sets RUN_LOCAL_TESTS.
-#   - Else → `bz tests`. This is the path every scheduled e2e pipeline
-#     (iptables/bpf/nftables/upgrade/aws/aks/certification/…) takes; bz runs the
-#     k8s-e2e suite and produces the JUnit report itself.
+# (both are master-only), so specs are selected with K8S_E2E_FLAGS regexes:
+#   - RUN_LOCAL_TESTS set → build the e2e binary from local source. On v3.32
+#     only the `windows` pipeline sets it.
+#   - TEST_TYPE k8s-e2e → download the OSS e2e binary from the hashrelease.
+#     This is the path the scheduled e2e pipelines take.
+#   - Else (non-e2e test types: benchmarks, certification, …) → `bz tests`,
+#     which runs the suite and produces the JUnit report itself.
 #
 # Required env:
 #   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
+# Required for hashrelease downloads:
+#   RELEASE_STREAM
 #
 # Sourced from body_*.sh. Exits with the test exit code.
 
@@ -25,9 +27,27 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   echo "[INFO] building e2e binary from local source..."
   pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
   make -C e2e build |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/${TEST_TYPE}-build.log.gz")
+  E2E_BINARY=e2e/bin/k8s/e2e.test
+elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
+  # Scheduled e2e: download the pre-built e2e binary from the hashrelease.
+  echo "[INFO] downloading e2e binary from hashrelease..."
+  pushd "${CI_HOME}/${CI_GIT_DIR}" || exit
 
-  # Run in the same calico/go-build image used to compile the binary (it has
-  # the libbpf/libelf/libz runtime deps and uuidgen the e2e scripts need).
+  # Upgrade runs set RELEASE_STREAM to the downlevel version they install
+  # first, but the tests run against the uplevel version.
+  E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
+  echo "[INFO] hashrelease URL: ${HASHREL_URL}"
+
+  ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
+  mkdir -p e2e/bin/k8s
+  curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o e2e/bin/k8s/e2e.test
+  chmod +x e2e/bin/k8s/e2e.test
+  E2E_BINARY=e2e/bin/k8s/e2e.test
+fi
+
+if [[ -n "${E2E_BINARY:-}" ]]; then
+  # Run in calico/go-build: it has uuidgen and the ginkgo CLI the run below needs.
   GO_BUILD_VER=$(make --no-print-directory -f ./metadata.mk -f - <<<'print:; @echo $(GO_BUILD_VER)' print)
   RUN_IMAGE="calico/go-build:${GO_BUILD_VER}"
 
