@@ -45,18 +45,34 @@ func newFakeClient(t *testing.T, objs ...ctrlclient.Object) ctrlclient.WithWatch
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 }
 
-func availableAPIService() *apiregistrationv1.APIService {
+func registeredAPIService() *apiregistrationv1.APIService {
 	return &apiregistrationv1.APIService{
 		ObjectMeta: metav1.ObjectMeta{Name: calicoV3APIServiceName},
-		Status: apiregistrationv1.APIServiceStatus{
-			Conditions: []apiregistrationv1.APIServiceCondition{
-				{
-					Type:   apiregistrationv1.Available,
-					Status: apiregistrationv1.ConditionTrue,
-				},
-			},
-		},
 	}
+}
+
+// stubDiscovery answers ServerGroups from fn, which sees the 1-indexed call count.
+type stubDiscovery struct {
+	calls int
+	fn    func(call int) (*metav1.APIGroupList, error)
+}
+
+func (s *stubDiscovery) ServerGroups() (*metav1.APIGroupList, error) {
+	s.calls++
+	return s.fn(s.calls)
+}
+
+func servingV3() *metav1.APIGroupList {
+	return &metav1.APIGroupList{
+		Groups: []metav1.APIGroup{{
+			Name:     v3.SchemeGroupVersion.Group,
+			Versions: []metav1.GroupVersionForDiscovery{{Version: v3.SchemeGroupVersion.Version}},
+		}},
+	}
+}
+
+func servingNothing() *metav1.APIGroupList {
+	return &metav1.APIGroupList{}
 }
 
 func TestRetriableAPIError(t *testing.T) {
@@ -77,7 +93,7 @@ func TestWithRetryRetriesServiceUnavailable(t *testing.T) {
 	shrinkRetry(t)
 
 	gets := 0
-	base := newFakeClient(t, availableAPIService())
+	base := newFakeClient(t, registeredAPIService())
 	c := WithRetry(interceptor.NewClient(base, interceptor.Funcs{
 		Get: func(ctx context.Context, cli ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
 			gets++
@@ -133,77 +149,81 @@ func TestWithRetryDoesNotRetryNotFound(t *testing.T) {
 	g.Expect(gets).To(Equal(1))
 }
 
-func TestCalicoV3APIAvailable(t *testing.T) {
+// A CRD-served v3 shows up in discovery with no aggregated apiserver behind it.
+func TestCalicoV3APIAvailableFromDiscovery(t *testing.T) {
 	g := NewWithT(t)
 	shrinkRetry(t)
 
-	available, err := calicoV3APIAvailable(context.Background(), newFakeClient(t, availableAPIService()))
+	d := &stubDiscovery{fn: func(int) (*metav1.APIGroupList, error) { return servingV3(), nil }}
+	available, err := calicoV3APIAvailable(context.Background(), d, newFakeClient(t))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(available).To(BeTrue())
+	g.Expect(d.calls).To(Equal(1))
 }
 
-// No APIService means nothing serves v3, so the calicoctl fallback should be taken
-// without waiting out the backoff.
-func TestCalicoV3APIAvailableNoAPIService(t *testing.T) {
+// Nothing serves v3, so the calicoctl fallback should be taken without waiting out
+// the backoff.
+func TestCalicoV3APIAvailableNoV3(t *testing.T) {
 	g := NewWithT(t)
 	shrinkRetry(t)
 
 	start := time.Now()
-	available, err := calicoV3APIAvailable(context.Background(), newFakeClient(t))
+	d := &stubDiscovery{fn: func(int) (*metav1.APIGroupList, error) { return servingNothing(), nil }}
+	available, err := calicoV3APIAvailable(context.Background(), d, newFakeClient(t))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(available).To(BeFalse())
 	g.Expect(time.Since(start)).To(BeNumerically("<", time.Second))
 }
 
-// A rolling apiserver leaves the APIService in place with Available=False. Wait for
-// it rather than falling back to calicoctl.
-func TestCalicoV3APIAvailableWaitsForAvailable(t *testing.T) {
+// A rolling apiserver drops out of discovery but keeps its APIService. Wait for it
+// rather than falling back to calicoctl.
+func TestCalicoV3APIAvailableWaitsForDiscovery(t *testing.T) {
 	g := NewWithT(t)
 	shrinkRetry(t)
 
-	rolling := availableAPIService()
-	rolling.Status.Conditions[0].Status = apiregistrationv1.ConditionFalse
+	d := &stubDiscovery{fn: func(call int) (*metav1.APIGroupList, error) {
+		if call < 3 {
+			return servingNothing(), nil
+		}
+		return servingV3(), nil
+	}}
 
-	gets := 0
-	base := newFakeClient(t, rolling)
-	c := WithRetry(interceptor.NewClient(base, interceptor.Funcs{
-		Get: func(ctx context.Context, cli ctrlclient.WithWatch, key ctrlclient.ObjectKey, obj ctrlclient.Object, opts ...ctrlclient.GetOption) error {
-			gets++
-			if err := cli.Get(ctx, key, obj, opts...); err != nil {
-				return err
-			}
-			if gets >= 3 {
-				apiService, ok := obj.(*apiregistrationv1.APIService)
-				if !ok {
-					return nil
-				}
-				apiService.Status.Conditions[0].Status = apiregistrationv1.ConditionTrue
-			}
-			return nil
-		},
-	}))
-
-	available, err := calicoV3APIAvailable(context.Background(), c)
+	available, err := calicoV3APIAvailable(context.Background(), d, newFakeClient(t, registeredAPIService()))
 	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(available).To(BeTrue())
-	g.Expect(gets).To(Equal(3))
+	g.Expect(d.calls).To(Equal(3))
 }
 
 // An apiserver that never comes back is an error, not a silent switch to calicoctl.
-func TestCalicoV3APIAvailableNeverAvailable(t *testing.T) {
+func TestCalicoV3APIAvailableNeverServed(t *testing.T) {
 	g := NewWithT(t)
 	shrinkRetry(t)
 
-	rolling := availableAPIService()
-	rolling.Status.Conditions[0].Status = apiregistrationv1.ConditionFalse
-
-	available, err := calicoV3APIAvailable(context.Background(), newFakeClient(t, rolling))
+	d := &stubDiscovery{fn: func(int) (*metav1.APIGroupList, error) { return servingNothing(), nil }}
+	available, err := calicoV3APIAvailable(context.Background(), d, newFakeClient(t, registeredAPIService()))
 	g.Expect(err).To(HaveOccurred())
 	g.Expect(available).To(BeFalse())
 }
 
-// RBAC-restricted clients can't read APIServices, and calicoctl would exec past the
-// RBAC those tests assert on.
+// Discovery itself fails while the apiserver rolls, which must not read as "no v3".
+func TestCalicoV3APIAvailableRetriesDiscoveryError(t *testing.T) {
+	g := NewWithT(t)
+	shrinkRetry(t)
+
+	d := &stubDiscovery{fn: func(call int) (*metav1.APIGroupList, error) {
+		if call < 3 {
+			return nil, apierrors.NewServiceUnavailable("unexpected EOF")
+		}
+		return servingV3(), nil
+	}}
+
+	available, err := calicoV3APIAvailable(context.Background(), d, newFakeClient(t))
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(available).To(BeTrue())
+	g.Expect(d.calls).To(Equal(3))
+}
+
+// RBAC-restricted clients can't read APIServices, so discovery has the only say.
 func TestCalicoV3APIAvailableForbidden(t *testing.T) {
 	g := NewWithT(t)
 	shrinkRetry(t)
@@ -215,9 +235,10 @@ func TestCalicoV3APIAvailableForbidden(t *testing.T) {
 		},
 	}))
 
-	available, err := calicoV3APIAvailable(context.Background(), c)
+	d := &stubDiscovery{fn: func(int) (*metav1.APIGroupList, error) { return servingNothing(), nil }}
+	available, err := calicoV3APIAvailable(context.Background(), d, c)
 	g.Expect(err).NotTo(HaveOccurred())
-	g.Expect(available).To(BeTrue())
+	g.Expect(available).To(BeFalse())
 }
 
 // The budget has to outlast a calico-apiserver restart, which takes tens of seconds.

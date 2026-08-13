@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -42,8 +44,13 @@ func New(cfg *rest.Config) (client.Client, error) {
 		return nil, err
 	}
 
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	// Checks to see if the projectcalico.org/v3 API is available.
-	available, err := calicoV3APIAvailable(context.Background(), c)
+	available, err := calicoV3APIAvailable(context.Background(), discoveryClient, c)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +121,7 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 
-	// APIServices are how we tell whether the aggregated v3 API is being served.
+	// APIServices tell us a rolling calico-apiserver is still registered.
 	if err := apiregistrationv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
@@ -127,52 +134,97 @@ func newScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
-// calicoV3APIServiceName is the APIService that serves projectcalico.org/v3, whether
-// backed by calico-apiserver or by CRDs.
+// calicoV3APIServiceName is the APIService registered for projectcalico.org/v3, either
+// by calico-apiserver or by the CRD registration controller.
 const calicoV3APIServiceName = "v3.projectcalico.org"
+
+// serverGroupLister is the slice of discovery this package needs.
+type serverGroupLister interface {
+	ServerGroups() (*metav1.APIGroupList, error)
+}
 
 // calicoV3APIAvailable reports whether projectcalico.org/v3 is served, waiting out an
 // apiserver that is still rolling rather than falling back to calicoctl.
-func calicoV3APIAvailable(ctx context.Context, c client.Client) (bool, error) {
-	key := client.ObjectKey{Name: calicoV3APIServiceName}
-	apiService := &apiregistrationv1.APIService{}
-	err := c.Get(ctx, key, apiService)
-
-	// No APIService at all means nothing serves v3, so calicoctl is the only option.
-	if apierrors.IsNotFound(err) {
-		return false, nil
-	}
-
-	// An RBAC-restricted client can't read APIServices, and calicoctl would exec
-	// past the RBAC those tests assert on.
-	if apierrors.IsForbidden(err) {
-		logrus.WithError(err).Warn("Cannot read APIServices, assuming projectcalico.org/v3 is served")
-		return true, nil
-	}
+func calicoV3APIAvailable(ctx context.Context, d serverGroupLister, c client.Client) (bool, error) {
+	served, err := v3InDiscovery(d)
 	if err != nil {
 		return false, err
 	}
+	if served {
+		return true, nil
+	}
 
-	if err := waitForAPIServiceAvailable(ctx, c, key); err != nil {
+	// A rolling calico-apiserver leaves discovery but keeps its APIService, so a
+	// registered APIService means wait rather than fall back.
+	registered, err := v3APIServiceRegistered(ctx, c)
+	if err != nil || !registered {
+		return false, err
+	}
+
+	logrus.Infof("APIService %s is registered but projectcalico.org/v3 is not in discovery, waiting", calicoV3APIServiceName)
+	if err := waitForV3InDiscovery(d); err != nil {
 		return false, err
 	}
 	return true, nil
 }
 
-func waitForAPIServiceAvailable(ctx context.Context, c client.Client, key client.ObjectKey) error {
+// v3InDiscovery retries transient discovery failures, but reports a clean answer
+// of "not served" straight away.
+func v3InDiscovery(d serverGroupLister) (bool, error) {
+	var served bool
+	err := retry.OnError(apiRetry, RetriableAPIError, func() error {
+		var err error
+		served, err = queryV3InDiscovery(d)
+		return err
+	})
+	return served, err
+}
+
+func queryV3InDiscovery(d serverGroupLister) (bool, error) {
+	groups, err := d.ServerGroups()
+	if err != nil {
+		return false, err
+	}
+	for _, group := range groups.Groups {
+		if group.Name != v3.SchemeGroupVersion.Group {
+			continue
+		}
+		for _, version := range group.Versions {
+			if version.Version == v3.SchemeGroupVersion.Version {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func v3APIServiceRegistered(ctx context.Context, c client.Client) (bool, error) {
+	apiService := &apiregistrationv1.APIService{}
+	err := c.Get(ctx, client.ObjectKey{Name: calicoV3APIServiceName}, apiService)
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+
+	// An RBAC-restricted client can't read APIServices, so trust discovery on its own.
+	if apierrors.IsForbidden(err) {
+		logrus.WithError(err).Warn("Cannot read APIServices, relying on discovery alone")
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func waitForV3InDiscovery(d serverGroupLister) error {
 	alwaysRetry := func(error) bool {
 		return true
 	}
 	return retry.OnError(apiRetry, alwaysRetry, func() error {
-		apiService := &apiregistrationv1.APIService{}
-		if err := c.Get(ctx, key, apiService); err != nil {
+		served, err := queryV3InDiscovery(d)
+		if err != nil {
 			return err
 		}
-		for _, condition := range apiService.Status.Conditions {
-			if condition.Type == apiregistrationv1.Available && condition.Status == apiregistrationv1.ConditionTrue {
-				return nil
-			}
+		if !served {
+			return fmt.Errorf("%s is not served yet", v3.SchemeGroupVersion.String())
 		}
-		return fmt.Errorf("APIService %s is not available yet", key.Name)
+		return nil
 	})
 }
