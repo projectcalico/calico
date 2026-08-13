@@ -26,3 +26,11 @@ func NFTMode() bool {
 func NetkitMode() bool {
 	return os.Getenv("FELIX_FV_NETKIT") == "Enabled"
 }
+
+// NetkitAttachMode returns true if Felix drives those netkit devices through
+// the netkit attach API. Selecting a BPFAttachType explicitly opts out of
+// netkit attachment, so a netkit device is then programmed like any other
+// workload — separate question from what kind of device it is.
+func NetkitAttachMode() bool {
+	return NetkitMode() && os.Getenv("FELIX_FV_BPFATTACHTYPE") == ""
+}

@@ -91,12 +91,13 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
-// +kubebuilder:validation:Enum=TC;TCX
+// +kubebuilder:validation:Enum=TC;TCX;Netkit
 type BPFAttachOption string
 
 const (
-	BPFAttachOptionTC  BPFAttachOption = "TC"
-	BPFAttachOptionTCX BPFAttachOption = "TCX"
+	BPFAttachOptionTC     BPFAttachOption = "TC"
+	BPFAttachOptionTCX    BPFAttachOption = "TCX"
+	BPFAttachOptionNetkit BPFAttachOption = "Netkit"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -1019,10 +1020,15 @@ type FelixConfigurationSpec struct {
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
-	// By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-	// `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-	// [Default: TCX]
-	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
+	// By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+	// netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+	// easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+	// qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+	// Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+	// instead of the netkit API, which is required before downgrading to a release without netkit
+	// support.
+	// [Default: Netkit]
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX Netkit"`
 
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string
