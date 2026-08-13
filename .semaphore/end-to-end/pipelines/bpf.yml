@@ -120,9 +120,10 @@ blocks:
           env_vars:
             # This run supplies what the Maglev tests need -- BPF with DSR, an
             # external node, one subnet, no encapsulation -- so it is the only
-            # run that keeps them. Same filter as the block, minus that skip.
+            # run that keeps them. Same filter as the block, minus that skip, plus
+            # a skip for the Enterprise-only specs the shared test image carries.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|sig-calico-enterprise)
             - name: ENABLE_BPF_DSR
               value: "true"
             - name: VPC_SUBNETS
