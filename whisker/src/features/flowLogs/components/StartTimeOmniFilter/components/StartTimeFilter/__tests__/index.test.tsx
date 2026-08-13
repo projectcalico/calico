@@ -1,12 +1,17 @@
 import { render, screen, userEvent, waitFor } from '@/test-utils/helper';
 import StartTimeFilter from '..';
 
+let mockSelectProps: Record<string, any> = {};
 jest.mock(
     '@/libs/tigera/ui-components/components/common/Select',
-    () =>
-        ({ options, onChange }: any) => {
-            return <div onClick={() => onChange(options[2])}>Mock Select</div>;
-        },
+    () => (props: any) => {
+        mockSelectProps = props;
+        return (
+            <div onClick={() => props.onChange(props.options[2])}>
+                Mock Select
+            </div>
+        );
+    },
 );
 
 describe('<StartTimeFilter />', () => {
@@ -75,5 +80,35 @@ describe('<StartTimeFilter />', () => {
         );
 
         expect(mockOnReset).toHaveBeenCalledTimes(1);
+    });
+
+    it('should merge custom menu, menuList and option styles with the base styles', async () => {
+        render(<StartTimeFilter {...defaultProps} />);
+
+        await openFilter();
+
+        const baseStyles = { '--base-style': 'preserved' };
+
+        expect(mockSelectProps.sx.menu(baseStyles)).toEqual(
+            expect.objectContaining({
+                '--base-style': 'preserved',
+                position: 'relative',
+                my: 0,
+                borderRadius: 0,
+                border: 'none',
+            }),
+        );
+        expect(mockSelectProps.sx.menuList(baseStyles)).toEqual(
+            expect.objectContaining({
+                '--base-style': 'preserved',
+                borderRadius: 0,
+                minHeight: 'fit-content',
+            }),
+        );
+        expect(mockSelectProps.sx.option(baseStyles)).toEqual(
+            expect.objectContaining({
+                '--base-style': 'preserved',
+            }),
+        );
     });
 });

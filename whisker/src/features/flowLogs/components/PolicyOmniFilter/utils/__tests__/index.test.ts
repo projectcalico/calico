@@ -1,4 +1,4 @@
-import { PolicyFilter } from '../..';
+import { PolicyFilter } from '@/utils/filters/types';
 import { PolicyQuery, QuerySelect } from '../../QueryList';
 import {
     getDefaultExpanded,

@@ -1,61 +1,13 @@
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
+import { useDebouncedCallback } from '@/hooks';
+import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import {
-    DataListOmniFilterParam,
-    ListOmniFilterData,
-    OmniFilterParam,
-    ListOmniFiltersData,
-    SelectedOmniFilterData,
-    SelectedOmniFilterOptions,
-    ListOmniFilterKeys,
-    FilterHintKey,
-} from '@/utils/omniFilter';
+import { toDataFilterQuery } from '@/utils/filters/flowsFilter';
+import { DataFilterId, ListOmniFilterData } from '@/utils/filters/dataFilters';
 import React from 'react';
 
-export const useSelectedListOmniFilters = (
-    urlFilterParams: Record<OmniFilterParam, string[]>,
-    omniFilterData: ListOmniFiltersData,
-    selectedOmniFilterData: SelectedOmniFilterData,
-) => {
-    const urlFilterValueKeys = Object.keys(urlFilterParams).filter(
-        (key) => ListOmniFilterKeys[key as DataListOmniFilterParam],
-    );
-
-    return urlFilterValueKeys.reduce((accumulator, current) => {
-        const filterId = current as DataListOmniFilterParam;
-
-        const selectedFilters = urlFilterParams[filterId].map(
-            (selectedValue) => {
-                let selectedOption = selectedOmniFilterData?.[
-                    filterId
-                ]?.filters?.find(
-                    (data: ListOmniFilterOption) =>
-                        data.value === selectedValue,
-                );
-
-                if (selectedOption) {
-                    return selectedOption;
-                }
-
-                selectedOption = omniFilterData[filterId]?.filters?.find(
-                    (selectOption) => selectOption.value === selectedValue,
-                ) ?? {
-                    label: selectedValue,
-                    value: selectedValue,
-                };
-
-                return selectedOption;
-            },
-        );
-
-        accumulator[filterId] = selectedFilters;
-
-        return accumulator;
-    }, {} as SelectedOmniFilterOptions);
-};
-
 export const useOmniFilterQuery = (
-    filterParam: FilterHintKey,
+    filterParam: DataFilterId,
 ): {
     data: ListOmniFilterData;
     fetchData: (query: string | null) => void;
@@ -87,33 +39,46 @@ export const useOmniFilterQuery = (
     };
 };
 
-export const useOmniFilterData = (): [
-    ListOmniFiltersData,
-    (filterParam: DataListOmniFilterParam, query: string | null) => void,
-] => {
-    const dataQueries = {
-        source_namespace: useOmniFilterQuery(
-            ListOmniFilterKeys.source_namespace,
-        ),
-        dest_namespace: useOmniFilterQuery(ListOmniFilterKeys.dest_namespace),
-        source_name: useOmniFilterQuery(ListOmniFilterKeys.source_name),
-        dest_name: useOmniFilterQuery(ListOmniFilterKeys.dest_name),
+export const useOmniFilterOptions = (
+    filterId: DataFilterId,
+    { narrowByActiveFilters = true }: { narrowByActiveFilters?: boolean } = {},
+) => {
+    const { filters } = useFlowLogsUrlFilters();
+    const { data, fetchData } = useOmniFilterQuery(filterId);
+    const debounce = useDebouncedCallback();
+    const [isTyping, setIsTyping] = React.useState(false);
+
+    const requestOptions = (searchOption?: string) =>
+        fetchData(
+            toDataFilterQuery(
+                narrowByActiveFilters ? filters : {},
+                filterId,
+                searchOption || undefined,
+            ),
+        );
+
+    const requestSearch = (searchOption: string) => {
+        const requestData = () => {
+            requestOptions(searchOption);
+            setIsTyping(false);
+        };
+
+        if (searchOption.length >= 1) {
+            setIsTyping(true);
+            debounce(searchOption, requestData);
+        } else {
+            requestData();
+        }
     };
 
-    const fetchData = (
-        filterParam: DataListOmniFilterParam,
-        query: string | null,
-    ) => {
-        dataQueries[filterParam].fetchData(query);
-    };
+    const requestNextPage = () => fetchData(null);
 
-    return [
-        {
-            source_namespace: dataQueries.source_namespace.data,
-            dest_namespace: dataQueries.dest_namespace.data,
-            source_name: dataQueries.source_name.data,
-            dest_name: dataQueries.dest_name.data,
-        },
-        fetchData,
-    ];
+    return {
+        options: data.filters,
+        isLoading: data.isLoading || isTyping,
+        total: data.total,
+        requestOptions,
+        requestSearch,
+        requestNextPage,
+    };
 };

@@ -6,15 +6,14 @@ import {
     QueryPage,
 } from '@/types/api';
 import { FlowLog } from '@/types/render';
+import { toFlowLogFilterQuery } from '@/utils/filters/flowsFilter';
 import {
-    FilterHintKey,
     FilterHintType,
-    FilterHintTypes,
-    OmniFilterProperties,
-    SelectedOmniFilterValues,
-    transformToFlowsFilterQuery,
+    dataFilters,
+    DataFilterId,
     transformToQueryPage,
-} from '@/utils/omniFilter';
+} from '@/utils/filters/dataFilters';
+import { SelectedOmniFilterValues } from '@/utils/filters/urlKeys';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import React from 'react';
 import {
@@ -60,7 +59,7 @@ export const fetchFilters = (query: {
     });
 
 export const useInfiniteFilterQuery = (
-    filterParam: FilterHintKey,
+    filterParam: DataFilterId,
     query: string | null,
 ) =>
     useInfiniteQuery<QueryPage, any>({
@@ -69,8 +68,8 @@ export const useInfiniteFilterQuery = (
         queryFn: ({ pageParam }) =>
             fetchFilters({
                 page: pageParam as number,
-                type: FilterHintTypes[filterParam],
-                pageSize: OmniFilterProperties[filterParam].limit ?? 1,
+                type: dataFilters[filterParam].hintType,
+                pageSize: dataFilters[filterParam].pageSize,
                 filters: query ?? undefined,
             }).then((response) =>
                 transformToQueryPage(response, pageParam as number),
@@ -86,7 +85,7 @@ export const useFlowLogsStream = (
     const firstFlowStartTime = React.useRef<number | null>(null);
     const restartTime = React.useRef<number | null>(null);
     const streamGeneration = React.useRef(0);
-    const filters = transformToFlowsFilterQuery(filterHintValues);
+    const filters = toFlowLogFilterQuery(filterHintValues);
     const startTimeGte = transformStartTime(startTime);
     const path = buildStreamPath(startTimeGte, filters);
     const resetStreamState = React.useCallback(() => {

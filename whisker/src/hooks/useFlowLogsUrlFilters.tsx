@@ -1,50 +1,28 @@
-import { SelectedOmniFilterValues } from '@/utils/omniFilter';
+import { parseStartTime } from '@/utils';
+import {
+    SelectedOmniFilterValues,
+    UrlFilterKey,
+    urlFilterKeys,
+    urlValueParsers,
+} from '@/utils/filters/urlKeys';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-const filterKeys = [
-    'source_name',
-    'source_namespace',
-    'dest_name',
-    'dest_namespace',
-    'policy',
-    'dest_port',
-    'protocol',
-    'action',
-    'staged_action',
-    'pending_action',
-    'reporter',
-    'start_time',
-] as const;
-
-export type UrlFilterKey = (typeof filterKeys)[number];
-
-export const transformJSON: Partial<
-    Record<UrlFilterKey, (value: string) => []>
-> = {
-    policy: (value: string) => {
-        try {
-            return JSON.parse(value);
-        } catch {
-            return [];
-        }
-    },
-};
+export type { UrlFilterKey };
 
 export const parseFiltersFromParams = (
     searchParams: URLSearchParams,
 ): SelectedOmniFilterValues => {
     const filters: SelectedOmniFilterValues = {};
 
-    for (const key of filterKeys) {
+    for (const key of urlFilterKeys) {
         const values = searchParams.getAll(key);
 
         if (values.length) {
-            if (transformJSON[key]) {
-                filters[key] = transformJSON[key](values[0]);
-            } else {
-                filters[key] = values;
-            }
+            const parseUrlValue = urlValueParsers[key];
+            (filters as Record<UrlFilterKey, unknown>)[key] = parseUrlValue
+                ? parseUrlValue(values[0])
+                : values;
         }
     }
 
@@ -78,6 +56,13 @@ export const useFlowLogsUrlFilters = () => {
         [searchParams.toString()],
     );
 
+    const startTime = parseStartTime(filters.start_time?.[0]);
+
+    const filterHintValues = useMemo(() => {
+        const { start_time: _startTime, ...rest } = filters;
+        return rest;
+    }, [filters]);
+
     const setMultiFilter = (
         filters: Partial<Record<UrlFilterKey, string[] | null>>,
     ) => {
@@ -91,12 +76,16 @@ export const useFlowLogsUrlFilters = () => {
     };
 
     const clearFilters = () => {
-        const nulled = Object.fromEntries(filterKeys.map((key) => [key, null]));
+        const nulled = Object.fromEntries(
+            urlFilterKeys.map((key) => [key, null]),
+        );
         setSearchParams(buildSearchParamsFromFilters(searchParams, nulled));
     };
 
     return {
         filters,
+        startTime,
+        filterHintValues,
         setFilter,
         setMultiFilter,
         clearFilters,

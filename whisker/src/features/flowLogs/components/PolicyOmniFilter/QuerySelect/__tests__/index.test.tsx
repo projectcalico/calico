@@ -1,5 +1,4 @@
 import { render, screen } from '@/test-utils/helper';
-import { FilterKey } from '@/utils/omniFilter';
 import QuerySelect from '..';
 
 jest.mock('../../PolicySelect', () => {
@@ -23,7 +22,7 @@ describe('<QuerySelect />', () => {
         render(
             <QuerySelect
                 label='Kind'
-                filterKey={FilterKey.policyKind}
+                filterKey={'policyKind'}
                 value={value}
                 onChange={onChange}
                 showSearch={false}
@@ -34,8 +33,25 @@ describe('<QuerySelect />', () => {
         expect(screen.getByText('Kind')).toBeInTheDocument();
 
         const select = screen.getByTestId('policy-select');
-        expect(select).toHaveAttribute('data-filter-key', FilterKey.policyKind);
+        expect(select).toHaveAttribute('data-filter-key', 'policyKind');
         expect(select).toHaveAttribute('data-value', 'NetworkPolicy');
         expect(select).toHaveAttribute('data-show-search', 'false');
+    });
+
+    it('defaults showSearch to true when not provided', () => {
+        render(
+            <QuerySelect
+                label='Kind'
+                filterKey={'policyKind'}
+                value={null}
+                onChange={jest.fn()}
+                placeholder='Select a kind...'
+            />,
+        );
+
+        expect(screen.getByTestId('policy-select')).toHaveAttribute(
+            'data-show-search',
+            'true',
+        );
     });
 });

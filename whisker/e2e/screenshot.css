@@ -1,0 +1,16 @@
+/*
+ * Applied to every toHaveScreenshot capture (wired up via stylePath in
+ * playwright.config.ts). Use it to hide chrome that is not part of the app a
+ * user sees, or that cannot be made deterministic.
+ */
+
+/*
+ * The React Query devtools launcher is mounted by App.tsx and only exists in
+ * dev builds, so it is not part of any state worth baselining -- and it floats
+ * over the bottom-right of the viewport, so it leaks into element screenshots
+ * too.
+ */
+.tsqd-parent-container,
+[aria-label='Open Tanstack query devtools'] {
+    display: none !important;
+}

@@ -1,9 +1,9 @@
 import {
-    transformJSON,
     parseFiltersFromParams,
     buildSearchParamsFromFilters,
     useFlowLogsUrlFilters,
 } from '../useFlowLogsUrlFilters';
+import { parsePolicyUrlValue } from '@/utils/filters/urlKeys';
 import { renderHookWithRouter, act } from '@/test-utils/helper';
 
 describe('useFlowLogsUrlFilters', () => {
@@ -24,6 +24,48 @@ describe('useFlowLogsUrlFilters', () => {
         });
 
         expect(result.current.filters).toEqual({});
+    });
+
+    describe('startTime', () => {
+        it('should parse start_time from the URL', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30'] },
+            );
+
+            expect(result.current.startTime).toEqual(30);
+        });
+
+        it('should fall back to the default when start_time is absent', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/'] },
+            );
+
+            expect(result.current.startTime).toEqual(1);
+        });
+    });
+
+    describe('filterHintValues', () => {
+        it('should exclude start_time and keep the other filters', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30&source_name=nginx'] },
+            );
+
+            expect(result.current.filterHintValues).toEqual({
+                source_name: ['nginx'],
+            });
+        });
+
+        it('should be empty when only start_time is set', () => {
+            const { result } = renderHookWithRouter(
+                () => useFlowLogsUrlFilters(),
+                { routes: ['/?start_time=30'] },
+            );
+
+            expect(result.current.filterHintValues).toEqual({});
+        });
     });
 
     describe('setFilter', () => {
@@ -164,7 +206,7 @@ describe('parseFiltersFromParams', () => {
         });
     });
 
-    it('should delegate the policy key to transformJSON', () => {
+    it('should decode the policy key from its JSON URL encoding', () => {
         const policies = JSON.stringify(['tier1|policy1', 'tier2|policy2']);
         const params = new URLSearchParams(
             `policy=${encodeURIComponent(policies)}`,
@@ -279,29 +321,27 @@ describe('buildSearchParamsFromFilters', () => {
     });
 });
 
-describe('transformJSON', () => {
+describe('parsePolicyUrlValue', () => {
+    const parsePolicy = parsePolicyUrlValue;
+
     it('should parse a valid JSON array string', () => {
         const input = JSON.stringify(['tier1|policy1', 'tier2|policy2']);
-        expect(transformJSON.policy!(input)).toEqual([
-            'tier1|policy1',
-            'tier2|policy2',
-        ]);
+        expect(parsePolicy(input)).toEqual(['tier1|policy1', 'tier2|policy2']);
     });
 
     it('should return an empty array for an empty JSON array', () => {
-        expect(transformJSON.policy!('[]')).toEqual([]);
+        expect(parsePolicy('[]')).toEqual([]);
     });
 
     it('should return an empty array for invalid JSON', () => {
-        expect(transformJSON.policy!('not-json')).toEqual([]);
+        expect(parsePolicy('not-json')).toEqual([]);
     });
 
     it('should return an empty array for an empty string', () => {
-        expect(transformJSON.policy!('')).toEqual([]);
+        expect(parsePolicy('')).toEqual([]);
     });
 
     it('should parse a JSON object without error', () => {
-        const result = transformJSON.policy!('{"key":"value"}');
-        expect(result).toEqual({ key: 'value' });
+        expect(parsePolicy('{"key":"value"}')).toEqual({ key: 'value' });
     });
 });

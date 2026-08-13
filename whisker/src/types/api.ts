@@ -1,5 +1,4 @@
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { DataListOmniFilterParam, OmniFilterParam } from '@/utils/omniFilter';
 import { FlowLogAction } from './render';
 
 export type Policy = {
@@ -49,16 +48,6 @@ export type QueryPage = {
     nextPage?: number;
 };
 
-export type OmniFilterDataQuery = {
-    searchOption?: string;
-    filterParam: DataListOmniFilterParam;
-};
-
-export type OmniFilterDataQueries = Record<
-    OmniFilterParam,
-    OmniFilterDataQuery | null
->;
-
 export type FilterHint = {
     value: string;
 };
@@ -98,9 +87,12 @@ export type FlowsFilterQuery = {
     type: 'Exact' | 'Fuzzy';
 };
 
-export type FlowsFilterValue =
-    | (FlowsFilterQuery[] & { name: FlowsFilterQuery }[])
-    | undefined;
+export type PolicyFilterQuery = {
+    name?: FlowsFilterQuery;
+    namespace?: FlowsFilterQuery;
+    tier?: FlowsFilterQuery;
+    kind?: string;
+};
 
 export type FlowsFilter = Partial<{
     source_names: FlowsFilterQuery[];
@@ -109,11 +101,10 @@ export type FlowsFilter = Partial<{
     dest_namespaces: FlowsFilterQuery[];
     protocols: FlowsFilterQuery[];
     dest_ports: FlowsFilterQuery[];
-    policies: FlowsFilterQuery[];
-    reporter: FlowsFilterQuery[];
-    actions: FlowsFilterQuery[];
-    staged_actions: FlowsFilterQuery[];
-    pending_actions: FlowsFilterQuery[];
+    policies: PolicyFilterQuery[];
+    reporter: string;
+    actions: string[];
+    pending_actions: string[];
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;

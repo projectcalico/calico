@@ -1,16 +1,16 @@
 import { createEventSource } from '..';
 import {
-    ListOmniFilterKeys,
-    transformToFlowsFilterQuery,
-    transformToPolicyFilterToRequest,
-} from '../omniFilter';
+    toFlowLogFilterQuery,
+    toDataFilterQuery,
+    transformToPolicyMatches,
+} from '../filters/flowsFilter';
 
 describe('transformToFilterHintsQuery', () => {
     it('should transform the data', () => {
         const destName = 'dest-1';
         const searchText = 'search';
         expect(
-            transformToFlowsFilterQuery(
+            toDataFilterQuery(
                 {
                     dest_name: [destName],
                     dest_namespace: [],
@@ -19,7 +19,7 @@ describe('transformToFilterHintsQuery', () => {
                     reporter: [],
                     policy: [],
                 },
-                ListOmniFilterKeys.dest_namespace,
+                'dest_namespace',
                 searchText,
             ),
         ).toEqual(
@@ -39,7 +39,7 @@ describe('transformToFilterHintsQuery', () => {
         };
 
         expect(
-            transformToFlowsFilterQuery({
+            toFlowLogFilterQuery({
                 dest_name: [],
                 dest_namespace: [],
                 source_name: [],
@@ -65,7 +65,7 @@ describe('transformToFilterHintsQuery', () => {
         const destName = 'dest-1';
         const searchText = 'search';
         expect(
-            transformToFlowsFilterQuery(
+            toDataFilterQuery(
                 {
                     dest_name: [destName],
                     dest_namespace: [],
@@ -74,7 +74,7 @@ describe('transformToFilterHintsQuery', () => {
                     policy: [],
                     reporter: [],
                 },
-                ListOmniFilterKeys.dest_name,
+                'dest_name',
                 searchText,
             ),
         ).toEqual(
@@ -85,19 +85,19 @@ describe('transformToFilterHintsQuery', () => {
     });
 });
 
-describe('transformToPolicyFilterToRequest', () => {
+describe('transformToPolicyMatches', () => {
     it('returns an empty array when given no values', () => {
-        expect(transformToPolicyFilterToRequest([])).toEqual([]);
+        expect(transformToPolicyMatches([])).toEqual([]);
     });
 
     it('only includes fields that are present', () => {
         expect(
-            transformToPolicyFilterToRequest([{ kind: 'GlobalNetworkPolicy' }]),
+            transformToPolicyMatches([{ kind: 'GlobalNetworkPolicy' }]),
         ).toEqual([{ kind: 'GlobalNetworkPolicy' }]);
     });
 
     it('transforms multiple filters', () => {
-        const result = transformToPolicyFilterToRequest([
+        const result = transformToPolicyMatches([
             { tier: 'security', kind: 'NetworkPolicy' },
             { name: 'deny-all', namespace: 'default' },
         ]);

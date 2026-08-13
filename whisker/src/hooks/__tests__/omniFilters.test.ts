@@ -1,244 +1,198 @@
-import { act, renderHook, waitFor } from '@/test-utils/helper';
-import { useSelectedListOmniFilters } from '..';
-import {
-    OmniFilterParam,
-    ListOmniFiltersData,
-    SelectedOmniFilterData,
-    ListOmniFilterKeys,
-} from '@/utils/omniFilter';
-import { useOmniFilterData } from '../omniFilters';
+import { act, renderHookWithRouter, waitFor } from '@/test-utils/helper';
+import { renderHook } from '@testing-library/react';
+import { useOmniFilterOptions, useOmniFilterQuery } from '../omniFilters';
 import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 
 jest.mock('@/features/flowLogs/api', () => ({
     useInfiniteFilterQuery: jest.fn(),
 }));
 
-const urlFilterParams: Record<OmniFilterParam, string[]> = {
-    dest_namespace: ['foo'],
-    source_name: [],
-    dest_name: [],
-    source_namespace: [],
-    dest_port: [],
-    protocol: [],
-    policy: [],
-    policyNamespace: [],
-    policyTier: [],
-    policyKind: [],
-    reporter: [],
-    start_time: [],
-    action: [],
-    staged_action: [],
-    policyName: [],
-};
-const omniFilterData: ListOmniFiltersData = {
-    dest_namespace: {
-        filters: [
-            { label: 'Foo', value: 'foo' },
-            { label: 'Bar', value: 'bar' },
-        ],
-        isLoading: false,
-    },
-    dest_name: {
-        filters: [],
-        isLoading: false,
-    },
-    source_namespace: {
-        filters: [],
-        isLoading: false,
-    },
-    source_name: {
-        filters: [],
-        isLoading: false,
-    },
-};
-const selectedOmniFilterData: SelectedOmniFilterData = {
-    dest_namespace: {
-        filters: [{ label: 'Foo', value: 'foo' }],
-        isLoading: false,
-        total: 0,
-    },
-};
+const queryResponse = {
+    data: undefined,
+    fetchNextPage: jest.fn(),
+    refetch: jest.fn(),
+    isLoading: false,
+    isFetchingNextPage: false,
+} as any;
 
-describe('useSelectedListOmniFilters', () => {
-    it('should get selected option from selectedOmniFilterData', () => {
+describe('useOmniFilterQuery', () => {
+    it('should return null filters and a total of 0 when there is no data', () => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            ...queryResponse,
+            isLoading: true,
+        });
+
         const { result } = renderHook(() =>
-            useSelectedListOmniFilters(
-                urlFilterParams,
-                omniFilterData,
-                selectedOmniFilterData,
-            ),
+            useOmniFilterQuery('source_namespace'),
         );
 
-        expect(result.current).toEqual({
-            dest_namespace: [{ label: 'Foo', value: 'foo' }],
-            dest_name: [],
-            source_name: [],
-            source_namespace: [],
-            reporter: [],
+        expect(result.current.data).toEqual({
+            filters: null,
+            isLoading: true,
+            total: 0,
         });
     });
 
-    it('should get selected option from omniFilterData', () => {
-        const selectedOmniFilterData: SelectedOmniFilterData = {
-            dest_namespace: {
-                filters: [],
-                isLoading: false,
-                total: 0,
+    it('should flatten the pages into filters and return the total', () => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            ...queryResponse,
+            data: {
+                pageParams: [],
+                pages: [
+                    {
+                        items: [{ label: 'Foo', value: 'foo' }],
+                        total: 3,
+                    },
+                    {
+                        items: [
+                            { label: 'Bar', value: 'bar' },
+                            { label: 'Baz', value: 'baz' },
+                        ],
+                        total: 3,
+                    },
+                ],
             },
-        };
-
-        const { result } = renderHook(() =>
-            useSelectedListOmniFilters(
-                urlFilterParams,
-                omniFilterData,
-                selectedOmniFilterData,
-            ),
-        );
-
-        expect(result.current).toEqual({
-            dest_namespace: [{ label: 'Foo', value: 'foo' }],
-            dest_name: [],
-            source_name: [],
-            source_namespace: [],
-            reporter: [],
         });
-    });
-
-    it('should create an option from the value when there is no option omniFilterData', () => {
-        const omniFilterData: ListOmniFiltersData = {
-            source_namespace: {
-                filters: [],
-                isLoading: false,
-            },
-            dest_namespace: {
-                filters: [],
-                isLoading: false,
-            },
-            dest_name: {
-                filters: [],
-                isLoading: false,
-            },
-            source_name: {
-                filters: [],
-                isLoading: false,
-            },
-        };
-        const selectedOmniFilterData: SelectedOmniFilterData = {
-            source_namespace: {
-                filters: [],
-                isLoading: false,
-                total: 0,
-            },
-        };
 
         const { result } = renderHook(() =>
-            useSelectedListOmniFilters(
-                urlFilterParams,
-                omniFilterData,
-                selectedOmniFilterData,
-            ),
+            useOmniFilterQuery('source_namespace'),
         );
 
-        expect(result.current).toEqual({
-            dest_namespace: [{ label: 'foo', value: 'foo' }],
-            dest_name: [],
-            source_name: [],
-            source_namespace: [],
-            reporter: [],
+        expect(result.current.data).toEqual({
+            filters: [
+                { label: 'Foo', value: 'foo' },
+                { label: 'Bar', value: 'bar' },
+                { label: 'Baz', value: 'baz' },
+            ],
+            isLoading: false,
+            total: 3,
         });
     });
 });
 
-describe('useOmniFilterData', () => {
-    it('should return the expected data', () => {
-        const hookResponse = {
-            data: {
-                pageParams: [],
-                pages: [],
-            },
-            fetchNextPage: jest.fn(),
-            refetch: jest.fn(),
-            isLoading: false,
-            isFetchingNextPage: false,
-        } as any;
-        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
+describe('useOmniFilterOptions', () => {
+    const lastRequestedQuery = () => {
+        const [filterId, query] = jest.mocked(useInfiniteFilterQuery).mock
+            .lastCall!;
+        return { filterId, query };
+    };
 
-        const { result } = renderHook(() => useOmniFilterData());
+    beforeEach(() => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue(queryResponse);
+    });
 
-        expect(result.current[0]).toEqual({
-            source_namespace: {
-                filters: [],
-                isLoading: false,
-                total: 0,
-            },
-            dest_namespace: {
-                filters: [],
-                isLoading: false,
-                total: 0,
-            },
-            source_name: {
-                filters: [],
-                isLoading: false,
-                total: 0,
-            },
-            dest_name: {
-                filters: [],
-                isLoading: false,
-                total: 0,
-            },
+    it('should narrow the request by other active filters, excluding its own selection', () => {
+        const { result } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/?source_namespace=default&dest_name=api'] },
+        );
+
+        act(() => result.current.requestOptions(''));
+
+        const { filterId, query } = lastRequestedQuery();
+        expect(filterId).toBe('source_namespace');
+        expect(JSON.parse(query!)).toEqual({
+            dest_names: [{ type: 'Exact', value: 'api' }],
         });
+    });
 
-        expect(hookResponse.fetchNextPage).not.toHaveBeenCalled();
-        expect(hookResponse.refetch).not.toHaveBeenCalled();
+    it('should include the search term as a fuzzy match', () => {
+        const { result } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/?dest_name=api'] },
+        );
+
+        act(() => result.current.requestOptions('kube'));
+
+        expect(JSON.parse(lastRequestedQuery().query!)).toEqual({
+            dest_names: [{ type: 'Exact', value: 'api' }],
+            source_namespaces: [{ type: 'Fuzzy', value: 'kube' }],
+        });
+    });
+
+    it('should not contribute start_time to the request', () => {
+        const { result } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/?start_time=15'] },
+        );
+
+        act(() => result.current.requestOptions(''));
+
+        expect(lastRequestedQuery().query).toBe('');
+    });
+
+    it('should ignore active filters when narrowByActiveFilters is false', () => {
+        const { result } = renderHookWithRouter(
+            () =>
+                useOmniFilterOptions('policyName', {
+                    narrowByActiveFilters: false,
+                }),
+            { routes: ['/?dest_name=api'] },
+        );
+
+        act(() => result.current.requestOptions('allow'));
+
+        const { filterId, query } = lastRequestedQuery();
+        expect(filterId).toBe('policyName');
+        expect(JSON.parse(query!)).toEqual({
+            policies: [{ name: { type: 'Fuzzy', value: 'allow' } }],
+        });
     });
 
     it('should fetch the next page', () => {
         const fetchNextPageMock = jest.fn();
-        const hookResponse = {
-            data: {
-                pageParams: [],
-                pages: [],
-            },
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            ...queryResponse,
             fetchNextPage: fetchNextPageMock,
-            refetch: jest.fn(),
-            isLoading: false,
-            isFetchingNextPage: false,
-        } as any;
-        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
+        });
 
-        const { result } = renderHook(() => useOmniFilterData());
+        const { result } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/'] },
+        );
 
-        result.current[1](ListOmniFilterKeys.source_namespace, null);
+        result.current.requestNextPage();
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });
 
-    it('should refetch when the same query is passed', async () => {
+    it('should refetch when the same options are requested again', async () => {
         const refetchMock = jest.fn();
-        const hookResponse = {
-            data: {
-                pageParams: [],
-                pages: [],
-            },
-            fetchNextPage: jest.fn(),
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            ...queryResponse,
             refetch: refetchMock,
-            isLoading: false,
-            isFetchingNextPage: false,
-        } as any;
-        jest.mocked(useInfiniteFilterQuery).mockReturnValue(hookResponse);
+        });
 
-        const { result, rerender } = renderHook(() => useOmniFilterData());
-
-        act(() =>
-            result.current[1](ListOmniFilterKeys.source_namespace, 'foo'),
+        const { result, rerender } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/'] },
         );
 
+        act(() => result.current.requestOptions(''));
         rerender();
-
-        act(() =>
-            result.current[1](ListOmniFilterKeys.source_namespace, 'foo'),
-        );
+        act(() => result.current.requestOptions(''));
 
         await waitFor(() => expect(refetchMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('should expose the fetched options, loading state and total', () => {
+        jest.mocked(useInfiniteFilterQuery).mockReturnValue({
+            ...queryResponse,
+            data: {
+                pageParams: [],
+                pages: [{ items: [{ label: 'Foo', value: 'foo' }], total: 1 }],
+            },
+        });
+
+        const { result } = renderHookWithRouter(
+            () => useOmniFilterOptions('source_namespace'),
+            { routes: ['/'] },
+        );
+
+        expect(result.current.options).toEqual([
+            { label: 'Foo', value: 'foo' },
+        ]);
+        expect(result.current.isLoading).toBe(false);
+        expect(result.current.total).toBe(1);
     });
 });

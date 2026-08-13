@@ -32,6 +32,7 @@ describe('<PromotionsBanner />', () => {
         );
 
     beforeEach(() => {
+        localStorage.clear();
         jest.mocked(useNotifications).mockReturnValue({
             notificationsDisabled: false,
             notificationsEnabled: true,
@@ -74,6 +75,33 @@ describe('<PromotionsBanner />', () => {
         );
 
         expect(screen.getByText(newConfig.bannerText)).toBeInTheDocument();
+    });
+
+    it('should fall back to the stored content when there is no new content', () => {
+        const storedContent = {
+            bannerLink: 'stored-link',
+            bannerText: 'stored-text',
+        };
+        localStorage.setItem(
+            'whisker.promotionsBannerContent',
+            JSON.stringify(storedContent),
+        );
+        jest.mocked(usePromotionsContent).mockReturnValue(undefined);
+
+        renderComponent();
+
+        expect(screen.getByText(storedContent.bannerText)).toBeInTheDocument();
+    });
+
+    it('should not show the banner when it was previously dismissed', () => {
+        localStorage.setItem(
+            'whisker.showPromotionsBanner',
+            JSON.stringify(false),
+        );
+
+        renderComponent();
+
+        expect(screen.queryByText(config.bannerText)).not.toBeInTheDocument();
     });
 
     it('should have the expected url', () => {

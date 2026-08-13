@@ -6,7 +6,7 @@ import {
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import Select from '@/libs/tigera/ui-components/components/common/Select';
 import { useDidUpdate } from '@/libs/tigera/ui-components/hooks';
-import { CustomOmniFilterParam } from '@/utils/omniFilter';
+import { UrlFilterKey } from '@/utils/filters/urlKeys';
 import {
     Box,
     Center,
@@ -26,7 +26,7 @@ type PortOmniFilterProps = {
     isDisabled?: boolean;
     selectedFilters: string[] | null;
     filterLabel: string;
-    filterId: CustomOmniFilterParam;
+    filterId: UrlFilterKey;
     onChange: (event: { protocol: string | null; port: string | null }) => void;
 };
 
@@ -42,6 +42,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
     port = '',
     protocol = '',
     isDisabled = false,
+    filterLabel,
 }) => {
     const popoverContentRef = React.useRef<HTMLElement>(null);
     const initialFocusRef = React.useRef<HTMLInputElement>(null);
@@ -86,7 +87,7 @@ const PortOmniFilter: React.FC<PortOmniFilterProps> = ({
                                     protocol,
                                 })
                             }
-                            label='Port'
+                            label={filterLabel}
                             isActive={!!(portLabel || protocol)}
                             isDisabled={isDisabled}
                             testId={testId}

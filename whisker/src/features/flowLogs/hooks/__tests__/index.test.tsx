@@ -56,6 +56,23 @@ describe('useMaxStartTime', () => {
             flowLogs[0].start_time.getTime(),
         );
     });
+
+    it('should keep the max when the list becomes empty', () => {
+        const { rerender, result } = renderHook(
+            ({ flowLogs }) => useMaxStartTime(flowLogs),
+            { initialProps: { flowLogs } },
+        );
+
+        expect(result.current.current).toEqual(
+            flowLogs[0].start_time.getTime(),
+        );
+
+        rerender({ flowLogs: [] as FlowLog[] });
+
+        expect(result.current.current).toEqual(
+            flowLogs[0].start_time.getTime(),
+        );
+    });
 });
 
 describe('useShouldAnimate', () => {

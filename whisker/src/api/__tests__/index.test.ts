@@ -1,8 +1,9 @@
 import { renderHook } from '@testing-library/react';
-import api, { apiFetch, useStream } from '..';
+import api, { apiFetch, useAppConfigQuery, useStream } from '..';
 import fetchMock from 'jest-fetch-mock';
 import { createEventSource } from '@/utils';
 import { act } from 'react';
+import { renderHookWithQueryClient, waitFor } from '@/test-utils/helper';
 
 describe('apiFetch', () => {
     it('should return the expected data', async () => {
@@ -66,6 +67,20 @@ describe('api.get', () => {
             expect.stringContaining(`/${path}`),
             { method: 'get' },
         );
+    });
+});
+
+describe('useAppConfigQuery', () => {
+    it('should fetch and return the app config', async () => {
+        const config = { config: { cluster_id: 'my-cluster-id' } };
+        fetchMock.mockResolvedValue({
+            json: () => Promise.resolve(config),
+            ok: true,
+        } as any);
+
+        const { result } = renderHookWithQueryClient(() => useAppConfigQuery());
+
+        await waitFor(() => expect(result.current.data).toEqual(config));
     });
 });
 
@@ -206,6 +221,71 @@ describe('useStream', () => {
         result.current.startStream({ path: newPath });
 
         expect(createEventSource).toHaveBeenCalledWith(newPath);
+    });
+
+    it('should stop the fetching state after the max fetching timeout', () => {
+        jest.useFakeTimers();
+        const { result, rerender } = renderHook(() => useStream(defaultProps));
+
+        act(() => result.current.startStream({ isUpdate: true }));
+        rerender();
+
+        expect(result.current.isFetching).toBe(true);
+
+        act(() => jest.advanceTimersByTime(5000));
+        rerender();
+
+        expect(result.current.isFetching).toBe(false);
+    });
+
+    it('should clear the pending buffer timer when the stream opens', () => {
+        jest.useFakeTimers();
+        const { result, rerender } = renderHook(() =>
+            useStream<Stream, any>({
+                path: '',
+                transformResponse: (stream) => stream,
+            }),
+        );
+
+        act(() =>
+            mockEventSource.onmessage({
+                data: JSON.stringify({ color: 'yellow' }),
+            }),
+        );
+        act(() => mockEventSource.onopen({}));
+
+        act(() => jest.advanceTimersByTime(1000));
+        rerender();
+
+        // the buffered message is not flushed because the timer was cleared
+        expect(result.current.data).toEqual([]);
+        expect(result.current.isDataStreaming).toBe(true);
+        expect(result.current.isWaiting).toBe(false);
+    });
+
+    it('should clear the pending buffer timer when an error occurs', () => {
+        jest.useFakeTimers();
+        const { result, rerender } = renderHook(() =>
+            useStream<Stream, any>({
+                path: '',
+                transformResponse: (stream) => stream,
+            }),
+        );
+
+        act(() =>
+            mockEventSource.onmessage({
+                data: JSON.stringify({ color: 'yellow' }),
+            }),
+        );
+        act(() => mockEventSource.onerror({}));
+
+        act(() => jest.advanceTimersByTime(1000));
+        rerender();
+
+        // the buffered message is not flushed because the timer was cleared
+        expect(result.current.data).toEqual([]);
+        expect(result.current.error).toEqual({});
+        expect(mockEventSource.close).toHaveBeenCalled();
     });
 
     it('should call startStream and replace the existing stream', async () => {

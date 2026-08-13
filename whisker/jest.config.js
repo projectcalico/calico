@@ -15,6 +15,9 @@ export default {
         ],
     },
     setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+    // The Playwright suite in e2e/ also uses *.spec.ts, which jest would
+    // otherwise pick up and fail on.
+    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/e2e/'],
     moduleNameMapper: {
         '^.+\\.svg$': 'jest-transformer-svg',
         '.+\\.(css|less|sass|scss)$':

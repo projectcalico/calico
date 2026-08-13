@@ -1,5 +1,5 @@
 import { SelectOption } from '@/libs/tigera/ui-components/components/common/Select';
-import { PolicyFilter } from '..';
+import { PolicyFilter } from '@/utils/filters/types';
 import { PolicyQuery, QuerySelect } from '../QueryList';
 
 export const transformToQueries = (selectedValues: PolicyFilter[]) => {
@@ -16,7 +16,6 @@ export const transformToQueries = (selectedValues: PolicyFilter[]) => {
 };
 
 export const transformToFilterOptions = (queryState: PolicyQuery[]) => {
-    console.log({ queryState });
     return queryState
         .map((query) =>
             Object.fromEntries(
