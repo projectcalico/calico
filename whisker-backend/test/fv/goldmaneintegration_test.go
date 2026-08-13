@@ -102,8 +102,9 @@ func TestGoldmaneIntegration_FlowWatching(t *testing.T) {
 			ServerTLSKeyPath:  serverKeyFile.Name(),
 		}
 		whiskerCfg.ConfigureLogging()
+		backend := newGoldmaneFlowsBackend(whiskerCfg)
 		wg.Go(func() {
-			whiskerbackend.Run(ctx, whiskerCfg)
+			whiskerbackend.Run(ctx, whiskerCfg, whiskerbackend.WithFlowsBackend(backend))
 		})
 
 		cli, err := client.NewFlowClient("localhost:5444", clientCertFile.Name(), clientKeyFile.Name(), certFile.Name())
@@ -218,9 +219,10 @@ func TestGoldmaneIntegration_FilterHints(t *testing.T) {
 		ServerTLSKeyPath:  serverKeyFile.Name(),
 	}
 	whiskerCfg.ConfigureLogging()
+	backend := newGoldmaneFlowsBackend(whiskerCfg)
 
 	wg.Go(func() {
-		whiskerbackend.Run(ctx, whiskerCfg)
+		whiskerbackend.Run(ctx, whiskerCfg, whiskerbackend.WithFlowsBackend(backend))
 	})
 
 	// We want to actually wait 5 seconds, not use our fake time for this.
