@@ -36,6 +36,14 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
+const (
+	// Delay before the first retry of a failed tunnel device sync; it doubles
+	// from there while the failure persists (see nextTunnelSyncRetryDelay).
+	tunnelSyncMinRetryDelay = 1 * time.Second
+	// How often to log a tunnel device sync failure that isn't going away.
+	tunnelSyncLogInterval = 1 * time.Minute
+)
+
 type routeManager struct {
 	// Our dependencies.
 	routeTable           routetable.Interface
@@ -517,7 +525,18 @@ func (m *routeManager) keepDeviceInSync(
 	logNextSuccess := true
 	parentIface := ""
 
-	sleepMonitoringChans := func(maxDuration time.Duration) {
+	// Failures here are often permanent rather than transient — the commonest
+	// is a host address that isn't on any local link — so back the retries off
+	// and rate limit their logs rather than repeating both every second for
+	// the lifetime of the process.
+	retryDelay := tunnelSyncMinRetryDelay
+	failureLog := logrusr.NewRateLimitedLogger(
+		logrusr.OptInterval(tunnelSyncLogInterval),
+	).WithFields(m.logCtx.Data)
+
+	// sleepMonitoringChans waits for up to maxDuration, reporting whether it
+	// returned early because our inputs changed.
+	sleepMonitoringChans := func(maxDuration time.Duration) bool {
 		timer := time.NewTimer(maxDuration)
 		defer timer.Stop()
 		select {
@@ -526,27 +545,43 @@ func (m *routeManager) keepDeviceInSync(
 			logrus.Debug("Sleep returning early: context finished.")
 		case <-m.tunnelChangedC:
 			logrus.Debug("Sleep returning early: tunnel changed.")
+			return true
 		}
+		return false
+	}
+
+	// sleepAfterFailure waits before the next attempt, lengthening the wait
+	// while the failure persists.  A change to our inputs is a reason to think
+	// the next attempt will do better, so it starts the back-off over.
+	sleepAfterFailure := func() {
+		if sleepMonitoringChans(retryDelay) {
+			retryDelay = tunnelSyncMinRetryDelay
+			return
+		}
+		retryDelay = nextTunnelSyncRetryDelay(retryDelay, wait)
 	}
 
 	for ctx.Err() == nil {
 		if m.parentIfaceAddr() == "" {
 			m.logCtx.Debug("Missing local information, retrying...")
+			retryDelay = tunnelSyncMinRetryDelay
 			sleepMonitoringChans(10 * time.Second)
 			continue
 		}
 
 		parentDevice, err := m.detectParentIface()
 		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to find parent device, retrying...")
-			sleepMonitoringChans(1 * time.Second)
+			failureLog.WithError(err).Warn("Failed to find parent device, retrying...")
+			logNextSuccess = true
+			sleepAfterFailure()
 			continue
 		}
 
 		link, addr, err := getDevice(parentDevice)
 		if err != nil {
-			m.logCtx.WithError(err).Warn("Failed to get tunnel device, retrying...")
-			sleepMonitoringChans(1 * time.Second)
+			failureLog.WithError(err).Warn("Failed to get tunnel device, retrying...")
+			logNextSuccess = true
+			sleepAfterFailure()
 			continue
 		}
 
@@ -554,9 +589,9 @@ func (m *routeManager) keepDeviceInSync(
 			m.logCtx.Debug("Configuring tunnel device")
 			err = m.configureTunnelDevice(link, addr, mtu, xsumBroken)
 			if err != nil {
-				m.logCtx.WithError(err).Warn("Failed to configure tunnel device, retrying...")
+				failureLog.WithError(err).Warn("Failed to configure tunnel device, retrying...")
 				logNextSuccess = true
-				sleepMonitoringChans(1 * time.Second)
+				sleepAfterFailure()
 				continue
 			}
 		}
@@ -578,11 +613,23 @@ func (m *routeManager) keepDeviceInSync(
 		}
 
 		if logNextSuccess {
-			m.logCtx.Info("Tunnel device configured")
+			// Force the log so that it isn't rate limited away, and so that it
+			// carries the count of failures we suppressed while broken.
+			failureLog.Force().Info("Tunnel device configured")
 			logNextSuccess = false
 		}
+		retryDelay = tunnelSyncMinRetryDelay
 		sleepMonitoringChans(wait)
 	}
+}
+
+// nextTunnelSyncRetryDelay backs off the retries of keepDeviceInSync, up to the
+// interval it polls at when healthy.  Retrying faster than that forever buys
+// nothing: each attempt costs a netlink LinkList plus an AddrList per link — on
+// a busy node that is one call per veth — and a failure that outlives the first
+// few retries is a configuration problem rather than a transient.
+func nextTunnelSyncRetryDelay(previous, wait time.Duration) time.Duration {
+	return min(previous*2, max(wait, tunnelSyncMinRetryDelay))
 }
 
 func (m *routeManager) configureTunnelDevice(
