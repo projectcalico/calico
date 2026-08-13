@@ -15,10 +15,15 @@
 package intdataplane
 
 import (
+	"context"
+	"io"
 	"net"
+	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
 	dpsets "github.com/projectcalico/calico/felix/dataplane/ipsets"
@@ -193,6 +198,93 @@ var _ = Describe("Route manager", func() {
 		})
 	})
 
+	Describe("tunnel device sync retries", func() {
+		// Each failed attempt costs a netlink LinkList plus an AddrList per
+		// link, and the commonest failure — a host address that isn't on any
+		// local link — is permanent.  Retrying that once a second forever is
+		// both a netlink load and a stream of warnings, so the delay grows.
+		It("should back off up to the healthy poll interval", func() {
+			delay := tunnelSyncMinRetryDelay
+			delays := []time.Duration{delay}
+			for range 5 {
+				delay = nextTunnelSyncRetryDelay(delay, 10*time.Second)
+				delays = append(delays, delay)
+			}
+			Expect(delays).To(Equal([]time.Duration{
+				1 * time.Second,
+				2 * time.Second,
+				4 * time.Second,
+				8 * time.Second,
+				10 * time.Second,
+				10 * time.Second,
+			}))
+		})
+
+		// The loop polls every "wait" once it is healthy; retrying a failure
+		// less often than that would leave the device unconfigured for longer
+		// than a working node goes unchecked.
+		It("should not back off beyond the poll interval", func() {
+			Expect(nextTunnelSyncRetryDelay(10*time.Second, 10*time.Second)).
+				To(Equal(10 * time.Second))
+		})
+
+		// A caller with a short (or unset) poll interval must not end up
+		// spinning: the minimum delay wins over the cap.
+		It("should not retry faster than the minimum delay", func() {
+			Expect(nextTunnelSyncRetryDelay(tunnelSyncMinRetryDelay, 0)).
+				To(Equal(tunnelSyncMinRetryDelay))
+			Expect(nextTunnelSyncRetryDelay(tunnelSyncMinRetryDelay, 100*time.Millisecond)).
+				To(Equal(tunnelSyncMinRetryDelay))
+		})
+	})
+
+	Describe("tunnel device sync recovery reporting", func() {
+		// "Tunnel device configured" is how an operator sees that the device
+		// came back, and the failure logs around it are rate limited, so every
+		// path that leaves the device unconfigured has to arm it.  Losing the
+		// host address is one of those paths: it is what takes the parent
+		// device away in the first place.
+		It("should report the recovery after the host address comes back", func() {
+			logs := captureStandardLogs()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			// Buffered so that the loop's parent-device notification doesn't
+			// block it; it only sends when the device name changes.
+			parentIfaceC := make(chan string, 10)
+			routeMgr.updateParentIfaceAddr("172.0.0.2")
+
+			done := make(chan struct{})
+			go func() {
+				defer GinkgoRecover()
+				defer close(done)
+				routeMgr.keepDeviceInSync(ctx, 1400, false, 10*time.Second, parentIfaceC,
+					func(netlink.Link) (netlink.Link, string, error) {
+						// A nil link means "nothing to configure", which takes
+						// the loop straight to its success bookkeeping.
+						return nil, "", nil
+					})
+			}()
+
+			configured := logs.counter("Tunnel device configured")
+			Eventually(configured).Should(Equal(1))
+
+			// Take the address away, and wait for the loop to notice before
+			// giving it back: it is that iteration which has to arm the log.
+			routeMgr.updateParentIfaceAddr("")
+			Eventually(logs.counter("Missing local information, retrying...")).
+				Should(BeNumerically(">=", 1))
+			Expect(configured()).To(Equal(1))
+
+			routeMgr.updateParentIfaceAddr("172.0.0.2")
+			Eventually(configured).Should(Equal(2))
+
+			cancel()
+			Eventually(done).Should(BeClosed())
+		})
+	})
+
 	Describe("parent device updates", func() {
 		BeforeEach(func() {
 			routeMgr.OnParentDeviceUpdate("eth0")
@@ -255,3 +347,60 @@ var _ = Describe("Route manager", func() {
 		})
 	})
 })
+
+// captureStandardLogs collects the messages logged to the standard logger for
+// the rest of the spec.  keepDeviceInSync builds its own rate-limited logger on
+// top of that logger, so a hook is the only way to see what it reports.
+func captureStandardLogs() *logCapture {
+	logger := logrus.StandardLogger()
+	capture := &logCapture{}
+
+	oldHooks := logger.ReplaceHooks(logrus.LevelHooks{})
+	logger.AddHook(capture)
+	// The loop reports the loss of the host address at debug level, and the
+	// output would otherwise clutter the spec's report.
+	oldLevel, oldOut := logger.GetLevel(), logger.Out
+	logger.SetLevel(logrus.DebugLevel)
+	logger.SetOutput(io.Discard)
+
+	DeferCleanup(func() {
+		logger.ReplaceHooks(oldHooks)
+		logger.SetLevel(oldLevel)
+		logger.SetOutput(oldOut)
+	})
+
+	return capture
+}
+
+// logCapture is a logrus hook that records the messages it is given.
+type logCapture struct {
+	lock     sync.Mutex
+	messages []string
+}
+
+func (c *logCapture) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+func (c *logCapture) Fire(entry *logrus.Entry) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.messages = append(c.messages, entry.Message)
+	return nil
+}
+
+// counter returns how many times the message has been logged so far, as a
+// function so that it can be polled by Eventually.
+func (c *logCapture) counter(message string) func() int {
+	return func() int {
+		c.lock.Lock()
+		defer c.lock.Unlock()
+		count := 0
+		for _, m := range c.messages {
+			if m == message {
+				count++
+			}
+		}
+		return count
+	}
+}
