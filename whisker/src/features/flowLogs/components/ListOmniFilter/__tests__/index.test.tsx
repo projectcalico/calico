@@ -193,21 +193,4 @@ describe('<ListOmniFilter />', () => {
 
         expect(fetchNextPageMock).toHaveBeenCalledTimes(1);
     });
-
-    it('should let static filters override fetching via filterComponentProps', () => {
-        renderListOmniFilter('/', {
-            filterId: 'reporter',
-            filterLabel: 'Reporter',
-        });
-
-        fireEvent.click(
-            within(screen.getByTestId('Reporter')).getByText('on ready'),
-        );
-
-        expect(
-            jest
-                .mocked(useInfiniteFilterQuery)
-                .mock.calls.every(([, query]) => query === null),
-        ).toBe(true);
-    });
 });

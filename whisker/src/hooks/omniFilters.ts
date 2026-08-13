@@ -2,15 +2,12 @@ import { useInfiniteFilterQuery } from '@/features/flowLogs/api';
 import { useDebouncedCallback } from '@/hooks';
 import { useFlowLogsUrlFilters } from '@/hooks/useFlowLogsUrlFilters';
 import { OmniFilterOption as ListOmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import {
-    FilterHintKey,
-    ListOmniFilterData,
-    toHintFilterQuery,
-} from '@/utils/omniFilter';
+import { toDataFilterQuery } from '@/utils/filters/flowsFilter';
+import { DataFilterId, ListOmniFilterData } from '@/utils/filters/dataFilters';
 import React from 'react';
 
 export const useOmniFilterQuery = (
-    filterParam: FilterHintKey,
+    filterParam: DataFilterId,
 ): {
     data: ListOmniFilterData;
     fetchData: (query: string | null) => void;
@@ -43,7 +40,7 @@ export const useOmniFilterQuery = (
 };
 
 export const useOmniFilterOptions = (
-    filterId: FilterHintKey,
+    filterId: DataFilterId,
     { narrowByActiveFilters = true }: { narrowByActiveFilters?: boolean } = {},
 ) => {
     const { filters } = useFlowLogsUrlFilters();
@@ -53,7 +50,7 @@ export const useOmniFilterOptions = (
 
     const requestOptions = (searchOption?: string) =>
         fetchData(
-            toHintFilterQuery(
+            toDataFilterQuery(
                 narrowByActiveFilters ? filters : {},
                 filterId,
                 searchOption || undefined,

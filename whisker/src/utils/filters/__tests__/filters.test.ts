@@ -1,24 +1,24 @@
 import { buildStreamPath, transformStartTime } from '@/features/flowLogs/utils';
-import { PolicyFilter } from '@/features/flowLogs/components/PolicyOmniFilter';
 import {
     buildSearchParamsFromFilters,
     parseFiltersFromParams,
 } from '@/hooks/useFlowLogsUrlFilters';
 import { FlowsFilter } from '@/types/api';
-import { parseStartTime } from '..';
+import { parseStartTime } from '../..';
 import {
-    filterIds,
-    listFilterIds,
-    OmniFilterProperties,
-    SelectedOmniFilterValues,
-    toFlowsFilterQuery,
-    toHintFilterQuery,
-    transformToList,
-    transformToPolicyFilterToRequest,
-    transformToQueryPage,
-    transformToSingleValue,
-    urlFilterKeys,
-} from '../omniFilter';
+    flowLogFilterMap,
+    FlowsFilterId,
+    toFlowLogFilterQuery,
+    toDataFilterQuery,
+    transformToExactMatches,
+    transformToHeadList,
+    transformToHeadValue,
+    transformToPolicyMatches,
+} from '../flowsFilter';
+import { tableLevelDataFilterIds } from '@/features/flowLogs/components/TableFilters/filters';
+import { dataFilters, transformToQueryPage } from '../dataFilters';
+import { PolicyFilter } from '../types';
+import { SelectedOmniFilterValues, urlFilterKeys } from '../urlKeys';
 
 /**
  * These tests pin the serialization chain that turns a Whisker URL into a
@@ -26,7 +26,7 @@ import {
  *
  *   URL search params
  *     -> parseFiltersFromParams   (SelectedOmniFilterValues)
- *     -> transformToFlowsFilterQuery  (the `filters` JSON blob)
+ *     -> toFlowLogFilterQuery     (the `filters` JSON blob)
  *     -> buildStreamPath          (the flows stream path)
  *
  * Every assertion here is expressed in terms of that public chain rather than
@@ -50,7 +50,7 @@ const urlToStreamPath = (url: string) => {
 
     return buildStreamPath(
         transformStartTime(startTime),
-        toFlowsFilterQuery(filterHintValues),
+        toFlowLogFilterQuery(filterHintValues),
     );
 };
 
@@ -58,7 +58,7 @@ const urlToStreamPath = (url: string) => {
 const urlToFlowsFilter = (url: string): FlowsFilter => {
     const { start_time: _startTime, ...filterHintValues } =
         parseFiltersFromParams(new URLSearchParams(url));
-    const query = toFlowsFilterQuery(filterHintValues);
+    const query = toFlowLogFilterQuery(filterHintValues);
 
     return query === '' ? {} : JSON.parse(query);
 };
@@ -260,22 +260,20 @@ describe('URL -> flows filter query', () => {
         {
             name: 'reporter is sent as a bare string, not a match object',
             url: 'reporter=Src',
-            expected: { reporter: 'Src' as unknown as FlowsFilter['reporter'] },
+            expected: { reporter: 'Src' },
         },
         {
             name: 'action is sent as a bare string list',
             url: 'action=deny',
             expected: {
-                actions: ['deny'] as unknown as FlowsFilter['actions'],
+                actions: ['deny'],
             },
         },
         {
             name: 'staged_action maps onto pending_actions',
             url: 'staged_action=Deny',
             expected: {
-                pending_actions: [
-                    'Deny',
-                ] as unknown as FlowsFilter['pending_actions'],
+                pending_actions: ['Deny'],
             },
         },
         {
@@ -298,7 +296,7 @@ describe('URL -> flows filter query', () => {
                         tier: { type: 'Exact', value: 'default' },
                         kind: 'CalicoNetworkPolicy',
                     },
-                ] as unknown as FlowsFilter['policies'],
+                ],
             },
         },
         {
@@ -308,8 +306,8 @@ describe('URL -> flows filter query', () => {
                 source_namespaces: [{ type: 'Exact', value: 'default' }],
                 dest_ports: [{ type: 'Exact', value: 443 }],
                 protocols: [{ type: 'Exact', value: 'tcp' }],
-                actions: ['deny'] as unknown as FlowsFilter['actions'],
-                reporter: 'Dst' as unknown as FlowsFilter['reporter'],
+                actions: ['deny'],
+                reporter: 'Dst',
             },
         },
         {
@@ -336,7 +334,7 @@ describe('URL -> flows filter query', () => {
 
     it('should omit a filter whose value list is empty', () => {
         expect(
-            toFlowsFilterQuery({
+            toFlowLogFilterQuery({
                 source_name: [],
                 dest_name: undefined,
             }),
@@ -347,11 +345,11 @@ describe('URL -> flows filter query', () => {
         // start_time reaches the backend as startTimeGte, not as a filter
         // hint. FlowLogsPage strips it before building the query, but if it
         // slips through, the query must not gain a start_time constraint.
-        expect(toFlowsFilterQuery({ start_time: ['15'] })).toBe('');
+        expect(toFlowLogFilterQuery({ start_time: ['15'] })).toBe('');
     });
 
     it('should return an empty string when nothing is filtered', () => {
-        expect(toFlowsFilterQuery({})).toBe('');
+        expect(toFlowLogFilterQuery({})).toBe('');
     });
 
     it('should ignore a URL carrying the unsupported pending_action param', () => {
@@ -389,7 +387,7 @@ describe('URL -> flows filter query', () => {
             };
 
             const query = JSON.parse(
-                toHintFilterQuery(values, 'source_namespace', 'kube'),
+                toDataFilterQuery(values, 'source_namespace', 'kube'),
             );
 
             expect(query).toEqual({
@@ -405,13 +403,13 @@ describe('URL -> flows filter query', () => {
             };
 
             expect(
-                JSON.parse(toHintFilterQuery(values, 'source_namespace')),
+                JSON.parse(toDataFilterQuery(values, 'source_namespace')),
             ).toEqual({ dest_names: [{ type: 'Exact', value: 'api' }] });
         });
 
         it('should route policy sub-filter searches under the parent policies key', () => {
             // policyName/policyNamespace/policyTier/policyKind all nest their
-            // search under `policies` via parentFilterKey.
+            // search under `policies`, each as its own attribute match.
             const searchesByFilter = {
                 policyName: { name: { type: 'Fuzzy', value: 'allow' } },
                 policyNamespace: {
@@ -425,9 +423,9 @@ describe('URL -> flows filter query', () => {
                 searchesByFilter,
             )) {
                 const query = JSON.parse(
-                    toHintFilterQuery(
+                    toDataFilterQuery(
                         {},
-                        filterId as Parameters<typeof toHintFilterQuery>[1],
+                        filterId as Parameters<typeof toDataFilterQuery>[1],
                         'allow',
                     ),
                 );
@@ -481,49 +479,22 @@ describe('URL -> flows stream path', () => {
     });
 });
 
-describe('filter key metadata', () => {
-    // Structural invariants over OmniFilterProperties. A refactor that adds a
+describe('registry invariants', () => {
+    // Structural invariants over the two registries. A refactor that adds a
     // filter key or renames a wire key trips these instead of silently
     // shipping a filter that never reaches the backend.
-    const allKeys = filterIds;
 
-    it.each(allKeys)('should give %s a label', (key) => {
-        expect(OmniFilterProperties[key].label).toBeTruthy();
-    });
+    const wireMappedKeys = urlFilterKeys.filter(
+        // start_time is applied as startTimeGte, not as a filter hint.
+        (key): key is FlowsFilterId => key !== 'start_time',
+    );
 
-    it.each(
-        allKeys.filter(
-            (key) =>
-                // start_time is applied as startTimeGte, not as a filter hint.
-                key !== 'start_time',
-        ),
-    )('should give %s a filter hints key', (key) => {
-        expect(OmniFilterProperties[key].filterHintsKey).toBeTruthy();
-    });
-
-    it('should give every fetching filter a hint type', () => {
-        for (const key of allKeys) {
-            const { kind, hintType } = OmniFilterProperties[key];
-
-            if (kind === 'list' || kind === 'nestedList') {
-                expect(hintType).toBeTruthy();
-            }
-        }
-    });
-
-    it('should give every list filter a page size', () => {
-        for (const key of listFilterIds) {
-            expect(OmniFilterProperties[key].limit).toBeGreaterThan(0);
-        }
-    });
-
-    it('should not reuse a filter hints key for two different filters', () => {
-        const hintKeys = allKeys
-            .filter((key) => key !== 'start_time')
-            .map((key) => OmniFilterProperties[key].filterHintsKey);
-
-        expect(new Set(hintKeys).size).toBe(hintKeys.length);
-    });
+    const policySubFilterIds = [
+        'policyName',
+        'policyNamespace',
+        'policyTier',
+        'policyKind',
+    ] as const;
 
     it('should accept exactly the supported URL filter keys', () => {
         expect([...urlFilterKeys].sort()).toEqual([
@@ -547,89 +518,89 @@ describe('filter key metadata', () => {
         ).toEqual({});
     });
 
-    it('should classify start_time as a stream-only custom filter', () => {
-        // start_time restarts the stream (startTimeGte) rather than being a
-        // filter hint, and it renders as a custom omni filter component.
-        expect(OmniFilterProperties.start_time.kind).toBe('custom');
-        expect(OmniFilterProperties.start_time.filterHintsKey).toBeUndefined();
+    it.each([...wireMappedKeys])('should give %s a wire key', (key) => {
+        expect(flowLogFilterMap[key].flowsFilterKey).toBeTruthy();
+    });
+
+    it('should classify start_time as a stream-only filter', () => {
+        expect('start_time' in flowLogFilterMap).toBe(false);
         expect(urlFilterKeys).toContain('start_time');
     });
 
-    it('should point every policy sub-filter at the policies parent key', () => {
-        for (const key of [
+    it('should not reuse a wire key for two different filters', () => {
+        const wireKeys = Object.values(flowLogFilterMap).map(
+            ({ flowsFilterKey }) => flowsFilterKey,
+        );
+
+        expect(new Set(wireKeys).size).toBe(wireKeys.length);
+    });
+
+    it('should fetch hints for exactly the list chips and policy sub-selects', () => {
+        expect(Object.keys(dataFilters).sort()).toEqual([
+            'dest_name',
+            'dest_namespace',
+            'policyKind',
             'policyName',
             'policyNamespace',
             'policyTier',
-            'policyKind',
-        ] as const) {
-            expect(OmniFilterProperties[key].parentFilterKey).toBe('policies');
-        }
-    });
-});
-
-describe('reporter filter component props', () => {
-    // The reporter omni filter is a fixed radio list rather than a paged data
-    // list, so its behaviour lives in filterComponentProps.
-    const componentProps = OmniFilterProperties.reporter.filterComponentProps!;
-
-    it('should offer exactly the Source and Destination options', () => {
-        expect(componentProps.filters).toEqual([
-            { label: 'Source', value: 'Src' },
-            { label: 'Destination', value: 'Dst' },
+            'source_name',
+            'source_namespace',
         ]);
-        expect(componentProps.listType).toBe('radio');
-        expect(componentProps.showSearch).toBe(false);
     });
 
-    it('should not request data on ready since the option list is fixed', () => {
-        expect(componentProps.onReady!()).toBeUndefined();
-    });
-
-    it.each([
-        ['Src', 'Source'],
-        ['Dst', 'Destination'],
-    ])(
-        'should render the selected value %s as the label %s',
-        (value, label) => {
-            expect(
-                componentProps.formatSelectedLabel!([{ label, value }]),
-            ).toBe(label);
+    it.each(Object.entries(dataFilters))(
+        'should give %s a hint type and a page size',
+        (_id, spec) => {
+            expect(spec.hintType).toBeTruthy();
+            expect(spec.pageSize).toBeGreaterThan(0);
         },
     );
 
-    it('should render an empty selection as an empty label', () => {
-        expect(componentProps.formatSelectedLabel!([])).toBe('');
-    });
+    it.each([...tableLevelDataFilterIds])(
+        'should search %s under the same wire key its selection uses',
+        (id) => {
+            expect(Object.keys(dataFilters[id].toSearch('nginx'))).toEqual([
+                flowLogFilterMap[id].flowsFilterKey,
+            ]);
+        },
+    );
+
+    it.each(policySubFilterIds)(
+        'should nest the %s search under the policies wire key',
+        (id) => {
+            expect(Object.keys(dataFilters[id].toSearch('allow'))).toEqual([
+                'policies',
+            ]);
+        },
+    );
 });
 
-describe('transformToListFilter', () => {
+describe('transformToExactMatches', () => {
     it('should treat an undefined filter list as no filters', () => {
         // List filters share this transform; an absent value must behave the
         // same as an empty selection and produce no query fragment.
         expect(
-            OmniFilterProperties.protocol.transformToFilterHintRequest!(
-                undefined as unknown as string[],
-            ),
+            transformToExactMatches(undefined as unknown as string[]),
         ).toBeUndefined();
     });
 });
 
-describe('transformToPolicyFilterToRequest', () => {
+describe('transformToPolicyMatches', () => {
     it('should omit fields the user left blank', () => {
-        expect(
-            transformToPolicyFilterToRequest([{ name: 'allow-nginx' }]),
-        ).toEqual([{ name: { type: 'Exact', value: 'allow-nginx' } }]);
+        expect(transformToPolicyMatches([{ name: 'allow-nginx' }])).toEqual([
+            { name: { type: 'Exact', value: 'allow-nginx' } },
+        ]);
     });
 
     it('should send kind verbatim rather than as a match object', () => {
-        expect(transformToPolicyFilterToRequest([{ kind: 'Profile' }])).toEqual(
-            [{ kind: 'Profile' }],
-        );
+        expect(transformToPolicyMatches([{ kind: 'Profile' }])).toEqual([
+            { kind: 'Profile' },
+        ]);
     });
 
     it('should transform each policy query independently', () => {
         expect(
-            transformToPolicyFilterToRequest([
+            transformToPolicyMatches([
                 { name: 'first' },
                 { namespace: 'second' },
             ]),
@@ -640,19 +611,19 @@ describe('transformToPolicyFilterToRequest', () => {
     });
 
     it('should produce an empty query for an empty policy filter', () => {
-        expect(transformToPolicyFilterToRequest([{}])).toEqual([{}]);
+        expect(transformToPolicyMatches([{}])).toEqual([{}]);
     });
 });
 
-describe('transformToList', () => {
+describe('transformToHeadList', () => {
     it('should keep only the first value', () => {
-        expect(transformToList(['deny', 'allow'])).toEqual(['deny']);
+        expect(transformToHeadList(['deny', 'allow'])).toEqual(['deny']);
     });
 });
 
-describe('transformToSingleValue', () => {
+describe('transformToHeadValue', () => {
     it('should unwrap the first value', () => {
-        expect(transformToSingleValue(['Src', 'Dst'])).toBe('Src');
+        expect(transformToHeadValue(['Src', 'Dst'])).toBe('Src');
     });
 });
 

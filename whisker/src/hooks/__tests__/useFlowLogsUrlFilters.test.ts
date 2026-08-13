@@ -3,7 +3,7 @@ import {
     buildSearchParamsFromFilters,
     useFlowLogsUrlFilters,
 } from '../useFlowLogsUrlFilters';
-import { OmniFilterProperties } from '@/utils/omniFilter';
+import { parsePolicyUrlValue } from '@/utils/filters/urlKeys';
 import { renderHookWithRouter, act } from '@/test-utils/helper';
 
 describe('useFlowLogsUrlFilters', () => {
@@ -321,8 +321,8 @@ describe('buildSearchParamsFromFilters', () => {
     });
 });
 
-describe('policy parseUrlValue', () => {
-    const parsePolicy = OmniFilterProperties.policy.parseUrlValue!;
+describe('parsePolicyUrlValue', () => {
+    const parsePolicy = parsePolicyUrlValue;
 
     it('should parse a valid JSON array string', () => {
         const input = JSON.stringify(['tier1|policy1', 'tier2|policy2']);

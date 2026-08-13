@@ -6,19 +6,14 @@ import {
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
-import {
-    FilterKeys,
-    OmniFilterProperties,
-    UrlFilterKey,
-} from '@/utils/omniFilter';
+import { PolicyFilter } from '@/utils/filters/types';
+import { FilterKeys, UrlFilterKey } from '@/utils/filters/urlKeys';
 import { Text as ChakraText, Flex } from '@chakra-ui/react';
 import React from 'react';
 import OmniFilterFooter from '../OmniFilterFooter';
 import NoPolicyCheckbox from './NoPolicyCheckbox';
-import QueryList, { PolicyFilterKey, PolicyQuery } from './QueryList';
+import QueryList, { PolicyQuery } from './QueryList';
 import { transformToFilterOptions, transformToQueries } from './utils';
-
-export type PolicyFilter = Partial<Record<PolicyFilterKey, string>>;
 
 const NO_POLICY_KIND = 'Profile';
 const NO_POLICY_VALUE = `[{"kind": "${NO_POLICY_KIND}"}]`;
@@ -33,6 +28,7 @@ type PolicyOmniFilterProps = {
     onClear: () => void;
     selectedFilters: PolicyFilter[];
     filterId: UrlFilterKey;
+    filterLabel: string;
 };
 
 const testId = 'policy-omni-filter';
@@ -40,6 +36,7 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
     onChange,
     onClear,
     selectedFilters,
+    filterLabel,
 }) => {
     const isNoPolicy = checkIsNoPolicy(selectedFilters);
     const [noPolicyChecked, setNoPolicyChecked] = React.useState(isNoPolicy);
@@ -80,13 +77,13 @@ const PolicyOmniFilter: React.FC<PolicyOmniFilterProps> = ({
             {({ onClose }) => (
                 <>
                     <OmniFilterTrigger
-                        label={OmniFilterProperties.policy.label}
+                        label={filterLabel}
                         testId={testId}
                         onClick={handleTriggerClick}
                         isActive={isActive}
                         customContent={
                             <Flex>
-                                <ChakraText>Policy</ChakraText>
+                                <ChakraText>{filterLabel}</ChakraText>
                                 {isActive && (
                                     <Badge ml={2}>{filterCount}</Badge>
                                 )}

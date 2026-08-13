@@ -87,9 +87,12 @@ export type FlowsFilterQuery = {
     type: 'Exact' | 'Fuzzy';
 };
 
-export type FlowsFilterValue =
-    | (FlowsFilterQuery[] & { name: FlowsFilterQuery }[])
-    | undefined;
+export type PolicyFilterQuery = {
+    name?: FlowsFilterQuery;
+    namespace?: FlowsFilterQuery;
+    tier?: FlowsFilterQuery;
+    kind?: string;
+};
 
 export type FlowsFilter = Partial<{
     source_names: FlowsFilterQuery[];
@@ -98,10 +101,10 @@ export type FlowsFilter = Partial<{
     dest_namespaces: FlowsFilterQuery[];
     protocols: FlowsFilterQuery[];
     dest_ports: FlowsFilterQuery[];
-    policies: FlowsFilterQuery[];
-    reporter: FlowsFilterQuery[];
-    actions: FlowsFilterQuery[];
-    pending_actions: FlowsFilterQuery[];
+    policies: PolicyFilterQuery[];
+    reporter: string;
+    actions: string[];
+    pending_actions: string[];
 }>;
 
 export type FlowsFilterKeys = keyof FlowsFilter;

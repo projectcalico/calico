@@ -1,6 +1,6 @@
 import { OmniFilterChangeEvent } from '@/libs/tigera/ui-components/components/common/OmniFilter';
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
-import { UrlFilterKey } from '@/utils/omniFilter';
+import { UrlFilterKey } from '@/utils/filters/urlKeys';
 import React from 'react';
 import StartTimeFilter from './components/StartTimeFilter';
 

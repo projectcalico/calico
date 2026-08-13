@@ -36,6 +36,7 @@ const defaultProps = {
     onClear: jest.fn(),
     selectedFilters: [] as any[],
     filterId: 'policy' as const,
+    filterLabel: 'Policy',
 };
 
 const openPopover = () => {

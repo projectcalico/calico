@@ -6,6 +6,7 @@ import {
 } from '@/components/common/shadcn/accordion';
 import { SelectOption } from '@/libs/tigera/ui-components/components/common/Select';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
+import { PolicyFilterKey } from '@/utils/filters/types';
 import { CloseIcon, InfoOutlineIcon } from '@chakra-ui/icons';
 import { Box, Button, Tooltip } from '@chakra-ui/react';
 import React from 'react';
@@ -19,8 +20,6 @@ export type Query = {
     namespace: string;
     name: string;
 };
-
-export type PolicyFilterKey = 'kind' | 'tier' | 'namespace' | 'name';
 
 export type PolicyQuery = Partial<Record<PolicyFilterKey, SelectOption | null>>;
 

@@ -7,11 +7,7 @@ import {
     OmniFilterContent,
     OmniFilterTrigger,
 } from '@/libs/tigera/ui-components/components/common/OmniFilter/parts';
-import {
-    FilterKeys,
-    OmniFilterProperties,
-    UrlFilterKey,
-} from '@/utils/omniFilter';
+import { FilterKeys, UrlFilterKey } from '@/utils/filters/urlKeys';
 import { InfoOutlineIcon } from '@chakra-ui/icons';
 import {
     Flex,
@@ -40,7 +36,11 @@ type ActionOmniFilterProps = {
     value: Record<ActionKeys, string | undefined>;
 };
 
-const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
+const ActionOmniFilter = ({
+    onChange,
+    value,
+    filterLabel,
+}: ActionOmniFilterProps) => {
     const [actions, setActions] = React.useState({
         action: value.action ?? '',
         staged_action: value.staged_action ?? '',
@@ -77,13 +77,13 @@ const ActionOmniFilter = ({ onChange, value }: ActionOmniFilterProps) => {
             <OmniFilterTrigger
                 isOpen={isOpen}
                 onClick={onToggle}
-                label={OmniFilterProperties.action.label}
+                label={filterLabel}
                 isActive={isActive}
                 testId={testId}
                 selectedValueLabel=''
                 customContent={
                     <Flex>
-                        <Text>{OmniFilterProperties.action.label}</Text>
+                        <Text>{filterLabel}</Text>
                         {isActive && <Badge ml={2}>{filterCount}</Badge>}
                     </Flex>
                 }

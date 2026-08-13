@@ -1,11 +1,11 @@
 import { OmniFilterOption } from '@/libs/tigera/ui-components/components/common/OmniFilter/types';
 import { Text } from '@/libs/tigera/ui-components/components/common/text';
-import { FilterHintKey } from '@/utils/omniFilter';
+import { DataFilterId } from '@/utils/filters/dataFilters';
 import PolicySelect from '../PolicySelect';
 
 type QuerySelectProps = {
     label: string;
-    filterKey: FilterHintKey;
+    filterKey: DataFilterId;
     value: OmniFilterOption | null | undefined;
     onChange: (value: OmniFilterOption | null) => void;
     showSearch?: boolean;

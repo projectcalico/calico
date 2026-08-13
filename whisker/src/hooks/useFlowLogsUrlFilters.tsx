@@ -1,10 +1,10 @@
 import { parseStartTime } from '@/utils';
 import {
-    OmniFilterProperties,
     SelectedOmniFilterValues,
     UrlFilterKey,
     urlFilterKeys,
-} from '@/utils/omniFilter';
+    urlValueParsers,
+} from '@/utils/filters/urlKeys';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -19,7 +19,7 @@ export const parseFiltersFromParams = (
         const values = searchParams.getAll(key);
 
         if (values.length) {
-            const { parseUrlValue } = OmniFilterProperties[key];
+            const parseUrlValue = urlValueParsers[key];
             (filters as Record<UrlFilterKey, unknown>)[key] = parseUrlValue
                 ? parseUrlValue(values[0])
                 : values;

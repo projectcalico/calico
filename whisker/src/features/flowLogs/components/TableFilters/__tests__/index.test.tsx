@@ -1,12 +1,27 @@
 import { act, fireEvent, renderWithRouter, screen } from '@/test-utils/helper';
+import { urlFilterKeys } from '@/utils/filters/urlKeys';
 import { useLocation } from 'react-router-dom';
 import TableFilters from '..';
+import { tableLevelFilterIds, filterLabels } from '../filters';
 
 jest.mock(
     '@/features/flowLogs/components/ListOmniFilter',
     () =>
         ({ filterId, filterLabel, selectedFilters }: any) => (
             <div data-testid={`list-filter-${filterId}`}>
+                {filterLabel} selected=
+                {selectedFilters
+                    .map(({ label }: { label: string }) => label)
+                    .join(',')}
+            </div>
+        ),
+);
+
+jest.mock(
+    '@/features/flowLogs/components/ReporterOmniFilter',
+    () =>
+        ({ filterId, filterLabel, selectedFilters }: any) => (
+            <div data-testid={`reporter-filter-${filterId}`}>
                 {filterLabel} selected=
                 {selectedFilters
                     .map(({ label }: { label: string }) => label)
@@ -119,12 +134,37 @@ describe('<TableFilters />', () => {
             'source_name',
             'dest_namespace',
             'dest_name',
-            'reporter',
         ]) {
             expect(
                 screen.getByTestId(`list-filter-${filterId}`),
             ).toBeInTheDocument();
         }
+    });
+
+    it('should render the reporter chip with its selection from the URL', () => {
+        renderOmniFilters('/?reporter=Src');
+
+        expect(
+            screen.getByTestId('reporter-filter-reporter'),
+        ).toHaveTextContent('Reporter selected=Src');
+    });
+
+    describe('chip manifest', () => {
+        it('should give every chip a label', () => {
+            for (const id of tableLevelFilterIds) {
+                expect(filterLabels[id]).toBeTruthy();
+            }
+        });
+
+        it('should render a chip for every URL key except the ones other chips own', () => {
+            expect([...tableLevelFilterIds].sort()).toEqual(
+                [...urlFilterKeys]
+                    .filter(
+                        (key) => key !== 'protocol' && key !== 'staged_action',
+                    )
+                    .sort(),
+            );
+        });
     });
 
     it('should write the policy filter value to the URL', () => {

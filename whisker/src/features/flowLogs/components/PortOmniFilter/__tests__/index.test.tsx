@@ -18,7 +18,7 @@ const defaultProps = {
     port: undefined as any,
     protocol: undefined as any,
     selectedFilters: null,
-    filterLabel: '',
+    filterLabel: 'Port',
     filterId: 'dest_port' as const,
     onChange: jest.fn(),
 };
