@@ -252,10 +252,10 @@ var _ = Describe("EncapsulationCalculator", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(encapsulationCalculator.NoEncapNeeded()).To(Equal(expectedNoEncapNeeded))
 			},
-			Entry("Disabled: BIRD programs everything", "Disabled", false),
-			Entry("EnabledIPIPOnly (the default): BIRD keeps the unencapsulated pools", "EnabledIPIPOnly", false),
-			Entry("EnabledNoEncapOnly", "EnabledNoEncapOnly", true),
-			Entry("Enabled", "Enabled", true),
+			Entry("Disabled: BIRD programs everything", apiv3.Disabled, false),
+			Entry("EnabledIPIPOnly (the default): BIRD keeps the unencapsulated pools", apiv3.EnabledIPIPOnly, false),
+			Entry("EnabledNoEncapOnly", apiv3.EnabledNoEncapOnly, true),
+			Entry("Enabled", apiv3.Enabled, true),
 		)
 		It("returns false with no unencapsulated pool, even when Felix owns no-encap", func() {
 			err := encapsulationCalculator.handlePool(*getAPIPool("192.168.1.0/24", apiv3.IPIPModeNever, apiv3.VXLANModeAlways))

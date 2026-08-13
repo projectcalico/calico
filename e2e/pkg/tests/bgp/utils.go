@@ -40,12 +40,12 @@ func requireBGPIsSoleRoutingMechanism(cli ctrlclient.Client) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default FelixConfiguration")
 
 	// An unset field means Calico's own default, which is EnabledIPIPOnly.
-	programClusterRoutes := "EnabledIPIPOnly"
+	programClusterRoutes := v3.EnabledIPIPOnly
 	if fc.Spec.ProgramClusterRoutes != nil {
 		programClusterRoutes = *fc.Spec.ProgramClusterRoutes
 	}
-	felixOwnsIPIP := programClusterRoutes == "Enabled" || programClusterRoutes == "EnabledIPIPOnly"
-	felixOwnsNoEncap := programClusterRoutes == "Enabled" || programClusterRoutes == "EnabledNoEncapOnly"
+	felixOwnsIPIP := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledIPIPOnly
+	felixOwnsNoEncap := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledNoEncapOnly
 
 	fail := func(pool v3.IPPool, why string) {
 		framework.Failf(

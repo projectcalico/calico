@@ -217,11 +217,11 @@ func requireFelixOwnsIPIPClusterRoutes(cli ctrlclient.Client) {
 		To(Succeed(), "Error querying default FelixConfiguration")
 
 	// An unset field means Calico's own default, which is EnabledIPIPOnly.
-	programClusterRoutes := "EnabledIPIPOnly"
+	programClusterRoutes := v3.EnabledIPIPOnly
 	if fc.Spec.ProgramClusterRoutes != nil {
 		programClusterRoutes = *fc.Spec.ProgramClusterRoutes
 	}
-	Expect(programClusterRoutes).To(BeElementOf("Enabled", "EnabledIPIPOnly"),
+	Expect(programClusterRoutes).To(BeElementOf(v3.Enabled, v3.EnabledIPIPOnly),
 		"this test needs Felix to own the IPIP cluster routes, but FelixConfiguration's "+
 			"programClusterRoutes is %s.", programClusterRoutes)
 }

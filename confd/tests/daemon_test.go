@@ -540,10 +540,10 @@ func TestProgramClusterRoutes(t *testing.T) {
 		// Unset is the default, EnabledNoEncapOnly: BIRD keeps programming the routes for these
 		// unencapsulated pools, and Felix has the IPIP ones, so tunl0 is rejected on export.
 		{value: nil, golden: "mesh/restart-time"},
-		{value: ptr.To("EnabledNoEncapOnly"), golden: "mesh/restart-time"},
-		{value: ptr.To("Disabled"), golden: "mesh/restart-time/pcr-disabled"},
-		{value: ptr.To("Enabled"), golden: "mesh/restart-time/pcr-enabled"},
-		{value: ptr.To("EnabledIPIPOnly"), golden: "mesh/restart-time/pcr-ipip-only"},
+		{value: ptr.To(apiv3.EnabledNoEncapOnly), golden: "mesh/restart-time"},
+		{value: ptr.To(apiv3.Disabled), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To(apiv3.Enabled), golden: "mesh/restart-time/pcr-enabled"},
+		{value: ptr.To(apiv3.EnabledIPIPOnly), golden: "mesh/restart-time/pcr-ipip-only"},
 	}
 
 	for _, be := range activeBackends {

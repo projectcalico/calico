@@ -605,14 +605,14 @@ func (config *Config) FlowLogsEnabled() bool {
 // with ipipMode Always or CrossSubnet.  When it returns false, confd and BIRD are expected to
 // program those routes instead; that is deprecated as of v3.33.
 func (config *Config) ProgramIPIPClusterRoutes() bool {
-	return config.ProgramClusterRoutes == "Enabled" || config.ProgramClusterRoutes == "EnabledIPIPOnly"
+	return config.ProgramClusterRoutes == v3.Enabled || config.ProgramClusterRoutes == v3.EnabledIPIPOnly
 }
 
 // ProgramNoEncapClusterRoutes returns whether Felix should program the cluster routes for
 // unencapsulated IP Pools (ipipMode and vxlanMode both Never).  When it returns false, confd and
 // BIRD are expected to program those routes instead.
 func (config *Config) ProgramNoEncapClusterRoutes() bool {
-	return config.ProgramClusterRoutes == "Enabled" || config.ProgramClusterRoutes == "EnabledNoEncapOnly"
+	return config.ProgramClusterRoutes == v3.Enabled || config.ProgramClusterRoutes == v3.EnabledNoEncapOnly
 }
 
 // Copy makes a copy of the object.  Internal state is deep copied but config parameters are only shallow copied.

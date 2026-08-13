@@ -1165,13 +1165,13 @@ func clusterRoutePolicyFromBGPConfig(cfg *v3.BGPConfiguration, logCtx *log.Entry
 	}
 
 	switch *cfg.Spec.ProgramClusterRoutes {
-	case "Disabled":
+	case v3.Disabled:
 		return clusterRoutePolicy{ipip: false, noEncap: false}
-	case "Enabled":
+	case v3.Enabled:
 		return clusterRoutePolicy{ipip: true, noEncap: true}
-	case "EnabledIPIPOnly":
+	case v3.EnabledIPIPOnly:
 		return clusterRoutePolicy{ipip: true, noEncap: false}
-	case "EnabledNoEncapOnly":
+	case v3.EnabledNoEncapOnly:
 		return clusterRoutePolicy{ipip: false, noEncap: true}
 	default:
 		logCtx.Warnf("Unrecognised BGPConfiguration.programClusterRoutes value %q; treating it as the default.",

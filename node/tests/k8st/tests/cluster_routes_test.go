@@ -154,7 +154,7 @@ func expectedIPIPClusterRouteProto(g *WithT, cli ctrlclient.Client) utils.RouteP
 		return utils.RouteProtoFelix
 	}
 	switch *fc.Spec.ProgramClusterRoutes {
-	case "Disabled", "EnabledNoEncapOnly":
+	case v3.Disabled, v3.EnabledNoEncapOnly:
 		return utils.RouteProtoBIRD
 	default:
 		// Enabled and EnabledIPIPOnly, but also anything this binary does not recognise:
