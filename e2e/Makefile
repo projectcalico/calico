@@ -68,6 +68,19 @@ sub-build-%:
 	$(MAKE) bin/k8s/e2e-linux-$*.test ARCH=$*
 
 ###############################################################################
+# UTs
+###############################################################################
+ci: ut
+
+# Only pkg carries unit tests; cmd holds the Ginkgo suites that need a cluster.
+ut: $(LIBBPF_A)
+	mkdir -p report
+	$(DOCKER_RUN_CGO) $(CALICO_BUILD) gotestsum --junitfile report/e2e_ut.xml -- ./pkg/... -race -count 1
+
+fv st:
+	@:
+
+###############################################################################
 # test images
 ###############################################################################
 # test-images builds a local single-arch image for development (kind etc.).
@@ -80,4 +93,4 @@ publish-test-images:
 	$(MAKE) -C images/rapidclient publish
 
 clean:
-	rm -rf bin/
+	rm -rf bin/ report/

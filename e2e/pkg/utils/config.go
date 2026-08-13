@@ -26,15 +26,12 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// configRetry backs off long enough to ride out a calico-apiserver pod that's
-// briefly rolling or unreachable, which is where the transient errors that
-// retriableAPIError covers come from.
+// Two minutes of fixed interval outlasts a calico-apiserver restart. No Cap:
+// wait.Backoff zeroes Steps once Duration*Factor exceeds it.
 var configRetry = wait.Backoff{
-	Steps:    8,
-	Duration: 100 * time.Millisecond,
-	Factor:   2.0,
-	Jitter:   0.1,
-	Cap:      10 * time.Second,
+	Steps:    30,
+	Duration: 4 * time.Second,
+	Factor:   1.0,
 }
 
 // ConfigureWithCleanup fetches an object by key, applies a mutation, and
