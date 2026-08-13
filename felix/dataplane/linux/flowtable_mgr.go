@@ -202,7 +202,11 @@ func workloadNeedsForwardHooks(wep *proto.WorkloadEndpoint) bool {
 		return true
 	}
 	qos := wep.QosControls
-	return qos != nil && (qos.IngressMaxConnections != 0 || qos.EgressMaxConnections != 0)
+	if qos == nil {
+		return false
+	}
+	return qos.IngressMaxConnections != 0 || qos.EgressMaxConnections != 0 ||
+		qos.IngressPacketRate != 0 || qos.EgressPacketRate != 0
 }
 
 func stripSubnetMasks(addrs []string) []string {

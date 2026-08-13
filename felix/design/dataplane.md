@@ -468,9 +468,10 @@ Two invariants follow:
   hooks, by IP.** `flowtableExclusionManager` in
   [`flowtable_mgr.go`](../dataplane/linux/flowtable_mgr.go) maintains
   the `no-flow-offload` IP set, holding the IPs of endpoints with DSCP
-  marking (rendered into mangle POSTROUTING) or a connection limit
-  (rendered into the endpoint's filter chain), and the offload rule
-  matches neither source nor destination in that set. Bandwidth QoS is
+  marking (rendered into mangle POSTROUTING) or a connection or packet
+  rate limit (rendered into the endpoint's filter chain), and the
+  offload rule matches neither source nor destination in that set.
+  Bandwidth QoS is
   enforced by tc on the veth, which the fast path still traverses, so
   it does not disqualify an endpoint.
 
