@@ -1316,6 +1316,14 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
                 calicoNetwork:
                   description:
                     CalicoNetwork specifies networking configuration options
@@ -3039,23 +3047,6 @@ spec:
                           type: object
                       type: object
                   type: object
-                calicoLibHostPath:
-                  default: /var/lib/calico
-                  description: |-
-                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                  maxLength: 1024
-                  type: string
-                calicoRunHostPath:
-                  default: /var/run/calico
-                  description: |-
-                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                    operator continues using that path after a manifest-to-operator migration.
-                  maxLength: 1024
-                  type: string
                 calicoNodeWindowsDaemonSet:
                   description:
                     CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -4402,6 +4393,15 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoWindowsUpgradeDaemonSet:
                   description: |-
                     Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -10692,6 +10692,14 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
                     calicoNetwork:
                       description:
                         CalicoNetwork specifies networking configuration
@@ -12442,23 +12450,6 @@ spec:
                               type: object
                           type: object
                       type: object
-                    calicoLibHostPath:
-                      default: /var/lib/calico
-                      description: |-
-                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                      maxLength: 1024
-                      type: string
-                    calicoRunHostPath:
-                      default: /var/run/calico
-                      description: |-
-                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                        operator continues using that path after a manifest-to-operator migration.
-                      maxLength: 1024
-                      type: string
                     calicoNodeWindowsDaemonSet:
                       description:
                         CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -13828,6 +13819,15 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoWindowsUpgradeDaemonSet:
                       description: |-
                         Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
