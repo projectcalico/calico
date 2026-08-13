@@ -28,10 +28,17 @@ type Modifier func(create, delete []client.Object) (newCreate, newDelete []clien
 // Decorate wraps base so modify runs over its rendered objects. An Installation
 // asking for a different variant gets base untouched.
 func Decorate(base render.Component, ri render.Inputs, variant operatorv1.ProductVariant, modify Modifier) render.Component {
-	if ri.Installation == nil || ri.Installation.Variant != variant {
+	if ri.Installation == nil || !sameProduct(ri.Installation.Variant, variant) {
 		return base
 	}
 	return &decoratedComponent{Component: base, modify: modify}
+}
+
+// sameProduct reports whether two variant values name the same product. Enterprise has
+// two spellings: TigeraSecureEnterprise is a deprecated alias for CalicoEnterprise, and
+// an Installation using either has to reach the same extension.
+func sameProduct(a, b operatorv1.ProductVariant) bool {
+	return a == b || (a.IsEnterprise() && b.IsEnterprise())
 }
 
 // decoratedComponent renders its base component and runs the modifier over the result.

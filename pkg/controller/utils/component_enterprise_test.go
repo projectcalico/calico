@@ -41,45 +41,53 @@ import (
 // A real typha component goes through the handler with the enterprise modifier
 // attached, so this fails if dispatch or the modifier stops matching render.
 var _ = Describe("enterprise typha modifier integration", func() {
-	It("applies the enterprise typha modifier to real render output", func() {
-		scheme := runtime.NewScheme()
-		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
-		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+	// Both spellings have to reach the modifier: an Installation asking for the
+	// deprecated TigeraSecureEnterprise otherwise renders Typha without the
+	// Enterprise-only permissions, and Typha never becomes ready.
+	DescribeTable("applies the enterprise typha modifier to real render output",
+		func(variant operatorv1.ProductVariant) {
+			scheme := runtime.NewScheme()
+			Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+			cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
 
-		certManager, err := certificatemanager.Create(cli, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
-		Expect(err).NotTo(HaveOccurred())
-		nodeKeyPair, err := certManager.GetOrCreateKeyPair(cli, render.NodeTLSSecretName, common.OperatorNamespace(), []string{render.FelixCommonName})
-		Expect(err).NotTo(HaveOccurred())
-		typhaKeyPair, err := certManager.GetOrCreateKeyPair(cli, render.TyphaTLSSecretName, common.OperatorNamespace(), []string{render.TyphaCommonName})
-		Expect(err).NotTo(HaveOccurred())
+			certManager, err := certificatemanager.Create(cli, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
+			Expect(err).NotTo(HaveOccurred())
+			nodeKeyPair, err := certManager.GetOrCreateKeyPair(cli, render.NodeTLSSecretName, common.OperatorNamespace(), []string{render.FelixCommonName})
+			Expect(err).NotTo(HaveOccurred())
+			typhaKeyPair, err := certManager.GetOrCreateKeyPair(cli, render.TyphaTLSSecretName, common.OperatorNamespace(), []string{render.TyphaCommonName})
+			Expect(err).NotTo(HaveOccurred())
 
-		instance := &operatorv1.InstallationSpec{
-			Variant: operatorv1.CalicoEnterprise,
-			CNI:     &operatorv1.CNISpec{Type: operatorv1.PluginCalico},
-		}
-		typhaCfg := &render.TyphaConfiguration{
-			K8sServiceEp:    k8sapi.ServiceEndpoint{},
-			Installation:    instance,
-			ClusterDomain:   dns.DefaultClusterDomain,
-			FelixHealthPort: 9099,
-			TLS: &render.TyphaNodeTLS{
-				TrustedBundle:   certManager.CreateTrustedBundle(),
-				TyphaSecret:     typhaKeyPair,
-				TyphaCommonName: render.TyphaCommonName,
-				NodeSecret:      nodeKeyPair,
-				NodeCommonName:  render.FelixCommonName,
-			},
-		}
+			instance := &operatorv1.InstallationSpec{
+				Variant: variant,
+				CNI:     &operatorv1.CNISpec{Type: operatorv1.PluginCalico},
+			}
+			typhaCfg := &render.TyphaConfiguration{
+				K8sServiceEp:    k8sapi.ServiceEndpoint{},
+				Installation:    instance,
+				ClusterDomain:   dns.DefaultClusterDomain,
+				FelixHealthPort: 9099,
+				TLS: &render.TyphaNodeTLS{
+					TrustedBundle:   certManager.CreateTrustedBundle(),
+					TyphaSecret:     typhaKeyPair,
+					TyphaCommonName: render.TyphaCommonName,
+					NodeSecret:      nodeKeyPair,
+					NodeCommonName:  render.FelixCommonName,
+				},
+			}
 
-		ext := enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}).Installation()
-		renderInputs := render.Inputs{Installation: instance}
-		handler := utils.NewComponentHandler(logf.Log, cli, scheme, nil, utils.WithModifier(func(c render.Component) render.Component {
-			return ext.Modify(c, renderInputs)
-		}))
-		Expect(handler.CreateOrUpdateOrDelete(context.Background(), render.Typha(typhaCfg), nil)).NotTo(HaveOccurred())
+			ext := enterprise.New(variant, eoptions.Options{}).Installation()
+			renderInputs := render.Inputs{Installation: instance}
+			handler := utils.NewComponentHandler(logf.Log, cli, scheme, nil, utils.WithModifier(func(c render.Component) render.Component {
+				return ext.Modify(c, renderInputs)
+			}))
+			Expect(handler.CreateOrUpdateOrDelete(context.Background(), render.Typha(typhaCfg), nil)).NotTo(HaveOccurred())
 
-		role := &rbacv1.ClusterRole{}
-		Expect(cli.Get(context.Background(), client.ObjectKey{Name: "calico-typha"}, role)).NotTo(HaveOccurred())
-		Expect(role.Rules).To(ContainElement(HaveField("Resources", ContainElement("licensekeys"))))
-	})
+			role := &rbacv1.ClusterRole{}
+			Expect(cli.Get(context.Background(), client.ObjectKey{Name: "calico-typha"}, role)).NotTo(HaveOccurred())
+			Expect(role.Rules).To(ContainElement(HaveField("Resources", ContainElement("licensekeys"))))
+		},
+		Entry("CalicoEnterprise", operatorv1.CalicoEnterprise),
+		//nolint:staticcheck // SA1019: the deprecated spelling is what this covers
+		Entry("TigeraSecureEnterprise", operatorv1.TigeraSecureEnterprise),
+	)
 })
