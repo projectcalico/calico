@@ -182,22 +182,22 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	trustedBundle, err := ci.CertificateManager.CreateNamedTrustedBundleFromSecrets(render.APIServerResourceName, ci.Client, common.OperatorNamespace(), false)
 	if err != nil {
-		return ci, nil, fmt.Errorf("unable to create the trusted bundle: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "unable to create the trusted bundle: %w", err)
 	}
 
 	applicationLayer, err := utils.GetApplicationLayer(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading ApplicationLayer: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ApplicationLayer: %w", err)
 	}
 
 	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading ManagementCluster: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}
 
 	managementClusterConnection, err := utils.GetManagementClusterConnection(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading ManagementClusterConnection: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementClusterConnection: %w", err)
 	}
 
 	if managementCluster != nil && managementClusterConnection != nil {
@@ -206,7 +206,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	rbacManagementEnabled, err := utils.RBACManagementEnabled(ctx, ci.Client, e.variant, e.opts.MultiTenant)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading the RBAC management UI ConfigMap: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading the RBAC management UI ConfigMap: %w", err)
 	}
 
 	// Management cluster only: the apiserver mounts the tunnel CA secret so it can sign
@@ -214,13 +214,13 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// ManagementCluster.Spec.TLS is defaulted; degrade until it exists.
 	if managementCluster != nil && managementCluster.Spec.TLS != nil && !e.opts.MultiTenant {
 		if _, err := utils.GetSecret(ctx, ci.Client, managementCluster.Spec.TLS.SecretName, common.OperatorNamespace()); err != nil {
-			return ci, nil, fmt.Errorf("unable to fetch the tunnel secret: %w", err)
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "unable to fetch the tunnel secret: %w", err)
 		}
 	}
 
 	prometheusCertificate, err := ci.CertificateManager.GetCertificate(ci.Client, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace())
 	if err != nil {
-		return ci, nil, fmt.Errorf("failed to get certificate: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to get certificate: %w", err)
 	}
 	if prometheusCertificate != nil {
 		trustedBundle.AddCertificates(prometheusCertificate)
@@ -229,7 +229,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	if managementClusterConnection != nil {
 		voltronLinseedCert, err := ci.CertificateManager.GetCertificate(ci.Client, render.VoltronLinseedPublicCert, common.OperatorNamespace())
 		if err != nil {
-			return ci, nil, fmt.Errorf("failed to retrieve %s: %w", render.VoltronLinseedPublicCert, err)
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to retrieve %s: %w", render.VoltronLinseedPublicCert, err)
 		}
 		if voltronLinseedCert != nil {
 			trustedBundle.AddCertificates(voltronLinseedCert)
@@ -241,13 +241,13 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	var keyValidatorConfig authentication.KeyValidatorConfig
 	authenticationCR, err := utils.GetAuthentication(ctx, ci.Client)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error while fetching Authentication: %s", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error while fetching Authentication: %w", err)
 	}
 	if authenticationCR != nil && authenticationCR.Status.State == operatorv1.TigeraStatusReady {
 		if utils.DexEnabled(authenticationCR) {
 			certificate, err := ci.CertificateManager.GetCertificate(ci.Client, render.DexTLSSecretName, common.OperatorNamespace())
 			if err != nil {
-				return ci, nil, extensions.Degradedf(operatorv1.CertificateError, "failed to retrieve %s: %s", render.DexTLSSecretName, err)
+				return ci, nil, extensions.Degradedf(operatorv1.CertificateError, "failed to retrieve %s: %w", render.DexTLSSecretName, err)
 			} else if certificate == nil {
 				return ci, nil, extensions.NotReadyf("waiting for secret '%s' to become available", render.DexTLSSecretName)
 			}
@@ -255,7 +255,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		}
 		keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, ci.Client, authenticationCR, ci.RenderInputs.ClusterDomain, false)
 		if err != nil {
-			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to get KeyValidator config: %s", err)
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to get KeyValidator config: %w", err)
 		}
 	}
 
@@ -270,7 +270,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 			dns.GetServiceDNSNames(render.APIServerServiceName, render.APIServerNamespace, ci.RenderInputs.ClusterDomain),
 		)
 		if err != nil {
-			return ci, nil, fmt.Errorf("unable to get or create query server tls key pair: %w", err)
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "unable to get or create query server tls key pair: %w", err)
 		}
 	}
 
@@ -279,11 +279,11 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// sidecar images are only needed when sidecar injection is enabled.
 	imageSet, err := imageset.GetImageSet(ctx, ci.Client, in.Variant)
 	if err != nil {
-		return ci, nil, err
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error getting ImageSet: %w", err)
 	}
 	calicoImage, err := components.GetReference(components.CombinedCalicoImage(in), in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 	if err != nil {
-		return ci, nil, err
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 	}
 
 	var l7EnvoyImage, dikastesImage string
@@ -292,11 +292,11 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		*applicationLayer.Spec.SidecarInjection == operatorv1.SidecarEnabled {
 		l7EnvoyImage, err = components.GetReference(components.ComponentEnvoyProxy, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 		if err != nil {
-			return ci, nil, err
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 		}
 		dikastesImage, err = components.GetReference(components.ComponentDikastes, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 		if err != nil {
-			return ci, nil, err
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 		}
 	}
 
@@ -308,7 +308,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	if e.opts.MultiTenant {
 		bindingNamespaces, err = utils.TenantNamespaces(ctx, ci.Client, nil)
 		if err != nil {
-			return ci, nil, fmt.Errorf("error reading tenant namespaces: %w", err)
+			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading tenant namespaces: %w", err)
 		}
 	}
 

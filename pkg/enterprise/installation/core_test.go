@@ -16,13 +16,17 @@ package installation_test
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apis"
@@ -32,7 +36,10 @@ import (
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
+	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
+	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
+	"github.com/tigera/operator/pkg/render/monitor"
 )
 
 var _ = Describe("installation controller extension", func() {
@@ -45,7 +52,7 @@ var _ = Describe("installation controller extension", func() {
 		_, _, err := ext.Installation().ExtendInputs(ctx, ci)
 		reason, ok := extensions.DegradedReason(err)
 		Expect(ok).To(BeTrue())
-		Expect(reason).To(Equal(operatorv1.ResourceValidationError))
+		Expect(reason).To(Equal(operatorv1.InvalidConfigurationError))
 	})
 
 	DescribeTable("defaults dnsTrustedServers for providers whose DNS service isn't kube-dns",
@@ -90,13 +97,82 @@ var _ = Describe("installation controller extension", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(managed).To(BeEmpty())
 	})
+
+	DescribeTable("reports the degraded reason for the read it failed on",
+		func(fail failingGet, expected operatorv1.TigeraStatusReason) {
+			readErr := fmt.Errorf("the API server is having a bad day")
+			ci := newControllerInputsWith(failingGetClient(fail, readErr), operatorv1.CalicoEnterprise)
+
+			_, _, err := ext.Installation().ExtendInputs(ctx, ci)
+			Expect(err).To(MatchError(readErr))
+			reason, ok := extensions.DegradedReason(err)
+			Expect(ok).To(BeTrue())
+			Expect(reason).To(Equal(expected))
+		},
+		Entry("the node prometheus keypair",
+			failingGet{obj: &corev1.Secret{}, name: render.NodePrometheusTLSServerSecret}, operatorv1.ResourceCreateError),
+		Entry("the kube-controllers metrics keypair",
+			failingGet{obj: &corev1.Secret{}, name: kubecontrollers.KubeControllerPrometheusTLSSecret}, operatorv1.ResourceReadError),
+		Entry("the LogCollector",
+			failingGet{obj: &operatorv1.LogCollector{}}, operatorv1.ResourceReadError),
+		Entry("the ManagementClusterConnection",
+			failingGet{obj: &operatorv1.ManagementClusterConnection{}}, operatorv1.ResourceReadError),
+		Entry("the ManagementCluster",
+			failingGet{obj: &operatorv1.ManagementCluster{}}, operatorv1.ResourceReadError),
+		Entry("the GatewayAPI",
+			failingGet{obj: &operatorv1.GatewayAPI{}}, operatorv1.ResourceReadError),
+		Entry("the RBAC management UI ConfigMap",
+			failingGet{obj: &corev1.ConfigMap{}, name: rbacmanagement.ConfigMapName}, operatorv1.ResourceReadError),
+		Entry("the prometheus client certificate",
+			failingGet{obj: &corev1.Secret{}, name: monitor.PrometheusClientTLSSecretName}, operatorv1.CertificateError),
+		Entry("the elasticsearch gateway certificate",
+			failingGet{obj: &corev1.Secret{}, name: relasticsearch.PublicCertSecret}, operatorv1.CertificateError),
+		Entry("the manager internal certificate",
+			failingGet{obj: &corev1.Secret{}, name: render.ManagerInternalTLSSecretName}, operatorv1.ResourceReadError),
+	)
 })
 
+// failingGet names the object read that should fail: any object of the same type as
+// obj, narrowed to a single name when one is given.
+type failingGet struct {
+	obj  client.Object
+	name string
+}
+
+func (f failingGet) matches(key client.ObjectKey, obj client.Object) bool {
+	if reflect.TypeOf(obj) != reflect.TypeOf(f.obj) {
+		return false
+	}
+	return f.name == "" || f.name == key.Name
+}
+
+func failingGetClient(fail failingGet, readErr error) client.WithWatch {
+	return ctrlrfake.DefaultFakeClientBuilder(installationScheme()).WithInterceptorFuncs(interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if fail.matches(key, obj) {
+				return readErr
+			}
+			return c.Get(ctx, key, obj, opts...)
+		},
+	}).Build()
+}
+
 func newControllerInputs(variant operatorv1.ProductVariant, objs ...client.Object) controller.Inputs {
+	return newControllerInputsWith(newFakeClient(), variant, objs...)
+}
+
+func newFakeClient() client.WithWatch {
+	return ctrlrfake.DefaultFakeClientBuilder(installationScheme()).Build()
+}
+
+func installationScheme() *runtime.Scheme {
 	scheme := runtime.NewScheme()
 	Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
-	c := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+	return scheme
+}
 
+// newControllerInputsWith is newControllerInputs against a caller-supplied client.
+func newControllerInputsWith(c client.WithWatch, variant operatorv1.ProductVariant, objs ...client.Object) controller.Inputs {
 	for _, o := range objs {
 		Expect(c.Create(context.Background(), o)).NotTo(HaveOccurred())
 	}

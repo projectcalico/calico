@@ -16,15 +16,19 @@ package windows_test
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apis"
@@ -121,6 +125,52 @@ var _ = Describe("windows enterprise modifier", func() {
 	It("sets the trusted DNS server on openshift", func() {
 		out, _ := ext.Windows().Modify(extensionstest.WindowsStub{StubComponent: extensionstest.StubComponent{Create: newObjs(), Delete: nil}, Cfg: nil}, ctxFor(operatorv1.ProviderOpenShift)).Objects()
 		Expect(container(ds(out), "node").Env).To(ContainElement(corev1.EnvVar{Name: "FELIX_DNSTRUSTEDSERVERS", Value: "k8s-service:openshift-dns/dns-default"}))
+	})
+
+	It("degrades with a create error when the prometheus reporter keypair cannot be read", func() {
+		readErr := fmt.Errorf("the API server is having a bad day")
+		scheme := runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		cli := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+		cm, err := certificatemanager.Create(cli, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
+		Expect(err).NotTo(HaveOccurred())
+
+		failing := ctrlrfake.DefaultFakeClientBuilder(scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if _, ok := obj.(*corev1.Secret); ok && key.Name == render.NodePrometheusTLSServerSecret {
+					return readErr
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+
+		ci := controller.Inputs{
+			RenderInputs: render.Inputs{
+				Installation:  ctxFor(operatorv1.ProviderNone).Installation,
+				TrustedBundle: cm.CreateTrustedBundle(),
+				ClusterDomain: dns.DefaultClusterDomain,
+			},
+			Client:             failing,
+			CertificateManager: cm,
+		}
+		_, _, err = ext.Windows().ExtendInputs(ctx, ci)
+		Expect(err).To(MatchError(readErr))
+		reason, ok := extensions.DegradedReason(err)
+		Expect(ok).To(BeTrue())
+		Expect(reason).To(Equal(operatorv1.ResourceCreateError))
+	})
+
+	It("rejects a zero prometheus reporter port", func() {
+		ci := controller.Inputs{
+			RenderInputs: render.Inputs{
+				Installation:       ctxFor(operatorv1.ProviderNone).Installation,
+				FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{PrometheusReporterPort: ptr.To(0)}},
+			},
+		}
+		_, _, err := ext.Windows().ExtendInputs(ctx, ci)
+		reason, ok := extensions.DegradedReason(err)
+		Expect(ok).To(BeTrue())
+		Expect(reason).To(Equal(operatorv1.InvalidConfigurationError))
 	})
 
 	It("mounts the prometheus reporter keypair when present", func() {

@@ -399,7 +399,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			})
 		})
 
-		It("degrades with a validation reason when the extension rejects the configuration", func() {
+		It("degrades with a configuration reason when the extension rejects the configuration", func() {
 			mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
 
 			port := 0
@@ -410,7 +410,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			_, err := r.Reconcile(ctx, reconcile.Request{})
 			Expect(err).To(HaveOccurred())
-			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.ResourceValidationError, "felixConfiguration prometheusReporterPort=0 not supported", mock.Anything, mock.Anything)
+			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operator.InvalidConfigurationError, "invalid metrics port: felixConfiguration prometheusReporterPort=0 not supported", mock.Anything, mock.Anything)
 		})
 
 		Context("image tests", func() {

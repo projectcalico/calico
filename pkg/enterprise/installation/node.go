@@ -255,7 +255,7 @@ func nodeMetricsService(ri render.Inputs) *corev1.Service {
 // The node and windows controller extensions share it.
 func ValidateReporterPort(fc *v3.FelixConfiguration) error {
 	if fc != nil && fc.Spec.PrometheusReporterPort != nil && *fc.Spec.PrometheusReporterPort == 0 {
-		return extensions.InvalidConfigf("felixConfiguration prometheusReporterPort=0 not supported")
+		return extensions.Degradedf(operatorv1.InvalidConfigurationError, "invalid metrics port: felixConfiguration prometheusReporterPort=0 not supported")
 	}
 	return nil
 }

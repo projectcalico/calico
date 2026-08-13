@@ -16,7 +16,6 @@ package installation
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
@@ -178,7 +177,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		dns.GetServiceDNSNames(render.CalicoNodeMetricsService, common.CalicoNamespace, ci.RenderInputs.ClusterDomain),
 	)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error creating node prometheus TLS certificate: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "error creating node prometheus TLS certificate: %w", err)
 	}
 	if nodePrometheusTLS != nil {
 		ci.RenderInputs.TrustedBundle.AddCertificates(nodePrometheusTLS)
@@ -194,7 +193,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		dns.GetServiceDNSNames(kubecontrollers.KubeControllerMetrics, common.CalicoNamespace, ci.RenderInputs.ClusterDomain),
 	)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error creating kube-controllers metrics TLS certificate: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error finding or creating the kube-controllers metrics TLS certificate: %w", err)
 	}
 	if kubeControllerTLS != nil {
 		ci.RenderInputs.TrustedBundle.AddCertificates(kubeControllerTLS)
@@ -202,7 +201,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	logCollector, err := utils.GetLogCollector(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading LogCollector: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading LogCollector: %w", err)
 	}
 
 	// calico-kube-controllers enterprise additions: the WAF surface, the enterprise
@@ -210,26 +209,26 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// kube-controllers needs an extra license-push rule.
 	managementClusterConnection, err := utils.GetManagementClusterConnection(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading ManagementClusterConnection: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementClusterConnection: %w", err)
 	}
 
 	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading ManagementCluster: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}
 	if managementCluster != nil && managementClusterConnection != nil {
 		return ci, nil, extensions.InvalidConfigf("having both a ManagementCluster and a ManagementClusterConnection is not supported")
 	}
 	waf, wafWebhookTLS, err := buildWAFData(ctx, ci)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error preparing WAF configuration: %w", err)
+		return ci, nil, err
 	}
 
 	// The rbacsync controller reconciles the ClusterRoles backing the Manager UI's
 	// RBAC management feature.
 	rbacManagementEnabled, err := utils.RBACManagementEnabled(ctx, ci.Client, e.variant, e.opts.MultiTenant)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error reading the RBAC management UI ConfigMap: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading the RBAC management UI ConfigMap: %w", err)
 	}
 
 	ci.RenderInputs.Extension = installationRenderData{
@@ -246,7 +245,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	prometheusClientCert, err := ci.CertificateManager.GetCertificate(ci.Client, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace())
 	if err != nil {
-		return ci, nil, fmt.Errorf("unable to fetch prometheus certificate: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.CertificateError, "unable to fetch prometheus certificate: %w", err)
 	}
 	if prometheusClientCert != nil {
 		ci.RenderInputs.TrustedBundle.AddCertificates(prometheusClientCert)
@@ -254,7 +253,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	esgwCertificate, err := ci.CertificateManager.GetCertificate(ci.Client, relasticsearch.PublicCertSecret, common.OperatorNamespace())
 	if err != nil {
-		return ci, nil, fmt.Errorf("failed to retrieve / validate %s: %w", relasticsearch.PublicCertSecret, err)
+		return ci, nil, extensions.Degradedf(operatorv1.CertificateError, "failed to retrieve / validate %s: %w", relasticsearch.PublicCertSecret, err)
 	}
 	if esgwCertificate != nil {
 		ci.RenderInputs.TrustedBundle.AddCertificates(esgwCertificate)
@@ -264,7 +263,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// manager internal cert.
 	managerInternalTLS, err := ci.CertificateManager.GetCertificate(ci.Client, render.ManagerInternalTLSSecretName, common.OperatorNamespace())
 	if err != nil {
-		return ci, nil, fmt.Errorf("failed to retrieve %s: %w", render.ManagerInternalTLSSecretName, err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to retrieve %s: %w", render.ManagerInternalTLSSecretName, err)
 	}
 	if managerInternalTLS != nil {
 		ci.RenderInputs.TrustedBundle.AddCertificates(managerInternalTLS)

@@ -31,6 +31,7 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
+	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller"
@@ -566,9 +567,9 @@ func buildWAFData(ctx context.Context, ci controller.Inputs) (wafRenderData, cer
 	gw, msg, err := gatewayapi.GetGatewayAPI(ctx, ci.Client)
 	if err != nil && !apierrors.IsNotFound(err) {
 		if msg != "" {
-			return wafRenderData{}, nil, fmt.Errorf("%s: %w", msg, err)
+			return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceReadError, "%s: %w", msg, err)
 		}
-		return wafRenderData{}, nil, err
+		return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading GatewayAPI: %w", err)
 	}
 	if gw == nil {
 		return wafRenderData{}, nil, nil
@@ -586,11 +587,11 @@ func buildWAFData(ctx context.Context, ci controller.Inputs) (wafRenderData, cer
 	// GetReference the base render uses for every image; the hook has the ImageSet here.
 	imageSet, err := imageset.GetImageSet(ctx, ci.Client, in.Variant)
 	if err != nil {
-		return wafRenderData{}, nil, err
+		return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error getting ImageSet: %w", err)
 	}
 	wasmImage, err := components.GetReference(components.ComponentGatewayAPIEnvoyProxy, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 	if err != nil {
-		return wafRenderData{}, nil, err
+		return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 	}
 
 	webhookTLS, err := ci.CertificateManager.GetOrCreateKeyPair(
@@ -600,12 +601,12 @@ func buildWAFData(ctx context.Context, ci controller.Inputs) (wafRenderData, cer
 		dns.GetServiceDNSNames(applicationlayer.WAFWebhookServiceName, common.CalicoNamespace, ci.RenderInputs.ClusterDomain),
 	)
 	if err != nil {
-		return wafRenderData{}, nil, err
+		return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "error creating the WAF admission webhook TLS certificate: %w", err)
 	}
 
 	pullSecrets, err := utils.GetInstallationPullSecrets(in, ci.Client)
 	if err != nil {
-		return wafRenderData{}, nil, err
+		return wafRenderData{}, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error retrieving pull secrets: %w", err)
 	}
 	var pullSecret *corev1.Secret
 	if len(pullSecrets) > 0 {

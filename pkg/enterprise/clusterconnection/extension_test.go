@@ -15,12 +15,17 @@
 package clusterconnection_test
 
 import (
+	"context"
+	"fmt"
+	"reflect"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
@@ -60,6 +65,20 @@ var _ = Describe("clusterconnection enterprise controller extension", func() {
 		return ctrlrfake.DefaultFakeClientBuilder(scheme).WithObjects(objs...).Build()
 	}
 
+	// failingGetClient fails every read of an object of the same type as fail.
+	failingGetClient := func(fail client.Object, readErr error) client.Client {
+		scheme := runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		return ctrlrfake.DefaultFakeClientBuilder(scheme).WithInterceptorFuncs(interceptor.Funcs{
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+				if reflect.TypeOf(obj) == reflect.TypeOf(fail) {
+					return readErr
+				}
+				return c.Get(ctx, key, obj, opts...)
+			},
+		}).Build()
+	}
+
 	Describe("configuration", func() {
 		It("rejects a cluster that is both a management and a managed cluster", func() {
 			cli = newClient(&operatorv1.ManagementCluster{ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"}})
@@ -68,6 +87,17 @@ var _ = Describe("clusterconnection enterprise controller extension", func() {
 			Expect(ok).To(BeTrue())
 			Expect(reason).To(Equal(operatorv1.ResourceValidationError))
 			Expect(err.Error()).To(ContainSubstring("not supported"))
+		})
+
+		It("degrades with a read error when the ManagementCluster cannot be read", func() {
+			readErr := fmt.Errorf("the API server is having a bad day")
+			cli = failingGetClient(&operatorv1.ManagementCluster{}, readErr)
+
+			_, _, err := ext.ClusterConnection().ExtendInputs(ctx, controllerInputs())
+			Expect(err).To(MatchError(readErr))
+			reason, ok := extensions.DegradedReason(err)
+			Expect(ok).To(BeTrue())
+			Expect(reason).To(Equal(operatorv1.ResourceReadError))
 		})
 
 		It("accepts impersonation and defaults it to empty lists", func() {

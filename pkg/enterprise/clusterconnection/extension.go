@@ -16,7 +16,6 @@ package clusterconnection
 
 import (
 	"context"
-	"fmt"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
@@ -103,7 +102,7 @@ func (e *Extension) ValidateAndDefault(cr *operatorv1.ManagementClusterConnectio
 func (e *Extension) validate(ctx context.Context, ci controller.Inputs) error {
 	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
-		return fmt.Errorf("error reading ManagementCluster: %w", err)
+		return extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}
 	if managementCluster != nil {
 		return extensions.InvalidConfigf("having both a ManagementCluster and a ManagementClusterConnection is not supported")
@@ -123,7 +122,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 
 	clusterInformation, err := utils.FetchClusterInformation(ctx, ci.Client)
 	if err != nil {
-		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error querying ClusterInformation: %s", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error querying ClusterInformation: %w", err)
 	}
 
 	// Ensure the license can support enterprise policy before enabling the
@@ -132,7 +131,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	if license, err := utils.FetchLicenseKey(ctx, ci.Client); err == nil {
 		includeEgressNetworkPolicy = utils.IsFeatureActive(license, common.EgressAccessControlFeature)
 	} else if !k8serrors.IsNotFound(err) {
-		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error querying license: %s", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error querying license: %w", err)
 	}
 
 	ci.RenderInputs.Extension = render.GuardianRenderData{

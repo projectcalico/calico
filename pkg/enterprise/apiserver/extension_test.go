@@ -17,6 +17,7 @@ package apiserver_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -47,6 +48,7 @@ import (
 	"github.com/tigera/operator/pkg/extensions/extensionstest"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
+	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -93,15 +95,35 @@ func apiServerScheme() *runtime.Scheme {
 // failingConfigMapInputs returns controller inputs whose client fails every read of
 // the named ConfigMap with readErr.
 func failingConfigMapInputs(name string, readErr error) controller.Inputs {
+	return failingGetInputs(failingGet{obj: &corev1.ConfigMap{}, name: name}, readErr)
+}
+
+// failingGet names the object read that should fail: any object of the same type as
+// obj, narrowed to a single name when one is given.
+type failingGet struct {
+	obj  client.Object
+	name string
+}
+
+func (f failingGet) matches(key client.ObjectKey, obj client.Object) bool {
+	if reflect.TypeOf(obj) != reflect.TypeOf(f.obj) {
+		return false
+	}
+	return f.name == "" || f.name == key.Name
+}
+
+// failingGetInputs returns controller inputs whose client fails the read fail
+// describes with readErr.
+func failingGetInputs(fail failingGet, readErr error, objs ...client.Object) controller.Inputs {
 	c := ctrlrfake.DefaultFakeClientBuilder(apiServerScheme()).WithInterceptorFuncs(interceptor.Funcs{
 		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-			if _, ok := obj.(*corev1.ConfigMap); ok && key.Name == name {
+			if fail.matches(key, obj) {
 				return readErr
 			}
 			return c.Get(ctx, key, obj, opts...)
 		},
 	}).Build()
-	return apiServerControllerInputsWith(c, operatorv1.CalicoEnterprise, nil)
+	return apiServerControllerInputsWith(c, operatorv1.CalicoEnterprise, nil, objs...)
 }
 
 // rbacManagementGate builds the admin-owned ConfigMap that switches the RBAC
@@ -172,6 +194,34 @@ var _ = Describe("API server enterprise controller extension", func() {
 			Expect(reason).To(Equal(operatorv1.ResourceValidationError))
 		})
 	})
+
+	DescribeTable("reports the degraded reason for the read it failed on",
+		func(fail failingGet, expected operatorv1.TigeraStatusReason, objs ...client.Object) {
+			readErr := fmt.Errorf("the API server is having a bad day")
+
+			_, _, err := ext.APIServer().ExtendInputs(ctx, failingGetInputs(fail, readErr, objs...))
+			Expect(err).To(MatchError(readErr))
+			reason, ok := extensions.DegradedReason(err)
+			Expect(ok).To(BeTrue())
+			Expect(reason).To(Equal(expected))
+		},
+		Entry("the ApplicationLayer",
+			failingGet{obj: &operatorv1.ApplicationLayer{}}, operatorv1.ResourceReadError),
+		Entry("the ManagementCluster",
+			failingGet{obj: &operatorv1.ManagementCluster{}}, operatorv1.ResourceReadError),
+		Entry("the ManagementClusterConnection",
+			failingGet{obj: &operatorv1.ManagementClusterConnection{}}, operatorv1.ResourceReadError),
+		Entry("the tunnel secret on a management cluster",
+			failingGet{obj: &corev1.Secret{}, name: render.VoltronTunnelSecretName}, operatorv1.ResourceReadError,
+			managementCluster()),
+		Entry("the prometheus client certificate",
+			failingGet{obj: &corev1.Secret{}, name: monitor.PrometheusClientTLSSecretName}, operatorv1.ResourceReadError),
+		Entry("the Voltron linseed certificate on a managed cluster",
+			failingGet{obj: &corev1.Secret{}, name: render.VoltronLinseedPublicCert}, operatorv1.ResourceReadError,
+			managementClusterConnection()),
+		Entry("the Authentication",
+			failingGet{obj: &operatorv1.Authentication{}}, operatorv1.ResourceReadError),
+	)
 
 	Describe("Dex", func() {
 		readyAuthentication := func() *operatorv1.Authentication {
@@ -380,6 +430,9 @@ var _ = Describe("API server enterprise modifier", func() {
 
 		_, _, err := ext.APIServer().ExtendInputs(ctx, ci)
 		Expect(err).To(MatchError(readErr))
+		reason, ok := extensions.DegradedReason(err)
+		Expect(ok).To(BeTrue())
+		Expect(reason).To(Equal(operatorv1.ResourceReadError))
 	})
 
 	Context("Calico Cloud", func() {

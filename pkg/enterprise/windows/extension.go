@@ -113,7 +113,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		dns.GetServiceDNSNames(render.WindowsNodeMetricsService, common.CalicoNamespace, ci.RenderInputs.ClusterDomain),
 	)
 	if err != nil {
-		return ci, nil, fmt.Errorf("error getting node prometheus TLS certificate: %w", err)
+		return ci, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "error getting node prometheus TLS certificate: %w", err)
 	}
 	ci.RenderInputs.Extension = windowsRenderData{prometheusServerTLS: tls}
 	return ci, nil, nil
