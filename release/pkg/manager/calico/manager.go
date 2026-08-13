@@ -330,6 +330,15 @@ func (r *CalicoManager) Build() error {
 		} else {
 			logrus.Info("Skipping building windows archive")
 		}
+
+		// Build multi-arch e2e test binaries and copy them into the output directory.
+		if r.e2eBinaries {
+			if err = r.buildE2EBinaries(); err != nil {
+				return err
+			}
+		} else {
+			logrus.Info("Skipping building e2e test binaries")
+		}
 	} else {
 		if err = r.buildOCPBundle(); err != nil {
 			return err
@@ -1215,6 +1224,43 @@ func (r *CalicoManager) buildReleaseTar() error {
 
 	if _, err := r.runner.RunInDir(r.repoRoot, "tar", []string{"-czvf", releaseTarFilePath, "-C", baseReleaseOutputDir, fmt.Sprintf("release-%s", r.calicoVersion)}, nil); err != nil {
 		return fmt.Errorf("failed to create release tar: %w", err)
+	}
+	return nil
+}
+
+func (r *CalicoManager) buildE2EBinaries() error {
+	logrus.Info("Building multi-arch e2e test binaries")
+	e2eDir := filepath.Join(r.repoRoot, "e2e")
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
+	if len(r.architectures) > 0 {
+		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
+	}
+	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
+	if err != nil {
+		logrus.Error(out)
+		return fmt.Errorf("failed to build e2e binaries: %w", err)
+	}
+
+	// Hard-link the built binaries into the hashrelease output directory
+	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
+	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create e2e output dir: %w", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+	if err != nil {
+		return fmt.Errorf("reading e2e bin directory: %w", err)
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
+			continue
+		}
+		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
+		dst := filepath.Join(e2eOutputDir, entry.Name())
+		if err := os.Link(src, dst); err != nil {
+			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
+		}
+		logrus.Infof("Staged e2e binary: %s", entry.Name())
 	}
 	return nil
 }
