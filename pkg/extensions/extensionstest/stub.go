@@ -23,6 +23,7 @@ import (
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
+	"github.com/tigera/operator/pkg/render/webhooks"
 )
 
 // StubComponent adapts raw object lists to a render.Component. The typed stubs embed
@@ -134,5 +135,15 @@ type KubeControllersPolicyStub struct {
 }
 
 func (s KubeControllersPolicyStub) KubeControllersPolicyConfig() *kubecontrollers.KubeControllersConfiguration {
+	return s.Cfg
+}
+
+type WebhooksStub struct {
+	StubComponent
+
+	Cfg *webhooks.Configuration
+}
+
+func (s WebhooksStub) WebhooksConfig() *webhooks.Configuration {
 	return s.Cfg
 }

@@ -55,6 +55,7 @@ import (
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/render/webhooks"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -134,6 +135,10 @@ func (e *Extension) Modify(c render.Component, ri render.Inputs) render.Componen
 	case render.APIServerPolicyComponent:
 		return extensions.Decorate(c, ri, e.variant, func(create, del []client.Object) ([]client.Object, []client.Object) {
 			return modifyAPIServerPolicy(ri, t.APIServerPolicyConfig(), create, del)
+		})
+	case webhooks.WebhooksComponent:
+		return extensions.Decorate(c, ri, e.variant, func(create, del []client.Object) ([]client.Object, []client.Object) {
+			return modifyWebhooks(t.WebhooksConfig(), apiServerData(ri).managementCluster, e.opts.MultiTenant, create, del)
 		})
 	default:
 		return c
@@ -344,14 +349,18 @@ func (CalicoCleanup) Watches(ctrlruntime.Controller) error {
 }
 
 func (CalicoCleanup) Modify(c render.Component, ri render.Inputs) render.Component {
-	t, ok := c.(render.APIServerComponent)
-	if !ok {
+	switch t := c.(type) {
+	case render.APIServerComponent:
+		return extensions.Decorate(c, ri, operatorv1.Calico, func(create, del []client.Object) ([]client.Object, []client.Object) {
+			return cleanupAPIServer(ri, t.APIServerConfig(), create, del)
+		})
+	case webhooks.WebhooksComponent:
+		return extensions.Decorate(c, ri, operatorv1.Calico, func(create, del []client.Object) ([]client.Object, []client.Object) {
+			return cleanupWebhooks(create, del)
+		})
+	default:
 		return c
 	}
-
-	return extensions.Decorate(c, ri, operatorv1.Calico, func(create, del []client.Object) ([]client.Object, []client.Object) {
-		return cleanupAPIServer(ri, t.APIServerConfig(), create, del)
-	})
 }
 
 // modifyAPIServer layers Calico Enterprise behavior onto the rendered API server objects:

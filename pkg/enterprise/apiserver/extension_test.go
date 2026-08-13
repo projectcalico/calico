@@ -49,6 +49,7 @@ import (
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/render/webhooks"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -857,6 +858,179 @@ var _ = Describe("API server enterprise policy modifier", func() {
 			}
 		}
 		Expect(found).To(BeTrue(), "expected the L7 admission controller ingress port")
+	})
+})
+
+var _ = Describe("webhooks enterprise modifier", func() {
+	// renderWebhooksWith builds the base webhooks objects and runs the extension over them,
+	// returning the create and delete lists it produced.
+	renderWebhooksWith := func(s extensions.Extensions, ci controller.Inputs, ri render.Inputs, kp certificatemanagement.KeyPairInterface) ([]client.Object, []client.Object) {
+		cfg := &webhooks.Configuration{
+			KeyPair:      kp,
+			Installation: ci.RenderInputs.Installation,
+			APIServer:    &operatorv1.APIServerSpec{},
+		}
+		comp := webhooks.Component(cfg)
+		Expect(comp.ResolveImages(nil)).NotTo(HaveOccurred())
+		create, del := comp.Objects()
+
+		return s.APIServer().Modify(extensionstest.WebhooksStub{StubComponent: extensionstest.StubComponent{Create: create, Delete: del}, Cfg: cfg}, ri).Objects()
+	}
+
+	renderWebhooks := func(objs ...client.Object) ([]client.Object, []client.Object) {
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil, objs...)
+		eci, _, err := ext.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+		return renderWebhooksWith(ext, ci, eci.RenderInputs, apiServerKeyPair(ci))
+	}
+
+	webhooksArgs := func(objs []client.Object) []string {
+		dp, ok := extensions.FindObject[*appsv1.Deployment](objs, webhooks.WebhooksName)
+		Expect(ok).To(BeTrue())
+		return dp.Spec.Template.Spec.Containers[0].Args
+	}
+
+	mutatingWebhooks := func(objs []client.Object) []admregv1.MutatingWebhook {
+		mwc, ok := extensions.FindObject[*admregv1.MutatingWebhookConfiguration](objs, "api.projectcalico.org")
+		Expect(ok).To(BeTrue())
+		return mwc.Webhooks
+	}
+
+	managerTLSManagementCluster := func() *operatorv1.ManagementCluster {
+		return &operatorv1.ManagementCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: utils.DefaultEnterpriseInstanceKey.Name},
+			Spec: operatorv1.ManagementClusterSpec{
+				Address: "mgmt.example.com:9449",
+				TLS:     &operatorv1.TLS{SecretName: render.ManagerTLSSecretName},
+			},
+		}
+	}
+
+	managerTLSSecret := func() *corev1.Secret {
+		return &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: render.ManagerTLSSecretName, Namespace: common.OperatorNamespace()},
+			Data:       map[string][]byte{"cert": []byte("a"), "key": []byte("b")},
+		}
+	}
+
+	It("registers the ManagedCluster webhook and the MCM flags on a management cluster", func() {
+		mc := &operatorv1.ManagementCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: utils.DefaultEnterpriseInstanceKey.Name},
+			Spec: operatorv1.ManagementClusterSpec{
+				Address: "mgmt.example.com:9449",
+				TLS:     &operatorv1.TLS{SecretName: render.VoltronTunnelSecretName},
+			},
+		}
+		objs, _ := renderWebhooks(mc, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: render.VoltronTunnelSecretName, Namespace: common.OperatorNamespace()},
+			Data:       map[string][]byte{"cert": []byte("a"), "key": []byte("b")},
+		})
+
+		hooks := mutatingWebhooks(objs)
+		Expect(hooks).To(HaveLen(2))
+		Expect(hooks[0].Name).To(Equal("uisettings.api.projectcalico.org"))
+		Expect(hooks[1].Name).To(Equal("managedclusters.api.projectcalico.org"))
+		Expect(*hooks[1].ClientConfig.Service.Path).To(Equal("/managedcluster"))
+		Expect(*hooks[1].FailurePolicy).To(Equal(admregv1.Fail))
+		Expect(hooks[1].Rules).To(HaveLen(1))
+		Expect(hooks[1].Rules[0].Operations).To(ConsistOf(admregv1.Create))
+		Expect(hooks[1].Rules[0].Rule.Resources).To(Equal([]string{"managedclusters"}))
+
+		args := webhooksArgs(objs)
+		Expect(args).To(ContainElement("--mcm-management-cluster-addr=mgmt.example.com:9449"))
+		Expect(args).To(ContainElement(fmt.Sprintf("--mcm-tunnel-secret-name=%s", render.VoltronTunnelSecretName)))
+		Expect(args).NotTo(ContainElement("--mcm-management-cluster-ca-type=Public"))
+		Expect(args).NotTo(ContainElement("--multi-tenant=true"))
+	})
+
+	It("sets the Public CA type when the tunnel secret is the manager TLS secret", func() {
+		objs, _ := renderWebhooks(managerTLSManagementCluster(), managerTLSSecret())
+		Expect(webhooksArgs(objs)).To(ContainElement("--mcm-management-cluster-ca-type=Public"))
+	})
+
+	It("passes the multi-tenant flag on a multi-tenant management cluster", func() {
+		mtExt := enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{MultiTenant: true})
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil, managerTLSManagementCluster(), managerTLSSecret())
+		eci, _, err := mtExt.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+
+		objs, _ := renderWebhooksWith(mtExt, ci, eci.RenderInputs, apiServerKeyPair(ci))
+		Expect(webhooksArgs(objs)).To(ContainElement("--multi-tenant=true"))
+	})
+
+	It("renders the tunnel secret RBAC namespaced for a single-tenant management cluster", func() {
+		objs, _ := renderWebhooks(managerTLSManagementCluster(), managerTLSSecret())
+
+		role, ok := extensions.FindObject[*rbacv1.Role](objs, webhooks.WebhooksSecretsRBACName)
+		Expect(ok).To(BeTrue())
+		Expect(role.Rules).To(ConsistOf(rbacv1.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"secrets"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{render.ManagerTLSSecretName},
+		}))
+
+		rb, ok := extensions.FindObject[*rbacv1.RoleBinding](objs, webhooks.WebhooksSecretsRBACName)
+		Expect(ok).To(BeTrue())
+		Expect(rb.Subjects).To(ConsistOf(rbacv1.Subject{
+			Kind:      "ServiceAccount",
+			Name:      webhooks.WebhooksName,
+			Namespace: common.CalicoNamespace,
+		}))
+	})
+
+	It("renders the tunnel secret RBAC cluster-scoped for a multi-tenant management cluster", func() {
+		mtExt := enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{MultiTenant: true})
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil, managerTLSManagementCluster(), managerTLSSecret())
+		eci, _, err := mtExt.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+
+		objs, _ := renderWebhooksWith(mtExt, ci, eci.RenderInputs, apiServerKeyPair(ci))
+
+		cr, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, webhooks.WebhooksSecretsRBACName)
+		Expect(ok).To(BeTrue())
+		Expect(cr.Rules).To(ConsistOf(rbacv1.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"secrets"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{render.ManagerTLSSecretName},
+		}))
+
+		crb, ok := extensions.FindObject[*rbacv1.ClusterRoleBinding](objs, webhooks.WebhooksSecretsRBACName)
+		Expect(ok).To(BeTrue())
+		Expect(crb.Subjects).To(ConsistOf(rbacv1.Subject{
+			Kind:      "ServiceAccount",
+			Name:      webhooks.WebhooksName,
+			Namespace: common.CalicoNamespace,
+		}))
+	})
+
+	It("queues the tunnel secret RBAC for deletion when not a management cluster", func() {
+		create, del := renderWebhooks()
+
+		Expect(mutatingWebhooks(create)).To(HaveLen(1))
+		Expect(webhooksArgs(create)).NotTo(ContainElement(ContainSubstring("--mcm-")))
+		for _, name := range []string{webhooks.WebhooksSecretsRBACName} {
+			_, ok := extensions.FindObject[*rbacv1.ClusterRole](del, name)
+			Expect(ok).To(BeTrue())
+			_, ok = extensions.FindObject[*rbacv1.ClusterRoleBinding](del, name)
+			Expect(ok).To(BeTrue())
+			_, ok = extensions.FindObject[*rbacv1.Role](del, name)
+			Expect(ok).To(BeTrue())
+			_, ok = extensions.FindObject[*rbacv1.RoleBinding](del, name)
+			Expect(ok).To(BeTrue())
+		}
+	})
+
+	It("queues the tunnel secret RBAC for deletion when the operator runs as Calico", func() {
+		ci := apiServerControllerInputs(operatorv1.Calico, nil)
+		eci, _, err := calicoExt.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, del := renderWebhooksWith(calicoExt, ci, eci.RenderInputs, apiServerKeyPair(ci))
+
+		_, ok := extensions.FindObject[*rbacv1.ClusterRole](del, webhooks.WebhooksSecretsRBACName)
+		Expect(ok).To(BeTrue())
 	})
 })
 

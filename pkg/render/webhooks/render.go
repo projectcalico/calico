@@ -54,13 +54,18 @@ var WebhooksPolicyName = fmt.Sprintf("%s.%s", networkpolicy.CalicoTierName, Webh
 // Configuration is the public API used to provide information to the render code to
 // generate Kubernetes objects for installing calico/webhooks on a cluster.
 type Configuration struct {
-	PullSecrets       []*corev1.Secret
-	KeyPair           certificatemanagement.KeyPairInterface
-	Installation      *operatorv1.InstallationSpec
-	APIServer         *operatorv1.APIServerSpec
-	ManagementCluster *operatorv1.ManagementCluster
-	MultiTenant       bool
-	OpenShift         bool
+	PullSecrets  []*corev1.Secret
+	KeyPair      certificatemanagement.KeyPairInterface
+	Installation *operatorv1.InstallationSpec
+	APIServer    *operatorv1.APIServerSpec
+	OpenShift    bool
+}
+
+// WebhooksComponent is the webhooks component paired with the configuration it rendered
+// from, so extensions can layer variant-specific objects onto it.
+type WebhooksComponent interface {
+	render.Component
+	WebhooksConfig() *Configuration
 }
 
 func Component(cfg *Configuration) render.Component {
@@ -73,6 +78,10 @@ type component struct {
 
 	// Images.
 	calicoImage string
+}
+
+func (c *component) WebhooksConfig() *Configuration {
+	return c.cfg
 }
 
 func (c *component) ResolveImages(is *operatorv1.ImageSet) error {
@@ -189,38 +198,6 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 				},
 			},
 		},
-	}
-
-	// On management clusters, pass flags so the ManagedCluster webhook can
-	// generate the installation manifest with the correct tunnel address and certs.
-	if c.cfg.ManagementCluster != nil {
-		mc := c.cfg.ManagementCluster
-		if mc.Spec.Address != "" {
-			dep.Spec.Template.Spec.Containers[0].Args = append(
-				dep.Spec.Template.Spec.Containers[0].Args,
-				fmt.Sprintf("--mcm-management-cluster-addr=%s", mc.Spec.Address),
-			)
-		}
-
-		secretName := render.TunnelSecretName(mc)
-		dep.Spec.Template.Spec.Containers[0].Args = append(
-			dep.Spec.Template.Spec.Containers[0].Args,
-			fmt.Sprintf("--mcm-tunnel-secret-name=%s", secretName),
-		)
-
-		if mc.Spec.TLS != nil && mc.Spec.TLS.SecretName == render.ManagerTLSSecretName {
-			dep.Spec.Template.Spec.Containers[0].Args = append(
-				dep.Spec.Template.Spec.Containers[0].Args,
-				"--mcm-management-cluster-ca-type=Public",
-			)
-		}
-
-		if c.cfg.MultiTenant {
-			dep.Spec.Template.Spec.Containers[0].Args = append(
-				dep.Spec.Template.Spec.Containers[0].Args,
-				"--multi-tenant=true",
-			)
-		}
 	}
 
 	if c.cfg.Installation.ControlPlaneReplicas != nil && *c.cfg.Installation.ControlPlaneReplicas > 1 {
@@ -519,40 +496,6 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 		},
 	}
 
-	// On management clusters, register the ManagedCluster webhook. This webhook
-	// generates the installation manifest (including tunnel certs) when a
-	// ManagedCluster CR is created.
-	if c.cfg.ManagementCluster != nil {
-		mwc.Webhooks = append(mwc.Webhooks, admissionregistrationv1.MutatingWebhook{
-			Name: "managedclusters.api.projectcalico.org",
-			Rules: []admissionregistrationv1.RuleWithOperations{
-				{
-					Operations: []admissionregistrationv1.OperationType{
-						admissionregistrationv1.Create,
-					},
-					Rule: admissionregistrationv1.Rule{
-						APIGroups:   []string{"projectcalico.org"},
-						APIVersions: []string{"v3"},
-						Resources:   []string{"managedclusters"},
-						Scope:       ptr.To(admissionregistrationv1.AllScopes),
-					},
-				},
-			},
-			ClientConfig: admissionregistrationv1.WebhookClientConfig{
-				Service: &admissionregistrationv1.ServiceReference{
-					Namespace: common.CalicoNamespace,
-					Name:      WebhooksName,
-					Path:      ptr.To("/managedcluster"),
-				},
-				CABundle: c.cfg.KeyPair.GetCertificatePEM(),
-			},
-			AdmissionReviewVersions: []string{"v1"},
-			SideEffects:             ptr.To(admissionregistrationv1.SideEffectClassNone),
-			TimeoutSeconds:          ptr.To(int32(10)),
-			FailurePolicy:           ptr.To(admissionregistrationv1.Fail),
-		})
-	}
-
 	// Create a ClusterRole and ClusterRoleBinding for the webhook service account.
 	rules := []rbacv1.PolicyRule{
 		{
@@ -625,20 +568,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 	}
 	objs = append(objs, cr, crb)
 
-	var objsToDelete []client.Object
-	if c.cfg.ManagementCluster != nil {
-		objs = append(objs, render.TunnelSecretRBAC(WebhooksSecretsRBACName, WebhooksName, c.cfg.ManagementCluster, c.cfg.MultiTenant)...)
-	} else {
-		// Clean up secrets RBAC when not a management cluster.
-		objsToDelete = append(objsToDelete,
-			&rbacv1.ClusterRole{TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: WebhooksSecretsRBACName}},
-			&rbacv1.ClusterRoleBinding{TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: WebhooksSecretsRBACName}},
-			&rbacv1.Role{TypeMeta: metav1.TypeMeta{Kind: "Role", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: WebhooksSecretsRBACName, Namespace: common.CalicoNamespace}},
-			&rbacv1.RoleBinding{TypeMeta: metav1.TypeMeta{Kind: "RoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: WebhooksSecretsRBACName, Namespace: common.CalicoNamespace}},
-		)
-	}
-
-	return objs, objsToDelete
+	return objs, nil
 }
 
 func (c *component) Ready() bool {

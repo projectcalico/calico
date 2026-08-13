@@ -345,17 +345,6 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 	}
 	trustedBundle := ci.RenderInputs.TrustedBundle
 
-	// The webhooks component (v3-CRD mode) needs the ManagementCluster to register the
-	// managed-cluster webhook. Reading it requires the enterprise CRDs.
-	var managementCluster *operatorv1.ManagementCluster
-	if r.opts.Variant.IsEnterprise() {
-		managementCluster, err = utils.GetManagementCluster(ctx, r.client)
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading ManagementCluster", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-	}
-
 	includeV3NetworkPolicy := false
 
 	// Ensure the calico-system tier exists, before rendering any network policies within it.
@@ -462,13 +451,11 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 		}
 
 		webhooksCfg := webhooks.Configuration{
-			PullSecrets:       pullSecrets,
-			KeyPair:           webhooksTLS,
-			Installation:      installationSpec,
-			APIServer:         &instance.Spec,
-			ManagementCluster: managementCluster,
-			MultiTenant:       r.opts.MultiTenant,
-			OpenShift:         r.opts.DetectedProvider.IsOpenShift(),
+			PullSecrets:  pullSecrets,
+			KeyPair:      webhooksTLS,
+			Installation: installationSpec,
+			APIServer:    &instance.Spec,
+			OpenShift:    r.opts.DetectedProvider.IsOpenShift(),
 		}
 		components = append(components, webhooks.Component(&webhooksCfg))
 		certKeyPairOptions = append(certKeyPairOptions, rcertificatemanagement.NewKeyPairOption(webhooksTLS, true, true))
