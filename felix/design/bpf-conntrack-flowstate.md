@@ -129,6 +129,16 @@ Creating a NAT'd flow means creating both. Destroying a NAT'd flow
 means destroying both — atomically enough that BPF never sees only
 one side. The cleanup pipeline is built around this requirement.
 
+The forward entry is a **stub**: `calico_ct_create_nat_fwd()` fills in
+only the type, the timestamp, the reverse key, and any source-port
+rewrite. All connection state — the TCP legs, the flags, the RST
+timestamp — lives on the reverse entry, which is why it is also called
+the **tracking** entry, and is the single source of truth for the flow.
+Readers and writers alike have to reach it: a `NAT_FWD` hit gives
+`calico_ct_lookup()` the stub, so it redirects
+`src_to_dst`/`dst_to_src` into the tracking entry's legs and keeps a
+`bk` pointer for the fields hanging off the value itself.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
@@ -219,6 +229,11 @@ and the Go-side reader must agree on units and reference clock.
   BPF cleaner path (insert into `cali_ct_cleanup`) or accept the
   race (and document why it is safe) — never delete a single side
   from userspace.
+- Connection state read or written through a conntrack **value** in
+  `calico_ct_lookup()` must go via `bk`, not `v` — on a `NAT_FWD` hit
+  `v` is the forward stub, and state put there is silently never read.
+  Test such a change in the client→service direction; the reverse
+  direction hits the tracking entry directly and passes either way.
 - Do not rely on LRU eviction to keep the table healthy. A PR that
   produces more conntrack entries per second than the cleanup
   pipeline removes will silently lose active flows once the map
