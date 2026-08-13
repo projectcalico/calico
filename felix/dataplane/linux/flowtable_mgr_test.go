@@ -131,7 +131,7 @@ var _ = Describe("flowtableExclusionManager", func() {
 		Entry("egress packet rate limit",
 			&proto.WorkloadEndpoint{QosControls: &proto.QoSControls{EgressPacketRate: 1000}},
 			[]string{"10.65.0.2"}),
-		Entry("bandwidth QoS, which the fast path still honours",
+		Entry("bandwidth QoS, which the fast path still honors",
 			&proto.WorkloadEndpoint{QosControls: &proto.QoSControls{IngressBandwidth: 1000}},
 			[]string{}),
 		Entry("no QoS at all", &proto.WorkloadEndpoint{}, []string{}),
