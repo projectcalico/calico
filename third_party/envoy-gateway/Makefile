@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.8.0
+ENVOY_GATEWAY_VERSION=v1.8.2
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -25,7 +25,8 @@ ENVOY_GATEWAY_DOWNLOADED=.envoy-gateway.downloaded
 init-source: $(ENVOY_GATEWAY_DOWNLOADED)
 $(ENVOY_GATEWAY_DOWNLOADED):
 	mkdir -p envoy-gateway
-	curl -sfL https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz | tar xz --strip-components 1 -C envoy-gateway
+	curl -sSfL --retry 5 -o /tmp/envoy-gateway.tar.gz https://github.com/envoyproxy/gateway/archive/refs/tags/$(ENVOY_GATEWAY_VERSION).tar.gz
+	tar xz --strip-components 1 -C envoy-gateway -f /tmp/envoy-gateway.tar.gz && rm -f /tmp/envoy-gateway.tar.gz
 
 # 	Apply patches for the specified Envoy Gateway version if patches directory exists.
 # 	This code checks for the presence of a patches directory corresponding to ENVOY_GATEWAY_VERSION.
@@ -51,17 +52,17 @@ LD_FLAGS = \
 # tree, so we need GOTOOLCHAIN here to let Go auto-download a newer toolchain
 # inside the build container.
 #
-# Pin minimum 1.26.4 (not bare `auto`) for defensive parity: plain `auto`
-# resolves to upstream's exact `go` directive (today 1.26.3), so pinning a
-# floor protects us if a future v1.8.x/v1.9.x cut regresses that directive.
-# The `+auto` suffix still lets a higher go.mod directive win without editing
-# this line.
+# Pin minimum 1.26.6 (not bare `auto`): upstream's `go` directive (1.26.3)
+# and plain `auto` would build with a toolchain whose stdlib still carries
+# CVEs flagged by the scan (GO-2026-4970, CVE-2026-39822, fixed in 1.26.5).
+# Pinning 1.26.6 (latest) clears those; the `+auto` suffix still lets a higher
+# go.mod directive win without editing this line.
 #
-# Remove this override once release-v3.31 picks up GO_VERSION >= 1.26.4.
+# Remove this override once release-v3.31 picks up GO_VERSION >= 1.26.6.
 bin/envoy-gateway-$(ARCH): init-source
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
-			CGO_ENABLED=0 GOTOOLCHAIN=go1.26.4+auto go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
+			CGO_ENABLED=0 GOTOOLCHAIN=go1.26.6+auto go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
 
 .PHONY: clean
 clean:
