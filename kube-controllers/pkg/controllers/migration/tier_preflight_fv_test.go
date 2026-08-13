@@ -16,16 +16,20 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	. "github.com/onsi/gomega"
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	"k8s.io/utils/ptr"
+	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -324,4 +328,33 @@ func TestPreflight_MessageClearedOnceTiersCorrected(t *testing.T) {
 		g.Expect(dm.Status.Message).NotTo(ContainSubstring("must have order"))
 		g.Expect(dm.Status.Phase).To(Equal(migrationv1.DatastoreMigrationPhaseConverged))
 	}, 45*time.Second, 200*time.Millisecond).Should(Succeed())
+}
+
+// TestPreflight_DriftRequeues verifies that a drifted tier requeues, since the
+// v1 tiers the check reads are not in our watch set.
+func TestPreflight_DriftRequeues(t *testing.T) {
+	g := NewWithT(t)
+	ctx := context.Background()
+	logCtx := logrus.WithField("test", t.Name())
+
+	bc := &mockBackendClient{
+		resources: tierOnlyV1Resources(
+			v1TierKVP("default", ptr.To(apiv3.DefaultTierOrder), apiv3.Deny),
+			v1TierKVP("kube-admin", ptr.To(float64(42)), apiv3.Pass),
+		),
+		clusterInfo: mainlineV1ClusterInfo(),
+	}
+
+	ensureV1CRD(t, ctx)
+	m := newTestController(ctx, bc, fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj()), rtclient.WithWatch(fvRTClient), 0)
+
+	createMigrationCR(t, ctx)
+	dm := &migrationv1.DatastoreMigration{}
+	g.Expect(fvRTClient.Get(ctx, dmKey, dm)).To(Succeed())
+
+	err := m.handlePending(logCtx, dm)
+	var requeue requeueAfter
+	g.Expect(errors.As(err, &requeue)).To(BeTrue(), "expected a requeue while blocked on tier drift, got: %v", err)
+	g.Expect(time.Duration(requeue)).To(Equal(m.waitingPollInterval))
+	g.Expect(v1DatastoreReady(g, bc)).NotTo(Equal(ptr.To(false)), "v1 must not be locked while the pre-flight check is blocking")
 }
