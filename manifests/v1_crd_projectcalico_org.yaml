@@ -11756,6 +11756,14 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
                 calicoNetwork:
                   description:
                     CalicoNetwork specifies networking configuration options
@@ -13479,23 +13487,6 @@ spec:
                           type: object
                       type: object
                   type: object
-                calicoLibHostPath:
-                  default: /var/lib/calico
-                  description: |-
-                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                  maxLength: 1024
-                  type: string
-                calicoRunHostPath:
-                  default: /var/run/calico
-                  description: |-
-                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                    operator continues using that path after a manifest-to-operator migration.
-                  maxLength: 1024
-                  type: string
                 calicoNodeWindowsDaemonSet:
                   description:
                     CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -14842,6 +14833,15 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoWindowsUpgradeDaemonSet:
                   description: |-
                     Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -21132,6 +21132,14 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
                     calicoNetwork:
                       description:
                         CalicoNetwork specifies networking configuration
@@ -22882,23 +22890,6 @@ spec:
                               type: object
                           type: object
                       type: object
-                    calicoLibHostPath:
-                      default: /var/lib/calico
-                      description: |-
-                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
-                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
-                      maxLength: 1024
-                      type: string
-                    calicoRunHostPath:
-                      default: /var/run/calico
-                      description: |-
-                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
-                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
-                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
-                        operator continues using that path after a manifest-to-operator migration.
-                      maxLength: 1024
-                      type: string
                     calicoNodeWindowsDaemonSet:
                       description:
                         CalicoNodeWindowsDaemonSet configures the calico-node-windows
@@ -24268,6 +24259,15 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoWindowsUpgradeDaemonSet:
                       description: |-
                         Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -35215,13 +35215,33 @@ spec:
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
-                    confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
+                    ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
+                    stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
+                    only applies to IP Pools with vxlanMode: Never; the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.  The routes
+                    that BIRD does not program here are expected to be programmed by Felix instead.  Below,
+                    an IPIP IP Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one
+                    has ipipMode and vxlanMode both Never.
+
+                    - Disabled: BIRD programs no cluster routes.
+                    - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools.
+                    - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools.
+                    - Enabled: BIRD programs them for both.
+
+                    This field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from Felix's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledNoEncapOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 serviceClusterIPs:
                   description: |-
@@ -38128,13 +38148,33 @@ spec:
                   type: string
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+                    ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+                    a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+                    with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+                    are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+                    one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+                    vxlanMode both Never.
+
+                    - Disabled: Felix programs no cluster routes.
+                    - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+                    - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+                    - Enabled: Felix programs them for both.
+
+                    This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledIPIPOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-
