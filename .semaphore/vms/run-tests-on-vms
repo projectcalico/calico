@@ -394,7 +394,22 @@ for i in "${!batches[@]}"; do
     batch_formatted="$(format_batch_for_log "$batch")"
     failed_summary_log="$artifacts_dir/test-$batch_formatted-FAILED.log"
     if [ ! -f "$failed_summary_log" ] && [ -f "$artifacts_dir/test-$batch_formatted.log" ]; then
-      failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+      # The batch failed without renaming its own log.  A batch the watchdog
+      # kills never reaches that rename, because the kill takes out the process
+      # group that would have done it.  Rename it here instead: the -FAILED
+      # suffix is how analyze-test-failures discovers which batches to analyse,
+      # so a log left under its running name gets no fv-tests-guru diagnosis and
+      # no DIAGS artifact, and the failure reaches CI reporting as nothing but
+      # the summary line below.  Safe at this point: we are past `wait`, so the
+      # batch is finished and nothing is still writing to the log.
+      mv "$artifacts_dir/test-$batch_formatted.log" "$failed_summary_log" ||
+        failed_summary_log="$artifacts_dir/test-$batch_formatted.log"
+      # Reaching here means the batch never ran its own failure handler, so the
+      # log stops wherever the batch was killed.  Say so in the log itself: it
+      # is now an input to fv-tests-guru, and a truncated transcript otherwise
+      # reads as a test that simply stopped emitting.
+      printf '\n===== Batch %s did not complete: killed before it could finish, so this log is truncated mid-run =====\n' \
+        "$batch" >> "$failed_summary_log"
     fi
     summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1
