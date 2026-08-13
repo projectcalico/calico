@@ -170,6 +170,13 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		return ci, nil, err
 	}
 
+	// Goldmane is Calico-only, so an Enterprise installation can't run alongside it.
+	if ci.RenderInputs.Installation.Variant == operatorv1.CalicoEnterprise {
+		if err := validateNoGoldmane(ctx, ci.Client); err != nil {
+			return ci, nil, err
+		}
+	}
+
 	nodePrometheusTLS, err := ci.CertificateManager.GetOrCreateKeyPair(
 		ci.Client,
 		render.NodePrometheusTLSServerSecret,

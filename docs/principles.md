@@ -10,6 +10,7 @@ API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD
 
 - **Never overwrite user-specified fields.** If a user sets a value on a resource, the operator must not silently replace it with a default or computed value.
 - **Never delete user-created resources.** Secrets, ConfigMaps, and other resources created by the user are theirs. The operator should not remove them.
+- **`operator.tigera.io` resources are user input too.** The operator must not delete its own CRs, not even the ones its controllers act on. If a resource can't be supported (a Goldmane CR on an Enterprise installation, say), set degraded with a message naming the resource and let the user delete it.
 - **Error on inconsistent input, don't guess.** If a user provides configuration that is contradictory or ambiguous, surface a clear error rather than assuming intent. Guessing leads to subtle, hard-to-debug behavior.
 - **Track field ownership on shared resources.** Where possible, write fields to APIs like FelixConfiguration, BGPConfiguration, etc. Use an annotation to track which fields the operator originally set. Never update or remove a field that wasn't set by the operator — that would overwrite user intent. If fields on these objects conflict with `operator.tigera.io` API configuration, surface an error.
 - **Copy user-provided resources downstream, never modify them.** Users provide input (custom certs, ConfigMaps, pull secrets, etc.) in the `tigera-operator` namespace. The operator copies and reconciles those objects into the downstream namespaces that need them, but must never edit, update, or delete the originals.
@@ -29,6 +30,10 @@ API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD
   5. Report status via the TigeraStatus API.
 - **Render packages are pure.** The `pkg/render` package generates Kubernetes manifests from inputs. It should not make API calls or have side effects — that's the controller's job.
 - **Status messages are for users, not developers.** TigeraStatus conditions should be actionable and user-facing. Don't surface internal error strings or stack traces.
+
+## Variants
+
+- **Core code is variant-blind.** Controllers and render packages outside `pkg/enterprise` must not name a variant, in code or in comments. Behavior a single variant needs registers through `pkg/extensions`.
 
 ## Security
 

@@ -1324,16 +1324,13 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	var goldmaneRunning bool
-	// Goldmane can only be running if the variant is Calico and the Whisker CRD exists.
-	if instance.Spec.Variant == operatorv1.Calico {
-		goldmaneCR, err := utils.GetIfExists[operatorv1.Goldmane](ctx, utils.DefaultInstanceKey, r.client)
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Unable retrieve Goldmane CR", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-		goldmaneRunning = goldmaneCR != nil
+	// Goldmane runs whenever its CR is present.
+	goldmaneCR, err := utils.GetIfExists[operatorv1.Goldmane](ctx, utils.DefaultInstanceKey, r.client)
+	if err != nil && !meta.IsNoMatchError(err) {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Unable retrieve Goldmane CR", err, reqLogger)
+		return reconcile.Result{}, err
 	}
+	goldmaneRunning := goldmaneCR != nil
 
 	// Calico node DNS configuration and policy should be inherited from the tigera/operator Deployment by default since:
 	//
