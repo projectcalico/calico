@@ -116,7 +116,7 @@ steps:
             value: "false"
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: bpf-run-matrix-aws-single-subnet
+  - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
     services:
       - docker
       - http-cache-proxy
@@ -131,7 +131,8 @@ steps:
         value: Felix
       # This run supplies what the Maglev tests need -- BPF with DSR, an
       # external node, one subnet, no encapsulation -- so it is the only run
-      # that keeps them. Same filter as the other runs, minus that skip.
+      # that keeps them. Same filter as the other runs, minus that skip, plus a
+      # skip for the Enterprise-only specs the shared test image carries.
       - name: ENABLE_BPF_DSR
         value: "true"
       - name: ENABLE_EXTERNAL_NODE
@@ -140,10 +141,12 @@ steps:
         value: None
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
+      - name: IP_FAMILY
+        value: dual
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
+        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|sig-calico-enterprise)
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
