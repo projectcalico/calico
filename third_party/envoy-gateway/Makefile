@@ -7,7 +7,7 @@ BUILD_IMAGES ?= $(ENVOY_GATEWAY_IMAGE)
 
 # For updating this version please see
 # https://github.com/tigera/operator/blob/master/docs/common_tasks.md#updating-the-bundled-version-of-envoy-gateway
-ENVOY_GATEWAY_VERSION=v1.8.2
+ENVOY_GATEWAY_VERSION=v1.8.3
 
 ##############################################################################
 # Include lib.Makefile before anything else
@@ -62,7 +62,7 @@ LD_FLAGS = \
 bin/envoy-gateway-$(ARCH): init-source
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(GIT_CONFIG_SSH) \
-			CGO_ENABLED=0 GOTOOLCHAIN=go1.26.4+auto go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
+			CGO_ENABLED=0 GOTOOLCHAIN=go1.26.6+auto go build -C envoy-gateway -buildvcs=false -o ../$@ -v -tags=$(TAGS) -ldflags="$(LD_FLAGS) -s -w" github.com/envoyproxy/gateway/cmd/envoy-gateway'
 
 .PHONY: clean
 clean:
