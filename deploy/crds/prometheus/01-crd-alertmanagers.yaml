@@ -3,8 +3,8 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
-    operator.prometheus.io/version: 0.88.0
+    controller-gen.kubebuilder.io/version: v0.21.0
+    operator.prometheus.io/version: 0.93.1
   name: alertmanagers.monitoring.coreos.com
 spec:
   group: monitoring.coreos.com
@@ -813,7 +813,7 @@ spec:
                                       type: string
                                   type: object
                                 tokenUrl:
-                                  minLength: 1
+                                  pattern: ^(http|https)://.+$
                                   type: string
                               required:
                                 - clientId
@@ -942,6 +942,22 @@ spec:
                               pattern: ^(http|https)://.+$
                               type: string
                           type: object
+                        mattermost:
+                          properties:
+                            webhookURL:
+                              properties:
+                                key:
+                                  type: string
+                                name:
+                                  default: ""
+                                  type: string
+                                optional:
+                                  type: boolean
+                              required:
+                                - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
                         opsGenieApiKey:
                           properties:
                             key:
@@ -1051,6 +1067,8 @@ spec:
                               x-kubernetes-map-type: atomic
                             authUsername:
                               type: string
+                            forceImplicitTLS:
+                              type: boolean
                             from:
                               type: string
                             hello:
@@ -2254,6 +2272,8 @@ spec:
                   x-kubernetes-list-map-keys:
                     - ip
                   x-kubernetes-list-type: map
+                hostNetwork:
+                  type: boolean
                 hostUsers:
                   type: boolean
                 image:
@@ -3103,6 +3123,9 @@ spec:
                   pattern: ^(0|(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                   type: string
                 routePrefix:
+                  type: string
+                schedulerName:
+                  minLength: 1
                   type: string
                 secrets:
                   items:
@@ -4213,6 +4236,10 @@ spec:
                                       type: integer
                                     signerName:
                                       type: string
+                                    userAnnotations:
+                                      additionalProperties:
+                                        type: string
+                                      type: object
                                   required:
                                     - keyType
                                     - signerName
@@ -4408,6 +4435,7 @@ spec:
                   properties:
                     getConcurrency:
                       format: int32
+                      minimum: 0
                       type: integer
                     httpConfig:
                       properties:
@@ -4436,6 +4464,7 @@ spec:
                       type: object
                     timeout:
                       format: int32
+                      minimum: 0
                       type: integer
                     tlsConfig:
                       properties:
