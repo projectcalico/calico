@@ -407,9 +407,13 @@ for i in "${!batches[@]}"; do
       # Reaching here means the batch never ran its own failure handler, so the
       # log stops wherever the batch was killed.  Say so in the log itself: it
       # is now an input to fv-tests-guru, and a truncated transcript otherwise
-      # reads as a test that simply stopped emitting.
+      # reads as a test that simply stopped emitting.  Best-effort under the
+      # script's `set -e`: a full disk is one of the things that gets a batch
+      # killed in the first place, and losing the marker must not cost us the
+      # summary, the failure exit code, or the watchdog cleanup below.
       printf '\n===== Batch %s did not complete: killed before it could finish, so this log is truncated mid-run =====\n' \
-        "$batch" >> "$failed_summary_log"
+        "$batch" >> "$failed_summary_log" ||
+        echo "  Could not mark $failed_summary_log as truncated (rc=$?)"
     fi
     summary+=( "Test batch $batch FAILED; Log file will be uploaded as artifact $failed_summary_log" )
     final_result=1
