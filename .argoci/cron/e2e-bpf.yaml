@@ -116,7 +116,7 @@ steps:
             value: "false"
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: bpf-run-matrix-aws-single-subnet
+  - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
     services:
       - docker
       - http-cache-proxy
@@ -141,6 +141,8 @@ steps:
         value: None
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
+      - name: IP_FAMILY
+        value: dual
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
