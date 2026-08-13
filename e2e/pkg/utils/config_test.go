@@ -29,9 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-// A calico-apiserver pod restart keeps the aggregated API unavailable for tens
-// of seconds, not just a blip, so the retry budget has to span that window. Sum
-// the backoff to guard against quietly shrinking it back to a few seconds.
+// A calico-apiserver restart takes tens of seconds. Guard against shrinking the
+// budget back below that.
 func TestConfigRetryBudgetCoversAPIServerRestart(t *testing.T) {
 	g := NewWithT(t)
 
