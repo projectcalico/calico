@@ -88,11 +88,11 @@ Once a new branch is cut, we need to ensure a new milestone exists to represent 
 
 > [!NOTE]
 > This step is automated. The [Release prep workflow](../.github/workflows/release-prep.yml)
-> runs on every merge into a `release-vX.Y` branch: it rebuilds `build-vX.Y.Z` from the release
+> runs on every push to a `release-vX.Y` branch, including PR merges: it rebuilds `build-vX.Y.Z` from the release
 > branch, runs `make release-prep`, force-pushes the branch, and creates or updates the release PR
 > with the generated release notes in its body.
 >
-> Because the branch is rebuilt and force-pushed on every merge, hand edits to it are lost. Fix
+> Because the branch is rebuilt and force-pushed on every run, hand edits to it are lost. Fix
 > release notes at their source instead: edit the ```` ```release-note ```` block in the
 > description of the PR that the note came from, then re-run the workflow to regenerate. See
 > [Release notes](#release-notes).

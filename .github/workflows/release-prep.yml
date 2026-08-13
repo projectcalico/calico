@@ -1,24 +1,26 @@
 # Keep the next patch release's build branch and PR up to date.
 #
-# This automates step 4.a of release/RELEASING.md. On every merge into a
-# release-vX.Y branch it rebuilds build-vX.Y.Z from the release branch, runs
-# `make release-prep` (version bump in charts/manifests, `make generate`,
-# release notes), force-pushes the branch, and creates or refreshes the
-# release PR with the generated release notes in its body.
+# This automates step 4.a of release/RELEASING.md. On every push to a
+# release-vX.Y branch - which is what merging a PR into one produces - it
+# rebuilds build-vX.Y.Z from the release branch, runs `make release-prep`
+# (version bump in charts/manifests, `make generate`, release notes),
+# force-pushes the branch, and creates or refreshes the release PR with the
+# generated release notes in its body.
 #
 # The build branch is rebuilt from scratch every run and force-pushed, so
 # hand edits to it are lost. Add the `release-prep-hold` label to the release
 # PR to stop this workflow from touching it - do that before hand-editing the
 # release notes ahead of a release.
 #
-# pull_request_target is safe here: the job checks out and runs the base
-# release branch, never the PR head. The merged code is already part of the
-# base branch by the time this runs, same as any other post-merge job.
+# This deliberately triggers on `push` rather than `pull_request_target`. Both
+# would run the base branch's code with a write token and secrets, but `push`
+# only ever fires for content that is already on a protected branch, so there
+# is no pull request head - and no fork - anywhere in the event context. It
+# also covers changes that land on a release branch without a PR.
 ---
 name: Release prep
 on:  # yamllint disable-line rule:truthy
-  pull_request_target:
-    types: [closed]
+  push:
     branches:
       - 'release-v*'
   workflow_dispatch:
@@ -34,22 +36,24 @@ permissions:
 
 jobs:
   release-prep:
-    # Skip merges of the build branch itself (step 4.e), otherwise merging a
-    # release immediately opens a PR for the next patch.
+    # Best effort skip of the build branch landing on the release branch
+    # (step 4.e), so publishing a release does not immediately open a PR for
+    # the next patch. Missing it is not harmful - the milestone check in the
+    # prep step is the real backstop.
     if: >-
       github.repository == 'projectcalico/calico' &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event.pull_request.merged == true &&
-        !startsWith(github.event.pull_request.head.ref, 'build-')))
+      github.event.deleted != true &&
+      !contains(github.event.head_commit.message, 'build: v') &&
+      !contains(github.event.head_commit.message, '/build-v')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     concurrency:
       # Each run rebuilds the branch from the release branch, so a newer run
       # fully supersedes an older one.
-      group: release-prep-${{ inputs.branch || github.event.pull_request.base.ref }}
+      group: release-prep-${{ inputs.branch || github.ref_name }}
       cancel-in-progress: true
     env:
-      BASE_BRANCH: ${{ inputs.branch || github.event.pull_request.base.ref }}
+      BASE_BRANCH: ${{ inputs.branch || github.ref_name }}
       HOLD_LABEL: release-prep-hold
       # marvin-tigera, so the branch push and PR come from a real account:
       # branches pushed with GITHUB_TOKEN do not start workflow runs, which
