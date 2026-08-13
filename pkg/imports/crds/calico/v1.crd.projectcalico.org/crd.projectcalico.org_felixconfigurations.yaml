@@ -11,6 +11,7 @@ spec:
     listKind: FelixConfigurationList
     plural: felixconfigurations
     singular: felixconfiguration
+  preserveUnknownFields: false
   scope: Cluster
   versions:
     - name: v1
@@ -283,24 +284,6 @@ spec:
                     - Enabled
                     - Disabled
                   type: string
-                bpfIPFragTimeout:
-                  description: |-
-                    BPFIPFragTimeout, in BPF mode, controls the timeout for IP fragment reassembly.
-                    This is the maximum time that the BPF dataplane will wait for all fragments of a
-                    fragmented IP packet to arrive before discarding them.  If left unset, the value
-                    is read from the Linux kernel sysctl net.ipv4.ipfrag_time (which defaults to 30
-                    seconds).
-                    [Default: unset - read from net.ipv4.ipfrag_time]
-                  pattern: ^([0-9]+(\\.[0-9]+)?(ms|s|m|h))*$
-                  type: string
-                bpfIPFragmentReassemblyEnabled:
-                  description: |-
-                    BPFIPFragmentReassemblyEnabled controls whether Felix loads the BPF program that
-                    reassembles out-of-order IP fragments from external networks. This program requires
-                    a kernel newer than 5.10. When enabled (the default) and the program fails to load,
-                    Felix reports not-ready until the user sets this to false. When false, fragmented
-                    packets from external sources are dropped. [Default: true]
-                  type: boolean
                 bpfJITHardening:
                   allOf:
                     - enum:
@@ -435,18 +418,6 @@ spec:
                     to hold one entry per workload and a handful of entries per host (enough to cover its own IPs and
                     tunnel IPs).
                   type: integer
-                bpfOverlayHostSourceIP:
-                  description: |-
-                    BPFOverlayHostSourceIP controls the source IP that Felix uses in BPF mode for host-networked
-                    (node-originated) traffic egressing over an IPIP/VXLAN overlay tunnel.  "TunnelAddress" (the default)
-                    assigns an IP address to the overlay tunnel device and uses it as the source, preserving the behaviour
-                    of clusters upgraded from earlier releases.  "HostAddress" uses the node's own IP directly and does not
-                    assign a tunnel device IP.  This option has no effect on WireGuard tunnels, which always use a tunnel
-                    device IP.  [Default: TunnelAddress]
-                  enum:
-                    - TunnelAddress
-                    - HostAddress
-                  type: string
                 bpfPSNATPorts:
                   anyOf:
                     - type: integer
@@ -476,7 +447,7 @@ spec:
                 bpfRedirectToPeer:
                   description: |-
                     BPFRedirectToPeer controls whether traffic may be forwarded directly to the peer side of a workload’s device.
-                    Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled".
+                    Note that the legacy "L2Only" option is now deprecated and if set it is treated like "Enabled.
                     Setting this option to "Enabled" allows direct redirection (including from L3 host devices such as IPIP tunnels or WireGuard),
                     which can improve redirection performance but causes the redirected packets to bypass the host‑side ingress path.
                     As a result, packet‑capture tools on the host side of the workload device (for example, tcpdump) will not see that traffic. [Default: Enabled]
@@ -566,13 +537,11 @@ spec:
                   description: |-
                     DeviceRouteSourceAddress IPv4 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
-                  maxLength: 45
                   type: string
                 deviceRouteSourceAddressIPv6:
                   description: |-
                     DeviceRouteSourceAddressIPv6 IPv6 address to set as the source hint for routes programmed by Felix. When not set
                     the source address for local traffic from host to workload will be determined by the kernel.
-                  maxLength: 45
                   type: string
                 disableConntrackInvalidCheck:
                   description: |-
@@ -782,7 +751,6 @@ spec:
                       - timeout
                     type: object
                   type: array
-                  x-kubernetes-list-type: atomic
                 interfaceExclude:
                   description: |-
                     InterfaceExclude A comma-separated list of interface names that should be excluded when Felix is resolving
@@ -873,9 +841,7 @@ spec:
                     IptablesMarkMask is the mask that Felix selects its IPTables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int64
-                  maximum: 4294967295
-                  minimum: 0
+                  format: int32
                   type: integer
                 iptablesNATOutgoingInterfaceFilter:
                   description: |-
@@ -942,14 +908,12 @@ spec:
                     - Disabled
                   type: string
                 istioDSCPMark:
-                  anyOf:
-                    - type: integer
-                    - type: string
                   description: |-
                     IstioDSCPMark sets the value to use when directing traffic to Istio ZTunnel, when Istio is enabled. The mark is set only on
                     SYN packets at the final hop to avoid interference with other protocols. This value is reserved by Calico and must not be used
                     with other Istio installation. [Default: 23]
                   pattern: ^.*
+                  type: integer
                   x-kubernetes-int-or-string: true
                 kubeNodePortRanges:
                   description: |-
@@ -961,7 +925,6 @@ spec:
                       - type: string
                     pattern: ^.*
                     x-kubernetes-int-or-string: true
-                  maxItems: 7
                   type: array
                 liveMigrationRouteConvergenceTime:
                   description: |-
@@ -969,26 +932,6 @@ spec:
                     VM live migration completes.  This allows routes to converge across the cluster before
                     reverting to normal priority. [Default: 30s]
                   pattern: ^([0-9]+(\.[0-9]+)?(ms|s|m|h))*$
-                  type: string
-                localSubnetL2Reachability:
-                  description: |-
-                    LocalSubnetL2Reachability controls whether Felix automatically responds to
-                    ARP (IPv4) and NDP (IPv6) requests on host interfaces for local pod IPs and
-                    selected LoadBalancer VIPs that fall within the same subnet as the host
-                    interface. When set to PodsAndLoadBalancers, pods and LB VIPs on the host
-                    subnet are reachable from the local L2 segment without BGP. [Default: Disabled]
-                  enum:
-                    - Disabled
-                    - PodsAndLoadBalancers
-                  type: string
-                localSubnetL2ReachabilityRefreshInterval:
-                  description: |-
-                    LocalSubnetL2ReachabilityRefreshInterval controls how often Felix re-announces
-                    (gratuitous ARP / unsolicited NA) every IP it proxies ARP/NDP for when
-                    LocalSubnetL2Reachability is enabled, keeping neighbor caches and switch
-                    forwarding tables warm even when the set of proxied IPs is unchanged. Set to 0
-                    to disable periodic re-announcement, leaving only the one-shot announce when an
-                    IP is added. [Default: 120s]
                   type: string
                 logActionRateLimit:
                   description: |-
@@ -1074,7 +1017,6 @@ spec:
                     NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
                     is leaving the network. By default the address used is an address on the interface the traffic is leaving on
                     (i.e. it uses the iptables MASQUERADE target).
-                  maxLength: 45
                   type: string
                 natOutgoingExclusions:
                   description: |-
@@ -1115,25 +1057,6 @@ spec:
                     blocks traffic with a "drop" action. If you want to use a "reject" action instead you can configure it here.
                   pattern: ^(?i)(Drop|Reject)?$
                   type: string
-                nftablesFlowTableDataIfacePattern:
-                  description: |-
-                    NFTablesFlowTableDataIfacePattern is a regular expression that controls which host
-                    interfaces are added to the nftables flowtable, so that traffic forwarded between those
-                    interfaces and local workloads is offloaded to the flowtable fast path. Leave empty to
-                    offload only workload-to-workload traffic. Only takes effect when NFTablesFlowTableOffload
-                    is not Disabled. [Default: ""]
-                  type: string
-                nftablesFlowTableOffload:
-                  default: Disabled
-                  description: |-
-                    NFTablesFlowTableOffload controls which traffic nftables flowtable offload is enabled for,
-                    for improved forwarding performance. When set to "All", established connections accepted by
-                    Calico policy are offloaded to the kernel's flowtable fast path. Only applies when
-                    nftables mode is active. [Default: Disabled]
-                  enum:
-                    - All
-                    - Disabled
-                  type: string
                 nftablesMangleAllowAction:
                   description: |-
                     NftablesMangleAllowAction controls the nftables action that Felix uses to represent the "allow" policy verdict
@@ -1146,16 +1069,13 @@ spec:
                     NftablesMarkMask is the mask that Felix selects its nftables Mark bits from. Should be a 32 bit hexadecimal
                     number with at least 8 bits set, none of which clash with any other mark bits in use on the system.
                     [Default: 0xffff0000]
-                  format: int64
-                  maximum: 4294967295
-                  minimum: 0
+                  format: int32
                   type: integer
                 nftablesMode:
                   default: Auto
-                  description: |-
-                    NFTablesMode configures nftables support in Felix. In Auto mode, Felix uses the
-                    nftables dataplane if kube-proxy is detected to be running in nftables mode.
-                    [Default: Auto]
+                  description:
+                    "NFTablesMode configures nftables support in Felix. [Default:
+                    Auto]"
                   enum:
                     - Disabled
                     - Enabled
@@ -1222,7 +1142,7 @@ spec:
                 prometheusMetricsClientAuth:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
-                    This determines how the server validates client certificates. Default is "NoClientCert".
+                    This determines how the server validates client certificates. Default is "RequireAndVerifyClientCert".
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -1310,10 +1230,6 @@ spec:
                     - max
                     - min
                   type: object
-                  x-kubernetes-validations:
-                    - message: must be a range of route table indices within 1..250
-                      reason: FieldValueInvalid
-                      rule: self.min >= 1 && self.max >= self.min && self.max <= 250
                 routeTableRanges:
                   description: |-
                     Calico programs additional Linux route tables for various purposes.
@@ -1329,13 +1245,6 @@ spec:
                       - max
                       - min
                     type: object
-                    x-kubernetes-validations:
-                      - message: min must be >= 1
-                        reason: FieldValueInvalid
-                        rule: self.min >= 1
-                      - message: min must not be greater than max
-                        reason: FieldValueInvalid
-                        rule: self.min <= self.max
                   type: array
                 serviceLoopPrevention:
                   description: |-
@@ -1496,24 +1405,6 @@ spec:
                 - message: routeTableRange and routeTableRanges cannot both be set
                   reason: FieldValueForbidden
                   rule: "!has(self.routeTableRange) || !has(self.routeTableRanges)"
-                - message: natOutgoingAddress must be a valid IPv4 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.natOutgoingAddress) || size(self.natOutgoingAddress)
-                    == 0 || (isIP(self.natOutgoingAddress) && ip(self.natOutgoingAddress).family()
-                    == 4)"
-                - message: deviceRouteSourceAddress must be a valid IPv4 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddress) || size(self.deviceRouteSourceAddress)
-                    == 0 || (isIP(self.deviceRouteSourceAddress) && ip(self.deviceRouteSourceAddress).family()
-                    == 4)"
-                - message: deviceRouteSourceAddressIPv6 must be a valid IPv6 address
-                  reason: FieldValueInvalid
-                  rule:
-                    "!has(self.deviceRouteSourceAddressIPv6) || size(self.deviceRouteSourceAddressIPv6)
-                    == 0 || (isIP(self.deviceRouteSourceAddressIPv6) && ip(self.deviceRouteSourceAddressIPv6).family()
-                    == 6)"
           type: object
           x-kubernetes-validations:
             - message:
