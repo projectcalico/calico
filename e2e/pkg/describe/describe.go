@@ -76,7 +76,6 @@ var features = map[string]bool{
 	"Datapath":        true,
 	"Istio":           true,
 	"KubeVirt":        true,
-	"ClusterRoutes":   true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with

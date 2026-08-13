@@ -14,9 +14,6 @@ include:
   - Conformance && sig-calico
   - Conformance && sig-network
   - RequiresCalicoAPIServer
-  # Tests of what Felix-programmed cluster routes look like. They need a cluster
-  # where Felix, not BIRD, owns those routes, so this lane is their only home.
-  - Feature:ClusterRoutes
 
 exclude:
   labels:

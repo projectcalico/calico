@@ -137,10 +137,21 @@ programming internally.
 | `confd/pkg/backends/calico/bgp_processor.go`                        | `clusterRoutePolicy` and `clusterRoutePolicyFromBGPConfig` parse the BGPConfiguration field; `processIPPool` decides, per pool, whether BIRD's kernel-programming filter accepts or rejects that pool's CIDR. |
 | `node/filesystem/etc/calico/confd/templates/bird_ipam.cfg.template` | Renders `filter calico_kernel_programming` from those statements, plus `calico_export_to_bgp_peers`.                                                                                                          |
 
-Only the *kernel-programming* filter varies with ownership.  The
-export-to-peers filters are the same either way, because whether this node
-should advertise a prefix to its peers is a separate question from who writes
-the route to this node's kernel.
+The kernel-programming filter is not the only one that varies with ownership.
+`calico_export_to_bgp_peers` varies too: BIRD's kernel protocol runs with
+`learn`, so once Felix owns the IPIP cluster routes BIRD picks them up as its
+own, and a kernel-learned route is not subject to the iBGP
+no-re-advertisement rule.  `processIPPools` therefore adds `tunl0` to the
+tunnel-route reject (`IBGPExportFilterForTunnelRoutes`) exactly when Felix is
+the owner.  The `*.cali` / `*.calico` arms of that reject are unconditional,
+because Felix always owns VXLAN and WireGuard routes.
+
+What does *not* vary is the rest of the export path: whether this node should
+advertise a prefix it owns is a separate question from who writes the route to
+this node's kernel.  `TestFelixClusterRoutesNotReadvertised`
+(`node/tests/k8st/tests/cluster_routes_test.go`) is what holds the `tunl0` arm
+in place — it asserts that no node exports another node's block once Felix is
+programming the route to it.
 
 For an IPIP pool that BIRD owns, the filter statement also sets BIRD's
 `krt_tunnel` variable, which tells the kernel protocol to send the route out
