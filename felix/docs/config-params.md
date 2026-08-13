@@ -1238,22 +1238,25 @@ like Application layer policy.
 
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
-Controls which "cluster routes" Felix programs, i.e. the routes that a node needs in
-order to reach workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; Felix always
-programs the cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. The routes that
-Felix does not program here are expected to be programmed by confd and BIRD instead. Below, an IPIP IP Pool
-is one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and vxlanMode both Never.
+Controls which "cluster routes" Felix programs, i.e. the routes that
+a node needs in order to reach workloads on other nodes. It only applies to IP Pools
+with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+vxlanMode: Always or vxlanMode: CrossSubnet. The routes that Felix does not program here
+are expected to be programmed by Calico's BGP stack instead. Below, an IPIP IP Pool is
+one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+vxlanMode both Never.
 
 - Disabled: Felix programs no cluster routes.
 - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
 - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
 - Enabled: Felix programs them for both.
 
-This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which makes the same choice
-from BIRD's side. If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the
-routes; if neither is, there will be no cluster routes at all.
+This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+makes the same choice from BIRD's side. If both Felix and BIRD are enabled for the same
+kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+routes at all.
 
-Note: leaving the IPIP cluster routes to confd and BIRD, which the Disabled and EnabledNoEncapOnly
+Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
 values do, is deprecated as of v3.33 and will be removed in v3.35.
 
 | Detail |   |
