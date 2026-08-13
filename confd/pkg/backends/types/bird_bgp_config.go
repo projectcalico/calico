@@ -34,6 +34,7 @@ type BirdBGPConfig struct {
 	ExternalIPs                       []string
 	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
+	IBGPExportFilterForTunnelRoutes   []string
 	BGPExportFilterForEnabledIPPools  []string
 	KernelFilterForIPPools            []string
 	SetMetricForBGPRoutes             []string
