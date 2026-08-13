@@ -98,6 +98,29 @@ BPF functional tests live alongside the rest of Felix FV in
   network-policy semantics) and are largely the same regardless
   of dataplane. The prefix marks them as runnable under BPF mode.
 
+### The two name markers and how CI selects on them
+
+CI selects the BPF runs by test *name*, using two markers:
+
+- `_BPF-SAFE_` — "run this test in BPF mode". Required on shared
+  FV tests; the BPF jobs' Ginkgo focus is built from it.
+- `_BPF_` — "this test targets the BPF dataplane". The reduced BPF
+  jobs focus on it to run a slice of the BPF tests (e.g.
+  `FV_FOCUS='_BPF_.*ct=true'`), so a BPF-specific test wants it.
+
+`_BPF_` **implies** `_BPF-SAFE_`: the full BPF job's focus is
+`BPF-SAFE|_BPF_` (`felix/.semaphore/fv-prologue`). Without that,
+a test named `_BPF_` but not `_BPF-SAFE_` would run in no job at
+all — the BPF jobs would skip it by focus, and the other jobs skip
+it because a BPF-specific test self-gates on
+`infrastructure.BPFMode()`. Nothing else catches that: an empty
+focus match is a silent pass.
+
+Ginkgo matches the focus against a spec's full text — every
+enclosing `Describe`/`Context` heading concatenated — so a marker
+on any ancestor container covers the specs beneath it. Convention
+for a BPF-specific test is to carry both, `_BPF_ _BPF-SAFE_`.
+
 A test in `fv/bpf_*_test.go` carries a **matrix prefix**
 identifying the dataplane parameter combination it represents:
 

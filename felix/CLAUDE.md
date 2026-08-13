@@ -76,6 +76,8 @@ make fv-bpf GINKGO_FOCUS="TestName"
 
 `fv/bpf_*_test.go` tests carry a matrix prefix (e.g. `"ipv4 udp, ct=true, log=debug, tunnel=none, dsr=false"`) which `GINKGO_FOCUS` can regex-match to slice the matrix when triaging. The matrix axes, the `_BPF-SAFE_` convention for shared FV tests, and the harness conventions for `bpf/ut/` are documented in [`design/bpf-tests.md`](./design/bpf-tests.md).
 
+**Name a new FV test that needs BPF mode `_BPF-SAFE_`, or `_BPF_ _BPF-SAFE_` if it targets the BPF dataplane.** CI's BPF jobs focus on `BPF-SAFE|_BPF_`, so either marker is enough to get the test run; a test with neither marker runs in no BPF job.
+
 ### Nftables Functional Tests
 
 ```bash
