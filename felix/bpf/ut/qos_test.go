@@ -15,10 +15,12 @@
 package ut_test
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
 
+	"github.com/gopacket/gopacket/layers"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/calico/felix/bpf/conntrack"
@@ -755,4 +757,457 @@ func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
 	// Counter must be unchanged at 1 — the "already counted" arm of the
 	// ingress check does NOT call qos_connlimit_check_and_increment.
 	Expect(readQoSCount()).To(Equal(uint32(1)))
+}
+
+// TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount verifies that a
+// spurious RST on a live connection costs its egress connlimit slot only until
+// the next recount, rather than permanently.
+//
+// calico_ct_lookup decrements on any RST: conntrack.h tests tcp_header->rst
+// directly, with no sequence validation anywhere on the path (the entry is
+// stamped for any RST matching the 4-tuple, and ct_tcp_entry_update's seqno
+// checks cover only SYN+ACK and bare ACK). The spurious-RST reasoning nearby
+// can only reach a verdict two minutes later, in hindsight, so it cannot help
+// at the moment the RST arrives.
+//
+// That prompt decrement is deliberate and must stay: felix/fv asserts a
+// genuine RST close frees a slot within 5s, and routing RST closes to the
+// cleanup path instead made those cases wait for TCPResetSeen (40s).
+//
+// What made a spurious RST unrecoverable was CONNLIMIT_DEC. The helper claims
+// it before decrementing and nothing ever clears it, so while the scanner
+// skipped entries carrying it, a still-live connection was excluded from every
+// future recount — the one mechanism that can return a slot. The per-leg RST
+// bits, by contrast, clear themselves the moment traffic resumes, which is
+// what makes recovery possible at all.
+//
+// So this drives the packet path with an out-of-window RST — the shape a
+// peer's stack discards, leaving the connection up while the dataplane counts
+// it as a close — then continued traffic, and finally the real scanner, and
+// asserts the slot comes back.
+func TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWrst"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		// ifIndex must match the BPF UT's default skb ifindex so the
+		// workload RPF check (route iface vs skb iface) passes.
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 12346 // local workload, the opener
+		dstPort        uint16 = 8055
+	)
+
+	// Routes: local workload source, remote workload destination (same shape
+	// as TestQoSConnLimitEgressRecycleNotDoubleCounted).
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// A fully-established egress connection that was counted against the
+	// egress limit on its first SYN (CONNLIMIT_EGRESS set, CONNLIMIT_DEC
+	// clear). No FIN and no RST on either leg. The opener leg carries the
+	// pod ifindex, which is where qos_connlimit_decrement_for_ct reads it.
+	//
+	// Approved must be set on both legs: from_wep is CALI_F_TO_HOST, so
+	// calico_ct_lookup checks src_to_dst->approved (conntrack.h:1041) and
+	// would otherwise return CALI_CT_INVALID for these non-SYN packets and
+	// drop them before they demonstrate anything.
+	legA := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true, Ifindex: ifIndex}
+	legB := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0), ctv4.FlagConnLimitOut, legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	// Egress connlimit map: max=3, current=1 — this one live connection.
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, 1).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTVal := func() ctv4.ValueInterface {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b)
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = dstIP
+
+	// An RST on the live connection's 5-tuple. Nothing in the BPF path
+	// checks its sequence number, which is what lets a peer's stack discard
+	// it (leaving the connection up) while the dataplane treats it as a
+	// close.
+	rstPkt, dataPkt := spuriousRSTThenTrafficPackets(&ip, srcPort, dstPort)
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(rstPkt)
+		Expect(err).NotTo(HaveOccurred())
+		// The RST must actually reach the conntrack path — if it were
+		// dropped the counter would be untouched and this test would
+		// pass vacuously.
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+	}, withEgressQoSConnLimit())
+
+	// Guard, not the behaviour under test: a non-zero RST timestamp proves
+	// the RST branch at conntrack.h:1079 executed, so the assertions below
+	// are meaningful rather than vacuous.
+	Expect(readCTVal().RSTSeen()).NotTo(BeZero(),
+		"RST was not recorded on the CT entry; the packet never reached the RST path")
+
+	// The fast path releases the slot immediately. That promptness is
+	// required — felix/fv asserts a genuine RST close frees a slot within
+	// 5s — and is why the RST decrement stays. On a spurious RST it is an
+	// under-count, which the recount below is expected to repair.
+	Expect(readQoSCount()).To(Equal(uint32(0)),
+		"fast path should have decremented on the RST")
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(dataPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+	}, withEgressQoSConnLimit())
+
+	// The connection is demonstrably still live, and last_seen having moved
+	// past rst_seen is the signal the recount keys on. The per-leg RST bits
+	// are no use for this: the RST packet's own pass through
+	// ct_tcp_entry_update() already cleared them.
+	Expect(readCTVal().LastSeen()).To(BeNumerically(">", readCTVal().RSTSeen()),
+		"traffic after the RST should have advanced last_seen past rst_seen")
+
+	// CONNLIMIT_DEC is still set and never will be cleared. The recount has
+	// to restore the slot in spite of it -- that is the whole fix.
+	Expect(readCTVal().Flags()&ctv4.FlagConnLimitDec).NotTo(Equal(uint32(0)),
+		"expected the fast path to have claimed CONNLIMIT_DEC")
+
+	// Run the real ConnLimitScanner over the real CT entry, exactly as the
+	// CT scan loop does. This is the seam the bug lived in: the packet path
+	// and the scanner were each locally reasonable, and only their
+	// composition was wrong, so assert the composition.
+	runConnLimitRecount(k, readCTVal(), srcIP, conntrack.ConnLimitPodInfo{
+		IfIndex: ifIndex, HasEgressLimit: true,
+	})
+
+	Expect(readQoSCount()).To(Equal(uint32(1)),
+		"recount did not restore the slot of a live connection after a spurious RST")
+}
+
+// TestQoSConnLimitSpuriousRSTReleasesStaleDecClaim verifies that once
+// calico_ct_lookup concludes an RST was spurious, it also releases the
+// CONNLIMIT_DEC claim that RST caused, so the connection's genuine close still
+// decrements on the fast path.
+//
+// A spurious RST decrements the counter and latches CONNLIMIT_DEC. The recount
+// restores the slot, but nothing released the latch, so when the connection
+// eventually closed for real qos_connlimit_decrement_for_ct bailed and the slot
+// came back only at recount speed (~30s) instead of immediately. The latch
+// describes a decrement that the recount has since rebased away, so it has to
+// be released at the same point the dataplane already decides the RST was
+// spurious — two minutes of continued traffic, where it clears v->rst_seen.
+//
+// The entry is staged in its post-recount state rather than replayed packet by
+// packet: established and approved, counted against the egress limit,
+// CONNLIMIT_DEC still latched from the earlier spurious RST, per-leg RST bits
+// already cleared by resumed traffic, and the peer's FIN seen. A single FIN
+// from the pod then has to do three things in one pass through
+// calico_ct_lookup: release the stale latch, complete the FIN exchange, and
+// decrement.
+func TestQoSConnLimitSpuriousRSTReleasesStaleDecClaim(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWrstD"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 12347
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// The pod is the opener; the peer has already sent its FIN, so the pod's
+	// FIN below completes the exchange. CONNLIMIT_DEC is latched from the
+	// spurious RST; the per-leg RST bits are not set, because traffic resumed
+	// and conntrack.h:571-576 cleared them.
+	legA := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true, Ifindex: ifIndex}
+	legB := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, FinSeen: true}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0),
+		ctv4.FlagConnLimitOut|ctv4.FlagConnLimitDec, legA, legB)
+
+	// Backdate the value's RST timestamp so the two-minute window has already
+	// elapsed. bpf_ktime_get_ns() counts from boot, so 1ns is effectively
+	// "at boot" — any host that has been up longer than 2 minutes satisfies
+	// the check, and the assertion on RSTSeen below catches it if not.
+	vb := v.AsBytes()
+	binary.LittleEndian.PutUint64(vb[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], 1)
+	Expect(ctMap.Update(k.AsBytes(), vb[:])).NotTo(HaveOccurred())
+
+	// The recount has already restored this connection's slot.
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, 1).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTVal := func() ctv4.ValueInterface {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b)
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = dstIP
+
+	// The pod's FIN, completing the bilateral close.
+	_, _, _, _, finPkt, err := testPacketV4(nil, &ip, &layers.TCP{
+		FIN:        true,
+		ACK:        true,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+	}, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(finPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+	}, withEgressQoSConnLimit())
+
+	// Guard, not the behaviour under test: a cleared RST timestamp proves the
+	// two-minute branch actually ran. Without this a host up for less than
+	// 2 minutes would fail the real assertion below for the wrong reason.
+	Expect(readCTVal().RSTSeen()).To(BeZero(),
+		"two-minute spurious-RST branch did not run; the rest of this test proves nothing")
+
+	// The real close decremented on the fast path, despite the stale latch.
+	Expect(readQoSCount()).To(Equal(uint32(0)),
+		"stale CONNLIMIT_DEC claim suppressed the decrement on a genuine close")
+}
+
+// runConnLimitRecount drives the real ConnLimitScanner over a single CT entry
+// the way the conntrack scan loop does — IterationStart, one Check, then
+// IterationEnd, which is where the recounted value is written back to the
+// cali_qos_conn map. podIP is the limited pod's address; the scanner resolves
+// an entry to a pod by matching the CT key's addresses against its pod map.
+func runConnLimitRecount(k ctv4.Key, val ctv4.ValueInterface, podIP net.IP, info conntrack.ConnLimitPodInfo) {
+	scanner := conntrack.NewConnLimitScanner(qosConnMap,
+		func() map[string]conntrack.ConnLimitPodInfo {
+			return map[string]conntrack.ConnLimitPodInfo{
+				string(podIP.To4()): info,
+			}
+		}, qos.IPFamilyV4)
+
+	scanner.IterationStart()
+	scanner.Check(k, val, nil)
+	scanner.IterationEnd()
+}
+
+// TestQoSConnLimitIngressSpuriousRSTSlotRestoredByRecount is the ingress twin
+// of TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount. The defect is
+// shared — the RST decrement is direction-agnostic — but the accounting is
+// not: the ingress arm of qos_connlimit_decrement_for_ct resolves the pod
+// ifindex from the *non-opener* leg and additionally gates on
+// CONNLIMIT_INGRESS_REJECTED, and the scanner picks the direction from the
+// opener bit, so egress passing is not evidence that ingress does.
+//
+// The threat model differs too. On egress the pod can defeat its own limit
+// knowing only its own 4-tuples; on ingress the RST arrives from outside, so a
+// third party needs the 4-tuple — but still not a valid sequence number, since
+// nothing in the BPF path validates one. The more common trigger here is not an
+// attacker at all but a genuinely spurious RST (a late reset for a recycled
+// tuple, or a middlebox), which is the case conntrack.h:1083-1091 already
+// concedes happens.
+func TestQoSConnLimitIngressSpuriousRSTSlotRestoredByRecount(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWrstI"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23458 // remote opener
+		dstPort        uint16 = 8055  // workload listening port
+	)
+
+	// Routes: same shape as the other ingress connlimit tests.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// An established inbound connection counted against the ingress limit:
+	// CONNLIMIT_INGRESS set, CONNLIMIT_DEC clear, and crucially
+	// CONNLIMIT_INGRESS_REJECTED clear (with it set, the ingress arm of the
+	// decrement is skipped and this test could not distinguish the bug from
+	// correct behaviour).
+	//
+	// The remote is the opener on leg A, so the pod is the responder on leg B
+	// and leg B carries the pod ifindex — that is the leg the ingress arm of
+	// qos_connlimit_decrement_for_ct reads. Approved is needed on both legs
+	// for the same reason as the egress twin: to_wep is CALI_F_FROM_HOST and
+	// checks dst_to_src->approved (conntrack.h:1054), so unapproved non-SYN
+	// packets would be dropped as CALI_CT_INVALID.
+	legA := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true}
+	legB := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Ifindex: ifIndex}
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	v := ctv4.NewValueNormal(time.Duration(0), ctv4.FlagConnLimitIn, legA, legB)
+	Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+	// Ingress connlimit map: max=3, current=1 — this one live connection.
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+	Expect(qosConnMap.Update(qosKey.AsBytes(),
+		qos.NewConnValue(maxConnections, 1).AsBytes())).
+		NotTo(HaveOccurred())
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTVal := func() ctv4.ValueInterface {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b)
+	}
+
+	ip := *ipv4Default
+	ip.DstIP = dstIP
+
+	// Inbound RST on the live connection's 5-tuple, then inbound traffic
+	// that proves the connection survived it.
+	rstPkt, dataPkt := spuriousRSTThenTrafficPackets(&ip, srcPort, dstPort)
+
+	// Ingress program: skb already marked seen (the packet passed through
+	// from-hep earlier), matching the other ingress connlimit tests.
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(rstPkt)
+		Expect(err).NotTo(HaveOccurred())
+		// The RST must actually reach the conntrack path — if it were
+		// dropped the counter would be untouched and this test would
+		// pass vacuously.
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+	}, withIngressQoSConnLimit())
+
+	// Guard, not the behaviour under test: proves the RST branch executed.
+	Expect(readCTVal().RSTSeen()).NotTo(BeZero(),
+		"RST was not recorded on the CT entry; the packet never reached the RST path")
+
+	// Prompt release on the fast path, as on egress.
+	Expect(readQoSCount()).To(Equal(uint32(0)),
+		"fast path should have decremented on the RST")
+
+	skbMark = tcdefs.MarkSeen
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(dataPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
+	}, withIngressQoSConnLimit())
+
+	// Still live, and last_seen past rst_seen is what the recount keys on.
+	Expect(readCTVal().LastSeen()).To(BeNumerically(">", readCTVal().RSTSeen()),
+		"traffic after the RST should have advanced last_seen past rst_seen")
+
+	Expect(readCTVal().Flags()&ctv4.FlagConnLimitDec).NotTo(Equal(uint32(0)),
+		"expected the fast path to have claimed CONNLIMIT_DEC")
+
+	// The pod is the responder here, so it is the CT key's dst address.
+	runConnLimitRecount(k, readCTVal(), dstIP, conntrack.ConnLimitPodInfo{
+		IfIndex: ifIndex, HasIngressLimit: true,
+	})
+
+	Expect(readQoSCount()).To(Equal(uint32(1)),
+		"recount did not restore the slot of a live connection after a spurious RST")
+}
+
+// spuriousRSTThenTrafficPackets builds the two packets the spurious-RST tests
+// replay over a live connection, in order:
+//
+//   - an RST on the connection's 5-tuple, carrying no valid sequence number.
+//     Nothing in the BPF path validates one (conntrack.h:1079 stamps the entry
+//     for any RST matching the tuple, and ct_tcp_entry_update's seqno checks
+//     cover only SYN+ACK and bare ACK), which is what lets a real peer's stack
+//     discard this while the dataplane counts it as a close.
+//   - continued traffic: a normal ACK-bearing data packet. With both legs
+//     already ACKed this takes the "Normal packet" arm of ct_tcp_entry_update
+//     and clears the per-leg rst_seen bits (conntrack.h:571-576), so the
+//     dataplane itself withdraws its own close signal.
+//
+// Both directions use the same builder: which leg the RST lands on is decided
+// by the CT entry's opener bit and the program under test, not by the packet.
+func spuriousRSTThenTrafficPackets(ip *layers.IPv4, srcPort, dstPort uint16) (rstPkt, dataPkt []byte) {
+	_, _, _, _, rstPkt, err := testPacketV4(nil, ip, &layers.TCP{
+		RST:        true,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+	}, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	_, _, _, _, dataPkt, err = testPacketV4(nil, ip, &layers.TCP{
+		ACK:        true,
+		PSH:        true,
+		SrcPort:    layers.TCPPort(srcPort),
+		DstPort:    layers.TCPPort(dstPort),
+		DataOffset: 5,
+	}, []byte("hello"))
+	Expect(err).NotTo(HaveOccurred())
+
+	return rstPkt, dataPkt
 }

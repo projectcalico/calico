@@ -1088,6 +1088,16 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				 * likely established and the RST was spurious.
 				 */
 				v->rst_seen = 0;
+
+				/* The RST also decremented the connlimit counter and
+				 * claimed CONNLIMIT_DEC below. The recount has since
+				 * restored the slot, so that claim is stale: release it,
+				 * or this connection's real close finds the latch taken
+				 * and frees its slot only at recount speed. Atomic AND to
+				 * match the atomic OR that claims it -- a byte-wide RMW
+				 * on flags3 would race with a claim on another CPU.
+				 */
+				__sync_fetch_and_and(&v->type_flags_word, ~(__u32)CALI_CT_FLAG_CONNLIMIT_DEC);
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
