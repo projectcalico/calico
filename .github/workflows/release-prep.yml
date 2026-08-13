@@ -1,0 +1,187 @@
+# Keep the next patch release's build branch and PR up to date.
+#
+# This automates step 4.a of release/RELEASING.md. On every merge into a
+# release-vX.Y branch it rebuilds build-vX.Y.Z from the release branch, runs
+# `make release-prep` (version bump in charts/manifests, `make generate`,
+# release notes), force-pushes the branch, and creates or refreshes the
+# release PR with the generated release notes in its body.
+#
+# The build branch is rebuilt from scratch every run and force-pushed, so
+# hand edits to it are lost. Add the `release-prep-hold` label to the release
+# PR to stop this workflow from touching it - do that before hand-editing the
+# release notes ahead of a release.
+#
+# pull_request_target is safe here: the job checks out and runs the base
+# release branch, never the PR head. The merged code is already part of the
+# base branch by the time this runs, same as any other post-merge job.
+---
+name: Release prep
+on:  # yamllint disable-line rule:truthy
+  pull_request_target:
+    types: [closed]
+    branches:
+      - 'release-v*'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Release branch to prep, e.g. release-v3.30'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-prep:
+    # Skip merges of the build branch itself (step 4.e), otherwise merging a
+    # release immediately opens a PR for the next patch.
+    if: >-
+      github.repository == 'projectcalico/calico' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.merged == true &&
+        !startsWith(github.event.pull_request.head.ref, 'build-')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      # Each run rebuilds the branch from the release branch, so a newer run
+      # fully supersedes an older one.
+      group: release-prep-${{ inputs.branch || github.event.pull_request.base.ref }}
+      cancel-in-progress: true
+    env:
+      BASE_BRANCH: ${{ inputs.branch || github.event.pull_request.base.ref }}
+      HOLD_LABEL: release-prep-hold
+      # marvin-tigera, so the branch push and PR come from a real account:
+      # branches pushed with GITHUB_TOKEN do not start workflow runs, which
+      # would leave the release PR without any GitHub Actions checks.
+      GH_TOKEN: ${{ secrets.MARVIN_RENOVATE_PAT || secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check the target is a release branch
+        run: |
+          case "${BASE_BRANCH}" in
+            release-v*) ;;
+            *) echo "::error::${BASE_BRANCH} is not a release branch"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ env.BASE_BRANCH }}
+          # release-prep derives the version from `git describe --tags`, and
+          # its `git push --force-with-lease` needs the remote-tracking ref
+          # for an existing build branch.
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.MARVIN_RENOVATE_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Fetch remote branches and tags
+        run: git fetch --prune --prune-tags --tags --force origin
+
+      - name: Check for a hold on the existing release PR
+        id: hold
+        run: |
+          set -euo pipefail
+          held=$(gh pr list --repo "${GITHUB_REPOSITORY}" --base "${BASE_BRANCH}" \
+            --state open --json number,headRefName,labels \
+            --jq "[.[] | select(.headRefName | startswith(\"build-\"))
+                      | select(any(.labels[]; .name == \"${HOLD_LABEL}\"))
+                      | .number] | .[0] // empty")
+          if [ -n "${held}" ]; then
+            echo "::notice::PR #${held} has the ${HOLD_LABEL} label; leaving it alone."
+            echo "held=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "held=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Configure git
+        if: steps.hold.outputs.held == 'false'
+        run: |
+          git config user.name marvin-tigera
+          git config user.email marvin-tigera@users.noreply.github.com
+
+      - name: Run release prep
+        id: prep
+        if: steps.hold.outputs.held == 'false'
+        env:
+          # Used for release note generation and by `gh` inside the tool.
+          GITHUB_TOKEN: ${{ secrets.MARVIN_RENOVATE_PAT || secrets.GITHUB_TOKEN }}
+          # `make generate` regenerates .semaphore/semaphore.yml; tell it which
+          # branch this is, since prep runs it on the build- branch.
+          SEMAPHORE_GIT_BRANCH: ${{ env.BASE_BRANCH }}
+        run: |
+          set -o pipefail
+          if make release-prep 2>&1 | tee /tmp/release-prep-output.log; then
+            echo "skipped=false" >> "${GITHUB_OUTPUT}"
+          elif grep -q 'no PRs found for milestone' /tmp/release-prep-output.log; then
+            # Normal right after a release: the next milestone does not exist
+            # yet, or has no PRs. See "Update milestones" in release/RELEASING.md.
+            echo "::notice::No milestone content for the next version yet; nothing to prep."
+            echo "skipped=true" >> "${GITHUB_OUTPUT}"
+          else
+            exit 1
+          fi
+
+      - name: Read the prep summary
+        id: summary
+        if: steps.hold.outputs.held == 'false' && steps.prep.outputs.skipped == 'false'
+        run: |
+          set -euo pipefail
+          summary=$(ls -t release/_output/summary/*/release-prep.yaml | head -1)
+          version=$(basename "$(dirname "${summary}")")
+          branch=$(sed -n 's/^[[:space:]]*branch:[[:space:]]*//p' "${summary}")
+          if [ -z "${version}" ] || [ -z "${branch}" ]; then
+            echo "::error::could not read version/branch from ${summary}"
+            cat "${summary}"
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create or update the release PR
+        if: steps.hold.outputs.held == 'false' && steps.prep.outputs.skipped == 'false'
+        env:
+          VERSION: ${{ steps.summary.outputs.version }}
+          PREP_BRANCH: ${{ steps.summary.outputs.branch }}
+        run: |
+          set -euo pipefail
+
+          # release-prep switches back to the base branch when it finishes, so
+          # read the notes out of the commit it just pushed.
+          notes=$(git show "${PREP_BRANCH}:release-notes/${VERSION}-release-notes.md")
+
+          {
+            echo "Release preparation for **${VERSION}** - step 4.a of \`release/RELEASING.md\`."
+            echo
+            echo "Rebuilt from \`${BASE_BRANCH}\` and force-pushed by the"
+            echo "[Release prep workflow](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/release-prep.yml)"
+            echo "on every merge into \`${BASE_BRANCH}\`, so **edits to this branch will be overwritten**."
+            echo "Add the \`${HOLD_LABEL}\` label to this PR to take it over by hand."
+            echo
+            echo "---"
+            echo
+            echo "${notes}"
+          } > /tmp/pr-body.md
+
+          number=$(gh pr list --repo "${GITHUB_REPOSITORY}" --head "${PREP_BRANCH}" \
+            --base "${BASE_BRANCH}" --state open --json number --jq '.[0].number // empty')
+
+          if [ -n "${number}" ]; then
+            gh pr edit "${number}" --repo "${GITHUB_REPOSITORY}" --body-file /tmp/pr-body.md
+            echo "Updated PR #${number}"
+          else
+            # release-prep normally opens the PR itself; this covers the case
+            # where that failed (for example, requesting the reviewer team).
+            url=$(gh pr create --repo "${GITHUB_REPOSITORY}" \
+              --base "${BASE_BRANCH}" --head "${PREP_BRANCH}" \
+              --title "build: ${VERSION} release" \
+              --body-file /tmp/pr-body.md \
+              --label release-note-not-required,docs-not-required)
+            number=${url##*/}
+            echo "Created PR ${url}"
+          fi
+
+          {
+            echo "### Release prep for ${VERSION}"
+            echo
+            echo "- Branch: \`${PREP_BRANCH}\` (base \`${BASE_BRANCH}\`)"
+            echo "- PR: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/pull/${number}"
+          } >> "${GITHUB_STEP_SUMMARY}"
