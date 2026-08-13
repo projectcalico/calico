@@ -15,6 +15,7 @@
 package conntrack
 
 import (
+	"encoding/binary"
 	"net"
 	"testing"
 	"time"
@@ -135,6 +136,18 @@ func makeEstablishedValueWithRST() Value {
 	legA := established(true)
 	legA.RstSeen = true
 	return NewValueNormal(time.Duration(0), 0, legA, established(false))
+}
+
+// stampRST sets the entry-level rst_seen timestamp, and last_seen to
+// rstSeen+since. since=0 reproduces what the RST packet itself leaves behind
+// (calico_ct_lookup stamps both from one `now`); a positive value reproduces
+// traffic continuing afterwards. The per-leg RST bits are deliberately left
+// clear: ct_tcp_entry_update() clears them on the RST packet's own pass when
+// the connection is established, so this is the state a scan actually sees.
+func stampRST(v Value, rstSeen int64, since time.Duration) Value {
+	binary.LittleEndian.PutUint64(v[ctv4.VoRSTSeen:ctv4.VoRSTSeen+8], uint64(rstSeen))
+	binary.LittleEndian.PutUint64(v[ctv4.VoLastSeen:ctv4.VoLastSeen+8], uint64(rstSeen+int64(since)))
+	return v
 }
 
 // makeSYNOnlyValue creates a value where only SYN was seen (not established).
@@ -260,6 +273,70 @@ func TestConnLimitScannerSkipsRSTSeen(t *testing.T) {
 	}
 	if len(scanner.counts) != 0 {
 		t.Errorf("expected no counts for RST connection, got %v", scanner.counts)
+	}
+}
+
+// A genuine RST close leaves the per-leg bits clear (the RST packet's own pass
+// through ct_tcp_entry_update() clears them) and last_seen frozen at rst_seen,
+// because nothing followed. Counting it would re-inflate a slot the fast path
+// correctly released, holding the pod at its limit until the entry expires.
+func TestConnLimitScannerSkipsRSTClosedConnection(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	rstAt := int64(60 * time.Second)
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := stampRST(NewValueNormal(time.Duration(0),
+		ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
+		established(true), established(false)), rstAt, 0)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+	if len(scanner.counts) != 0 {
+		t.Errorf("RST-closed connection was recounted, which re-takes the slot "+
+			"the fast path released: %v", scanner.counts)
+	}
+}
+
+// Traffic after the RST proves the connection survived it, so the slot the fast
+// path released on that RST has to come back.
+func TestConnLimitScannerCountsLiveConnectionAfterSpuriousRST(t *testing.T) {
+	podIP := "10.65.0.2"
+	remoteIP := "10.65.1.3"
+
+	scanner := &ConnLimitScanner{
+		family: qos.IPFamilyV4,
+		counts: make(map[connlimitKey]uint32),
+		podInfo: map[string]ConnLimitPodInfo{
+			string(net.ParseIP(podIP).To4()): podInfo(9, true, false),
+		},
+	}
+
+	rstAt := int64(60 * time.Second)
+	key := makeKey(remoteIP, podIP, 54321, 8080)
+	val := stampRST(NewValueNormal(time.Duration(0),
+		ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
+		established(true), established(false)), rstAt, 5*time.Second)
+
+	verdict, _ := scanner.Check(key, val, nil)
+	if verdict != ScanVerdictOK {
+		t.Fatalf("expected ScanVerdictOK, got %d", verdict)
+	}
+
+	expected := connlimitKey{ifindex: 9, direction: 1}
+	if scanner.counts[expected] != 1 {
+		t.Errorf("live connection was excluded from the recount: expected "+
+			"ingress count 1 for ifindex 9, got %v", scanner.counts)
 	}
 }
 
@@ -418,28 +495,10 @@ func TestConnLimitScannerBothPodsLimited(t *testing.T) {
 	}
 }
 
-// TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST verifies that a
-// live, established connection is included in the recount even though the BPF
-// fast path already decremented the counter for it and claimed
-// CALI_CT_FLAG_CONNLIMIT_DEC.
-//
-// The fast path decrements on any RST: conntrack.h reads tcp_header->rst
-// directly, nothing validates the sequence number, and the spurious-RST
-// reasoning alongside it can only reach a verdict two minutes later, in
-// hindsight. A spurious RST — out of window, ignored by both peers — therefore
-// decrements a connection that is still up. That much is recoverable on its
-// own, because the per-leg RST bits clear as soon as traffic resumes
-// (conntrack.h:571-576) and the entry becomes countable again.
-//
-// What was not recoverable was CONNLIMIT_DEC, which nothing ever clears. While
-// this scanner skipped entries carrying it, such a connection was excluded
-// from every future recount — and since the recount is the only mechanism that
-// can give a slot back, the under-count became permanent. N spurious RSTs
-// against N live connections parked current_count at 0 with all N still up,
-// letting the pod open N more.
-//
-// An established entry with no FIN and no RST is live, so it must be counted,
-// whatever CONNLIMIT_DEC says.
+// CONNLIMIT_DEC alone must not suppress the count. The fast path claims it on
+// any RST and clears it only once it judges the RST spurious, so while the
+// recount skipped on it — the recount being the only mechanism that can give a
+// slot back — a spurious RST cost the connection its slot for good.
 func TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST(t *testing.T) {
 	podIP := "10.65.0.2"
 	remoteIP := "10.65.1.3"
@@ -452,10 +511,9 @@ func TestConnLimitScannerRecountsLiveConnectionAfterSpuriousRST(t *testing.T) {
 		},
 	}
 
-	// Pod is AddrB (responder), remote is AddrA (opener), so this counts
-	// against the pod's ingress limit. Both legs established, no FIN and no
-	// RST bit — the shape a busy connection presents once the transient RST
-	// marks have cleared — but CONNLIMIT_DEC is set from the earlier RST.
+	// Pod is AddrB (responder), so this counts against its ingress limit.
+	// Established, no FIN, rst_seen already cleared by the two-minute
+	// spurious verdict — but CONNLIMIT_DEC still latched.
 	key := makeKey(remoteIP, podIP, 54321, 8080)
 	val := NewValueNormal(time.Duration(0), ctv4.FlagConnLimitIn|ctv4.FlagConnLimitDec,
 		established(true),

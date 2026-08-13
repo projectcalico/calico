@@ -133,19 +133,27 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	data := ctVal.Data()
 
-	// Skip connections that are closing or closed (any FIN or RST):
-	// the fast path decremented when it saw the close, or the cleanup
-	// path will when the entry expires, so counting them here would
-	// overwrite the decremented value with a higher one.
-	//
-	// Deliberately NOT skipped: entries carrying CONNLIMIT_DEC. The
-	// fast path claims that flag on any RST, including a spurious one
-	// both peers ignore, and rarely clears it again, so it sits on
-	// live connections. Since this recount is the only thing that can
-	// give a slot back, skipping on it made such an under-count
-	// effectively permanent. The FIN/RST skips above already prevent
-	// the double-count it was added for.
+	// Skip closing/closed connections: the fast path decremented on the
+	// close, or the cleanup path will when the entry expires, so counting
+	// them would overwrite the decremented value with a higher one.
 	if data.FINsSeenDSR() || data.RSTSeen() {
+		return ScanVerdictOK, 0
+	}
+
+	// The per-leg RST bits above are not enough: on an established
+	// connection the RST packet's own pass through ct_tcp_entry_update()
+	// takes the "normal packet" arm and clears them again, so by scan time
+	// a genuine RST close looks identical to a live connection. Use the
+	// rst_seen timestamp, which persists. calico_ct_lookup() stamps
+	// rst_seen and last_seen from one `now`, so last_seen > rst_seen means
+	// traffic flowed after the RST — live, count it. Equal means nothing
+	// followed: treat it as the close it looks like.
+	//
+	// CONNLIMIT_DEC is deliberately not consulted. The fast path claims it
+	// on any RST, spurious ones included, so it marks live connections; as
+	// the only mechanism that can give a slot back, skipping on it made
+	// that under-count permanent.
+	if rstSeen := ctVal.RSTSeen(); rstSeen != 0 && ctVal.LastSeen() <= rstSeen {
 		return ScanVerdictOK, 0
 	}
 	// Only count fully established connections.

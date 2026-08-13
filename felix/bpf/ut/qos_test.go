@@ -889,10 +889,12 @@ func TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount(t *testing.T) {
 		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	}, withEgressQoSConnLimit())
 
-	// The connection is demonstrably still live: traffic flowed after the
-	// RST, and the dataplane itself has withdrawn the per-leg RST marks.
-	Expect(readCTVal().Data().RSTSeen()).To(BeFalse(),
-		"per-leg rst_seen should have been cleared by the continued traffic")
+	// The connection is demonstrably still live, and last_seen having moved
+	// past rst_seen is the signal the recount keys on. The per-leg RST bits
+	// are no use for this: the RST packet's own pass through
+	// ct_tcp_entry_update() already cleared them.
+	Expect(readCTVal().LastSeen()).To(BeNumerically(">", readCTVal().RSTSeen()),
+		"traffic after the RST should have advanced last_seen past rst_seen")
 
 	// CONNLIMIT_DEC is still set and never will be cleared. The recount has
 	// to restore the slot in spite of it -- that is the whole fix.
@@ -1158,9 +1160,9 @@ func TestQoSConnLimitIngressSpuriousRSTSlotRestoredByRecount(t *testing.T) {
 		Expect(res.Retval).NotTo(Equal(resTC_ACT_SHOT))
 	}, withIngressQoSConnLimit())
 
-	// The connection is demonstrably still live.
-	Expect(readCTVal().Data().RSTSeen()).To(BeFalse(),
-		"per-leg rst_seen should have been cleared by the continued traffic")
+	// Still live, and last_seen past rst_seen is what the recount keys on.
+	Expect(readCTVal().LastSeen()).To(BeNumerically(">", readCTVal().RSTSeen()),
+		"traffic after the RST should have advanced last_seen past rst_seen")
 
 	Expect(readCTVal().Flags()&ctv4.FlagConnLimitDec).NotTo(Equal(uint32(0)),
 		"expected the fast path to have claimed CONNLIMIT_DEC")
