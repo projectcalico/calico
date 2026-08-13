@@ -15,6 +15,9 @@
 package client
 
 import (
+	"context"
+	"fmt"
+
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -22,9 +25,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
+	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,13 +42,8 @@ func New(cfg *rest.Config) (client.Client, error) {
 		return nil, err
 	}
 
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
 	// Checks to see if the projectcalico.org/v3 API is available.
-	available, err := calicoV3APIAvailable(discoveryClient)
+	available, err := calicoV3APIAvailable(context.Background(), c)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +66,11 @@ func NewAPIClient(cfg *rest.Config) (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.New(cfg, client.Options{Scheme: scheme})
+	c, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, err
+	}
+	return WithRetry(c), nil
 }
 
 // NewCalicoctlExecClient returns a new controller-runtime client that uses exec commands into a calicoctl pod to interact with the projectcalico.org/v3 API.
@@ -110,6 +114,11 @@ func newScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 
+	// APIServices are how we tell whether the aggregated v3 API is being served.
+	if err := apiregistrationv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
 	// KubeVirt VM/VMI/VMIM types: register so KubeVirt e2e tests share this
 	// client instead of a parallel typed clientset.
 	if err := kubevirtv1.AddToScheme(scheme); err != nil {
@@ -118,19 +127,52 @@ func newScheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
-func calicoV3APIAvailable(discoveryClient discovery.DiscoveryInterface) (bool, error) {
-	groups, err := discoveryClient.ServerGroups()
+// calicoV3APIServiceName is the APIService that serves projectcalico.org/v3, whether
+// backed by calico-apiserver or by CRDs.
+const calicoV3APIServiceName = "v3.projectcalico.org"
+
+// calicoV3APIAvailable reports whether projectcalico.org/v3 is served, waiting out an
+// apiserver that is still rolling rather than falling back to calicoctl.
+func calicoV3APIAvailable(ctx context.Context, c client.Client) (bool, error) {
+	key := client.ObjectKey{Name: calicoV3APIServiceName}
+	apiService := &apiregistrationv1.APIService{}
+	err := c.Get(ctx, key, apiService)
+
+	// No APIService at all means nothing serves v3, so calicoctl is the only option.
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+
+	// An RBAC-restricted client can't read APIServices, and calicoctl would exec
+	// past the RBAC those tests assert on.
+	if apierrors.IsForbidden(err) {
+		logrus.WithError(err).Warn("Cannot read APIServices, assuming projectcalico.org/v3 is served")
+		return true, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	for _, group := range groups.Groups {
-		if group.Name == "projectcalico.org" {
-			for _, version := range group.Versions {
-				if version.Version == "v3" {
-					return true, nil
-				}
+
+	if err := waitForAPIServiceAvailable(ctx, c, key); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func waitForAPIServiceAvailable(ctx context.Context, c client.Client, key client.ObjectKey) error {
+	alwaysRetry := func(error) bool {
+		return true
+	}
+	return retry.OnError(apiRetry, alwaysRetry, func() error {
+		apiService := &apiregistrationv1.APIService{}
+		if err := c.Get(ctx, key, apiService); err != nil {
+			return err
+		}
+		for _, condition := range apiService.Status.Conditions {
+			if condition.Type == apiregistrationv1.Available && condition.Status == apiregistrationv1.ConditionTrue {
+				return nil
 			}
 		}
-	}
-	return false, nil
+		return fmt.Errorf("APIService %s is not available yet", key.Name)
+	})
 }
