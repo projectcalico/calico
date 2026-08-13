@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,19 +18,31 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/projectcalico/calico/goldmane/pkg/client"
-	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	apictx "github.com/projectcalico/calico/lib/httpmachinery/pkg/context"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	"github.com/projectcalico/calico/whisker-backend/pkg/auth"
 )
 
 type flowsHdlr struct {
-	flowCli client.FlowsClient
+	backend       whiskerv1.FlowsBackend
+	filterFactory auth.FlowFilterFactory
 }
 
-func NewFlows(cli client.FlowsClient) *flowsHdlr {
-	return &flowsHdlr{cli}
+func NewFlows(backend whiskerv1.FlowsBackend, opts ...FlowsOption) *flowsHdlr {
+	h := &flowsHdlr{backend: backend}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+type FlowsOption func(*flowsHdlr)
+
+func WithFlowFilterFactory(f auth.FlowFilterFactory) FlowsOption {
+	return func(h *flowsHdlr) {
+		h.filterFactory = f
+	}
 }
 
 func (hdlr *flowsHdlr) APIs() []apiutil.Endpoint {
@@ -57,18 +69,28 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 	// flow metadata that could be a bulk-exfil vector.
 	logger.Debug("Applying filters.")
 
-	filter := toProtoFilter(params.Filters)
 	if params.Watch {
 		logger.Debug("Watch is set, streaming flows...")
 		// TODO figure out how we're going to handle errors.
-		flowReq := &proto.FlowStreamRequest{
-			Filter:       filter,
-			StartTimeGte: params.StartTimeGte,
+
+		// Streaming is optional. Backends that cannot stream (e.g. Linseed)
+		// implement only FlowsBackend; reject the watch request with a clear
+		// error instead of a generic 500.
+		streamer, ok := hdlr.backend.(whiskerv1.StreamingFlowsBackend)
+		if !ok {
+			logger.Debug("Watch requested but the configured upstream does not support streaming.")
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusBadRequest).SetError("Streaming is not supported by the configured flow upstream")
 		}
 
-		flowStream, err := hdlr.flowCli.Stream(ctx, flowReq)
+		flowStream, err := streamer.Stream(ctx, params)
 		if err != nil {
 			logger.Error("failed to stream flows", "error", err)
+			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
+		}
+
+		flowStream, err = auth.FilterStreamFromUser(ctx, flowStream, hdlr.filterFactory)
+		if err != nil {
+			logger.Error("failed to create RBAC flow filter", "error", err)
 			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
 		}
 
@@ -85,35 +107,37 @@ func (hdlr *flowsHdlr) ListOrStream(ctx apictx.Context, params whiskerv1.ListFlo
 					}
 
 					logger.Debug("Received flow from stream.")
-					if !yield(protoToFlow(flow.Flow)) {
+					if !yield(*flow) {
 						return
 					}
 				}
 			})
-	} else {
-		logger.Debug("Watch not set, will return a list of flows.")
-
-		flowReq := &proto.FlowListRequest{
-			SortBy:       toProtoSortByOptions(params.SortBy),
-			Filter:       filter,
-			StartTimeGte: params.StartTimeGte,
-			StartTimeLt:  params.StartTimeLt,
-		}
-
-		meta, flows, err := hdlr.flowCli.List(ctx, flowReq)
-		if err != nil {
-			logger.Error("failed to list flows", "error", err)
-			return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
-		}
-
-		var rspFlows []whiskerv1.FlowResponse
-		for _, flow := range flows {
-			rspFlows = append(rspFlows, protoToFlow(flow.Flow))
-		}
-
-		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
-			SendList(apiutil.ListMeta{TotalPages: int(meta.TotalPages)}, rspFlows)
 	}
+
+	logger.Debug("Watch not set, will return a list of flows.")
+
+	totalPages, flows, err := hdlr.backend.List(ctx, params)
+	if err != nil {
+		logger.Error("failed to list flows", "error", err)
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
+	}
+
+	flows, err = auth.FilterFlowsFromUser(ctx, flows, hdlr.filterFactory)
+	if err != nil {
+		logger.Error("failed to filter flows by RBAC", "error", err)
+		return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusInternalServerError).SetError("Internal Server Error")
+	}
+
+	// A single-page result the RBAC filter emptied is no pages at all —
+	// backends already report 0 for an empty result, and the UI must not be
+	// told there is a page to render with nothing in it. Multi-page counts are
+	// left alone: they are real pagination state from the backend.
+	if len(flows) == 0 && totalPages == 1 {
+		totalPages = 0
+	}
+
+	return apiutil.NewListOrStreamResponse[whiskerv1.FlowResponse]().SetStatus(http.StatusOK).
+		SendList(apiutil.ListMeta{TotalPages: totalPages}, flows)
 }
 
 // ListFilterHints returns a list of filter hints. This provides filter values for various filters that will produce
@@ -122,14 +146,19 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 	logger := ctx.Logger()
 	logger.Debug("ListFilterHints called.")
 
-	req := &proto.FilterHintsRequest{
-		PageSize: int64(params.PageSize),
-		Page:     int64(params.Page),
-		Type:     params.Type.AsProto(),
-		Filter:   toProtoFilter(params.Filters),
+	// Hints are derived from an unscoped, cluster-wide query. Gate the source
+	// flows by the same RBAC check used for List, so a namespace-scoped user
+	// can't read back names / namespaces / policies from namespaces they cannot
+	// list.
+	includeFlow, err := auth.FilterFuncFromUser(ctx, hdlr.filterFactory)
+	if err != nil {
+		logger.Error("failed to create RBAC flow filter", "error", err)
+		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
+			SetStatus(http.StatusInternalServerError).
+			SetError("Internal Server Error")
 	}
 
-	hintsMeta, gmhints, err := hdlr.flowCli.FilterHints(ctx, req)
+	totalPages, hints, err := hdlr.backend.FilterHints(ctx, params, includeFlow)
 	if err != nil {
 		logger.Error("failed to list filter hints", "error", err)
 		return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
@@ -137,19 +166,8 @@ func (hdlr *flowsHdlr) ListFilterHints(ctx apictx.Context, params whiskerv1.Flow
 			SetError("Internal Server Error")
 	}
 
-	hints := make([]whiskerv1.FlowFilterHintResponse, len(gmhints))
-	for i, hint := range gmhints {
-		switch params.Type.AsProto() {
-		case proto.FilterType_FilterTypeSourceNamespace, proto.FilterType_FilterTypeDestNamespace:
-			hint.Value = protoToNamespace(hint.Value)
-		case proto.FilterType_FilterTypeSourceName, proto.FilterType_FilterTypeDestName:
-			hint.Value = protoToName(hint.Value)
-		}
-		hints[i] = whiskerv1.FlowFilterHintResponse{Value: hint.Value}
-	}
-
 	return apiutil.NewListResponse[whiskerv1.FlowFilterHintResponse]().
 		SetStatus(http.StatusOK).
-		SetMeta(apiutil.ListMeta{TotalPages: int(hintsMeta.TotalPages)}).
+		SetMeta(apiutil.ListMeta{TotalPages: totalPages}).
 		SetItems(hints)
 }
