@@ -2098,14 +2098,18 @@ var _ = Describe("Flowtable offload", func() {
 	}
 	renderer := NewRenderer(config, true).(*DefaultRuleRenderer)
 
+	noOffloadSetName := ipSetName(IPSetIDNoFlowOffload, 4)
 	offloadRule := generictables.Rule{
-		Match:   nftables.Match().ConntrackState("RELATED,ESTABLISHED"),
+		Match: nftables.Match().
+			ConntrackState("RELATED,ESTABLISHED").
+			NotSourceIPSet(noOffloadSetName).
+			NotDestIPSet(noOffloadSetName),
 		Action:  nftables.FlowOffloadAction{},
 		Comment: []string{"Offload established Calico flows."},
 	}
 
 	It("should offload established flows at the top of the forward chain, ahead of the workload dispatch jump", func() {
-		chains := renderer.StaticFilterForwardChains()
+		chains := renderer.StaticFilterForwardChains(4)
 		chain := findChain(chains, ChainFilterForward)
 		Expect(chain).NotTo(BeNil())
 		Expect(chain.Rules).To(ContainElement(offloadRule))
@@ -2121,7 +2125,7 @@ var _ = Describe("Flowtable offload", func() {
 		disabledConfig.NFTablesFlowTableOffload = false
 		disabledRenderer := NewRenderer(disabledConfig, true).(*DefaultRuleRenderer)
 
-		chains := disabledRenderer.StaticFilterForwardChains()
+		chains := disabledRenderer.StaticFilterForwardChains(4)
 		chain := findChain(chains, ChainFilterForward)
 		Expect(chain).NotTo(BeNil())
 		Expect(chain.Rules).NotTo(ContainElement(offloadRule))
