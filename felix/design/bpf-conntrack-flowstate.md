@@ -129,6 +129,27 @@ Creating a NAT'd flow means creating both. Destroying a NAT'd flow
 means destroying both — atomically enough that BPF never sees only
 one side. The cleanup pipeline is built around this requirement.
 
+The forward entry is a **stub**: `calico_ct_create_nat_fwd()` fills in
+only the type, the timestamp, the reverse key, and any source-port
+rewrite. All connection state — the TCP legs, the flags, the RST
+timestamp — lives on the reverse entry, which is why it is also called
+the *tracking* entry.
+
+That makes the tracking entry the single source of truth, and every
+reader already follows the rule: the liveness scanner decides a forward
+key's fate from the reverse entry (below), the BPF cleaner decrements
+connlimit off `rev_ct_value`, and `calico_ct_lookup()` re-reads
+`result.flags` from `tracking_v`.
+
+**Writers in the packet path must follow it too.** On a `NAT_FWD` hit
+`calico_ct_lookup()` is called with `v` pointing at the stub, so it
+redirects `src_to_dst`/`dst_to_src` into the tracking entry's legs and
+keeps a `bk` pointer for the fields that hang off the value itself
+(`rst_seen`, the connlimit flags). State written to the stub instead is
+state nothing ever reads: the flow keeps its pre-close behaviour, and
+for `rst_seen` specifically the entry misses the ~2-minute
+spurious-RST expiry and survives to `TCPEstablished` (1h) instead.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
@@ -219,6 +240,15 @@ and the Go-side reader must agree on units and reference clock.
   BPF cleaner path (insert into `cali_ct_cleanup`) or accept the
   race (and document why it is safe) — never delete a single side
   from userspace.
+- Anything written to a conntrack **value** in `calico_ct_lookup()`
+  must target the tracking entry, not `v`, which is the forward stub
+  on a `NAT_FWD` hit. Use `bk`, alongside the already-redirected
+  `src_to_dst`/`dst_to_src`. Writing to the stub is silent — the field
+  is set, no verifier or test complains, and the flow simply behaves as
+  though the event never happened, only for NAT'd traffic and only in
+  one direction. A test for such a change has to exercise the
+  client→service direction specifically; the reverse direction hits the
+  tracking entry directly and passes either way.
 - Do not rely on LRU eviction to keep the table healthy. A PR that
   produces more conntrack entries per second than the cleanup
   pipeline removes will silently lose active flows once the map
