@@ -102,9 +102,15 @@ export const flowLogsTableWithHeader = (page: Page) =>
 export const visibleTabPanel = (page: Page) =>
     page.getByRole('tabpanel').filter({ visible: true });
 
-/** The row of filter triggers above the table. */
-export const filterBar = (page: Page) =>
-    page.getByRole('button', { name: 'Policy' }).locator('../..');
+/**
+ * The row of filter triggers above the table.
+ *
+ * Anchored on the list's own testid rather than by walking up from the first
+ * trigger: the parent chain has already changed once (the page used to wrap the
+ * list in a Flex of its own), and walking up silently reframed the baseline to
+ * include the stream status beside it instead of failing on the locator.
+ */
+export const filterBar = (page: Page) => page.getByTestId('table-filters');
 
 /**
  * Opens the named filter and returns its popover.

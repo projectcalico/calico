@@ -37,6 +37,7 @@ const TableFilters: React.FC = () => {
 
     return (
         <OmniFilterList
+            data-testid='table-filters'
             gap={2}
             defaultFilterIds={[...tableLevelFilterIds]}
             visibleFilterIds={[...tableLevelFilterIds]}
