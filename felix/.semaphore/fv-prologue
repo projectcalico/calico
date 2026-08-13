@@ -22,8 +22,8 @@ export NUM_FV_BATCHES=8
 JOB_TAG=""
 TEST_REPORT_NAME=""
 
-# In BPF runs, only run BPF-SAFE tagged tests.  _BPF_ (i.e. "BPF-specific test")
-# implies BPF-SAFE.
+# In BPF runs, only run tests tagged for BPF mode: _BPF-SAFE_ (shared FV) or _BPF_ (BPF-specific).
+# (The full BPF job treats _BPF_ as implying _BPF-SAFE_ via the focus regex.)
 if [[ $FELIX_TEST_GROUP =~ bpf ]]; then
   export FV_FOCUS='BPF-SAFE|_BPF_'
   JOB_TAG+="bpf"
