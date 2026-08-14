@@ -25,9 +25,18 @@ stub_dir="$work/bin"
 stub_log="$work/calls.log"
 mkdir -p "$stub_dir"
 
+# The s3cmd stub records its argv and, for `ls`, replays $S3CMD_LS_OUT as the
+# listing so the wrapper's output massaging can be checked.
 cat >"$stub_dir/s3cmd" <<'STUB'
 #!/usr/bin/env bash
 echo "s3cmd $*" >>"$STUB_LOG"
+for a in "$@"; do
+  if [[ "$a" == ls && -n "${S3CMD_LS_OUT:-}" ]]; then
+    printf '%s\n' "$S3CMD_LS_OUT"
+    break
+  fi
+done
+exit 0
 STUB
 
 # The curl stub understands just enough of the flags s3-cmd passes: -o writes
@@ -113,13 +122,25 @@ check "creds upload does not use curl" test "$(grep -c '^curl ' "$stub_log")" = 
 run cp s3://test-bucket/ci/x.tar.zst "$work/got3.bin" >/dev/null 2>&1
 check "creds download calls s3cmd get" grep -q "^s3cmd .* get --force " "$stub_log"
 
-# 7. A half-set credential pair counts as no credentials, rather than sending a
+# 7. With credentials, ls strips s3cmd's date/size (and DIR) columns so its
+#    output matches the anonymous path: one bare s3:// URL per line.
+S3CMD_LS_OUT='2026-08-12 22:22          1234  s3://test-bucket/ci/a.tar
+                       DIR  s3://test-bucket/ci/sub/'
+out=$(S3CMD_LS_OUT="$S3CMD_LS_OUT" run ls s3://test-bucket/ci/ 2>/dev/null)
+rc=$?
+check "creds ls RC=0 with matches" [ "$rc" = 0 ]
+check "creds ls prints bare URLs" test "$out" = "s3://test-bucket/ci/a.tar
+s3://test-bucket/ci/sub/"
+run ls s3://test-bucket/ci/ >/dev/null 2>&1
+check "creds ls RC!=0 when empty" [ "$?" != 0 ]
+
+# 8. A half-set credential pair counts as no credentials, rather than sending a
 #    request that would be rejected as an invalid signature.
 unset CALICO_S3_SECRET_KEY
 out=$(run cp "$work/upload.bin" s3://test-bucket/ci/x.tar.zst 2>&1)
 check "partial creds treated as read-only" grep -q "skipping upload" <<<"$out"
 
-# 8. write-config without credentials still writes the endpoint and warns.
+# 9. write-config without credentials still writes the endpoint and warns.
 unset CALICO_S3_ACCESS_KEY
 out=$(run write-config "$work/s3cfg" 2>&1)
 rc=$?

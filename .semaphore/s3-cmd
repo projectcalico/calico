@@ -62,7 +62,8 @@
 #                                   Without credentials, uploads and server-side
 #                                   copies are skipped and recursive fetches are
 #                                   refused (anonymous mode cannot list).
-#   s3-cmd ls <s3url>               List; exits non-zero when nothing matches, so
+#   s3-cmd ls <s3url>               List, one bare s3:// URL per line; exits
+#                                   non-zero when nothing matches, so
 #                                   `if s3-cmd ls ...` behaves like `gcloud
 #                                   storage ls`.
 #   s3-cmd write-config <path>      Write an s3cmd config file built from the
@@ -239,7 +240,10 @@ cmd_ls() {
   fi
   build_s3cmd_args
   local out
-  out="$(s3cmd "${S3CMD_ARGS[@]}" ls "$1")" || return 1
+  # s3cmd prints "<date> <time> <size> s3://bucket/key" for objects and
+  # "DIR s3://bucket/prefix/" for common prefixes. Reduce both to the bare URL
+  # so the credentialed and anonymous paths emit the same thing.
+  out="$(s3cmd "${S3CMD_ARGS[@]}" ls "$1" | grep -o 's3://.*')" || return 1
   [[ -n "$out" ]] || return 1
   printf '%s\n' "$out"
 }
