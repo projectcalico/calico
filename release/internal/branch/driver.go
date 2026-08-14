@@ -131,6 +131,9 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if err := d.validate(); err != nil {
 		return err
 	}
+	if plan.Source == plan.Derived {
+		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
@@ -342,7 +345,15 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 // updateDerived runs PrepareDerived on the derived branch and commits the files
 // it changed.
 func (d *Driver) updateDerived(g git, p *CutPlan) error {
-	if err := checkoutBranch(g, p.Derived); err != nil {
+	// If source advanced past the derived branch, re-cut it from source so the
+	// resume picks up the new source commits; otherwise just check it out.
+	if sourceAheadOf(g, p.Source, p.Derived) {
+		logrus.WithFields(logrus.Fields{"branch": p.Derived, "source": p.Source}).
+			Info("source advanced; resetting derived branch to source")
+		if err := resetBranchToBase(g, p.Derived, p.Source); err != nil {
+			return err
+		}
+	} else if err := checkoutBranch(g, p.Derived); err != nil {
 		return err
 	}
 	var changed []string
