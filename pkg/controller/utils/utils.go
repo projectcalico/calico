@@ -23,7 +23,6 @@ import (
 	"strings"
 	"time"
 
-	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 	csiv1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
@@ -60,7 +59,6 @@ import (
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
-	"github.com/tigera/operator/pkg/render/logstorage/eck"
 )
 
 const (
@@ -713,32 +711,6 @@ func GetPacketCaptureAPI(ctx context.Context, cli client.Client) (*operatorv1.Pa
 	return pc, nil
 }
 
-// GetElasticLicenseType returns the license type from elastic-licensing ConfigMap that ECK operator keeps updated.
-func GetElasticLicenseType(ctx context.Context, cli client.Client, logger logr.Logger) (render.ElasticsearchLicenseType, error) {
-	cm := &corev1.ConfigMap{}
-	err := cli.Get(ctx, client.ObjectKey{Name: eck.LicenseConfigMapName, Namespace: eck.OperatorNamespace}, cm)
-	if err != nil {
-		return render.ElasticsearchLicenseTypeUnknown, err
-	}
-	license, ok := cm.Data["eck_license_level"]
-	if !ok {
-		return render.ElasticsearchLicenseTypeUnknown, fmt.Errorf("eck_license_level not available")
-	}
-
-	return StrToElasticLicenseType(license, logger), nil
-}
-
-// StrToElasticLicenseType maps Elasticsearch license to one of the known and expected value.
-func StrToElasticLicenseType(license string, logger logr.Logger) render.ElasticsearchLicenseType {
-	if license == string(render.ElasticsearchLicenseTypeEnterprise) ||
-		license == string(render.ElasticsearchLicenseTypeBasic) ||
-		license == string(render.ElasticsearchLicenseTypeEnterpriseTrial) {
-		return render.ElasticsearchLicenseType(license)
-	}
-	logger.V(3).Info("Elasticsearch license %s is unexpected", license)
-	return render.ElasticsearchLicenseTypeUnknown
-}
-
 type resourceWatchContext struct {
 	predicate predicate.Predicate
 	logger    logr.Logger
@@ -914,18 +886,6 @@ func GetKubeControllerMetricsPort(ctx context.Context, client client.Client) (in
 		kubeControllersMetricsPort = *kubeControllersConfig.Spec.PrometheusMetricsPort
 	}
 	return kubeControllersMetricsPort, nil
-}
-
-func GetElasticsearch(ctx context.Context, c client.Client) (*esv1.Elasticsearch, error) {
-	es := esv1.Elasticsearch{}
-	err := c.Get(ctx, client.ObjectKey{Name: render.ElasticsearchName, Namespace: render.ElasticsearchNamespace}, &es)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &es, nil
 }
 
 // AddKubeProxyWatch creates a watch on the kube-proxy DaemonSet.

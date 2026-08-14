@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/mock"
 	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/controller/utils"
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,14 +30,14 @@ type MockESClient struct {
 	mock.Mock
 }
 
-func MockESCLICreator(_ client.Client, ctx context.Context, _ string, _ bool) (utils.ElasticClient, error) {
+func MockESCLICreator(_ client.Client, ctx context.Context, _ string, _ bool) (esutils.ElasticClient, error) {
 	if esCli := ctx.Value(MockESClientKey("mockESClient")); esCli != nil {
 		return esCli.(*MockESClient), nil
 	}
 	return &MockESClient{}, nil
 }
 
-func (m *MockESClient) CreateUser(_ context.Context, _ *utils.User) error {
+func (m *MockESClient) CreateUser(_ context.Context, _ *esutils.User) error {
 	return fmt.Errorf("CreateUser not implemented in mock client")
 }
 
@@ -45,7 +45,7 @@ func (m *MockESClient) SetILMPolicies(_ context.Context, _ *operatorv1.LogStorag
 	return nil
 }
 
-func (m *MockESClient) DeleteRoles(ctx context.Context, roles []utils.Role) error {
+func (m *MockESClient) DeleteRoles(ctx context.Context, roles []esutils.Role) error {
 	var ret mock.Arguments
 	for _, role := range roles {
 		ret = m.MethodCalled("deleteRole", ctx, role)
@@ -58,7 +58,7 @@ func (m *MockESClient) DeleteRoles(ctx context.Context, roles []utils.Role) erro
 	return ret.Error(0)
 }
 
-func (m *MockESClient) DeleteUser(ctx context.Context, u *utils.User) error {
+func (m *MockESClient) DeleteUser(ctx context.Context, u *esutils.User) error {
 	ret := m.MethodCalled("DeleteRoles", ctx, u.Roles)
 	if ret.Error(0) != nil {
 		return ret.Error(0)
@@ -68,7 +68,7 @@ func (m *MockESClient) DeleteUser(ctx context.Context, u *utils.User) error {
 	return ret.Error(0)
 }
 
-func (m *MockESClient) GetUsers(ctx context.Context) ([]utils.User, error) {
+func (m *MockESClient) GetUsers(ctx context.Context) ([]esutils.User, error) {
 	ret := m.Called(ctx)
-	return ret.Get(0).([]utils.User), ret.Error(1)
+	return ret.Get(0).([]esutils.User), ret.Error(1)
 }

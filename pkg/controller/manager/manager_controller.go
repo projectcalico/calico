@@ -45,6 +45,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/gatewayapi"
 	lscommon "github.com/tigera/operator/pkg/controller/logstorage/common"
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
@@ -648,7 +649,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 
 	elasticLicenseType := render.ElasticsearchLicenseTypeBasic
 	if !r.opts.ElasticExternal && managementClusterConnection == nil {
-		if elasticLicenseType, err = utils.GetElasticLicenseType(ctx, r.client, logc); err != nil {
+		if elasticLicenseType, err = esutils.GetElasticLicenseType(ctx, r.client, logc); err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to get Elasticsearch license", err, logc)
 			return reconcile.Result{}, err
 		}

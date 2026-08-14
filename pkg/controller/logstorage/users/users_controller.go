@@ -28,6 +28,7 @@ import (
 	"github.com/tigera/operator/pkg/render/logstorage/dashboards"
 	corev1 "k8s.io/api/core/v1"
 
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
@@ -56,7 +57,7 @@ type UserController struct {
 	client          client.Client
 	scheme          *runtime.Scheme
 	status          status.StatusManager
-	esClientFn      utils.ElasticsearchClientCreator
+	esClientFn      esutils.ElasticsearchClientCreator
 	multiTenant     bool
 	elasticExternal bool
 }
@@ -64,7 +65,7 @@ type UserController struct {
 type UsersCleanupController struct {
 	client          client.Client
 	scheme          *runtime.Scheme
-	esClientFn      utils.ElasticsearchClientCreator
+	esClientFn      esutils.ElasticsearchClientCreator
 	elasticExternal bool
 }
 
@@ -84,7 +85,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		scheme:          mgr.GetScheme(),
 		multiTenant:     opts.MultiTenant,
 		status:          status.New(mgr.GetClient(), initializer.TigeraStatusLogStorageUsers, opts.KubernetesVersion),
-		esClientFn:      utils.NewElasticClient,
+		esClientFn:      esutils.NewElasticClient,
 		elasticExternal: opts.ElasticExternal,
 	}
 	r.status.Run(opts.ShutdownContext)
@@ -137,7 +138,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	usersCleanupReconciler := &UsersCleanupController{
 		client:          mgr.GetClient(),
 		scheme:          mgr.GetScheme(),
-		esClientFn:      utils.NewElasticClient,
+		esClientFn:      esutils.NewElasticClient,
 		elasticExternal: opts.ElasticExternal,
 	}
 
@@ -204,7 +205,7 @@ func (r *UserController) Reconcile(ctx context.Context, request reconcile.Reques
 
 	if !r.elasticExternal {
 		// Wait for Elasticsearch to be installed and available.
-		elasticsearch, err := utils.GetElasticsearch(ctx, r.client)
+		elasticsearch, err := esutils.GetElasticsearch(ctx, r.client)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "An error occurred trying to retrieve Elasticsearch", err, reqLogger)
 			return reconcile.Result{}, err
@@ -241,7 +242,7 @@ func (r *UserController) Reconcile(ctx context.Context, request reconcile.Reques
 
 	// Query any existing username and password for this Linseed instance. If one already exists, we'll simply
 	// use that. Otherwise, generate a new one.
-	linseedUser := utils.LinseedUser(clusterID, tenantID)
+	linseedUser := esutils.LinseedUser(clusterID, tenantID)
 	linseedUserSecret := corev1.Secret{}
 	var credentialSecrets []client.Object
 	key := types.NamespacedName{Name: render.ElasticsearchLinseedUserSecret, Namespace: helper.TruthNamespace()}
@@ -261,7 +262,7 @@ func (r *UserController) Reconcile(ctx context.Context, request reconcile.Reques
 	// Query any existing username and password for this Dashboards instance. If one already exists, we'll simply
 	// use that. Otherwise, generate a new one.
 	keyDashboardCred := types.NamespacedName{Name: dashboards.ElasticCredentialsSecret, Namespace: helper.TruthNamespace()}
-	dashboardUser := utils.DashboardUser(clusterID, tenantID)
+	dashboardUser := esutils.DashboardUser(clusterID, tenantID)
 	dashboardUserSecret := corev1.Secret{}
 	if err = r.client.Get(ctx, key, &dashboardUserSecret); err != nil && !errors.IsNotFound(err) {
 		r.status.SetDegraded(operatorv1.ResourceReadError, fmt.Sprintf("Error getting Secret %s", keyDashboardCred), err, reqLogger)
@@ -325,7 +326,7 @@ func (r *UserController) Reconcile(ctx context.Context, request reconcile.Reques
 	return reconcile.Result{}, nil
 }
 
-func (r *UserController) createUserLogin(ctx context.Context, elasticEndpoint string, secret *corev1.Secret, user *utils.User, reqLogger logr.Logger) error {
+func (r *UserController) createUserLogin(ctx context.Context, elasticEndpoint string, secret *corev1.Secret, user *esutils.User, reqLogger logr.Logger) error {
 	esClient, err := r.esClientFn(r.client, ctx, elasticEndpoint, r.elasticExternal)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Failed to connect to Elasticsearch - failed to create the Elasticsearch client", err, reqLogger)
@@ -359,7 +360,7 @@ func (r *UsersCleanupController) Reconcile(ctx context.Context, request reconcil
 
 	if !r.elasticExternal {
 		// Wait for Elasticsearch to be installed and available.
-		elasticsearch, err := utils.GetElasticsearch(ctx, r.client)
+		elasticsearch, err := esutils.GetElasticsearch(ctx, r.client)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
@@ -419,8 +420,8 @@ func (r *UsersCleanupController) cleanupStaleUsers(ctx context.Context, logger l
 			return fmt.Errorf("failed to fetch users from Elasticsearch")
 		}
 
-		lu := utils.LinseedUser(clusterID, t.Spec.ID)
-		dashboardsUser := utils.DashboardUser(clusterID, t.Spec.ID)
+		lu := esutils.LinseedUser(clusterID, t.Spec.ID)
+		dashboardsUser := esutils.DashboardUser(clusterID, t.Spec.ID)
 		for _, user := range allESUsers {
 			if user.Username == lu.Username || user.Username == dashboardsUser.Username {
 				err = esClient.DeleteUser(ctx, &user)

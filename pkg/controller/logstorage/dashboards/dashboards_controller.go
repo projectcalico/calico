@@ -38,6 +38,7 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	lscommon "github.com/tigera/operator/pkg/controller/logstorage/common"
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/controller/logstorage/initializer"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -267,7 +268,7 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 	var externalKibanaSecret *corev1.Secret
 	if !d.elasticExternal {
 		// Wait for Elasticsearch to be installed and available.
-		elasticsearch, err := utils.GetElasticsearch(ctx, d.client)
+		elasticsearch, err := esutils.GetElasticsearch(ctx, d.client)
 		if err != nil {
 			d.status.SetDegraded(operatorv1.ResourceReadError, "An error occurred trying to retrieve Elasticsearch", err, reqLogger)
 			return reconcile.Result{}, err

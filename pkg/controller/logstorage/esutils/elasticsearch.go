@@ -13,30 +13,40 @@
 // limitations under the License.
 
 // This file contains functions common to the controllers to help them interact with elasticsearch.
-package utils
+package esutils
 
 import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
+
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 
+	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	"github.com/olivere/elastic/v7"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
+	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/logstorage"
+	"github.com/tigera/operator/pkg/render/logstorage/eck"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var log = logf.Log.WithName("esutils")
 
 const (
 	ElasticsearchRetentionFactor = 4
@@ -136,7 +146,7 @@ func NewElasticClient(client client.Client, ctx context.Context, elasticHTTPSEnd
 	var clientCertificates []tls.Certificate
 	if external {
 		// mTLS is enabled. We need to provide a client certificate.
-		certSecret, err := GetSecret(ctx, client, logstorage.ExternalCertsSecret, common.OperatorNamespace())
+		certSecret, err := utils.GetSecret(ctx, client, logstorage.ExternalCertsSecret, common.OperatorNamespace())
 		if err != nil {
 			return nil, err
 		}
@@ -618,7 +628,7 @@ func getClientCredentials(ctx context.Context, client client.Client, externalEla
 // getESRoots returns the root certificates used to validate the Elasticsearch server certificate.
 func getESRoots(ctx context.Context, client client.Client, secretName string) (*x509.CertPool, error) {
 	instance := &operatorv1.Installation{}
-	if err := client.Get(ctx, DefaultInstanceKey, instance); err != nil {
+	if err := client.Get(ctx, utils.DefaultInstanceKey, instance); err != nil {
 		return nil, err
 	}
 
@@ -675,4 +685,42 @@ func getTotalEsDisk(ls *operatorv1.LogStorage) int64 {
 		}
 	}
 	return totalEsStorage
+}
+
+// GetElasticLicenseType returns the license type from elastic-licensing ConfigMap that ECK operator keeps updated.
+func GetElasticLicenseType(ctx context.Context, cli client.Client, logger logr.Logger) (render.ElasticsearchLicenseType, error) {
+	cm := &corev1.ConfigMap{}
+	err := cli.Get(ctx, client.ObjectKey{Name: eck.LicenseConfigMapName, Namespace: eck.OperatorNamespace}, cm)
+	if err != nil {
+		return render.ElasticsearchLicenseTypeUnknown, err
+	}
+	license, ok := cm.Data["eck_license_level"]
+	if !ok {
+		return render.ElasticsearchLicenseTypeUnknown, fmt.Errorf("eck_license_level not available")
+	}
+
+	return StrToElasticLicenseType(license, logger), nil
+}
+
+// StrToElasticLicenseType maps Elasticsearch license to one of the known and expected value.
+func StrToElasticLicenseType(license string, logger logr.Logger) render.ElasticsearchLicenseType {
+	if license == string(render.ElasticsearchLicenseTypeEnterprise) ||
+		license == string(render.ElasticsearchLicenseTypeBasic) ||
+		license == string(render.ElasticsearchLicenseTypeEnterpriseTrial) {
+		return render.ElasticsearchLicenseType(license)
+	}
+	logger.V(3).Info("Elasticsearch license %s is unexpected", license)
+	return render.ElasticsearchLicenseTypeUnknown
+}
+
+func GetElasticsearch(ctx context.Context, c client.Client) (*esv1.Elasticsearch, error) {
+	es := esv1.Elasticsearch{}
+	err := c.Get(ctx, client.ObjectKey{Name: render.ElasticsearchName, Namespace: render.ElasticsearchNamespace}, &es)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &es, nil
 }

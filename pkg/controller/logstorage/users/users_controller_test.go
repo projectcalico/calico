@@ -30,7 +30,7 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	tigeraelastic "github.com/tigera/operator/pkg/controller/logstorage/elastic"
-	"github.com/tigera/operator/pkg/controller/utils"
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 )
 
@@ -61,18 +61,18 @@ var _ = Describe("LogStorage cleanup controller", func() {
 		tenantID1 := "tenant1"
 		tenantID2 := "tenant2"
 
-		staleLinseedUser := utils.LinseedUser(clusterID1, tenantID1)
-		staleDashboardsUser := utils.DashboardUser(clusterID1, tenantID1)
+		staleLinseedUser := esutils.LinseedUser(clusterID1, tenantID1)
+		staleDashboardsUser := esutils.DashboardUser(clusterID1, tenantID1)
 
-		esTestUsers := []utils.User{
+		esTestUsers := []esutils.User{
 			*staleLinseedUser,
 			*staleDashboardsUser,
-			*utils.LinseedUser(clusterID1, tenantID2),
-			*utils.DashboardUser(clusterID1, tenantID2),
-			*utils.LinseedUser(clusterID2, tenantID1),
-			*utils.DashboardUser(clusterID2, tenantID1),
-			*utils.LinseedUser(clusterID2, tenantID2),
-			*utils.DashboardUser(clusterID2, tenantID2),
+			*esutils.LinseedUser(clusterID1, tenantID2),
+			*esutils.DashboardUser(clusterID1, tenantID2),
+			*esutils.LinseedUser(clusterID2, tenantID1),
+			*esutils.DashboardUser(clusterID2, tenantID1),
+			*esutils.LinseedUser(clusterID2, tenantID2),
+			*esutils.DashboardUser(clusterID2, tenantID2),
 		}
 
 		testESClient.On("GetUsers", ctx).Return(esTestUsers, nil)

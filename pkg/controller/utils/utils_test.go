@@ -54,56 +54,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/logstorage/eck"
 )
-
-var _ = Describe("Utils elasticsearch license type tests", func() {
-	var (
-		c      client.Client
-		ctx    context.Context
-		scheme *runtime.Scheme
-		log    logr.Logger
-	)
-
-	BeforeEach(func() {
-		// Create a Kubernetes client.
-		scheme = runtime.NewScheme()
-		err := apis.AddToScheme(scheme, false)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(corev1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
-		Expect(apps.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
-		Expect(batchv1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
-
-		c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
-		ctx = context.Background()
-		log = logf.Log.WithName("utils-test-logger")
-	})
-
-	It("Returns license type from elastic-licensing", func() {
-		Expect(c.Create(ctx, &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: eck.OperatorNamespace, Name: eck.LicenseConfigMapName},
-			Data:       map[string]string{"eck_license_level": "enterprise"},
-		})).ShouldNot(HaveOccurred())
-		license, err := GetElasticLicenseType(ctx, c, log)
-		Expect(err).ShouldNot(HaveOccurred())
-		Expect(license).Should(Equal(render.ElasticsearchLicenseTypeEnterprise))
-	})
-
-	It("Return error if elastic-licensing not found", func() {
-		license, err := GetElasticLicenseType(ctx, c, log)
-		Expect(err).Should(HaveOccurred())
-		Expect(license).Should(Equal(render.ElasticsearchLicenseTypeUnknown))
-	})
-
-	It("Return error if license type if missing", func() {
-		Expect(c.Create(ctx, &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: eck.OperatorNamespace, Name: eck.LicenseConfigMapName},
-		})).ShouldNot(HaveOccurred())
-		_, err := GetElasticLicenseType(ctx, c, log)
-		Expect(err).Should(HaveOccurred())
-	})
-})
 
 var _ = Describe("Tigera License polling test", func() {
 	var client fakeClient
@@ -276,42 +227,6 @@ var _ = Describe("PopulateK8sServiceEndPoint", func() {
 		err := PopulateK8sServiceEndPoint(c)
 
 		Expect(err).To(BeNil())
-	})
-})
-
-var _ = Describe("Utils ElasticSearch test", func() {
-	var (
-		userPrefix = "test-es-prefix"
-		clusterID  = "clusterUUID"
-		tenantID   = "tenantID"
-	)
-	It("should generate usernames in expected format", func() {
-		generatedESUsername := formatName(userPrefix, clusterID, tenantID)
-		expectedESUsername := fmt.Sprintf("%s_%s_%s", userPrefix, clusterID, tenantID)
-		Expect(generatedESUsername).To(Equal(expectedESUsername))
-	})
-
-	It("should generate Linseed ElasticUser with expected username and roles", func() {
-		linseedUser := LinseedUser(clusterID, tenantID)
-		expectedLinseedESName := fmt.Sprintf("%s_%s_%s", ElasticsearchUserNameLinseed, clusterID, tenantID)
-
-		Expect(linseedUser.Username).To(Equal(expectedLinseedESName))
-		Expect(len(linseedUser.Roles)).To(Equal(1))
-		linseedRole := linseedUser.Roles[0]
-		Expect(linseedRole.Name).To(Equal(expectedLinseedESName))
-
-		expectedLinseedRoleDef := RoleDefinition{
-			Cluster: []string{"monitor", "manage_index_templates", "manage_ilm"},
-			Indices: []RoleIndex{
-				{
-					// Include both single-index and multi-index name formats.
-					Names:      []string{indexPattern("tigera_secure_ee_*", "*", ".*", tenantID), "calico_*"},
-					Privileges: []string{"create_index", "write", "manage", "read"},
-				},
-			},
-		}
-
-		Expect(*linseedRole.Definition).To(Equal(expectedLinseedRoleDef))
 	})
 })
 

@@ -49,6 +49,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
+	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/controller/logstorage/initializer"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -86,7 +87,7 @@ func NewReconcilerWithShims(
 	scheme *runtime.Scheme,
 	status status.StatusManager,
 	provider operatorv1.Provider,
-	esCliCreator utils.ElasticsearchClientCreator,
+	esCliCreator esutils.ElasticsearchClientCreator,
 	clusterDomain string,
 	tierWatchReady *utils.ReadyFlag,
 ) (*ElasticSubController, error) {
