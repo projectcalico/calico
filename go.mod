@@ -222,7 +222,7 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.7.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
-	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
+	github.com/cyphar/filepath-securejoin v0.7.0
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/cli v29.4.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.5 // indirect
@@ -385,8 +385,8 @@ require (
 	k8s.io/cloud-provider v0.37.0-beta.0 // indirect
 	k8s.io/component-helpers v0.37.0-beta.0 // indirect
 	k8s.io/controller-manager v0.37.0-beta.0 // indirect
-	k8s.io/cri-api v0.37.0-beta.0 // indirect
-	k8s.io/cri-client v0.37.0-beta.0 // indirect
+	k8s.io/cri-api v0.37.0-beta.0
+	k8s.io/cri-client v0.37.0-beta.0
 	k8s.io/cri-streaming v0.0.0 // indirect
 	k8s.io/csi-translation-lib v0.37.0-beta.0 // indirect
 	k8s.io/dynamic-resource-allocation v0.37.0-beta.0 // indirect

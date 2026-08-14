@@ -412,6 +412,8 @@ func StartDataplaneDriver(
 			NFTablesFlowTableDataIfacePattern:  configParams.NFTablesFlowTableDataIfacePattern,
 			BPFL3IfacePattern:                  configParams.BPFL3IfacePattern,
 			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
+			CRISocketPath:                      configParams.CRISocketPath,
+			ProcRootPath:                       configParams.ProcRootPath,
 			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
 			KubeProxyHealtzPort:                configParams.BPFKubeProxyHealthzPort,
 			BPFPSNATPorts:                      configParams.BPFPSNATPorts,

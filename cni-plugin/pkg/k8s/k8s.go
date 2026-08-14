@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -528,6 +529,25 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			}
 		}
 		logger.WithField("endpoint", endpoint).Info("Added floatingIPs to endpoint")
+	}
+
+	// Record the pod's netns path (forwarded as the
+	// cni.projectcalico.org/podNetns annotation via pods/status) so Felix can
+	// resolve its netns cookie without scanning /proc. Canonicalise it here:
+	// the CNI plugin runs in the host mount namespace, so EvalSymlinks resolves
+	// symlinks (e.g. /var/run → /run) against the real layout and Felix can use
+	// the path as-is.
+	if args.Netns != "" {
+		canonical, err := filepath.EvalSymlinks(args.Netns)
+		if err != nil {
+			logger.WithError(err).WithField("netns", args.Netns).
+				Debug("Failed to canonicalise netns path; storing raw value")
+			canonical = args.Netns
+		}
+		if endpoint.Annotations == nil {
+			endpoint.Annotations = map[string]string{}
+		}
+		endpoint.Annotations[k8sconversion.AnnotationPodNetns] = canonical
 	}
 
 	// Write the endpoint object (either the newly created one, or the updated one)
