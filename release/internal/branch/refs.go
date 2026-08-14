@@ -55,6 +55,23 @@ func createAndCheckoutBranch(g git, name, base string) error {
 	return checkoutBranch(g, name)
 }
 
+// resetBranchToBase points name at base's head and checks it out, creating it if
+// absent, so a re-cut picks up source changes.
+func resetBranchToBase(g git, name, base string) error {
+	if _, err := g("checkout", "-B", name, base); err != nil {
+		return fmt.Errorf("reset branch %s to %s: %w", name, base, err)
+	}
+	return nil
+}
+
+// sourceAheadOf reports whether source has commits the branch lacks (source is
+// not an ancestor of branch). A missing branch counts as behind.
+func sourceAheadOf(g git, source, branch string) bool {
+	// exit 0 => source is an ancestor of branch => branch already has source.
+	_, err := g("merge-base", "--is-ancestor", source, branch)
+	return err != nil
+}
+
 // checkoutBranch switches HEAD to name. It is idempotent: checking out the
 // branch already at HEAD is a no-op.
 func checkoutBranch(g git, name string) error {

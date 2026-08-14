@@ -761,3 +761,51 @@ func TestValidateFreshCutBaseCheckRunsWithoutValidate(t *testing.T) {
 	err := d.validateFreshCut(gitIn(root), p)
 	require.ErrorContains(t, err, "not in sync", "the base check must run even with --no-validation")
 }
+
+// A cut whose source equals its derived branch is rejected before any git work.
+func TestCutReleaseBranchRejectsSourceEqualsDerived(t *testing.T) {
+	d := newTestDriver(t, Driver{RepoRoot: t.TempDir()})
+	p := &CutPlan{Derived: "release-v3.33", Source: "release-v3.33", Remote: "origin"}
+	err := d.CutReleaseBranch(p)
+	require.ErrorContains(t, err, "cannot be the same as derived")
+}
+
+// A resume re-cuts the derived branch from source when source advanced, so new
+// source commits are picked up; an unchanged source leaves the branch in place.
+func TestUpdateDerivedResetsWhenSourceAdvanced(t *testing.T) {
+	root := initGitRepo(t)
+	derived := utils.ReleaseBranchPrefix() + "-v3.33"
+	p := &CutPlan{Derived: derived, Source: "master"}
+	prepare := func(string) ([]string, error) {
+		written, _, err := ApplyEdits(root, []Edit{
+			{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: "OPERATOR_BRANCH ?= " + derived},
+		})
+		return written, err
+	}
+	d, g := stepDriver(root, nil, false, nil)
+	d.PrepareDerived = prepare
+
+	// First cut: create derived off master and apply the edit.
+	all := d.steps(g, p)
+	require.NoError(t, d.runSteps([]Step{findStep(t, all, "cut-branch"), findStep(t, all, "update-derived")}))
+
+	// Advance master with a new commit the derived branch does not have.
+	_, err := command.GitInDir(root, "checkout", "-q", "master")
+	require.NoError(t, err)
+	writeFile(t, root, "new-on-master.txt", "added after the cut\n")
+	_, err = command.GitInDir(root, "add", ".")
+	require.NoError(t, err)
+	_, err = command.GitInDir(root, "commit", "-q", "-m", "advance master")
+	require.NoError(t, err)
+
+	// Resume update-derived: it must re-cut derived from the advanced master.
+	require.NoError(t, d.runSteps([]Step{findStep(t, d.steps(g, p), "update-derived")}))
+
+	// The derived branch now contains master's new file, and still has the edit.
+	content, err := command.GitInDir(root, "show", derived+":new-on-master.txt")
+	require.NoError(t, err)
+	require.Contains(t, content, "added after the cut", "derived must pick up the advanced source commit")
+	meta, err := command.GitInDir(root, "show", derived+":metadata.mk")
+	require.NoError(t, err)
+	require.Contains(t, meta, "OPERATOR_BRANCH ?= "+derived, "the edit must be re-applied after the reset")
+}

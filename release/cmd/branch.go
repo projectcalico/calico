@@ -51,7 +51,6 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				operatorBranchFlag,
 				localFlag,
 				validationFlag,
-				branchCheckFlag,
 				planFlag,
 				skipFlag(branch.StepNames()),
 			},
