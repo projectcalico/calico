@@ -3884,6 +3884,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Ref:         ref(numorstring.Port{}.OpenAPIModelName()),
 						},
 					},
+					"criSocketPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "CRISocketPath is the path to the local container-runtime CRI socket (e.g. /run/containerd/containerd.sock). When empty, Felix probes a small set of well-known paths at startup.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfMapSizeNATFrontend": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeNATFrontend sets the size for NAT front end map. FrontendMap should be large enough to hold an entry for each nodeport, external IP and each port in each service.",

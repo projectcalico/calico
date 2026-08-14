@@ -242,6 +242,7 @@ large enough to bloat AI-tool context.
 | [bpf-tests](./design/bpf-tests.md) | `felix/bpf/ut/**`, `felix/fv/bpf_*_test.go` | ✅ exists |
 | [dataplane](./design/dataplane.md) | `felix/dataplane/linux/**` (the shared loop/manager/resync architecture, all modes — BPF-specific files here are *also* matched by the `bpf-*` rows, intentionally), `felix/iptables/**`, `felix/nftables/**`, `felix/generictables/**`, `felix/ipsets/**`, `felix/markbits/**`, `felix/rules/**`; also the manager/driver architecture & resync doctrine for `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` | ✅ exists |
 | [calc-graph](./design/calc-graph.md) | `felix/calc/**`, `felix/labelindex/**`, `felix/dispatcher/**` | ✅ exists |
+| [netns-resolution](./design/netns-resolution.md) | `felix/netns/**`, `felix/cri/**`, `felix/dataplane/linux/netns_mgr.go` | ✅ exists |
 | route-sync (deep netlink design only) | `felix/routetable/**`, `felix/routerule/**`, `felix/vxlanfdb/**` — *architecture covered by [dataplane.md](./design/dataplane.md); this row reserved for the deeper netlink-level resync design* | *not yet written* |
 | flow-logs-collector | `felix/collector/**` | *not yet written* |
 | config-engine | `felix/config/**` | *not yet written* |

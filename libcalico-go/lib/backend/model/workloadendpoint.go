@@ -175,6 +175,8 @@ type WorkloadEndpoint struct {
 	State                      string            `json:"state"`
 	Name                       string            `json:"name"`
 	ActiveInstanceID           string            `json:"active_instance_id"`
+	UID                        string            `json:"uid,omitempty"`
+	NetnsPath                  string            `json:"netns_path,omitempty"`
 	Mac                        *net.MAC          `json:"mac"`
 	ProfileIDs                 []string          `json:"profile_ids"`
 	IPv4Nets                   []net.IPNet       `json:"ipv4_nets"`
