@@ -243,23 +243,30 @@ func evictCalicoNodeFrom(
 		}
 	}
 
-	setNodeSelector := func(ctx context.Context, selector map[string]string) {
+	// Whatever override the cluster already had, so that restoring puts it back rather than
+	// clearing it: the STs run against clusters this test does not own.
+	inst := &operatorv1.Installation{}
+	g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, inst)).
+		To(Succeed(), "reading Installation default")
+	previousDaemonSet := inst.Spec.CalicoNodeDaemonSet.DeepCopy()
+
+	setDaemonSetOverride := func(ctx context.Context, override *operatorv1.CalicoNodeDaemonSet) {
 		inst := &operatorv1.Installation{}
 		g.Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, inst)).
 			To(Succeed(), "reading Installation default")
 		patch := ctrlclient.MergeFrom(inst.DeepCopy())
-		if selector == nil {
-			inst.Spec.CalicoNodeDaemonSet = nil
-		} else {
-			inst.Spec.CalicoNodeDaemonSet = &operatorv1.CalicoNodeDaemonSet{
-				Spec: &operatorv1.CalicoNodeDaemonSetSpec{
-					Template: &operatorv1.CalicoNodeDaemonSetPodTemplateSpec{
-						Spec: &operatorv1.CalicoNodeDaemonSetPodSpec{NodeSelector: selector},
-					},
-				},
-			}
-		}
+		inst.Spec.CalicoNodeDaemonSet = override
 		g.Expect(cli.Patch(ctx, inst, patch)).To(Succeed(), "patching Installation calicoNodeDaemonSet")
+	}
+
+	pinToLabel := func(ctx context.Context, selector map[string]string) {
+		setDaemonSetOverride(ctx, &operatorv1.CalicoNodeDaemonSet{
+			Spec: &operatorv1.CalicoNodeDaemonSetSpec{
+				Template: &operatorv1.CalicoNodeDaemonSetPodTemplateSpec{
+					Spec: &operatorv1.CalicoNodeDaemonSetPodSpec{NodeSelector: selector},
+				},
+			},
+		})
 	}
 
 	calicoNodePodsOn := func(ctx context.Context, nodeName string) int {
@@ -274,7 +281,7 @@ func evictCalicoNodeFrom(
 	}
 
 	t.Logf("Removing calico-node from %s", targetNode)
-	setNodeSelector(ctx, map[string]string{labelKey: "true"})
+	pinToLabel(ctx, map[string]string{labelKey: "true"})
 	g.Eventually(func() int { return calicoNodePodsOn(ctx, targetNode) }, "3m", "2s").
 		Should(BeZero(), "calico-node did not go away on %s", targetNode)
 
@@ -286,7 +293,7 @@ func evictCalicoNodeFrom(
 		restored = true
 		ctx := context.Background()
 		t.Logf("Restoring calico-node on %s", targetNode)
-		setNodeSelector(ctx, nil)
+		setDaemonSetOverride(ctx, previousDaemonSet)
 		for _, n := range nodeList.Items {
 			if n.Name != targetNode {
 				setLabel(ctx, n.Name, false)
@@ -392,7 +399,9 @@ func tigeraStatusDegradedMessage(t testing.TB, name string) string {
 			` -o jsonpath='{.status.conditions[?(@.type=="Degraded")].message}'`,
 		utils.RunOptions{AllowFail: true, SuppressErrLog: true})
 	if err != nil {
-		return ""
+		// Deliberately not "": the caller waits for this to become empty, so a TigeraStatus it
+		// could not read must not be mistaken for a healthy one.
+		return fmt.Sprintf("could not read tigerastatus %s: %v", name, err)
 	}
 	return strings.TrimSpace(strings.Trim(out, "'"))
 }
