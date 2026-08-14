@@ -537,6 +537,29 @@ endif
 force-rebuild:
 
 ###############################################################################
+# Downloading tarballs
+###############################################################################
+# download_and_extract fetches a gzipped tarball and unpacks it into an
+# existing directory.
+#   $(1) URL
+#   $(2) destination directory
+#   $(3) extra tar arguments (e.g. --strip-components 1, or a member to extract)
+#
+# The tarball is written to a temporary file before tar reads it, rather than
+# piped straight into tar. A pipe makes the transfer unretryable — curl has
+# already handed part of the body downstream — so a connection cut short leaves
+# a corrupt or partly populated source tree.
+#
+# --retry-all-errors is what makes the retry cover that case: a truncated body
+# is CURLE_PARTIAL_FILE, which plain --retry does not count as transient.
+define download_and_extract
+	tmp=$$(mktemp "$${TMPDIR:-/tmp}/calico-download.XXXXXX") && \
+	trap 'rm -f "$$tmp"' EXIT INT TERM && \
+	curl -sSfL --retry 5 --retry-all-errors -o "$$tmp" '$(1)' && \
+	tar xz -C '$(2)' -f "$$tmp" $(3)
+endef
+
+###############################################################################
 # Updating pins
 #   the repo importing this Makefile _must_ define the update-pins target
 #   for example:
@@ -1532,7 +1555,7 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
+	@$(call download_and_extract,$(CRANE_URL),$(REPO_ROOT)/bin,crane)
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
