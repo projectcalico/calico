@@ -76,6 +76,7 @@ type mockDataplane struct {
 	numAttaches          map[string]int
 	policy               map[string]polprog.Rules
 	routes               map[ip.CIDR]struct{}
+	rpFilter             map[string]int
 	netlinkShim          netlinkshim.Interface
 	natDevicesConfigured bool
 
@@ -102,6 +103,7 @@ func newMockDataplane() *mockDataplane {
 		numAttaches: map[string]int{},
 		policy:      map[string]polprog.Rules{},
 		routes:      map[ip.CIDR]struct{}{},
+		rpFilter:    map[string]int{},
 		netlinkShim: netlinkShim,
 	}
 }
@@ -208,7 +210,20 @@ func (m *mockDataplane) setAcceptLocal(iface string, val bool) error {
 }
 
 func (m *mockDataplane) setRPFilter(iface string, val int) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.rpFilter[iface] = val
 	return nil
+}
+
+func (m *mockDataplane) rpFilterLevel(iface string) int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	val, seen := m.rpFilter[iface]
+	if !seen {
+		return -1
+	}
+	return val
 }
 
 func (m *mockDataplane) getIfaceLink(name string) (netlink.Link, error) {
@@ -404,6 +419,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		dataIfacePattern     string
 		l3IfacePattern       string
 		workloadIfaceRegex   string
+		overlayIPOnDevice    bool
 		ipSetIDAllocatorV4   *idalloc.IDAllocator
 		ipSetIDAllocatorV6   *idalloc.IDAllocator
 		vxlanMTU             int
@@ -431,6 +447,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		dataIfacePattern = "^eth0"
 		workloadIfaceRegex = "cali"
 		l3IfacePattern = "^l30"
+		overlayIPOnDevice = true // BPFOverlayHostSourceIP=TunnelAddress
 		ipSetIDAllocatorV4 = idalloc.New()
 		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
@@ -539,6 +556,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				BPFHostNetworkedNAT:     "Enabled",
 				BPFPolicyDebugEnabled:   true,
 				BPFIpv6Enabled:          ipv6Enabled,
+				BPFOverlayIPOnDevice:    overlayIPOnDevice,
 			},
 			maps,
 			regexp.MustCompile(workloadIfaceRegex),
@@ -1257,6 +1275,40 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			Expect(dp.programAttached("l30:ingress")).To(BeTrue())
 			Expect(dp.programAttached("l30:egress")).To(BeTrue())
 			checkIfState(14, "l30", ifstate.FlgIPv4Ready|ifstate.FlgL3)
+		})
+	})
+
+	Context("with overlay devices", func() {
+		JustBeforeEach(func() {
+			err := dp.createIface("vxlan.calico", 10, "vxlan")
+			Expect(err).NotTo(HaveOccurred())
+			err = dp.createIface("tunl0", 11, "ipip")
+			Expect(err).NotTo(HaveOccurred())
+			dataIfacePattern = "^(eth0|tunl0|vxlan.calico)"
+			newBpfEpMgr(false)
+			genIfaceUpdate("eth0", ifacemonitor.StateUp, 3)()
+			genIfaceUpdate("vxlan.calico", ifacemonitor.StateUp, 10)()
+			genIfaceUpdate("tunl0", ifacemonitor.StateUp, 11)()
+		})
+
+		Context("in BPFOverlayHostSourceIP=HostAddress mode", func() {
+			BeforeEach(func() {
+				overlayIPOnDevice = false
+			})
+
+			It("should turn rp_filter off on the address-less overlay devices only", func() {
+				Expect(dp.rpFilterLevel("tunl0")).To(Equal(0))
+				Expect(dp.rpFilterLevel("vxlan.calico")).To(Equal(0))
+				Expect(dp.rpFilterLevel("eth0")).To(Equal(2))
+			})
+		})
+
+		Context("in BPFOverlayHostSourceIP=TunnelAddress mode", func() {
+			It("should set loose rp_filter on all host devices", func() {
+				Expect(dp.rpFilterLevel("tunl0")).To(Equal(2))
+				Expect(dp.rpFilterLevel("vxlan.calico")).To(Equal(2))
+				Expect(dp.rpFilterLevel("eth0")).To(Equal(2))
+			})
 		})
 	})
 
