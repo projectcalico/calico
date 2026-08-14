@@ -239,7 +239,7 @@ endif
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
-ISTIO_VERSION ?= 1.29.4
+ISTIO_VERSION ?= 1.29.6
 ISTIO_RESOURCES_DIR = pkg/render/istio
 ISTIO_CHARTS = base istiod cni ztunnel
 ISTIO_CHART_FILES = $(addprefix $(ISTIO_RESOURCES_DIR)/,$(addsuffix .tgz,$(ISTIO_CHARTS)))

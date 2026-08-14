@@ -47,13 +47,13 @@ components:
     version: v3.23.1
   # eck-kibana holds the version of Kibana built for tigera/kibana
   eck-kibana:
-    version: 8.19.16
+    version: 8.19.20
   kibana:
     image: kibana
     version: v3.23.1
   # eck-elasticsearch holds the version of Elasticsearch built for tigera/elasticsearch
   eck-elasticsearch:
-    version: 8.19.16
+    version: 8.19.20
   elasticsearch:
     image: elasticsearch
     version: v3.23.1
@@ -108,14 +108,14 @@ components:
   # coreos-prometheus holds the version of prometheus built for tigera/prometheus,
   # which prometheus operator uses to validate.
   coreos-prometheus:
-    version: v3.9.1
+    version: v3.13.2
   prometheus:
     image: prometheus
     version: v3.23.1
   # coreos-alertmanager holds the version of alertmanager built for tigera/alertmanager,
   # which prometheus operator uses to validate.
   coreos-alertmanager:
-    version: v0.30.1
+    version: v0.33.1
   alertmanager:
     image: alertmanager
     version: v3.23.1
@@ -140,7 +140,7 @@ components:
   # eck-elasticsearch-operator holds the version of the ECK operator used to manage
   # Elasticsearch
   eck-elasticsearch-operator:
-    version: 3.4.0
+    version: 3.4.1
   l7-collector:
     image: l7-collector
     version: v3.23.1
