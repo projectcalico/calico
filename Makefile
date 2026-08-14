@@ -164,7 +164,7 @@ CONTAINERIZED= mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 		-e KUBECONFIG=/go/src/$(PACKAGE_NAME)/kubeconfig.yaml \
 		-e ACK_GINKGO_RC=true \
 		-e ACK_GINKGO_DEPRECATIONS=1.16.5 \
-		-e GOTOOLCHAIN=go1.26.4+auto \
+		-e GOTOOLCHAIN=go1.26.6+auto \
 		-w /go/src/$(PACKAGE_NAME) \
 		--net=host \
 		$(EXTRA_DOCKER_ARGS)
@@ -515,10 +515,15 @@ cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
 .PHONY: static-checks
 ## Perform static checks on the code.
 # Use the newer go-build image for lint because golangci-lint bundled in the
-# 1.25.x image was built with Go 1.25 and refuses to lint code targeting
-# Go 1.26.3. The binary build still uses GO_BUILD_VER (1.25.x) to ensure
-# glibc compatibility with the runtime UBI image.
-CALICO_BUILD_LINT ?= calico/go-build:1.26.3-llvm21.1.8-k8s1.35.5-$(BUILDARCH)
+# 1.25.x image was built with Go 1.25 and refuses to lint code targeting the
+# Go 1.26.x that go.mod asks for.
+#
+# The binary build keeps GO_BUILD_VER (1.25.x) as the *container*, for glibc
+# compatibility with the runtime UBI image, but the Go toolchain that actually
+# compiles it comes from GOTOOLCHAIN above plus the go.mod directive - not from
+# GO_VERSION. Keep this image's Go version in step with that floor so lint and
+# the binary are checked by the same compiler.
+CALICO_BUILD_LINT ?= calico/go-build:1.26.6-llvm21.1.8-k8s1.36.3-$(BUILDARCH)
 static-checks:
 	$(CONTAINERIZED) $(CALICO_BUILD_LINT) golangci-lint run --timeout 5m
 
