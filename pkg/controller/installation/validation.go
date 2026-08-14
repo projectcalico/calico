@@ -146,7 +146,8 @@ func validateCustomResource(instance *operatorv1.Installation) error {
 	// Verify Calico settings, if specified.
 	if instance.Spec.CalicoNetwork != nil {
 		bpfDataplane := instance.Spec.CalicoNetwork.LinuxDataplane != nil && *instance.Spec.CalicoNetwork.LinuxDataplane == operatorv1.LinuxDataplaneBPF
-		felixClusterRoutingMode := felixProgramsClusterRoutes(instance)
+		felixOwnsIPIPRoutes := felixProgramsIPIPClusterRoutes(instance)
+		felixOwnsNoEncapRoutes := felixProgramsNoEncapClusterRoutes(instance)
 
 		// Perform validation on non-IPPool fields that rely on IP pool configuration. Validation of the IP pools themselves
 		// happens in the IP pool controller.
@@ -175,15 +176,17 @@ func validateCustomResource(instance *operatorv1.Installation) error {
 					// Verify the specified encapsulation type is valid.
 					switch pool.Encapsulation {
 					case operatorv1.EncapsulationIPIP, operatorv1.EncapsulationIPIPCrossSubnet:
-						// In BIRD cluster routing mode, IPIP currently requires BGP to be running in order to program routes.
-						if !felixClusterRoutingMode &&
+						// Unless Felix is the configured owner of the IPIP cluster routes, they are
+						// BIRD's to program, which requires BGP to be running.
+						if !felixOwnsIPIPRoutes &&
 							(instance.Spec.CalicoNetwork.BGP == nil || *instance.Spec.CalicoNetwork.BGP == operatorv1.BGPDisabled) {
 							return fmt.Errorf("with BIRD cluster routing mode, IPIP encapsulation requires that BGP is enabled")
 						}
 					case operatorv1.EncapsulationVXLAN, operatorv1.EncapsulationVXLANCrossSubnet:
 					case operatorv1.EncapsulationNone:
-						// In BIRD cluster routing mode, Unencapsulated currently requires BGP to be running in order to program routes.
-						if !felixClusterRoutingMode &&
+						// Likewise for unencapsulated pools.  Note that clusterRoutingMode
+						// FelixIPIPOnly leaves these with BIRD, so it still needs BGP.
+						if !felixOwnsNoEncapRoutes &&
 							(instance.Spec.CalicoNetwork.BGP == nil || *instance.Spec.CalicoNetwork.BGP == operatorv1.BGPDisabled) {
 							return fmt.Errorf("with BIRD cluster routing mode, unencapsulated IP pools require that BGP is enabled")
 						}

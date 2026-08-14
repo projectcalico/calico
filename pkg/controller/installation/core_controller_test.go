@@ -1554,6 +1554,26 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(*bgpConfig.Spec.ProgramClusterRoutes).To(Equal("Disabled"))
 		})
 
+		It("should correctly patch FelixConfig and BGPConfig with ClusterRouteMode set to FelixIPIPOnly", func() {
+			felixIPIPOnly := operator.ClusterRoutingModeFelixIPIPOnly
+			cr.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{ClusterRoutingMode: &felixIPIPOnly}
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			fc := &v3.FelixConfiguration{}
+			err = c.Get(ctx, types.NamespacedName{Name: "default"}, fc)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(fc.Spec.ProgramClusterRoutes).NotTo(BeNil())
+			Expect(*fc.Spec.ProgramClusterRoutes).To(Equal("EnabledIPIPOnly"))
+
+			bgpConfig := &v3.BGPConfiguration{}
+			err = c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(bgpConfig.Spec.ProgramClusterRoutes).NotTo(BeNil())
+			Expect(*bgpConfig.Spec.ProgramClusterRoutes).To(Equal("EnabledNoEncapOnly"))
+		})
+
 		It("should create the default BGPConfig and FelixConfig with ClusterRoutingMode set", func() {
 			bgpConfig := &v3.BGPConfiguration{}
 			err := c.Get(ctx, types.NamespacedName{Name: "default"}, bgpConfig)

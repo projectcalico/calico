@@ -1899,10 +1899,7 @@ func setClusterRoutingOnFelixConfiguration(
 	}
 
 	updated := false
-	desiredValue := "Disabled"
-	if felixProgramsClusterRoutes(install) {
-		desiredValue = "Enabled"
-	}
+	desiredValue := felixProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
 
 	if fc.Spec.ProgramClusterRoutes == nil || *fc.Spec.ProgramClusterRoutes != desiredValue {
 		fc.Spec.ProgramClusterRoutes = &desiredValue
@@ -1925,10 +1922,7 @@ func setClusterRoutingOnBGPConfiguration(
 	}
 
 	updated := false
-	desiredValue := "Enabled"
-	if felixProgramsClusterRoutes(install) {
-		desiredValue = "Disabled"
-	}
+	desiredValue := birdProgramClusterRoutesValue(*install.Spec.CalicoNetwork.ClusterRoutingMode)
 
 	if bgpConfig.Spec.ProgramClusterRoutes == nil || *bgpConfig.Spec.ProgramClusterRoutes != desiredValue {
 		bgpConfig.Spec.ProgramClusterRoutes = &desiredValue
@@ -1939,12 +1933,50 @@ func setClusterRoutingOnBGPConfiguration(
 	return updated, nil
 }
 
-func felixProgramsClusterRoutes(install *operatorv1.Installation) bool {
-	if install.Spec.CalicoNetwork != nil && install.Spec.CalicoNetwork.ClusterRoutingMode != nil &&
-		*install.Spec.CalicoNetwork.ClusterRoutingMode == operatorv1.ClusterRoutingModeFelix {
-		return true
+// felixProgramClusterRoutesValue and birdProgramClusterRoutesValue map a cluster routing mode onto
+// the FelixConfiguration and BGPConfiguration programClusterRoutes values that implement it.  The
+// two must always be complementary: whatever Felix is not programming, BIRD has to, and vice versa.
+func felixProgramClusterRoutesValue(mode operatorv1.ClusterRoutingMode) string {
+	switch mode {
+	case operatorv1.ClusterRoutingModeFelix:
+		return "Enabled"
+	case operatorv1.ClusterRoutingModeFelixIPIPOnly:
+		return "EnabledIPIPOnly"
+	default:
+		return "Disabled"
 	}
-	return false
+}
+
+func birdProgramClusterRoutesValue(mode operatorv1.ClusterRoutingMode) string {
+	switch mode {
+	case operatorv1.ClusterRoutingModeFelix:
+		return "Disabled"
+	case operatorv1.ClusterRoutingModeFelixIPIPOnly:
+		return "EnabledNoEncapOnly"
+	default:
+		return "Enabled"
+	}
+}
+
+// felixProgramsIPIPClusterRoutes and felixProgramsNoEncapClusterRoutes say whether Felix, rather
+// than confd and BIRD, is the configured owner of the cluster routes for IPIP and for
+// unencapsulated IP Pools respectively.  Both return false when the mode is unset: the operator
+// then writes neither field and Calico's own defaults decide, which is not something to encode
+// here -- it varies by Calico version.
+func felixProgramsIPIPClusterRoutes(install *operatorv1.Installation) bool {
+	mode := clusterRoutingMode(install)
+	return mode == operatorv1.ClusterRoutingModeFelix || mode == operatorv1.ClusterRoutingModeFelixIPIPOnly
+}
+
+func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
+	return clusterRoutingMode(install) == operatorv1.ClusterRoutingModeFelix
+}
+
+func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {
+	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
+		return ""
+	}
+	return *install.Spec.CalicoNetwork.ClusterRoutingMode
 }
 
 // setBPFUpdatesOnFelixConfiguration will take the passed in fc and update any BPF properties needed
