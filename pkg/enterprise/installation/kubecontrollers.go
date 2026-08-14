@@ -275,6 +275,12 @@ func calicoKubeControllersEnterpriseRules(gatewayAPIPresent, managedCluster, rba
 			Verbs:     []string{"watch", "list", "get"},
 		},
 		rbacv1.PolicyRule{
+			// The node controller's IPAM syncer watches Networks to reserve their subnet edges.
+			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+			Resources: []string{"networks"},
+			Verbs:     []string{"watch", "list", "get"},
+		},
+		rbacv1.PolicyRule{
 			APIGroups: []string{""},
 			Resources: []string{"endpoints"},
 			Verbs:     []string{"create", "update", "delete"},

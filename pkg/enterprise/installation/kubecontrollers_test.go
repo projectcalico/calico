@@ -186,6 +186,20 @@ var _ = Describe("calico-kube-controllers enterprise surface", func() {
 		Expect(ok).To(BeFalse())
 	})
 
+	It("grants the node controller's IPAM syncer list access to Networks", func() {
+		eci, _, err := ext.Installation().ExtendInputs(ctx, newControllerInputs(operatorv1.CalicoEnterprise))
+		Expect(err).NotTo(HaveOccurred())
+		objs := renderKubeControllers(newControllerInputs(operatorv1.CalicoEnterprise), eci.RenderInputs)
+
+		role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, kubecontrollers.KubeControllerRole)
+		Expect(ok).To(BeTrue())
+		Expect(role.Rules).To(ContainElement(rbacv1.PolicyRule{
+			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+			Resources: []string{"networks"},
+			Verbs:     []string{"watch", "list", "get"},
+		}))
+	})
+
 	It("layers the full WAF surface on when the GatewayAPI extension is enabled", func() {
 		ci := wafControllerInputs()
 		eci, managed, err := ext.Installation().ExtendInputs(ctx, ci)
