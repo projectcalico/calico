@@ -16,6 +16,9 @@ package fv_test
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -111,6 +114,25 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		}, "30s", "1s").Should(ContainSubstring("[OFFLOAD]"))
 	})
 
+	It("keeps conntrack counters up to date for an offloaded flow", func() {
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		Eventually(func() int {
+			return offloadedPacketCount(tc.Felixes[0], w[0].IP, w[1].IP)
+		}, "30s", "1s").Should(BeNumerically(">", 0))
+
+		before := offloadedPacketCount(tc.Felixes[0], w[0].IP, w[1].IP)
+
+		// Flow logs take their counts off the conntrack entry, so frozen counters report a
+		// busy flow as idle.
+		Eventually(func() int {
+			return offloadedPacketCount(tc.Felixes[0], w[0].IP, w[1].IP)
+		}, "30s", "1s").Should(BeNumerically(">", before))
+	})
+
 	It("adds a matching host interface to the flowtable device set", func() {
 		// Create a dummy interface whose name matches FELIX_NFTABLESFLOWTABLEDATAIFACEPATTERN.
 		// The ifacemonitor should see it come up, the flowtable manager should match it, and it
@@ -144,3 +166,26 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		}, "30s", "1s").ShouldNot(ContainSubstring(fmt.Sprintf("flowtable %s", dataplanedefs.FlowtableName)))
 	})
 })
+
+var conntrackPacketsRegexp = regexp.MustCompile(`packets=(\d+)`)
+
+// offloadedPacketCount totals both directions' packets on the offloaded conntrack entry between
+// the two IPs, or 0 if there is none.
+func offloadedPacketCount(felix *infrastructure.Felix, ipA, ipB string) int {
+	out, _ := felix.ExecOutput("conntrack", "-L")
+
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "[OFFLOAD]") || !strings.Contains(line, ipA) || !strings.Contains(line, ipB) {
+			continue
+		}
+
+		total := 0
+		for _, match := range conntrackPacketsRegexp.FindAllStringSubmatch(line, -1) {
+			packets, err := strconv.Atoi(match[1])
+			Expect(err).NotTo(HaveOccurred())
+			total += packets
+		}
+		return total
+	}
+	return 0
+}

@@ -145,6 +145,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/cadvisor/lib v0.60.4 // indirect
+	github.com/google/nftables v0.3.0 // indirect
 )
 
 require (
@@ -301,8 +302,8 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-zglob v0.0.2-0.20190814121620-e3c945676326 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
-	github.com/mdlayher/netlink v1.7.2 // indirect
-	github.com/mdlayher/socket v0.5.1 // indirect
+	github.com/mdlayher/netlink v1.11.2 // indirect
+	github.com/mdlayher/socket v0.6.1 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -447,3 +448,5 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.37.0-beta.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.0-beta.0
 )
+
+replace sigs.k8s.io/knftables => github.com/caseydavenport/knftables v0.0.0-20260811210040-3c58db541a55
