@@ -131,6 +131,9 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if err := d.validate(); err != nil {
 		return err
 	}
+	if plan.Source == plan.Derived {
+		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
