@@ -45,6 +45,7 @@ import (
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/authentication"
@@ -258,7 +259,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 			}
 			trustedBundle.AddCertificates(certificate)
 		}
-		keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, ci.Client, authenticationCR, ci.RenderInputs.ClusterDomain, false)
+		keyValidatorConfig, err = eutils.GetKeyValidatorConfig(ctx, ci.Client, authenticationCR, ci.RenderInputs.ClusterDomain, false)
 		if err != nil {
 			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "failed to get KeyValidator config: %w", err)
 		}

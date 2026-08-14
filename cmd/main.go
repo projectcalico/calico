@@ -27,7 +27,7 @@ import (
 
 	"github.com/cloudflare/cfssl/log"
 	"github.com/go-logr/logr"
-	"github.com/tigera/operator/pkg/render/common/cloudconfig"
+	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 

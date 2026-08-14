@@ -42,9 +42,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
-	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -140,7 +141,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	}
 
 	if opts.Cloud && opts.ElasticExternal {
-		// This ConfigMap is needed for utils.GetCloudConfig
+		// This ConfigMap is needed for eutils.GetCloudConfig
 		if err = utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("policy-recommendation-controller failed to watch the ConfigMap resource: %w", err)
 		}
@@ -344,12 +345,12 @@ func (r *ReconcilePolicyRecommendation) Reconcile(ctx context.Context, request r
 	if r.opts.Cloud && r.opts.ElasticExternal && !r.opts.MultiTenant {
 		// For Calico Cloud single-tenant clusters sharing an external ES, extract the tenant
 		// information from the cloud config map.
-		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, logc)
 			return reconcile.Result{}, err
 		}
-		tenant = cloudConfig.ToTenant()
+		tenant = eutils.TenantFromCloudConfig(cloudConfig)
 	}
 
 	// Create a component handler to manage the rendered component.

@@ -46,8 +46,9 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/logstorage"
@@ -183,7 +184,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	go utils.WaitToAddResourceWatch(c, opts.K8sClientset, log, r.dpiAPIReady, []client.Object{&v3.DeepPacketInspection{TypeMeta: metav1.TypeMeta{Kind: v3.KindDeepPacketInspection}}})
 
 	if opts.Cloud && opts.ElasticExternal {
-		// This ConfigMap is needed for utils.GetCloudConfig
+		// This ConfigMap is needed for eutils.GetCloudConfig
 		if err = utils.AddConfigMapWatch(c, cloudconfig.CloudConfigConfigMapName, common.OperatorNamespace(), &handler.EnqueueRequestForObject{}); err != nil {
 			return fmt.Errorf("log-storage-linseed-controller failed to watch the ConfigMap resource: %w", err)
 		}
@@ -331,12 +332,12 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 			}
 		} else if r.cloud {
 			// Calico Cloud single-tenant: there is no Tenant CR, so read it from the cloud config map.
-			cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+			cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 			if err != nil {
 				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to read cloud config", err, reqLogger)
 				return reconcile.Result{}, err
 			}
-			tenant = cloudConfig.ToTenant()
+			tenant = eutils.TenantFromCloudConfig(cloudConfig)
 		}
 
 		// Determine the host and port from the URL.

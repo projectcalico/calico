@@ -36,8 +36,9 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/common/cloudconfig"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/logstorage/externalelasticsearch"
 )
@@ -163,7 +164,7 @@ func (r *ExternalESController) Reconcile(ctx context.Context, request reconcile.
 	// Calico Cloud addition. For Calico Cloud single-tenant management clusters connected to a
 	// multi-tenant external ES, augment the cluster config with this management cluster's tenant ID.
 	if r.opts.Cloud && !r.opts.MultiTenant {
-		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve tigera-secure-cloud-config config map", err, reqLogger)

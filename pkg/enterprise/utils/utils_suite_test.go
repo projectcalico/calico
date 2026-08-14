@@ -1,4 +1,4 @@
-// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,22 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cloudconfig
+package utils_test
 
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
+	"go.uber.org/zap/zapcore"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-func TestStatus(t *testing.T) {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter)))
-	RegisterFailHandler(Fail)
-	suiteConfig, reporterConfig := GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/cloudconfig_suite.xml"
-	RunSpecs(t, "pkg/render/common/cloudconfig/CloudConfig Suite", suiteConfig, reporterConfig)
+type allLogs struct{}
+
+func (a *allLogs) Enabled(_ zapcore.Level) bool {
+	return true
+}
+
+func TestEnterpriseUtils(t *testing.T) {
+	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(&allLogs{})))
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../../report/ut/enterprise_utils_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/utils Suite", suiteConfig, reporterConfig)
 }

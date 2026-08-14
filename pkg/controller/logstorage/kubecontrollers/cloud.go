@@ -21,6 +21,7 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/utils"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
@@ -35,7 +36,7 @@ func (r *ESKubeControllersController) esGatewayAddCloudModificationsToConfig(c *
 	c.Cloud.EsAdminUserSecret = esAdminUserSecret
 	c.Cloud.ExternalElastic = true
 
-	cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+	cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to retrieve tigera-secure-cloud-config config map", err, reqLogger)
@@ -71,7 +72,7 @@ func (r *ESKubeControllersController) esGatewayAddCloudModificationsToConfig(c *
 // esKubeControllersAddCloudModificationsToConfig modifies the provided *kubecontrollers.KubeControllersConfiguration to include Calico Cloud specific configuration.
 func (r *ESKubeControllersController) esKubeControllersAddCloudModificationsToConfig(c *kubecontrollers.KubeControllersConfiguration, reqLogger logr.Logger, ctx context.Context) (reconcile.Result, bool, error) {
 	if r.cloud && r.elasticExternal && !r.multiTenant {
-		cloudConfig, err := utils.GetCloudConfig(ctx, r.client)
+		cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				r.status.SetDegraded(operatorv1.ResourceReadError, "tigera-secure-cloud-config config map not found", err, reqLogger)

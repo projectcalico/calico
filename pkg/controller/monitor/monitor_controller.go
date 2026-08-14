@@ -44,6 +44,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	rauth "github.com/tigera/operator/pkg/render/common/authentication"
@@ -372,7 +373,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 	var keyValidatorConfig rauth.KeyValidatorConfig
 	if authenticationCR != nil && authenticationCR.Status.State == operatorv1.TigeraStatusReady {
-		keyValidatorConfig, err = utils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.clusterDomain, r.cloud && !r.multiTenant)
+		keyValidatorConfig, err = eutils.GetKeyValidatorConfig(ctx, r.client, authenticationCR, r.clusterDomain, r.cloud && !r.multiTenant)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceUpdateError, "Failed to process the authentication CR.", err, reqLogger)
 			return reconcile.Result{}, err

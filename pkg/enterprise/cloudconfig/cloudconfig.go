@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"strconv"
 
-	v1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 
 	"github.com/pkg/errors"
@@ -77,27 +76,6 @@ type CloudConfig struct {
 	externalESDomain     string
 	externalKibanaDomain string
 	enableMTLS           bool
-}
-
-// ToTenant converts the given CloudConfig structure to a Tenant object.
-// This allows controllers that have been converted to support multi-tenancy to still leverage
-// the single-tenant CloudConfig structure using the same code path as in multi-tenancy.
-func (c CloudConfig) ToTenant() *v1.Tenant {
-	return &v1.Tenant{
-		// We don't specify a Namespace for this tenant because it represents a singular tenant installed
-		// in this management cluster. The signals to the render code that this is a single-tenant cluster and not
-		// a cluster capable of multi-tenancy.
-		ObjectMeta: metav1.ObjectMeta{Name: "default"},
-		Spec: v1.TenantSpec{
-			ID:   c.tenantId,
-			Name: c.tenantName,
-			Elastic: &v1.TenantElasticSpec{
-				URL:       fmt.Sprintf("https://%s:443", c.externalESDomain),
-				KibanaURL: fmt.Sprintf("https://%s:443", c.externalKibanaDomain),
-				MutualTLS: c.enableMTLS,
-			},
-		},
-	}
 }
 
 func (c CloudConfig) TenantId() string {
