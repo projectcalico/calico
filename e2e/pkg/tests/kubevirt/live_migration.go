@@ -41,8 +41,9 @@ import (
 
 // KubeVirt live migration e2e tests validate Calico's seamless migration support for
 // KubeVirt VMs. The tests cover:
-//   - Zero-downtime TCP connectivity through iBGP and eBGP during migration (Tests 1-2)
-//   - Kubernetes NetworkPolicy enforcement survives migration (Test 3)
+//   - Zero-downtime TCP connectivity through iBGP during migration (Test 1)
+//   - Target-node BIRD route preference during migration (Test 2)
+//   - Zero-downtime TCP connectivity from an eBGP external client (Test 3)
 //
 // Prerequisites:
 //   - KubeVirt installed with live migration support
@@ -169,6 +170,44 @@ var _ = describe.CalicoDescribe(
 			logrus.Infof("Sequence: %d gaps, %d data points across 2 migrations", seqGaps, lastSeq)
 			Expect(seqGaps).To(BeNumerically("==", 0),
 				"seamless live migration must not drop any TCP segments")
+		})
+
+		// Test 2: target-node route preference. On the node receiving a
+		// migrated VM, BIRD must prefer the VM's local veth route (raised to
+		// preference 150 while Felix's route elevation is active) over the
+		// stale /32 still advertised by the migration source, and clients
+		// must see only a brief cutover disruption — not the ~9s black-hole
+		// that lasts until the source's veth teardown. Shared choreography in
+		// live_migration_target_route.go; MockVirt runs an ICMP variant.
+		It("should prefer the local workload route on the migration target node", func() {
+			if isMockVirtDeployed(f) {
+				Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
+			}
+			utils.RequireNodeCount(f, 3)
+			ctx, cancel := context.WithTimeout(context.Background(), targetRouteMigrationTimeout)
+			defer cancel()
+
+			runTargetRouteMigrationTest(ctx, f, cli, targetRouteTestParams{
+				vmName:    "e2e-target-route",
+				cloudInit: tcpServerCloudInit,
+				preflight: func(ctx context.Context, client conncheck.Client, tester conncheck.ConnectionTester, vmIP string) {
+					tester.WithTimeout(2 * time.Minute)
+					tester.ExpectSuccess(client, conncheck.NewTCPConnectTarget(vmIP, 9999))
+					tester.Execute()
+					tester.ResetExpectations()
+				},
+				startProbe: func(ctx context.Context, client conncheck.Client, vmIP string) continuityProbe {
+					name := "tcp-stream-" + client.Name()
+					cp := conncheck.StartStream(ctx, name,
+						conncheck.NewPodSource(f, client),
+						conncheck.WithStreamCommand("nc", vmIP, "9999"))
+					return continuityProbe{name: name, cp: cp, filter: func(l string) bool {
+						return strings.HasPrefix(l, "seq=")
+					}}
+				},
+				contestGuardHard:   true,
+				requireZeroSeqGaps: true,
+			})
 		})
 
 		// Test 3: same as Test 2 but the client runs on an external TOR over eBGP.
