@@ -268,6 +268,8 @@ var _ = Describe("Installation validation tests", func() {
 	It("should prevent IPIP with BGP disabled in BIRD cluster routing mode", func() {
 		disabled := operator.BGPDisabled
 		instance.Spec.CalicoNetwork.BGP = &disabled
+		clusterRoutingMode := operator.ClusterRoutingModeBIRD
+		instance.Spec.CalicoNetwork.ClusterRoutingMode = &clusterRoutingMode
 		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
 			{
 				CIDR:          "192.168.0.0/24",
@@ -283,6 +285,8 @@ var _ = Describe("Installation validation tests", func() {
 	It("should prevent IPIP cross-subnet with BGP disabled in BIRD cluster routing mode", func() {
 		disabled := operator.BGPDisabled
 		instance.Spec.CalicoNetwork.BGP = &disabled
+		clusterRoutingMode := operator.ClusterRoutingModeBIRD
+		instance.Spec.CalicoNetwork.ClusterRoutingMode = &clusterRoutingMode
 		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
 			{
 				CIDR:          "192.168.0.0/24",
@@ -298,6 +302,8 @@ var _ = Describe("Installation validation tests", func() {
 	It("should prevent no-encap with BGP disabled in BIRD cluster routing mode", func() {
 		disabled := operator.BGPDisabled
 		instance.Spec.CalicoNetwork.BGP = &disabled
+		clusterRoutingMode := operator.ClusterRoutingModeBIRD
+		instance.Spec.CalicoNetwork.ClusterRoutingMode = &clusterRoutingMode
 		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
 			{
 				CIDR:          "192.168.0.0/24",
@@ -402,6 +408,41 @@ var _ = Describe("Installation validation tests", func() {
 		instance.Spec.CalicoNetwork.BGP = &disabled
 		clusterRoutingMode := operator.ClusterRoutingModeFelixIPIPOnly
 		instance.Spec.CalicoNetwork.ClusterRoutingMode = &clusterRoutingMode
+		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
+			{
+				CIDR:          "192.168.0.0/24",
+				Encapsulation: operator.EncapsulationNone,
+				NATOutgoing:   operator.NATOutgoingEnabled,
+				NodeSelector:  "all()",
+			},
+		}
+		err := validateCustomResource(instance)
+		Expect(err).To(HaveOccurred())
+	})
+
+	// An unset clusterRoutingMode means Calico's own defaults, which since v3.33 are the same
+	// split as FelixIPIPOnly: Felix owns the IPIP cluster routes, BIRD keeps the unencapsulated
+	// ones.  So the two cases below must match the FelixIPIPOnly ones above.
+	It("should allow IPIP with BGP disabled when the cluster routing mode is unset", func() {
+		disabled := operator.BGPDisabled
+		instance.Spec.CalicoNetwork.BGP = &disabled
+		instance.Spec.CalicoNetwork.ClusterRoutingMode = nil
+		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
+			{
+				CIDR:          "192.168.0.0/24",
+				Encapsulation: operator.EncapsulationIPIP,
+				NATOutgoing:   operator.NATOutgoingEnabled,
+				NodeSelector:  "all()",
+			},
+		}
+		err := validateCustomResource(instance)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should prevent no-encap with BGP disabled when the cluster routing mode is unset", func() {
+		disabled := operator.BGPDisabled
+		instance.Spec.CalicoNetwork.BGP = &disabled
+		instance.Spec.CalicoNetwork.ClusterRoutingMode = nil
 		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
 			{
 				CIDR:          "192.168.0.0/24",
