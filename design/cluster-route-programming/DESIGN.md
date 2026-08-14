@@ -266,14 +266,22 @@ including the cluster routes Felix programs.  `calico_export_to_bgp_peers`
 rejects the ones that leave via a Calico tunnel device: `*.cali` / `*.calico`
 (VXLAN, WireGuard) and, since the IPIP default moved, `tunl0`.  Felix-programmed
 *no-encap* routes leave via an ordinary NIC, so they are still not caught, and a
-node can end up advertising other nodes' blocks to its peers.
+node can end up advertising other nodes' blocks to its iBGP peers.  Whether that
+actually misadvertises anything for no-encap is not established; it is tracked,
+with the history of this filter, in CORE-13346.
 
-Two further limits of the current filter, both of which the eventual fix should
-address rather than extend:
+The scope of the reject is deliberate on one axis and a proxy on the other:
 
-- `reject_tunnel_routes()` is only applied to internal peers, so nothing stops
-  these routes reaching an external peer — a ToR can learn every node's blocks
-  from every node, instead of just once from the owning node.
+- **External peers are out of scope by decision, not by omission.**  The reject
+  is applied only to internal peers, so a node does go on advertising these
+  routes to its eBGP peers.  That is intended: some deployments peer to their
+  external BGP infrastructure from only a *subset* of cluster nodes, so an
+  external peer may never hear from the node that programs a workload's local
+  route, and has to learn that workload's block from another node's remote
+  route instead.  Suppressing the advertisement would break those deployments.
+  An operator who does want it suppressed can express that with a BGPFilter
+  `interface` rule, which is what that field exists for.  Any remaining work
+  here is therefore about the iBGP case only.
 - Matching on interface name is a proxy for the property we actually want, which
   is "a route this node owns" versus "a route this node learned or synthesised".
   A route protocol test (`krt_source` against Felix's `DeviceRouteProtocol`)
