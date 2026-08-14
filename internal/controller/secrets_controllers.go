@@ -24,6 +24,7 @@ import (
 
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/secrets"
+	"github.com/tigera/operator/pkg/controller/tenantsecrets"
 )
 
 // LogStorageReconciler reconciles a LogStorage object
@@ -40,7 +41,7 @@ func (r *SecretsReconciler) SetupWithManager(mgr ctrl.Manager, opts options.Cont
 	if err := secrets.AddClusterCAController(mgr, opts); err != nil {
 		return err
 	}
-	if err := secrets.AddTenantController(mgr, opts); err != nil {
+	if err := tenantsecrets.AddTenantController(mgr, opts); err != nil {
 		return err
 	}
 	return nil
