@@ -11968,13 +11968,22 @@ spec:
                       type: string
                     clusterRoutingMode:
                       description: |-
-                        ClusterRoutingMode controls how nodes get a route to a workload on another node,
-                        when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                        confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                        Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                        ClusterRoutingMode controls which component programs the routes that a node needs in order to reach
+                        workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; the routes for IP Pools
+                        with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
+                        In BIRD mode, confd and BIRD program the routes for both IPIP and unencapsulated IP Pools.
+                        In Felix mode, Felix programs the routes for both IPIP and unencapsulated IP Pools.
+                        In FelixIPIPOnly mode, Felix programs the routes for IPIP IP Pools, and confd and BIRD program them
+                        for unencapsulated IP Pools.
+                        If not specified, the operator writes neither FelixConfiguration.programClusterRoutes nor
+                        BGPConfiguration.programClusterRoutes, so Calico's own defaults apply; as of Calico v3.33 those
+                        defaults are equivalent to FelixIPIPOnly.
+                        Note that BIRD programming of IPIP routes, which the BIRD mode selects, is deprecated as of
+                        Calico v3.33 and is intended for removal in v3.35.
                       enum:
                         - BIRD
                         - Felix
+                        - FelixIPIPOnly
                       type: string
                     containerIPForwarding:
                       description: |-
@@ -21344,13 +21353,22 @@ spec:
                           type: string
                         clusterRoutingMode:
                           description: |-
-                            ClusterRoutingMode controls how nodes get a route to a workload on another node,
-                            when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                            confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                            Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                            ClusterRoutingMode controls which component programs the routes that a node needs in order to reach
+                            workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; the routes for IP Pools
+                            with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
+                            In BIRD mode, confd and BIRD program the routes for both IPIP and unencapsulated IP Pools.
+                            In Felix mode, Felix programs the routes for both IPIP and unencapsulated IP Pools.
+                            In FelixIPIPOnly mode, Felix programs the routes for IPIP IP Pools, and confd and BIRD program them
+                            for unencapsulated IP Pools.
+                            If not specified, the operator writes neither FelixConfiguration.programClusterRoutes nor
+                            BGPConfiguration.programClusterRoutes, so Calico's own defaults apply; as of Calico v3.33 those
+                            defaults are equivalent to FelixIPIPOnly.
+                            Note that BIRD programming of IPIP routes, which the BIRD mode selects, is deprecated as of
+                            Calico v3.33 and is intended for removal in v3.35.
                           enum:
                             - BIRD
                             - Felix
+                            - FelixIPIPOnly
                           type: string
                         containerIPForwarding:
                           description: |-
