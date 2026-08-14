@@ -118,7 +118,7 @@ REPO?=tigera/operator
 PACKAGE_NAME?=github.com/tigera/operator
 LOCAL_USER_ID?=$(shell id -u $$USER)
 # The project Go version.
-GO_VERSION?=1.25.12
+GO_VERSION?=1.25.13
 # Version of Kubernetes to use for dependencies, tests, and kubectl.
 K8S_VERSION?=v1.35.7
 # The version of LLVM to use for the go-build image.
@@ -256,7 +256,7 @@ endif
 
 # To update the Istio version, see "Updating the bundled version of Istio" in docs/common_tasks.md.
 ISTIO_HELM_REPO ?= https://istio-release.storage.googleapis.com/charts
-ISTIO_VERSION ?= 1.29.2
+ISTIO_VERSION ?= 1.29.6
 ISTIO_RESOURCES_DIR = pkg/render/istio
 ISTIO_CHARTS = base istiod cni ztunnel
 ISTIO_CHART_FILES = $(addprefix $(ISTIO_RESOURCES_DIR)/,$(addsuffix .tgz,$(ISTIO_CHARTS)))

@@ -46,12 +46,12 @@ components:
     image: tigera/dex
     version: v3.22.6
   eck-kibana:
-    version: 8.19.19
+    version: 8.19.20
   kibana:
     image: tigera/kibana
     version: v3.22.6
   eck-elasticsearch:
-    version: 8.19.19
+    version: 8.19.20
   elasticsearch:
     image: tigera/elasticsearch
     version: v3.22.6
@@ -106,14 +106,14 @@ components:
   # coreos-prometheus holds the version of prometheus built for tigera/prometheus,
   # which prometheus operator uses to validate.
   coreos-prometheus:
-    version: v3.12.0
+    version: v3.13.2
   prometheus:
     image: tigera/prometheus
     version: v3.22.6
   # coreos-prometheus holds the version of alertmanager built for tigera/alertmanager,
   # which prometheus operator uses to validate.
   coreos-alertmanager:
-    version: v0.32.1
+    version: v0.33.1
   alertmanager:
     image: tigera/alertmanager
     version: v3.22.6
