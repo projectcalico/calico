@@ -131,6 +131,9 @@ func (d *Driver) CutReleaseBranch(plan *CutPlan) error {
 	if err := d.validate(); err != nil {
 		return err
 	}
+	if plan.Source == plan.Derived {
+		return fmt.Errorf("source %q cannot be the same as derived %q branch", plan.Source, plan.Derived)
+	}
 	g := gitIn(d.RepoRoot)
 	if d.Plan {
 		logPlan(plan)
@@ -295,6 +298,7 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 			Done: func() (bool, error) {
 				// A local run pushes nothing, so there is nothing to probe: report done.
 				if !d.Publish {
+					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
 					return true, nil
 				}
 				// Done only when every ref is on the remote at the local sha. A stale
@@ -319,7 +323,7 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 			},
 			Do: func() error {
 				if !d.Publish {
-					logrus.Info("skipping push (local run)")
+					logrus.WithField("step", stepPushRefs).Info("skipping push (local run)")
 					return nil
 				}
 				return pushRefs(g, p.Remote, d.pushRefs(p)...)
@@ -328,7 +332,13 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 		{
 			Name: stepPostPush,
 			// Local runs still run the hook, which honors dry-run itself.
-			Done: func() (bool, error) { return d.PostDerivedPush == nil, nil },
+			Done: func() (bool, error) {
+				if d.PostDerivedPush == nil {
+					logrus.WithField("step", stepPostPush).Info("skipping post-push (no hook)")
+					return true, nil
+				}
+				return false, nil
+			},
 			Do: func() error {
 				if d.PostDerivedPush == nil {
 					return nil
@@ -342,7 +352,15 @@ func (d *Driver) steps(g git, p *CutPlan) []Step {
 // updateDerived runs PrepareDerived on the derived branch and commits the files
 // it changed.
 func (d *Driver) updateDerived(g git, p *CutPlan) error {
-	if err := checkoutBranch(g, p.Derived); err != nil {
+	// If source advanced past the derived branch, re-cut it from source so the
+	// resume picks up the new source commits; otherwise just check it out.
+	if sourceAheadOf(g, p.Source, p.Derived) {
+		logrus.WithFields(logrus.Fields{"branch": p.Derived, "source": p.Source, "step": stepUpdateDerived}).
+			Info("source advanced; resetting derived branch to source")
+		if err := resetBranchToBase(g, p.Derived, p.Source); err != nil {
+			return err
+		}
+	} else if err := checkoutBranch(g, p.Derived); err != nil {
 		return err
 	}
 	var changed []string
@@ -358,7 +376,7 @@ func (d *Driver) updateDerived(g git, p *CutPlan) error {
 		return fmt.Errorf("stage and commit: %w", err)
 	}
 	if !committed {
-		logrus.WithField("branch", p.Derived).Info("update-derived: no changes to commit")
+		logrus.WithFields(logrus.Fields{"branch": p.Derived, "step": stepUpdateDerived}).Info("no changes to commit")
 	}
 	return nil
 }
