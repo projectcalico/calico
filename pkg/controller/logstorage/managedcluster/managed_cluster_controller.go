@@ -31,6 +31,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 )
 
@@ -111,7 +112,7 @@ func (r *LogStorageManagedClusterController) Reconcile(ctx context.Context, requ
 		return reconcile.Result{}, err
 	}
 
-	managementCluster, err := utils.GetManagementCluster(ctx, r.client)
+	managementCluster, err := eutils.GetManagementCluster(ctx, r.client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -121,7 +122,7 @@ func (r *LogStorageManagedClusterController) Reconcile(ctx context.Context, requ
 		return reconcile.Result{}, fmt.Errorf("ManagementCluster is not supported on a managed cluster")
 	}
 
-	exists, err := utils.LogStorageExists(ctx, r.client)
+	exists, err := eutils.LogStorageExists(ctx, r.client)
 	if err != nil {
 		return reconcile.Result{}, err
 	}

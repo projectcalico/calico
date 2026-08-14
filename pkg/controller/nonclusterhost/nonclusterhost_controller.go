@@ -32,6 +32,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render/nonclusterhost"
 	"github.com/tigera/operator/pkg/url"
 )
@@ -87,7 +88,7 @@ func (r *ReconcileNonClusterHost) Reconcile(ctx context.Context, request reconci
 	logc := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	logc.Info("Reconciling NonClusterHost")
 
-	instance, err := utils.GetNonClusterHost(ctx, r.client)
+	instance, err := eutils.GetNonClusterHost(ctx, r.client)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to query NonClusterHost resource", err, logc)
 		return reconcile.Result{}, err

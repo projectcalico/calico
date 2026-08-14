@@ -50,6 +50,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
@@ -90,7 +91,7 @@ var _ = Describe("Manager controller tests", func() {
 		}
 		err := c.Create(ctx, instance)
 		Expect(err).NotTo(HaveOccurred())
-		instance, err = utils.GetManager(ctx, c, false, "")
+		instance, err = eutils.GetManager(ctx, c, false, "")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -104,7 +105,7 @@ var _ = Describe("Manager controller tests", func() {
 		}
 		err := c.Create(ctx, instanceA)
 		Expect(err).NotTo(HaveOccurred())
-		instance, err = utils.GetManager(ctx, c, true, tenantANamespace)
+		instance, err = eutils.GetManager(ctx, c, true, tenantANamespace)
 		Expect(err).NotTo(HaveOccurred())
 
 		tenantBNamespace := "tenant-b"
@@ -114,13 +115,13 @@ var _ = Describe("Manager controller tests", func() {
 		}
 		err = c.Create(ctx, instanceB)
 		Expect(err).NotTo(HaveOccurred())
-		instance, err = utils.GetManager(ctx, c, true, tenantBNamespace)
+		instance, err = eutils.GetManager(ctx, c, true, tenantBNamespace)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should return a nil instance and no error when querying a namespace that does not contain a manager instance", func() {
 		nsWithoutManager := "non-manager-ns"
-		instance, err := utils.GetManager(ctx, c, true, nsWithoutManager)
+		instance, err := eutils.GetManager(ctx, c, true, nsWithoutManager)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance).To(BeNil())
 	})
@@ -811,7 +812,7 @@ var _ = Describe("Manager controller tests", func() {
 						Namespace: "",
 					}})
 					Expect(err).ShouldNot(HaveOccurred())
-					instance, err := utils.GetManager(ctx, r.client, false, "")
+					instance, err := eutils.GetManager(ctx, r.client, false, "")
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(instance.Status.Conditions).To(HaveLen(1))
@@ -835,7 +836,7 @@ var _ = Describe("Manager controller tests", func() {
 						Namespace: "",
 					}})
 					Expect(err).ShouldNot(HaveOccurred())
-					instance, err := utils.GetManager(ctx, r.client, false, "")
+					instance, err := eutils.GetManager(ctx, r.client, false, "")
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(instance.Status.Conditions).To(HaveLen(0))
@@ -879,7 +880,7 @@ var _ = Describe("Manager controller tests", func() {
 						Namespace: "",
 					}})
 					Expect(err).ShouldNot(HaveOccurred())
-					instance, err := utils.GetManager(ctx, r.client, false, "")
+					instance, err := eutils.GetManager(ctx, r.client, false, "")
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(instance.Status.Conditions).To(HaveLen(3))
@@ -940,7 +941,7 @@ var _ = Describe("Manager controller tests", func() {
 						Namespace: "",
 					}})
 					Expect(err).ShouldNot(HaveOccurred())
-					instance, err := utils.GetManager(ctx, r.client, false, "")
+					instance, err := eutils.GetManager(ctx, r.client, false, "")
 					Expect(err).ShouldNot(HaveOccurred())
 
 					Expect(instance.Status.Conditions).To(HaveLen(3))

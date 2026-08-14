@@ -98,11 +98,11 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	// we should update all tenants whenever one changes. For single-tenant clusters, we can just queue the object.
 	var eventHandler handler.EventHandler = &handler.EnqueueRequestForObject{}
 	if opts.MultiTenant {
-		eventHandler = utils.EnqueueAllTenants(mgr.GetClient())
+		eventHandler = eutils.EnqueueAllTenants(mgr.GetClient())
 	}
 
 	// Make a helper for determining which namespaces to use based on tenancy mode.
-	helper := utils.NewNamespaceHelper(opts.MultiTenant, render.ManagerNamespace, "")
+	helper := eutils.NewNamespaceHelper(opts.MultiTenant, render.ManagerNamespace, "")
 
 	if err := utils.AddSecretsWatch(c, render.VoltronLinseedTLS, helper.InstallNamespace()); err != nil {
 		return err
@@ -291,7 +291,7 @@ type ReconcileManager struct {
 // Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
 func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	// Perform any common preparation that needs to be done for single-tenant and multi-tenant scenarios.
-	helper := utils.NewNamespaceHelper(r.opts.MultiTenant, render.ManagerNamespace, request.Namespace)
+	helper := eutils.NewNamespaceHelper(r.opts.MultiTenant, render.ManagerNamespace, request.Namespace)
 	logc := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name, "installNS", helper.InstallNamespace(), "truthNS", helper.TruthNamespace(), "multi-tenant", r.opts.MultiTenant)
 	logc.Info("Reconciling Manager")
 
@@ -301,7 +301,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Check if this is a tenant-scoped request.
-	tenant, _, err := utils.GetTenant(ctx, r.opts.MultiTenant, r.client, request.Namespace)
+	tenant, _, err := eutils.GetTenant(ctx, r.opts.MultiTenant, r.client, request.Namespace)
 	if errors.IsNotFound(err) {
 		logc.Info("No Tenant in this Namespace, skip")
 		return reconcile.Result{}, nil
@@ -311,7 +311,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Fetch the Manager instance that corresponds with this reconcile trigger.
-	instance, err := utils.GetManager(ctx, r.client, r.opts.MultiTenant, request.Namespace)
+	instance, err := eutils.GetManager(ctx, r.client, r.opts.MultiTenant, request.Namespace)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying Manager", err, logc)
 		return reconcile.Result{}, err
@@ -450,7 +450,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 			render.TigeraLinseedSecret,
 		}
 
-		packetcaptureapi, err := utils.GetPacketCaptureAPI(ctx, r.client)
+		packetcaptureapi, err := eutils.GetPacketCaptureAPI(ctx, r.client)
 		if err != nil && !errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying PacketCapture CR", err, logc)
 			return reconcile.Result{}, err
@@ -484,7 +484,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 
 	var authenticationCR *operatorv1.Authentication
 	// Fetch the Authentication spec. If present, we use to configure user authentication.
-	authenticationCR, err = utils.GetAuthentication(ctx, r.client)
+	authenticationCR, err = eutils.GetAuthentication(ctx, r.client)
 	if err != nil && !errors.IsNotFound(err) {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error while fetching Authentication", err, logc)
 		return reconcile.Result{}, err
@@ -492,7 +492,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	if authenticationCR != nil && authenticationCR.Status.State != operatorv1.TigeraStatusReady {
 		r.status.SetDegraded(operatorv1.ResourceNotReady, fmt.Sprintf("Authentication is not ready authenticationCR status: %s", authenticationCR.Status.State), nil, logc)
 		return reconcile.Result{}, nil
-	} else if utils.DexEnabled(authenticationCR) {
+	} else if eutils.DexEnabled(authenticationCR) {
 		trustedSecretNames = append(trustedSecretNames, render.DexTLSSecretName)
 	}
 
@@ -548,7 +548,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	managementCluster, err := utils.GetManagementCluster(ctx, r.client)
+	managementCluster, err := eutils.GetManagementCluster(ctx, r.client)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading ManagementCluster", err, logc)
 		return reconcile.Result{}, err
@@ -679,11 +679,11 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Determine the namespaces to which we must bind the cluster role.
-	namespaces, err := helper.FilteredTenantNamespaces(r.client, utils.ManagedEnterpriseOnly)
+	namespaces, err := eutils.HelperNamespaces(ctx, r.client, helper, eutils.ManagedEnterpriseOnly)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
-	ossTenantNamespaces, err := helper.FilteredTenantNamespaces(r.client, utils.ManagedCalicoOnly)
+	ossTenantNamespaces, err := eutils.HelperNamespaces(ctx, r.client, helper, eutils.ManagedCalicoOnly)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -695,7 +695,7 @@ func (r *ReconcileManager) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Check if non-cluster host feature is enabled.
-	nonclusterhost, err := utils.GetNonClusterHost(ctx, r.client)
+	nonclusterhost, err := eutils.GetNonClusterHost(ctx, r.client)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to query NonClusterHost resource", err, logc)
 		return reconcile.Result{}, err
@@ -1049,7 +1049,7 @@ func (r *ReconcileManager) resolveGateway(
 	instance *operatorv1.Manager,
 	authenticationCR *operatorv1.Authentication,
 	certManager certificatemanager.CertificateManager,
-	helper utils.NamespaceHelper,
+	helper eutils.NamespaceHelper,
 	logc logr.Logger,
 ) (render.Component, certificatemanagement.KeyPairInterface, reconcile.Result, error) {
 	gw := instance.Spec.IngressGateway

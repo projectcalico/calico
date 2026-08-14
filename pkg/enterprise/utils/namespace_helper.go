@@ -15,11 +15,7 @@
 package utils
 
 import (
-	"context"
-
-	operator "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewSingleTenantNamespaceHelper(ns string) NamespaceHelper {
@@ -37,10 +33,6 @@ func NewNamespaceHelper(mt bool, singleTenantNS, multiTenantNS string) Namespace
 	}
 }
 
-// TenantFilter is a function that accepts a tenant and returns true if the Tenant should be included
-// in the query, and false otherwise.
-type TenantFilter func(*operator.Tenant) bool
-
 type NamespaceHelper interface {
 	// InstallNamespace returns the namespace that components will be installed into.
 	// for single-tenant clusters, this is generally a well-known namespace of the form tigera-*.
@@ -51,14 +43,6 @@ type NamespaceHelper interface {
 	// For single-tenant installs, this is the tigera-operator namespace.
 	// For multi-tenant installs, this is tenant's namespace.
 	TruthNamespace() string
-
-	// TenantNamespaces returns all namespaces in the cluster for this component, across all tenants. This is useful when
-	// binding global resources to potentially several different Tenant namespaces.
-	// For single-tenant clusters, this simply returns the InstallNamespace.
-	TenantNamespaces(client.Client) ([]string, error)
-
-	// FilteredTenantNamespaces returns all namespaces for all Tenants that match the given filter.
-	FilteredTenantNamespaces(client.Client, TenantFilter) ([]string, error)
 
 	// Returns whether or not this is a multi-tenant helper.
 	MultiTenant() bool
@@ -86,28 +70,4 @@ func (r *namespacer) TruthNamespace() string {
 		return r.multiTenantNamespace
 	}
 	return common.OperatorNamespace()
-}
-
-func (r *namespacer) TenantNamespaces(c client.Client) ([]string, error) {
-	if r.multiTenant {
-		return TenantNamespaces(context.Background(), c, nil)
-	}
-	return []string{r.InstallNamespace()}, nil
-}
-
-func (r *namespacer) FilteredTenantNamespaces(c client.Client, f TenantFilter) ([]string, error) {
-	if r.multiTenant {
-		return TenantNamespaces(context.Background(), c, f)
-	}
-	return []string{r.InstallNamespace()}, nil
-}
-
-// ManagedCalicoOnly is a TenantFilter that matches tenants who manage Calico OSS clusters.
-func ManagedCalicoOnly(t *operator.Tenant) bool {
-	return t.ManagedClusterIsCalico()
-}
-
-// ManagedEnterpriseOnly is a TenantFilter that matches tenants who manage Calico Enterprise clusters.
-func ManagedEnterpriseOnly(t *operator.Tenant) bool {
-	return t != nil && !t.ManagedClusterIsCalico()
 }

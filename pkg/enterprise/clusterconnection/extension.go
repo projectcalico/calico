@@ -29,6 +29,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/monitor"
@@ -100,7 +101,7 @@ func (e *Extension) ValidateAndDefault(cr *operatorv1.ManagementClusterConnectio
 }
 
 func (e *Extension) validate(ctx context.Context, ci controller.Inputs) error {
-	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
+	managementCluster, err := eutils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
 		return extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}

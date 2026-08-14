@@ -46,6 +46,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/secret"
@@ -187,7 +188,7 @@ var _ = Describe("authentication controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetAuthentication(ctx, r.client)
+			instance, err := eutils.GetAuthentication(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(instance.Status.Conditions).To(HaveLen(1))
@@ -212,7 +213,7 @@ var _ = Describe("authentication controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetAuthentication(ctx, r.client)
+			instance, err := eutils.GetAuthentication(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(instance.Status.Conditions).To(HaveLen(0))
 		})
@@ -253,7 +254,7 @@ var _ = Describe("authentication controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetAuthentication(ctx, r.client)
+			instance, err := eutils.GetAuthentication(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(instance.Status.Conditions).To(HaveLen(3))
@@ -313,7 +314,7 @@ var _ = Describe("authentication controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetAuthentication(ctx, r.client)
+			instance, err := eutils.GetAuthentication(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(instance.Status.Conditions).To(HaveLen(3))
@@ -355,7 +356,7 @@ var _ = Describe("authentication controller tests", func() {
 			r := &ReconcileAuthentication{cli, scheme, operatorv1.ProviderNone, mockStatus, "", operatorv1.CalicoEnterprise, readyFlag, false, []*httpproxy.Config{}, metav1.Now()}
 			_, err := r.Reconcile(ctx, reconcile.Request{})
 			Expect(err).ShouldNot(HaveOccurred())
-			authentication, err := utils.GetAuthentication(ctx, cli)
+			authentication, err := eutils.GetAuthentication(ctx, cli)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all the expected defaults.

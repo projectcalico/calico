@@ -32,6 +32,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
@@ -206,7 +207,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		ci.RenderInputs.TrustedBundle.AddCertificates(kubeControllerTLS)
 	}
 
-	logCollector, err := utils.GetLogCollector(ctx, ci.Client)
+	logCollector, err := eutils.GetLogCollector(ctx, ci.Client)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading LogCollector: %w", err)
 	}
@@ -219,7 +220,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementClusterConnection: %w", err)
 	}
 
-	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
+	managementCluster, err := eutils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}

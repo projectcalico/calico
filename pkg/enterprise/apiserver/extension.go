@@ -191,12 +191,12 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceCreateError, "unable to create the trusted bundle: %w", err)
 	}
 
-	applicationLayer, err := utils.GetApplicationLayer(ctx, ci.Client)
+	applicationLayer, err := eutils.GetApplicationLayer(ctx, ci.Client)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ApplicationLayer: %w", err)
 	}
 
-	managementCluster, err := utils.GetManagementCluster(ctx, ci.Client)
+	managementCluster, err := eutils.GetManagementCluster(ctx, ci.Client)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading ManagementCluster: %w", err)
 	}
@@ -245,12 +245,12 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// Authentication: when a Dex-backed Authentication CR is ready, add its cert to the
 	// bundle and build the key validator config for the query server and the policy.
 	var keyValidatorConfig authentication.KeyValidatorConfig
-	authenticationCR, err := utils.GetAuthentication(ctx, ci.Client)
+	authenticationCR, err := eutils.GetAuthentication(ctx, ci.Client)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error while fetching Authentication: %w", err)
 	}
 	if authenticationCR != nil && authenticationCR.Status.State == operatorv1.TigeraStatusReady {
-		if utils.DexEnabled(authenticationCR) {
+		if eutils.DexEnabled(authenticationCR) {
 			certificate, err := ci.CertificateManager.GetCertificate(ci.Client, render.DexTLSSecretName, common.OperatorNamespace())
 			if err != nil {
 				return ci, nil, extensions.Degradedf(operatorv1.CertificateError, "failed to retrieve %s: %w", render.DexTLSSecretName, err)
@@ -312,7 +312,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// is covered by its own binding.
 	var bindingNamespaces []string
 	if e.opts.MultiTenant {
-		bindingNamespaces, err = utils.TenantNamespaces(ctx, ci.Client, nil)
+		bindingNamespaces, err = eutils.TenantNamespaces(ctx, ci.Client, nil)
 		if err != nil {
 			return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error reading tenant namespaces: %w", err)
 		}

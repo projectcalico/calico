@@ -40,6 +40,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
 	"github.com/tigera/operator/pkg/render/istio"
@@ -397,7 +398,7 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 		istioNeeds = utils.IstioRequiresPolicySync(instance, variant)
 	}
 
-	al, err := utils.GetApplicationLayer(ctx, r.Client)
+	al, err := eutils.GetApplicationLayer(ctx, r.Client)
 	if err != nil {
 		return false, err
 	}

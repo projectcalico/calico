@@ -44,6 +44,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/secret"
@@ -365,7 +366,7 @@ var _ = Describe("packet capture controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetPacketCaptureAPI(ctx, r.client)
+			instance, err := eutils.GetPacketCaptureAPI(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(instance.Status.Conditions).To(HaveLen(1))
 
@@ -388,7 +389,7 @@ var _ = Describe("packet capture controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetPacketCaptureAPI(ctx, r.client)
+			instance, err := eutils.GetPacketCaptureAPI(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(instance.Status.Conditions).To(HaveLen(0))
 		})
@@ -429,7 +430,7 @@ var _ = Describe("packet capture controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetPacketCaptureAPI(ctx, r.client)
+			instance, err := eutils.GetPacketCaptureAPI(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(instance.Status.Conditions).To(HaveLen(3))
 
@@ -511,7 +512,7 @@ var _ = Describe("packet capture controller tests", func() {
 				Namespace: "",
 			}})
 			Expect(err).ShouldNot(HaveOccurred())
-			instance, err := utils.GetPacketCaptureAPI(ctx, r.client)
+			instance, err := eutils.GetPacketCaptureAPI(ctx, r.client)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(instance.Status.Conditions).To(HaveLen(3))
 

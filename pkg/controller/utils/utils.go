@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -338,31 +337,6 @@ func IsProjectCalicoV3Available(client client.Client, opts options.ControllerOpt
 	return true
 }
 
-func LogStorageExists(ctx context.Context, cli client.Client) (bool, error) {
-	instance := &operatorv1.LogStorage{}
-	err := cli.Get(ctx, DefaultEnterpriseInstanceKey, instance)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	return true, nil
-}
-
-func GetLogCollector(ctx context.Context, cli client.Client) (*operatorv1.LogCollector, error) {
-	logCollector := &operatorv1.LogCollector{}
-	err := cli.Get(ctx, DefaultEnterpriseInstanceKey, logCollector)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return logCollector, nil
-}
-
 // FetchClusterInformation fetches and returns the clusterinformation.
 func FetchClusterInformation(ctx context.Context, cli client.Client) (v3.ClusterInformation, error) {
 	instance := &v3.ClusterInformation{}
@@ -456,22 +430,6 @@ func GetInstallationPullSecrets(i *operatorv1.InstallationSpec, c client.Client)
 	return secrets, nil
 }
 
-// Return the AplicationLayer CR if present. No error is returned if it was not
-// found.
-func GetApplicationLayer(ctx context.Context, c client.Client) (*operatorv1.ApplicationLayer, error) {
-	applicationLayer := &operatorv1.ApplicationLayer{}
-
-	err := c.Get(ctx, DefaultEnterpriseInstanceKey, applicationLayer)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return applicationLayer, nil
-}
-
 // Return the Istio CR if present. No error is returned if it was not found.
 func GetIstio(ctx context.Context, c client.Client) (*operatorv1.Istio, error) {
 	istio := &operatorv1.Istio{}
@@ -485,42 +443,6 @@ func GetIstio(ctx context.Context, c client.Client) (*operatorv1.Istio, error) {
 	}
 
 	return istio, nil
-}
-
-// GetManager returns the Manager CR, or nil if it is not found. When
-// multiTenant is true the tenant-scoped instance is read from ns; otherwise the
-// cluster-scoped instance is read and ns is ignored. A NoMatchError (the
-// Manager CRD is not registered) is returned to the caller rather than treated
-// as not-found: absence of the CRD is distinct from the user not having created
-// a Manager, and the caller decides how to handle it.
-func GetManager(ctx context.Context, cli client.Client, multiTenant bool, ns string) (*operatorv1.Manager, error) {
-	key := DefaultEnterpriseInstanceKey
-	if multiTenant {
-		key.Namespace = ns
-	}
-	instance := &operatorv1.Manager{}
-	if err := cli.Get(ctx, key, instance); err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return instance, nil
-}
-
-// Return the ManagementCluster CR if present. No error is returned if it was not found.
-func GetManagementCluster(ctx context.Context, c client.Client) (*operatorv1.ManagementCluster, error) {
-	managementCluster := &operatorv1.ManagementCluster{}
-
-	err := c.Get(ctx, DefaultEnterpriseInstanceKey, managementCluster)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return managementCluster, nil
 }
 
 // Return the ManagementClusterConnection CR if present. No error is returned if it was not found.
@@ -571,72 +493,6 @@ func RBACManagementEnabled(ctx context.Context, c client.Client, variant operato
 		return false, err
 	}
 	return rbacmanagement.Enabled(gate), nil
-}
-
-// GetNonClusterHost finds the NonClusterHost CR in your cluster.
-func GetNonClusterHost(ctx context.Context, cli client.Client) (*operatorv1.NonClusterHost, error) {
-	nonclusterhost := &operatorv1.NonClusterHost{}
-
-	err := cli.Get(ctx, DefaultEnterpriseInstanceKey, nonclusterhost)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return nonclusterhost, nil
-}
-
-// GetAuthentication finds the authentication CR in your cluster.
-func GetAuthentication(ctx context.Context, cli client.Client) (*operatorv1.Authentication, error) {
-	authentication := &operatorv1.Authentication{}
-	err := cli.Get(ctx, DefaultEnterpriseInstanceKey, authentication)
-	if err != nil {
-		return nil, err
-	}
-
-	return authentication, nil
-}
-
-// GetTenant returns the Tenant instance in the given namespace.
-func GetTenant(ctx context.Context, mt bool, cli client.Client, ns string) (*operatorv1.Tenant, string, error) {
-	if !mt {
-		// Multi-tenancy isn't enabled. Return nil.
-		return nil, "", nil
-	}
-
-	key := client.ObjectKey{Name: "default", Namespace: ns}
-	instance := &operatorv1.Tenant{}
-	err := cli.Get(ctx, key, instance)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if instance.Spec.ID == "" {
-		return nil, "", fmt.Errorf("tenant %s/%s has no ID specified", ns, instance.Name)
-	}
-	return instance, instance.Spec.ID, nil
-}
-
-// TenantNamespaces returns all namespaces that contain a tenant.
-// include is an optional filter function that returns true if the tenant should be included, false otherwise.
-func TenantNamespaces(ctx context.Context, cli client.Client, include TenantFilter) ([]string, error) {
-	namespaces := []string{}
-	tenants := operatorv1.TenantList{}
-	err := cli.List(ctx, &tenants)
-	if err != nil {
-		return nil, err
-	}
-	for _, t := range tenants.Items {
-		if include == nil || include(&t) {
-			namespaces = append(namespaces, t.Namespace)
-		}
-	}
-
-	// Sort the namespaces, so that the output is deterministic.
-	sort.Strings(namespaces)
-	return namespaces, nil
 }
 
 // GetInstallationStatus returns the current installation status, for use by other controllers.
@@ -698,17 +554,6 @@ func GetAPIServer(ctx context.Context, client client.Client) (*operatorv1.APISer
 		}
 	}
 	return instance, "", nil
-}
-
-// GetPacketCapture finds the PacketCapture CR in your cluster.
-func GetPacketCaptureAPI(ctx context.Context, cli client.Client) (*operatorv1.PacketCaptureAPI, error) {
-	pc := &operatorv1.PacketCaptureAPI{}
-	err := cli.Get(ctx, DefaultEnterpriseInstanceKey, pc)
-	if err != nil {
-		return nil, err
-	}
-
-	return pc, nil
 }
 
 type resourceWatchContext struct {
@@ -998,14 +843,6 @@ func compareMap(m1, m2 map[string]string) bool {
 		}
 	}
 	return true
-}
-
-func DexEnabled(authentication *operatorv1.Authentication) bool {
-	enableDex := authentication != nil
-	if enableDex && authentication.Spec.OIDC != nil && authentication.Spec.OIDC.Type == operatorv1.OIDCTypeTigera {
-		enableDex = false
-	}
-	return enableDex
 }
 
 func VerifySysctl(pluginData []operatorv1.Sysctl) error {

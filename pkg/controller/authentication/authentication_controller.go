@@ -187,7 +187,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 	reqLogger.Info("Reconciling ", "controller", controllerName)
 
 	// Fetch the Authentication spec. If present, we deploy dex in the cluster.
-	authentication, err := utils.GetAuthentication(ctx, r.client)
+	authentication, err := eutils.GetAuthentication(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.OnCRNotFound()
@@ -378,7 +378,7 @@ func (r *ReconcileAuthentication) Reconcile(ctx context.Context, request reconci
 	}
 	r.lastAvailabilityTransition = currentAvailabilityTransition
 
-	enableDex := utils.DexEnabled(authentication)
+	enableDex := eutils.DexEnabled(authentication)
 
 	// DexConfig adds convenience methods around dex related objects in k8s and can be used to configure Dex.
 	dexCfg := render.NewDexConfig(installationSpec.CertificateManagement, authentication, idpSecret, secretProviderClass, r.clusterDomain)

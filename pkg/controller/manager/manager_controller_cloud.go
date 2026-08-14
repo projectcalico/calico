@@ -69,7 +69,7 @@ func addCloudWatch(c ctrlruntime.Controller, eventHandler handler.EventHandler, 
 func (r *ReconcileManager) handleCloudReconcile(
 	ctx context.Context,
 	reqLogger logr.Logger,
-	helper utils.NamespaceHelper,
+	helper eutils.NamespaceHelper,
 	tenant *operatorv1.Tenant,
 	authenticationCR *operatorv1.Authentication,
 	certificateManager certificatemanager.CertificateManager,

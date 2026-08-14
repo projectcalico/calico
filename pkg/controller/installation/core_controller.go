@@ -72,6 +72,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/imports/admission"
 	"github.com/tigera/operator/pkg/imports/crds"
@@ -1215,7 +1216,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	// Check if non-cluster host feature is enabled.
 	var nonclusterhost *operatorv1.NonClusterHost
 	if instance.Spec.Variant.IsEnterprise() {
-		nonclusterhost, err = utils.GetNonClusterHost(ctx, r.client)
+		nonclusterhost, err = eutils.GetNonClusterHost(ctx, r.client)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to query NonClusterHost resource", err, reqLogger)
 			return reconcile.Result{}, err

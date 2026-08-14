@@ -27,6 +27,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	"github.com/tigera/operator/pkg/render/logstorage"
@@ -108,7 +109,7 @@ func (r *TenantController) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Get the Tenant.
-	tenant, _, err := utils.GetTenant(ctx, true, r.client, request.Namespace)
+	tenant, _, err := eutils.GetTenant(ctx, true, r.client, request.Namespace)
 	if errors.IsNotFound(err) {
 		logc.V(1).Info("No Tenant in this Namespace, skip")
 		r.status.OnCRNotFound()

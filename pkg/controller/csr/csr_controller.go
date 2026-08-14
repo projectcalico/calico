@@ -37,6 +37,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rmonitor "github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls"
@@ -207,7 +208,7 @@ func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request)
 		// Check whether the non-cluster host feature is enabled.
 		// Non-cluster hosts generate CSRs to establish mTLS connections with the cluster.
 		if !needsCSRRole {
-			nonclusterhost, err := utils.GetNonClusterHost(ctx, r.client)
+			nonclusterhost, err := eutils.GetNonClusterHost(ctx, r.client)
 			if err != nil {
 				return reconcile.Result{}, err
 			}

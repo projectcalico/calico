@@ -442,19 +442,6 @@ var _ = Describe("CreatePredicateForObject", func() {
 			Expect(p.Delete(event.DeleteEvent{Object: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "other-object", Namespace: "test-namespace"}}})).To(BeFalse())
 		})
 	})
-
-	DescribeTable("should correctly determine whether Dex is enabled",
-		func(authentication *opv1.Authentication, expectedResult bool) {
-			Expect(DexEnabled(authentication)).To(Equal(expectedResult))
-		},
-		Entry("when authentication is nil", nil, false),
-		Entry("when authentication is not nil and OIDC is nil",
-			&opv1.Authentication{Spec: opv1.AuthenticationSpec{OIDC: nil}}, true),
-		Entry("when authentication is not nil and OIDC type is OIDCTypeTigera",
-			&opv1.Authentication{Spec: opv1.AuthenticationSpec{OIDC: &opv1.AuthenticationOIDC{Type: opv1.OIDCTypeTigera}}}, false),
-		Entry("when authentication is not nil and OIDC type is different",
-			&opv1.Authentication{Spec: opv1.AuthenticationSpec{OIDC: &opv1.AuthenticationOIDC{Type: opv1.OIDCTypeDex}}}, true),
-	)
 })
 
 var _ = Describe("WaitToAddResourceWatch with custom predicates", func() {
