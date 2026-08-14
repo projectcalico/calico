@@ -3891,6 +3891,13 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 							Format:      "",
 						},
 					},
+					"procRootPath": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ProcRootPath is the path at which Felix reads the procfs of the host the pods run on, when resolving a local pod's network namespace. When Felix does not share the host PID namespace, the operator bind-mounts the host procfs (typically at /host/proc) and points Felix at it here. [Default: /proc]",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"bpfMapSizeNATFrontend": {
 						SchemaProps: spec.SchemaProps{
 							Description: "BPFMapSizeNATFrontend sets the size for NAT front end map. FrontendMap should be large enough to hold an entry for each nodeport, external IP and each port in each service.",

@@ -40,8 +40,8 @@ Resolution walks a fallback chain, first non-empty result wins:
 | Tier | Source | Package | Notes |
 |---|---|---|---|
 | 1 | CNI-set annotation `cni.projectcalico.org/podNetns` on the WEP | (on `proto.WorkloadEndpoint.netns_path`) | Fast path for the Calico-CNI case. The CNI plugin canonicalises `args.Netns` with `EvalSymlinks` at `cmdAdd` and writes it via the `pods/status` subresource. |
-| 2 | CRI runtime lookup by pod UID | `felix/cri` | Cross-CNI fallback. Lists the ready sandbox for the pod UID, extracts the sandbox PID from the runtime `Info` JSON, derives `/proc/<pid>/ns/net`. Disabled when no CRI socket is available. |
-| 3 | `/proc`-cgroup UID scan | `felix/netns` | Last-resort safety net. Finds a live process whose cgroup path mentions the pod UID (dash or underscore form) and uses its `/proc/<pid>/ns/net`. |
+| 2 | CRI runtime lookup by pod UID | `felix/cri` | Cross-CNI fallback. Lists the ready sandbox for the pod UID, extracts the sandbox PID from the runtime `Info` JSON, derives `<procRoot>/<pid>/ns/net`. Disabled when no CRI socket is available. |
+| 3 | `/proc`-cgroup UID scan | `felix/netns` | Last-resort safety net. Finds a live process whose cgroup path mentions the pod UID (dash or underscore form) and uses its `<procRoot>/<pid>/ns/net`. |
 
 The pod UID (`proto.WorkloadEndpoint.uid`) is the stable key Tiers 2/3
 use when the annotation is absent (pods admitted by another CNI in a
@@ -109,26 +109,40 @@ places:
 
 ## Reaching host paths (no `hostPID`)
 
-The netns files and the CRI socket live in the **host's** mount
-namespace; calico-node does not bind-mount them. Felix reaches them
-through the host's `/proc`, which the operator bind-mounts into
-calico-node at `/host/proc`. `/host/proc/1/root` is host PID-1's root —
-the host mount namespace — regardless of which PID namespace calico-node
-runs in, so this does **not** depend on `hostPID=true`.
+calico-node does not necessarily share the host's PID or mount
+namespaces, so the resolution tiers reach host state two different ways.
 
-Absolute symlink targets along that path (e.g. `/var/run` → `/run`) are
-resolved against the host view with `filepath-securejoin`'s `SecureJoin`
-rooted at `/host/proc/1/root` (`felix/cri`'s `viaHostRoot`,
-`felix/netns`'s `hostPath`), not the container's `/` — a naive prefix
-would re-root the target at the container root and miss the real inode.
+**Pid-based netns paths (Tiers 2 and 3)** live in the procfs of the host
+PID namespace the pods run in. Felix reads that procfs at `procRoot`,
+configured by `FelixConfiguration.ProcRootPath` (default `/proc`); when
+calico-node lacks `hostPID`, the operator bind-mounts the host procfs
+(e.g. `/host/proc`) and sets `ProcRootPath` to it. Both tiers build
+`<procRoot>/<pid>/ns/net`, which Felix can open directly because it reads
+`procRoot` directly (`felix/netns`'s `CookieByPath`, `felix/cri`'s path
+built under the client's `procRoot`).
+
+**Host-mount-namespace paths (Tier 1 and the CRI socket)** — the CNI-set
+netns file (e.g. `/run/netns/cni-<uuid>`) and the CRI socket live in the
+host's **mount** namespace, which calico-node does not bind-mount. Felix
+reaches them through `<procRoot>/1/root` — host PID-1's root in the same
+`procRoot` procfs, i.e. the host mount namespace — regardless of which PID
+namespace calico-node runs in, so this does **not** depend on `hostPID=true`
+(`/host/proc/1/root` in production, `/proc/1/root` when `procRoot` is
+`/proc`). Absolute symlink targets along that path (e.g. `/var/run` →
+`/run`) are resolved against the host view with `filepath-securejoin`'s
+`SecureJoin` rooted there (`felix/cri`'s `viaHostRoot`, `felix/netns`'s
+`hostPath`), not the container's `/` — a naive prefix would re-root the
+target at the container root and miss the real inode.
 `felix/cri/socket_detect.go` stat-probes a small fixed list of
 well-known CRI socket paths through the same mechanism; the probe is
 overridden by `FelixConfiguration.CRISocketPath`.
 
-**Review note.** `hostRootPrefix` is a package var in both `felix/cri`
-and `felix/netns` so tests can point it at a `t.TempDir()`. Keep the two
-in agreement (both `/host/proc/1/root` in production) and keep the
-SecureJoin-with-naive-fallback shape in both.
+**Review note.** There is one knob: `FelixConfiguration.ProcRootPath`
+(`procRoot`). The pid-based tiers open their `<procRoot>/<pid>/ns/net`
+path directly; the host-mount-namespace tiers re-root through
+`hostMountRoot(procRoot)` = `<procRoot>/1/root` (`felix/cri` and
+`felix/netns` each derive it — keep the SecureJoin-with-naive-fallback
+shape in both). Tests drive both by passing a `t.TempDir()` as `procRoot`.
 
 ## Where it sits, and why it's standalone
 
@@ -175,9 +189,12 @@ registration moves out of the BPF branch if a non-BPF consumer arrives.
   `Installation.spec.cniAnnotationsPolicy` toggle. A change to the managed
   keys or exemptions must update **both** repos.
 - The `/host/proc` bind-mount is added by the operator
-  (`pkg/render/node.go`). Removing the operator's remaining `hostPID=true`
-  usage (process-path collection) is a coordinated follow-up because the
-  consumer is Enterprise-only.
+  (`pkg/render/node.go`), which must also set `FelixConfiguration.ProcRootPath`
+  (or `FELIX_ProcRootPath`) to that mount so Felix reads the host procfs
+  there; the default `/proc` only suits calico-node sharing the host PID
+  namespace. Removing the operator's remaining `hostPID=true` usage
+  (process-path collection) is a coordinated follow-up because the consumer
+  is Enterprise-only.
 - The proto contract (`felix/proto/felixbackend.proto`,
   `WorkloadEndpoint.uid = 20`, `netns_path = 21`) and its plumbing through
   `libcalico-go` are part of this design; a change to what's carried

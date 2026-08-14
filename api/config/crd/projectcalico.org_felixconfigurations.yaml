@@ -1195,6 +1195,14 @@ spec:
                     PolicySyncPathPrefix is used to by Felix to communicate policy changes to external services,
                     like Application layer policy. [Default: Empty]
                   type: string
+                procRootPath:
+                  description: |-
+                    ProcRootPath is the path at which Felix reads the procfs of the host
+                    the pods run on, when resolving a local pod's network namespace. When
+                    Felix does not share the host PID namespace, the operator bind-mounts
+                    the host procfs (typically at /host/proc) and points Felix at it here.
+                    [Default: /proc]
+                  type: string
                 programClusterRoutes:
                   description: |-
                     ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,

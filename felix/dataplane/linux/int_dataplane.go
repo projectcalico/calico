@@ -235,6 +235,7 @@ type Config struct {
 	BPFConntrackTimeouts               bpftimeouts.Timeouts
 	BPFCgroupV2                        string
 	CRISocketPath                      string
+	ProcRootPath                       string
 	BPFConnTimeLBEnabled               bool
 	BPFConnTimeLB                      string
 	BPFHostNetworkedNAT                string
@@ -1081,7 +1082,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// otherwise the /proc-cgroup scan still covers fallback.
 		criSocket := config.CRISocketPath
 		if criSocket == "" {
-			if detected, derr := cri.DetectSocketPath(); derr == nil {
+			if detected, derr := cri.DetectSocketPath(config.ProcRootPath); derr == nil {
 				criSocket = detected
 				log.WithField("path", criSocket).Info("Autodetected CRI socket at well-known path")
 			} else {
@@ -1090,7 +1091,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 		var criResolver netnsCRIResolver
 		if criSocket != "" {
-			if cc, cerr := cri.New(criSocket); cerr == nil {
+			if cc, cerr := cri.New(config.ProcRootPath, criSocket); cerr == nil {
 				criResolver = cc.NetnsPathForPodUID
 				log.WithField("path", cc.SocketPath()).Info("netnsManager CRI tier enabled")
 			} else {
@@ -1099,7 +1100,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 		}
 		dp.netnsResolverWakeupC = make(chan struct{}, 1)
-		netnsMgr := newNetnsManager(criResolver, dp.netnsResolverWakeupC)
+		netnsMgr := newNetnsManager(config.ProcRootPath, criResolver, dp.netnsResolverWakeupC)
 		netnsMgr.Start()
 		dp.RegisterManager(netnsMgr)
 

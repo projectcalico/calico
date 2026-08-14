@@ -901,7 +901,14 @@ type FelixConfigurationSpec struct {
 	// CRISocketPath is the path to the local container-runtime CRI socket
 	// (e.g. /run/containerd/containerd.sock). When empty, Felix probes a
 	// small set of well-known paths at startup.
-	CRISocketPath string `json:"criSocketPath,omitempty" validate:"omitempty,file"`
+	CRISocketPath string `json:"criSocketPath,omitempty"`
+
+	// ProcRootPath is the path at which Felix reads the procfs of the host
+	// the pods run on, when resolving a local pod's network namespace. When
+	// Felix does not share the host PID namespace, the operator bind-mounts
+	// the host procfs (typically at /host/proc) and points Felix at it here.
+	// [Default: /proc]
+	ProcRootPath string `json:"procRootPath,omitempty"`
 
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,

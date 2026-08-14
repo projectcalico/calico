@@ -1251,6 +1251,22 @@ like Application layer policy.
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
 
+### `ProcRootPath` (config file) / `procRootPath` (YAML)
+
+The path at which Felix reads the procfs of the host
+the pods run on, when resolving a local pod's network namespace. When
+Felix does not share the host PID namespace, the operator bind-mounts
+the host procfs (typically at /host/proc) and points Felix at it here.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProcRootPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `/proc` |
+| `FelixConfiguration` field | `procRootPath` (YAML) `ProcRootPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `/proc` |
+
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 
 Controls how a cluster node gets a route to a workload on another node,

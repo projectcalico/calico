@@ -27,12 +27,14 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// procRoot is the path to procfs. Overridable for tests.
-var procRoot = "/proc"
-
-// ResolvePodNetnsPath finds the netns path of a pod via a
-// /proc-cgroup scan. Returns /proc/<pid>/ns/net for any live process
+// ResolvePodNetnsPath finds the netns path of a pod via a /proc-cgroup
+// scan of procRoot. Returns <procRoot>/<pid>/ns/net for any live process
 // whose cgroup path mentions the pod UID.
+//
+// procRoot is where Felix can read the procfs the pod's process lives in:
+// "/proc" when Felix shares the host PID namespace, or the operator's
+// host-procfs bind-mount (e.g. "/host/proc") otherwise. The result is
+// directly openable because Felix reads procRoot directly.
 //
 // Works regardless of cgroup version because it keys off the pod UID
 // embedded in any host process's cgroup path. The pod UID appears
@@ -40,11 +42,11 @@ var procRoot = "/proc"
 // underscores (systemd driver); both forms are searched.
 //
 // Returns an error if no live process can be found for the pod.
-func ResolvePodNetnsPath(podUID string) (string, error) {
+func ResolvePodNetnsPath(procRoot, podUID string) (string, error) {
 	if podUID == "" {
 		return "", fmt.Errorf("empty pod UID")
 	}
-	pid, err := findPodPID(podUID)
+	pid, err := findPodPID(procRoot, podUID)
 	if err != nil {
 		return "", fmt.Errorf("finding pid for pod %s: %w", podUID, err)
 	}
@@ -52,16 +54,16 @@ func ResolvePodNetnsPath(podUID string) (string, error) {
 }
 
 // ResolvePodNetnsPaths is the batched form of ResolvePodNetnsPath: it
-// resolves netns paths for many pod UIDs in a single /proc walk. The
-// returned map contains an entry (uid -> /proc/<pid>/ns/net) only for
+// resolves netns paths for many pod UIDs in a single procRoot walk. The
+// returned map contains an entry (uid -> <procRoot>/<pid>/ns/net) only for
 // the UIDs that matched a live process; UIDs with no live process are
 // omitted rather than erroring.
 //
 // The background resolver in netnsManager uses this so a start-of-day
 // burst of unresolved pods costs one O(processes) scan per cycle rather
 // than one per pod. Empty/blank UIDs are ignored.
-func ResolvePodNetnsPaths(podUIDs []string) map[string]string {
-	pids := findPodPIDs(podUIDs)
+func ResolvePodNetnsPaths(procRoot string, podUIDs []string) map[string]string {
+	pids := findPodPIDs(procRoot, podUIDs)
 	if len(pids) == 0 {
 		return nil
 	}
@@ -76,18 +78,18 @@ func ResolvePodNetnsPaths(podUIDs []string) map[string]string {
 // path via ResolvePodNetnsPath and reads the cookie via the resulting
 // path. Callers that only need the path should call
 // ResolvePodNetnsPath directly.
-func ResolvePodCookie(podUID string) (uint64, error) {
-	netnsPath, err := ResolvePodNetnsPath(podUID)
+func ResolvePodCookie(procRoot, podUID string) (uint64, error) {
+	netnsPath, err := ResolvePodNetnsPath(procRoot, podUID)
 	if err != nil {
 		return 0, err
 	}
-	return netnsCookie(netnsPath)
+	return CookieByPath(netnsPath)
 }
 
-// findPodPID scans /proc for the first PID whose cgroup line references
+// findPodPID scans procRoot for the first PID whose cgroup line references
 // the pod UID. Returns an error if no live process is found.
-func findPodPID(podUID string) (int, error) {
-	pids := findPodPIDs([]string{podUID})
+func findPodPID(procRoot, podUID string) (int, error) {
+	pids := findPodPIDs(procRoot, []string{podUID})
 	if pid, ok := pids[podUID]; ok {
 		return pid, nil
 	}
@@ -106,7 +108,7 @@ func findPodPID(podUID string) (int, error) {
 // call regardless of how many UIDs are pending, rather than
 // O(processes x pods). The scan never runs on the packet path; on busy
 // nodes (~thousands of PIDs) it completes well under 100ms.
-func findPodPIDs(podUIDs []string) map[string]int {
+func findPodPIDs(procRoot string, podUIDs []string) map[string]int {
 	// Build the two match forms per UID once, skipping blanks/dupes.
 	type forms struct{ dash, underscore string }
 	want := make(map[string]forms, len(podUIDs))
@@ -152,14 +154,16 @@ func findPodPIDs(podUIDs []string) map[string]int {
 	return found
 }
 
-// hostRootPrefix is the prefix used to reach host-filesystem paths from
-// inside the calico-node container. The operator bind-mounts the host's
-// /proc into calico-node at /host/proc, so /host/proc/1/root is host
-// PID-1's root view — the host's mount namespace — regardless of which
-// PID namespace calico-node runs in (this does NOT depend on
-// hostPID=true). Thus /host/proc/1/root/<host-path> resolves through the
-// host's mount namespace.  Overridable for tests.
-var hostRootPrefix = "/host/proc/1/root"
+// hostMountRoot returns the path, from inside calico-node, of the host
+// mount namespace's root: PID-1's root within the procfs at procRoot. In
+// production procRoot is the operator's host-procfs bind-mount, so this is
+// /host/proc/1/root; with procRoot=/proc (calico-node in the host PID
+// namespace) it is /proc/1/root. Either way it resolves through host
+// PID-1's mount namespace, regardless of calico-node's PID namespace (this
+// does NOT depend on hostPID=true).
+func hostMountRoot(procRoot string) string {
+	return filepath.Join(procRoot, "1", "root")
+}
 
 // ResolveCookieByPath opens the given netns path and returns the
 // kernel-stable netns cookie (the same value SO_NETNS_COOKIE returns
@@ -176,42 +180,53 @@ var hostRootPrefix = "/host/proc/1/root"
 //
 // Because the netns file lives in the host's mount namespace and Felix
 // runs in a container that doesn't bind-mount /var/run/netns, we rewrite
-// absolute host paths to go via /host/proc/1/root (the bind-mounted host
-// /proc), which resolves through host PID-1's mount namespace. Any
-// absolute symlink targets along the way are resolved against the host's
-// view with SecureJoin (see hostPath).
+// absolute host paths to go via hostMountRoot(procRoot), which resolves
+// through host PID-1's mount namespace. Any absolute symlink targets along
+// the way are resolved against the host's view with SecureJoin (see
+// hostPath).
 //
 // Returns an error if the path is empty or can't be opened (pod
 // already deleted, race, non-Calico-CNI WEP). Callers should fall back
 // to the UID-based /proc scan in that case.
-func ResolveCookieByPath(netnsPath string) (uint64, error) {
+func ResolveCookieByPath(procRoot, netnsPath string) (uint64, error) {
 	if netnsPath == "" {
 		return 0, fmt.Errorf("empty netns path")
 	}
-	return netnsCookie(hostPath(netnsPath))
+	return netnsCookie(hostPath(procRoot, netnsPath))
 }
 
-// hostPath rewrites an absolute host path so it resolves through the
-// bind-mounted host /proc (hostRootPrefix, /host/proc/1/root in
-// production) — i.e. host PID-1's mount namespace — from inside the
-// calico-node container. Already-prefixed or non-absolute paths are
-// returned unchanged.
+// CookieByPath opens netnsPath directly (no host re-rooting) and returns
+// its netns cookie. Use it for paths Felix can already reach — i.e. the
+// CRI and /proc-cgroup scan results, which live under procRoot. For the
+// host-mount-namespace annotation path, use ResolveCookieByPath instead.
+func CookieByPath(netnsPath string) (uint64, error) {
+	if netnsPath == "" {
+		return 0, fmt.Errorf("empty netns path")
+	}
+	return netnsCookie(netnsPath)
+}
+
+// hostPath rewrites an absolute host path so it resolves through host
+// PID-1's mount namespace (hostMountRoot(procRoot), /host/proc/1/root in
+// production) from inside the calico-node container. Already-prefixed or
+// non-absolute paths are returned unchanged.
 //
 // Symlinks along the path are resolved against the host's view using
 // SecureJoin, so an absolute symlink target (e.g. /var/run -> /run) is
 // re-rooted at the host root rather than the container's "/". The
 // annotation path is normally already canonical (the CNI plugin runs
-// EvalSymlinks at cmdAdd), but SecureJoin keeps this correct for the
-// CRI/proc tiers too and matches felix/cri's viaHostRoot. If SecureJoin
-// errors (e.g. a broken intermediate symlink) we fall back to the naive
-// prefix so the caller still gets a chance to open the path.
-func hostPath(netnsPath string) string {
-	if !strings.HasPrefix(netnsPath, "/") || strings.HasPrefix(netnsPath, hostRootPrefix+"/") || netnsPath == hostRootPrefix {
+// EvalSymlinks at cmdAdd), but SecureJoin keeps this correct and matches
+// felix/cri's viaHostRoot. If SecureJoin errors (e.g. a broken
+// intermediate symlink) we fall back to the naive prefix so the caller
+// still gets a chance to open the path.
+func hostPath(procRoot, netnsPath string) string {
+	root := hostMountRoot(procRoot)
+	if !strings.HasPrefix(netnsPath, "/") || strings.HasPrefix(netnsPath, root+"/") || netnsPath == root {
 		return netnsPath
 	}
-	resolved, err := securejoin.SecureJoin(hostRootPrefix, netnsPath)
+	resolved, err := securejoin.SecureJoin(root, netnsPath)
 	if err != nil {
-		return hostRootPrefix + netnsPath
+		return root + netnsPath
 	}
 	return resolved
 }

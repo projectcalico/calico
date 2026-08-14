@@ -208,6 +208,7 @@ type Config struct {
 	BPFConnectTimeLoadBalancingEnabled bool              `config:"bool;;"`
 	BPFConnectTimeLoadBalancing        string            `config:"oneof(TCP,Enabled,Disabled);TCP;non-zero"`
 	CRISocketPath                      string            `config:"string;;"`
+	ProcRootPath                       string            `config:"string;/proc"`
 	BPFHostNetworkedNATWithoutCTLB     string            `config:"oneof(Enabled,Disabled);Enabled;non-zero"`
 	BPFExternalServiceMode             string            `config:"oneof(tunnel,dsr);tunnel;non-zero"`
 	BPFDSROptoutCIDRs                  []string          `config:"cidr-list;;"`

@@ -1272,6 +1272,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: policySyncPathPrefix
       type:
         scalar: string
+    - name: procRootPath
+      type:
+        scalar: string
     - name: programClusterRoutes
       type:
         scalar: string

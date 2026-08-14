@@ -24,9 +24,6 @@ import (
 
 func TestFindPodPID(t *testing.T) {
 	tmp := t.TempDir()
-	origProcRoot := procRoot
-	procRoot = tmp
-	t.Cleanup(func() { procRoot = origProcRoot })
 
 	const podUID = "9f6e3c84-1234-4abc-9999-aabbccddeeff"
 	// systemd driver replaces dashes with underscores in the pod
@@ -135,14 +132,11 @@ func findPodPIDOnly(podUID, root string, keepPID int) (int, error) {
 			}
 		}
 	}()
-	return findPodPID(podUID)
+	return findPodPID(root, podUID)
 }
 
 func TestResolvePodNetnsPaths_Batched(t *testing.T) {
 	tmp := t.TempDir()
-	origProcRoot := procRoot
-	procRoot = tmp
-	t.Cleanup(func() { procRoot = origProcRoot })
 
 	const (
 		uidA = "aaaaaaaa-1111-4abc-9999-aaaaaaaaaaaa" // cgroupfs dash form
@@ -166,7 +160,7 @@ func TestResolvePodNetnsPaths_Batched(t *testing.T) {
 		}
 	}
 
-	got := ResolvePodNetnsPaths([]string{uidA, uidB, uidC})
+	got := ResolvePodNetnsPaths(tmp, []string{uidA, uidB, uidC})
 	if len(got) != 2 {
 		t.Fatalf("expected 2 resolved paths, got %d: %v", len(got), got)
 	}
@@ -181,35 +175,37 @@ func TestResolvePodNetnsPaths_Batched(t *testing.T) {
 	}
 
 	// Empty / blank input is ignored, not an error.
-	if got := ResolvePodNetnsPaths(nil); len(got) != 0 {
+	if got := ResolvePodNetnsPaths(tmp, nil); len(got) != 0 {
 		t.Errorf("nil input: expected empty, got %v", got)
 	}
-	if got := ResolvePodNetnsPaths([]string{"", ""}); len(got) != 0 {
+	if got := ResolvePodNetnsPaths(tmp, []string{"", ""}); len(got) != 0 {
 		t.Errorf("blank UIDs: expected empty, got %v", got)
 	}
 }
 
 func TestResolvePodCookie_EmptyUID(t *testing.T) {
-	if _, err := ResolvePodCookie(""); err == nil {
+	if _, err := ResolvePodCookie("/proc", ""); err == nil {
 		t.Fatalf("expected error for empty UID")
 	}
 }
 
 func TestHostPath(t *testing.T) {
-	// hostPath() rewrites absolute host paths under hostRootPrefix
-	// (/host/proc/1/root) using SecureJoin. With no symlinks present
-	// under that (non-existent, in tests) root, SecureJoin yields the
-	// same clean result as a naive prefix, so we assert against that.
+	// hostPath() rewrites absolute host paths under hostMountRoot(procRoot)
+	// (<procRoot>/1/root) using SecureJoin. With no symlinks present under
+	// that (non-existent, in tests) root, SecureJoin yields the same clean
+	// result as a naive prefix, so we assert against that.
+	const procRoot = "/host/proc"
+	root := hostMountRoot(procRoot)
 	cases := []struct {
 		in, want string
 	}{
-		{"/run/netns/cni-X", hostRootPrefix + "/run/netns/cni-X"},
+		{"/run/netns/cni-X", root + "/run/netns/cni-X"},
 		{"", ""},
 		{"relative/path", "relative/path"},
-		{hostRootPrefix + "/already/prefixed", hostRootPrefix + "/already/prefixed"},
+		{root + "/already/prefixed", root + "/already/prefixed"},
 	}
 	for _, c := range cases {
-		if got := hostPath(c.in); got != c.want {
+		if got := hostPath(procRoot, c.in); got != c.want {
 			t.Errorf("hostPath(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
