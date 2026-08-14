@@ -51,9 +51,12 @@ var _ = Describe("Route manager", func() {
 		dataplane.ResetDeltas()
 
 		dpConfig = Config{
-			Hostname:             "node1",
-			MaxIPSetSize:         5,
-			ProgramClusterRoutes: true,
+			Hostname:     "node1",
+			MaxIPSetSize: 5,
+			// The IPIP and no-encap managers only program routes when Felix, rather than
+			// confd and BIRD, owns the cluster routes for that encapsulation.
+			ProgramIPIPClusterRoutes:    true,
+			ProgramNoEncapClusterRoutes: true,
 		}
 
 		routeMgr = newRouteManager(

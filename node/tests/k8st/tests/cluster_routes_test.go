@@ -12,17 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// cluster_routes_test.go is a kind-only system test asserting that cross-node
-// cluster routes are programmed by the configured owner. With an IPIP-Always
-// pool, the route to a remote node's IPAM block must go out tunl0 and carry the
-// netlink protocol of whichever component owns in-cluster routing: Felix (proto
-// 80) when ProgramClusterRoutes is Enabled, otherwise BIRD (proto 12).
+// cluster_routes_test.go holds kind-only system tests for cluster route programming: which
+// component programs the cross-node routes, and what a node advertises over BGP once Felix owns
+// them.
+//
+// TestClusterRouteOwnership covers the first.  With an IPIP-Always pool, the route to a remote
+// node's IPAM block must go out tunl0 and carry the netlink protocol of whichever component owns
+// in-cluster routing: Felix (proto 80) by default, or BIRD (proto 12) if FelixConfiguration's
+// ProgramClusterRoutes hands IPIP back to BIRD.
+//
+// TestFelixClusterRoutesNotReadvertised covers the second.  A node must not advertise another
+// node's block over BGP merely because Felix programmed a kernel route to it.
 
 package k8stests
 
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +57,16 @@ const (
 
 	// routeOwnerPoolAnnotation pins a pod's IPAM assignment to our test pool.
 	routeOwnerPoolAnnotation = "cni.projectcalico.org/ipv4pools"
+
+	// routeExportPoolCIDR is a second dedicated IPPool, used by
+	// TestFelixClusterRoutesNotReadvertised.  Kept separate from
+	// routeOwnerPoolCIDR so that neither test can see the other's blocks
+	// in BIRD's export tables.
+	routeExportPoolCIDR = "192.0.2.0/24"
+
+	// routeExportPoolPrefix is the substring matcher for blocks carved out
+	// of routeExportPoolCIDR.
+	routeExportPoolPrefix = "192.0.2."
 )
 
 // TestClusterRouteOwnership stands up a server / client pair on different nodes
@@ -120,7 +138,119 @@ func TestClusterRouteOwnership(t *testing.T) {
 
 	// The client node's route to the server's block must be programmed by the
 	// configured owner, out tunl0.
-	utils.AssertRouteOwnership(t, clientNode, routeOwnerPoolPrefix, "tunl0", expectedClusterRouteProto(g, cli))
+	utils.AssertRouteOwnership(t, clientNode, routeOwnerPoolPrefix, "tunl0", expectedIPIPClusterRouteProto(g, cli))
+}
+
+// TestFelixClusterRoutesNotReadvertised checks that a node does not advertise another node's IPAM
+// block over BGP merely because Felix programmed a kernel route to it.
+//
+// A node's BGP export is meant to carry the blocks that node owns, and nothing else.  Under iBGP a
+// node does not re-advertise what it learned from another mesh peer, so in a BIRD-routed cluster
+// that property holds for free.  It does not hold for free once Felix owns the cluster routes:
+// Felix programs a route to every remote node's block, BIRD's kernel protocol is configured with
+// `learn` so it picks those up as its own, and a kernel-learned route is not subject to the iBGP
+// no-re-advertisement rule.  What stops it is the tunnel-route reject that confd builds in
+// IBGPExportFilterForTunnelRoutes (confd/pkg/backends/calico/bgp_processor.go) and the ipam
+// templates render into calico_export_to_bgp_peers.  That reject's tunl0 arm is only emitted when
+// Felix is the component programming the IPIP cluster routes.
+func TestFelixClusterRoutesNotReadvertised(t *testing.T) {
+	defer utils.CollectDiagsOnFailure(t)()
+
+	g := NewWithT(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	t.Cleanup(cancel)
+
+	cli := newClient(g)
+
+	// The assertion only means something where Felix owns the IPIP cluster routes.  Under BIRD the
+	// remote block routes are BGP-learned, the iBGP rule already covers them, and there is nothing
+	// here to catch.
+	if owner := expectedIPIPClusterRouteProto(g, cli); owner != utils.RouteProtoFelix {
+		t.Skipf("cluster is configured for %s-owned IPIP cluster routes, so no route can leak", owner)
+	}
+
+	// Two workers, so that two nodes own a block out of the test pool and each has the other's
+	// block to route to.  NodeInfo returns the control-plane node first, then workers.
+	nodes, _, _ := utils.NodeInfo(t)
+	g.Expect(len(nodes)).To(BeNumerically(">=", 3),
+		"need a control-plane node and at least two workers")
+	nodeA, nodeB := nodes[1], nodes[2]
+
+	pool := &v3.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "route-export-pool"},
+		Spec: v3.IPPoolSpec{
+			CIDR:        routeExportPoolCIDR,
+			IPIPMode:    v3.IPIPModeAlways,
+			NATOutgoing: true,
+			BlockSize:   28,
+			// Explicit because this test reads BIRD's export tables: with export disabled
+			// there would be nothing in them and the assertion would pass vacuously.
+			DisableBGPExport: false,
+		},
+	}
+	g.Expect(cli.Create(ctx, pool)).To(Succeed(), "creating IPPool")
+	t.Cleanup(func() { deletePool(t, cli, pool.Name) })
+
+	nsName := e2eutils.GenerateRandomName("route-exports")
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: nsName}}
+	g.Expect(cli.Create(ctx, ns)).To(Succeed(), "creating namespace")
+	t.Cleanup(func() { _ = cli.Delete(context.Background(), ns) })
+
+	// One pod per worker, pinned to the test pool, which is what makes each of those nodes take a
+	// block affinity out of it.  The pods only need to hold an address, so both are idle: crossing
+	// the tunnel is TestClusterRouteOwnership's job.
+	for i, node := range []string{nodeA, nodeB} {
+		pod := routeOwnerPod(nsName, fmt.Sprintf("blockholder-%d", i), node, pool.Name, false)
+		g.Expect(cli.Create(ctx, pod)).To(Succeed(), "creating pod on %s", node)
+		t.Cleanup(func() { _ = cli.Delete(context.Background(), pod) })
+		waitForPodIP(ctx, g, cli, pod, corev1.IPv4Protocol)
+	}
+
+	// Guard against asserting nothing: each worker must have a Felix-programmed route into the
+	// pool out tunl0, which can only be a route to the other worker's block, since a node's own
+	// block is a blackhole with no device.  That is the route that could leak.
+	for _, node := range []string{nodeA, nodeB} {
+		utils.AssertRouteOwnership(t, node, routeExportPoolPrefix, "tunl0", utils.RouteProtoFelix)
+	}
+
+	// Every node's BIRD, control plane included, must export blocks of this pool only as the
+	// blackhole route that confd derives from the node's own block affinity.  Anything else -- in
+	// practice a "via <node> on tunl0" -- is a route the node learned from the kernel because
+	// Felix programmed it, and is not the node's to advertise.
+	blockOwner := map[string]bool{nodeA: true, nodeB: true}
+	g.Eventually(func() error {
+		for _, node := range nodes {
+			// Nothing can leak to a peering that does not exist: the tunl0 reject sits inside
+			// `if (internal_peer)` in calico_export_to_bgp_peers, so a node with no established
+			// peering would satisfy the assertion below for the wrong reason.
+			protocols, err := establishedBGPProtocols(t, node)
+			if err != nil {
+				return err
+			}
+			if len(protocols) == 0 {
+				return fmt.Errorf("node %s has no established BGP peering, so a leak could not show up",
+					node)
+			}
+
+			blackholes, others, err := poolExports(t, node, protocols)
+			if err != nil {
+				return err
+			}
+			if len(others) > 0 {
+				return fmt.Errorf("node %s is exporting %v over BGP; a node should advertise only its "+
+					"own blocks, and only as blackhole routes.  These are Felix's routes to other "+
+					"nodes' blocks, learned by BIRD from the kernel and re-advertised", node, others)
+			}
+
+			// Positive control for the nodes that do own a block: without this, "no non-blackhole
+			// exports" would also be satisfied by a node exporting nothing at all.
+			if blockOwner[node] && len(blackholes) == 0 {
+				return fmt.Errorf("node %s owns a block of %s but is not exporting it as a blackhole",
+					node, routeExportPoolCIDR)
+			}
+		}
+		return nil
+	}, 90*time.Second, 5*time.Second).Should(Succeed())
 }
 
 // routeOwnerPod builds a pod pinned to nodeName and to the test IPPool. The
@@ -147,16 +277,93 @@ func routeOwnerPod(namespace, name, nodeName, poolName string, server bool) *cor
 	}
 }
 
-// expectedClusterRouteProto returns the route protocol owner that the cluster
-// is currently configured to use for IPIP and no-encap cluster routes.
-// "Enabled" => Felix (proto 80), anything else (including unset) => BIRD's
-// proto 12.
-func expectedClusterRouteProto(g *WithT, cli ctrlclient.Client) utils.RouteProto {
+// expectedIPIPClusterRouteProto returns the route protocol owner that the
+// cluster is currently configured to use for IPIP cluster routes: Felix (proto
+// 80) unless FelixConfiguration explicitly hands IPIP back to BIRD (proto 12).
+// The default, with the field unset, is EnabledIPIPOnly, i.e. Felix.
+func expectedIPIPClusterRouteProto(g *WithT, cli ctrlclient.Client) utils.RouteProto {
 	fc := &v3.FelixConfiguration{}
 	g.Expect(cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)).
 		To(Succeed(), "querying default FelixConfiguration")
-	if fc.Spec.ProgramClusterRoutes != nil && *fc.Spec.ProgramClusterRoutes == "Enabled" {
+	if fc.Spec.ProgramClusterRoutes == nil {
 		return utils.RouteProtoFelix
 	}
-	return utils.RouteProtoBIRD
+	switch *fc.Spec.ProgramClusterRoutes {
+	case v3.Disabled, v3.EnabledNoEncapOnly:
+		return utils.RouteProtoBIRD
+	default:
+		// Enabled and EnabledIPIPOnly, but also anything this binary does not recognise:
+		// Felix replaces an unparseable value with the parameter's default, which is
+		// EnabledIPIPOnly, so a newer value than we know about still means Felix here.
+		return utils.RouteProtoFelix
+	}
+}
+
+// establishedBGPProtocols returns the names of the BIRD protocols on nodeName that are BGP and
+// Established.  The columns of `birdcl show protocols` are name, proto, table, state, since, info,
+// and for a BGP protocol it is the trailing info column that carries "Established".  Sessions that
+// are down are left out because they have no export table to inspect.
+func establishedBGPProtocols(t testing.TB, nodeName string) ([]string, error) {
+	t.Helper()
+
+	out, err := utils.ExecInCalicoNode(t, nodeName, "birdcl show protocols")
+	if err != nil {
+		return nil, fmt.Errorf("listing BIRD protocols on node %s: %w", nodeName, err)
+	}
+
+	var names []string
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[1] == "BGP" && strings.Contains(line, "Established") {
+			names = append(names, fields[0])
+		}
+	}
+	return names, nil
+}
+
+// poolExports splits the routes within routeExportPoolCIDR that nodeName's BIRD is exporting to the
+// given peerings into those it exports as a blackhole -- its own block, from its block affinity --
+// and everything else.  It asks BIRD directly rather than inferring the answer from connectivity.
+//
+// Only lines that start with a CIDR are considered: BIRD prints additional paths for the same prefix
+// as continuation lines, and a node's own block legitimately has a second, kernel-sourced path
+// behind the static one.
+func poolExports(t testing.TB, nodeName string, protocols []string) (blackholes, others []string, err error) {
+	t.Helper()
+
+	seen := map[string]bool{}
+	for _, protocol := range protocols {
+		// `show route export` takes a single protocol name, hence one call per peering.
+		out, err := utils.ExecInCalicoNode(t, nodeName,
+			fmt.Sprintf("birdcl show route export %s", protocol))
+		if err != nil {
+			return nil, nil, fmt.Errorf("reading exports of protocol %s on node %s: %w",
+				protocol, nodeName, err)
+		}
+		for _, line := range strings.Split(out, "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			if cidr := fields[0]; !strings.HasPrefix(cidr, routeExportPoolPrefix) ||
+				!strings.Contains(cidr, "/") {
+				continue
+			}
+			line = strings.TrimSpace(line)
+			if seen[line] {
+				continue
+			}
+			seen[line] = true
+			if strings.Contains(line, "blackhole") {
+				blackholes = append(blackholes, line)
+			} else {
+				others = append(others, line)
+			}
+		}
+	}
+
+	// Deterministic order, so a failure message reads the same way on a re-run.
+	slices.Sort(blackholes)
+	slices.Sort(others)
+	return blackholes, others, nil
 }
