@@ -1766,8 +1766,8 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 	// Update release stream used for CAPZ - Windows FV tests.
 	releaseStream := strings.TrimPrefix(branch, r.releaseBranchPrefix+"-")
 	logrus.WithField("releaseStream", releaseStream).Debug("Updating release stream in setup script for CAPZ Windows FV tests")
-	scriptFilePath := filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh")
-	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM=.*HASH_RELEASE/RELEASE_STREAM=%s HASH_RELEASE/g`, releaseStream), scriptFilePath}, nil); err != nil {
+	scriptFilePath := filepath.Join(r.repoRoot, "process", "testing", "aso", "export-env.sh")
+	if out, err := r.runner.Run("sed", []string{"-i", fmt.Sprintf(`s/RELEASE_STREAM:=master/RELEASE_STREAM:=%s/g`, releaseStream), scriptFilePath}, nil); err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("failed to update release stream in %s: %w", scriptFilePath, err)
 	}
@@ -1793,7 +1793,7 @@ func (r *CalicoManager) SetupReleaseBranch(branch string) error {
 		filepath.Join(r.repoRoot, "charts"),
 		filepath.Join(r.repoRoot, "manifests"),
 		filepath.Join(r.repoRoot, "metadata.mk"),
-		filepath.Join(r.repoRoot, "process", "testing", "winfv-felix", "setup-fv-capz.sh"),
+		filepath.Join(r.repoRoot, "process", "testing", "aso", "export-env.sh"),
 		filepath.Join(r.repoRoot, "test-tools", "mocknode"),
 	); err != nil {
 		logrus.Error(out)
