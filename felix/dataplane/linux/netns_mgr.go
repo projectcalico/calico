@@ -92,7 +92,13 @@ type resolvedNetns struct {
 // (cached SO_NETNS_COOKIE) or OpenNetnsForWEP (opens the cached path).
 // See felix/design/netns-resolution.md for the full model.
 type netnsManager struct {
+	// resolveCookieByPath reads the cookie for the host-absolute annotation
+	// path (Tier 1), re-rooting it via /host/proc/1/root.
 	resolveCookieByPath netnsCookieReader
+	// resolveCookieDirect reads the cookie for a path Felix can already
+	// reach: the CRI (Tier 2) and /proc-scan (Tier 3) results, both built
+	// under procRoot.
+	resolveCookieDirect netnsCookieReader
 	resolveProcPaths    netnsBatchResolver
 	resolveNetnsViaCRI  netnsCRIResolver
 	openNetns           netnsOpener
@@ -121,23 +127,29 @@ type netnsManager struct {
 	pendingDeep map[string]pendingWEP
 }
 
-// newNetnsManager builds a netnsManager. criResolver may be nil (Tier 2
-// disabled). wakeupC (owned by int_dataplane, buffered size 1) is used
-// to wake the apply loop when the background resolver produces a result;
-// it may be nil in tests. Call Start once before use to launch the
-// background resolver goroutine.
-func newNetnsManager(criResolver netnsCRIResolver, wakeupC chan<- struct{}) *netnsManager {
+// newNetnsManager builds a netnsManager. procRoot is where the Tier-3
+// /proc-cgroup scan reads (FelixConfiguration.ProcRootPath, default
+// /proc). criResolver may be nil (Tier 2 disabled). wakeupC (owned by
+// int_dataplane, buffered size 1) is used to wake the apply loop when the
+// background resolver produces a result; it may be nil in tests. Call
+// Start once before use to launch the background resolver goroutine.
+func newNetnsManager(procRoot string, criResolver netnsCRIResolver, wakeupC chan<- struct{}) *netnsManager {
 	return &netnsManager{
-		resolveCookieByPath: netns.ResolveCookieByPath,
-		resolveProcPaths:    netns.ResolvePodNetnsPaths,
-		resolveNetnsViaCRI:  criResolver,
-		openNetns:           ns.GetNS,
-		wakeupC:             wakeupC,
-		kickC:               make(chan struct{}, 1),
-		stopC:               make(chan struct{}),
-		paths:               map[string]string{},
-		cookies:             map[string]uint64{},
-		pendingDeep:         map[string]pendingWEP{},
+		resolveCookieByPath: func(p string) (uint64, error) {
+			return netns.ResolveCookieByPath(procRoot, p)
+		},
+		resolveCookieDirect: netns.CookieByPath,
+		resolveProcPaths: func(uids []string) map[string]string {
+			return netns.ResolvePodNetnsPaths(procRoot, uids)
+		},
+		resolveNetnsViaCRI: criResolver,
+		openNetns:          ns.GetNS,
+		wakeupC:            wakeupC,
+		kickC:              make(chan struct{}, 1),
+		stopC:              make(chan struct{}),
+		paths:              map[string]string{},
+		cookies:            map[string]uint64{},
+		pendingDeep:        map[string]pendingWEP{},
 	}
 }
 
@@ -312,7 +324,9 @@ func (m *netnsManager) resolveDeepBatch() {
 	// new UID while we were resolving.
 	wokeAny := false
 	for key, r := range resolved {
-		cookie, err := m.resolveCookieByPath(r.path)
+		// Both Tier-2 (CRI) and Tier-3 (/proc scan) paths are built under
+		// procRoot and are directly openable.
+		cookie, err := m.resolveCookieDirect(r.path)
 		if err != nil {
 			// Leave it in pendingDeep for the next cycle to retry.
 			log.WithError(err).WithField("path", r.path).

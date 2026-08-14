@@ -43,15 +43,17 @@ var wellKnownSocketPaths = []string{
 // DetectSocketPath probes a short list of well-known CRI socket
 // paths and returns the first one present on the host filesystem.
 //
-// Paths are resolved through hostRootPrefix (/host/proc/1/root in
-// production) with SecureJoin, so symlinks like /var/run -> /run are
-// followed against the host's view rather than the container's, even
-// though calico-node does not bind-mount the runtime socket dir.
+// Paths are resolved through host PID-1's root in procRoot's procfs
+// (hostMountRoot, /host/proc/1/root in production) with SecureJoin, so
+// symlinks like /var/run -> /run are followed against the host's view
+// rather than the container's, even though calico-node does not
+// bind-mount the runtime socket dir.
 //
 // Returns an error if none of the well-known paths exist.
-func DetectSocketPath() (string, error) {
+func DetectSocketPath(procRoot string) (string, error) {
+	root := hostMountRoot(procRoot)
 	for _, p := range wellKnownSocketPaths {
-		probe, err := securejoin.SecureJoin(hostRootPrefix, p)
+		probe, err := securejoin.SecureJoin(root, p)
 		if err != nil {
 			continue
 		}

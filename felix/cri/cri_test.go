@@ -22,20 +22,18 @@ import (
 
 func TestDetectSocketPath(t *testing.T) {
 	// Build a fake host root with a containerd.sock at /run/containerd/.
-	// DetectSocketPath looks under hostRootPrefix; point that at the
-	// tmp dir.
+	// DetectSocketPath looks under <procRoot>/1/root; point procRoot at
+	// the tmp dir and lay the socket out under tmp/1/root.
 	tmp := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmp, "run", "containerd"), 0o755); err != nil {
+	root := filepath.Join(tmp, "1", "root")
+	if err := os.MkdirAll(filepath.Join(root, "run", "containerd"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "run", "containerd", "containerd.sock"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "run", "containerd", "containerd.sock"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := hostRootPrefix
-	hostRootPrefix = tmp
-	t.Cleanup(func() { hostRootPrefix = orig })
 
-	got, err := DetectSocketPath()
+	got, err := DetectSocketPath(tmp)
 	if err != nil {
 		t.Fatalf("DetectSocketPath: %v", err)
 	}
@@ -46,11 +44,7 @@ func TestDetectSocketPath(t *testing.T) {
 
 func TestDetectSocketPath_None(t *testing.T) {
 	tmp := t.TempDir()
-	orig := hostRootPrefix
-	hostRootPrefix = tmp
-	t.Cleanup(func() { hostRootPrefix = orig })
-
-	if _, err := DetectSocketPath(); err == nil {
+	if _, err := DetectSocketPath(tmp); err == nil {
 		t.Fatalf("expected error when no socket present at any well-known path")
 	}
 }
@@ -59,17 +53,15 @@ func TestDetectSocketPath_CRIO(t *testing.T) {
 	// /var/run/crio/crio.sock should be found via the /var/run -> /run
 	// alias.
 	tmp := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmp, "run", "crio"), 0o755); err != nil {
+	root := filepath.Join(tmp, "1", "root")
+	if err := os.MkdirAll(filepath.Join(root, "run", "crio"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "run", "crio", "crio.sock"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "run", "crio", "crio.sock"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	orig := hostRootPrefix
-	hostRootPrefix = tmp
-	t.Cleanup(func() { hostRootPrefix = orig })
 
-	got, err := DetectSocketPath()
+	got, err := DetectSocketPath(tmp)
 	if err != nil {
 		t.Fatalf("DetectSocketPath: %v", err)
 	}
@@ -104,36 +96,34 @@ func TestPidFromInfo(t *testing.T) {
 func TestViaHostRoot(t *testing.T) {
 	// Build a fake host root: /var/run is a symlink to /run, with real
 	// dirs underneath. viaHostRoot uses SecureJoin against
-	// hostRootPrefix so the /var/run symlink must be followed against
+	// <procRoot>/1/root so the /var/run symlink must be followed against
 	// that root, not the test process's real /.
 	tmp := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(tmp, "run", "containerd"), 0o755); err != nil {
+	root := filepath.Join(tmp, "1", "root")
+	if err := os.MkdirAll(filepath.Join(root, "run", "containerd"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(tmp, "var"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "var"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("/run", filepath.Join(tmp, "var", "run")); err != nil {
+	if err := os.Symlink("/run", filepath.Join(root, "var", "run")); err != nil {
 		t.Fatal(err)
 	}
-	orig := hostRootPrefix
-	hostRootPrefix = tmp
-	t.Cleanup(func() { hostRootPrefix = orig })
 
 	cases := []struct {
 		in, want string
 	}{
 		// Plain pass-through under /run (no symlink to follow).
-		{"/run/containerd/containerd.sock", tmp + "/run/containerd/containerd.sock"},
+		{"/run/containerd/containerd.sock", root + "/run/containerd/containerd.sock"},
 		// /var/run -> /run symlink is followed against the fake root.
-		{"/var/run/containerd/containerd.sock", tmp + "/run/containerd/containerd.sock"},
+		{"/var/run/containerd/containerd.sock", root + "/run/containerd/containerd.sock"},
 		// Special cases that should pass through unchanged.
 		{"", ""},
 		{"relative/path", "relative/path"},
-		{tmp + "/already", tmp + "/already"},
+		{root + "/already", root + "/already"},
 	}
 	for _, c := range cases {
-		if got := viaHostRoot(c.in); got != c.want {
+		if got := viaHostRoot(tmp, c.in); got != c.want {
 			t.Errorf("viaHostRoot(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}

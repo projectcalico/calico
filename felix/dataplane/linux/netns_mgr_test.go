@@ -52,8 +52,9 @@ func stubCookieReader(byPath map[string]uint64) netnsCookieReader {
 }
 
 func newNetnsManagerForTest(byPath map[string]uint64, byUID map[string]string) *netnsManager {
-	m := newNetnsManager(nil, nil)
+	m := newNetnsManager("/proc", nil, nil)
 	m.resolveCookieByPath = stubCookieReader(byPath)
+	m.resolveCookieDirect = stubCookieReader(byPath)
 	m.resolveProcPaths = stubBatchResolver(byUID)
 	m.openNetns = func(string) (ns.NetNS, error) {
 		return nil, fmt.Errorf("openNetns not stubbed in this test")
