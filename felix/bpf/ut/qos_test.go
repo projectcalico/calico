@@ -759,7 +759,7 @@ func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
 
 // TestQoSConnLimitEgressGatedOnConfiguredFlag verifies that the egress
 // connection-limit check is gated on EGRESS_CONN_LIMIT_CONFIGURED, matching
-// the ingress check (tc.c:1463) and the egress CT stamp (tc.c:1621).
+// the ingress check and the egress CT stamp.
 //
 // The check at tc.c:1574 ran on every from-WEP TCP SYN and fired whenever a
 // cali_qos_conn entry with max_connections > 0 existed, while the stamp that
