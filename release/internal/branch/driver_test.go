@@ -761,3 +761,11 @@ func TestValidateFreshCutBaseCheckRunsWithoutValidate(t *testing.T) {
 	err := d.validateFreshCut(gitIn(root), p)
 	require.ErrorContains(t, err, "not in sync", "the base check must run even with --no-validation")
 }
+
+// A cut whose source equals its derived branch is rejected before any git work.
+func TestCutReleaseBranchRejectsSourceEqualsDerived(t *testing.T) {
+	d := newTestDriver(t, Driver{RepoRoot: t.TempDir()})
+	p := &CutPlan{Derived: "release-v3.33", Source: "release-v3.33", Remote: "origin"}
+	err := d.CutReleaseBranch(p)
+	require.ErrorContains(t, err, "cannot be the same as derived")
+}
