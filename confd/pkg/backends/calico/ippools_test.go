@@ -105,6 +105,24 @@ var (
 		`  if (net ~ 10.19.0.0/16) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
 
+	// The pool CIDRs that the iBGP export filter rejects, for the IPv4 pool table above, grouped by
+	// class of IP Pool.  A pool is in the list when Felix programs its cluster routes: this node
+	// learns those routes from the kernel, but they are the owning node's to advertise.  Both the
+	// CrossSubnet pools and the unencapsulated pool are here because their routes do not
+	// necessarily leave via a Calico tunnel device, so the interface test alone lets them through.
+	// Pools with BGP export disabled are absent: they are rejected outright, ahead of this filter.
+	ibgpRejectIPIPByFelixV4 = []string{
+		`  if (net ~ 10.10.0.0/16) then { reject; }`,
+		`  if (net ~ 10.12.0.0/16) then { reject; }`,
+	}
+	ibgpRejectNoEncapByFelixV4 = []string{
+		`  if (net ~ 10.14.0.0/16) then { reject; }`,
+	}
+	ibgpRejectVXLANV4 = []string{
+		`  if (net ~ 10.16.0.0/16) then { reject; }`,
+		`  if (net ~ 10.18.0.0/16) then { reject; }`,
+	}
+
 	// The filters for exporting to BGP peers only depend on DisableBGPExport, so they are the same
 	// whichever component programs the cluster routes.
 	exportStatementsV4 = []string{
@@ -152,6 +170,20 @@ var (
 		`  if (net ~ dead:beef:19::/64) then { reject; } # VXLAN routes are handled by Felix.`,
 	}
 
+	// The same, for the IPv6 pool table.  IPIP is IPv4-only in practice, but processIPPool keys off
+	// the pool's ipipMode rather than the IP version, so the IPv6 IPIP pools behave the same way.
+	ibgpRejectIPIPByFelixV6 = []string{
+		`  if (net ~ dead:beef:10::/64) then { reject; }`,
+		`  if (net ~ dead:beef:12::/64) then { reject; }`,
+	}
+	ibgpRejectNoEncapByFelixV6 = []string{
+		`  if (net ~ dead:beef:14::/64) then { reject; }`,
+	}
+	ibgpRejectVXLANV6 = []string{
+		`  if (net ~ dead:beef:16::/64) then { reject; }`,
+		`  if (net ~ dead:beef:18::/64) then { reject; }`,
+	}
+
 	exportStatementsV6 = []string{
 		`  if (net ~ dead:beef:10::/64) then { accept; }`,
 		`  if (net ~ dead:beef:11::/64) then { reject; } # BGP export is disabled.`,
@@ -175,58 +207,82 @@ func Test_processIPPools(t *testing.T) {
 		programClusterRoutes *string
 		ipVersion            int
 		wantKernel           []string
+		// wantIBGPRejectCIDRs is the pool-CIDR arm of the iBGP export reject: the pools whose
+		// cluster routes Felix programs.
+		wantIBGPRejectCIDRs []string
+		// felixOwnsIPIP selects the interface arm of the same reject: tunl0 is only in it when
+		// Felix programs the IPIP cluster routes.
+		felixOwnsIPIP bool
 	}{
 		{
-			name:       "IPv4, field unset: BIRD programs unencapsulated pools only",
-			ipVersion:  4,
-			wantKernel: slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+			name:                "IPv4, field unset: BIRD programs unencapsulated pools only",
+			ipVersion:           4,
+			wantKernel:          slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs: slices.Concat(ibgpRejectIPIPByFelixV4, ibgpRejectVXLANV4),
+			felixOwnsIPIP:       true,
 		},
 		{
 			name:                 "IPv4, EnabledNoEncapOnly: BIRD programs unencapsulated pools only",
 			programClusterRoutes: ptr.To(v3.EnabledNoEncapOnly),
 			ipVersion:            4,
 			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs:  slices.Concat(ibgpRejectIPIPByFelixV4, ibgpRejectVXLANV4),
+			felixOwnsIPIP:        true,
 		},
 		{
 			name:                 "IPv4, Enabled: BIRD programs both IPIP and unencapsulated pools",
 			programClusterRoutes: ptr.To(v3.Enabled),
 			ipVersion:            4,
 			wantKernel:           slices.Concat(kernelIPIPByBIRDV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs:  slices.Clone(ibgpRejectVXLANV4),
+			felixOwnsIPIP:        false,
 		},
 		{
 			name:                 "IPv4, EnabledIPIPOnly: BIRD programs IPIP pools only",
 			programClusterRoutes: ptr.To(v3.EnabledIPIPOnly),
 			ipVersion:            4,
 			wantKernel:           slices.Concat(kernelIPIPByBIRDV4, kernelNoEncapByFelixV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs:  slices.Concat(ibgpRejectNoEncapByFelixV4, ibgpRejectVXLANV4),
+			felixOwnsIPIP:        false,
 		},
 		{
 			name:                 "IPv4, Disabled: Felix programs everything",
 			programClusterRoutes: ptr.To(v3.Disabled),
 			ipVersion:            4,
 			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByFelixV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs:  slices.Concat(ibgpRejectIPIPByFelixV4, ibgpRejectNoEncapByFelixV4, ibgpRejectVXLANV4),
+			felixOwnsIPIP:        true,
 		},
 		{
 			name:                 "IPv4, unrecognised value: falls back to the default",
 			programClusterRoutes: ptr.To("SomethingFromANewerAPI"),
 			ipVersion:            4,
 			wantKernel:           slices.Concat(kernelIPIPByFelixV4, kernelNoEncapByBIRDV4, kernelVXLANV4),
+			wantIBGPRejectCIDRs:  slices.Concat(ibgpRejectIPIPByFelixV4, ibgpRejectVXLANV4),
+			felixOwnsIPIP:        true,
 		},
 		{
-			name:       "IPv6, field unset: BIRD programs unencapsulated pools only",
-			ipVersion:  6,
-			wantKernel: slices.Concat(kernelIPIPByFelixV6, kernelNoEncapByBIRDV6, kernelVXLANV6),
+			name:                "IPv6, field unset: BIRD programs unencapsulated pools only",
+			ipVersion:           6,
+			wantKernel:          slices.Concat(kernelIPIPByFelixV6, kernelNoEncapByBIRDV6, kernelVXLANV6),
+			wantIBGPRejectCIDRs: slices.Concat(ibgpRejectIPIPByFelixV6, ibgpRejectVXLANV6),
+			felixOwnsIPIP:       true,
 		},
 		{
 			name:                 "IPv6, Enabled: BIRD programs both IPIP and unencapsulated pools",
 			programClusterRoutes: ptr.To(v3.Enabled),
 			ipVersion:            6,
 			wantKernel:           slices.Concat(kernelIPIPByBIRDV6, kernelNoEncapByBIRDV6, kernelVXLANV6),
+			wantIBGPRejectCIDRs:  slices.Clone(ibgpRejectVXLANV6),
+			felixOwnsIPIP:        false,
 		},
 		{
 			name:                 "IPv6, Disabled: Felix programs everything",
 			programClusterRoutes: ptr.To(v3.Disabled),
 			ipVersion:            6,
 			wantKernel:           slices.Concat(kernelIPIPByFelixV6, kernelNoEncapByFelixV6, kernelVXLANV6),
+			wantIBGPRejectCIDRs:  slices.Concat(ibgpRejectIPIPByFelixV6, ibgpRejectNoEncapByFelixV6, ibgpRejectVXLANV6),
+			felixOwnsIPIP:        true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -271,8 +327,42 @@ func Test_processIPPools(t *testing.T) {
 			slices.Sort(wantExport)
 			require.Equal(t, filterExpectedStatements(wantExport, "reject"), config.BGPExportFilterForDisabledIPPools)
 			require.Equal(t, filterExpectedStatements(wantExport, "accept"), config.BGPExportFilterForEnabledIPPools)
+
+			require.Equal(t,
+				wantIBGPExportReject(tc.felixOwnsIPIP, tc.wantIBGPRejectCIDRs),
+				config.IBGPExportFilterForFelixClusterRoutes)
 		})
 	}
+}
+
+// wantIBGPExportReject spells out the whole reject that confd builds for internal peers: the
+// interface arm, whose tunl0 test is only present when Felix programs the IPIP cluster routes,
+// followed by the pool-CIDR arm for the pools Felix owns.  The text is written out here rather
+// than borrowed from the code under test, so that a change to what BIRD is asked to match has to
+// be made deliberately in both places.
+func wantIBGPExportReject(felixOwnsIPIP bool, rejectCIDRs []string) []string {
+	interfaces := `(ifname ~ "*.cali") || (ifname ~ "*.calico")`
+	if felixOwnsIPIP {
+		interfaces += ` || (ifname ~ "tunl0")`
+	}
+	lines := []string{
+		"if (defined(ifname)) then {",
+		"  if (" + interfaces + ") then {",
+		"    reject;",
+		"  }",
+		"}",
+	}
+	if len(rejectCIDRs) == 0 {
+		return lines
+	}
+	lines = append(lines,
+		"if (defined(source) && (source = RTS_INHERIT) && ((dest = RTD_ROUTER) || (dest = RTD_MULTIPATH))) then {",
+		"  # Cluster routes for these pools are Felix's to program, and the owning node's to advertise.",
+	)
+	sortedCIDRs := slices.Clone(rejectCIDRs)
+	slices.Sort(sortedCIDRs)
+	lines = append(lines, sortedCIDRs...)
+	return append(lines, "}")
 }
 
 func Test_processIPPoolsV4_NoLocalSubnet(t *testing.T) {

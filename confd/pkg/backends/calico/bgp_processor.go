@@ -920,25 +920,11 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 		"noEncap": policy.noEncap,
 	}).Debug("BIRD's responsibility for programming cluster routes.")
 
-	// Don't export Felix-programmed tunnel routes to other nodes over iBGP.  This always
-	// includes VXLAN and Wireguard routes.  When Felix is responsible for programming remote
-	// IPIP routes it also includes those.
-	felixTunnelIntfPatterns := []string{"*.cali", "*.calico"}
-	if !policy.ipip {
-		// Felix is programming remote IPIP routes.
-		felixTunnelIntfPatterns = append(felixTunnelIntfPatterns, "tunl0")
-	}
-	conditions := make([]string, len(felixTunnelIntfPatterns))
-	for i := range felixTunnelIntfPatterns {
-		conditions[i] = "(ifname ~ \"" + felixTunnelIntfPatterns[i] + "\")"
-	}
-	config.IBGPExportFilterForTunnelRoutes = []string{
-		"if (defined(ifname)) then {",
-		"  if (" + strings.Join(conditions, " || ") + ") then {",
-		"    reject;",
-		"  }",
-		"}",
-	}
+	// Don't export the cluster routes that Felix programmed to other nodes over iBGP.  The
+	// interface test below catches the ones that leave via a Calico tunnel device; the pool CIDRs
+	// collected in the loop below catch the rest.  See rejectForFelixTunnelRoutes and
+	// rejectForFelixOwnedPools.
+	config.IBGPExportFilterForFelixClusterRoutes = rejectForFelixTunnelRoutes(policy)
 
 	kvPairs, err := c.GetValues([]string{poolKey})
 	if err != nil {
@@ -958,6 +944,7 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 	}
 
 	birdIPIPInUse := false
+	var felixOwnedPoolCIDRs []string
 	for key, value := range kvPairs {
 		var ippool model.IPPool
 		if err := json.Unmarshal([]byte(value), &ippool); err != nil {
@@ -967,6 +954,13 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 
 		if policy.programsPool(&ippool) && poolUsesIPIP(&ippool) {
 			birdIPIPInUse = true
+		}
+
+		// Collect the pools whose cluster routes Felix programs, for the iBGP reject.  Pools with
+		// BGP export disabled are left out: they are rejected outright, for every peer, by
+		// BGPExportFilterForDisabledIPPools, which the templates render ahead of this filter.
+		if !policy.programsPool(&ippool) && !ippool.DisableBGPExport {
+			felixOwnedPoolCIDRs = append(felixOwnedPoolCIDRs, ippool.CIDR.String())
 		}
 
 		// Generate statements for rejecting disabled ippools in the filter for exporting routes to other peers.
@@ -1003,7 +997,76 @@ func (c *client) processIPPools(pc *processorContext, config *types.BirdBGPConfi
 	slices.Sort(config.BGPExportFilterForDisabledIPPools)
 	slices.Sort(config.BGPExportFilterForEnabledIPPools)
 
+	slices.Sort(felixOwnedPoolCIDRs)
+	config.IBGPExportFilterForFelixClusterRoutes = append(
+		config.IBGPExportFilterForFelixClusterRoutes,
+		rejectForFelixOwnedPools(felixOwnedPoolCIDRs)...,
+	)
+
 	return nil
+}
+
+// rejectForFelixTunnelRoutes builds the arm of the iBGP export reject that matches on the outgoing
+// interface.  It catches the cluster routes Felix programs through a Calico tunnel device: VXLAN
+// and WireGuard routes always, since Felix always owns those, and IPIP routes when Felix owns them
+// too.
+//
+// This arm cannot catch every Felix-programmed cluster route, because not all of them leave via a
+// tunnel device — see rejectForFelixOwnedPools.  It is kept alongside the CIDR test because it
+// holds for a route whose destination is not in any IP Pool that confd currently knows about, for
+// instance while a pool is being deleted.
+func rejectForFelixTunnelRoutes(policy clusterRoutePolicy) []string {
+	felixTunnelIntfPatterns := []string{"*.cali", "*.calico"}
+	if !policy.ipip {
+		// Felix is programming remote IPIP routes.
+		felixTunnelIntfPatterns = append(felixTunnelIntfPatterns, "tunl0")
+	}
+	conditions := make([]string, len(felixTunnelIntfPatterns))
+	for i := range felixTunnelIntfPatterns {
+		conditions[i] = "(ifname ~ \"" + felixTunnelIntfPatterns[i] + "\")"
+	}
+	return []string{
+		"if (defined(ifname)) then {",
+		"  if (" + strings.Join(conditions, " || ") + ") then {",
+		"    reject;",
+		"  }",
+		"}",
+	}
+}
+
+// rejectForFelixOwnedPools builds the arm of the iBGP export reject that matches on the IP Pool
+// CIDR, for the pools whose cluster routes Felix programs.
+//
+// The interface test in rejectForFelixTunnelRoutes only catches an encapsulated route.  Felix does
+// not encapsulate a cluster route to a node in this node's own subnet when the pool is in
+// CrossSubnet mode, and does not encapsulate at all in an unencapsulated pool that it owns: those
+// routes leave via the host NIC, so the interface test lets them through and the node re-advertises
+// another node's block.  Matching the pool's CIDR is what catches them.
+//
+// The CIDR on its own would be too broad — this node's own routes into the pool are in it too — so
+// the match is narrowed to the routes that Felix programmed to somewhere else:
+//
+//   - source = RTS_INHERIT selects the routes BIRD learned from the kernel, which is how Felix's
+//     routes get into BIRD's table (the kernel protocol runs with `learn`).  It excludes the
+//     blocks this node advertises from its own affinities, which come from BIRD's own static
+//     protocol, and it excludes anything learned over BGP, so a route reflector goes on reflecting
+//     its clients' routes.
+//   - dest selects the routes that have a next hop, i.e. that lead off this node.  It excludes the
+//     device routes to this node's own workloads, which must still be advertised — including a
+//     workload whose address was borrowed from another node's block, and the elevated-priority /32
+//     of a workload that has migrated here — and the blackhole routes for this node's own blocks.
+func rejectForFelixOwnedPools(cidrs []string) []string {
+	if len(cidrs) == 0 {
+		return nil
+	}
+	lines := []string{
+		"if (defined(source) && (source = RTS_INHERIT) && ((dest = RTD_ROUTER) || (dest = RTD_MULTIPATH))) then {",
+		"  # Cluster routes for these pools are Felix's to program, and the owning node's to advertise.",
+	}
+	for _, cidr := range cidrs {
+		lines = append(lines, emitFilterStatementForIPPools(cidr, "", "reject", "", ""))
+	}
+	return append(lines, "}")
 }
 
 // processWireguardPeerFilter generates BIRD kernel filter reject statements for peers
