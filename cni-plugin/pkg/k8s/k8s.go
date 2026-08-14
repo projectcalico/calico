@@ -42,7 +42,6 @@ import (
 	"github.com/projectcalico/calico/cni-plugin/pkg/types"
 	"github.com/projectcalico/calico/cni-plugin/pkg/wait"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
-	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	k8sconversion "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 	k8sresources "github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 	calicoclient "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
@@ -548,7 +547,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if endpoint.Annotations == nil {
 			endpoint.Annotations = map[string]string{}
 		}
-		endpoint.Annotations[conversion.AnnotationPodNetns] = canonical
+		endpoint.Annotations[k8sconversion.AnnotationPodNetns] = canonical
 	}
 
 	// Write the endpoint object (either the newly created one, or the updated one)
