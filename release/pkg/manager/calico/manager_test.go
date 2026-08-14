@@ -18,6 +18,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/projectcalico/calico/release/internal/command"
 )
 
 // fakeResult is the canned response for a matched command.
@@ -461,4 +465,79 @@ func TestOwnerFromRemoteURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCutPlanAdvancesMain asserts a cut off main emits no derived tag and
+// advances main to the next minor.
+func TestCutPlanAdvancesMain(t *testing.T) {
+	root := t.TempDir()
+	run := func(args ...string) {
+		_, err := command.GitInDir(root, args...)
+		require.NoError(t, err, "git %v", args)
+	}
+	run("init", "-q", "-b", "master")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "test")
+	run("config", "commit.gpgsign", "false")
+	run("config", "tag.gpgsign", "false")
+	run("commit", "-q", "--allow-empty", "-m", "initial")
+	run("tag", "--no-sign", "v3.33.0-0.dev")
+
+	m := &CalicoManager{}
+	for _, opt := range []Option{
+		WithRepoRoot(root),
+		WithMainBranch("master"),
+		WithReleaseBranchPrefix("release"),
+		WithDevTagIdentifier("0.dev"),
+	} {
+		require.NoError(t, opt(m))
+	}
+
+	plan, err := m.cutPlan()
+	require.NoError(t, err)
+	require.Equal(t, "release-v3.33", plan.Derived)
+
+	var derivedTag, mainTag string
+	for _, tt := range plan.TagTargets {
+		switch tt.Branch {
+		case "release-v3.33":
+			derivedTag = tt.DevTag
+		case "master":
+			mainTag = tt.DevTag
+		}
+	}
+	require.Empty(t, derivedTag, "the derived branch inherits main's tag, so no new derived tag")
+	require.Equal(t, "v3.34.0-0.dev", mainTag, "main advances to the next minor")
+}
+
+func TestRequireOnMainBranch(t *testing.T) {
+	root := t.TempDir()
+	run := func(args ...string) {
+		_, err := command.GitInDir(root, args...)
+		require.NoError(t, err, "git %v", args)
+	}
+	run("init", "-q", "-b", "master")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "test")
+	run("config", "commit.gpgsign", "false")
+	run("commit", "-q", "--allow-empty", "-m", "initial")
+
+	m := &CalicoManager{}
+	for _, opt := range []Option{WithRepoRoot(root), WithMainBranch("master"), WithValidation(true)} {
+		require.NoError(t, opt(m))
+	}
+
+	// On master, a fresh cut (derived branch absent) is allowed.
+	require.NoError(t, m.requireOnMainBranch("release-v3.33"), "on master the cut is allowed")
+
+	// Off a non-main branch, a fresh cut (derived branch absent) is rejected.
+	run("checkout", "-q", "-b", "some-feature")
+	err := m.requireOnMainBranch("release-v3.33")
+	require.Error(t, err, "a fresh cut off a non-main branch must be rejected")
+	require.Contains(t, err.Error(), "must run on master")
+
+	// Resume: the derived branch exists, so the rerun is allowed off it.
+	run("checkout", "-q", "-b", "release-v3.33")
+	require.NoError(t, m.requireOnMainBranch("release-v3.33"),
+		"a resume must be allowed when the derived branch exists")
 }
