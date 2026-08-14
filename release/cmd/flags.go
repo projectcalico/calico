@@ -106,11 +106,11 @@ var (
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
 		Value:    utils.DefaultDevTagSuffix,
 	}
-	baseBranchFlag = &cli.StringFlag{
-		Name:     "base-branch",
+	mainBranchFlag = &cli.StringFlag{
+		Name:     "main-branch",
 		Category: gitCategory,
-		Aliases:  []string{"base", "main-branch"},
-		Usage:    "The base branch to cut the release branch from",
+		Aliases:  []string{"base-branch"},
+		Usage:    "The main/default branch for the repo",
 		Sources:  cli.EnvVars("RELEASE_BRANCH_BASE"),
 		Value:    utils.DefaultBranch,
 		Action: func(_ context.Context, c *cli.Command, str string) error {
@@ -129,6 +129,16 @@ var (
 		Usage:   "Run all actions locally without remote changes",
 		Sources: cli.EnvVars("LOCAL"),
 		Value:   false,
+	}
+	planFlag = &cli.BoolFlag{
+		Name:     "plan",
+		Category: stepControlCategory,
+		Usage:    "Print what each step would do without acting.",
+	}
+	skipFlag = &cli.StringSliceFlag{
+		Name:     "skip",
+		Category: stepControlCategory,
+		Usage:    "Step names to skip.",
 	}
 )
 
