@@ -48,5 +48,5 @@ export ASO_KUBE_PROXY_MODE="${ASO_KUBE_PROXY_MODE:="iptables"}" # 'iptables' or 
 export PRODUCT="calico"
 # Respect pre-set values so callers (e.g. the win-fv-felix local-build job) can
 # select RELEASE_STREAM=local-build / HASH_RELEASE=false without being clobbered.
-export RELEASE_STREAM="${RELEASE_STREAM:=master}"
+export RELEASE_STREAM="${RELEASE_STREAM:=v3.33}"
 export HASH_RELEASE="${HASH_RELEASE:=true}"

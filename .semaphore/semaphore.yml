@@ -735,7 +735,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies: []
     task:
       agent:
@@ -1087,7 +1087,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies: []
     task:
       env_vars:
@@ -1472,7 +1472,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies:
       - "Build: nftables RPMs"
     task:
@@ -1620,7 +1620,7 @@ blocks:
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
         '/lib/**/*_test.go',
-        '/libcalico-go/**/*_test.go']})
+        '/libcalico-go/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -1740,7 +1740,7 @@ blocks:
         '/felix/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/node/**/*_test.go']})
+        '/node/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -1834,7 +1834,7 @@ blocks:
         '/kube-controllers/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -2242,7 +2242,7 @@ blocks:
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go',
         '/webhooks/**/*_test.go',
-        '/whisker-backend/**/*_test.go']})
+        '/whisker-backend/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -2322,7 +2322,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -2412,7 +2412,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -2535,7 +2535,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -2713,7 +2713,7 @@ blocks:
         '/goldmane/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/whisker-backend/**/*_test.go']})
+        '/whisker-backend/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -3199,7 +3199,7 @@ blocks:
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go',
         '/webhooks/**/*_test.go',
-        '/whisker-backend/**/*_test.go']})
+        '/whisker-backend/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -3449,7 +3449,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -3643,7 +3643,7 @@ blocks:
         '/node/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -3802,7 +3802,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -3927,7 +3927,7 @@ blocks:
         '/node/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - "Felix: Build Windows binaries"
       - "Build: calico image"
@@ -4095,7 +4095,7 @@ blocks:
         '/node/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - "Felix: Build"
     task:
@@ -4278,7 +4278,7 @@ blocks:
         '/crypto/**/*_test.go',
         '/felix/**/*_test.go',
         '/lib/**/*_test.go',
-        '/libcalico-go/**/*_test.go']})
+        '/libcalico-go/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -4337,7 +4337,7 @@ blocks:
         '/crypto/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -4377,7 +4377,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: nftables RPMs"
@@ -4533,7 +4533,7 @@ blocks:
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
         '/pkg/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -4720,7 +4720,7 @@ blocks:
         '/node/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -4825,7 +4825,7 @@ blocks:
         '/**/SECURITY.md',
         '/api/**/*_test.go',
         '/crypto/**/*_test.go',
-        '/lib/**/*_test.go']})
+        '/lib/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -5094,7 +5094,7 @@ blocks:
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -5371,7 +5371,7 @@ blocks:
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: nftables RPMs"
@@ -5830,7 +5830,7 @@ blocks:
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go',
         '/webhooks/**/*_test.go',
-        '/whisker-backend/**/*_test.go']})
+        '/whisker-backend/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - "Prerequisites"
       # cache-test-artifacts ships these images to the test VMs. Without the
@@ -5902,7 +5902,7 @@ blocks:
         '/**/LICENSE*',
         '/**/README*',
         '/**/SECURITY.md',
-        '/lib/**/*_test.go']})
+        '/lib/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -6039,7 +6039,7 @@ blocks:
         '/crypto/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
       - "Build: calico image"
@@ -6126,7 +6126,7 @@ blocks:
         '/crypto/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
-        '/pkg/**/*_test.go']})
+        '/pkg/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -6198,7 +6198,7 @@ blocks:
         '/felix/**/*_test.go',
         '/goldmane/**/*_test.go',
         '/lib/**/*_test.go',
-        '/libcalico-go/**/*_test.go']})
+        '/libcalico-go/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
@@ -6264,7 +6264,7 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -6378,7 +6378,7 @@ blocks:
         '/api/**/*_test.go',
         '/felix/**/*_test.go',
         '/lib/**/*_test.go',
-        '/libcalico-go/**/*_test.go']})
+        '/libcalico-go/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -6462,7 +6462,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/pkg/**/*_test.go',
-        '/typha/**/*_test.go']})
+        '/typha/**/*_test.go'], default_branch: 'release-v3.33'})
     dependencies:
       - Prerequisites
     task:
@@ -6499,7 +6499,7 @@ blocks:
         '/**/LICENSE*',
         '/**/README*',
         '/**/SECURITY.md',
-        '/lib/**/*_test.go']})
+        '/lib/**/*_test.go'], default_branch: 'release-v3.33'})
     execution_time_limit:
       minutes: 30
     dependencies:
