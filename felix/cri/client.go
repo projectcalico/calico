@@ -63,7 +63,12 @@ func New(socketPath string) (*Client, error) {
 	endpoint := "unix://" + viaHostRoot(socketPath)
 	// tp=nil (no tracing), useStreaming=false (we only issue unary
 	// List/Status RPCs, never Exec/Attach/PortForward).
-	svc, err := remote.NewRemoteRuntimeService(context.Background(), endpoint, connectTimeout, nil, false)
+	svc, err := remote.NewRemoteRuntimeServiceBuilder().
+		WithEndpoint(endpoint).
+		WithConnectionTimeout(connectTimeout).
+		WithTracerProvider(nil).
+		WithUseStreaming(false).
+		Build(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("NewRemoteRuntimeService(%s): %w", endpoint, err)
 	}
