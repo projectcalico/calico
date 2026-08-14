@@ -34,12 +34,14 @@ type BirdBGPConfig struct {
 	ExternalIPs                       []string
 	LoadBalancerIPs                   []string
 	BGPExportFilterForDisabledIPPools []string
-	IBGPExportFilterForTunnelRoutes   []string
-	BGPExportFilterForEnabledIPPools  []string
-	KernelFilterForIPPools            []string
-	SetMetricForBGPRoutes             []string
-	WireguardPeerKernelFilter         []string
-	NormalRoutePriority               int // IPv4 or IPv6 normal route priority (default 1024)
+	// IBGPExportFilterForFelixClusterRoutes rejects the cluster routes that Felix programmed, which
+	// BIRD learns from the kernel but which are not this node's to advertise.  Internal peers only.
+	IBGPExportFilterForFelixClusterRoutes []string
+	BGPExportFilterForEnabledIPPools      []string
+	KernelFilterForIPPools                []string
+	SetMetricForBGPRoutes                 []string
+	WireguardPeerKernelFilter             []string
+	NormalRoutePriority                   int // IPv4 or IPv6 normal route priority (default 1024)
 }
 
 // BirdBGPPeer represents a processed BGP peer configuration

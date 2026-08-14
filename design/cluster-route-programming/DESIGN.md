@@ -139,19 +139,32 @@ programming internally.
 
 The kernel-programming filter is not the only one that varies with ownership.
 `calico_export_to_bgp_peers` varies too: BIRD's kernel protocol runs with
-`learn`, so once Felix owns the IPIP cluster routes BIRD picks them up as its
-own, and a kernel-learned route is not subject to the iBGP
-no-re-advertisement rule.  `processIPPools` therefore adds `tunl0` to the
-tunnel-route reject (`IBGPExportFilterForTunnelRoutes`) exactly when Felix is
-the owner.  The `*.cali` / `*.calico` arms of that reject are unconditional,
-because Felix always owns VXLAN and WireGuard routes.
+`learn`, so once Felix owns a class of cluster route BIRD picks those routes up
+as its own, and a kernel-learned route is not subject to the iBGP
+no-re-advertisement rule.  `processIPPools` therefore builds a reject for
+internal peers, `IBGPExportFilterForFelixClusterRoutes`, with two arms:
+
+- **By outgoing interface.**  `*.cali` / `*.calico` unconditionally, because
+  Felix always owns VXLAN and WireGuard routes, plus `tunl0` exactly when Felix
+  owns the IPIP cluster routes.
+- **By IP Pool CIDR**, for every pool whose cluster routes Felix owns.  The
+  interface arm only catches an *encapsulated* route, and not every
+  Felix-programmed cluster route is one: in a CrossSubnet pool the route to a
+  node in this node's own subnet leaves by the host NIC, as does every route in
+  an unencapsulated pool that Felix owns.  The CIDR on its own would be too
+  broad — this node's own routes into the pool are inside it too — so the match
+  is narrowed to `source = RTS_INHERIT` (kernel-learned, so not this node's own
+  static blocks and not anything learned over BGP, which keeps a route
+  reflector reflecting) and to a `dest` that has a next hop (so not the device
+  routes to this node's own workloads, nor the blackholes for its own blocks).
 
 What does *not* vary is the rest of the export path: whether this node should
 advertise a prefix it owns is a separate question from who writes the route to
 this node's kernel.  `TestFelixClusterRoutesNotReadvertised`
-(`node/tests/k8st/tests/cluster_routes_test.go`) is what holds the `tunl0` arm
-in place — it asserts that no node exports another node's block once Felix is
-programming the route to it.
+(`node/tests/k8st/tests/cluster_routes_test.go`) is what holds both arms in
+place — it asserts that no node exports another node's block once Felix is
+programming the route to it, with an `ipipMode: Always` pool for the interface
+arm and an `ipipMode: CrossSubnet` pool for the CIDR arm.
 
 For an IPIP pool that BIRD owns, the filter statement also sets BIRD's
 `krt_tunnel` variable, which tells the kernel protocol to send the route out
@@ -260,17 +273,14 @@ possible future improvement; it is not implemented.
 These are recorded so that a future change does not mistake them for solved
 problems.
 
-**Felix-programmed no-encap cluster routes and BGP re-advertisement.**  BIRD's
-kernel protocol is configured with `learn`, so it learns alien kernel routes —
-including the cluster routes Felix programs.  `calico_export_to_bgp_peers`
-rejects the ones that leave via a Calico tunnel device: `*.cali` / `*.calico`
-(VXLAN, WireGuard) and, since the IPIP default moved, `tunl0`.  Felix-programmed
-*no-encap* routes leave via an ordinary NIC, so they are still not caught, and a
-node can end up advertising other nodes' blocks to its iBGP peers.  Whether that
-actually misadvertises anything for no-encap is not established; it is tracked,
-with the history of this filter, in CORE-13346.
-
-The scope of the reject is deliberate on one axis and a proxy on the other:
+**Felix-programmed cluster routes and BGP re-advertisement.**  BIRD's kernel
+protocol is configured with `learn`, so it learns alien kernel routes —
+including the cluster routes Felix programs.  The reject described in §2 keeps
+those out of the export to internal peers; its CIDR arm was added because the
+interface arm let through everything Felix does not encapsulate, which is a
+CrossSubnet pool's routes to nodes in the local subnet and all of an
+unencapsulated pool's routes (CORE-13346, which also carries the history of this
+filter).  What remains open:
 
 - **External peers are out of scope by decision, not by omission.**  The reject
   is applied only to internal peers, so a node does go on advertising these
@@ -280,17 +290,18 @@ The scope of the reject is deliberate on one axis and a proxy on the other:
   route, and has to learn that workload's block from another node's remote
   route instead.  Suppressing the advertisement would break those deployments.
   An operator who does want it suppressed can express that with a BGPFilter
-  `interface` rule, which is what that field exists for.  Any remaining work
-  here is therefore about the iBGP case only.
-- Matching on interface name is a proxy for the property we actually want, which
-  is "a route this node owns" versus "a route this node learned or synthesised".
-  A route protocol test (`krt_source` against Felix's `DeviceRouteProtocol`)
-  combined with "has a next hop" would express that directly and cover every
-  encapsulation at once; doing it in the kernel protocol's *import* filter would
-  keep the routes out of BIRD's table entirely.  Note that BIRD learning Felix's
-  *local* workload routes is load-bearing — `calico_aggr()` reads their
-  `krt_metric` to advertise the elevated-priority /32 during live migration — so
-  any such filter must exclude only the remote ones.
+  `interface` rule, which is what that field exists for.
+- Both arms are proxies for the property we actually want, which is "a route
+  this node owns" versus "a route this node learned or synthesised".  The CIDR
+  arm's `source` and `dest` tests come close, but a route protocol test
+  (`krt_source` against Felix's `DeviceRouteProtocol`) would say it directly and
+  without depending on the set of pools; doing it in the kernel protocol's
+  *import* filter would keep the routes out of BIRD's table entirely.  Note that
+  BIRD learning Felix's *local* workload routes is load-bearing —
+  `calico_aggr()` reads their `krt_metric` to advertise the elevated-priority
+  /32 during live migration — so any such filter must exclude only the remote
+  ones.  The CIDR arm's `dest` test is what preserves them today, along with the
+  /32s of workloads whose address is borrowed from another node's block.
 
 **KubeVirt live migration.**  Route-priority propagation for live migration was
 designed and tested for confd/BIRD-programmed routes.  Whether the elevated
