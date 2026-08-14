@@ -686,6 +686,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.DeviceRouteProtocol,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			config.RemoveExternalRoutes,
+			config.ProgramIPIPClusterRoutes,
 		)
 		routeTableV4 = routetable.New(
 			mainTablePolV4,
@@ -707,6 +708,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.DeviceRouteProtocol,
 				config.RulesConfig.WorkloadIfacePrefixes,
 				config.RemoveExternalRoutes,
+				// IPIP is IPv4-only, so there is no IPIP device in the v6 table
+				// for BIRD to program routes through.
+				false,
 			)
 			routeTableV6 = routetable.New(
 				mainTablePolV6,
