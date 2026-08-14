@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
@@ -106,11 +107,11 @@ var (
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("DEV_TAG_SUFFIX"), defaults.MK(defaults.KeyDevTagSuffix)),
 		Value:    utils.DefaultDevTagSuffix,
 	}
-	baseBranchFlag = &cli.StringFlag{
-		Name:     "base-branch",
+	mainBranchFlag = &cli.StringFlag{
+		Name:     "main-branch",
 		Category: gitCategory,
-		Aliases:  []string{"base", "main-branch"},
-		Usage:    "The base branch to cut the release branch from",
+		Aliases:  []string{"base-branch"},
+		Usage:    "The main/default branch for the repo",
 		Sources:  cli.EnvVars("RELEASE_BRANCH_BASE"),
 		Value:    utils.DefaultBranch,
 		Action: func(_ context.Context, c *cli.Command, str string) error {
@@ -129,6 +130,34 @@ var (
 		Usage:   "Run all actions locally without remote changes",
 		Sources: cli.EnvVars("LOCAL"),
 		Value:   false,
+	}
+	planFlag = &cli.BoolFlag{
+		Name:     "plan",
+		Category: stepControlCategory,
+		Usage:    "Print what each step would do without acting.",
+	}
+	skipFlagName = "skip"
+	skipFlag     = func(validSteps []string) *cli.StringSliceFlag {
+		return &cli.StringSliceFlag{
+			Name:     skipFlagName,
+			Category: stepControlCategory,
+			Usage:    "Step names to skip. Valid: " + strings.Join(validSteps, ", "),
+			Action: func(_ context.Context, _ *cli.Command, vals []string) error {
+				if validSteps == nil { // no validations to run
+					return nil
+				}
+				unknown := []string{}
+				for _, v := range vals {
+					if !slices.Contains(validSteps, v) {
+						unknown = append(unknown, v)
+					}
+				}
+				if len(unknown) > 0 {
+					return fmt.Errorf("unknown --skip steps %q; valid steps: %s", unknown, strings.Join(validSteps, ", "))
+				}
+				return nil
+			},
+		}
 	}
 )
 
