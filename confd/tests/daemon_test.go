@@ -520,32 +520,50 @@ func runDaemonScenario(t *testing.T, d *confdDaemon, be *datastoreBackend, sc da
 	}
 }
 
+// TestProgramClusterRoutes checks that the running daemon re-renders BIRD's config as
+// BGPConfiguration.programClusterRoutes is moved around its enum.  Each value renders differently,
+// along two independent axes:
+//
+//   - whether BIRD programs the routes for the unencapsulated pools in the mesh/restart-time input,
+//     which decides whether the kernel filter accepts or rejects them; and
+//   - whether BIRD programs the IPIP routes, which decides whether the export filter's
+//     tunnel-route reject includes tunl0.  This axis shows up even though the input has no IPIP
+//     pool, because the reject is built from the BGPConfiguration alone.
+//
+// So all four values, plus the unset default, need their own golden.  Only the second axis is about
+// IPIP, and the pools side of it is covered by the oneshot cluster_routes scenarios.
 func TestProgramClusterRoutes(t *testing.T) {
+	steps := []struct {
+		value  *string
+		golden string
+	}{
+		// Unset is the default, EnabledNoEncapOnly: BIRD keeps programming the routes for these
+		// unencapsulated pools, and Felix has the IPIP ones, so tunl0 is rejected on export.
+		{value: nil, golden: "mesh/restart-time"},
+		{value: ptr.To(apiv3.EnabledNoEncapOnly), golden: "mesh/restart-time"},
+		{value: ptr.To(apiv3.Disabled), golden: "mesh/restart-time/pcr-disabled"},
+		{value: ptr.To(apiv3.Enabled), golden: "mesh/restart-time/pcr-enabled"},
+		{value: ptr.To(apiv3.EnabledIPIPOnly), golden: "mesh/restart-time/pcr-ipip-only"},
+	}
+
 	for _, be := range activeBackends {
 		t.Run(be.name, func(t *testing.T) {
 			d := startConfdDaemon(t, be)
 			ctx := context.Background()
 
-			// Step 1: as for mesh/restart-time test oneshot test.
 			cleanup := applyResources(t, be, "mock_data/calicoctl/mesh/restart-time/input.yaml")
 			t.Cleanup(cleanup)
-			d.expectOutput("mesh/restart-time")
 
-			// Step 2: update BGPConfiguration to disable cluster route programming.
-			cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Disabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time/pcr-disabled")
-
-			// Step 3: update BGPConfiguration to enable cluster route programming.
-			cfg, err = be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
-			require.NoError(t, err)
-			cfg.Spec.ProgramClusterRoutes = ptr.To("Enabled")
-			_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
-			require.NoError(t, err)
-			d.expectOutput("mesh/restart-time")
+			for _, step := range steps {
+				if step.value != nil {
+					cfg, err := be.calicoClient.BGPConfigurations().Get(ctx, "default", options.GetOptions{})
+					require.NoError(t, err)
+					cfg.Spec.ProgramClusterRoutes = step.value
+					_, err = be.calicoClient.BGPConfigurations().Update(ctx, cfg, options.SetOptions{})
+					require.NoError(t, err)
+				}
+				d.expectOutput(step.golden)
+			}
 		})
 	}
 }
