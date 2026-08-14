@@ -1827,19 +1827,21 @@ func (r *CalicoManager) cutPlan() (*branch.CutPlan, error) {
 	}, nil
 }
 
-// derivedBranchEdits returns the freshly-cut-branch edits: OPERATOR_BRANCH in
-// metadata.mk (required) and the mocknode image tag (optional).
-func derivedBranchEdits(derived, operatorBranch string) []branch.Edit {
+// derivedBranchEdits returns the edits to make in the freshly-cut-branch.
+func derivedBranchEdits(derived, stream, operatorBranch string) []branch.Edit {
 	return []branch.Edit{
 		{File: "metadata.mk", Pattern: `^OPERATOR_BRANCH.*`, Replacement: fmt.Sprintf("OPERATOR_BRANCH ?= %s", operatorBranch), Required: true},
 		{File: "test-tools/mocknode/mock-node.yaml", Pattern: `([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+`, Replacement: fmt.Sprintf(`${1}${2}%s`, derived)},
+		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=master\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="${RELEASE_STREAM:=%s}"`, stream)},
+		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="master"\} # Default to master`, Replacement: fmt.Sprintf(`: ${RELEASE_STREAM:="%s"} # Default to master`, stream)},
 	}
 }
 
 // prepareDerived is the PrepareDerived hook: on a fresh branch it applies the
 // edits, rewrites helm values, and runs code generation, returning changed files.
 func (r *CalicoManager) prepareDerived(derived string) ([]string, error) {
-	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, r.operatorBranch))
+	stream := strings.TrimPrefix(derived, r.releaseBranchPrefix+"-")
+	written, _, err := branch.ApplyEdits(r.repoRoot, derivedBranchEdits(derived, stream, r.operatorBranch))
 	if err != nil {
 		return nil, err
 	}

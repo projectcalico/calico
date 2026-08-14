@@ -110,9 +110,8 @@ var (
 	mainBranchFlag = &cli.StringFlag{
 		Name:     "main-branch",
 		Category: gitCategory,
-		Aliases:  []string{"base-branch"},
 		Usage:    "The main/default branch for the repo",
-		Sources:  cli.EnvVars("RELEASE_BRANCH_BASE"),
+		Sources:  cli.EnvVars("MAIN_BRANCH"),
 		Value:    utils.DefaultBranch,
 		Action: func(_ context.Context, c *cli.Command, str string) error {
 			if str != utils.DefaultBranch {
@@ -134,6 +133,7 @@ var (
 	planFlag = &cli.BoolFlag{
 		Name:     "plan",
 		Category: stepControlCategory,
+		Sources:  cli.EnvVars("PLAN"),
 		Usage:    "Print what each step would do without acting.",
 	}
 	skipFlagName = "skip"
@@ -141,6 +141,7 @@ var (
 		return &cli.StringSliceFlag{
 			Name:     skipFlagName,
 			Category: stepControlCategory,
+			Sources:  cli.EnvVars("SKIP_STEPS"),
 			Usage:    "Step names to skip. Valid: " + strings.Join(validSteps, ", "),
 			Action: func(_ context.Context, _ *cli.Command, vals []string) error {
 				if validSteps == nil { // no validations to run
