@@ -28,7 +28,7 @@ import (
 )
 
 func (r *DefaultRuleRenderer) StaticFilterTableChains(ipVersion uint8) (chains []*generictables.Chain) {
-	chains = append(chains, r.StaticFilterForwardChains()...)
+	chains = append(chains, r.StaticFilterForwardChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterInputChains(ipVersion)...)
 	chains = append(chains, r.StaticFilterOutputChains(ipVersion)...)
 	return
@@ -606,7 +606,7 @@ func (r *DefaultRuleRenderer) failsafeOutChain(table string, ipVersion uint8) *g
 	}
 }
 
-func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain {
+func (r *DefaultRuleRenderer) StaticFilterForwardChains(ipVersion uint8) []*generictables.Chain {
 	rules := []generictables.Rule{}
 
 	if r.nft && r.NFTablesFlowTableOffload {
@@ -614,9 +614,16 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*generictables.Chain
 		// spot: the per-workload dispatch chains terminally accept established traffic (so a rule
 		// after them never runs), and the kernel only allows flow offload in chains reached from
 		// the forward hook, which rules out those shared per-workload chains.
+		//
+		// An offloaded flow skips the FORWARD and POSTROUTING hooks for its whole life, so
+		// endpoints that need rules in those hooks are excluded by IP.
+		noOffloadSetName := r.ipSetConfig(ipVersion).NameForMainIPSet(IPSetIDNoFlowOffload)
 		rules = append(rules,
 			generictables.Rule{
-				Match:   r.NewMatch().ConntrackState("RELATED,ESTABLISHED"),
+				Match: r.NewMatch().
+					ConntrackState("RELATED,ESTABLISHED").
+					NotSourceIPSet(noOffloadSetName).
+					NotDestIPSet(noOffloadSetName),
 				Action:  r.FlowOffload(),
 				Comment: []string{"Offload established Calico flows."},
 			},
