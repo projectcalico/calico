@@ -371,6 +371,13 @@ self-correcting instead of permanent, which is the property that
 matters: a spurious RST costs one scan cycle, not the connection's
 lifetime.
 
+Host-originated traffic — including from host-networked pods — is
+exempt from the ingress limit: it takes the `skip_policy` path in
+`tc.c` and the admission check is gated on `!policy_skipped`, so it is
+neither counted nor limited. Same in iptables/nftables, where the
+connlimit rule sits in `cali-tw-<iface>`, a chain host-origin traffic
+never reaches.
+
 The per-direction `INGRESS_CONN_LIMIT_CONFIGURED` /
 `EGRESS_CONN_LIMIT_CONFIGURED` flags gate the BPF connlimit code
 path entirely when no limit is configured for that attach point.
