@@ -431,16 +431,6 @@ func routesOnNodeViaDocker(t testing.TB, nodeName string) string {
 	return strings.TrimSpace(out)
 }
 
-// routesOnNode returns the node's whole main routing table, for substring assertions.
-func routesOnNode(t testing.TB, nodeName string) string {
-	t.Helper()
-	out, err := utils.ExecInCalicoNode(t, nodeName, "ip route show", utils.RunOptions{AllowFail: true})
-	if err != nil {
-		return fmt.Sprintf("ERROR: %v", err)
-	}
-	return strings.TrimSpace(out)
-}
-
 func ptrTo[T any](v T) *T {
 	return &v
 }
