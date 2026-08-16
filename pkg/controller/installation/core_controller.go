@@ -1960,10 +1960,8 @@ func birdProgramClusterRoutesValue(mode operatorv1.ClusterRoutingMode) string {
 }
 
 // felixProgramsIPIPClusterRoutes and felixProgramsNoEncapClusterRoutes say whether Felix, rather
-// than confd and BIRD, is the configured owner of the cluster routes for IPIP and for
-// unencapsulated IP Pools respectively.  Both return false when the mode is unset: the operator
-// then writes neither field and Calico's own defaults decide, which is not something to encode
-// here -- it varies by Calico version.
+// than confd and BIRD, is the owner of the cluster routes for IPIP and for unencapsulated IP Pools
+// respectively.
 func felixProgramsIPIPClusterRoutes(install *operatorv1.Installation) bool {
 	mode := clusterRoutingMode(install)
 	return mode == operatorv1.ClusterRoutingModeFelix || mode == operatorv1.ClusterRoutingModeFelixIPIPOnly
@@ -1973,9 +1971,26 @@ func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
 	return clusterRoutingMode(install) == operatorv1.ClusterRoutingModeFelix
 }
 
+// clusterRoutingMode returns the cluster routing mode in effect: the configured one, or -- when the
+// field is unset, which is the common case -- the mode that Calico's own defaults amount to.  Since
+// Calico v3.33 those defaults give Felix the cluster routes for IPIP IP Pools and leave the
+// unencapsulated ones with BIRD, which is exactly FelixIPIPOnly.
+//
+// Returning the effective mode rather than "" does tie this to the Calico version the operator
+// ships with, which is why it previously returned "".  But every caller has to reach some
+// conclusion about who owns the routes, and "nobody knows, so assume BIRD" is not a neutral answer:
+// it rejects a configuration that works, namely IPIP with BGP disabled on a cluster that has simply
+// taken Calico's default.  The operator is released against a known Calico version, so encoding
+// that version's defaults here is well defined.  Revisit when the no-encap default moves.
+//
+// This is deliberately not used to decide whether to *write* programClusterRoutes into
+// FelixConfiguration and BGPConfiguration.  Those writes stay gated on the field being explicitly
+// set (see setClusterRoutingOnFelixConfiguration and setClusterRoutingOnBGPConfiguration), so that
+// leaving it unset continues to mean "whatever Calico's defaults are" rather than pinning today's
+// defaults into the datastore.
 func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {
 	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
-		return ""
+		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
 }
