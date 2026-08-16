@@ -574,6 +574,150 @@ var _ = Describe("IPAM garbage collection FV tests with short leak grace period"
 			return nil
 		}, time.Minute, retryInterval).Should(BeNil())
 	})
+
+	It("should NOT garbage collect a valid IP address when the allocation's recorded node is stale (issue #12257)", func() {
+		// The CNI plugin can stamp the wrong node into an allocation's attrs["node"] at ADD time
+		// (e.g. a stale on-disk CNI config left behind by a previous node identity), even though
+		// the pod itself is placed correctly and genuinely holds the IP it was given. A node
+		// mismatch alone must not be treated as proof the pod was rescheduled.
+		var err error
+		nodeB := "node-b"
+		By("creating a second node to reschedule the pod onto", func() {
+			_, err = k8sClient.CoreV1().Nodes().Create(context.Background(),
+				&v1.Node{
+					TypeMeta:   metav1.TypeMeta{Kind: "Node", APIVersion: "v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: nodeB},
+					Spec:       v1.NodeSpec{},
+				},
+				metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		handleStaleNodeValidIP := "handle-stale-node-valid-ip"
+		By("allocating an IP with a node attribute that will turn out to be stale", func() {
+			attrs := map[string]string{"node": nodeA, "pod": "pod-stale-node", "namespace": "default"}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.5"), HandleID: &handleStaleNodeValidIP, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		var pod *v1.Pod
+		By("creating a Pod that is actually scheduled on the other node", func() {
+			pod = &v1.Pod{
+				TypeMeta:   metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: metav1.ObjectMeta{Name: "pod-stale-node", Namespace: "default"},
+				Spec: v1.PodSpec{
+					NodeName: nodeB,
+					Containers: []v1.Container{
+						{
+							Name:    "container1",
+							Image:   "busybox",
+							Command: []string{"sleep", "3600"},
+						},
+					},
+				},
+			}
+			pod, err = k8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("updating the Pod to be running with the IP it was actually allocated", func() {
+			pod.Status.PodIP = "192.168.0.5"
+			pod.Status.Phase = v1.PodRunning
+			_, err = k8sClient.CoreV1().Pods("default").UpdateStatus(context.Background(), pod, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(blocks.KVPairs)).To(Equal(1))
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(affs.KVPairs)).To(Equal(1))
+
+		// The allocation's recorded node no longer matches the pod's real node, but the pod is
+		// genuinely running with this IP - it must survive every scan.
+		Consistently(func() error {
+			if err := assertIPsWithHandle(calicoClient.IPAM(), handleStaleNodeValidIP, 1); err != nil {
+				return err
+			}
+			if err := assertNumBlocks(bc, 1); err != nil {
+				return err
+			}
+			return nil
+		}, consistentlyTimeout, consistentlyInterval).Should(BeNil())
+	})
+
+	It("should GC an allocation whose recorded node mismatches the pod's node, if the pod has not yet reported an IP", func() {
+		// Guards the other half of the #12257 fix: a pod that has genuinely moved to a new node
+		// and hasn't been given an IP yet must still fast-path the old allocation as leaked,
+		// rather than waiting indefinitely on an IP report that will never match.
+		var err error
+		nodeB := "node-b"
+		By("creating a second node to reschedule the pod onto", func() {
+			_, err = k8sClient.CoreV1().Nodes().Create(context.Background(),
+				&v1.Node{
+					TypeMeta:   metav1.TypeMeta{Kind: "Node", APIVersion: "v1"},
+					ObjectMeta: metav1.ObjectMeta{Name: nodeB},
+					Spec:       v1.NodeSpec{},
+				},
+				metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		handleStaleNodeNoIP := "handle-stale-node-no-ip"
+		By("allocating an IP that will be superseded by a fresh pod on a different node", func() {
+			attrs := map[string]string{"node": nodeA, "pod": "pod-stale-node-no-ip", "namespace": "default"}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.6"), HandleID: &handleStaleNodeNoIP, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("creating a Pod of the same name/namespace on the other node, without an IP yet", func() {
+			// Simulates the pod having been deleted and recreated fresh on a different node: the
+			// new pod instance hasn't been given an IP by kubelet yet, so there's no IP evidence to
+			// check - the stale allocation should still be recognized as no-longer-valid via the
+			// node mismatch.
+			pod := &v1.Pod{
+				TypeMeta:   metav1.TypeMeta{Kind: "Pod", APIVersion: "v1"},
+				ObjectMeta: metav1.ObjectMeta{Name: "pod-stale-node-no-ip", Namespace: "default"},
+				Spec: v1.PodSpec{
+					NodeName: nodeB,
+					Containers: []v1.Container{
+						{
+							Name:    "container1",
+							Image:   "busybox",
+							Command: []string{"sleep", "3600"},
+						},
+					},
+				},
+			}
+			_, err = k8sClient.CoreV1().Pods("default").Create(context.Background(), pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(blocks.KVPairs)).To(Equal(1))
+		affs, err := bc.List(context.Background(), model.BlockAffinityListOptions{Host: nodeA, AffinityType: string(ipam.AffinityTypeHost)}, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(affs.KVPairs)).To(Equal(1))
+
+		// Eventually the stale allocation will be GC'd, since there's no IP evidence to save it
+		// and the node mismatch is the only signal available. The block itself remains (it's
+		// node A's only block).
+		Eventually(func() error {
+			if err := assertIPsWithHandle(calicoClient.IPAM(), handleStaleNodeNoIP, 0); err != nil {
+				return err
+			}
+			if err := assertNumBlocks(bc, 1); err != nil {
+				return err
+			}
+			return nil
+		}, time.Minute, retryInterval).Should(BeNil())
+	})
 })
 
 var _ = Describe("IPAM garbage collection FV tests with long leak grace period", Ordered, ContinueOnFailure, func() {
