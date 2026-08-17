@@ -17,6 +17,7 @@ package initializer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,6 +45,7 @@ func AddConditionsController(mgr manager.Manager, opts options.ControllerOptions
 		client:      mgr.GetClient(),
 		scheme:      mgr.GetScheme(),
 		multiTenant: opts.MultiTenant,
+		cloud:       opts.Cloud,
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
@@ -62,6 +64,10 @@ type LogStorageConditions struct {
 	client      client.Client
 	scheme      *runtime.Scheme
 	multiTenant bool
+
+	// cloud indicates that this is a Calico Cloud install, in which case the log-storage users
+	// controller runs in single-tenant mode too and reports status.
+	cloud bool
 }
 
 func (r *LogStorageConditions) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -91,6 +97,12 @@ func (r *LogStorageConditions) Reconcile(ctx context.Context, request reconcile.
 	ls.Status.Conditions = updateConditions(currentConditions, desiredConditions)
 
 	if err := r.client.Status().Update(ctx, ls); err != nil {
+		if errors.IsConflict(err) {
+			// The LogStorage was modified after we read it - our cached copy is stale. Requeue and
+			// recompute the conditions from the updated object instead of reporting an error.
+			reqLogger.V(3).Info("Conflict updating LogStorage status conditions, retrying")
+			return reconcile.Result{Requeue: true}, nil
+		}
 		log.WithValues("reason", err).Info("Failed to update LogStorage status conditions")
 		return reconcile.Result{}, err
 	}
@@ -112,6 +124,10 @@ func (r *LogStorageConditions) getDesiredConditions(ctx context.Context) (map[st
 		expectedInstances = append(expectedInstances, TigeraStatusLogStorageUsers)
 	} else {
 		expectedInstances = append(expectedInstances, TigeraStatusLogStorageESMetrics, TigeraStatusLogStorageKubeController, TigeraStatusLogStorageDashboards)
+		if r.cloud {
+			// In Calico Cloud, the users controller runs in single-tenant mode too.
+			expectedInstances = append(expectedInstances, TigeraStatusLogStorageUsers)
+		}
 	}
 
 	// Keep track of which instances are in which state.
@@ -197,5 +213,12 @@ func updateConditions(currentConditions, desiredConditions map[string]metav1.Con
 
 		statusConditions = append(statusConditions, desired)
 	}
+
+	// desiredConditions is a map, so iteration order is random. Sort by type to keep the stored
+	// conditions stable across reconciles - otherwise every write reorders the list, which counts
+	// as a change and triggers another reconcile.
+	sort.Slice(statusConditions, func(i, j int) bool {
+		return statusConditions[i].Type < statusConditions[j].Type
+	})
 	return statusConditions
 }

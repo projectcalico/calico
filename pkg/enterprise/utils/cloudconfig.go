@@ -32,6 +32,28 @@ import (
 // (e.g. the tenantID) for a single-tenant cloud management cluster backed by internal Elasticsearch.
 const CloudAuthConfig = "cloud-auth-config"
 
+// ClusterInfoConfigMap is the name of the ConfigMap holding this cluster's ID. It is written at
+// install time, and only exists in multi-tenant management clusters.
+const ClusterInfoConfigMap = "cluster-info"
+
+// GetClusterID reads the cluster ID from the cluster-info ConfigMap.
+func GetClusterID(ctx context.Context, cli client.Client) (string, error) {
+	cm := &corev1.ConfigMap{}
+	key := client.ObjectKey{Name: ClusterInfoConfigMap, Namespace: common.OperatorNamespace()}
+	if err := cli.Get(ctx, key, cm); err != nil {
+		return "", fmt.Errorf("failed to read ConfigMap %s/%s: %w", key.Namespace, key.Name, err)
+	}
+
+	clusterID, ok := cm.Data["cluster-id"]
+	if !ok {
+		return "", fmt.Errorf("%s/%s ConfigMap does not contain expected 'cluster-id' key", key.Namespace, key.Name)
+	} else if clusterID == "" {
+		return "", fmt.Errorf("%s/%s ConfigMap value for key 'cluster-id' must be non-empty", key.Namespace, key.Name)
+	}
+
+	return clusterID, nil
+}
+
 func GetTenantFromCloudAuthConfig(ctx context.Context, cli client.Client) (*v1.Tenant, error) {
 	cm := &corev1.ConfigMap{}
 	if err := cli.Get(ctx, types.NamespacedName{Name: CloudAuthConfig, Namespace: common.OperatorNamespace()}, cm); err != nil {

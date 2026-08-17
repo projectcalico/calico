@@ -117,6 +117,7 @@ type Config struct {
 	// Tenant configuration, if running for a particular tenant.
 	Tenant          *operatorv1.Tenant
 	ExternalElastic bool
+	UseSingleIndex  bool
 
 	// Secret containing client certificate and key for connecting to the Elastic cluster. If configured,
 	// mTLS is used between Linseed and the external Elastic cluster.
@@ -425,6 +426,13 @@ func (l *linseed) linseedDeployment() *appsv1.Deployment {
 
 			if l.cfg.Tenant.Spec.ControlPlaneReplicas != nil {
 				replicas = l.cfg.Tenant.Spec.ControlPlaneReplicas
+			}
+		} else if l.cfg.UseSingleIndex {
+			// For single-tenant clusters migrating to single-index storage,
+			// use the elastic-single-index backend and configure index base names.
+			envVars = append(envVars, corev1.EnvVar{Name: "BACKEND", Value: "elastic-single-index"})
+			for _, index := range l.cfg.Tenant.Spec.Indices {
+				envVars = append(envVars, index.EnvVar())
 			}
 		}
 	}

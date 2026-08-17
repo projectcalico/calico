@@ -79,11 +79,9 @@ func NewLinseedControllerWithShims(
 		client:         cli,
 		scheme:         scheme,
 		status:         status,
-		clusterDomain:  opts.ClusterDomain,
-		variant:        opts.Variant,
-		multiTenant:    opts.MultiTenant,
 		tierWatchReady: &utils.ReadyFlag{},
 		dpiAPIReady:    &utils.ReadyFlag{},
+		opts:           opts,
 	}
 	r.tierWatchReady.MarkAsReady()
 	r.dpiAPIReady.MarkAsReady()
@@ -516,8 +514,8 @@ var _ = Describe("LogStorage Linseed controller", func() {
 				Expect(cli.Delete(ctx, es)).ShouldNot(HaveOccurred())
 
 				// Set the reconcile to run in external ES mode.
-				r.elasticExternal = true
-				r.multiTenant = true
+				r.opts.ElasticExternal = true
+				r.opts.MultiTenant = true
 
 				// Set the elasticsearch configuration for the tenant.
 				tenant.Spec.Elastic = &operatorv1.TenantElasticSpec{URL: "https://external.elastic:443"}

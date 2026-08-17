@@ -83,7 +83,13 @@ func NewElasticsearchKubeControllers(cfg *rkc.KubeControllersConfiguration) rend
 
 	if !cfg.Tenant.MultiTenant() {
 		// Zero and single tenant clusters need elasticsearch configuration.
-		cfg.EnabledControllers = append(cfg.EnabledControllers, "authorization", "elasticsearchconfiguration")
+		cfg.EnabledControllers = append(cfg.EnabledControllers, "authorization")
+		if !cfg.Cloud {
+			// In Calico Cloud, the operator's log-storage users controller provisions the Elasticsearch
+			// users itself, so that they get the RBAC for the indices the cluster actually stores its
+			// data in. Running this controller as well would have it overwrite those users.
+			cfg.EnabledControllers = append(cfg.EnabledControllers, "elasticsearchconfiguration")
+		}
 		if cfg.ManagementCluster != nil && cfg.Tenant == nil {
 			cfg.ManagedClusterWatchBinding = true
 			// Enterprise requires the managedcluster controller to push licenses.

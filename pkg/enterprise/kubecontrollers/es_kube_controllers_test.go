@@ -182,6 +182,23 @@ var _ = Describe("es-kube-controllers rendering tests", func() {
 			}))
 	})
 
+	It("should not enable the elasticsearchconfiguration controller in Calico Cloud", func() {
+		instance.Variant = operatorv1.CalicoEnterprise
+		cfg.KubeControllersGatewaySecret = &testutils.KubeControllersUserSecret
+		cfg.MetricsPort = 9094
+		cfg.Cloud = true
+
+		component := NewElasticsearchKubeControllers(&cfg)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := component.Objects()
+
+		dp := rtest.GetResource(resources, EsKubeController, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
+		envs := dp.Spec.Template.Spec.Containers[0].Env
+		Expect(envs).To(ContainElement(corev1.EnvVar{
+			Name: "ENABLED_CONTROLLERS", Value: "authorization",
+		}))
+	})
+
 	It("should render all es-calico-kube-controllers resources for a default configuration using CalicoEnterprise and ClusterType is Management", func() {
 		expectedResources := []struct {
 			name    string

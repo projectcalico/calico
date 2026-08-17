@@ -62,6 +62,10 @@ type ControllerOptions struct {
 	// LSS configuration and internal elasticsearch running. Only meaningful when Cloud is set.
 	ESMigration bool
 
+	// UseSingleIndex is enabled in the last phase of an index migration for a single tenant cluster,
+	// during which the operator reconfigures log storage to use the single-index names.
+	UseSingleIndex bool
+
 	// Whether or not to use crd.projectcalico.org/v1 or projectcalico.org/v3 for Calico CRDs.
 	UseV3CRDs bool
 
