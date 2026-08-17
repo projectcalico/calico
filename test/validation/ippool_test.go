@@ -238,7 +238,7 @@ func TestIPPool_Validation(t *testing.T) {
 					CIDR: "192.168.0.1/24",
 				},
 			},
-			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
+			wantErr: "IPPool CIDR must be strictly masked",
 		},
 		{
 			name: "IPv6 CIDR that is not strictly masked is rejected",
@@ -248,17 +248,16 @@ func TestIPPool_Validation(t *testing.T) {
 					CIDR: "fd00::1/112",
 				},
 			},
-			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
+			wantErr: "IPPool CIDR must be strictly masked",
 		},
 		{
-			name: "IPv6 CIDR that is not in canonical form is rejected",
+			name: "IPv6 CIDR in upper case is accepted",
 			obj: &v3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
 				Spec: v3.IPPoolSpec{
-					CIDR: "FD00::/112",
+					CIDR: "FD00:1234::/112",
 				},
 			},
-			wantErr: "IPPool CIDR must be strictly masked and in canonical form",
 		},
 		{
 			name: "CIDR equal to the IPv4 link local range is rejected",
@@ -429,8 +428,6 @@ func TestIPPool_Validation(t *testing.T) {
 }
 
 func TestIPPool_CIDRImmutability(t *testing.T) {
-	// CIDR is normalized to canonical form on create, so the stored value is always
-	// canonical. This test verifies that updating the CIDR after creation is rejected.
 	pool := &v3.IPPool{
 		ObjectMeta: metav1.ObjectMeta{Name: uniqueName("ippool")},
 		Spec: v3.IPPoolSpec{

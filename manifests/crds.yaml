@@ -5455,9 +5455,9 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
-                - message: IPPool CIDR must be strictly masked and in canonical form
+                - message: IPPool CIDR must be strictly masked
                   reason: FieldValueInvalid
-                  rule: self.cidr == string(cidr(self.cidr).masked())
+                  rule: cidr(self.cidr) == cidr(self.cidr).masked()
                 - message: IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16
                   reason: FieldValueInvalid
                   rule:
