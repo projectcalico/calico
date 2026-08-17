@@ -30,7 +30,3 @@ exclude:
       patterns:
         - "scenario-7:"
         - "scenario-12:"
-
-    - group: "flow logs were not delivered in the manual EKS validation run"
-      patterns:
-        - Test.presence.in.flow.logs

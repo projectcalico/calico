@@ -25,7 +25,3 @@ exclude:
       patterns:
         - IPAM.StrictAffinity
         - IPAM.GC
-
-    - group: "flow logs were not delivered in the manual EKS validation run"
-      patterns:
-        - Test.presence.in.flow.logs
