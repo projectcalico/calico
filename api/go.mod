@@ -1,6 +1,6 @@
 module github.com/tigera/operator/api
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.80.1
