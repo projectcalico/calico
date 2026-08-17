@@ -58,11 +58,14 @@ fi
 mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
-trap 'rm -rf "$SRC"' EXIT
+TARBALL=$(mktemp)
+trap 'rm -rf "$SRC" "$TARBALL"' EXIT
 
 echo "Fetching controller-tools $VERSION ..."
-curl -sfL "https://github.com/kubernetes-sigs/controller-tools/archive/refs/tags/${VERSION}.tar.gz" \
-    | tar xz --strip-components 1 -C "$SRC"
+# Not piped into tar, so curl can retry and report GitHub archive download failures.
+curl -fL --retry 5 --retry-all-errors --silent --show-error -o "$TARBALL" \
+    "https://github.com/kubernetes-sigs/controller-tools/archive/refs/tags/${VERSION}.tar.gz"
+tar xzf "$TARBALL" --strip-components 1 -C "$SRC"
 
 for p in "$SCRIPT_DIR"/*.patch; do
     echo "Applying $(basename "$p") ..."
