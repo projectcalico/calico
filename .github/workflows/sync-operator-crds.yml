@@ -3,14 +3,14 @@
 # the bundled CNI plugin pin to the latest upstream commit. Opens or updates a
 # single PR per branch carrying whatever drifted.
 #
-# Runs every 4h, but a cheap drift check up front skips the heavy regen unless
+# Runs hourly, but a cheap drift check up front skips the heavy regen unless
 # something actually changed: a recent merge, an operator CRD update, or the CNI
 # pin falling behind upstream.
 ---
 name: Sync upstream
 on:  # yamllint disable-line rule:truthy
   schedule:
-    - cron: '0 */4 * * *'  # every 4 hours
+    - cron: '0 * * * *'  # every hour
   workflow_dispatch: {}
 
 permissions:
@@ -73,11 +73,11 @@ jobs:
             force=true  # manual runs do the full work (handy for testing / forcing a sync)
           fi
 
-          # recent: a merge could have changed generated output. The window must
-          # stay larger than the cron interval (4h) so we never skip across a gap
+          # recent: a merge could have changed generated output. The window stays
+          # larger than the hourly cron interval so we never skip across a gap
           # between runs. Coarse on purpose -- we can't know what a merge touched,
           # so any merge means regenerate.
-          if [ "$force" = true ] || [ -n "$(git log -1 --since='5 hours ago' --format=%H)" ]; then
+          if [ "$force" = true ] || [ -n "$(git log -1 --since='2 hours ago' --format=%H)" ]; then
             recent=true
           fi
 
