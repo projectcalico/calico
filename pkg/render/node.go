@@ -1353,7 +1353,7 @@ func (c *nodeComponent) cniEnvvars() []corev1.EnvVar {
 func (c *nodeComponent) nodeContainer() corev1.Container {
 	sc := securitycontext.NewRootContext(true)
 
-	lp, rp := c.nodeLivenessReadinessProbes()
+	sp, lp, rp := c.nodeProbes()
 
 	return corev1.Container{
 		Name:            CalicoNodeObjectName,
@@ -1363,6 +1363,7 @@ func (c *nodeComponent) nodeContainer() corev1.Container {
 		SecurityContext: sc,
 		Env:             c.nodeEnvVars(),
 		VolumeMounts:    c.nodeVolumeMounts(),
+		StartupProbe:    sp,
 		LivenessProbe:   lp,
 		ReadinessProbe:  rp,
 		Lifecycle:       c.nodeLifecycle(),
@@ -1747,8 +1748,8 @@ func (c *nodeComponent) nodeLifecycle() *corev1.Lifecycle {
 	return lc
 }
 
-// nodeLivenessReadinessProbes creates the node's liveness and readiness probes.
-func (c *nodeComponent) nodeLivenessReadinessProbes() (*corev1.Probe, *corev1.Probe) {
+// nodeProbes creates calico/node health probes. It returns in order: startupProbe, livenessProbe, readinessProbe
+func (c *nodeComponent) nodeProbes() (*corev1.Probe, *corev1.Probe, *corev1.Probe) {
 	// Determine liveness and readiness configuration for node.
 	livenessPort := intstr.FromInt(c.cfg.FelixHealthPort)
 	readinessCmd := []string{"/bin/calico-node", "-bird-ready", "-felix-ready"}
@@ -1779,7 +1780,16 @@ func (c *nodeComponent) nodeLivenessReadinessProbes() (*corev1.Probe, *corev1.Pr
 		// This timeout should be less than the PeriodSeconds (30s in controller/utils/component.go).
 		TimeoutSeconds: 10,
 	}
-	return lp, rp
+
+	// Poll every 2s so readiness lands fast; 150 failures gives ~300s of startup, more if checks time out.
+	sp := &corev1.Probe{
+		ProbeHandler:     corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: readinessCmd}},
+		PeriodSeconds:    2,
+		TimeoutSeconds:   10,
+		FailureThreshold: 150,
+	}
+
+	return sp, lp, rp
 }
 
 // nodeMetricsService creates a Service which exposes two endpoints on calico/node for
