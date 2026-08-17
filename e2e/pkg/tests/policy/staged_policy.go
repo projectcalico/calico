@@ -134,14 +134,14 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedKubernetesNetworkPolicy.Name,
-						"default",
-						whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
-						whiskerv1.Action(0), // Action is empty for StagedKubernetesNetworkPolicy
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name: stagedKubernetesNetworkPolicy.Name,
+						tier: "default",
+						kind: whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
+
+						// Action is empty for StagedKubernetesNetworkPolicy.
+						action: whiskerv1.Action(0),
+					})
 				})
 
 				AfterEach(func() {
@@ -170,15 +170,12 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedPolicyName,
-						stagedPolicy.Spec.Tier,
-						whiskerv1.PolicyKindStagedNetworkPolicy,
-						whiskerv1.ActionDeny,
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name:   stagedPolicyName,
+						tier:   stagedPolicy.Spec.Tier,
+						kind:   whiskerv1.PolicyKindStagedNetworkPolicy,
+						action: whiskerv1.ActionDeny,
+					})
 				})
 
 				AfterEach(func() {
@@ -207,14 +204,12 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedGlobalNetworkPolicyName,
-						stagedGlobalNetworkPolicy.Spec.Tier,
-						whiskerv1.PolicyKindStagedGlobalNetworkPolicy,
-						whiskerv1.ActionDeny,
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name:   stagedGlobalNetworkPolicyName,
+						tier:   stagedGlobalNetworkPolicy.Spec.Tier,
+						kind:   whiskerv1.PolicyKindStagedGlobalNetworkPolicy,
+						action: whiskerv1.ActionDeny,
+					})
 				})
 
 				AfterEach(func() {
@@ -426,76 +421,68 @@ func verifyPortForward(url string) {
 	}, 30*time.Second, 1*time.Second).Should(Not(HaveOccurred()))
 }
 
-func verifyFlowCount(url string, count int) {
-	var response apiutil.List[whiskerv1.FlowResponse]
-
-	EventuallyWithOffset(1, func() error {
-		resp, err := whiskerGet(url)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
-		}
-
-		if err = json.Unmarshal(body, &response); err != nil {
-			return err
-		}
-
-		if len(response.Items) != count {
-			return fmt.Errorf(
-				"expected %d flow items, got %d\n%s",
-				count, len(response.Items), formatFlowDiagnostics(response.Items),
-			)
-		}
-
-		return nil
-	}, 150*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
-}
-
-func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
-	var response apiutil.List[whiskerv1.FlowResponse]
-	containsStagedPolicy := false
-
+func getFlows(url string) ([]whiskerv1.FlowResponse, error) {
 	resp, err := whiskerGet(url)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	if err != nil {
+		return nil, err
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	ExpectWithOffset(1, resp.StatusCode).To(Equal(http.StatusOK), "unexpected status code from whisker-backend, body: %s", string(body))
-	err = json.Unmarshal(body, &response)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
-
-	matchesPolicyHit := func(p *whiskerv1.PolicyHit) bool {
-		return p != nil && p.Name == name && p.Tier == tier && p.Kind == kind && p.Action == action
+	if err != nil {
+		return nil, err
 	}
 
-	for _, item := range response.Items {
-		for _, pending := range item.Policies.Pending {
-			if matchesPolicyHit(pending) || matchesPolicyHit(pending.Trigger) {
-				containsStagedPolicy = true
-				break
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var response apiutil.List[whiskerv1.FlowResponse]
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	return response.Items, nil
+}
+
+// stagedPolicyHit is the pending policy a flow is expected to report.
+type stagedPolicyHit struct {
+	name   string
+	tier   string
+	kind   whiskerv1.PolicyKind
+	action whiskerv1.Action
+}
+
+func (h stagedPolicyHit) matches(p *whiskerv1.PolicyHit) bool {
+	return p != nil && p.Name == h.name && p.Tier == h.tier && p.Kind == h.kind && p.Action == h.action
+}
+
+// expectFlowWithStagedPolicy re-probes while polling, since Felix only evaluates pending policy for connections it still tracks.
+func expectFlowWithStagedPolicy(url string, checker conncheck.ConnectionTester, client conncheck.Client, target conncheck.Target, want stagedPolicyHit) {
+	EventuallyWithOffset(1, func() error {
+		if _, err := checker.Connect(client, target); err != nil {
+			return fmt.Errorf("probe from %s to %s failed: %w", client.Name(), target.String(), err)
+		}
+
+		flows, err := getFlows(url)
+		if err != nil {
+			return err
+		}
+
+		for _, flow := range flows {
+			for _, pending := range flow.Policies.Pending {
+				if pending == nil {
+					continue
+				}
+				if want.matches(pending) || want.matches(pending.Trigger) {
+					return nil
+				}
 			}
 		}
-	}
-
-	Expect(containsStagedPolicy).Should(
-		BeTrue(),
-		fmt.Sprintf(
-			"Could not find staged policy: Kind:%s Name:%s Tier:%s Action:%s\n%s",
-			kind, name, tier, action, formatFlowDiagnostics(response.Items),
-		),
-	)
+		return fmt.Errorf(
+			"no flow reports staged policy as pending: Kind:%s Name:%s Tier:%s Action:%s\n%s",
+			want.kind, want.name, want.tier, want.action, formatFlowDiagnostics(flows),
+		)
+	}, 150*time.Second, 5*time.Second).Should(Succeed(), "timed out waiting for a flow reporting staged policy %s", want.name)
 }
 
 func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
