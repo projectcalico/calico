@@ -298,7 +298,7 @@ why the identification mechanism differs per driver:
 | Subsystem | How Felix recognises its own state |
 |---|---|
 | iptables (`iptables/`) | A **rule comment with our prefix and a hash of the input rule**. Needed because `iptables-save` output does **not** round-trip — the kernel re-canonicalises some constructs and the tools reformat others (the one concrete documented case is TCP-flag matches, per `iptables/actions.go`; MARK/CONNMARK are rendered to round-trip). The comment lets Felix (i) identify Calico rules even outside Calico-owned chains, and (ii) detect drift: read-back hash ≠ desired hash ⇒ reprogram. (Does not defend against malicious tampering that preserves the comment — out of threat model.) |
-| nftables (`nftables/`) | Inherited the iptables hash/prefix approach for porting ease, but doesn't strictly need it: **if it's in our table, it's ours.** A future simplification. |
+| nftables (`nftables/`) | Inherited the iptables hash/prefix approach for porting ease. Inside Calico's own table it isn't strictly needed — **if it's in our table, it's ours** — but it is what picks out state a previous iptables-nft Felix left in the shared tables (see [cleaning up after the other backend](#cleaning-up-after-the-other-backend)). |
 | ip rules (`routerule/`) | No marking support. Identified by **the tables they jump to being Felix-owned**. Imperfect — a config change can confuse it. |
 | routes (`routetable/`) | Heuristic, because the first implementation didn't uniformly use the route `proto` field (it should have): **in a Felix-owned table ⇒ ours; carries our proto ⇒ ours; points down a `cali`-owned veth ⇒ ours**; etc. The classifier is the `OwnershipPolicy` interface — `MainTableOwnershipPolicy.RouteIsOurs`/`IfaceIsOurs` in `routetable/ownershippol/`. (Not to be confused with `RouteClass`, which is a same-CIDR conflict tie-breaker among *desired* routes, not an ownership test.) |
 | IP sets, iptables chains, veths | Identified by **name prefix** (`cali`...). |
@@ -490,6 +490,49 @@ pattern-matched host devices). nft rejects the whole transaction if a
 flowtable names a device the kernel doesn't have, which takes down the
 entire table.
 
+### Cleaning up after the other backend
+
+A node can switch backends across a Felix restart, so Felix sweeps
+every dataplane it isn't currently programming. There are three, and
+`iptablesBackend: Auto` can move a node between the last two on its
+own — detection keys off kube-proxy's chains, so boot ordering
+changes the answer:
+
+The shared tables (`filter`/`nat`/`mangle`/`raw`) exist twice in the
+kernel, once per iptables backend, so this doc calls them the
+**legacy copies** and the **nftables copies**.
+
+| Dataplane | Swept by | Needed when |
+|---|---|---|
+| Calico's own nftables table | that table's `Table`, which deletes it wholesale (safe: nothing else writes there) | iptables mode, either backend |
+| the nftables copies of the shared tables, where `iptables-nft` writes | `nftables.IPTablesNFTCleanup` | nftables mode, or iptables mode on iptables-legacy |
+| the legacy copies of the shared tables, where `iptables-legacy` writes | `iptables.Table` pinned to iptables-legacy, `CleanupOnly` | nftables mode, or iptables mode on iptables-nft |
+
+Two details that are easy to get wrong:
+
+- The nftables copies are read over **netlink**, not with
+  `iptables-nft-save`, which refuses to read a table holding anything
+  iptables can't express - a neighbouring tool's native nft rules used
+  to crash-loop Felix that way. Only **base chains** are read for
+  rules, the only chains Felix ever inserted into, which is what keeps
+  the rule dumps off kube-proxy's thousands of chains. The chain list
+  itself is one dump of the whole family, since netlink has no
+  per-table filter for it, so the sweep is paced by the refresh
+  interval rather than run on every apply.
+- A `CleanupOnly` table never panics: the backend it names may have no
+  kernel support on this host, in which case there is nothing of ours
+  in it anyway. Felix also declines to build the legacy tables at all
+  unless the iptables-legacy binaries are present, because `FindBestBinary`
+  would otherwise fall back to the default `iptables`, and Felix would
+  sweep the backend it is programming. The same check gates the nft
+  view in iptables mode. Nor does it build them unless the legacy
+  modules are already loaded, since `iptables-legacy-save` would
+  autoload them onto a node running pure nftables.
+
+Cleanup **never terminates**. A shared table can be written again at
+any point (kube-proxy restarting, say), so one clean read proves
+nothing about the next.
+
 ### Review notes for this section
 
 - A PR that renders a new rule into filter FORWARD or mangle
@@ -504,6 +547,9 @@ entire table.
   recognised touches the restart/resync identification mechanism —
   review it against [mark-and-sweep](#restart-resync-and-mark-and-sweep),
   not just the happy path.
+- A change to what Felix writes into the shared tables needs a
+  matching change to the other mode's cleanup, or a node that
+  switches backends keeps the stale rules indefinitely.
 
 ## Rules generation, dispatch chains and mark bits
 
