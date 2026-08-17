@@ -1,0 +1,36 @@
+# eks-v3-crds.yaml - test selection for the EKS native v3 CRD run.
+#
+# Extends base.yaml. The cluster runs the AWS VPC CNI and its IPAM with
+# USE_API_SERVER=false, so tests needing Calico IPAM, Calico BGP or the
+# aggregated Calico API server are excluded.
+
+extends: base.yaml
+
+exclude:
+  labels:
+    - label: RequiresCalicoAPIServer
+      reason: "this job runs with USE_API_SERVER=false (v3 CRD mode, no aggregated Calico API server)"
+
+    - label: RequiresBGPMesh
+      reason: "requires Calico BGP, but this cluster runs the AWS VPC CNI with BGP disabled"
+
+    - label: NoEncap
+      reason: "requires Calico-managed routing, but this cluster runs the AWS VPC CNI"
+
+    - label: Feature:Istio
+      reason: "Istio ambient policy enforcement is not configured on this cluster"
+
+  namePatterns:
+    - group: "requires Calico IPAM, but this cluster uses AWS VPC IPAM"
+      patterns:
+        - IPAM.StrictAffinity
+        - IPAM.GC
+
+    - group: "NodePort traffic is blocked by the EKS node security group"
+      patterns:
+        - "scenario-7:"
+        - "scenario-12:"
+
+    - group: "flow logs were not delivered in the manual EKS validation run"
+      patterns:
+        - Test.presence.in.flow.logs
