@@ -1,4 +1,4 @@
-# kind.yaml - test selection for local kind cluster e2e runs.
+# kind/conformance.yaml - test selection for local kind cluster e2e runs.
 #
 # Used by `make e2e-run-test`. Runs Conformance tests from sig-calico and
 # sig-network, plus BGP tests.
