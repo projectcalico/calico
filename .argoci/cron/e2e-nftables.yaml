@@ -106,6 +106,21 @@ steps:
         value: "false"
     commands: |
       .argoci/scripts/body_standard.sh
+  # Kubernetes 1.36 serves MutatingAdmissionPolicy, which the operator defaults
+  # policy types through in v3 CRD mode.
+  - name: nftables-mode-native-v3-crds-eks
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: nftables-mode-eks-eks-w-aws-cni
     services:
       - docker
