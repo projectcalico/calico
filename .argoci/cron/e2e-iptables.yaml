@@ -211,7 +211,7 @@ steps:
       - name: AZ_NETWORK_PLUGIN
         value: azure
       - name: E2E_TEST_CONFIG
-        value: e2e/config/aks-v3-crds.yaml
+        value: e2e/config/aks.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -232,7 +232,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/eks-v3-crds.yaml
+        value: e2e/config/eks.yaml
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION

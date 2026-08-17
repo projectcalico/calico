@@ -1,15 +1,15 @@
-# eks-v3-crds.yaml - test selection for the EKS native v3 CRD run.
+# eks.yaml - test selection for EKS runs.
 #
-# Extends base.yaml. The cluster runs the AWS VPC CNI and its IPAM with
-# USE_API_SERVER=false, so tests needing Calico IPAM, Calico BGP or the
-# aggregated Calico API server are excluded.
+# Extends base.yaml. EKS runs the AWS VPC CNI and its IPAM, so tests needing
+# Calico IPAM or Calico BGP are excluded. A run serving the aggregated Calico
+# API server would need its own eks-aapis.yaml.
 
 extends: base.yaml
 
 exclude:
   labels:
     - label: RequiresCalicoAPIServer
-      reason: "this job runs with USE_API_SERVER=false (v3 CRD mode, no aggregated Calico API server)"
+      reason: "the projectcalico.org/v3 CRDs are served directly, with no aggregated Calico API server"
 
     - label: RequiresBGPMesh
       reason: "requires Calico BGP, but this cluster runs the AWS VPC CNI with BGP disabled"
