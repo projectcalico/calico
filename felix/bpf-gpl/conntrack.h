@@ -797,7 +797,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
-	struct calico_ct_value *tracking_v;
+	/* Connection-level state -- the RST timestamp and the connlimit flags --
+	 * lives on the tracking entry. For a NAT_FWD hit that is the reverse
+	 * entry, picked up by the secondary lookup below, same as the legs
+	 * src_to_dst/dst_to_src point into; for every other type the entry we
+	 * looked up is itself the tracking entry.
+	 */
+	struct calico_ct_value *tracking_v = v;
+
 	switch (v->type) {
 	case CALI_CT_TYPE_NAT_FWD:
 		// This is a forward NAT entry; since we do the bookkeeping on the
@@ -1079,15 +1086,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		if (tcp_header->rst) {
 			CALI_CT_DEBUG("RST seen, marking CT entry.");
 			src_to_dst->rst_seen = 1;
-			v->rst_seen = now;
-		} else if (v->rst_seen) {
-			if (now - v->rst_seen > 2 * 60 * 1000000000ull || now - v->rst_seen > (1ull << 63)) {
+			tracking_v->rst_seen = now;
+		} else if (tracking_v->rst_seen) {
+			if (now - tracking_v->rst_seen > 2 * 60 * 1000000000ull || now - tracking_v->rst_seen > (1ull << 63)) {
 				/* It's been a looong time (2m) since we saw the RST, we still see
 				 * traffic, we must have seen traffic between now and rst_seen,
 				 * otherwise the entry would have been GCed, the connection is
 				 * likely established and the RST was spurious.
 				 */
-				v->rst_seen = 0;
+				tracking_v->rst_seen = 0;
 			}
 		}
 		ct_tcp_entry_update(ctx, tcp_header, src_to_dst, dst_to_src);
@@ -1097,7 +1104,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * before decrementing so concurrent paths bail.
 		 */
 		if ((src_to_dst->fin_seen && dst_to_src->fin_seen) || tcp_header->rst) {
-			qos_connlimit_decrement_for_ct(v);
+			qos_connlimit_decrement_for_ct(tracking_v);
 		}
 	}
 
@@ -1214,7 +1221,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		 * INGRESS on success, REJECTED on failure, never both
 		 */
 		if (CALI_F_TO_WEP && INGRESS_CONN_LIMIT_CONFIGURED) {
-			__u32 cl = ct_value_get_flags(v);
+			__u32 cl = ct_value_get_flags(tracking_v);
 			if (cl & CALI_CT_FLAG_CONNLIMIT_INGRESS) {
 				result.flags |= CALI_CT_FLAG_CONNLIMIT_INGRESS;
 			}

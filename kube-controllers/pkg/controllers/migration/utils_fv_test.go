@@ -16,6 +16,7 @@ package migration
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,9 +25,12 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	k8stesting "k8s.io/client-go/testing"
 	fakeapiregclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/fake"
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 )
@@ -46,7 +50,7 @@ func newFVHelper(t *testing.T, g Gomega, ctx context.Context) *fvHelper {
 	return &fvHelper{t: t, g: g, ctx: ctx}
 }
 
-// getMigration fetches the DatastoreMigration CR by the well-known name.
+// getMigration fetches the migrationv1.DatastoreMigration CR by the well-known name.
 func (h *fvHelper) getMigration() *migrationv1.DatastoreMigration {
 	dm := &migrationv1.DatastoreMigration{}
 	h.g.ExpectWithOffset(1, fvRTClient.Get(h.ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
@@ -142,6 +146,7 @@ func startController(
 		CRDClient:           fvCRDClient,
 		Migrators:           NewMigrators(bc, fvRTClient),
 		WaitingPollInterval: 500 * time.Millisecond,
+		DrainPeriod:         100 * time.Millisecond,
 		RestartFunc:         func() {},
 	})
 
@@ -151,7 +156,94 @@ func startController(
 	return fakeAPIReg
 }
 
-// createMigrationCR creates the well-known DatastoreMigration CR and registers
+// Side effects recorded by orderLog.
+const (
+	eventLockV1           = "lockV1"
+	eventLockV3           = "lockV3"
+	eventDeleteAPIService = "deleteAPIService"
+)
+
+// orderLog records the order in which the controller performs its side effects,
+// so tests can assert on sequencing rather than just the end state.
+type orderLog struct {
+	mu     sync.Mutex
+	events []string
+}
+
+func (l *orderLog) record(event string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events = append(l.events, event)
+}
+
+func (l *orderLog) snapshot() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.events...)
+}
+
+// recordingAPIRegClient returns a fake apiregistration client seeded with an
+// aggregated APIService that logs deletes to the given order log.
+func recordingAPIRegClient(log *orderLog) *fakeapiregclient.Clientset {
+	c := fakeapiregclient.NewSimpleClientset(newAggregatedAPIServiceObj())
+	c.PrependReactor("delete", "apiservices", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		log.record(eventDeleteAPIService)
+		return false, nil, nil
+	})
+	return c
+}
+
+// recordingRTClient wraps a client so that locking the v3 ClusterInformation
+// (DatastoreReady=false) is written to the given order log.
+func recordingRTClient(c rtclient.WithWatch, log *orderLog) rtclient.WithWatch {
+	recordLock := func(obj rtclient.Object) {
+		ci, ok := obj.(*apiv3.ClusterInformation)
+		if ok && ci.Spec.DatastoreReady != nil && !*ci.Spec.DatastoreReady {
+			log.record(eventLockV3)
+		}
+	}
+	return interceptor.NewClient(c, interceptor.Funcs{
+		Create: func(ctx context.Context, client rtclient.WithWatch, obj rtclient.Object, opts ...rtclient.CreateOption) error {
+			if err := client.Create(ctx, obj, opts...); err != nil {
+				return err
+			}
+			recordLock(obj)
+			return nil
+		},
+		Update: func(ctx context.Context, client rtclient.WithWatch, obj rtclient.Object, opts ...rtclient.UpdateOption) error {
+			if err := client.Update(ctx, obj, opts...); err != nil {
+				return err
+			}
+			recordLock(obj)
+			return nil
+		},
+	})
+}
+
+// newTestController builds a migration controller that tests drive by calling
+// phase handlers directly, bypassing the informer and workqueue.
+func newTestController(
+	ctx context.Context,
+	bc *mockBackendClient,
+	apiReg *fakeapiregclient.Clientset,
+	rt rtclient.WithWatch,
+	drainPeriod time.Duration,
+) *migrationController {
+	return &migrationController{
+		ctx:                 ctx,
+		k8sClient:           fvTestEnv.K8sClient,
+		backendClient:       bc,
+		rtClient:            rt,
+		dynamicClient:       fvDynamicClient,
+		apiregClient:        apiReg.ApiregistrationV1(),
+		migrators:           NewMigrators(bc, fvRTClient),
+		waitingPollInterval: 500 * time.Millisecond,
+		drainPeriod:         drainPeriod,
+		restartFunc:         func() {},
+	}
+}
+
+// createMigrationCR creates the well-known migrationv1.DatastoreMigration CR and registers
 // a cleanup to delete it (and all migrated resources) when the test ends.
 func createMigrationCR(t *testing.T, ctx context.Context) {
 	t.Helper()
@@ -160,12 +252,12 @@ func createMigrationCR(t *testing.T, ctx context.Context) {
 		Spec:       migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
 	}
 	if err := fvRTClient.Create(ctx, dm); err != nil {
-		t.Fatalf("creating DatastoreMigration CR: %v", err)
+		t.Fatalf("creating migrationv1.DatastoreMigration CR: %v", err)
 	}
 	t.Cleanup(func() { cleanupMigrationResources(t, ctx) })
 }
 
-// cleanupMigrationResources removes the DatastoreMigration CR (stripping its
+// cleanupMigrationResources removes the migrationv1.DatastoreMigration CR (stripping its
 // finalizer first so deletion isn't blocked) and all v3 Calico resources that
 // may have been created during migration.
 func cleanupMigrationResources(t *testing.T, ctx context.Context) {
@@ -185,7 +277,7 @@ func cleanupMigrationResources(t *testing.T, ctx context.Context) {
 			continue
 		}
 		if err := fvRTClient.Delete(ctx, dm); err != nil {
-			t.Logf("cleanup: deleting DatastoreMigration: %v", err)
+			t.Logf("cleanup: deleting migrationv1.DatastoreMigration: %v", err)
 		}
 		break
 	}

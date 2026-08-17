@@ -56,7 +56,11 @@ gen-files:
 ###############################################################################
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-MAYBE_WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+ifeq ($(filter __SPIDER_OK__,$(SPIDER_OUTPUT)),)
+$(error test spider did not complete - refusing to run zero tests. See its output above)
+endif
+MAYBE_WHAT:=$(filter-out __SPIDER_OK__,$(SPIDER_OUTPUT))
 else
 # By default, run all tests.
 MAYBE_WHAT=.

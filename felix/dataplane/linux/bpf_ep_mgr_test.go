@@ -87,6 +87,7 @@ type mockDataplane struct {
 
 	jitHarden             bool
 	finalTrampolineStride int
+	erangeCount           int
 }
 
 func newMockDataplane() *mockDataplane {
@@ -296,6 +297,18 @@ func (m *mockDataplane) numOfAttaches(key string) int {
 	return m.numAttaches[key]
 }
 
+func (m *mockDataplane) getFinalTrampolineStride() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.finalTrampolineStride
+}
+
+func (m *mockDataplane) getErangeCount() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.erangeCount
+}
+
 func (m *mockDataplane) setRoute(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -351,10 +364,15 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 		}
 
 		if builder.TrampolineStride() > 15000 {
+			m.mutex.Lock()
+			m.erangeCount++
+			m.mutex.Unlock()
 			return nil, nil, unix.ERANGE
 		}
 
+		m.mutex.Lock()
 		m.finalTrampolineStride = builder.TrampolineStride()
+		m.mutex.Unlock()
 	}
 
 	fdCounterLock.Lock()
@@ -1193,7 +1211,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should load program with shorter trampoline jumps", func() {
 			Expect(dp.programAttached("cali12345:ingress")).To(BeTrue())
 			Expect(dp.programAttached("cali12345:egress")).To(BeTrue())
-			Expect(dp.finalTrampolineStride).To(BeNumerically("<=", 15000))
+			// The initial (default-stride) attempt(s) must have been rejected
+			// with ERANGE before the retry loop found a stride that fits;
+			// otherwise finalTrampolineStride's "<= 15000" check below is
+			// trivially true regardless of whether the retry logic ran.
+			Expect(dp.getErangeCount()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically("<=", 15000))
 		})
 	})
 
