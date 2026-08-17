@@ -30,6 +30,6 @@ func init() {
 func TestUpdateEC2Instance(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../report/felix_aws_suite.xml"
+	testutils.RegisterJUnitReporter("felix_aws_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/aws", suiteConfig, reporterConfig)
 }

@@ -3,6 +3,8 @@ package policy
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +18,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -64,6 +67,9 @@ var _ = describe.CalicoDescribe(
 			installed, err := utils.WhiskerInstalled(cli)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(installed).To(BeTrue(), "Whisker is not installed in the cluster")
+
+			whiskerHTTPSClient, err = buildWhiskerHTTPSClient(context.TODO(), cli)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("Test presence in flow logs", func() {
@@ -342,8 +348,43 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
+// whiskerHTTPSClient verifies whisker-backend's certificate against the
+// cluster CA bundle. Populated once the bundle is read in BeforeEach.
+var whiskerHTTPSClient *http.Client
+
+// buildWhiskerHTTPSClient reads the cluster's CA bundle and returns a client
+// that trusts certificates signed by it, such as whisker-backend's.
+func buildWhiskerHTTPSClient(ctx context.Context, cli ctrlclient.Client) (*http.Client, error) {
+	bundle := &corev1.ConfigMap{}
+	err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: "calico-system", Name: "tigera-ca-bundle"}, bundle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tigera-ca-bundle: %w", err)
+	}
+
+	rootCAs := x509.NewCertPool()
+	appended := false
+	for _, pem := range bundle.Data {
+		if rootCAs.AppendCertsFromPEM([]byte(pem)) {
+			appended = true
+		}
+	}
+	if !appended {
+		return nil, fmt.Errorf("no CA certificates found in tigera-ca-bundle")
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootCAs}},
+	}, nil
+}
+
+// whiskerGet fetches a whisker-backend URL over HTTPS, verifying the
+// backend's certificate against the cluster CA bundle.
+func whiskerGet(baseURL string) (*http.Response, error) {
+	return whiskerHTTPSClient.Get("https://" + baseURL)
+}
+
 func buildURL(port int, sourceNamespace, destinationNamespace, startTime string) string {
-	baseURL := fmt.Sprintf("http://localhost:%d/flows", port)
+	baseURL := fmt.Sprintf("localhost:%d/flows", port)
 
 	f := whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{
@@ -366,7 +407,7 @@ func buildURL(port int, sourceNamespace, destinationNamespace, startTime string)
 func verifyPortForward(url string) {
 	// Port forward should be working and whisker-backend should return 200 status
 	Eventually(func() error {
-		resp, err := http.Get(url)
+		resp, err := whiskerGet(url)
 		if err != nil {
 			return err
 		}
@@ -389,7 +430,7 @@ func verifyFlowCount(url string, count int) {
 	var response apiutil.List[whiskerv1.FlowResponse]
 
 	EventuallyWithOffset(1, func() error {
-		resp, err := http.Get(url)
+		resp, err := whiskerGet(url)
 		if err != nil {
 			return err
 		}
@@ -423,7 +464,7 @@ func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.Polic
 	var response apiutil.List[whiskerv1.FlowResponse]
 	containsStagedPolicy := false
 
-	resp, err := http.Get(url)
+	resp, err := whiskerGet(url)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	defer func() { _ = resp.Body.Close() }()
 

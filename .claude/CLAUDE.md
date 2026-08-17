@@ -73,6 +73,10 @@ config docs, and manifests. See also `hack/docs/adding-an-api.md`.
 
 After regenerating, commit the generated files alongside your source changes.
 
+`charts/calico` is a manifest-generation template, not a chart anyone installs
+with Helm - its rendered output in `manifests/` is the only contract. See
+[`.github/instructions/helm-charts.instructions.md`](../.github/instructions/helm-charts.instructions.md).
+
 ## Code Conventions
 
 ### Formatting

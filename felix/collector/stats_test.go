@@ -50,6 +50,17 @@ var (
 		Tier:      "T2",
 		Direction: rules.RuleDirIngress,
 	}
+	stagedDenyIngressRid0 = &calc.RuleID{
+		Action:   rules.RuleActionDeny,
+		Index:    2,
+		IndexStr: "2",
+		PolicyID: calc.PolicyID{
+			Name: "P2",
+			Kind: v3.KindStagedGlobalNetworkPolicy,
+		},
+		Tier:      "T2",
+		Direction: rules.RuleDirIngress,
+	}
 	allowIngressRid1 = &calc.RuleID{
 		Action:   rules.RuleActionAllow,
 		Index:    1,
@@ -245,6 +256,21 @@ var _ = Describe("Rule Trace", func() {
 			})
 		})
 	})
+
+	// A staged policy never enforces anything, so it must never be recorded as the verdict, whether
+	// the hit arrives through AddRuleID or through ReplaceRuleID after a mid-flow rule change.
+	Describe("Replacing with a staged policy hit", func() {
+		BeforeEach(func() {
+			data.ReplaceRuleID(stagedDenyIngressRid0, 0, 0, 0)
+		})
+		It("should not record a verdict", func() {
+			Expect(data.IngressRuleTrace.FoundVerdict()).To(BeFalse())
+			Expect(data.IngressRuleTrace.VerdictRuleID()).To(BeNil())
+		})
+		It("should not attribute the staged policy's action to the flow", func() {
+			Expect(data.IngressAction()).NotTo(Equal(rules.RuleActionDeny))
+		})
+	})
 	Describe("RuleTraces with next Tier", func() {
 		BeforeEach(func() {
 			rm := data.AddRuleID(nextTierIngressRid0, 0, 0, 0)
@@ -371,6 +397,50 @@ var _ = Describe("Rule Trace", func() {
 			It("should have action set to allow", func() {
 				Expect(data.IngressAction()).To(Equal(rules.RuleActionDeny))
 			})
+		})
+	})
+})
+
+var _ = Describe("Conntrack counters", func() {
+	var data *collector.Data
+
+	BeforeEach(func() {
+		var src, dst [16]byte
+		copy(src[:], net.ParseIP("127.0.0.1").To16())
+		copy(dst[:], net.ParseIP("127.1.1.1").To16())
+		data = collector.NewData(*tuple.New(src, dst, 6, 12345, 80), nil, nil)
+
+		data.SetConntrackCounters(10, 1000)
+		data.SetConntrackCountersReverse(20, 2000)
+
+		// Data starts out dirty and holding deltas from the sets above; clear both so the
+		// assertions below only see the effect of the update under test.
+		data.ClearConnDirtyFlag()
+	})
+
+	// The byte counter must be updated even when the packet count happens to be unchanged.
+	Describe("a bytes-only update", func() {
+		It("should be recorded in the forward direction", func() {
+			data.SetConntrackCounters(10, 1500)
+			bytesCtr := data.ConntrackBytesCounter()
+			Expect(bytesCtr.Absolute()).To(Equal(1500))
+			Expect(bytesCtr.Delta()).To(Equal(500))
+			Expect(data.IsDirty()).To(BeTrue())
+		})
+		It("should be recorded in the reverse direction", func() {
+			data.SetConntrackCountersReverse(20, 2500)
+			bytesCtr := data.ConntrackBytesCounterReverse()
+			Expect(bytesCtr.Absolute()).To(Equal(2500))
+			Expect(bytesCtr.Delta()).To(Equal(500))
+			Expect(data.IsDirty()).To(BeTrue())
+		})
+	})
+
+	Describe("an unchanged update", func() {
+		It("should leave the data clean", func() {
+			data.SetConntrackCounters(10, 1000)
+			data.SetConntrackCountersReverse(20, 2000)
+			Expect(data.IsDirty()).To(BeFalse())
 		})
 	})
 })

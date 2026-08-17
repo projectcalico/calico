@@ -153,13 +153,12 @@ jobs:
 
       # The PR author is github-actions[bot] (the GITHUB_TOKEN identity above), so
       # it can't approve its own PR, and the Actions token can't approve PRs anyway.
-      # Approve as marvin-tigera (TIGERA_BOT_PAT) so Marvin merges it once CI is green.
-      # branch protection has dismiss_stale_reviews off, so a single approval persists
-      # across content updates -- the reviewDecision guard keeps reruns quiet.
+      # Approve as marvin-tigera (MARVIN_RENOVATE_PAT) so Marvin merges it once CI is
+      # green. dismiss_stale_reviews is off, so one approval covers later updates.
       - name: Auto-approve so Marvin merges once CI passes
-        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        if: steps.cpr.outputs.pull-request-number != ''
         env:
-          GH_TOKEN: ${{ secrets.TIGERA_BOT_PAT }}
+          GH_TOKEN: ${{ secrets.MARVIN_RENOVATE_PAT }}
           PR: ${{ steps.cpr.outputs.pull-request-number }}
           REPO: ${{ github.repository }}
         run: |
@@ -168,3 +167,28 @@ jobs:
             exit 0
           fi
           gh pr review "$PR" -R "$REPO" --approve
+
+      # GitHub holds Actions runs on a PR pushed by github-actions[bot] in the
+      # action_required state, which leaves the PR permanently unmergeable.
+      # Release them as marvin-tigera.
+      - name: Approve held workflow runs
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.MARVIN_RENOVATE_PAT }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=$(gh pr view "$PR" -R "$REPO" --json headRefOid -q .headRefOid)
+          for _ in $(seq 1 6); do
+            runs=$(gh api "repos/$REPO/actions/runs?head_sha=$sha" \
+              --jq '.workflow_runs[] | select(.conclusion == "action_required") | .id')
+            if [ -n "$runs" ]; then
+              for id in $runs; do
+                echo "Approving held run $id"
+                gh api -X POST "repos/$REPO/actions/runs/$id/approve"
+              done
+              break
+            fi
+            echo "No held runs for $sha yet; waiting."
+            sleep 10
+          done

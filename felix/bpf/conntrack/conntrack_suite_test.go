@@ -30,6 +30,6 @@ func init() {
 func TestBPFConntrack(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../report/felix_bpf_conntrack_suite.xml"
+	testutils.RegisterJUnitReporter("felix_bpf_conntrack_suite.xml")
 	ginkgo.RunSpecs(t, "UT: felix/bpf/conntrack", suiteConfig, reporterConfig)
 }

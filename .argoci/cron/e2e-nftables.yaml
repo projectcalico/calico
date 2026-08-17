@@ -41,16 +41,16 @@ steps:
       - name: STERN_CHECK
         value: DISABLED
     matrix:
-      - name: stable-ubuntu-2204-lts-arm64
+      - name: beta-or-stable-ubuntu-2204-lts-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: ubuntu-2204-lts-arm64
-      - name: stable-rocky-linux-9-arm64
+      - name: beta-or-stable-rocky-linux-9-arm64
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: CLUSTER_IMAGE
             value: rocky-linux-9-arm64
     commands: |

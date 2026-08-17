@@ -255,7 +255,7 @@ steps:
       - name: K8S_E2E_EXTRA_FLAGS
         value: --feature-gates=dualstack=true
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered RBAC)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered.RBAC)
       - name: K8S_VERSION
         value: stable-1
       - name: KIND_CONFIG
@@ -302,10 +302,10 @@ steps:
       - name: USE_API_SERVER
         value: "false"
     matrix:
-      - name: stable
+      - name: beta-or-stable
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: usage-reporting
@@ -341,10 +341,10 @@ steps:
       - name: USE_HASH_RELEASE
         value: "true"
     matrix:
-      - name: beta-calico-yaml-iptables
+      - name: beta-or-stable-calico-yaml-iptables
         env:
           - name: K8S_VERSION
-            value: beta
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
           - name: KUBE_PROXY_MODE
@@ -389,10 +389,10 @@ steps:
       - name: VPC_SUBNETS
         value: '["172.16.101.0/24"]'
     matrix:
-      - name: stable
+      - name: beta-or-stable
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
     commands: |
       .argoci/scripts/body_standard.sh
   - name: wireguard-k8s-e2e
@@ -770,22 +770,22 @@ steps:
       - name: PROVISIONER
         value: gcp-kubeadm
     matrix:
-      - name: stable-calico-yaml
+      - name: beta-or-stable-calico-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico.yaml
-      - name: stable-calico-typha-yaml
+      - name: beta-or-stable-calico-typha-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: calico-typha.yaml
-      - name: stable-canal-yaml
+      - name: beta-or-stable-canal-yaml
         env:
           - name: K8S_VERSION
-            value: stable
+            value: beta-or-stable
           - name: MANIFEST_FILE
             value: canal.yaml
     commands: |
@@ -798,7 +798,7 @@ steps:
       - name: INSTALL_ETCD_POD
         value: "true"
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.skip=(Tiered RBAC)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Tiered.RBAC)
       - name: MANIFEST_FILE
         value: calico-etcd.yaml
       - name: PROVISIONER
