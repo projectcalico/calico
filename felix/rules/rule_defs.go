@@ -64,6 +64,10 @@ const (
 	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
 	IPSetIDDSCPEndpoints = "dscp-src-net"
 
+	// IPSetIDNoFlowOffload holds the IPs of endpoints whose traffic must not take the
+	// nftables flowtable fast path.
+	IPSetIDNoFlowOffload = "no-flow-offload"
+
 	IPSetIDNetworkPools         = "network-ip-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 

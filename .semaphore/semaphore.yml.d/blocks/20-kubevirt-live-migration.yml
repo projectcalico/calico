@@ -11,6 +11,12 @@
         value: "calico"
       - name: E2E_TEST_CONFIG
         value: "e2e/config/kind-kubevirt.yaml"
+      # Live migration's route-priority propagation is built on confd and BIRD
+      # programming the cluster routes, and IPIP is not going to gain support
+      # for Felix-programmed live migration. Pin the mode rather than rely on
+      # the default, which from v3.33 gives Felix the IPIP routes.
+      - name: EXTRA_VALUES_FILES
+        value: "hack/test/kind/infra/values-bird-routing.yaml"
     agent:
       machine:
         type: f1-standard-4
