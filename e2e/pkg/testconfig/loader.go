@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -42,7 +43,9 @@ func load(path string, seen []string) (*Config, error) {
 			return nil, fmt.Errorf("circular extends chain: %v -> %s", seen, absPath)
 		}
 	}
-	seen = append(seen, absPath)
+	// Copy rather than append in place: sibling parents would otherwise share a
+	// backing array and write over each other's entry.
+	seen = append(append([]string(nil), seen...), absPath)
 
 	data, err := os.ReadFile(absPath)
 	if err != nil {
@@ -58,22 +61,30 @@ func load(path string, seen []string) (*Config, error) {
 		return nil, err
 	}
 
-	if cfg.Extends == "" {
+	if len(cfg.Extends) == 0 {
 		return &cfg, nil
 	}
 
-	// Resolve the parent path relative to this config file's directory.
-	parentPath := filepath.Join(filepath.Dir(absPath), cfg.Extends)
-	parent, err := load(parentPath, seen)
-	if err != nil {
-		return nil, fmt.Errorf("loading parent of %q: %w", absPath, err)
+	// Fold parents left-to-right, then append this config's own entries, so a
+	// later parent's exclusions stack onto an earlier one's scope.
+	inherited := &Config{}
+	for _, rel := range cfg.Extends {
+		parentPath := filepath.Join(filepath.Dir(absPath), rel)
+		parent, err := load(parentPath, seen)
+		if err != nil {
+			return nil, fmt.Errorf("loading parent %q of %q: %w", rel, absPath, err)
+		}
+		inherited = merge(inherited, parent)
 	}
 
-	return merge(parent, &cfg), nil
+	return merge(inherited, &cfg), nil
 }
 
 // merge combines a parent and child config. The child's includes and excludes
-// are appended to the parent's.
+// are appended to the parent's, dropping repeats: with composition a shared
+// exclusion easily arrives by two routes, and `!Slow && !Slow` in the generated
+// label filter is the string an engineer reads when a lane selects the wrong
+// specs. First occurrence wins, so the earliest reason is the one kept.
 func merge(parent, child *Config) *Config {
 	merged := &Config{
 		Include: make([]IncludeEntry, 0, len(parent.Include)+len(child.Include)),
@@ -83,14 +94,39 @@ func merge(parent, child *Config) *Config {
 		},
 	}
 
-	merged.Include = append(merged.Include, parent.Include...)
-	merged.Include = append(merged.Include, child.Include...)
+	seenInclude := map[string]bool{}
+	for _, src := range [][]IncludeEntry{parent.Include, child.Include} {
+		for _, e := range src {
+			if seenInclude[e.Label] {
+				continue
+			}
+			seenInclude[e.Label] = true
+			merged.Include = append(merged.Include, e)
+		}
+	}
 
-	merged.Exclude.Labels = append(merged.Exclude.Labels, parent.Exclude.Labels...)
-	merged.Exclude.Labels = append(merged.Exclude.Labels, child.Exclude.Labels...)
+	seenLabel := map[string]bool{}
+	for _, src := range [][]ExcludeLabel{parent.Exclude.Labels, child.Exclude.Labels} {
+		for _, e := range src {
+			if seenLabel[e.Label] {
+				continue
+			}
+			seenLabel[e.Label] = true
+			merged.Exclude.Labels = append(merged.Exclude.Labels, e)
+		}
+	}
 
-	merged.Exclude.NamePatterns = append(merged.Exclude.NamePatterns, parent.Exclude.NamePatterns...)
-	merged.Exclude.NamePatterns = append(merged.Exclude.NamePatterns, child.Exclude.NamePatterns...)
+	seenPattern := map[string]bool{}
+	for _, src := range [][]NamePatternEntry{parent.Exclude.NamePatterns, child.Exclude.NamePatterns} {
+		for _, e := range src {
+			key := e.Group + "\x00" + e.Pattern + "\x00" + strings.Join(e.AllPatterns(), "\x00")
+			if seenPattern[key] {
+				continue
+			}
+			seenPattern[key] = true
+			merged.Exclude.NamePatterns = append(merged.Exclude.NamePatterns, e)
+		}
+	}
 
 	return merged
 }

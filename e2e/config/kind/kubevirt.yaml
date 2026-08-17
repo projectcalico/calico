@@ -1,4 +1,4 @@
-# kind-kubevirt.yaml - test selection for KubeVirt live migration with MockVirt.
+# kind/kubevirt.yaml - test selection for KubeVirt live migration with MockVirt.
 #
 # Used by the "KubeVirt live migration (MockVirt)" Semaphore block.
 # Runs KubeVirt tests that work with MockVirt (simulated KubeVirt).

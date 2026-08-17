@@ -1,4 +1,4 @@
-# gcp-kubevirt.yaml - GCP kubeadm with KubeVirt VMs.
+# gcp/kubevirt.yaml - GCP kubeadm with KubeVirt VMs.
 #
 # Referenced by KubeVirt e2e blocks in the per-dataplane and release
 # pipelines (iptables.yml, bpf.yml, nftables.yml, patch-verification.yml,

@@ -1,4 +1,4 @@
-# kind-felix-routing.yaml - test selection for the Felix-routing kind e2e CI
+# kind/felix-routing.yaml - test selection for the Felix-routing kind e2e CI
 # job.
 #
 # Used by `make e2e-test` with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1,
