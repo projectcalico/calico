@@ -267,6 +267,7 @@ func TestSignArgs(t *testing.T) {
 // TestSignArgsOverridesGPGPath verifies rpmsign is pointed at the gpg that is
 // installed. rpm 4 on Debian and Ubuntu defaults %__gpg to /usr/bin/gpg2, which
 // their gnupg package does not ship, and signing dies trying to exec it.
+func TestSignArgsOverridesGPGPath(t *testing.T) {
 	original := rpmsignSupportsRPMV4
 	t.Cleanup(func() { rpmsignSupportsRPMV4 = original })
 	rpmsignSupportsRPMV4 = func() bool { return false }
