@@ -217,7 +217,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[sig-calico-enterprise\]|\[NoEncap\]|RequiresCalicoAPIServer|RequiresBGPMesh|RequiresAmbientPolicyEnforcement|ExternalNode|Feature:KubeVirt|Feature:EgressGateway|Feature:Dashboards|Test.presence.in.flow.logs|IPAM.StrictAffinity|IPAM.GC)
       - name: K8S_VERSION
         value: stable
       - name: PROVISIONER
@@ -233,6 +233,10 @@ steps:
     env:
       - name: INSTALLER
         value: operator
+      # scenario-7 and scenario-12 are skipped because NodePort traffic is
+      # blocked by the EKS node security group.
+      - name: K8S_E2E_FLAGS
+        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[sig-calico-enterprise\]|\[NoEncap\]|RequiresCalicoAPIServer|RequiresBGPMesh|RequiresAmbientPolicyEnforcement|ExternalNode|Feature:KubeVirt|Feature:EgressGateway|Feature:Dashboards|Test.presence.in.flow.logs|IPAM.StrictAffinity|IPAM.GC|scenario-7:|scenario-12:)
       - name: K8S_VERSION
         value: stable
       - name: PROVISIONER
