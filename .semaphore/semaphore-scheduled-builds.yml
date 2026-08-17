@@ -879,6 +879,20 @@ blocks:
         - name: "E2E images: rapidclient CI"
           commands:
             - .semaphore/run-and-monitor rapidclient-ci.log make -C e2e/images/rapidclient ci
+  - name: E2E test set drift
+    run:
+      when: >-
+        true or change_in(['/e2e/', '/.argoci/cron/', '/.semaphore/end-to-end/pipelines/'],
+        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      jobs:
+        - name: "E2E test set drift: check-test-set"
+          commands:
+            - .semaphore/run-and-monitor e2e-check-test-set.log make -C e2e check-test-set
   - name: "E2E unit tests"
     run:
       when: "true"
