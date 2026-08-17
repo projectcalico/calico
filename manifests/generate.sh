@@ -44,7 +44,7 @@ OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
-NON_HELM_MANIFEST_IMAGES="node-windows"
+NON_HELM_MANIFEST_IMAGES="node-windows calico"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
@@ -192,3 +192,6 @@ for img in $NON_HELM_MANIFEST_IMAGES; do
   echo "Update $img image to $new_img:$CALICO_VERSION"
   find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
 done
+
+# Version the component list in manifest header comments, which carry no "image:" prefix.
+find . -type f -name "*.yaml" -exec sed -i -E "s|^(#[[:space:]]+)calico/calico:[A-Za-z0-9_.-]*|\1calico/calico:$CALICO_VERSION|g" {} \;
