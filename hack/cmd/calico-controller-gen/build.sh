@@ -58,16 +58,18 @@ fi
 mkdir -p "$(dirname "$OUT")"
 
 SRC=$(mktemp -d)
+TARBALL=$(mktemp)
 # Created by mktemp in $OUT's own directory, which is the shared Go build
 # cache: O_EXCL there is what makes the name unique between concurrent builds.
 # $$ would not — each build runs in its own container, and those PID namespaces
 # hand out the same few PIDs, so it collides exactly when $OUT is contended.
 TMP_OUT=$(mktemp "$OUT.tmp.XXXXXXXX")
-trap 'rm -rf "$SRC" "$TMP_OUT"' EXIT
+trap 'rm -rf "$SRC" "$TARBALL" "$TMP_OUT"' EXIT
 
 echo "Fetching controller-tools $VERSION ..."
-curl -sfL "https://github.com/kubernetes-sigs/controller-tools/archive/refs/tags/${VERSION}.tar.gz" \
-    | tar xz --strip-components 1 -C "$SRC"
+curl -fL --retry 5 --retry-all-errors --silent --show-error -o "$TARBALL" \
+    "https://github.com/kubernetes-sigs/controller-tools/archive/refs/tags/${VERSION}.tar.gz"
+tar xzf "$TARBALL" --strip-components 1 -C "$SRC"
 
 for p in "$SCRIPT_DIR"/*.patch; do
     echo "Applying $(basename "$p") ..."
