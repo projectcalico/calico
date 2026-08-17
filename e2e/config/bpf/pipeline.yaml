@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# bpf pipeline: test selection scope.
+#
+# As iptables. Dataplane:BPF is not listed: its only spec (maglev) also
+# carries sig-calico, so the first entry already selects it.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - sig-calico
+  - Conformance && sig-network
+  - Feature:NetworkPolicy
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"

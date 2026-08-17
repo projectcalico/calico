@@ -1,11 +1,13 @@
-# base.yaml - shared test selection config for all e2e pipelines.
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
-# Includes all sig-calico tests and sig-network Conformance tests.
-# Excludes labels that are universally inappropriate for CI.
-
-include:
-  - sig-calico
-  - Conformance && sig-network
+# Universal CI exclusions, extended by every other config in this tree.
+#
+# Deliberately minimal. merge() only appends, so a label excluded here can never
+# be re-included by a child -- keep lane-specific and feature-gating exclusions
+# in the pipeline configs instead.
+#
+# No `include:` here for the same reason: a child can broaden an include list but
+# never narrow it, so each pipeline declares its own scope.
 
 exclude:
   labels:
@@ -14,9 +16,3 @@ exclude:
 
     - label: Disruptive
       reason: "breaks cluster state for other parallel tests"
-
-    - label: ExternalNode
-      reason: "requires a non-cluster node with EXT_IP/EXT_KEY/EXT_USER configured"
-
-    - label: Feature:KubeVirt
-      reason: "e2e infra integration with Banzai not ready, currently run manually"
