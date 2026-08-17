@@ -1339,6 +1339,47 @@ var _ = Describe("Common components render tests", func() {
 			Expect(ann).To(ContainSubstring("resources"))
 		})
 
+		It("should apply a startup probe override and set the annotation", func() {
+			ds := appsv1.DaemonSet{}
+			ds.Spec.Template.Spec.Containers = []corev1.Container{
+				{
+					Name:  "calico-node",
+					Image: "test-image",
+					StartupProbe: &corev1.Probe{
+						ProbeHandler:     corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/bin/calico-node", "-felix-ready"}}},
+						PeriodSeconds:    2,
+						TimeoutSeconds:   5,
+						FailureThreshold: 150,
+					},
+				},
+			}
+
+			period := int32(5)
+			threshold := int32(60)
+			overrides := &v1.CalicoNodeDaemonSet{
+				Spec: &v1.CalicoNodeDaemonSetSpec{
+					Template: &v1.CalicoNodeDaemonSetPodTemplateSpec{
+						Spec: &v1.CalicoNodeDaemonSetPodSpec{
+							Containers: []v1.CalicoNodeDaemonSetContainer{
+								{
+									Name:         "calico-node",
+									StartupProbe: &v1.ProbeOverride{PeriodSeconds: &period, FailureThreshold: &threshold},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			ApplyDaemonSetOverrides(&ds, overrides)
+			sp := ds.Spec.Template.Spec.Containers[0].StartupProbe
+			Expect(sp.PeriodSeconds).To(Equal(int32(5)))
+			Expect(sp.FailureThreshold).To(Equal(int32(60)))
+			Expect(sp.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(sp.Exec.Command).To(Equal([]string{"/bin/calico-node", "-felix-ready"}))
+			Expect(ds.Annotations).To(HaveKeyWithValue(CustomOverridesAnnotation, "startupProbe"))
+		})
+
 		It("should not set annotation when no probe or resource overrides", func() {
 			d := appsv1.Deployment{}
 			d.Spec.Template.Spec.Containers = []corev1.Container{

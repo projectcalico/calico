@@ -211,6 +211,7 @@ var _ = Describe("node enterprise modifier integration", func() {
 		// BGP is enabled, so the bird readiness check is present and the modifier
 		// adds the BGP metrics check.
 		Expect(c.ReadinessProbe.Exec.Command).To(ContainElement("--bgp-metrics-ready"))
+		Expect(c.StartupProbe.Exec.Command).To(ContainElement("--bgp-metrics-ready"))
 	})
 
 	It("enables process-path collection when the LogCollector requests it", func() {

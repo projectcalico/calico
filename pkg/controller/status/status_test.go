@@ -616,6 +616,24 @@ var _ = Describe("Status reporting tests", func() {
 					Expect(issues[0].issueType).To(Equal(issueNotReady))
 				})
 
+				It("should derive a longer grace period from the startup probe", func() {
+					// calico-node's startup probe: 150 * (2s + 5s) = 1050s of budget.
+					startup := &corev1.Probe{PeriodSeconds: 2, TimeoutSeconds: 5, FailureThreshold: 150}
+					readiness := &corev1.Probe{PeriodSeconds: 10, TimeoutSeconds: 5, FailureThreshold: 3}
+					pod := notReadyPod("starting-up", time.Now().Add(-300*time.Second))
+					pod.Spec.Containers = []corev1.Container{{Name: "c", StartupProbe: startup, ReadinessProbe: readiness}}
+					Expect(client.Create(ctx, pod)).NotTo(HaveOccurred())
+					issues := sm.diagnosePods("Test", selector, "NS1", "", nil)
+					Expect(issues).To(BeEmpty())
+
+					stuck := notReadyPod("startup-stuck", time.Now().Add(-1200*time.Second))
+					stuck.Spec.Containers = []corev1.Container{{Name: "c", StartupProbe: startup, ReadinessProbe: readiness}}
+					Expect(client.Create(ctx, stuck)).NotTo(HaveOccurred())
+					issues = sm.diagnosePods("Test", selector, "NS1", "", nil)
+					Expect(issues).To(HaveLen(1))
+					Expect(issues[0].issueType).To(Equal(issueNotReady))
+				})
+
 				It("should not derive a grace period shorter than the default floor", func() {
 					// A tight probe derives ~33s, but the default floor keeps the grace
 					// at 60s so we never flag more aggressively than the fixed default.

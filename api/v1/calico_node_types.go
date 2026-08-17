@@ -43,6 +43,11 @@ type CalicoNodeDaemonSetContainer struct {
 	// The probe handler is set by the operator and cannot be overridden.
 	// +optional
 	LivenessProbe *ProbeOverride `json:"livenessProbe,omitempty"`
+
+	// StartupProbe allows customization of the startup probe timing parameters.
+	// The probe handler is set by the operator.
+	// +optional
+	StartupProbe *ProbeOverride `json:"startupProbe,omitempty"`
 }
 
 // CalicoNodeDaemonSetInitContainer is a calico-node DaemonSet init container.

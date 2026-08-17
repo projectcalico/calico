@@ -178,6 +178,7 @@ type containerOverride struct {
 	Ports          []corev1.ContainerPort
 	ReadinessProbe *operator.ProbeOverride
 	LivenessProbe  *operator.ProbeOverride
+	StartupProbe   *operator.ProbeOverride
 }
 
 // GetContainerOverrides returns the full container overrides including probe timing.
@@ -206,8 +207,11 @@ func valueToContainerOverrides(value reflect.Value) []containerOverride {
 		if lp := v.FieldByName("LivenessProbe"); lp.IsValid() && !lp.IsNil() {
 			co.LivenessProbe = lp.Interface().(*operator.ProbeOverride)
 		}
+		if sp := v.FieldByName("StartupProbe"); sp.IsValid() && !sp.IsNil() {
+			co.StartupProbe = sp.Interface().(*operator.ProbeOverride)
+		}
 
-		if co.Resources != nil || co.Ports != nil || co.ReadinessProbe != nil || co.LivenessProbe != nil {
+		if co.Resources != nil || co.Ports != nil || co.ReadinessProbe != nil || co.LivenessProbe != nil || co.StartupProbe != nil {
 			cs = append(cs, co)
 		}
 	}
@@ -413,6 +417,10 @@ func applyReplicatedPodResourceOverrides(r *replicatedPodResource, overrides any
 			if co.LivenessProbe != nil && !seen["livenessProbe"] {
 				seen["livenessProbe"] = true
 				overrideTypes = append(overrideTypes, "livenessProbe")
+			}
+			if co.StartupProbe != nil && !seen["startupProbe"] {
+				seen["startupProbe"] = true
+				overrideTypes = append(overrideTypes, "startupProbe")
 			}
 			if co.Resources != nil && !seen["resources"] {
 				seen["resources"] = true
@@ -725,6 +733,9 @@ func mergeContainerOverrides(current []corev1.Container, overrides []containerOv
 		}
 		if co.LivenessProbe != nil && current[i].LivenessProbe != nil {
 			applyProbeOverride(current[i].LivenessProbe, co.LivenessProbe)
+		}
+		if co.StartupProbe != nil && current[i].StartupProbe != nil {
+			applyProbeOverride(current[i].StartupProbe, co.StartupProbe)
 		}
 	}
 }

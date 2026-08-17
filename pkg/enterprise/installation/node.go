@@ -124,10 +124,11 @@ func modifyNodeDaemonSet(ri render.Inputs, ds *appsv1.DaemonSet) {
 	c := render.MustContainer(spec, render.CalicoNodeObjectName)
 	c.Env = append(c.Env, nodeEnterpriseEnv(ri)...)
 
-	// Add the BGP metrics readiness check, but only when the base render kept the
-	// bird readiness check (i.e. BGP is in use and we're not on VPP).
-	if c.ReadinessProbe != nil && c.ReadinessProbe.Exec != nil && slices.Contains(c.ReadinessProbe.Exec.Command, "--bird-ready") {
-		c.ReadinessProbe.Exec.Command = append(c.ReadinessProbe.Exec.Command, "--bgp-metrics-ready")
+	// Add the BGP metrics check to both probes, but only when the base render kept the bird check.
+	for _, p := range []*corev1.Probe{c.ReadinessProbe, c.StartupProbe} {
+		if p != nil && p.Exec != nil && slices.Contains(p.Exec.Command, "--bird-ready") {
+			p.Exec.Command = append(slices.Clone(p.Exec.Command), "--bgp-metrics-ready")
+		}
 	}
 
 	mountNodePrometheusTLS(ri, ds)

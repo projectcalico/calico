@@ -61,6 +61,9 @@ var _ = Describe("node enterprise modifier", func() {
 						ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{
 							Command: []string{"/bin/calico-node", "-bird-ready", "--bird-ready", "--felix-ready"},
 						}}},
+						StartupProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{
+							Command: []string{"/bin/calico-node", "-bird-ready", "--bird-ready", "--felix-ready"},
+						}}},
 					}},
 				}}},
 			},
@@ -115,20 +118,23 @@ var _ = Describe("node enterprise modifier", func() {
 		Expect(nodeContainer(ds).Env).To(ContainElement(corev1.EnvVar{Name: "FELIX_PROMETHEUSREPORTERPORT", Value: "7081"}))
 	})
 
-	It("appends the BGP metrics readiness check when the bird check is present", func() {
+	It("appends the BGP metrics check to the readiness and startup probes when the bird check is present", func() {
 		out, _ := ext.Installation().Modify(extensionstest.NodeStub{StubComponent: extensionstest.StubComponent{Create: newObjs(), Delete: nil}, Cfg: nil}, entIn()).Objects()
 		ds, _ := extensions.FindObject[*appsv1.DaemonSet](out, common.NodeDaemonSetName)
 		Expect(nodeContainer(ds).ReadinessProbe.Exec.Command).To(ContainElement("--bgp-metrics-ready"))
+		Expect(nodeContainer(ds).StartupProbe.Exec.Command).To(ContainElement("--bgp-metrics-ready"))
 	})
 
-	It("does not add the BGP metrics readiness check when the bird check is absent", func() {
+	It("does not add the BGP metrics check when the bird check is absent", func() {
 		objs := newObjs()
 		ds := objs[2].(*appsv1.DaemonSet)
 		ds.Spec.Template.Spec.Containers[0].ReadinessProbe.Exec.Command = []string{"/bin/calico-node", "--felix-ready"}
+		ds.Spec.Template.Spec.Containers[0].StartupProbe.Exec.Command = []string{"/bin/calico-node", "--felix-ready"}
 
 		out, _ := ext.Installation().Modify(extensionstest.NodeStub{StubComponent: extensionstest.StubComponent{Create: objs, Delete: nil}, Cfg: nil}, entIn()).Objects()
 		got, _ := extensions.FindObject[*appsv1.DaemonSet](out, common.NodeDaemonSetName)
 		Expect(nodeContainer(got).ReadinessProbe.Exec.Command).NotTo(ContainElement("--bgp-metrics-ready"))
+		Expect(nodeContainer(got).StartupProbe.Exec.Command).NotTo(ContainElement("--bgp-metrics-ready"))
 	})
 
 	It("adds MULTI_INTERFACE_MODE to the node and install-cni containers when configured", func() {

@@ -926,6 +926,9 @@ func (m *statusManager) diagnosePods(workload string, selector *metav1.LabelSele
 					if hasOverride(workloadAnnotations, "readinessProbe") {
 						msg += "; custom readiness probe configuration is in effect"
 					}
+					if hasOverride(workloadAnnotations, "startupProbe") {
+						msg += "; custom startup probe configuration is in effect"
+					}
 					issues = append(issues, podIssue{
 						workload:      workload,
 						severity:      severityFailing,
@@ -942,44 +945,48 @@ func (m *statusManager) diagnosePods(workload string, selector *metav1.LabelSele
 }
 
 // readinessGracePeriod returns how long the given pod may remain unready before
-// we treat it as failing. It is derived from the pod's readiness probes: a pod
-// that legitimately takes a while to become ready (long initial delay, lenient
-// failure threshold, or a slow probe cadence) should not be flagged before its
-// probes would normally have settled. The value is the worst-case settling time
-// across all containers, floored at defaultReadinessGracePeriod so we never flag
-// a pod more aggressively than the fixed default and so pods without a readiness
-// probe still get a sensible grace period.
+// we treat it as failing. It is derived from the pod's startup and readiness
+// probes: a pod that legitimately takes a while to become ready (long initial
+// delay, lenient failure threshold, or a slow probe cadence) should not be
+// flagged before its probes would normally have settled. The value is the
+// worst-case settling time across all containers, floored at
+// defaultReadinessGracePeriod so we never flag a pod more aggressively than the
+// fixed default and so pods without probes still get a sensible grace period.
 func readinessGracePeriod(p corev1.Pod) time.Duration {
 	grace := defaultReadinessGracePeriod
 	for _, c := range p.Spec.Containers {
-		probe := c.ReadinessProbe
-		if probe == nil {
-			continue
-		}
-
-		period := probe.PeriodSeconds
-		if period <= 0 {
-			period = defaultProbePeriodSeconds
-		}
-		timeout := probe.TimeoutSeconds
-		if timeout <= 0 {
-			timeout = defaultProbeTimeoutSeconds
-		}
-		threshold := probe.FailureThreshold
-		if threshold <= 0 {
-			threshold = defaultProbeFailureThreshold
-		}
-
-		// Worst case for a slow-starting container: the initial delay before
-		// probing begins, plus a full run of failureThreshold attempts, each of
-		// which can take up to the probe period plus its timeout.
-		d := time.Duration(probe.InitialDelaySeconds)*time.Second +
-			time.Duration(threshold)*time.Duration(period+timeout)*time.Second
+		// Kubelet holds off readiness until the startup probe passes, so the budgets add.
+		d := probeSettlingTime(c.StartupProbe) + probeSettlingTime(c.ReadinessProbe)
 		if d > grace {
 			grace = d
 		}
 	}
 	return grace
+}
+
+// probeSettlingTime returns the worst-case time for a probe to pass or give up,
+// and zero for a nil probe.
+func probeSettlingTime(probe *corev1.Probe) time.Duration {
+	if probe == nil {
+		return 0
+	}
+
+	period := probe.PeriodSeconds
+	if period <= 0 {
+		period = defaultProbePeriodSeconds
+	}
+	timeout := probe.TimeoutSeconds
+	if timeout <= 0 {
+		timeout = defaultProbeTimeoutSeconds
+	}
+	threshold := probe.FailureThreshold
+	if threshold <= 0 {
+		threshold = defaultProbeFailureThreshold
+	}
+
+	// Initial delay, plus failureThreshold attempts each costing period plus timeout.
+	return time.Duration(probe.InitialDelaySeconds)*time.Second +
+		time.Duration(threshold)*time.Duration(period+timeout)*time.Second
 }
 
 // diagnoseContainers checks a list of container statuses for known error states and

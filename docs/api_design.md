@@ -111,7 +111,8 @@ customizable, follow the established nesting (see `whisker_deployment_types.go`)
 (`...PodTemplateSpec`) → `Metadata` + `Spec` (`...PodSpec`) →
 `Containers []<Comp>DeploymentContainer`. The container type pins `Name` with an
 Enum and exposes `Resources` and `ReadinessProbe`/`LivenessProbe` (as
-`*ProbeOverride`). Mirror upstream Kubernetes field names and semantics.
+`*ProbeOverride`), plus `StartupProbe` when the container renders one. Mirror
+upstream Kubernetes field names and semantics.
 
 ## After every API change
 
