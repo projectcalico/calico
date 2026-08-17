@@ -28,8 +28,8 @@ type IPPoolSpecApplyConfiguration struct {
 	// Disable exporting routes from this IP Pool's CIDR over BGP. [Default: false]
 	DisableBGPExport *bool `json:"disableBGPExport,omitempty"`
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
-	// The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
-	// or equal to the size of the pool CIDR.
+	// The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller
+	// than or equal to the size of the pool CIDR.
 	BlockSize *int `json:"blockSize,omitempty"`
 	// Allows IPPool to allocate for a specific node by label selector.
 	NodeSelector *string `json:"nodeSelector,omitempty"`
