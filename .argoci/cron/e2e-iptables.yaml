@@ -210,14 +210,14 @@ steps:
         value: AKS
       - name: AZ_NETWORK_PLUGIN
         value: azure
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/aks-v3-crds.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[sig-calico-enterprise\]|\[NoEncap\]|RequiresCalicoAPIServer|RequiresBGPMesh|RequiresAmbientPolicyEnforcement|ExternalNode|Feature:KubeVirt|Feature:EgressGateway|Feature:Dashboards|Test.presence.in.flow.logs|IPAM.StrictAffinity|IPAM.GC)
       - name: K8S_VERSION
         value: stable
       - name: PROVISIONER
@@ -231,12 +231,10 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/eks-v3-crds.yaml
       - name: INSTALLER
         value: operator
-      # scenario-7 and scenario-12 are skipped because NodePort traffic is
-      # blocked by the EKS node security group.
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[sig-calico-enterprise\]|\[NoEncap\]|RequiresCalicoAPIServer|RequiresBGPMesh|RequiresAmbientPolicyEnforcement|ExternalNode|Feature:KubeVirt|Feature:EgressGateway|Feature:Dashboards|Test.presence.in.flow.logs|IPAM.StrictAffinity|IPAM.GC|scenario-7:|scenario-12:)
       - name: K8S_VERSION
         value: stable
       - name: PROVISIONER
