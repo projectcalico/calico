@@ -982,7 +982,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}, options.SetOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
-			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+			Expect(err.Error()).To(ContainSubstring("blockSize must be between"))
 
 			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
@@ -993,7 +993,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}, options.SetOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
-			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+			Expect(err.Error()).To(ContainSubstring("blockSize must be between"))
 		})
 
 		It("should prevent the creation of a pool with an identical or overlapping CIDR using block sizes", func() {
