@@ -14,6 +14,9 @@ exclude:
     - label: RequiresBGPMesh
       reason: "requires Calico BGP, but this cluster runs the Azure CNI with BGP disabled"
 
+    - label: Feature:BGPPeer
+      reason: "requires Calico BGP, but this cluster runs the Azure CNI with BGP disabled"
+
     - label: NoEncap
       reason: "requires Calico-managed routing, but this cluster runs the Azure CNI"
 
@@ -25,3 +28,12 @@ exclude:
       patterns:
         - IPAM.StrictAffinity
         - IPAM.GC
+
+    - group: "NodePort traffic is blocked between nodes by the AKS network security group"
+      patterns:
+        - "scenario-7:"
+        - "scenario-12:"
+
+    - group: "needs the multi-mode rapidclient server image, which is only side-loaded into kind and gcp-kubeadm clusters"
+      patterns:
+        - Packet.Size.Verification

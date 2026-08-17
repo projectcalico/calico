@@ -14,6 +14,9 @@ exclude:
     - label: RequiresBGPMesh
       reason: "requires Calico BGP, but this cluster runs the AWS VPC CNI with BGP disabled"
 
+    - label: Feature:BGPPeer
+      reason: "requires Calico BGP, but this cluster runs the AWS VPC CNI with BGP disabled"
+
     - label: NoEncap
       reason: "requires Calico-managed routing, but this cluster runs the AWS VPC CNI"
 
@@ -30,3 +33,7 @@ exclude:
       patterns:
         - "scenario-7:"
         - "scenario-12:"
+
+    - group: "needs the multi-mode rapidclient server image, which is only side-loaded into kind and gcp-kubeadm clusters"
+      patterns:
+        - Packet.Size.Verification
