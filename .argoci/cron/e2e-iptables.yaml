@@ -205,14 +205,14 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: K8S_E2E_EXTRA_FLAGS
         value: --feature-gates=dualstack=true
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: K8S_VERSION
         value: stable-1
       - name: KIND_CONFIG
@@ -248,14 +248,14 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest-v3crd.yaml
       - name: ENABLE_DUAL_STACK
         value: "true"
       - name: INSTALL_ETCD_POD
         value: "true"
       - name: K8S_E2E_EXTRA_FLAGS
         value: --feature-gates=dualstack=true
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|EndpointSlice|Tiered.RBAC)
       - name: K8S_VERSION
         value: stable-1
       - name: KIND_CONFIG
@@ -284,6 +284,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-autohep.yaml
       - name: ENABLE_AUTOHEP
         value: "true"
       - name: PROVISIONER
@@ -295,6 +297,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-v3crd.yaml
       - name: KUBE_PROXY_MODE
         value: ipvs
       - name: PROVISIONER
@@ -334,6 +338,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: PROVISIONER
@@ -356,6 +362,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables.yaml
       - name: K8S_VERSION
         value: v1.31.3
       - name: RKE_VERSION
@@ -449,6 +457,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables.yaml
       - name: INSTALLER
         value: manual
       - name: IPV6_POD_CIDR
@@ -476,6 +486,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables.yaml
       - name: INSTALLER
         value: manual
       - name: IPV4_POD_CIDR
@@ -729,6 +741,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-encap-nobgp.yaml
       - name: CLUSTER_ROUTING_MODE
         value: Felix
     matrix:
@@ -775,6 +789,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
       - name: PROVISIONER
@@ -805,10 +821,10 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest.yaml
       - name: ENABLE_CALICOCTL_APISERVER
         value: "true"
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: PROVISIONER
         value: gcp-kubeadm
     matrix:
@@ -837,10 +853,10 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest-v3crd.yaml
       - name: INSTALL_ETCD_POD
         value: "true"
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard|Tiered.RBAC)
       - name: MANIFEST_FILE
         value: calico-etcd.yaml
       - name: PROVISIONER
@@ -858,12 +874,12 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-manifest.yaml
       - name: CALICO_MANIFEST
         value: manifests/flannel-migration/calico.yaml
       - name: INSTALLER
         value: manual
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard)
       - name: K8S_VERSION
         value: stable-1
       - name: MIGRATION_MANIFEST
