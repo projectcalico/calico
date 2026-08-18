@@ -1,6 +1,6 @@
 - name: E2E test set drift
   run:
-    when: "${CHANGE_IN(e2e,non-go:/e2e/config/,non-go:/.argoci/cron/,non-go:/.semaphore/end-to-end/pipelines/)}"
+    when: "${CHANGE_IN(e2e,non-go:/e2e/config/,non-go:/.argoci/cron/,non-go:/.semaphore/end-to-end/pipelines/,non-go:/.semaphore/semaphore.yml.d/blocks/)}"
   execution_time_limit:
     minutes: 30
   dependencies:

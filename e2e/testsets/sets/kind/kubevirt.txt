@@ -1,0 +1,10 @@
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should assign static IP via annotation and preserve it across migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across VMI recreation (reboot)
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across pod recreation
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP address across live migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should promote target pod to active IPAM owner after migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should release IPAM handle when VM is deleted
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge eBGP routes after live migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge iBGP routes after live migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should enforce NetworkPolicy after live migration
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should not have /32 host route on target node after a migration timeout

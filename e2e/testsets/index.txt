@@ -48,8 +48,8 @@
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
-.argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 193
-.argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 188
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 192
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 185
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 219
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 219
@@ -211,3 +211,8 @@
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | legacy/vpp | 140
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | legacy/windows | 8
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | legacy/windows | 8
+.semaphore/semaphore.yml.d/blocks/20-e2e-gcp.yml | E2E tests on GCP kubeadm (local binary) / gcp-kubeadm - e2e local binary | gcp/bpf | 118
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: BIRD) | kind/conformance | 74
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: Conformance (cluster routing: Felix) | kind/felix-routing | 75
+.semaphore/semaphore.yml.d/blocks/20-e2e.yml | E2E tests (KinD) / E2E tests: sig-calico (dataplane: BPF) | kind/bpf | 118
+.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml | KubeVirt live migration (KIND) / KubeVirt live migration (KIND) | kind/kubevirt | 10

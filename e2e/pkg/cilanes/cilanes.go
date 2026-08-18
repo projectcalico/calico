@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package cilanes resolves the test selection of every e2e lane under
-// .argoci/cron and .semaphore/end-to-end/pipelines.
+// .argoci/cron, .semaphore/end-to-end/pipelines and .semaphore/semaphore.yml.d/blocks.
 package cilanes
 
 import (
@@ -30,6 +30,10 @@ import (
 const (
 	argoDir      = ".argoci/cron"
 	semaphoreDir = ".semaphore/end-to-end/pipelines"
+
+	// The PR pipeline's blocks, which hold the kind lanes alongside every
+	// build and unit test job.
+	blocksDir = ".semaphore/semaphore.yml.d/blocks"
 
 	// The flannel migration script runs the suite once before migrating with a
 	// hardcoded selection, then again with the job's own.
@@ -76,6 +80,10 @@ type Lane struct {
 	// PipelineDefault reports whether Flags come from the file's global scope
 	// rather than a lane-level override.
 	PipelineDefault bool
+
+	// RunsE2E reports whether the lane runs the e2e suite at all, whether or
+	// not it manages to select any specs.
+	RunsE2E bool
 }
 
 // RunsE2EBinary reports whether the lane runs the e2e test binary, and so has a
@@ -115,6 +123,7 @@ func Load(repoRoot string) ([]Lane, error) {
 	for dir, parse := range map[string]func(string, []byte) ([]Lane, error){
 		argoDir:      parseArgo,
 		semaphoreDir: parseSemaphore,
+		blocksDir:    parseBlocks,
 	} {
 		entries, err := os.ReadDir(filepath.Join(repoRoot, dir))
 		if err != nil {
@@ -208,6 +217,7 @@ func (e env) lane(source, name, globalFlags string) Lane {
 		Flags:           e[envFlags],
 		TestType:        testType,
 		PipelineDefault: e[envFlags] == globalFlags,
+		RunsE2E:         testType == "k8s-e2e" && e[envArea] != "",
 	}
 }
 
@@ -294,21 +304,23 @@ type semPipeline struct {
 	GlobalJobConfig struct {
 		EnvVars []envVar `yaml:"env_vars"`
 	} `yaml:"global_job_config"`
-	Blocks []struct {
-		Name string `yaml:"name"`
-		Task struct {
-			EnvVars []envVar `yaml:"env_vars"`
-			Jobs    []struct {
-				Name     string   `yaml:"name"`
-				EnvVars  []envVar `yaml:"env_vars"`
-				Commands []string `yaml:"commands"`
-				Matrix   []struct {
-					EnvVar string   `yaml:"env_var"`
-					Values []string `yaml:"values"`
-				} `yaml:"matrix"`
-			} `yaml:"jobs"`
-		} `yaml:"task"`
-	} `yaml:"blocks"`
+	Blocks []semBlock `yaml:"blocks"`
+}
+
+type semBlock struct {
+	Name string `yaml:"name"`
+	Task struct {
+		EnvVars []envVar `yaml:"env_vars"`
+		Jobs    []struct {
+			Name     string   `yaml:"name"`
+			EnvVars  []envVar `yaml:"env_vars"`
+			Commands []string `yaml:"commands"`
+			Matrix   []struct {
+				EnvVar string   `yaml:"env_var"`
+				Values []string `yaml:"values"`
+			} `yaml:"matrix"`
+		} `yaml:"jobs"`
+	} `yaml:"task"`
 }
 
 func parseSemaphore(source string, data []byte) ([]Lane, error) {
@@ -317,9 +329,39 @@ func parseSemaphore(source string, data []byte) ([]Lane, error) {
 		return nil, err
 	}
 	global := env{}.apply(p.GlobalJobConfig.EnvVars)
+	return blockLanes(source, global, p.Blocks)
+}
 
+// kindE2ETargets matches the make targets that run the k8s e2e binary against a
+// kind cluster. e2e-test-clusternetworkpolicy and e2e-test-gateway-conformance
+// run other suites, which no config selects specs for.
+var kindE2ETargets = regexp.MustCompile(`\bmake (e2e-test|e2e-test-bpf|e2e-run)(\s|$)`)
+
+// parseBlocks resolves the lanes in one PR-pipeline block file. Most jobs there
+// build or unit test something, so a job counts as a lane only when it declares
+// a TEST_TYPE or runs one of the kind e2e targets.
+func parseBlocks(source string, data []byte) ([]Lane, error) {
+	var blocks []semBlock
+	if err := yaml.Unmarshal(data, &blocks); err != nil {
+		return nil, err
+	}
+	lanes, err := blockLanes(source, env{}, blocks)
+	if err != nil {
+		return nil, err
+	}
+	out := lanes[:0]
+	for _, l := range lanes {
+		if !l.RunsE2E {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out, nil
+}
+
+func blockLanes(source string, global env, blocks []semBlock) ([]Lane, error) {
 	var lanes []Lane
-	for _, block := range p.Blocks {
+	for _, block := range blocks {
 		blockEnv := global.apply(block.Task.EnvVars)
 		for _, job := range block.Task.Jobs {
 			base := blockEnv.apply(job.EnvVars)
@@ -331,7 +373,13 @@ func parseSemaphore(source string, data []byte) ([]Lane, error) {
 					return nil, fmt.Errorf("job %q: matrix on %s is not modelled", name, axis.EnvVar)
 				}
 			}
-			lanes = append(lanes, base.lanes(source, name, commands, global[envFlags])...)
+			found := base.lanes(source, name, commands, global[envFlags])
+			for i := range found {
+				// A block file declares no FUNCTIONAL_AREA, so the target it
+				// runs is what marks it as an e2e lane.
+				found[i].RunsE2E = found[i].RunsE2E || kindE2ETargets.MatchString(commands)
+			}
+			lanes = append(lanes, found...)
 		}
 	}
 	return dedupe(lanes), nil
