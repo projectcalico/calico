@@ -861,21 +861,8 @@ only to maps that genuinely can't be rebuilt.
   (rather than diffing and touching only what's wrong) will glitch
   connectivity — push back.
 
-## Keep this document in sync with the code
+## Siblings that move with this doc
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the Linux dataplane, "changes how it works" means: a
-new manager or driver, or a change to the manager/driver split; a
-change to the `apply()` ordering or the `OnUpdate`/`CompleteDeferredWork`
-contract; a new kind of kernel resource or a change to how Calico
-resources are identified for resync; a change to the `*tables` Table
-reconciliation, dispatch-chain structure, mark-bit allocation, IP-set
-ordering, or route ownership classification; or a change to the
-`proto.*` dataplane API. Update the relevant section of this file in
-the same PR — and [`calc-graph.md`](./calc-graph.md) too if the
-[dataplane API contract](#the-dataplane-api-calc-graph--dataplane-contract)
-changes. This file is the source of truth for the Linux dataplane's
-invariants.
+- [`calc-graph.md`](./calc-graph.md) — whenever the
+  [dataplane API contract](#the-dataplane-api-calc-graph--dataplane-contract)
+  changes.
