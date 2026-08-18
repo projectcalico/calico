@@ -394,7 +394,7 @@ blocks:
         - name: PROVISIONER
           value: "aws-kubeadm"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(WireGuard)
+          value: --ginkgo.focus=Feature:Wireguard
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
@@ -425,7 +425,7 @@ blocks:
         - name: PROVISIONER
           value: "aws-kubeadm"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(WireGuard)
+          value: --ginkgo.focus=Feature:Wireguard
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
@@ -606,7 +606,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=Feature:Wireguard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
 
   - name: Focused WireGuard E2E (AKS with Calico CNI)
     dependencies: []
@@ -634,7 +634,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=Feature:Wireguard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
         - name: AKS_CNI
           value: "calico"
 
@@ -672,7 +672,7 @@ blocks:
             # - [It] "DNS should provide DNS for the cluster"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=Feature:Wireguard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       env_vars:
         - name: AWS_K8S_CNI_VERSION
           value: "NA"
@@ -687,7 +687,7 @@ blocks:
         - name: ENABLE_WIREGUARD
           value: "true"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+          value: --ginkgo.focus=Feature:Wireguard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
 
   # This is the old every-other-week tests
   - name: Distro support
