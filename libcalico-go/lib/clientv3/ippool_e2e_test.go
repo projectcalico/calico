@@ -973,9 +973,14 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		})
 
 		It("should prevent pools from being created with bad block sizes", func() {
-			// The block size range is a CEL rule, so the error type depends on who evaluates it.
+			// The block size range is a CEL rule on the CRD, which with KDD is enforced by the apiserver.
 			expectRejected := func(err error) {
 				Expect(err).To(HaveOccurred())
+				if config.Spec.DatastoreType == apiconfig.EtcdV3 {
+					Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+				} else {
+					Expect(err).To(BeAssignableToTypeOf(errors.ErrorDatastoreError{}))
+				}
 				Expect(err.Error()).To(ContainSubstring("blockSize must be between"))
 			}
 
