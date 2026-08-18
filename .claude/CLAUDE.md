@@ -141,11 +141,50 @@ every matching sub-design.
 1. Before writing or reviewing code in a component, read that component's
    `DESIGN.md` (or, for Felix, the sub-designs matching the paths you touch).
 2. Follow links. A design is a graph, not a single node.
-3. A PR that changes how a component works — its behaviour, data model,
-   configuration surface, or any invariant the design records — must update the
-   relevant `DESIGN.md` in the same PR. Exemptions: bug fix restoring documented
-   behaviour, mechanical refactor, comment or log-message edits, dependency
-   bumps. If in doubt, update the doc.
+3. A design doc records the design, not the change that introduced it, and
+   **the default is no edit**. Edit one only when a sentence in it is now
+   false, a new invariant exists that a future change could silently break, or
+   a new concept exists that the doc's mental model does not name. A new
+   behaviour, flag, field, config key, or bug fix is not by itself any of
+   those. A warranted edit lands **in the same PR as the code**, in the doc
+   covering the area — for Felix, the matching sub-design, not the index.
+
+### Editing a design doc
+
+A design doc is written for someone who has never seen your diff and has to
+make the *next* change safely. The rules below are the canonical statement;
+[`.github/copilot-instructions.md` → Documentation map](../.github/copilot-instructions.md)
+mirrors them for Copilot — keep the two in sync.
+
+- Never copy or paraphrase the commit message or PR description into a design
+  doc. That narrative belongs in git, exactly as for code comments.
+- **In doubt, propose — don't write.** Keep the edit out of the PR: show the
+  user the target file, the target section, and the exact one to three lines
+  you would add, and wait for approval. Raise it at the pre-commit checkpoint,
+  batched into a single ask, so it never blocks the code work. When one of the
+  three conditions clearly holds, just make the edit.
+- A warranted edit is normally **one to three lines**, edited into the section
+  that already covers the area. Fix the existing sentence before adding a new
+  one; a new `###` heading needs a new concept, not a new behaviour. Past about
+  five lines you are narrating the change.
+- Write at an altitude that survives a rename: state the invariant, and name
+  identifiers or files as one orientation pointer per concept.
+- A file already past ~500 lines should be compressed by the next PR that
+  touches it, not grown.
+
+**Worked example.** A change that taught the BPF service syncer to keep the
+`default/kubernetes` backend rather than let it drop to zero added 34 lines
+under a new heading in `felix/design/bpf-services.md`, re-telling its own commit
+message and naming three internal identifiers. The durable content was one
+bullet in the invariant list already there: *the `default/kubernetes` service
+keeps its last-known-good backend instead of dropping to zero — under
+`bpfNetworkBootstrap` Felix reaches the API server through this NAT entry, so an
+empty backend list is self-severing.*
+
+**Reviewing** a design-doc diff applies the same rules: reject prose that reads
+like the commit message, a heading added for a single fix, or an addition where
+a sentence already in the doc covers the area. A missing update the author
+explicitly considered and skipped is not a blocker on its own.
 
 ## Tests required for code changes
 
