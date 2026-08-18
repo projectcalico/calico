@@ -67,9 +67,17 @@ func TestResolveSets(t *testing.T) {
 	Expect(err).To(MatchError(ContainSubstring("flags:-y")))
 
 	// Lanes that never run the binary have no set.
-	sets, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "os", TestType: "openstack-e2e", Flags: "-x"}})
+	sets, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "os", Area: "openstack", TestType: "openstack-e2e", Flags: "-x"}})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(sets).To(BeEmpty())
+
+	// A pipeline with no FUNCTIONAL_AREA runs no tests at all.
+	_, err = ResolveSets([]Lane{{Source: "cleanup.yml", Name: "gc", TestType: "k8s-e2e"}})
+	Expect(err).NotTo(HaveOccurred())
+
+	// An e2e lane that lost its selection is a lane that would exit 1.
+	_, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "broken", Area: "bpf.yml", TestType: "k8s-e2e"}})
+	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
 }
 
 // The pre-migration selection is a copy of a literal in the script, so a change
