@@ -223,29 +223,71 @@ of no-encap.
 
 ## 4. Transitioning a running cluster
 
-On upgrade to v3.33, a cluster with IPIP pools and no explicit configuration
-moves from BIRD-programmed to Felix-programmed IPIP cluster routes.  The
-handover is:
+A cluster moves between BIRD-programmed and Felix-programmed IPIP cluster routes
+in one of two ways, and they do not behave the same.
 
-1. confd sees the new default and re-renders `bird_ipam.cfg` so that
-   `calico_kernel_programming` rejects the IPIP pools' CIDRs.
-2. BIRD reloads and withdraws those routes from the kernel, because they were
-   BIRD's own routes and BIRD is no longer exporting them.
-3. Felix, in the same window, starts programming the same CIDRs with its own
-   route protocol (`DeviceRouteProtocol`, default 80).
+**Upgrading the code.**  On upgrade to v3.33, a cluster with IPIP pools and no
+explicit configuration changes owner without anything in the datastore changing
+at all: both `programClusterRoutes` fields are unset before and after, and what
+moves is the *default* each component derives from unset.  The calico-node pod
+is replaced, so:
 
-Steps 2 and 3 are not synchronised, so a route may be briefly absent or briefly
-present twice.  Both components converge on the same next hop and device, so
-the window is a reordering rather than a blackhole in practice — but it is
-unmeasured, and a cluster that cannot tolerate any cross-node packet loss should
-be upgraded with the pre-v3.33 configuration pinned explicitly, then switched
-over deliberately.
+1. The old BIRD exits.  Its kernel protocol is configured with `persist`, so it
+   deliberately leaves its routes in the kernel instead of withdrawing them.
+2. The new pod's confd renders `bird_ipam.cfg` so that
+   `calico_kernel_programming` rejects the IPIP pools' CIDRs, and Felix starts
+   programming those CIDRs with its own route protocol (`DeviceRouteProtocol`,
+   default 80).
+3. If BGP is still enabled, the new BIRD starts with `-R`, holds the routes it
+   found through its graceful-restart recovery period, and then reconciles.  By
+   then Felix has taken over the destinations it wants, so to BIRD those are
+   alien routes that it learns rather than removes; what is left to reconcile is
+   whatever Felix did not want.
 
-If BIRD is stopped before it withdraws its routes (for example, if the node
-container is killed mid-upgrade), stale `proto bird` routes can be left behind.
-Felix's route-ownership heuristic does not claim them, so they persist until
-BIRD next runs.  Making Felix adopt and clean up BIRD's IPIP routes is a
-possible future improvement; it is not implemented.
+There is no window in which a destination Felix wants has no route.  When Felix
+wants a route to exist, it atomically replaces any previous route for the same
+prefix, regardless of whether that previous route was within its logical
+ownership — it programs with `RouteReplace` (`felix/routetable/route_table.go`).
+That is long-standing behaviour and does not depend on the ownership rule
+described below.
+
+**Changing the configuration on a running cluster.**  Setting either
+`programClusterRoutes` field explicitly is picked up live: confd re-renders and
+BIRD reconfigures in place.  That BIRD knows it exported those routes, so it
+withdraws them itself.  Felix restarts on the config change and starts
+programming the same CIDRs.
+
+The two paths differ in whether there is a gap, and not in the direction one
+might expect.  Replacing the pod has none, as above.  Changing the configuration
+on a running cluster does: BIRD withdraws promptly, while Felix *restarts*
+because its configuration changed, and only programs the destinations once it is
+back.  The gap is therefore about the length of a Felix restart, and it is
+unmeasured.  A cluster that cannot tolerate any cross-node packet loss should
+prefer the upgrade path, or make the change during a maintenance window.
+
+Once Felix has re-programmed a destination, BIRD can no longer withdraw it out
+from under Felix: the kernel matches on route protocol when the delete specifies
+one, so a delete carrying `RTPROT_BIRD` does not match a route that is now
+Felix's proto 80.  (Verified against the kernel; it assumes BIRD sets the
+protocol on its delete messages, which its kernel protocol does.)
+
+**Where BIRD does not come back.**  Step 3 is what removes BIRD's persisted
+routes in the ordinary upgrade, and it does not happen if BGP is disabled as
+part of the same migration, if BIRD is not run because the cluster has no BGP
+peers, or if BIRD never completes recovery.  Nothing else would remove them:
+they are not Felix's by protocol, and BIRD is not there to reconcile them.  So
+Felix's route-ownership policy claims routes via the IPIP device that carry
+BIRD's protocol, whenever Felix is the configured owner of the IPIP cluster
+routes (`OwnBIRDIPIPRoutes`, `felix/routetable/ownershippol`), so that
+reconciliation removes them.
+
+Note what this does and does not cover.  Destinations Felix *does* want were
+already handled, by the atomic replace above; the rule adds nothing there.  What
+it adds is the removal of BIRD's routes to destinations Felix does **not** want
+— a block released while the node was down, a node that has left the cluster, a
+pool that has been deleted.  Those have no desired route to overwrite them, so
+without the rule, and without a BIRD to reconcile them, they would stay in the
+kernel indefinitely.
 
 ### Review notes — §4
 
@@ -254,6 +296,15 @@ possible future improvement; it is not implemented.
   window is short is that confd and Felix are reacting to the same change at the
   same time; introducing a staged or operator-driven migration would need the
   intermediate state to be explicitly representable in the API, not implied.
+- The ownership rule is deliberately not time-bounded, and not conditional on
+  having recently upgraded.  Felix has no notion of "we just upgraded", and a
+  bounded window would fail precisely the cases the rule exists for: a node down
+  across the window, a rolling upgrade slower than it, or BGP being switched off
+  weeks after the version moved.
+- Do not widen the rule to every protocol on `tunl0`.  Felix's own routes there
+  are already claimed by protocol, whoever the configured owner is, so widening
+  it would only take in routes belonging to neither Felix nor BIRD.  It is also
+  deliberately not scoped by destination; see the field comment for why.
 
 ## 5. Known gaps
 
