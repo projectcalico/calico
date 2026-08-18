@@ -32,7 +32,7 @@ import (
 const gkeNodeLabelPrefix = "cloud.google.com/gke-"
 
 // EnterpriseAPIsExist reports whether the cluster serves the Calico Enterprise APIs.
-func EnterpriseAPIsExist(clientset *kubernetes.Clientset) (bool, error) {
+func EnterpriseAPIsExist(clientset kubernetes.Interface) (bool, error) {
 	resources, err := clientset.Discovery().ServerResourcesForGroupVersion("operator.tigera.io/v1")
 	if err != nil {
 		return false, err

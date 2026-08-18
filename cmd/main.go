@@ -27,7 +27,6 @@ import (
 
 	"github.com/cloudflare/cfssl/log"
 	"github.com/go-logr/logr"
-	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
@@ -48,10 +47,6 @@ import (
 	"github.com/tigera/operator/pkg/imports/admission"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/intrusiondetection/dpi"
-	"github.com/tigera/operator/pkg/render/istio"
-	"github.com/tigera/operator/pkg/render/logstorage"
-	"github.com/tigera/operator/pkg/render/logstorage/eck"
 	operatortls "github.com/tigera/operator/pkg/tls"
 	"github.com/tigera/operator/version"
 
@@ -62,6 +57,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -443,18 +439,11 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}
 
-	// The enterprise controllers can't register without their APIs. Exiting lets the kubelet
+	// The variant's controllers can't register without their APIs. Exiting lets the kubelet
 	// retry us once the CRDs are installed.
-	if variant.IsEnterprise() {
-		enterpriseAPIs, err := discovery.EnterpriseAPIsExist(cs)
-		if err != nil {
-			setupLog.Error(err, "Failed to determine whether the Enterprise APIs are available")
-			os.Exit(1)
-		}
-		if !enterpriseAPIs {
-			setupLog.Error(fmt.Errorf("the Calico Enterprise CRDs are not installed"), "Cannot run as Calico Enterprise")
-			os.Exit(1)
-		}
+	if err := enterprise.VerifyAPIsExist(variant, cs); err != nil {
+		setupLog.Error(err, "Cannot run as the configured variant")
+		os.Exit(1)
 	}
 
 	// Start a goroutine to handle termination.
@@ -555,18 +544,10 @@ admission policy installation; once an Installation exists it is the authority o
 
 	// The operator MUST not run within one of the Namespaces that it itself manages. Perform an early check here
 	// to make sure that we're not doing so, and exit if we are.
-	badNamespaces := []string{
-		common.CalicoNamespace,
-		"calico-apiserver",
-		render.ElasticsearchNamespace,
-		render.IntrusionDetectionNamespace,
-		dpi.DeepPacketInspectionNamespace,
-		eck.OperatorNamespace,
-		render.LogCollectorNamespace,
-		render.CSIDaemonSetNamespace,
-		render.ManagerNamespace,
-		istio.IstioNamespace,
-	}
+	// Components share namespaces, so dedupe before the error lists them.
+	badNamespaces := sets.New(common.CalicoNamespace, render.CSIDaemonSetNamespace).
+		Insert(enterprise.ProtectedNamespaces()...).
+		UnsortedList()
 	for _, ns := range badNamespaces {
 		if common.OperatorNamespace() == ns {
 			log.Error("Operator must not be run within a Namespace managed by the operator, please select a different namespace")
@@ -591,11 +572,9 @@ admission policy installation; once an Installation exists it is the authority o
 	if isCloudBuild() {
 		elasticIsMigrating = discovery.ElasticIsMigrating(bootConfig)
 		useSingleIndex = discovery.UseSingleIndex(bootConfig)
-		if !elasticIsMigrating {
-			if err := verifyElasticSearch(ctx, cs, useExternalElastic); err != nil {
-				setupLog.Error(err, "Elasticsearch configuration verification failed")
-				os.Exit(1)
-			}
+		if err := enterprise.VerifyElasticsearch(ctx, cs, variant, elasticIsMigrating, useExternalElastic); err != nil {
+			setupLog.Error(err, "Elasticsearch configuration verification failed")
+			os.Exit(1)
 		}
 	}
 
@@ -637,12 +616,6 @@ admission policy installation; once an Installation exists it is the authority o
 		Extensions:        extensionRegistry,
 	}
 
-	// Before we start any controllers, make sure our options are valid.
-	if err := verifyConfiguration(ctx, clientset, options); err != nil {
-		setupLog.Error(err, "Invalid configuration")
-		os.Exit(1)
-	}
-
 	err = controller.AddToManager(mgr, options)
 	if err != nil {
 		setupLog.Error(err, "unable to create controllers")
@@ -660,30 +633,6 @@ admission policy installation; once an Installation exists it is the authority o
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func verifyElasticSearch(ctx context.Context, cs kubernetes.Interface, isElasticsearchExternal bool) error {
-	if isElasticsearchExternal {
-		// There should not be an internal-es cert.
-		_, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, render.TigeraElasticsearchInternalCertSecret, metav1.GetOptions{})
-		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil
-			}
-			return fmt.Errorf("unexpected error encountered when confirming elastic is not currently internal: %w", err)
-		}
-		return fmt.Errorf("refusing to run: operator configured as external-es but secret/%s found which suggests its internal-es", render.TigeraElasticsearchInternalCertSecret)
-	}
-
-	// There should not be an external-es cert.
-	_, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, logstorage.ExternalCertsSecret, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("unexpected error encountered when confirming elastic is not currently external: %w", err)
-	}
-	return fmt.Errorf("refusing to run: operator configured as internal-es but configmap/%s found which suggests its external-es", cloudconfig.CloudConfigConfigMapName)
 }
 
 // setKubernetesServiceEnv configured the environment with the location of the Kubernetes API
@@ -873,35 +822,5 @@ func executePreDeleteHook(ctx context.Context, c client.Client) error {
 		}
 		log.Info("Waiting for Installation to be fully deleted")
 		time.Sleep(5 * time.Second)
-	}
-}
-
-// verifyConfiguration verifies that the final configuration of the operator is correct before starting any controllers.
-func verifyConfiguration(ctx context.Context, cs kubernetes.Interface, opts options.ControllerOptions) error {
-	if opts.ESMigration {
-		// During the final phase of an ES migration both internal and external ES exist
-		// simultaneously, so the internal/external cert exclusivity checks below do not apply.
-		return nil
-	}
-
-	if opts.ElasticExternal {
-		// There should not be an internal-es cert
-		if _, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, render.TigeraElasticsearchInternalCertSecret, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				return nil
-			}
-			return fmt.Errorf("unexpected error encountered when confirming elastic is not currently internal: %v", err)
-		}
-		return fmt.Errorf("refusing to run: configured as external ES but secret/%s found which suggests internal ES", render.TigeraElasticsearchInternalCertSecret)
-	} else {
-		// There should not be an external-es cert
-		_, err := cs.CoreV1().Secrets(render.ElasticsearchNamespace).Get(ctx, logstorage.ExternalCertsSecret, metav1.GetOptions{})
-		if err != nil {
-			if errors.IsNotFound(err) {
-				return nil
-			}
-			return fmt.Errorf("unexpected error encountered when confirming elastic is not currently external: %v", err)
-		}
-		return fmt.Errorf("refusing to run: configured as internal-es but secret/%s found which suggests external ES", logstorage.ExternalCertsSecret)
 	}
 }
