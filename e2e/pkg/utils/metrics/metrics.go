@@ -106,17 +106,13 @@ func NewMetricScraper(f *framework.Framework, nodeIP string, metricsPort int) (s
 }
 
 // Metric returns a func which can be repeatedly-called to poll a metric
-// on the given endpoint.
+// on the given endpoint. It only matches an unlabelled series; use MetricSum
+// for a metric that carries labels.
 func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) {
 	return func() (float64, error) {
-		errOutFile := fmt.Sprintf("metrics-err-%s-%d", metricName, time.Now().UnixNano())
-		url := "http://" + net.JoinHostPort(scraper.metricsEPIP, strconv.Itoa(scraper.metricsEPPort)) + "/metrics"
-		output, err := conncheck.ExecInPod(scraper.pod, "sh", "-c",
-			fmt.Sprintf("wget -qO- %s 2>/tmp/%s", url, errOutFile))
+		output, url, err := scraper.scrape(metricName)
 		if err != nil {
-			catCmd := fmt.Sprintf("cat /tmp/%s", errOutFile)
-			errmsg, _ := conncheck.ExecInPod(scraper.pod, "sh", "-c", catCmd)
-			return 0, fmt.Errorf("failed to scrape metrics at %s: %w: %s", url, err, errmsg)
+			return 0, err
 		}
 
 		for _, line := range strings.Split(output, "\n") {
@@ -130,4 +126,51 @@ func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) 
 
 		return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
 	}
+}
+
+// MetricSum returns a func which can be repeatedly-called to poll the sum of
+// every series of a metric, across all label values.
+func (scraper *MetricScraper) MetricSum(metricName string) func() (float64, error) {
+	return func() (float64, error) {
+		output, url, err := scraper.scrape(metricName)
+		if err != nil {
+			return 0, err
+		}
+
+		found := false
+		var sum float64
+		for _, line := range strings.Split(output, "\n") {
+			if !strings.HasPrefix(line, metricName+" ") && !strings.HasPrefix(line, metricName+"{") {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) < 2 {
+				continue
+			}
+			v, err := strconv.ParseFloat(parts[len(parts)-1], 64)
+			if err != nil {
+				return 0, fmt.Errorf("failed to parse %q from %s: %w", line, url, err)
+			}
+			sum += v
+			found = true
+		}
+
+		if !found {
+			return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
+		}
+		return sum, nil
+	}
+}
+
+func (scraper *MetricScraper) scrape(metricName string) (output, url string, err error) {
+	errOutFile := fmt.Sprintf("metrics-err-%s-%d", metricName, time.Now().UnixNano())
+	url = "http://" + net.JoinHostPort(scraper.metricsEPIP, strconv.Itoa(scraper.metricsEPPort)) + "/metrics"
+	output, err = conncheck.ExecInPod(scraper.pod, "sh", "-c",
+		fmt.Sprintf("wget -qO- %s 2>/tmp/%s", url, errOutFile))
+	if err != nil {
+		catCmd := fmt.Sprintf("cat /tmp/%s", errOutFile)
+		errmsg, _ := conncheck.ExecInPod(scraper.pod, "sh", "-c", catCmd)
+		return "", url, fmt.Errorf("failed to scrape metrics at %s: %w: %s", url, err, errmsg)
+	}
+	return output, url, nil
 }

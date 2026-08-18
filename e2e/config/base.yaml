@@ -18,3 +18,5 @@ exclude:
       reason: "breaks cluster state for other parallel tests"
     - label: Feature:SCTPConnectivity
       reason: "no lane installs the SCTP kernel module, so these cannot connect"
+    - label: Feature:Wireguard
+      reason: "needs a cluster provisioned with WireGuard; no config lane enables it"
