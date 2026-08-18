@@ -149,7 +149,7 @@ log / observability pipeline (Goldmane and friends).
 
 They are distinct from:
 
-- **Debug log filters (Debug log filters)**, which emit per-packet textual
+- **[Debug log filters](#debug-log-filters)**, which emit per-packet textual
   traces for diagnosis. Log filters are off by default; flow
   logs are a feature.
 - **BPF counters**, which produce aggregate counts, not
@@ -191,21 +191,18 @@ counters, timestamps and a verdict code.
 
 ### Why ring buffer, not perf buffer
 
-BPF ring buffer (`BPF_MAP_TYPE_RINGBUF`, kernel 5.8+) is
-preferred over the older per-CPU perf-event buffer for this
-use because it is MPSC (multi-producer, single-consumer), so
-the userspace side does not need to fan in from `nCPU`
-readers, and it has the correct backpressure semantics
-— drops are explicit and countable rather than per-CPU
-reorderings. Calico's minimum kernel (5.10) supports it.
+`BPF_MAP_TYPE_RINGBUF` (kernel 5.8+, so within Calico's 5.10
+minimum) is MPSC, so userspace reads one stream instead of fanning in
+`nCPU` per-CPU buffers, and its backpressure is explicit: drops are
+countable rather than showing up as per-CPU reordering.
 
 ### Fast-path discipline
 
-The emission sites are on the flow-creation path, not on every
-packet of an established flow, so the per-packet fast-path cost
-([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)) is unaffected when flow logs are on. The `FLOWLOGS_ENABLED`
-branch that guards emission is also a single mark-style load,
-which is acceptable on the fast path.
+Emission sites are on the flow-creation path, never on every packet of
+an established flow, so enabling flow logs does not move the
+per-packet cost ([bpf-overview.md → Fast-path performance discipline](./bpf-overview.md)).
+The `FLOWLOGS_ENABLED` guard is a single mark-style load, which is
+acceptable on the fast path.
 
 ### Review notes
 
@@ -251,11 +248,11 @@ loop), and `felix/bpf-gpl/qos.h` (C).
 ### Two maps: `cali_qos` (packet rate) and `cali_qos_conn` (connlimit)
 
 Packet-rate and connection-limit state live in two separate BPF maps
-that share the same key shape but have disjoint values. Splitting
-them is what allows the userspace `ConnLimitScanner` to write
-`current_count` back without clobbering the BPF dataplane's running
-token-bucket state — see PR #13009 for the lost-update bug the split
-fixes.
+that share the same key shape but have disjoint values. The split is
+what lets the userspace `ConnLimitScanner` write `current_count` back
+without clobbering the dataplane's running token-bucket state:
+userspace cannot read-modify-write under a BPF spinlock, so a value
+holding both would lose one writer's update.
 
 Shared key (`felix/bpf/qos/map.go`):
 
@@ -402,7 +399,8 @@ annotation on a HEP or WEP. The value is carried in BPF globals as
 
 The ECN bits are preserved in both address families. Istio's DSCP
 hook (for L7 mesh identification at connection setup) uses a second
-global, `ISTIO_DSCP`; see Istio ambient mode integration for the integration.
+global, `ISTIO_DSCP`; see
+[Istio ambient mode](#istio-ambient-mode-integration).
 
 ### Review notes for this section
 
@@ -494,7 +492,7 @@ the main program in `tc.c` does:
    a mesh member.
 4. On match, `qos_dscp_set(ctx, ISTIO_DSCP)` rewrites the DSCP
    bits in the IPv4 TOS / IPv6 traffic-class byte — same
-   mechanics as QoS QoS DSCP.
+   mechanics as [QoS DSCP](#dscp).
 
 The `ALL_ISTIO_WEPS_ID` IP set is populated by Felix with every
 mesh WEP in the cluster (local and remote); it lives in the
@@ -527,7 +525,8 @@ a convention shared with Istio ztunnel).
 ### Review notes
 
 - The SYN-only path is load-bearing. A change that moves Istio
-  DSCP marking onto every packet breaks [bpf-overview.md → Fast-path performance discipline](./bpf-overview.md) fast-path discipline.
+  DSCP marking onto every packet breaks the
+  [fast-path discipline](./bpf-overview.md).
   If a future feature genuinely needs per-packet Istio DSCP,
   reuse `CALI_CT_FLAG_SET_DSCP` / `CALI_ST_SET_DSCP` from QoS
   rather than introducing a second per-packet rewrite.
