@@ -16,3 +16,5 @@ exclude:
 
     - label: Disruptive
       reason: "breaks cluster state for other parallel tests"
+    - label: Feature:SCTPConnectivity
+      reason: "no lane installs the SCTP kernel module, so these cannot connect"
