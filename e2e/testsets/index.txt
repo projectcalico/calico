@@ -58,7 +58,7 @@
 .argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | legacy/nftables | 194
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | legacy/nftables/nftables-mode-eks-eks-w-calico-cni | 187
+.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 219
 .argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | legacy/nftables | 194
 .argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | legacy/nftables | 194
 .argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-aws | legacy/nftables | 194
@@ -91,8 +91,8 @@
 .argoci/cron/e2e-upgrade.yaml | calico-tests-rke2 | legacy/upgrade | 84
 .argoci/cron/e2e-vpp.yaml | iptables-openshift | legacy/vpp | 140
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-v3-28-regression-test | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks | legacy/vpp/k8s-e2e-st-vpp-eks | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks-dpdk | legacy/vpp/k8s-e2e-st-vpp-eks-dpdk | 140
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks | vpp/eks-vpp-encap-extnode-aws | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks-dpdk | vpp/eks-vpp-encap-extnode-aws | 117
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm | legacy/vpp | 140
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge | legacy/vpp | 140
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-ipsec-huge | legacy/vpp | 140
@@ -166,7 +166,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | k8s distros / install required | legacy/iptables | 425
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | legacy/nftables/nftables-mode-eks-eks-w-calico-cni | 187
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 219
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | legacy/nftables | 194
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | legacy/nftables | 194
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | legacy/nftables | 194
@@ -199,8 +199,8 @@
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - iptables | legacy/upgrade | 84
 .semaphore/end-to-end/pipelines/vpp.yml | Iptables (Openshift) / Iptables (Openshift) | legacy/vpp | 140
 .semaphore/end-to-end/pipelines/vpp.yml | VPP-openshift / VPP-openshift | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS | legacy/vpp/k8s-e2e-st-vpp-eks | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS-dpdk | legacy/vpp/k8s-e2e-st-vpp-eks-dpdk | 140
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS | vpp/eks-vpp-encap-extnode-aws | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS-dpdk | vpp/eks-vpp-encap-extnode-aws | 117
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm | legacy/vpp | 140
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge | legacy/vpp | 140
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-IPSec-Huge | legacy/vpp | 140
