@@ -31,10 +31,11 @@ const (
 	argoDir      = ".argoci/cron"
 	semaphoreDir = ".semaphore/end-to-end/pipelines"
 
-	// flannelMigrationScript hardcodes its own selection rather than reading
-	// either selection variable.
-	flannelMigrationScript = "body_flannel-migration.sh"
-	flannelMigrationFlags  = "--ginkgo.focus=should.serve.a.basic.endpoint.from.pods"
+	// The flannel migration script runs the suite once before migrating with a
+	// hardcoded selection, then again with the job's own.
+	flannelMigrationScript   = "body_flannel-migration.sh"
+	flannelMigrationPreFlags = "--ginkgo.focus=should.serve.a.basic.endpoint.from.pods"
+	flannelMigrationPreName  = " [pre-migration]"
 )
 
 // Selection variables, in precedence order. run_tests.sh prefers the config and
@@ -43,6 +44,7 @@ const (
 	envConfig   = "E2E_TEST_CONFIG"
 	envFlags    = "K8S_E2E_FLAGS"
 	envTestType = "TEST_TYPE"
+	envArea     = "FUNCTIONAL_AREA"
 	envProvider = "PROVISIONER"
 )
 
@@ -62,6 +64,10 @@ type Lane struct {
 	// Flags is the raw K8S_E2E_FLAGS value, empty when the lane selects by
 	// config.
 	Flags string
+
+	// Area is the FUNCTIONAL_AREA both CI systems declare, naming the pipeline
+	// a cron lane mirrors.
+	Area string
 
 	// TestType is the resolved TEST_TYPE. Only "k8s-e2e" lanes run the e2e
 	// binary; the rest defer to `bz tests`.
@@ -167,9 +173,26 @@ func (e env) apply(vars []envVar) env {
 	return out
 }
 
+// lanes builds every Lane one CI job resolves to, which is more than one when
+// the job runs the suite several times.
+func (e env) lanes(source, name, commands, globalFlags string) []Lane {
+	l := e.lane(source, name, globalFlags)
+	if !strings.Contains(commands, flannelMigrationScript) {
+		return []Lane{l}
+	}
+	pre := Lane{
+		Source:   source,
+		Name:     name + flannelMigrationPreName,
+		Area:     l.Area,
+		Flags:    flannelMigrationPreFlags,
+		TestType: l.TestType,
+	}
+	return []Lane{l, pre}
+}
+
 // lane builds a Lane from a resolved environment, applying the same defaulting
 // that .argoci/scripts/global_prologue.sh does for TEST_TYPE.
-func (e env) lane(source, name, commands, globalFlags string) Lane {
+func (e env) lane(source, name, globalFlags string) Lane {
 	testType, ok := e[envTestType]
 	if !ok {
 		testType = "k8s-e2e"
@@ -177,18 +200,15 @@ func (e env) lane(source, name, commands, globalFlags string) Lane {
 			testType = "openstack-e2e"
 		}
 	}
-	l := Lane{
+	return Lane{
 		Source:          source,
 		Name:            name,
+		Area:            e[envArea],
 		Config:          e[envConfig],
 		Flags:           e[envFlags],
 		TestType:        testType,
 		PipelineDefault: e[envFlags] == globalFlags,
 	}
-	if strings.Contains(commands, flannelMigrationScript) {
-		l.Config, l.Flags, l.PipelineDefault = "", flannelMigrationFlags, false
-	}
-	return l
 }
 
 type argoWorkflow struct {
@@ -219,12 +239,12 @@ func parseArgo(source string, data []byte) ([]Lane, error) {
 	for _, step := range wf.Steps {
 		base := global.apply(step.Env)
 		if len(step.Matrix) == 0 {
-			lanes = append(lanes, base.lane(source, step.Name, step.Commands, global[envFlags]))
+			lanes = append(lanes, base.lanes(source, step.Name, step.Commands, global[envFlags])...)
 			continue
 		}
 		for _, m := range step.Matrix {
 			e := base.apply(m.Env)
-			lanes = append(lanes, e.lane(source, matrixName(step.Name, m.Name, base, e), step.Commands, global[envFlags]))
+			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name, base, e), step.Commands, global[envFlags])...)
 		}
 	}
 	return dedupe(lanes), nil
@@ -306,24 +326,12 @@ func parseSemaphore(source string, data []byte) ([]Lane, error) {
 			name := block.Name + " / " + job.Name
 			commands := strings.Join(job.Commands, "\n")
 
-			// A matrix axis on a selection variable is the only case that
-			// splits a job into several lanes.
-			var expanded []env
 			for _, axis := range job.Matrix {
-				if axis.EnvVar != envConfig && axis.EnvVar != envFlags {
-					continue
-				}
-				for _, v := range axis.Values {
-					expanded = append(expanded, base.apply([]envVar{{Name: axis.EnvVar, Value: v}}))
+				if axis.EnvVar == envConfig || axis.EnvVar == envFlags {
+					return nil, fmt.Errorf("job %q: matrix on %s is not modelled", name, axis.EnvVar)
 				}
 			}
-			if len(expanded) == 0 {
-				lanes = append(lanes, base.lane(source, name, commands, global[envFlags]))
-				continue
-			}
-			for i, e := range expanded {
-				lanes = append(lanes, e.lane(source, fmt.Sprintf("%s [%d]", name, i), commands, global[envFlags]))
-			}
+			lanes = append(lanes, base.lanes(source, name, commands, global[envFlags])...)
 		}
 	}
 	return dedupe(lanes), nil

@@ -24,6 +24,7 @@ const argoFixture = `
 globalPrologue: |
   export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=default}"
   export INSTALLER="${INSTALLER:-operator}"
+  export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
   export TEST_TYPE="${OTHER_TYPE:-nonsense}"
 steps:
   - name: inherits-default
@@ -81,6 +82,7 @@ func TestParseArgo(t *testing.T) {
 	Expect(inherited.Flags).To(Equal("--ginkgo.focus=default"))
 	Expect(inherited.PipelineDefault).To(BeTrue())
 	Expect(inherited.TestType).To(Equal("k8s-e2e"))
+	Expect(inherited.Area).To(Equal("iptables.yml"))
 	Expect(inherited.RunsE2EBinary()).To(BeTrue())
 
 	// The prologue's TEST_TYPE defaults off a different variable, so it does not
@@ -95,9 +97,11 @@ func TestParseArgo(t *testing.T) {
 	Expect(openstack.TestType).To(Equal("openstack-e2e"))
 	Expect(openstack.RunsE2EBinary()).To(BeFalse())
 
-	migration := byName["migration"]
-	Expect(migration.Flags).To(Equal(flannelMigrationFlags))
-	Expect(migration.PipelineDefault).To(BeFalse())
+	// The migration job runs the suite twice, so it resolves to two lanes.
+	Expect(byName["migration"].Flags).To(Equal("--ginkgo.focus=default"))
+	Expect(byName["migration"].PipelineDefault).To(BeTrue())
+	Expect(byName["migration [pre-migration]"].Flags).To(Equal(flannelMigrationPreFlags))
+	Expect(byName["migration [pre-migration]"].PipelineDefault).To(BeFalse())
 
 	// The CNI axis leaves the selection alone, so its entries collapse into the
 	// unsuffixed step.
@@ -111,6 +115,8 @@ global_job_config:
   env_vars:
     - name: K8S_E2E_FLAGS
       value: --ginkgo.focus=default
+    - name: FUNCTIONAL_AREA
+      value: nftables.yml
 blocks:
   - name: Block one
     task:
@@ -131,8 +137,19 @@ blocks:
           matrix:
             - env_var: NETWORK_PLUGIN
               values: ["calico", "aws"]
+          commands:
+            - body_standard.sh
+`
+
+const semaphoreSelectionMatrix = `
+blocks:
+  - name: Block one
+    task:
+      jobs:
+        - name: matrixed
+          matrix:
             - env_var: K8S_E2E_FLAGS
-              values: ["--ginkgo.focus=one", "--ginkgo.focus=two"]
+              values: ["--ginkgo.focus=one"]
           commands:
             - body_standard.sh
 `
@@ -150,11 +167,14 @@ func TestParseSemaphore(t *testing.T) {
 
 	Expect(byName["Block one / inherits"].PipelineDefault).To(BeTrue())
 	Expect(byName["Block one / configured"].Selection()).To(Equal("config:e2e/config/nftables/eks.yaml"))
+	Expect(byName["Block one / inherits"].Area).To(Equal("nftables.yml"))
 
-	// Only the flags axis splits the job; the plugin axis shares one selection.
-	Expect(byName["Block one / matrixed [0]"].Flags).To(Equal("--ginkgo.focus=one"))
-	Expect(byName["Block one / matrixed [1]"].Flags).To(Equal("--ginkgo.focus=two"))
-	Expect(byName).NotTo(HaveKey("Block one / matrixed [2]"))
+	// A non-selection axis leaves the job as one lane.
+	Expect(byName["Block one / matrixed"].Flags).To(Equal("--ginkgo.focus=default"))
+
+	// No pipeline varies the selection by matrix, so the parser refuses to guess.
+	_, err = parseSemaphore("pipeline.yml", []byte(semaphoreSelectionMatrix))
+	Expect(err).To(MatchError(ContainSubstring("matrix on K8S_E2E_FLAGS")))
 }
 
 func TestSelectionArgs(t *testing.T) {
