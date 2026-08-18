@@ -145,47 +145,10 @@ var _ = Describe("Webhooks rendering tests", func() {
 			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"}},
 			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName, Namespace: common.CalicoNamespace}, TypeMeta: metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}},
 			&admissionregistrationv1.ValidatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "api.projectcalico.org"}, TypeMeta: metav1.TypeMeta{Kind: "ValidatingWebhookConfiguration", APIVersion: "admissionregistration.k8s.io/v1"}},
-			&admissionregistrationv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "api.projectcalico.org"}, TypeMeta: metav1.TypeMeta{Kind: "MutatingWebhookConfiguration", APIVersion: "admissionregistration.k8s.io/v1"}},
 			&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}},
 			&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: webhooks.WebhooksName}, TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}},
 		}
 		rtest.ExpectResources(resources, expectedResources)
-
-		// Verify the MutatingWebhookConfiguration has the expected webhooks.
-		mwc, err := rtest.GetResourceOfType[*admissionregistrationv1.MutatingWebhookConfiguration](resources, "api.projectcalico.org", "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(mwc.Webhooks).To(HaveLen(1))
-		Expect(mwc.Webhooks[0].Name).To(Equal("uisettings.api.projectcalico.org"))
-		Expect(*mwc.Webhooks[0].ClientConfig.Service.Path).To(Equal("/uisettings"))
-		Expect(*mwc.Webhooks[0].FailurePolicy).To(Equal(admissionregistrationv1.Fail))
-		Expect(*mwc.Webhooks[0].TimeoutSeconds).To(Equal(int32(10)))
-		Expect(mwc.Webhooks[0].Rules).To(HaveLen(1))
-		Expect(mwc.Webhooks[0].Rules[0].Operations).To(ConsistOf(
-			admissionregistrationv1.Create,
-			admissionregistrationv1.Update,
-			admissionregistrationv1.Delete,
-		))
-		Expect(mwc.Webhooks[0].Rules[0].Rule.Resources).To(Equal([]string{"uisettings"}))
-
-		// The audit-logging webhook is Enterprise-only.
-		vwc, err := rtest.GetResourceOfType[*admissionregistrationv1.ValidatingWebhookConfiguration](resources, "api.projectcalico.org", "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(vwc.Webhooks).To(ContainElement(HaveField("Name", "audit-logging.api.projectcalico.org")))
-
-		// Verify the ClusterRole includes the enterprise-only rules.
-		cr := rtest.GetResource(resources, webhooks.WebhooksName, "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
-		Expect(cr.Rules).To(ContainElements(
-			rbacv1.PolicyRule{
-				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"managedclusters"},
-				Verbs:     []string{"list", "watch", "update"},
-			},
-			rbacv1.PolicyRule{
-				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"uisettingsgroups"},
-				Verbs:     []string{"get"},
-			},
-		))
 
 		// Verify Enterprise uses the Tigera webhooks image.
 		dep := rtest.GetResource(resources, webhooks.WebhooksName, common.CalicoNamespace, "apps", "v1", "Deployment").(*appsv1.Deployment)
@@ -195,18 +158,6 @@ var _ = Describe("Webhooks rendering tests", func() {
 				components.TigeraImagePath,
 				components.ComponentTigeraCalico.Image,
 				components.ComponentTigeraCalico.Version)))
-	})
-
-	It("should only register the UISettings mutating webhook", func() {
-		installation.Variant = operatorv1.CalicoEnterprise
-		component := webhooks.Component(cfg)
-		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
-		resources, _ := component.Objects()
-
-		mwc, err := rtest.GetResourceOfType[*admissionregistrationv1.MutatingWebhookConfiguration](resources, "api.projectcalico.org", "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(mwc.Webhooks).To(HaveLen(1))
-		Expect(mwc.Webhooks[0].Name).To(Equal("uisettings.api.projectcalico.org"))
 	})
 
 	It("should not include UISettingsGroup rule for Calico", func() {

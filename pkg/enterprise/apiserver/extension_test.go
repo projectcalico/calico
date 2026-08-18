@@ -30,6 +30,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
@@ -1031,6 +1032,113 @@ var _ = Describe("webhooks enterprise modifier", func() {
 
 		_, ok := extensions.FindObject[*rbacv1.ClusterRole](del, webhooks.WebhooksSecretsRBACName)
 		Expect(ok).To(BeTrue())
+	})
+
+	It("runs the webhook container as root so it can write audit logs", func() {
+		create, _ := renderWebhooks()
+
+		dp, ok := extensions.FindObject[*appsv1.Deployment](create, webhooks.WebhooksName)
+		Expect(ok).To(BeTrue())
+		ctr := dp.Spec.Template.Spec.Containers[0]
+		Expect(*ctr.SecurityContext.RunAsUser).To(Equal(int64(0)))
+		Expect(*ctr.SecurityContext.RunAsNonRoot).To(BeFalse())
+		Expect(*ctr.SecurityContext.Privileged).To(BeFalse())
+	})
+
+	It("marks the security context privileged on OpenShift", func() {
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil)
+		ci.RenderInputs.Installation.KubernetesProvider = operatorv1.ProviderOpenShift
+		eci, _, err := ext.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+
+		create, _ := renderWebhooksWith(ext, ci, eci.RenderInputs, apiServerKeyPair(ci))
+
+		dp, ok := extensions.FindObject[*appsv1.Deployment](create, webhooks.WebhooksName)
+		Expect(ok).To(BeTrue())
+		Expect(*dp.Spec.Template.Spec.Containers[0].SecurityContext.Privileged).To(BeTrue())
+	})
+
+	It("mounts the audit log directory off the host", func() {
+		create, _ := renderWebhooks()
+
+		dp, ok := extensions.FindObject[*appsv1.Deployment](create, webhooks.WebhooksName)
+		Expect(ok).To(BeTrue())
+		podSpec := dp.Spec.Template.Spec
+		Expect(podSpec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+			Name:      "audit-logs",
+			MountPath: "/var/log/calico/audit",
+		}))
+		Expect(podSpec.Volumes).To(ContainElement(corev1.Volume{
+			Name: "audit-logs",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/var/log/calico/audit",
+					Type: ptr.To(corev1.HostPathDirectoryOrCreate),
+				},
+			},
+		}))
+	})
+
+	It("registers the audit logging webhook against every v3 resource", func() {
+		create, _ := renderWebhooks()
+
+		vwc, ok := extensions.FindObject[*admregv1.ValidatingWebhookConfiguration](create, "api.projectcalico.org")
+		Expect(ok).To(BeTrue())
+		Expect(vwc.Webhooks).To(ContainElement(HaveField("Name", "audit-logging.api.projectcalico.org")))
+
+		hook := vwc.Webhooks[len(vwc.Webhooks)-1]
+		Expect(*hook.ClientConfig.Service.Path).To(Equal("/audit"))
+		Expect(*hook.FailurePolicy).To(Equal(admregv1.Ignore))
+		Expect(hook.Rules).To(HaveLen(1))
+		Expect(hook.Rules[0].Rule.Resources).To(Equal([]string{"*"}))
+		Expect(hook.Rules[0].Operations).To(ConsistOf(
+			admregv1.Create, admregv1.Update, admregv1.Delete, admregv1.Connect,
+		))
+	})
+
+	It("registers the UISettings mutating webhook", func() {
+		create, _ := renderWebhooks()
+
+		hooks := mutatingWebhooks(create)
+		Expect(hooks).To(HaveLen(1))
+		Expect(hooks[0].Name).To(Equal("uisettings.api.projectcalico.org"))
+		Expect(*hooks[0].ClientConfig.Service.Path).To(Equal("/uisettings"))
+		Expect(*hooks[0].FailurePolicy).To(Equal(admregv1.Fail))
+		Expect(*hooks[0].TimeoutSeconds).To(Equal(int32(10)))
+		Expect(hooks[0].Rules).To(HaveLen(1))
+		Expect(hooks[0].Rules[0].Rule.Resources).To(Equal([]string{"uisettings"}))
+	})
+
+	It("grants the webhook the Enterprise-only permissions", func() {
+		create, _ := renderWebhooks()
+
+		cr, ok := extensions.FindObject[*rbacv1.ClusterRole](create, webhooks.WebhooksName)
+		Expect(ok).To(BeTrue())
+		Expect(cr.Rules).To(ContainElements(
+			rbacv1.PolicyRule{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"managedclusters"},
+				Verbs:     []string{"list", "watch", "update"},
+			},
+			rbacv1.PolicyRule{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: []string{"uisettingsgroups"},
+				Verbs:     []string{"get"},
+			},
+		))
+	})
+
+	It("queues the mutating webhook configuration for deletion when the operator runs as Calico", func() {
+		ci := apiServerControllerInputs(operatorv1.Calico, nil)
+		eci, _, err := calicoExt.APIServer().ExtendInputs(ctx, ci)
+		Expect(err).NotTo(HaveOccurred())
+
+		create, del := renderWebhooksWith(calicoExt, ci, eci.RenderInputs, apiServerKeyPair(ci))
+
+		_, ok := extensions.FindObject[*admregv1.MutatingWebhookConfiguration](del, "api.projectcalico.org")
+		Expect(ok).To(BeTrue())
+		_, ok = extensions.FindObject[*admregv1.MutatingWebhookConfiguration](create, "api.projectcalico.org")
+		Expect(ok).To(BeFalse())
 	})
 })
 

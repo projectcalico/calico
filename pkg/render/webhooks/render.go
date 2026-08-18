@@ -108,13 +108,6 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 		},
 	}
 
-	// Create the correct security context for the webhook container. By default, it should run as non-root, but in Enterprise
-	// we need to run as root to be able to write audit logs to the host filesystem.
-	securtyContext := securitycontext.NewNonRootContext()
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		securtyContext = securitycontext.NewRootContext(c.cfg.Installation.KubernetesProvider.IsOpenShift())
-	}
-
 	// Create the Deployment for the webhook with defaults, then apply overrides.
 	dep := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
@@ -147,7 +140,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 						Name:            WebhooksName,
 						Image:           c.calicoImage,
 						Command:         []string{components.CalicoBinaryPath, "component", "webhooks"},
-						SecurityContext: securtyContext,
+						SecurityContext: securitycontext.NewNonRootContext(),
 						Args: []string{
 							"webhook",
 							fmt.Sprintf("--tls-cert-file=%s", c.cfg.KeyPair.VolumeMountCertificateFilePath()),
@@ -173,27 +166,10 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							c.cfg.KeyPair.VolumeMount(c.SupportedOSType()),
-							{
-								Name:      "audit-logs",
-								MountPath: "/var/log/calico/audit",
-								ReadOnly:  false,
-							},
 						},
 					}},
 					Volumes: []corev1.Volume{
-						// The volume for the TLS certs.
 						c.cfg.KeyPair.Volume(),
-
-						// Host volume for audit logs to be wrriten.
-						{
-							Name: "audit-logs",
-							VolumeSource: corev1.VolumeSource{
-								HostPath: &corev1.HostPathVolumeSource{
-									Path: "/var/log/calico/audit",
-									Type: ptr.To(corev1.HostPathDirectoryOrCreate),
-								},
-							},
-						},
 					},
 				},
 			},
@@ -410,87 +386,6 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 		},
 	}
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		// The /audit handler only exists in Enterprise. Registering this webhook on Calico OSS
-		// points the API server at an endpoint that isn't served, filling its log with failed
-		// webhook calls, so only add it for Enterprise.
-		vwc.Webhooks = append(vwc.Webhooks, admissionregistrationv1.ValidatingWebhook{
-			Name: "audit-logging.api.projectcalico.org",
-			Rules: []admissionregistrationv1.RuleWithOperations{
-				{
-					Operations: []admissionregistrationv1.OperationType{
-						admissionregistrationv1.Create,
-						admissionregistrationv1.Update,
-						admissionregistrationv1.Delete,
-						admissionregistrationv1.Connect,
-					},
-					Rule: admissionregistrationv1.Rule{
-						APIGroups:   []string{"projectcalico.org"},
-						APIVersions: []string{"v3"},
-						Resources:   []string{"*"},
-						Scope:       ptr.To(admissionregistrationv1.AllScopes),
-					},
-				},
-			},
-			ClientConfig: admissionregistrationv1.WebhookClientConfig{
-				Service: &admissionregistrationv1.ServiceReference{
-					Namespace: common.CalicoNamespace,
-					Name:      WebhooksName,
-					Path:      ptr.To("/audit"),
-				},
-				CABundle: c.cfg.KeyPair.GetCertificatePEM(),
-			},
-			AdmissionReviewVersions: []string{"v1"},
-			SideEffects:             ptr.To(admissionregistrationv1.SideEffectClassNone),
-			TimeoutSeconds:          ptr.To(int32(5)),
-			FailurePolicy:           ptr.To(admissionregistrationv1.Ignore),
-			MatchPolicy:             ptr.To(admissionregistrationv1.Exact),
-		})
-	}
-
-	// Create a MutatingWebhookConfiguration for Enterprise-only mutating webhooks.
-	mwc := &admissionregistrationv1.MutatingWebhookConfiguration{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "api.projectcalico.org",
-		},
-		Webhooks: []admissionregistrationv1.MutatingWebhook{
-			{
-				// This webhook handles authorization, mutation, and validation for UISettings resources.
-				// On Create it sets ownerReferences and user fields; on all operations it performs
-				// authorization checks against the parent UISettingsGroup.
-				Name: "uisettings.api.projectcalico.org",
-				Rules: []admissionregistrationv1.RuleWithOperations{
-					{
-						Operations: []admissionregistrationv1.OperationType{
-							admissionregistrationv1.Create,
-							admissionregistrationv1.Update,
-							admissionregistrationv1.Delete,
-						},
-						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{"projectcalico.org"},
-							APIVersions: []string{"v3"},
-							Resources:   []string{"uisettings"},
-							Scope:       ptr.To(admissionregistrationv1.AllScopes),
-						},
-					},
-				},
-				ClientConfig: admissionregistrationv1.WebhookClientConfig{
-					Service: &admissionregistrationv1.ServiceReference{
-						Namespace: common.CalicoNamespace,
-						Name:      WebhooksName,
-						Path:      ptr.To("/uisettings"),
-					},
-					CABundle: c.cfg.KeyPair.GetCertificatePEM(),
-				},
-				AdmissionReviewVersions: []string{"v1"},
-				SideEffects:             ptr.To(admissionregistrationv1.SideEffectClassNone),
-				TimeoutSeconds:          ptr.To(int32(10)),
-				FailurePolicy:           ptr.To(admissionregistrationv1.Fail),
-				MatchPolicy:             ptr.To(admissionregistrationv1.Exact),
-			},
-		},
-	}
-
 	// Create a ClusterRole and ClusterRoleBinding for the webhook service account.
 	rules := []rbacv1.PolicyRule{
 		{
@@ -505,25 +400,6 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 			Resources: []string{"tiers"},
 			Verbs:     []string{"get"},
 		},
-	}
-
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		rules = append(rules,
-			rbacv1.PolicyRule{
-				// The ManagedCluster cleanup controller watches ManagedCluster objects and clears their
-				// installation manifest field after creation.
-				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"managedclusters"},
-				Verbs:     []string{"list", "watch", "update"},
-			},
-			rbacv1.PolicyRule{
-				// The UISettings webhook needs to GET UISettingsGroups to verify group existence
-				// and build owner references when creating UISettings.
-				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"uisettingsgroups"},
-				Verbs:     []string{"get"},
-			},
-		)
 	}
 
 	cr := &rbacv1.ClusterRole{
@@ -557,11 +433,7 @@ func (c *component) Objects() ([]client.Object, []client.Object) {
 	if np != nil {
 		objs = append(objs, np)
 	}
-	objs = append(objs, dep, svc, vwc)
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		objs = append(objs, mwc)
-	}
-	objs = append(objs, cr, crb)
+	objs = append(objs, dep, svc, vwc, cr, crb)
 
 	return objs, nil
 }

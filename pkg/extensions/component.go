@@ -15,6 +15,8 @@
 package extensions
 
 import (
+	"fmt"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -61,4 +63,14 @@ func FindObject[T client.Object](objs []client.Object, name string) (T, bool) {
 		}
 	}
 	return zero, false
+}
+
+// MustFindObject returns the first object of type T with the given name, panicking
+// if the base render did not produce it.
+func MustFindObject[T client.Object](objs []client.Object, name string) T {
+	t, ok := FindObject[T](objs, name)
+	if !ok {
+		panic(fmt.Sprintf("BUG: no object named %q to modify", name))
+	}
+	return t
 }

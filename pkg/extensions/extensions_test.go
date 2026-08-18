@@ -132,3 +132,23 @@ var _ = Describe("the base ManagementClusterConnection validation", func() {
 		Expect(e.ClusterConnection().ValidateAndDefault(cr)).NotTo(HaveOccurred())
 	})
 })
+
+var _ = Describe("MustFindObject", func() {
+	objs := []client.Object{configMap("present")}
+
+	It("should return the named object", func() {
+		Expect(extensions.MustFindObject[*corev1.ConfigMap](objs, "present").Name).To(Equal("present"))
+	})
+
+	It("should panic when the object is absent", func() {
+		Expect(func() {
+			extensions.MustFindObject[*corev1.ConfigMap](objs, "missing")
+		}).To(PanicWith(ContainSubstring(`BUG: no object named "missing"`)))
+	})
+
+	It("should panic when the object has a different type", func() {
+		Expect(func() {
+			extensions.MustFindObject[*corev1.Secret](objs, "present")
+		}).To(PanicWith(ContainSubstring(`BUG: no object named "present"`)))
+	})
+})
