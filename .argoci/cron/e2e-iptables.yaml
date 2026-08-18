@@ -199,6 +199,50 @@ steps:
         value: "true"
     commands: |
       .argoci/scripts/body_standard.sh
+  # The two native-v3-crds lanes need Kubernetes 1.36, where MutatingAdmissionPolicy
+  # is served; the operator defaults policy types through it in v3 CRD mode.
+  - name: native-v3-crds-aks
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: AZ_CREATE_MODE
+        value: AKS
+      - name: AZ_NETWORK_PLUGIN
+        value: azure
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp-v3crd.yaml
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: INSTALLER
+        value: operator
+      - name: IPV4_POD_CIDR
+        value: 10.244.0.0/16
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: azr-aks
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: native-v3-crds-eks
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/eks-xtables-nobgp-v3crd.yaml
+      - name: INSTALLER
+        value: operator
+      - name: K8S_VERSION
+        value: stable
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_API_SERVER
+        value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: dual-stack-k8s-e2e-kdd
     jobSize: large
     services:
