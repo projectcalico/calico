@@ -29,6 +29,13 @@ choice is a single decision split across two components, two API resources, and
 the node container's BIRD templates.  Getting either half wrong leaves a cluster
 with no cluster routes, or with two components fighting over the same ones.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../MAINTAINING.md)
+> before adding to this file.
+
 ## 1. The ownership matrix
 
 There are three classes of non-VXLAN, non-WireGuard IP Pool, and the owner of
@@ -317,12 +324,14 @@ way.  This is a documentation and release-note obligation, not a code one.
 
 ## 6. Keep this doc in sync with the code
 
-A PR that changes which component programs cluster routes, the enum values or
-defaults of either `programClusterRoutes` field, the BIRD kernel-programming
-filter, or the deprecation and removal plan, must update this file in the same
-PR.  Exemptions: a bug fix restoring behaviour this doc already describes, a
-mechanical refactor with no observable change, comment or log-message edits, and
-dependency bumps.  If in doubt, update.
+Edits to this file follow the note at the top of the file and
+[`design/MAINTAINING.md`](../MAINTAINING.md).  A PR that changes which component programs
+cluster routes, the enum values or defaults of either `programClusterRoutes`
+field, the BIRD kernel-programming filter, or the deprecation and removal plan
+earns one — but only if it falsifies a sentence here, or introduces an invariant
+or concept this doc does not name.  Exemptions: a bug fix restoring behaviour
+this doc already describes, a mechanical refactor with no observable change,
+comment or log-message edits, and dependency bumps.
 
 Related designs:
 

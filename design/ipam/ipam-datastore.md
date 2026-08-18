@@ -14,6 +14,13 @@ The backend datastore layer for IPAM: the four CRDs and their KDD wrappers under
 the model types under [`libcalico-go/lib/backend/model/`](../../libcalico-go/lib/backend/model/). Cross-component picture is in the [index](./DESIGN.md). Paired with
 [`ipam-core-library.md`](./ipam-core-library.md) - the CAS protocol and sequence-number scheme are defined together; this file covers the datastore side.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../MAINTAINING.md)
+> before adding to this file.
+
 ## IPAMBlock
 
 An `IPAMBlock` is a contiguous slice of a pool, default /26 for IPv4 and /122 for IPv6. The block is the CAS unit: one object per slice, holding every per-IP record. Layout is in
