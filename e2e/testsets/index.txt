@@ -48,6 +48,8 @@
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 212
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 193
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 188
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 220
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 220

@@ -211,7 +211,7 @@ steps:
       - name: AZ_NETWORK_PLUGIN
         value: azure
       - name: E2E_TEST_CONFIG
-        value: e2e/config/aks.yaml
+        value: e2e/config/iptables/aks-xtables-nobgp-v3crd.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -232,7 +232,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/eks.yaml
+        value: e2e/config/iptables/eks-xtables-nobgp-v3crd.yaml
       - name: INSTALLER
         value: operator
       - name: K8S_VERSION
