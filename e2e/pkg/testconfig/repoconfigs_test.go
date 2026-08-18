@@ -245,6 +245,7 @@ var unwiredConfigs = map[string]bool{
 	"iptables/aks-xtables-nobgp.yaml":                 true,
 	"iptables/aks-xtables.yaml":                       true,
 	"iptables/eks-xtables-aws.yaml":                   true,
+	"iptables/gke-xtables-nobgp-v3crd.yaml":           true,
 	"iptables/xtables-aws.yaml":                       true,
 	"iptables/xtables-v3crd-aws.yaml":                 true,
 	"nftables/eks-xtables-nobgp-aws-autohep.yaml":     true,
