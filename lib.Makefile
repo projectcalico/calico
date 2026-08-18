@@ -1942,8 +1942,9 @@ else
 endif
 	touch $@
 
-# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
-MIN_K8S_VERSION ?= v1.31.0
+# Minimum supported Kubernetes version. 1.32 is the first release that estimates
+# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
+MIN_K8S_VERSION ?= v1.32.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").
