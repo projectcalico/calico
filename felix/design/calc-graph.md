@@ -29,6 +29,13 @@ dataplane — is the other end of the contract documented in
 Build/test commands are in [`felix/CLAUDE.md`](../CLAUDE.md); the
 whole-Felix overview is in [`felix/DESIGN.md`](../DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../../design/MAINTAINING.md)
+> before adding to this file.
+
 ## Conventions
 
 - "WEP"/"HEP" = workload/host endpoint. "Local" = hosted on this
@@ -431,16 +438,19 @@ case matters (it usually does for indexes/refcounts).
 
 ## Keep this document in sync with the code
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the calc graph, "changes how it works" means: a new node
-or rewiring; a new emitted message type or a change to the
-`EventSequencer` flush order; a change to a label index or other
-refcounting structure; or a change to how the graph treats
-inconsistency, in-sync, or the upstream contract. Update the relevant
-section here, update the node graph in
+Edits to this file follow the note at the top of the file and
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md), mirrored in
+[`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md) and
+[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md).
+
+For the calc graph, a new node or rewiring; a new emitted message type
+or a change to the `EventSequencer` flush order; a change to a label
+index or other refcounting structure; or a change to how the graph
+treats inconsistency, in-sync, or the upstream contract is a
+*candidate* for an edit — not a trigger on its own. It earns one only
+if it falsifies a sentence here, or introduces an invariant or concept
+this file does not name. Update the relevant section here, update the
+node graph in
 [`felix/docs/calc-graph-diagram.md`](../docs/calc-graph-diagram.md) when
 nodes change, and update
 [`dataplane.md` → The dataplane API](./dataplane.md#the-dataplane-api-calc-graph--dataplane-contract)

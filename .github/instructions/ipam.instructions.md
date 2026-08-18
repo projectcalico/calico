@@ -37,17 +37,23 @@ siblings, code, and external resources.
 
 ## Update rule
 
-A PR that **changes how IPAM works** - the data model, the
-allocation or release flow, the handle ID convention, the GC
-reconciliation logic, the `IPAMConfig` resolution rules, or any
-invariant a sub-design records - must update the relevant file
-under `design/ipam/` in the same PR.
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) is the
+canonical rule. **The default is no edit**, and an edit that does
+belong is normally one to three lines in a section that is
+already there.
 
-**Exemption.** No doc update is needed if the PR is exclusively
-one of: (a) a bug fix that restores behavior the doc already
+In IPAM, the changes that *usually* earn one are a change to the
+data model, the allocation or release flow, the handle ID
+convention, the GC reconciliation logic, or the `IPAMConfig`
+resolution rules. Treat that list as candidates, not as a
+trigger: the edit is warranted only if a sentence in the matching
+sub-design is now false, or the change introduces an invariant or
+a concept no sub-design names.
+
+**Exemption.** No doc update at all if the PR is exclusively one
+of: (a) a bug fix that restores behavior the doc already
 describes, (b) a mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) a dependency bump. If in
-doubt, update the doc.
+(c) comment / log-message edits, (d) a dependency bump.
 
 ## Amending the PR
 
@@ -55,9 +61,10 @@ The Copilot automated code-review step is read-only with respect
 to the PR branch - it cannot push the doc amendment itself. When
 the review flags a missing update per the rule above, its
 comment should include a ready-to-paste `@copilot` prompt naming
-the sub-design and the new behavior or invariant, for example:
+the sub-design, the section, and the one invariant to state - not
+a list of mechanics to describe. For example:
 
-> `@copilot update design/ipam/ipam-gc.md "Reconciliation" to cover the new confirmation-pass step before releasing a suspected leaked allocation - what triggers it, what it checks, and how it interacts with the existing grace period.`
+> `@copilot update design/ipam/ipam-gc.md "Reconciliation": state in one sentence the invariant the new confirmation pass introduces before a suspected leaked allocation is released. Edit the existing prose in that section; do not add a heading, and do not restate the commit message.`
 
 The reviewer (or author) drops that into a new PR comment; the
 Copilot coding agent picks it up and pushes a commit with the
