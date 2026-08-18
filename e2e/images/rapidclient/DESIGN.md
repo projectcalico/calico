@@ -1,5 +1,10 @@
 # Design: multi-mode `rapidclient` e2e utility binary
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../../../design/MAINTAINING.md).
+
 ## Goal
 
 `rapidclient` is a multi-mode Go binary for e2e tests, dispatched by a `MODE`

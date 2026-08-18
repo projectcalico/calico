@@ -13,6 +13,11 @@ You may obtain a copy of the License at
 This sub-design covers the core IPAM library in `libcalico-go/lib/ipam/`. It is the in-process API every IPAM caller goes through (CNI plugin, kube-controllers, `node`,
 `calicoctl`, operator). The cross-component picture - data model, consumers, repo split - lives in the [index](./DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## Public API surface
 
 The library's contract is `Interface` in [`interface.go`](../../libcalico-go/lib/ipam/interface.go); that file is the source of truth for method signatures and is not restated

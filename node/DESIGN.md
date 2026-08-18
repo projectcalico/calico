@@ -24,6 +24,11 @@ single container.
   CNI plugin binary and configuration into the host's CNI
   directories so kubelet can invoke it for pod-network setup.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../design/MAINTAINING.md).
+
 ## Cross-cutting
 
 - Combined `calico` binary, restart-on-config-change, health
@@ -38,14 +43,7 @@ single container.
   cross-component decision documented in
   [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md).
 
-## Keep this doc in sync with the code
-
-A PR that changes how the node container works — startup
-sequence, runit service set, CNI plugin installation path, or
-any documented invariant — must update this file in the same
-PR. Exemptions: bug fix restoring documented behaviour,
-mechanical refactor with no observable change, comment /
-log-message edits, dependency bumps. If in doubt, update.
+## Gaps
 
 This doc is currently a stub. Sections to flesh out as the
 content grows: startup flow detail (datastore-side resource

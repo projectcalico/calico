@@ -24,6 +24,11 @@ model, the fast-path cost rule, and the cross-cutting review notes
 that apply to every BPF change. The full set of sub-designs is
 listed in [`felix/DESIGN.md`](../DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../../design/MAINTAINING.md).
+
 ## Host-networked workaround (bpfnat veth)
 
 ### Why it exists
@@ -168,17 +173,9 @@ the redirect path.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
