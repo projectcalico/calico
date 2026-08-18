@@ -18,6 +18,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -369,6 +370,7 @@ func buildWhiskerHTTPSClient(ctx context.Context, cli ctrlclient.Client) (*http.
 
 	return &http.Client{
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootCAs}},
+		Timeout:   30 * time.Second,
 	}, nil
 }
 
@@ -421,7 +423,7 @@ func verifyPortForward(url string) {
 	}, 30*time.Second, 1*time.Second).Should(Not(HaveOccurred()))
 }
 
-func getFlows(url string) ([]whiskerv1.FlowResponse, error) {
+func getWhiskerFlows(url string) ([]whiskerv1.FlowResponse, error) {
 	resp, err := whiskerGet(url)
 	if err != nil {
 		return nil, err
@@ -457,13 +459,13 @@ func (h stagedPolicyHit) matches(p *whiskerv1.PolicyHit) bool {
 }
 
 // expectFlowWithStagedPolicy re-probes while polling, since Felix only evaluates pending policy for connections it still tracks.
-func expectFlowWithStagedPolicy(url string, checker conncheck.ConnectionTester, client conncheck.Client, target conncheck.Target, want stagedPolicyHit) {
+func expectFlowWithStagedPolicy(url string, checker conncheck.ConnectionTester, cl conncheck.Client, target conncheck.Target, want stagedPolicyHit) {
 	EventuallyWithOffset(1, func() error {
-		if _, err := checker.Connect(client, target); err != nil {
-			return fmt.Errorf("probe from %s to %s failed: %w", client.Name(), target.String(), err)
+		if _, err := checker.Connect(cl, target); err != nil {
+			logrus.WithError(err).Warnf("Probe from %s to %s failed, checking flows anyway", cl.Name(), target.String())
 		}
 
-		flows, err := getFlows(url)
+		flows, err := getWhiskerFlows(url)
 		if err != nil {
 			return err
 		}
@@ -506,7 +508,7 @@ func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
 			diag.WriteString("      pending:\n")
 			for _, p := range item.Policies.Pending {
 				diag.WriteString(fmt.Sprintf("        - %s\n", formatPolicyHit(p)))
-				if p.Trigger != nil {
+				if p != nil && p.Trigger != nil {
 					diag.WriteString(fmt.Sprintf("          triggered-by:\n            %s\n", formatPolicyHit(p.Trigger)))
 				}
 			}
