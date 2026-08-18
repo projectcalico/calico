@@ -191,3 +191,90 @@ func TestSelectionArgs(t *testing.T) {
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
 	Expect(err).To(HaveOccurred())
 }
+
+const blocksFixture = `
+- name: E2E tests (KinD)
+  task:
+    env_vars:
+      - name: BUILD_CACHE_GROUP
+        value: calico
+    jobs:
+      - name: conformance
+        env_vars:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/conformance.yaml
+        commands:
+          - .semaphore/run-and-monitor e2e-test.log make e2e-test
+      - name: bpf
+        env_vars:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/kind/bpf.yaml
+        commands:
+          - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
+      - name: cluster network policy
+        commands:
+          - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
+- name: Unit tests
+  task:
+    jobs:
+      - name: felix ut
+        commands:
+          - make -C felix ut
+- name: E2E tests on GCP kubeadm
+  task:
+    env_vars:
+      - name: TEST_TYPE
+        value: k8s-e2e
+      - name: FUNCTIONAL_AREA
+        value: e2e-gcp.yml
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/gcp/bpf.yaml
+    jobs:
+      - name: gcp-kubeadm
+        commands:
+          - .semaphore/end-to-end/scripts/body_standard.sh
+`
+
+func TestParseBlocks(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseBlocks("blocks/20-e2e.yml", []byte(blocksFixture))
+	Expect(err).NotTo(HaveOccurred())
+
+	byName := map[string]Lane{}
+	for _, l := range lanes {
+		byName[l.Name] = l
+	}
+
+	// A kind job is a lane because of the target it runs, not a FUNCTIONAL_AREA.
+	kind := byName["E2E tests (KinD) / conformance"]
+	Expect(kind.RunsE2E).To(BeTrue())
+	Expect(kind.Selection()).To(Equal("config:e2e/config/kind/conformance.yaml"))
+
+	// The suffixed target matches too, and only as a whole word.
+	Expect(byName["E2E tests (KinD) / bpf"].Selection()).To(Equal("config:e2e/config/kind/bpf.yaml"))
+
+	// Jobs running another suite, or no suite at all, are not lanes.
+	Expect(byName).NotTo(HaveKey("E2E tests (KinD) / cluster network policy"))
+	Expect(byName).NotTo(HaveKey("Unit tests / felix ut"))
+
+	// A block declaring the ArgoCI variables resolves the same way a pipeline does.
+	Expect(byName["E2E tests on GCP kubeadm / gcp-kubeadm"].Area).To(Equal("e2e-gcp.yml"))
+}
+
+func TestBlocksLaneWithoutSelectionIsAnError(t *testing.T) {
+	RegisterTestingT(t)
+
+	lanes, err := parseBlocks("blocks/20-e2e.yml", []byte(`
+- name: E2E tests (KinD)
+  task:
+    jobs:
+      - name: conformance
+        commands:
+          - make e2e-test
+`))
+	Expect(err).NotTo(HaveOccurred())
+
+	_, err = ResolveSets(lanes)
+	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
+}

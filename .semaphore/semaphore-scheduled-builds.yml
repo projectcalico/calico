@@ -961,6 +961,8 @@ blocks:
             # routing mechanism.
             - name: EXTRA_VALUES_FILES
               value: "hack/test/kind/infra/values-bird-routing.yaml"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind/conformance.yaml"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -979,11 +981,12 @@ blocks:
               value: "hack/test/kind/infra/values-felix-routing.yaml"
             - name: KIND_CALICO_API_GROUP
               value: "projectcalico.org/v3"
-            - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: sig-calico (dataplane: BPF)"
           commands:
             - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
+          env_vars:
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/kind/bpf.yaml"
       epilogue:
         always:
           commands:
