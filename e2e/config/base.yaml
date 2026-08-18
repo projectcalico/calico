@@ -2,12 +2,12 @@
 #
 # Universal CI exclusions, extended by every other config in this tree.
 #
-# Deliberately minimal. merge() only appends, so a label excluded here can never
-# be re-included by a child -- keep lane-specific and feature-gating exclusions
-# in the pipeline configs instead.
+# Deliberately minimal. Keep lane-specific exclusions in the pipeline configs; a
+# lane whose cluster does provide what a label needs cancels an exclusion here with
+# `enable:`.
 #
-# No `include:` here for the same reason: a child can broaden an include list but
-# never narrow it, so each pipeline declares its own scope.
+# No `include:` here: a child can broaden an include list but never narrow it, so
+# each pipeline declares its own scope.
 
 exclude:
   labels:
@@ -16,7 +16,9 @@ exclude:
 
     - label: Disruptive
       reason: "breaks cluster state for other parallel tests"
+
     - label: Feature:SCTPConnectivity
       reason: "no lane installs the SCTP kernel module, so these cannot connect"
+
     - label: Feature:Wireguard
-      reason: "needs a cluster provisioned with WireGuard; no config lane enables it"
+      reason: "needs a cluster provisioned with WireGuard; the lanes that have one enable this label"
