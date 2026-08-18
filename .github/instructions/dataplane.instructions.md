@@ -62,16 +62,23 @@ the design is a graph.
 
 ## Doc update rule
 
-The repo-wide doc-update rule and its exemptions
-([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
-For the Linux dataplane, "changes how it works" means: a new manager
-or driver, or a change to the manager/driver split; a change to the
-`apply()` ordering or the `OnUpdate`/`CompleteDeferredWork`
-contract; a new kind of kernel resource or a change to how Calico
-resources are identified for resync; a change to `*tables` Table
-reconciliation, dispatch-chain structure, mark-bit allocation,
-IP-set ordering, or route ownership classification; or a change to
-the `proto.*` dataplane API. Update the relevant section of
-[`dataplane.md`](../../felix/design/dataplane.md) in the same PR
-(and `calc-graph.md` if the proto contract changes).
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) is the
+canonical rule, mirrored in
+[`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md)
+and [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md). **The default is
+no edit**, and an edit that does belong is normally one to three
+lines in a section that is already there.
+
+For the Linux dataplane, the changes that *usually* earn one are: a
+new manager or driver, or a change to the manager/driver split; a
+change to the `apply()` ordering or the
+`OnUpdate`/`CompleteDeferredWork` contract; a new kind of kernel
+resource or a change to how Calico resources are identified for
+resync; a change to `*tables` Table reconciliation, dispatch-chain
+structure, mark-bit allocation, IP-set ordering, or route ownership
+classification; or a change to the `proto.*` dataplane API. Treat
+that list as candidates, not as a trigger: the edit is warranted only
+if a sentence in [`dataplane.md`](../../felix/design/dataplane.md) is
+now false, or the change introduces an invariant or a concept the doc
+does not name. When it is, the edit goes there in the same PR (and in
+`calc-graph.md` if the proto contract changes).

@@ -11,6 +11,13 @@ If you're looking for *how* to do something in this repo, look in
 `CLAUDE.md`. If you're looking for *what the code promises*, look
 here or in the matching component's `DESIGN.md`.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](design/MAINTAINING.md)
+> before adding to this file.
+
 ## 1. Calico in one paragraph
 
 Project Calico is a container networking and security platform
