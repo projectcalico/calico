@@ -51,8 +51,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/render"
+	rtest "github.com/tigera/operator/pkg/render/common/test"
 	rlogcollector "github.com/tigera/operator/pkg/render/logcollector"
 	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/render/otelcollector"
 	"github.com/tigera/operator/test"
 )
 
@@ -1028,6 +1030,40 @@ var _ = Describe("LogCollector controller tests", func() {
 	})
 
 	Context("License expiry", func() {
+		It("should trust the OpenTelemetry Collector's serving certificate when OTLP export is on", func() {
+			// fluent-bit verifies the collector over TLS. The operator CA covers an
+			// operator-minted cert, but a user-supplied otel-collector-tls is honoured
+			// as-is, so its cert has to be in fluent-bit's bundle or every connection
+			// fails with an unknown authority.
+			lc := &operatorv1.LogCollector{}
+			Expect(c.Get(ctx, utils.DefaultEnterpriseInstanceKey, lc)).ShouldNot(HaveOccurred())
+			lc.Spec.OpenTelemetry = &operatorv1.OpenTelemetrySpec{
+				Logs:      &operatorv1.OpenTelemetryLogs{Types: []operatorv1.OpenTelemetryLogType{operatorv1.OpenTelemetryFlowLog}},
+				Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4318"}},
+			}
+			Expect(c.Update(ctx, lc)).ShouldNot(HaveOccurred())
+
+			// A user-supplied cert, signed by a CA the operator does not know. An
+			// operator-minted cert would be skipped by AddCertificates, since the
+			// operator CA already covers it -- this is the case that needs the fix.
+			byoSecret := rtest.CreateCertSecret(
+				otelcollector.OpenTelemetryCollectorServerTLSSecretName,
+				common.OperatorNamespace(),
+				"otel-collector.calico-system.svc")
+			Expect(c.Create(ctx, byoSecret)).ShouldNot(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			bundle := corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{
+				Name:      "calico-fluent-bit-ca-bundle-system-certs",
+				Namespace: render.LogCollectorNamespace,
+			}}
+			Expect(test.GetResource(c, &bundle)).To(BeNil())
+			Expect(bundle.Data["tigera-ca-bundle.crt"]).To(ContainSubstring(string(byoSecret.Data[corev1.TLSCertKey])),
+				"fluent-bit's bundle must carry a user-supplied collector certificate")
+		})
+
 		It("should set degraded status and delete fluent-bit DaemonSet when license is expired", func() {
 			// First reconcile to create fluent-bit resources.
 			_, err := r.Reconcile(ctx, reconcile.Request{})

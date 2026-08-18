@@ -49,6 +49,7 @@ import (
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	rlogcollector "github.com/tigera/operator/pkg/render/logcollector"
 	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/render/otelcollector"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 	"github.com/tigera/operator/pkg/url"
 )
@@ -133,6 +134,7 @@ func add(mgr manager.Manager, c ctrlruntime.Controller) error {
 		rlogcollector.S3FluentBitSecretName, rlogcollector.EksLogForwarderSecret,
 		rlogcollector.SplunkFluentBitTokenSecretName, monitor.PrometheusClientTLSSecretName,
 		rlogcollector.FluentBitTLSSecretName, render.TigeraLinseedSecret, render.VoltronLinseedPublicCert, rlogcollector.EKSLogForwarderTLSSecretName,
+		otelcollector.OpenTelemetryCollectorServerTLSSecretName,
 	} {
 		if err = utils.AddSecretsWatch(c, secretName, common.OperatorNamespace()); err != nil {
 			return fmt.Errorf("log-collector-controller failed to watch the Secret resource(%s): %v", secretName, err)
@@ -187,6 +189,7 @@ func add(mgr manager.Manager, c ctrlruntime.Controller) error {
 	if err = c.WatchObject(&operatorv1.NonClusterHost{}, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("logcollector-controller failed to watch resource: %w", err)
 	}
+
 	return nil
 }
 
@@ -473,12 +476,25 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, nil
 	}
 
-	// Fluent Bit needs to mount system certificates in the case where Splunk, Syslog or AWS are used.
-	// The bundle carries fluent-bit's own name: calico-system's shared tigera-ca-bundle is rendered by
-	// the core Installation controller with a different certificate set, and the component handler
-	// replaces ConfigMap data wholesale — an unnamed bundle here would fight it, and additions like
-	// the syslog user CA would be lost to whichever controller wrote last.
-	trustedBundle := certificatemanagement.CreateNamedTrustedBundle(render.FluentBitNodeName, certificateManager.KeyPair(), true, prometheusCertificate, linseedCertificate)
+	// FluentBit needs system certificates to talk to external tools like Splunk, Syslog, or AWS. We give
+	// it its own trusted bundle as a result to avoid contamination with other services in this namespace.
+	//
+	// We must also trust the OTEL collector's server certificate, if enabled.
+	extraCerts := []certificatemanagement.CertificateInterface{prometheusCertificate, linseedCertificate}
+	if instance.Spec.OpenTelemetry.HasLogs() {
+		otelCertificate, err := certificateManager.GetCertificate(r.client, otelcollector.OpenTelemetryCollectorServerTLSSecretName, common.OperatorNamespace())
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Failed to get the OpenTelemetry Collector certificate", err, reqLogger)
+			return reconcile.Result{}, err
+		}
+		// Absent simply means the otel controller has not minted it yet; it will
+		// trigger another reconcile here when it does.
+		if otelCertificate != nil {
+			extraCerts = append(extraCerts, otelCertificate)
+		}
+	}
+
+	trustedBundle := certificatemanagement.CreateNamedTrustedBundle(render.FluentBitNodeName, certificateManager.KeyPair(), true, extraCerts...)
 
 	certificateManager.AddToStatusManager(r.status, render.LogCollectorNamespace)
 
@@ -649,24 +665,26 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 	handler := utils.NewComponentHandler(log, r.client, r.scheme, instance)
 
 	fluentBitCfg := &rlogcollector.FluentBitConfiguration{
-		LogCollector:           instance,
-		S3Credential:           s3Credential,
-		SplkCredential:         splunkCredential,
-		Filters:                filters,
-		EKSConfig:              eksConfig,
-		PullSecrets:            pullSecrets,
-		Installation:           installationSpec,
-		ClusterDomain:          r.opts.ClusterDomain,
-		FluentBitKeyPair:       fluentBitKeyPair,
-		TrustedBundle:          trustedBundle,
-		ManagedCluster:         managedCluster,
-		UseSyslogCertificate:   useSyslogCertificate,
-		Tenant:                 tenant,
-		ExternalElastic:        r.opts.ElasticExternal,
-		Cloud:                  r.opts.Cloud,
-		EKSLogForwarderKeyPair: eksLogForwarderKeyPair,
-		NonClusterHost:         nonclusterhost,
-		LicenseExpired:         licenseExpired,
+		LogCollector:                  instance,
+		S3Credential:                  s3Credential,
+		SplkCredential:                splunkCredential,
+		Filters:                       filters,
+		EKSConfig:                     eksConfig,
+		PullSecrets:                   pullSecrets,
+		Installation:                  installationSpec,
+		ClusterDomain:                 r.opts.ClusterDomain,
+		FluentBitKeyPair:              fluentBitKeyPair,
+		TrustedBundle:                 trustedBundle,
+		ManagedCluster:                managedCluster,
+		UseSyslogCertificate:          useSyslogCertificate,
+		Tenant:                        tenant,
+		ExternalElastic:               r.opts.ElasticExternal,
+		Cloud:                         r.opts.Cloud,
+		EKSLogForwarderKeyPair:        eksLogForwarderKeyPair,
+		NonClusterHost:                nonclusterhost,
+		LicenseExpired:                licenseExpired,
+		OpenTelemetryCollectorEnabled: instance.Spec.OpenTelemetry.Deployable(utils.IsFeatureActive(license, common.OpenTelemetryCollectorFeature)),
+		OpenTelemetryLogTypes:         otelLogTypes(instance),
 	}
 	// Render the fluent-bit component for Linux. The same configuration drives
 	// the shared and Windows components below; each applies its OS-specific
@@ -919,4 +937,13 @@ func getUserCACertificate(client client.Client, name string) (certificatemanagem
 		return nil, nil
 	}
 	return certificatemanagement.NewCertificate(name, common.OperatorNamespace(), []byte(cm.Data[corev1.TLSCertKey]), nil), nil
+}
+
+// otelLogTypes returns the log types selected for OpenTelemetry export, empty when the
+// otelCollector section or its logs selection is absent.
+func otelLogTypes(lc *operatorv1.LogCollector) []operatorv1.OpenTelemetryLogType {
+	if lc.Spec.OpenTelemetry == nil || lc.Spec.OpenTelemetry.Logs == nil {
+		return nil
+	}
+	return lc.Spec.OpenTelemetry.Logs.Types
 }

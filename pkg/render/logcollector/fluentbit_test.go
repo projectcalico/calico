@@ -275,6 +275,64 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 		Expect(ms.Spec.ClusterIP).To(Equal("None"), "metrics service should be headless to prevent kube-proxy from rendering too many iptables rules")
 	})
 
+	It("should render one opentelemetry output per selected OpenTelemetry log type", func() {
+		cfg.OpenTelemetryCollectorEnabled = true
+		cfg.OpenTelemetryLogTypes = []operatorv1.OpenTelemetryLogType{operatorv1.OpenTelemetryFlowLog, operatorv1.OpenTelemetryAuditLog}
+		component := logcollector.FluentBitOSSpecific(cfg, rmeta.OSTypeLinux)
+		resources, _ := component.Objects()
+
+		cm := rtest.GetResource(resources, logcollector.FluentBitConfConfigMapName, render.LogCollectorNamespace, "", "v1", "ConfigMap").(*corev1.ConfigMap)
+		conf := cm.Data["fluent-bit.yaml"]
+
+		// One output per selected type, matched by tag — DNS not selected, so
+		// no output for it. service.name is stamped at the source via the
+		// per-output processors, so the collector needs no classification.
+		Expect(strings.Count(conf, `"name": "opentelemetry"`)).To(Equal(2), "one output per selected type")
+		Expect(conf).To(ContainSubstring(`"match": "flows"`))
+		Expect(conf).To(ContainSubstring(`"match": "audit.*"`))
+		Expect(conf).To(ContainSubstring(`"name": "opentelemetry_envelope"`))
+		Expect(conf).To(ContainSubstring(`"name": "content_modifier"`))
+		Expect(conf).To(ContainSubstring(`"context": "otel_resource_attributes"`))
+		Expect(conf).To(ContainSubstring(`"value": "flows"`))
+		Expect(conf).To(ContainSubstring(`"value": "audit"`))
+	})
+
+	It("should also export non-cluster-host flow and DNS records", func() {
+		// Non-cluster-host data carries its own tags, which the exact tag does not
+		// match. Without a second output those records reach Linseed but are
+		// silently missing from the OTLP export.
+		cfg.OpenTelemetryCollectorEnabled = true
+		cfg.OpenTelemetryLogTypes = []operatorv1.OpenTelemetryLogType{
+			operatorv1.OpenTelemetryFlowLog, operatorv1.OpenTelemetryDNSLog, operatorv1.OpenTelemetryAuditLog,
+		}
+		cfg.NonClusterHost = &operatorv1.NonClusterHost{}
+		component := logcollector.FluentBitOSSpecific(cfg, rmeta.OSTypeLinux)
+		resources, _ := component.Objects()
+
+		cm := rtest.GetResource(resources, logcollector.FluentBitConfConfigMapName, render.LogCollectorNamespace, "", "v1", "ConfigMap").(*corev1.ConfigMap)
+		conf := cm.Data["fluent-bit.yaml"]
+
+		Expect(conf).To(ContainSubstring(`"match": "non_cluster_flows"`))
+		Expect(conf).To(ContainSubstring(`"match": "non_cluster_dns"`))
+		// Audit has no non-cluster-host variant.
+		Expect(conf).ToNot(ContainSubstring(`"match": "non_cluster_audit"`))
+		// flows, dns, audit.* plus the two non-cluster variants.
+		Expect(strings.Count(conf, `"name": "opentelemetry"`)).To(Equal(5))
+	})
+
+	It("should not export over OTLP when the collector is not deployable", func() {
+		// The controller passes the same predicate it deploys the collector on, so
+		// an unlicensed or invalid spec must not leave fluent-bit shipping to a
+		// Service that does not exist.
+		cfg.OpenTelemetryCollectorEnabled = false
+		cfg.OpenTelemetryLogTypes = []operatorv1.OpenTelemetryLogType{operatorv1.OpenTelemetryFlowLog}
+		component := logcollector.FluentBitOSSpecific(cfg, rmeta.OSTypeLinux)
+		resources, _ := component.Objects()
+
+		cm := rtest.GetResource(resources, logcollector.FluentBitConfConfigMapName, render.LogCollectorNamespace, "", "v1", "ConfigMap").(*corev1.ConfigMap)
+		Expect(cm.Data["fluent-bit.yaml"]).ToNot(ContainSubstring(`"name": "opentelemetry"`))
+	})
+
 	It("should render fluent-bit DaemonSet with resources requests/limits", func() {
 		ca, _ := tls.MakeCA(rmeta.DefaultOperatorCASignerName())
 		cert, _, _ := ca.Config.GetPEMBytes() // create a valid pem block

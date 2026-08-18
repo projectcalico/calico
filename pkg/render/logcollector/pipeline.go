@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -234,6 +235,10 @@ func (c *fluentBitComponent) addOutputs(cfg *fluentBitConfig) {
 			c.linseedHTTPOutput(tag, c.certPath(), c.keyPath(), linseedStorageLimit(tag)))
 	}
 
+	if c.osType == rmeta.OSTypeLinux {
+		c.addOpenTelemetryOutputs(cfg)
+	}
+
 	// Additional stores are Linux-only, matching the fluentd Windows variant
 	// (Linseed only).
 	if c.cfg.LogCollector.Spec.AdditionalStores != nil && c.osType == rmeta.OSTypeLinux {
@@ -241,6 +246,61 @@ func (c *fluentBitComponent) addOutputs(cfg *fluentBitConfig) {
 		c.addSyslogOutputs(cfg)
 		c.addSplunkOutputs(cfg)
 	}
+}
+
+func (c *fluentBitComponent) addOpenTelemetryOutputs(cfg *fluentBitConfig) {
+	if !c.cfg.OpenTelemetryCollectorEnabled {
+		return
+	}
+	for _, t := range c.cfg.OpenTelemetryLogTypes {
+		m, ok := otelLogTypeMatch[t]
+		if !ok {
+			continue
+		}
+		matches := []string{m.match}
+		// Non-cluster-host records carry their own tags, which the exact tag above
+		// does not match. Without this they reach Linseed but are silently missing
+		// from the OTLP export.
+		if c.cfg.NonClusterHost != nil && m.nonClusterMatch != "" {
+			matches = append(matches, m.nonClusterMatch)
+		}
+		for _, match := range matches {
+			cfg.Pipeline.Outputs = append(cfg.Pipeline.Outputs, map[string]interface{}{
+				"name":         "opentelemetry",
+				"match":        match,
+				"host":         fmt.Sprintf("%s.%s.svc", render.OpenTelemetryCollectorName, common.CalicoNamespace),
+				"port":         render.OpenTelemetryCollectorOTLPHTTPPort,
+				"logs_uri":     "/v1/logs",
+				"tls":          "on",
+				"tls.verify":   "on",
+				"tls.ca_file":  c.trustedBundlePath(),
+				"tls.crt_file": c.certPath(),
+				"tls.key_file": c.keyPath(),
+				"processors": map[string]interface{}{
+					"logs": []map[string]interface{}{
+						{"name": "opentelemetry_envelope"},
+						{
+							"name":    "content_modifier",
+							"context": "otel_resource_attributes",
+							"action":  "upsert",
+							"key":     "service.name",
+							"value":   m.serviceName,
+						},
+					},
+				},
+			})
+		}
+	}
+}
+
+// otelLogTypeMatch maps each OpenTelemetry log type to its fluent-bit match
+// patterns and service.name. audit.* covers both audit.tsee and audit.kube.
+// nonClusterMatch is the non-cluster-host tag for the same data, emitted as a
+// second output when NonClusterHost is configured; audit has no such variant.
+var otelLogTypeMatch = map[operatorv1.OpenTelemetryLogType]struct{ match, nonClusterMatch, serviceName string }{
+	operatorv1.OpenTelemetryFlowLog:  {"flows", "non_cluster_flows", "flows"},
+	operatorv1.OpenTelemetryDNSLog:   {"dns", "non_cluster_dns", "dns"},
+	operatorv1.OpenTelemetryAuditLog: {"audit.*", "", "audit"},
 }
 
 // linseedTags lists the tags shipped to Linseed: every tailed tag except

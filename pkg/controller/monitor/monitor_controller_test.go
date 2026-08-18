@@ -351,6 +351,68 @@ var _ = Describe("Monitor controller tests", func() {
 		})
 	})
 
+	Context("OpenTelemetry Collector ServiceMonitor", func() {
+		otelKey := client.ObjectKey{Name: render.OpenTelemetryCollectorName, Namespace: common.TigeraPrometheusNamespace}
+
+		BeforeEach(func() {
+			// A licensed, valid export config. The Service is what the collector's
+			// own controller creates once it has everything it needs.
+			Expect(cli.Delete(ctx, &v3.LicenseKey{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, &v3.LicenseKey{
+				ObjectMeta: metav1.ObjectMeta{Name: "default", CreationTimestamp: metav1.Now()},
+				Status: v3.LicenseKeyStatus{
+					Expiry:   metav1.Time{Time: time.Now().Add(24 * time.Hour)},
+					Features: []string{common.OpenTelemetryCollectorFeature},
+				},
+			})).NotTo(HaveOccurred())
+			Expect(cli.Create(ctx, &operatorv1.LogCollector{
+				ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+				Spec: operatorv1.LogCollectorSpec{
+					OpenTelemetry: &operatorv1.OpenTelemetrySpec{
+						Metrics:   &operatorv1.OpenTelemetryMetrics{State: ptr.To(operatorv1.OpenTelemetryMetricsEnabled)},
+						Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
+					},
+				},
+			})).NotTo(HaveOccurred())
+		})
+
+		It("should not render the ServiceMonitor before the collector Service exists", func() {
+			// The spec is valid and licensed, but the otel controller stops short of
+			// rendering when material an exporter names is missing. Scraping then has
+			// nothing to select.
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Get(ctx, otelKey, &monitoringv1.ServiceMonitor{})).To(HaveOccurred())
+		})
+
+		It("should render the ServiceMonitor once the collector Service exists", func() {
+			Expect(cli.Create(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name:      render.OpenTelemetryCollectorName,
+				Namespace: render.OpenTelemetryCollectorNamespace,
+			}})).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Get(ctx, otelKey, &monitoringv1.ServiceMonitor{})).NotTo(HaveOccurred())
+		})
+
+		It("should remove the ServiceMonitor when the collector Service goes away", func() {
+			svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name:      render.OpenTelemetryCollectorName,
+				Namespace: render.OpenTelemetryCollectorNamespace,
+			}}
+			Expect(cli.Create(ctx, svc)).NotTo(HaveOccurred())
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Get(ctx, otelKey, &monitoringv1.ServiceMonitor{})).NotTo(HaveOccurred())
+
+			Expect(cli.Delete(ctx, svc)).NotTo(HaveOccurred())
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cli.Get(ctx, otelKey, &monitoringv1.ServiceMonitor{})).To(HaveOccurred())
+		})
+	})
+
 	Context("Alertmanager Configuration secrets", func() {
 		var secretOperator *corev1.Secret
 		var secretPrometheus *corev1.Secret
