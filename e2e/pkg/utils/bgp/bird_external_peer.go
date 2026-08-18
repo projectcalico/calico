@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -84,10 +85,19 @@ const birdPeerTemplate = `protocol bgp node_%d from bgp_template {
 
 // BIRDRoute represents a single BIRD route entry for a /32 prefix.
 type BIRDRoute struct {
-	NextHop   string `json:"nextHop"`
-	LocalPref int    `json:"localPref"`
-	Community string `json:"community"`
-	Best      bool   `json:"best"`
+	NextHop string `json:"nextHop"`
+	// Iface is the interface of a directly-connected device route ("dev caliX"
+	// lines); empty for via-gateway routes.
+	Iface string `json:"iface"`
+	// Device is true for directly-connected device routes (no "via" gateway),
+	// e.g. a local workload veth route learned by BIRD's kernel protocol.
+	Device bool `json:"device"`
+	// Preference is BIRD's protocol preference for the route, parsed from the
+	// trailing "(pref)" or "(pref/metric)" on the route line. Zero if absent.
+	Preference int    `json:"preference"`
+	LocalPref  int    `json:"localPref"`
+	Community  string `json:"community"`
+	Best       bool   `json:"best"`
 }
 
 // PrefixState captures whether a prefix is present in BIRD and its routes.
@@ -134,9 +144,16 @@ type BIRDPeer interface {
 	QuerySnapshot(vmIP string) RouteSnapshot
 }
 
+// birdRoutePrefRe matches the trailing preference on a BIRD route line:
+// "(150)" for kernel/device routes, "(100/0)" for BGP routes. Note that
+// ParseBIRDRouteOutput only recognises "via" and "dev" route lines, so
+// "unreachable" route lines (e.g. "(100/-)") are never parsed.
+var birdRoutePrefRe = regexp.MustCompile(`\((\d+)(?:/[^)]*)?\)`)
+
 // ParseBIRDRouteOutput parses the output of "birdcl show route <prefix> all"
-// and returns the list of routes. Returns nil if the output contains
-// "Network not in table" or is empty.
+// and returns the list of routes. Handles both via-gateway routes ("via <ip>
+// on <iface>") and directly-connected device routes ("dev <iface>"). Returns
+// nil if the output contains "Network not in table" or is empty.
 func ParseBIRDRouteOutput(output string) []BIRDRoute {
 	if strings.Contains(output, "Network not in table") {
 		return nil
@@ -152,13 +169,33 @@ func ParseBIRDRouteOutput(output string) []BIRDRoute {
 			continue
 		}
 
-		// Route line: contains "via" but is not a BGP attribute.
-		if strings.Contains(line, " via ") && !strings.HasPrefix(trimmed, "BGP.") {
+		// Route line: contains "via" or "dev" but is not a BGP attribute.
+		// (Attribute lines like "Type: device unicast univ" contain neither
+		// " via " nor " dev " as standalone tokens with surrounding spaces.)
+		isVia := strings.Contains(line, " via ")
+		isDev := !isVia && (strings.Contains(line, " dev ") || strings.HasPrefix(trimmed, "dev "))
+		if (isVia || isDev) && !strings.HasPrefix(trimmed, "BGP.") {
 			r := BIRDRoute{}
-			if idx := strings.Index(line, " via "); idx >= 0 {
-				fields := strings.Fields(line[idx+5:])
-				if len(fields) > 0 {
-					r.NextHop = fields[0]
+			if isVia {
+				if idx := strings.Index(line, " via "); idx >= 0 {
+					fields := strings.Fields(line[idx+5:])
+					if len(fields) > 0 {
+						r.NextHop = fields[0]
+					}
+				}
+			} else {
+				r.Device = true
+				if idx := strings.Index(line, "dev "); idx >= 0 {
+					fields := strings.Fields(line[idx+4:])
+					if len(fields) > 0 {
+						r.Iface = fields[0]
+					}
+				}
+			}
+			// Protocol preference: the last "(pref[/metric])" group on the line.
+			if ms := birdRoutePrefRe.FindAllStringSubmatch(line, -1); len(ms) > 0 {
+				if _, err := fmt.Sscanf(ms[len(ms)-1][1], "%d", &r.Preference); err != nil {
+					logrus.Warnf("ParseBIRDRouteOutput: failed to parse preference from %q: %v", line, err)
 				}
 			}
 			// BIRD marks the active/best route with " * " (space-asterisk-space)
