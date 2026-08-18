@@ -64,14 +64,11 @@ var _ = describe.CalicoDescribe(
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			// Most lanes select this spec through a broad focus expression, so gate
-			// on the cluster's declared intent rather than failing everywhere.
 			felixConfig := &v3.FelixConfiguration{}
 			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, felixConfig)
 			Expect(err).NotTo(HaveOccurred(), "Error querying FelixConfiguration")
-			if felixConfig.Spec.WireguardEnabled == nil || !*felixConfig.Spec.WireguardEnabled {
-				ginkgo.Skip("WireGuard is not enabled in this cluster")
-			}
+			Expect(felixConfig.Spec.WireguardEnabled).NotTo(BeNil(), "WireGuard is not enabled in the cluster")
+			Expect(*felixConfig.Spec.WireguardEnabled).To(BeTrue(), "WireGuard is not enabled in the cluster")
 
 			// The client and server must land on different nodes for their traffic
 			// to cross a WireGuard tunnel at all.
@@ -106,9 +103,7 @@ var _ = describe.CalicoDescribe(
 		})
 
 		ginkgo.AfterEach(func() {
-			if checker != nil {
-				checker.Stop()
-			}
+			checker.Stop()
 		})
 
 		ginkgo.It("should carry pod traffic between nodes over the tunnel", func() {

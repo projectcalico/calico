@@ -116,7 +116,6 @@
 [sig-calico] [Team:CORE] [Feature:OwnerReferences] [Category:Configuration] OwnerReference tests should delete a NetworkSet if its owner has been deleted
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit bandwidth with QoS annotations
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit packet rate with QoS annotations
-[sig-calico] [Team:CORE] [Feature:Wireguard] [Category:Networking] WireGuard tests should carry pod traffic between nodes over the tunnel
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]
 [sig-network] DNS should provide /etc/hosts entries for the cluster [Conformance]
