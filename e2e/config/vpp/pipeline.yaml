@@ -18,3 +18,8 @@ exclude:
   labels:
     - label: Feature:KubeVirt
       reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Tiered-Policy
+      reason: "VPP does not implement policy tiers"
+  namePatterns:
+    - pattern: 'doNotTrack'
+      reason: "doNotTrack policy is programmed in the raw table; VPP does not program iptables"
