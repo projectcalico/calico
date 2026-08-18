@@ -262,16 +262,32 @@ for architecture in `CLAUDE.md`.
   (the update rule, the `@copilot` invocation pattern). They do
   not restate design content — always read the pointed-at
   `DESIGN.md`.
-- A PR changing how a component works — its behaviour, data
-  model, configuration surface, or any invariant the design doc
-  records — must update the relevant `DESIGN.md` in the same PR.
-  For components with a design directory (Felix uses
-  `felix/design/`), this means updating the relevant file under
-  that directory — the sub-design covering the area — and/or
-  the index itself when the sub-design table or scope changes.
-  Exemptions: bug fix restoring documented behaviour, mechanical
-  refactor, comment/log edits, dependency bump. If in doubt,
-  update the doc.
+- [`design/MAINTAINING.md`](../design/MAINTAINING.md) — the
+  canonical rule for editing any `DESIGN.md`: when a code change
+  earns a doc edit, how terse it must be, and what belongs in the
+  commit message instead. Read it before editing a design doc, and
+  apply it when reviewing a design-doc diff.
+
+A design doc records the design, not the change that introduced
+it, and **the default is no edit**. Edit one only when a sentence
+in it is now false, a new invariant exists that a future change
+could silently break, or a new concept exists that the doc's
+mental model does not name. A new behaviour, flag, field, config
+key, or bug fix is not by itself any of those. A warranted edit is
+normally **one to three lines**, in the section that already
+covers the area — not a new heading, and never a paraphrase of
+the commit message. For components with a design directory (Felix
+uses `felix/design/`), it goes in the sub-design covering the
+area, and in the index only when the sub-design table or scope
+changes.
+
+**If in doubt, make no change** — name what you considered and
+skipped in the PR description so a reviewer can ask for it. (The
+Copilot coding agent and automated review have no interactive
+user; a human-driven agent proposes the edit and waits for
+approval instead, per `design/MAINTAINING.md`.) A missing doc
+update the author explicitly considered and skipped is not a
+review blocker on its own.
 
 ## Tests required for code changes
 
@@ -291,11 +307,11 @@ Per-area sub-designs carry the area-specific test conventions on top of this gen
 
 The eBPF dataplane design is split across the `bpf-*.md` files under [`felix/design/`](../felix/design/), with [`bpf-overview.md`](../felix/design/bpf-overview.md) as the always-pulled umbrella (packet-path mental model, fast-path cost rule, cross-cutting review rules) and topic-specific sub-designs covering each area of the dataplane. See [`felix/DESIGN.md`](../felix/DESIGN.md) for the authoritative table mapping code paths to sub-design files.
 
-Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies; for BPF, "changes how it works" specifically means a new sub-program, CT flag, mark bit, map or map field, or any change to the packet path or forwarding decision.
+Path-specific reviewer rules live in [`.github/instructions/bpf.instructions.md`](instructions/bpf.instructions.md) — a single thin pointer that scopes to all BPF paths and directs the agent to load the matching sub-design(s) from [`felix/DESIGN.md`](../felix/DESIGN.md)'s topic table, with `bpf-overview.md` as the always-read companion. The doc-update rule above applies. For BPF, the changes that usually earn a doc edit are a new sub-program, CT flag, mark bit, map or map field, or a change to the packet path or forwarding decision — candidates for the test above, not triggers on their own.
 
 ## Helm Chart Review
 
-The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. The doc-update rule above applies; for charts, "changes how it works" means anything that alters how a user installs or upgrades Calico via Helm — moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, or changing a documented values key or example command.
+The user-facing install and upgrade instructions are hand-written READMEs ([`charts/tigera-operator/README.md`](../charts/tigera-operator/README.md) and [`charts/crd.projectcalico.org.v1/README.md`](../charts/crd.projectcalico.org.v1/README.md)), not generated, so they drift silently when a chart change alters the steps a user has to run. [`.github/instructions/helm-charts.instructions.md`](instructions/helm-charts.instructions.md) scopes to `charts/**` and directs the reviewer to cross-check those READMEs against the change. These READMEs are **user-facing documentation, not design docs**, so the design-doc rule above — with its default of no edit — does not apply to them: a chart change that alters how a user installs or upgrades Calico must update them, and there the safe default is to update. That covers moving resources between charts (CRDs especially), adding or removing a manual step, renaming a chart, and changing a documented values key or example command.
 
 `charts/calico` is the exception, and it is exempt: nobody installs it with Helm. It is only the template source that `make gen-manifests` renders into `manifests/calico*.yaml`, so the rendered manifests are the whole contract - no Helm upgrade path, no install docs to sync. Review such a PR by reading the regenerated `manifests/` diff. Its `values.yaml` keys are an internal interface rather than a user-facing one: renaming one is fine, but the same PR has to update the in-repo consumers (`manifests/generate.sh`, the root `Makefile`, `hack/check-images-availability.sh`, and the overlays in `charts/values/`).
 
