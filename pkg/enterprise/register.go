@@ -20,6 +20,7 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/clusterconnection"
 	"github.com/tigera/operator/pkg/enterprise/installation"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+	"github.com/tigera/operator/pkg/enterprise/tiers"
 	"github.com/tigera/operator/pkg/enterprise/windows"
 	"github.com/tigera/operator/pkg/extensions"
 )
@@ -36,6 +37,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			Windows:           windows.New(variant),
 			APIServer:         apiserver.New(variant, o),
 			ClusterConnection: clusterconnection.New(variant),
+			Tiers:             tiers.New(o),
 		})
 	}
 

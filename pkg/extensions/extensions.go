@@ -21,6 +21,7 @@ type Set struct {
 	Windows           WindowsExtension
 	APIServer         APIServerExtension
 	ClusterConnection ClusterConnectionExtension
+	Tiers             TiersExtension
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -61,4 +62,11 @@ func (e Extensions) ClusterConnection() ClusterConnectionExtension {
 		return noopClusterConnection{}
 	}
 	return e.set.ClusterConnection
+}
+
+func (e Extensions) Tiers() TiersExtension {
+	if e.set.Tiers == nil {
+		return noopTiers{}
+	}
+	return e.set.Tiers
 }

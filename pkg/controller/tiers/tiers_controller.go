@@ -30,7 +30,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -43,11 +42,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/logstorage/eck"
-	"github.com/tigera/operator/pkg/render/logstorage/kibana"
 	"github.com/tigera/operator/pkg/render/tiers"
 )
 
@@ -79,10 +75,8 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		{Name: tiers.ClusterDNSPolicyName, Namespace: "kube-system"},
 	})
 
-	if opts.MultiTenant {
-		if err = c.WatchObject(&operatorv1.Tenant{}, &handler.EnqueueRequestForObject{}); err != nil {
-			return fmt.Errorf("tiers-controller failed to watch Tenant resource: %w", err)
-		}
+	if err := opts.Extensions.Tiers().Watches(c); err != nil {
+		return fmt.Errorf("tiers-controller failed to register extension watches: %w", err)
 	}
 
 	if err := utils.AddInstallationWatch(c); err != nil {
@@ -169,27 +163,12 @@ func (r *ReconcileTiers) prepareTiersConfig(ctx context.Context, reqLogger logr.
 	namespaces := []string{
 		common.CalicoNamespace,
 	}
-	if r.opts.Variant.IsEnterprise() {
-		namespaces = append(namespaces,
-			render.DexNamespace,
-			render.ElasticsearchNamespace,
-			render.IntrusionDetectionNamespace,
-			kibana.Namespace,
-			eck.OperatorNamespace,
-			render.PacketCaptureNamespace,
-			common.TigeraPrometheusNamespace,
-			"tigera-skraper",
-		)
+	extraNamespaces, err := r.opts.Extensions.Tiers().DNSClientNamespaces(ctx, r.client)
+	if err != nil {
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying namespaces that need DNS access", err, reqLogger)
+		return nil, &reconcile.Result{RequeueAfter: utils.StandardRetry}
 	}
-	if r.opts.MultiTenant {
-		// For multi-tenant clusters, we need to include well-known namespaces as well as per-tenant namespaces.
-		tenantNamespaces, err := eutils.TenantNamespaces(ctx, r.client, nil)
-		if err != nil {
-			r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying tenant namespaces", err, reqLogger)
-			return nil, &reconcile.Result{RequeueAfter: utils.StandardRetry}
-		}
-		namespaces = append(namespaces, tenantNamespaces...)
-	}
+	namespaces = append(namespaces, extraNamespaces...)
 	tiersConfig.CalicoNamespaces = namespaces
 
 	// node-local-dns is not supported on openshift
