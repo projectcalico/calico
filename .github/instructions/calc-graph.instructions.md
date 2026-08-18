@@ -40,17 +40,25 @@ resources.
 
 ## Doc update rule
 
-The repo-wide doc-update rule and its exemptions
-([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) apply.
-For the calc graph, "changes how it works" means: a new calculation
-node or rewiring; a new emitted message type or a change to the
-`EventSequencer` flush order; a change to a label index or other
-refcounting structure; or a change to how the graph treats
-inconsistency, in-sync, or the upstream contract. Update the
-relevant section of
-[`calc-graph.md`](../../felix/design/calc-graph.md) in the same PR
-(and `dataplane.md` if the output contract changes), and update the
-hand-maintained node diagram in
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) is the
+canonical rule, mirrored in
+[`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md)
+and [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md). **The default is
+no edit**, and an edit that does belong is normally one to three
+lines in a section that is already there.
+
+For the calc graph, the changes that *usually* earn one are: a new
+calculation node or rewiring; a new emitted message type or a change
+to the `EventSequencer` flush order; a change to a label index or
+other refcounting structure; or a change to how the graph treats
+inconsistency, in-sync, or the upstream contract. Treat that list as
+candidates, not as a trigger: the edit is warranted only if a
+sentence in [`calc-graph.md`](../../felix/design/calc-graph.md) is
+now false, or the change introduces an invariant or a concept the doc
+does not name. When it is, the edit goes there in the same PR (and in
+`dataplane.md` if the output contract changes).
+
+The hand-maintained node diagram in
 [`felix/docs/calc-graph-diagram.md`](../../felix/docs/calc-graph-diagram.md)
-when you add or rewire a node.
+is a separate case: it must be updated whenever you add or rewire a
+node, since it is a picture of the wiring rather than prose about it.
