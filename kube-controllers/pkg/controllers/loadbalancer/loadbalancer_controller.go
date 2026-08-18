@@ -576,7 +576,7 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 			}
 		}
 	} else {
-		// No annotations are specified, check that the IPs assigned aren't from Manual pool from earlier assignment
+		// No specific IPs or pools requested (annotation or spec), check that assigned IPs aren't from a Manual pool
 		for ip := range c.allocationTracker.ipsByService[svcKey] {
 			pool, err := c.poolForIP(ip)
 			if err != nil {
@@ -584,12 +584,12 @@ func (c *loadBalancerController) syncService(svcKey serviceKey) {
 				return
 			}
 			if pool != nil {
-				// We want to release the address if annotation changed and we are no longer requesting IP from manual pool,
+				// Release if the service no longer requests a Manual-pool IP (via annotation or spec fields).
 				// if pool is nil we can skip this and the address will be removed during the next IPAM sync
 				//
 				// AssignmentMode should never be nil due to defaulting, but we check it just in case.
 				if pool.Spec.AssignmentMode != nil && *pool.Spec.AssignmentMode == api.Manual {
-					log.Infof("Removing IP assignment (%s) for Service %s/%s. No annotations but IP is from a 'Manual' IP pool.", ip, svc.Namespace, svc.Name)
+					log.Infof("Removing IP assignment (%s) for Service %s/%s. No requested IPs but IP is from a 'Manual' IP pool.", ip, svc.Namespace, svc.Name)
 					err = c.releaseIP(svcKey, ip)
 					if err != nil {
 						log.WithError(err).Errorf("Failed to release IP for %s/%s", svc.Namespace, svc.Name)
@@ -696,18 +696,11 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		return nil, err
 	}
 
+	// requestedLoadBalancerIPs already resolves Calico annotations and falls back to
+	// spec.loadBalancerIP / spec.externalIPs when the annotation is absent.
 	loadBalancerIPs, ipv4Pools, ipv6Pools, err := c.requestedLoadBalancerIPs(svc)
 	if err != nil {
 		return nil, err
-	}
-
-	// Fall back to spec.loadBalancerIP when no specific IP was requested via annotation.
-	if loadBalancerIPs == nil && svc.Spec.LoadBalancerIP != "" {
-		ip := cnet.ParseIP(svc.Spec.LoadBalancerIP)
-		if ip == nil {
-			return nil, fmt.Errorf("invalid IP in spec.loadBalancerIP: %s", svc.Spec.LoadBalancerIP)
-		}
-		loadBalancerIPs = []cnet.IP{*ip}
 	}
 
 	var assignedIPs []string
@@ -1000,8 +993,10 @@ func (c *loadBalancerController) parseAnnotations(annotations map[string]string)
 }
 
 // requestedLoadBalancerIPs returns the IPs, IPv4 pools, and IPv6 pools requested for a service.
-// It checks the Calico annotation first, then falls back to spec.loadBalancerIP (deprecated)
-// and spec.externalIPs if no annotation-based IPs are specified.
+// Presence of the Calico projectcalico.org/loadBalancerIPs annotation always takes precedence
+// (even when empty/null); only when the annotation key is absent do we fall back to
+// spec.loadBalancerIP (deprecated) and spec.externalIPs. Callers (syncService, assignIP) should
+// treat the returned IP list as the full set of "requested IPs" regardless of source.
 func (c *loadBalancerController) requestedLoadBalancerIPs(svc *v1.Service) ([]cnet.IP, []cnet.IPNet, []cnet.IPNet, error) {
 	loadBalancerIPs, ipv4Pools, ipv6Pools, err := c.parseAnnotations(svc.Annotations)
 	if err != nil {
