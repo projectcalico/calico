@@ -35,22 +35,22 @@
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni | legacy/iptables/aks-aks-w-calico-cni | 426
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-eks-arm64-calico-cni | legacy/iptables/arm64-smoke-tests-eks-arm64-calico-cni | 294
-.argoci/cron/e2e-iptables.yaml | autohep-test | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | legacy/iptables/datastore-k8s-e2e-etcd | 408
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | legacy/iptables/datastore-k8s-e2e-kdd-new | 426
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | distro-support | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | legacy/iptables/dual-stack-k8s-e2e-etcd | 402
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | legacy/iptables/dual-stack-k8s-e2e-kdd | 426
-.argoci/cron/e2e-iptables.yaml | ipvs | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | k8s-distros | legacy/iptables | 425
+.argoci/cron/e2e-iptables.yaml | autohep-test | iptables/xtables-autohep | 226
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 211
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 215
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 215
+.argoci/cron/e2e-iptables.yaml | distro-support | iptables/xtables-encap-nobgp | 218
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 211
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 215
+.argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 219
+.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 215
+.argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 223
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-iptables.yaml | migration | legacy/iptables/migration | 426
+.argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 215
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | legacy/iptables | 425
-.argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | legacy/iptables | 425
+.argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 223
+.argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 223
 .argoci/cron/e2e-iptables.yaml | usage-reporting | (usage-reporting) | -
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 462
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 426
@@ -139,31 +139,31 @@
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w Calico CNI | legacy/iptables/aks-aks-w-calico-cni | 426
 .semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 | legacy/iptables | 425
 .semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / EKS - ARM64 - Calico CNI | legacy/iptables/arm64-smoke-tests-eks-arm64-calico-cni | 294
-.semaphore/end-to-end/pipelines/iptables.yml | AutoHEP test / Test with AutoHEP enabled | legacy/iptables | 425
-.semaphore/end-to-end/pipelines/iptables.yml | Distro support / kdd | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | AutoHEP test / Test with AutoHEP enabled | iptables/xtables-autohep | 226
+.semaphore/end-to-end/pipelines/iptables.yml | Distro support / kdd | iptables/xtables-encap-nobgp | 218
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS w/ Azure CNI) / kdd | legacy/iptables/focused-wireguard-e2e-aks-w-azure-cni-kdd | 0
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS with Calico CNI) / kdd | legacy/iptables/focused-wireguard-e2e-aks-with-calico-cni-kdd | 0
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (AWS CNI) | legacy/iptables/focused-wireguard-e2e-eks-kdd-aws-cni | 0
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | legacy/iptables/focused-wireguard-e2e-eks-kdd-calico-cni | 0
-.semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 219
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | legacy/iptables/migration-flannel-migration | 426
+.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 215
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | legacy/iptables/migration-flannel-migration-pre-migration | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | legacy/iptables | 425
-.semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | legacy/iptables | 425
-.semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | iptables/xtables | 223
+.semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | iptables/xtables | 223
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard VXLAN k8s-e2e / wireguard-vxlan-aws-kubeadm | legacy/iptables/wireguard-vxlan-k8s-e2e-wireguard-vxlan-aws-kubeadm | 0
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard k8s-e2e / aws-kubeadm-calico-cni with/without IP-in-IP | legacy/iptables/wireguard-k8s-e2e-aws-kubeadm-calico-cni-with-without-ip-in-ip | 0
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / AKS w AKS CNI + Overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 462
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 426
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - old | legacy/iptables/wireguard-regression-k8s-e2e-kdd-old | 401
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / etcd | legacy/iptables/datastore-k8s-e2e-etcd | 408
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - new | legacy/iptables/datastore-k8s-e2e-kdd-new | 426
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - old | legacy/iptables | 425
-.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / etcd | legacy/iptables/dual-stack-k8s-e2e-etcd | 402
-.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / kdd | legacy/iptables/dual-stack-k8s-e2e-kdd | 426
-.semaphore/end-to-end/pipelines/iptables.yml | k8s beta runs / k8s beta | legacy/iptables | 425
-.semaphore/end-to-end/pipelines/iptables.yml | k8s distros / install required | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 211
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - new | iptables/xtables-manifest | 215
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - old | iptables/xtables-manifest | 215
+.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 211
+.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / kdd | iptables/xtables-manifest | 215
+.semaphore/end-to-end/pipelines/iptables.yml | k8s beta runs / k8s beta | iptables/xtables-manifest | 215
+.semaphore/end-to-end/pipelines/iptables.yml | k8s distros / install required | iptables/xtables | 223
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 219
