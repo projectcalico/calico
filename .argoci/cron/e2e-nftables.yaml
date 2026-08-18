@@ -127,14 +127,14 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/nftables/eks-xtables-aws-autohep.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -196,7 +196,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       # gcp-kubeadm uses the fixed semaphore-autotest VPC + reserved IPs, which
       # exist only in us-central1; pin region/zone (the load-spread randomisation
       # in the prologue can't apply to region-fixed jobs). See arm64-wg.

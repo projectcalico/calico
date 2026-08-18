@@ -174,8 +174,14 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6 net.IP
 	DeviceRouteProtocol          netlink.RouteProtocol
 	RemoveExternalRoutes         bool
-	ProgramClusterRoutes         bool
-	NoEncapEnabled               bool
+
+	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
+	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
+	// Pools respectively.  NoEncapNeeded already incorporates ProgramNoEncapClusterRoutes (see
+	// calc.EncapsulationCalculator.NoEncapNeeded).
+	ProgramIPIPClusterRoutes    bool
+	ProgramNoEncapClusterRoutes bool
+	NoEncapNeeded               bool
 
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
@@ -680,6 +686,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.DeviceRouteProtocol,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			config.RemoveExternalRoutes,
+			config.ProgramIPIPClusterRoutes,
 		)
 		routeTableV4 = routetable.New(
 			mainTablePolV4,
@@ -701,6 +708,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.DeviceRouteProtocol,
 				config.RulesConfig.WorkloadIfacePrefixes,
 				config.RemoveExternalRoutes,
+				// IPIP is IPv4-only, so there is no IPIP device in the v6 table
+				// for BIRD to program routes through.
+				false,
 			)
 			routeTableV6 = routetable.New(
 				mainTablePolV6,
@@ -732,7 +742,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
-	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
 		dp.noEncapManager = newNoEncapManager(
 			routeTableV4,
@@ -1292,8 +1302,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		dp.RegisterManager(newFlowtableExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
+	}
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+
+		if !config.ProgramIPIPClusterRoutes {
+			log.Warn("IPIP is enabled but ProgramClusterRoutes leaves the IPIP cluster routes to " +
+				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in v3.35; " +
+				"set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
+				"Enabled) and BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or " +
+				"Disabled) to let Felix program them instead.")
+		}
+
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
 			routeTableV4,
@@ -1530,6 +1553,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
+		}
+
+		if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+			dp.RegisterManager(newFlowtableExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
