@@ -299,7 +299,7 @@ var _ = Describe("Webhooks rendering tests", func() {
 
 		// Verify the network policy.
 		np := rtest.GetResource(resources, webhooks.WebhooksPolicyName, common.CalicoNamespace, "projectcalico.org", "v3", "NetworkPolicy").(*v3.NetworkPolicy)
-		Expect(np.Spec.Ingress).To(HaveLen(3))
+		Expect(np.Spec.Ingress).To(HaveLen(4))
 
 		// Rule 1: Allow from kube-apiserver.
 		Expect(np.Spec.Ingress[0].Action).To(Equal(v3.Allow))
@@ -309,15 +309,20 @@ var _ = Describe("Webhooks rendering tests", func() {
 		}))
 		Expect(np.Spec.Ingress[0].Destination.Ports[0].MinPort).To(Equal(uint16(6443)))
 
-		// Rule 2: Deny from any workload endpoint (pod traffic); the orchestrator selector
-		// excludes NetworkSets so a user-defined set doesn't broaden or narrow the rule.
-		Expect(np.Spec.Ingress[1].Action).To(Equal(v3.Deny))
-		Expect(np.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("all()"))
-		Expect(np.Spec.Ingress[1].Source.Selector).To(Equal("has(projectcalico.org/orchestrator)"))
+		// Rule 2: Allow from the konnectivity agents that proxy apiserver traffic on AKS and GKE.
+		Expect(np.Spec.Ingress[1].Action).To(Equal(v3.Allow))
+		Expect(np.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("kubernetes.io/metadata.name == 'kube-system'"))
+		Expect(np.Spec.Ingress[1].Source.Selector).To(Equal("app == 'konnectivity-agent' || k8s-app == 'konnectivity-agent'"))
+		Expect(np.Spec.Ingress[1].Destination.Ports[0].MinPort).To(Equal(uint16(6443)))
 
-		// Rule 3: Fallback allow for non-pod sources (including tunnel-SNAT'd hostnet apiserver traffic).
-		Expect(np.Spec.Ingress[2].Action).To(Equal(v3.Allow))
-		Expect(np.Spec.Ingress[2].Destination.Ports[0].MinPort).To(Equal(uint16(6443)))
+		// Rule 3: Deny from any workload endpoint. The orchestrator selector excludes NetworkSets.
+		Expect(np.Spec.Ingress[2].Action).To(Equal(v3.Deny))
+		Expect(np.Spec.Ingress[2].Source.NamespaceSelector).To(Equal("all()"))
+		Expect(np.Spec.Ingress[2].Source.Selector).To(Equal("has(projectcalico.org/orchestrator)"))
+
+		// Rule 4: Fallback allow for non-pod sources (including tunnel-SNAT'd hostnet apiserver traffic).
+		Expect(np.Spec.Ingress[3].Action).To(Equal(v3.Allow))
+		Expect(np.Spec.Ingress[3].Destination.Ports[0].MinPort).To(Equal(uint16(6443)))
 	})
 
 	It("should use custom container port", func() {
@@ -355,12 +360,13 @@ var _ = Describe("Webhooks rendering tests", func() {
 
 		// Verify the network policy uses the custom port.
 		np := rtest.GetResource(resources, webhooks.WebhooksPolicyName, common.CalicoNamespace, "projectcalico.org", "v3", "NetworkPolicy").(*v3.NetworkPolicy)
-		Expect(np.Spec.Ingress).To(HaveLen(3))
+		Expect(np.Spec.Ingress).To(HaveLen(4))
 		Expect(np.Spec.Ingress[0].Destination.Ports[0].MinPort).To(Equal(uint16(customPort)))
-		Expect(np.Spec.Ingress[1].Action).To(Equal(v3.Deny))
-		Expect(np.Spec.Ingress[1].Source.NamespaceSelector).To(Equal("all()"))
-		Expect(np.Spec.Ingress[1].Source.Selector).To(Equal("has(projectcalico.org/orchestrator)"))
-		Expect(np.Spec.Ingress[2].Destination.Ports[0].MinPort).To(Equal(uint16(customPort)))
+		Expect(np.Spec.Ingress[1].Destination.Ports[0].MinPort).To(Equal(uint16(customPort)))
+		Expect(np.Spec.Ingress[2].Action).To(Equal(v3.Deny))
+		Expect(np.Spec.Ingress[2].Source.NamespaceSelector).To(Equal("all()"))
+		Expect(np.Spec.Ingress[2].Source.Selector).To(Equal("has(projectcalico.org/orchestrator)"))
+		Expect(np.Spec.Ingress[3].Destination.Ports[0].MinPort).To(Equal(uint16(customPort)))
 	})
 
 	It("should not use host network by default on non-EKS", func() {

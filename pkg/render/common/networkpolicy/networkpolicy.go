@@ -217,6 +217,12 @@ var KubeAPIServerEntityRule = v3.EntityRule{
 	},
 }
 
+// Konnectivity agents proxy apiserver traffic into the cluster. AKS and GKE label them differently.
+var KonnectivityAgentEntityRule = v3.EntityRule{
+	NamespaceSelector: "kubernetes.io/metadata.name == 'kube-system'",
+	Selector:          "app == 'konnectivity-agent' || k8s-app == 'konnectivity-agent'",
+}
+
 // Helper creates a helper for building network policies for multi-tenant capable components.
 // It takes two arguments:
 // - mt: true if running in multi-tenant mode, false otherwise.
