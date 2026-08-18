@@ -20,21 +20,54 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/resources"
 )
 
-// requireNonVXLANCluster checks that no IP pool uses VXLAN encapsulation. Tests that
-// disable the BGP mesh and expect connectivity to break cannot work on VXLAN clusters
-// because Felix programs VXLAN tunnel routes independently of BGP.
-func requireNonVXLANCluster(cli ctrlclient.Client) {
+// requireBGPIsSoleRoutingMechanism checks that confd and BIRD, rather than Felix, own the
+// cluster routes for every IP pool in the cluster. Tests that disable the BGP mesh and then
+// expect connectivity to break only work if BGP is the only thing putting cross-node routes
+// in the kernel: Felix derives its routes from the datastore, so they survive the mesh going
+// away and the connectivity assertion fails.
+//
+// Felix always owns VXLAN routes, so any VXLAN pool disqualifies the cluster outright. For
+// IPIP and unencapsulated pools ownership is configurable, so consult
+// FelixConfiguration.programClusterRoutes -- which since v3.33 hands Felix the IPIP routes by
+// default. See design/cluster-route-programming/DESIGN.md.
+func requireBGPIsSoleRoutingMechanism(cli ctrlclient.Client) {
 	pools := &v3.IPPoolList{}
 	err := cli.List(context.Background(), pools)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error listing IP pools")
 
+	fc := &v3.FelixConfiguration{}
+	err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, fc)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Error querying default FelixConfiguration")
+
+	// An unset field means Calico's own default, which is EnabledIPIPOnly.
+	programClusterRoutes := v3.EnabledIPIPOnly
+	if fc.Spec.ProgramClusterRoutes != nil {
+		programClusterRoutes = *fc.Spec.ProgramClusterRoutes
+	}
+	felixOwnsIPIP := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledIPIPOnly
+	felixOwnsNoEncap := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledNoEncapOnly
+
+	fail := func(pool v3.IPPool, why string) {
+		framework.Failf(
+			"This test requires BGP full mesh as the sole routing mechanism, but Felix owns the cluster "+
+				"routes for pool %s (%s).",
+			pool.Name, why,
+		)
+	}
+
 	for _, pool := range pools.Items {
-		switch pool.Spec.VXLANMode {
-		case v3.VXLANModeAlways, v3.VXLANModeCrossSubnet:
-			framework.Failf(
-				"This test requires BGP full mesh as the sole routing mechanism, and cannot run with VXLAN enabled (pool %s uses VXLANMode %s)",
-				pool.Name, pool.Spec.VXLANMode,
-			)
+		switch {
+		case pool.Spec.VXLANMode == v3.VXLANModeAlways || pool.Spec.VXLANMode == v3.VXLANModeCrossSubnet:
+			fail(pool, fmt.Sprintf("VXLANMode %s, which Felix always programs", pool.Spec.VXLANMode))
+		case pool.Spec.IPIPMode == v3.IPIPModeAlways || pool.Spec.IPIPMode == v3.IPIPModeCrossSubnet:
+			if felixOwnsIPIP {
+				fail(pool, fmt.Sprintf("IPIPMode %s with programClusterRoutes %s",
+					pool.Spec.IPIPMode, programClusterRoutes))
+			}
+		default:
+			if felixOwnsNoEncap {
+				fail(pool, fmt.Sprintf("no encapsulation with programClusterRoutes %s", programClusterRoutes))
+			}
 		}
 	}
 }

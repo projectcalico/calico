@@ -30,10 +30,10 @@ import (
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/ethtool"
 	"github.com/projectcalico/calico/felix/ip"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 type routeManager struct {
@@ -41,6 +41,7 @@ type routeManager struct {
 	routeTable           routetable.Interface
 	routeClassTunnel     routetable.RouteClass
 	routeClassSameSubnet routetable.RouteClass
+	routeClassBlackhole  routetable.RouteClass
 	ipVersion            uint8
 	ippoolType           proto.IPPoolType
 
@@ -69,7 +70,7 @@ type routeManager struct {
 
 	// Log context
 	logCtx     *logrus.Entry
-	opRecorder logutils.OpRecorder
+	opRecorder logrusr.OpRecorder
 
 	// In dual-stack setup in ebpf mode, for the sake of simplicity, we still
 	// run 2 instance of the vxlan manager, one for each ip version - like in
@@ -88,7 +89,7 @@ func newRouteManager(
 	ipVersion uint8,
 	mtu int,
 	dpConfig Config,
-	opRecorder logutils.OpRecorder,
+	opRecorder logrusr.OpRecorder,
 	nlHandle netlinkshim.Interface,
 ) *routeManager {
 	return &routeManager{
@@ -96,6 +97,7 @@ func newRouteManager(
 		routeTable:           mainRouteTable,
 		routeClassTunnel:     routeClassTunnel,
 		routeClassSameSubnet: routeClassSameSubnet,
+		routeClassBlackhole:  blackholeRouteClass(ippoolType),
 		routesByDest:         map[string]*proto.RouteUpdate{},
 		localIPAMBlocks:      map[string]*proto.RouteUpdate{},
 		tunnelChangedC:       make(chan struct{}, 1),
@@ -111,6 +113,24 @@ func newRouteManager(
 			"ipVersion":    ipVersion,
 			"tunnelDevice": tunnelDevice,
 		}),
+	}
+}
+
+// ipamBlockDropRouteClass returns the route class to use for the blackhole "drop" routes programmed
+// by this manager. For example, to cover local affine blocks. Each encap type gets its own class to
+// avoid conflicts when multiple encapsulation types are enabled.
+func blackholeRouteClass(ippoolType proto.IPPoolType) routetable.RouteClass {
+	switch ippoolType {
+	case proto.IPPoolType_VXLAN:
+		return routetable.RouteClassBlackholeVXLAN
+	case proto.IPPoolType_IPIP:
+		return routetable.RouteClassBlackholeIPIP
+	case proto.IPPoolType_NO_ENCAP:
+		return routetable.RouteClassBlackholeNoEncap
+	default:
+		logrus.WithField("ippoolType", ippoolType).Error(
+			"Unexpected IP pool type for IPAM block blackhole routes; blackhole routes may be missing.")
+		return routetable.RouteClassBlackholeNoEncap
 	}
 }
 
@@ -216,9 +236,17 @@ func (m *routeManager) triggerRouteUpdate() {
 
 func (m *routeManager) updateParentIfaceAddr(addr string) {
 	m.parentDeviceLock.Lock()
-	defer m.parentDeviceLock.Unlock()
 	m.parentDeviceAddr = addr
-	m.tunnelChangedC <- struct{}{}
+	m.parentDeviceLock.Unlock()
+
+	// Kick the device-sync goroutine so that it picks up the new address without
+	// waiting for its next poll. The kick must not block to avoid a deadlock. If there's already
+	// a kick pending, we can just ride that one.
+	select {
+	case m.tunnelChangedC <- struct{}{}:
+	default:
+		m.logCtx.Debug("Tunnel-changed kick already pending, not sending another.")
+	}
 }
 
 func (m *routeManager) parentIfaceAddr() string {
@@ -255,6 +283,7 @@ func (m *routeManager) routeIsLocalBlock(msg *proto.RouteUpdate) bool {
 	if err != nil {
 		logrus.WithError(err).WithField("msg", msg).
 			Warning("Unable to parse destination into a CIDR. Treating block as external.")
+		return false
 	}
 	// Ignore exact routes, i.e. /32 (ipv4) or /128 (ipv6) routes in any case for two reasons:
 	// * If we have a /32 or /128 block then our blackhole route would stop the CNI plugin from
@@ -321,12 +350,15 @@ func (m *routeManager) CompleteDeferredWork() error {
 	return nil
 }
 
-func (m *routeManager) OnParentDeviceUpdate(name string) {
+// OnParentDeviceUpdate records a new parent device, reporting whether anything changed so the
+// caller knows to kick an apply.
+func (m *routeManager) OnParentDeviceUpdate(name string) bool {
 	if name == "" {
 		m.logCtx.Warn("Empty parent interface name? Ignoring.")
+		return false
 	}
 	if name == m.parentDevice {
-		return
+		return false
 	}
 	if m.parentDevice != "" {
 		// We're changing parent interface, remove the old routes.
@@ -334,6 +366,7 @@ func (m *routeManager) OnParentDeviceUpdate(name string) {
 	}
 	m.parentDevice = name
 	m.routesDirty = true
+	return true
 }
 
 func (m *routeManager) updateRoutes() {
@@ -370,7 +403,7 @@ func (m *routeManager) updateRoutes() {
 
 	bhRoutes := blackholeRoutes(m.localIPAMBlocks, m.routeProtocol)
 	m.logCtx.WithField("routes", bhRoutes).Debug("Route manager setting blackhole routes")
-	m.routeTable.SetRoutes(routetable.RouteClassIPAMBlockDrop, routetable.InterfaceNone, bhRoutes)
+	m.routeTable.SetRoutes(m.routeClassBlackhole, routetable.InterfaceNone, bhRoutes)
 
 	if m.parentDevice != "" {
 		m.logCtx.WithFields(logrus.Fields{
@@ -555,7 +588,8 @@ func (m *routeManager) keepDeviceInSync(
 func (m *routeManager) configureTunnelDevice(
 	newLink netlink.Link,
 	addr string,
-	mtu int, xsumBroken bool) error {
+	mtu int, xsumBroken bool,
+) error {
 	if newLink == nil {
 		return fmt.Errorf("no tunnel link provided")
 	}
@@ -681,15 +715,17 @@ func (m *routeManager) ensureAddressOnLink(ipStr string, link netlink.Link) erro
 		return err
 	}
 
-	// Remove any addresses which we don't want, but never strip the kernel-managed IPv6 link-local
-	// address.
+	// Remove any addresses which we don't want.
 	addrPresent := false
 	for _, existing := range existingAddrs {
 		if desired != nil && reflect.DeepEqual(existing.IPNet, desired.IPNet) {
 			addrPresent = true
 			continue
 		}
-		if existing.IP.IsLinkLocalUnicast() {
+		// Never strip the kernel-managed IPv6 link-local address. Guard on the address being IPv6
+		// (To4() == nil), since IsLinkLocalUnicast() also matches IPv4 169.254.0.0/16, which we do
+		// want to remove when reconciling to "no address".
+		if existing.IP.To4() == nil && existing.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		m.logCtx.WithFields(logrus.Fields{

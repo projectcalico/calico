@@ -20,7 +20,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -81,7 +81,7 @@ func main() {
 	}
 	logrus.SetLevel(level)
 
-	logutils.ConfigureFormatter("deps")
+	logrusr.ConfigureFormatter("deps")
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -150,6 +150,13 @@ var nonGoDeps = map[string][]string{
 	// Whisker is not a go project so we list the whole thing.
 	"whisker": {
 		"/whisker",
+	},
+
+	// The generated CRD YAML has no .go files, so it's invisible to the
+	// dir-scan that builds secondary-package inclusions, but validation_fv_test.go
+	// reads it directly.
+	"kube-controllers": {
+		"/kube-controllers/pkg/apis/migration/v1/crd",
 	},
 }
 

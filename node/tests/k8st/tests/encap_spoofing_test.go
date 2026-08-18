@@ -23,6 +23,7 @@ package k8stests
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -258,47 +259,46 @@ func setEncapsulation(t *testing.T, g *WithT, cli ctrlclient.Client, ctx context
 		return nil
 	}, "60s", "1s").Should(Succeed(), "operator did not reconcile %s to %s", defaultV4Pool, encap)
 
-	// Restart calico-node to cleanly apply the new encapsulation.
-	cs := utils.K8sClient(t)
-	g.Expect(cs.CoreV1().Pods("calico-system").DeleteCollection(ctx, metav1.DeleteOptions{},
-		metav1.ListOptions{LabelSelector: "k8s-app=calico-node"})).
-		To(Succeed(), "deleting calico-node pods")
-	waitForCalicoNodeRestart(t, ctx)
+	// Felix applies the new encapsulation without a restart, so wait for the tunnel
+	// device rather than restarting calico-node. Restarting left the following tests
+	// running against a Felix that had only just started.
+	waitForTunnelIface(t, ctx, map[string]string{"IPIP": "tunl0", "VXLAN": "vxlan.calico"}[encap])
 }
 
-// waitForCalicoNodeRestart blocks until every calico-node pod is freshly
-// running and Ready, with none still terminating. This is stricter than a bare
-// readiness wait: right after DeleteCollection the old pods may still report
-// Ready, so we additionally require no pod carries a deletion timestamp.
-func waitForCalicoNodeRestart(t *testing.T, ctx context.Context) {
+// waitForTunnelIface blocks until iface has an address on every worker node, which
+// is what tells us Felix has finished programming the new encapsulation.
+func waitForTunnelIface(t *testing.T, ctx context.Context, iface string) {
 	t.Helper()
 	g := NewWithT(t)
 
 	cs := utils.K8sClient(t)
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	g.Expect(err).NotTo(HaveOccurred(), "listing nodes")
+
 	g.Eventually(func() error {
-		pods, err := cs.CoreV1().Pods("calico-system").List(ctx, metav1.ListOptions{
-			LabelSelector: "k8s-app=calico-node",
-		})
-		if err != nil {
-			return err
-		}
-		if len(pods.Items) == 0 {
-			return fmt.Errorf("no calico-node pods yet")
-		}
-		for _, p := range pods.Items {
-			if p.DeletionTimestamp != nil {
-				return fmt.Errorf("calico-node pod %s is still terminating", p.Name)
+		for _, n := range nodes.Items {
+			if strings.Contains(n.Name, "control-plane") {
+				continue
 			}
-			ready := false
-			for _, c := range p.Status.Conditions {
-				if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue {
-					ready = true
-				}
+			// ip exits non-zero when the device does not exist yet.
+			out, err := utils.Run(t, "docker exec "+n.Name+" ip -brief addr show "+iface,
+				utils.RunOptions{AllowFail: true, SuppressErrLog: true})
+			if err != nil {
+				return fmt.Errorf("%s on %s: %w", iface, n.Name, err)
 			}
-			if !ready {
-				return fmt.Errorf("calico-node pod %s is not ready", p.Name)
+			// ip -brief output: "<iface> <state> <addrs...>", e.g.
+			// "vxlan.calico UNKNOWN 10.244.0.1/32".
+			fields := strings.Fields(out)
+			if len(fields) < 3 {
+				return fmt.Errorf("%s on %s has no address yet: %s", iface, n.Name, strings.TrimSpace(out))
+			}
+
+			// Felix assigns the address before bringing the link up, so an
+			// address alone doesn't mean the device can carry traffic.
+			if fields[1] == "DOWN" {
+				return fmt.Errorf("%s on %s is DOWN: %s", iface, n.Name, strings.TrimSpace(out))
 			}
 		}
 		return nil
-	}, 2*time.Minute, time.Second).Should(Succeed(), "calico-node pods did not restart cleanly")
+	}, 2*time.Minute, time.Second).Should(Succeed(), "%s did not come up on all workers", iface)
 }

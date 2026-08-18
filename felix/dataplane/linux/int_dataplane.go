@@ -71,7 +71,6 @@ import (
 	"github.com/projectcalico/calico/felix/jitter"
 	"github.com/projectcalico/calico/felix/labelindex/ipsetmember"
 	"github.com/projectcalico/calico/felix/linkaddrs"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
 	"github.com/projectcalico/calico/felix/proto"
@@ -83,9 +82,9 @@ import (
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
 	"github.com/projectcalico/calico/felix/wireguard"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	cprometheus "github.com/projectcalico/calico/libcalico-go/lib/prometheus"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -175,8 +174,14 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6 net.IP
 	DeviceRouteProtocol          netlink.RouteProtocol
 	RemoveExternalRoutes         bool
-	ProgramClusterRoutes         bool
-	NoEncapEnabled               bool
+
+	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
+	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
+	// Pools respectively.  NoEncapNeeded already incorporates ProgramNoEncapClusterRoutes (see
+	// calc.EncapsulationCalculator.NoEncapNeeded).
+	ProgramIPIPClusterRoutes    bool
+	ProgramNoEncapClusterRoutes bool
+	NoEncapNeeded               bool
 
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
@@ -428,7 +433,7 @@ type InternalDataplane struct {
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *common.Callbacks
 
-	loopSummarizer *logutils.Summarizer
+	loopSummarizer *logrusr.Summarizer
 
 	// Fields used to accumulate counts of messages of various types before we report them to
 	// prometheus.
@@ -537,7 +542,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ifaceUpdates:                make(chan any, 100),
 		config:                      config,
 		applyThrottle:               throttle.New(10),
-		loopSummarizer:              logutils.NewSummarizer("dataplane reconciliation loops"),
+		loopSummarizer:              logrusr.NewSummarizer("dataplane reconciliation loops"),
 		actions:                     actionSet,
 		newMatch:                    newMatchFn,
 		nftablesEnabled:             nftablesEnabled,
@@ -733,7 +738,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
-	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
 		dp.noEncapManager = newNoEncapManager(
 			routeTableV4,
@@ -1277,7 +1282,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.listener = epManager
+	dp.liveMigrationMonitor.registerListener(epManager)
 	if mainTablePolV4 != nil {
 		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
 	}
@@ -1293,8 +1298,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		dp.RegisterManager(newFlowtableExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
+	}
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+
+		if !config.ProgramIPIPClusterRoutes {
+			log.Warn("IPIP is enabled but ProgramClusterRoutes leaves the IPIP cluster routes to " +
+				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in v3.35; " +
+				"set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
+				"Enabled) and BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or " +
+				"Disabled) to let Felix program them instead.")
+		}
+
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
 			routeTableV4,
@@ -1517,6 +1535,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
+		dp.liveMigrationMonitor.registerListener(epManagerV6)
 		if mainTablePolV6 != nil {
 			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
 		}
@@ -1530,6 +1549,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
+		}
+
+		if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+			dp.RegisterManager(newFlowtableExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -1997,7 +2020,7 @@ func (d *InternalDataplane) monitorHostMTU() {
 		} else if d.config.hostMTU != mtu {
 			// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 			// all the in-flight logs get written before we exit.
-			log.WithFields(log.Fields{lclogutils.FieldForceFlush: true}).Info("Host MTU changed")
+			log.WithFields(log.Fields{logrusr.FieldForceFlush: true}).Info("Host MTU changed")
 			d.config.ConfigChangedRestartCallback()
 		}
 		time.Sleep(30 * time.Second)
@@ -2437,15 +2460,15 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onLiveMigrationGARPDetected(id)
 			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
-			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.ipipManager.routeMgr, name)
 		case name := <-d.noEncapParentIfaceC:
-			d.noEncapManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.noEncapManager.routeMgr, name)
 		case name := <-d.noEncapParentIfaceCV6:
-			d.noEncapManagerV6.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.noEncapManagerV6.routeMgr, name)
 		case name := <-d.vxlanParentIfaceC:
-			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.vxlanManager.routeMgr, name)
 		case name := <-d.vxlanParentIfaceCV6:
-			d.vxlanManagerV6.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.vxlanManagerV6.routeMgr, name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2569,6 +2592,14 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 			"Datastore in sync, flushing the dataplane for the first time...")
 		d.datastoreInSync = true
+	}
+}
+
+// onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
+// goroutine that spots the move may be the only thing happening at the time.
+func (d *InternalDataplane) onParentDeviceUpdate(mgr *routeManager, name string) {
+	if mgr.OnParentDeviceUpdate(name) {
+		d.dataplaneNeedsSync = true
 	}
 }
 

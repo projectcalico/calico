@@ -416,8 +416,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				options.IPIPStrategy = infrastructure.NewDefaultTunnelStrategy(options.IPPoolCIDR, options.IPv6PoolCIDR)
 				options.IPIPMode = api.IPIPModeAlways
 				if testOpts.ipv6 {
+					// SimulateBIRDRoutes makes the topology set
+					// FELIX_ProgramClusterRoutes=Disabled for us.
 					options.SimulateBIRDRoutes = true
-					options.ExtraEnvVars["FELIX_ProgramClusterRoutes"] = "Disabled"
 				}
 			case "vxlan":
 				options.VXLANMode = api.VXLANModeAlways
@@ -951,9 +952,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				It("should recover if the BPF programs are removed", func() {
-					if infrastructure.NetkitMode() {
-						Skip("Netkit uses bpf_link; removing pins doesn't detach programs")
-					}
+					// A workload on a netkit device is netkit-attached whatever
+					// BPFAttachType asks for, so its programs are removed by
+					// unpinning the link, and it has no qdisc to delete.
+					tcAttached := BPFAttachType() == "tc" && !infrastructure.NetkitMode()
+
 					flapInterface := func() {
 						By("Flapping interface")
 						tc.Felixes[0].Exec("ip", "link", "set", "down", w[0].InterfaceName)
@@ -974,7 +977,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ResetExpectations()
 
 						By("handling ingress program removal")
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							tc.Felixes[0].Exec("tc", "filter", "del", "ingress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_ingress", w[0].InterfaceName)))
@@ -991,7 +994,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.CheckConnectivity()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "ingress", "dev", w[0].InterfaceName)
 								return out
@@ -1006,7 +1009,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 
 						By("handling egress program removal")
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							tc.Felixes[0].Exec("tc", "filter", "del", "egress", "dev", w[0].InterfaceName)
 						} else {
 							tc.Felixes[0].Exec("rm", "-rf", path.Join(bpfProgPinDir(), fmt.Sprintf("%s_egress", w[0].InterfaceName)))
@@ -1017,7 +1020,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						trigger()
 
 						// Check the program is put back.
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							Eventually(func() string {
 								out, _ := tc.Felixes[0].ExecOutput("tc", "filter", "show", "egress", "dev", w[0].InterfaceName)
 								return out
@@ -1032,7 +1035,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						}
 						cc.CheckConnectivity()
 
-						if BPFAttachType() == "tc" {
+						if tcAttached {
 							By("Handling qdisc removal")
 							tc.Felixes[0].Exec("tc", "qdisc", "delete", "dev", w[0].InterfaceName, "clsact")
 

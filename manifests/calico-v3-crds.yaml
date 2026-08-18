@@ -66,7 +66,7 @@ data:
   cni_network_config: |-
     {
       "name": "k8s-pod-network",
-      "cniVersion": "0.3.1",
+      "cniVersion": "1.0.0",
       "plugins": [
         {
           "type": "calico",
@@ -302,13 +302,33 @@ spec:
                   x-kubernetes-list-type: atomic
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled,
-                    confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]
+                    ProgramClusterRoutes controls which "cluster routes" are programmed by Calico's BGP
+                    stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It
+                    only applies to IP Pools with vxlanMode: Never; the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.  The routes
+                    that BIRD does not program here are expected to be programmed by Felix instead.  Below,
+                    an IPIP IP Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one
+                    has ipipMode and vxlanMode both Never.
+
+                    - Disabled: BIRD programs no cluster routes.
+                    - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools.
+                    - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools.
+                    - Enabled: BIRD programs them for both.
+
+                    This field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from Felix's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledNoEncapOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 serviceClusterIPs:
                   description: |-
@@ -2430,17 +2450,13 @@ spec:
                     packets from external sources are dropped. [Default: true]
                   type: boolean
                 bpfJITHardening:
-                  allOf:
-                    - enum:
-                        - Auto
-                        - Strict
-                    - enum:
-                        - Auto
-                        - Strict
                   description: |-
                     BPFJITHardening controls BPF JIT hardening. When set to "Auto", Felix will set JIT hardening to 1
                     if it detects the current value is 2 (strict mode that hurts performance). When set to "Strict",
                     Felix will not modify the JIT hardening setting. [Default: Auto]
+                  enum:
+                    - Auto
+                    - Strict
                   type: string
                 bpfKubeProxyHealthzPort:
                   description: |-
@@ -3324,13 +3340,33 @@ spec:
                   type: string
                 programClusterRoutes:
                   description: |-
-                    ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-                    when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-                    it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-                    Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+                    ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+                    a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+                    with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+                    vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+                    are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+                    one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+                    vxlanMode both Never.
+
+                    - Disabled: Felix programs no cluster routes.
+                    - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+                    - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+                    - Enabled: Felix programs them for both.
+
+                    This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+                    makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+                    kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+                    routes at all.
+
+                    Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+                    values do, is deprecated as of v3.33 and will be removed in v3.35.
+
+                    [Default: EnabledIPIPOnly]
                   enum:
                     - Enabled
                     - Disabled
+                    - EnabledIPIPOnly
+                    - EnabledNoEncapOnly
                   type: string
                 prometheusGoMetricsEnabled:
                   description: |-
@@ -3351,6 +3387,11 @@ spec:
                   description: |-
                     PrometheusMetricsClientAuth specifies the client authentication type for the /metrics endpoint.
                     This determines how the server validates client certificates. Default is "NoClientCert".
+                  enum:
+                    - RequireAndVerifyClientCert
+                    - RequireAnyClientCert
+                    - VerifyClientCertIfGiven
+                    - NoClientCert
                   type: string
                 prometheusMetricsEnabled:
                   description:
@@ -5887,8 +5928,8 @@ spec:
                   description: |-
                     ReservedCIDRs is a list of CIDRs that Calico IPAM will exclude from new allocations.
                     Each entry must be in CIDR notation (e.g., "10.0.0.0/24" or "10.0.0.1/32" for a single IP).
-                  format: cidr
                   items:
+                    format: cidr
                     type: string
                   type: array
                   x-kubernetes-list-type: set
@@ -12309,6 +12350,7 @@ rules:
       - ipreservations
     verbs:
       - list
+      - watch
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
       - blockaffinities
@@ -13517,9 +13559,39 @@ webhooks:
           - CREATE
           - UPDATE
           - DELETE
+          - CONNECT
         resources:
           - networkpolicies
           - globalnetworkpolicies
           - stagednetworkpolicies
           - stagedglobalnetworkpolicies
-          - stagedkubernetesnetworkpolicies
+        scope: '*'
+  # Blocks user writes to ClusterInformation, which is managed by Calico system components.
+  # This mirrors the write protection provided by the aggregated API server.
+  - name: cluster-info.api.projectcalico.org
+    admissionReviewVersions:
+      - v1
+    clientConfig:
+      # Replace with the CA bundle for the webhook TLS certificate.
+      caBundle: ""
+      service:
+        name: calico-webhooks
+        namespace: kube-system
+        path: /cluster-info
+    # Ignore rather than Fail: calico-node and typha write ClusterInformation at startup,
+    # so a cluster restart must not depend on the webhook being up.
+    failurePolicy: Ignore
+    sideEffects: None
+    timeoutSeconds: 5
+    rules:
+      - apiGroups:
+          - projectcalico.org
+        apiVersions:
+          - v3
+        operations:
+          - CREATE
+          - UPDATE
+          - DELETE
+        resources:
+          - clusterinformations
+        scope: '*'

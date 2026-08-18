@@ -50,10 +50,10 @@ func Run(ctx context.Context, cfg *config.Config) {
 		server.WithAddr(cfg.HostAddr()),
 	}
 
-	// TODO maybe we can push getting tls files to the common http utilities package?
-	if cfg.TLSKeyPath != "" && cfg.TLSCertPath != "" {
-		opts = append(opts, server.WithTLSFiles(cfg.TLSCertPath, cfg.TLSKeyPath))
+	if cfg.ServerTLSCertPath == "" || cfg.ServerTLSKeyPath == "" {
+		logrus.Fatal("SERVER_TLS_CERT_PATH and SERVER_TLS_KEY_PATH must be set.")
 	}
+	opts = append(opts, server.WithTLSFiles(cfg.ServerTLSCertPath, cfg.ServerTLSKeyPath))
 
 	flowsAPI := v1.NewFlows(gmCli)
 
@@ -66,9 +66,8 @@ func Run(ctx context.Context, cfg *config.Config) {
 		logrus.WithError(err).Fatal("Failed to create server.")
 	}
 
-	// TODO Should we require that this is TLS? It will be in the same pod as nginx.
 	logrus.Infof("Listening on %s.", cfg.HostAddr())
-	if err := srv.ListenAndServe(ctx); err != nil {
+	if err := srv.ListenAndServeTLS(ctx); err != nil {
 		logrus.WithError(err).Fatal("Failed to start server.")
 	}
 

@@ -25,11 +25,11 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/calico/calicoctl/calicoctl/commands/common"
-	"github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 )
 
 func init() {
-	logutils.ConfigureFormatter("test")
+	logrusr.ConfigureFormatter("test")
 }
 
 func TestBpfJSONCmd_CollectsJSONWithTextFallback(t *testing.T) {

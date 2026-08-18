@@ -17,6 +17,7 @@ package nftables
 import (
 	"context"
 	"fmt"
+	"net"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -35,8 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -49,6 +49,13 @@ const (
 	objectTypeChain     = "chain"
 	objectTypeMap       = "map"
 	objectTypeFlowtable = "flowtable"
+
+	// How soon to re-assert the flowtable after pruning dropped a device, and how many times in a
+	// row we'll do it before falling back to the refresh timer. A device that is merely slow to
+	// appear is back within a retry or two; one that never appears - a workload endpoint whose
+	// veth is gone for good - mustn't keep us reprogramming forever.
+	FlowtablePruneRetryDelay = 5 * time.Second
+	MaxFlowtablePruneRetries = 5
 )
 
 type FlowTableHandler interface {
@@ -186,6 +193,10 @@ var (
 		Name: "felix_nft_flowtable_devices",
 		Help: "Number of devices attached to the Calico nftables flowtable.",
 	}, []string{"ip_version"})
+	gaugeNumFlowtableMissingDevices = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "felix_nft_flowtable_missing_devices",
+		Help: "Number of desired Calico nftables flowtable devices that do not exist in the kernel.",
+	}, []string{"ip_version"})
 )
 
 func init() {
@@ -196,6 +207,7 @@ func init() {
 	prometheus.MustRegister(gaugeNumChains)
 	prometheus.MustRegister(gaugeNumRules)
 	prometheus.MustRegister(gaugeNumFlowtableDevices)
+	prometheus.MustRegister(gaugeNumFlowtableMissingDevices)
 }
 
 // NftablesTable is an implementation of the generictables.Table interface that programs nftables. It represents a
@@ -271,10 +283,17 @@ type NftablesTable struct {
 	// is enabled, or deleted when it is disabled but a flowtable lingers from a previous run.
 	flowtableDirty bool
 
+	// flowtablePruneRetries counts consecutive Applies that left the flowtable dirty because
+	// pruning dropped a device. Bounded by MaxFlowtablePruneRetries.
+	flowtablePruneRetries int
+
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
+
+	// recreatePending is set by queueTableRecreate after repeated programming failures.
+	recreatePending bool
 
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
@@ -294,11 +313,12 @@ type NftablesTable struct {
 	peakNftablesWriteTime time.Duration
 
 	logCxt               *logrus.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *logrusr.RateLimitedLogger
 
-	gaugeNumChains           prometheus.Gauge
-	gaugeNumRules            prometheus.Gauge
-	gaugeNumFlowtableDevices prometheus.Gauge
+	gaugeNumChains                  prometheus.Gauge
+	gaugeNumRules                   prometheus.Gauge
+	gaugeNumFlowtableDevices        prometheus.Gauge
+	gaugeNumFlowtableMissingDevices prometheus.Gauge
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdshim.CmdFactory
@@ -307,8 +327,12 @@ type NftablesTable struct {
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
 
+	// listInterfaces returns the names of interfaces that currently exist in the kernel.
+	// Defaults to net.Interfaces(); overridable in tests.
+	listInterfaces func() ([]string, error)
+
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	reason       string
 
 	contextTimeout time.Duration
@@ -334,11 +358,15 @@ type TableOptions struct {
 	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
 	LookPathOverride func(file string) (string, error)
 
+	// ListInterfacesOverride for tests, if non-nil, replaces the net.Interfaces()-based
+	// lister used to prune the flowtable device list against kernel truth.
+	ListInterfacesOverride func() ([]string, error)
+
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
 
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder logrusr.OpRecorder
 }
 
 func NewTable(
@@ -451,6 +479,10 @@ func newTable(
 	if options.NowOverride != nil {
 		now = options.NowOverride
 	}
+	listInterfaces := realInterfaceNames
+	if options.ListInterfacesOverride != nil {
+		listInterfaces = options.ListInterfacesOverride
+	}
 
 	if options.NewDataplane == nil {
 		options.NewDataplane = knftables.New
@@ -484,9 +516,9 @@ func newTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		logCxt:                 logrus.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(30*time.Second),
+			logrusr.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,
@@ -497,10 +529,13 @@ func newTable(
 		timeSleep: sleep,
 		timeNow:   now,
 
-		gaugeNumChains:           gaugeNumChains.WithLabelValues(gaugeLabel),
-		gaugeNumRules:            gaugeNumRules.WithLabelValues(gaugeLabel),
-		gaugeNumFlowtableDevices: gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
-		opReporter:               options.OpRecorder,
+		listInterfaces: listInterfaces,
+
+		gaugeNumChains:                  gaugeNumChains.WithLabelValues(gaugeLabel),
+		gaugeNumRules:                   gaugeNumRules.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableDevices:        gaugeNumFlowtableDevices.WithLabelValues(gaugeLabel),
+		gaugeNumFlowtableMissingDevices: gaugeNumFlowtableMissingDevices.WithLabelValues(gaugeLabel),
+		opReporter:                      options.OpRecorder,
 
 		disabled: options.Disabled,
 
@@ -559,6 +594,11 @@ func (t *NftablesTable) GaugeNumFlowtableDevices() prometheus.Gauge {
 	return t.gaugeNumFlowtableDevices
 }
 
+// GaugeNumFlowtableMissingDevices exposes the felix_nft_flowtable_missing_devices gauge for tests.
+func (t *NftablesTable) GaugeNumFlowtableMissingDevices() prometheus.Gauge {
+	return t.gaugeNumFlowtableMissingDevices
+}
+
 // enableFlowtable turns on offload and recalculates the device list. The first enable marks
 // the flowtable dirty even when there are no devices, so the always-present FORWARD rule has
 // a flowtable to reference.
@@ -583,6 +623,59 @@ func (t *NftablesTable) recalcFlowtableDevices() {
 		t.flowtableDevices = combined
 		t.flowtableDirty = true
 	}
+}
+
+// realInterfaceNames returns the names of every network interface currently present in the
+// kernel, via a single netlink dump.
+func realInterfaceNames() ([]string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(ifaces))
+	for _, iface := range ifaces {
+		names = append(names, iface.Name)
+	}
+	return names, nil
+}
+
+// pruneToExistingDevices drops any device that the kernel no longer has, and reports whether it
+// dropped anything. A flowtable that references a missing device fails the whole nft
+// transaction, and the device lists we're given are fed asynchronously (endpoint manager,
+// ifacemonitor), so they can still name a veth that CNI already deleted.
+//
+// We deliberately ask the kernel rather than reusing ifacemonitor's cache: that cache is exactly
+// what's stale during this race - it hasn't processed the RTM_DELLINK yet - so consulting it
+// would tell us what we already believe. One netlink dump per programming pass is cheap next to
+// the transaction it protects, and it beats a per-device lookup once a node has a few hundred
+// workloads.
+//
+// On a listing error we fall open and return the list unchanged: a transient failure to read
+// interfaces shouldn't wipe offload from every device.
+func (t *NftablesTable) pruneToExistingDevices(devices []string) ([]string, bool) {
+	if len(devices) == 0 {
+		return devices, false
+	}
+	names, err := t.listInterfaces()
+	if err != nil {
+		t.logCxt.WithError(err).Warn("Failed to list interfaces while pruning flowtable devices; keeping cached list")
+		return devices, false
+	}
+
+	existing := set.FromArray(names)
+	pruned := make([]string, 0, len(devices))
+	var dropped []string
+	for _, d := range devices {
+		if existing.Contains(d) {
+			pruned = append(pruned, d)
+		} else {
+			dropped = append(dropped, d)
+		}
+	}
+	if len(dropped) > 0 {
+		t.logCxt.WithField("devices", dropped).Info("Pruned flowtable devices that no longer exist in the kernel")
+	}
+	return pruned, len(dropped) > 0
 }
 
 // InsertOrAppendRules sets the rules that should be inserted into or appended
@@ -1047,21 +1140,16 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
-				if retries < 6 {
-					// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
-					// This can help in case we are trying to make a change that is incompatible with the current table state.
-					t.logCxt.Warn("Recreating table due to prior nftables programming error")
-					tx := t.nft.NewTransaction()
-					tx.Delete(&knftables.Table{})
-					tx.Add(&knftables.Table{})
-
-					if err := t.runTransaction(tx); err != nil {
-						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
-					}
+				if retries < 6 && !t.disabled {
+					// If we hit multiple failures in a row, rebuild the table from scratch on the next
+					// iteration. This can help in case we are trying to make a change that is
+					// incompatible with the current table state.
+					t.logCxt.Warn("Queueing table recreate due to prior nftables programming error")
+					t.queueTableRecreate()
+				} else {
+					// Reload the data plane state in case we're out of sync.
+					t.loadDataplaneState()
 				}
-
-				// Reload the data plane state in case we're out of sync.
-				t.loadDataplaneState()
 
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
@@ -1095,7 +1183,41 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		}).Debug("Calculating reschedule time")
 		rescheduleAfter = t.refreshInterval - lastReadToNow
 	}
+
+	// A flowtable left dirty is waiting on a device to appear, so come back for it promptly
+	// instead of waiting out the refresh interval (which may be disabled entirely).
+	if t.flowtableDirty && (rescheduleAfter == 0 || rescheduleAfter > FlowtablePruneRetryDelay) {
+		rescheduleAfter = FlowtablePruneRetryDelay
+	}
 	return
+}
+
+// queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same
+// transaction that rewrites the whole ruleset, so the table is never left without its base chains.
+func (t *NftablesTable) queueTableRecreate() {
+	if t.recreatePending {
+		// Already queued, and the desired state cannot change mid-retry, so nothing to redo.
+		return
+	}
+	t.recreatePending = true
+
+	// Nothing in the table survives the recreate, so drop our view of it and mark everything we
+	// want back as dirty.
+	t.chainToDataplaneHashes = map[string][]string{}
+	t.dirtyChains = set.New[string]()
+	for chainName := range t.chainNameToChain {
+		if _, present := t.desiredStateOfChain(chainName); present {
+			t.markChainDirty(chainName)
+		}
+	}
+	for chainName := range t.baseChainDefs {
+		t.dirtyBaseChains.Add(chainName)
+	}
+	t.flowtableDirty = t.flowtableEnabled
+
+	// We already know what the table will contain, so there is nothing to be gained from reading
+	// it back before the retry.
+	t.inSyncWithDataPlane = true
 }
 
 func (t *NftablesTable) applyUpdates() error {
@@ -1105,16 +1227,37 @@ func (t *NftablesTable) applyUpdates() error {
 	// Start a new nftables transaction.
 	tx := t.nft.NewTransaction()
 
+	// Set when the flowtable needs another pass, so the dirty-clear at the end of this function
+	// leaves flowtableDirty set for the next Apply.
+	keepFlowtableDirty := false
+
 	// Get the set of map updates we need to make. We'll interleave these with the chain updates.
 	// in the correct order. Namely:
 	// - Create any new maps.
 	// - Create any new chains / rules.
 	// - Add elements to maps.
+	// The recreate below takes the sets and maps with it, and each layer tracks its own view of
+	// what it programmed. Drop those views here, next to the recreate they depend on, so the two
+	// cannot get out of step.
+	if t.recreatePending && !t.disabled {
+		t.QueueResync()
+		t.InvalidateMapsCache()
+	}
+
 	mapUpdates := t.MapUpdates()
 
-	if !t.disabled && len(t.chainToDataplaneHashes) == 0 {
-		// Table is enabled, but doesn't exist in the dataplane yet.
-		tx.Add(&knftables.Table{})
+	if !t.disabled {
+		if t.recreatePending {
+			// nftables commits the whole transaction or none of it, so folding the recreate in with
+			// the rewrite below means the table is never left standing without its base chains. The
+			// leading Add keeps the Delete from failing if the table is already gone.
+			tx.Add(&knftables.Table{})
+			tx.Delete(&knftables.Table{})
+			tx.Add(&knftables.Table{})
+		} else if len(t.chainToDataplaneHashes) == 0 {
+			// Table is enabled, but doesn't exist in the dataplane yet.
+			tx.Add(&knftables.Table{})
+		}
 	}
 
 	// Add in any new maps we need to create.
@@ -1145,13 +1288,24 @@ func (t *NftablesTable) applyUpdates() error {
 	// even with no devices). The delete for the disabled case is deferred to the end of the
 	// transaction, after the referencing rule has been flushed away.
 	if t.flowtableDirty && t.flowtableEnabled {
+		devices, dropped := t.pruneToExistingDevices(t.flowtableDevices)
 		prio := knftables.FilterIngressPriority
 		tx.Add(&knftables.Flowtable{
 			Name:     dataplanedefs.FlowtableName,
 			Priority: &prio,
-			Devices:  t.flowtableDevices,
+			Devices:  devices,
 		})
-		t.gaugeNumFlowtableDevices.Set(float64(len(t.flowtableDevices)))
+		t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
+		t.gaugeNumFlowtableMissingDevices.Set(float64(len(t.flowtableDevices) - len(devices)))
+
+		// Pruning is symmetric: it also drops a device that hasn't appeared yet, which happens
+		// when we learn about a workload before its veth is created. Nothing re-dirties the
+		// flowtable when the device does show up - the desired list never changed - so stay dirty
+		// and re-assert shortly rather than leaving the device unoffloaded until the next resync.
+		if dropped && t.flowtablePruneRetries < MaxFlowtablePruneRetries {
+			t.flowtablePruneRetries++
+			keepFlowtableDirty = true
+		}
 	}
 
 	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
@@ -1291,6 +1445,7 @@ func (t *NftablesTable) applyUpdates() error {
 	if t.flowtableDirty && !t.flowtableEnabled {
 		tx.Delete(&knftables.Flowtable{Name: dataplanedefs.FlowtableName})
 		t.gaugeNumFlowtableDevices.Set(0)
+		t.gaugeNumFlowtableMissingDevices.Set(0)
 	}
 
 	if t.disabled && len(t.chainToDataplaneHashes) != 0 {
@@ -1324,7 +1479,13 @@ func (t *NftablesTable) applyUpdates() error {
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
-	t.flowtableDirty = false
+	t.recreatePending = false
+	if !keepFlowtableDirty {
+		t.flowtableDirty = false
+
+		// A stale count would shorten the retry budget of the next prune.
+		t.flowtablePruneRetries = 0
+	}
 
 	// Store off the updates.
 	for chainName, hashes := range newHashes {

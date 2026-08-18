@@ -701,6 +701,15 @@ func (c *loadBalancerController) assignIP(svc *v1.Service) ([]string, error) {
 		return nil, err
 	}
 
+	// Fall back to spec.loadBalancerIP when no specific IP was requested via annotation.
+	if loadBalancerIPs == nil && svc.Spec.LoadBalancerIP != "" {
+		ip := cnet.ParseIP(svc.Spec.LoadBalancerIP)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP in spec.loadBalancerIP: %s", svc.Spec.LoadBalancerIP)
+		}
+		loadBalancerIPs = []cnet.IP{*ip}
+	}
+
 	var assignedIPs []string
 
 	metadataAttrs := map[string]string{
@@ -912,10 +921,11 @@ func IsCalicoManagedLoadBalancer(svc *v1.Service, assignIPs api.AssignIPs) bool 
 
 		if svc.Annotations[annotationIPv4Pools] != "" ||
 			svc.Annotations[annotationIPv6Pools] != "" ||
-			svc.Annotations[annotationLoadBalancerIP] != "" {
+			svc.Annotations[annotationLoadBalancerIP] != "" ||
+			svc.Spec.LoadBalancerIP != "" {
 
 			if svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != calicoLoadBalancerClass {
-				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer annotation set with spec.LoadBalancerClass != calico is not supported")
+				log.WithFields(log.Fields{"svc": svc.Name, "ns": svc.Namespace}).Warn("calico LoadBalancer IP request set with spec.LoadBalancerClass != calico is not supported")
 				return false
 			}
 			return true

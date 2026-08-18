@@ -59,13 +59,13 @@ import (
 	"github.com/projectcalico/calico/felix/ifacemonitor"
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/felix/ipsets"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	mocknetlink "github.com/projectcalico/calico/felix/netlinkshim/mocknetlink"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/types"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -87,6 +87,7 @@ type mockDataplane struct {
 
 	jitHarden             bool
 	finalTrampolineStride int
+	erangeCount           int
 }
 
 func newMockDataplane() *mockDataplane {
@@ -296,6 +297,18 @@ func (m *mockDataplane) numOfAttaches(key string) int {
 	return m.numAttaches[key]
 }
 
+func (m *mockDataplane) getFinalTrampolineStride() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.finalTrampolineStride
+}
+
+func (m *mockDataplane) getErangeCount() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.erangeCount
+}
+
 func (m *mockDataplane) setRoute(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -351,10 +364,15 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 		}
 
 		if builder.TrampolineStride() > 15000 {
+			m.mutex.Lock()
+			m.erangeCount++
+			m.mutex.Unlock()
 			return nil, nil, unix.ERANGE
 		}
 
+		m.mutex.Lock()
 		m.finalTrampolineStride = builder.TrampolineStride()
+		m.mutex.Unlock()
 	}
 
 	fdCounterLock.Lock()
@@ -530,7 +548,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			filterTableV4,
 			filterTableV6,
 			nil,
-			logutils.NewSummarizer("test"),
+			logrusr.NewSummarizer("test"),
 			&routetable.DummyTable{}, // FIXME test the routes.
 			&routetable.DummyTable{}, // FIXME test the routes.
 			lookupsCache,
@@ -719,6 +737,43 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	It("exists", func() {
 		Expect(bpfEpMgr).NotTo(BeNil())
+	})
+
+	It("keeps a not-managed host interface's ifstate entry across a felix restart", func() {
+		// A host interface that matches neither the data, workload, nor L3
+		// pattern (e.g. an ExternalNetwork exit device) is recorded in the
+		// ifstate map with FlgNotManaged. fib_approve relies on that entry to
+		// let an egress gateway's own traffic out; without it the gateway's
+		// health probes are dropped and it never becomes ready (CORE-13245).
+		const (
+			exitDev = "extnet0"
+			exitIdx = 37
+		)
+
+		// The device exists throughout, so the start-of-day resync sees it as
+		// present when it walks the pinned ifstate map after a restart.
+		dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+			if ifindex == exitIdx {
+				return &net.Interface{Name: exitDev, Index: exitIdx, Flags: net.FlagUp}, nil
+			}
+			return nil, errors.New("no such network interface")
+		}
+
+		By("recording the not-managed entry when the device first comes up")
+		genIfaceUpdate(exitDev, ifacemonitor.StateUp, exitIdx)()
+		checkIfState(exitIdx, exitDev, ifstate.FlgNotManaged)
+
+		By("restarting felix with the device already present")
+		// A fresh manager reuses the pinned ifstate map. The pre-existing
+		// device's up event is delivered before the start-of-day sync runs
+		// (both happen in the first CompleteDeferredWork).
+		newBpfEpMgr(false)
+		genIfaceUpdate(exitDev, ifacemonitor.StateUp, exitIdx)()
+
+		// The entry must still be there. syncIfStateMap must not prune a
+		// present, not-managed device's entry just because it is not one we
+		// actively manage.
+		checkIfState(exitIdx, exitDev, ifstate.FlgNotManaged)
 	})
 
 	Context("with lookup cache", func() {
@@ -1156,7 +1211,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should load program with shorter trampoline jumps", func() {
 			Expect(dp.programAttached("cali12345:ingress")).To(BeTrue())
 			Expect(dp.programAttached("cali12345:egress")).To(BeTrue())
-			Expect(dp.finalTrampolineStride).To(BeNumerically("<=", 15000))
+			// The initial (default-stride) attempt(s) must have been rejected
+			// with ERANGE before the retry loop found a stride that fits;
+			// otherwise finalTrampolineStride's "<= 15000" check below is
+			// trivially true regardless of whether the retry logic ran.
+			Expect(dp.getErangeCount()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically("<=", 15000))
 		})
 	})
 

@@ -122,6 +122,25 @@ func TestBuildExportFilter_EmptyFilters(t *testing.T) {
 	assert.Contains(t, result, "calico_export_to_bgp_peers")
 }
 
+func TestGetBirdBGPConfig_ServiceExternalIPs(t *testing.T) {
+	originalNodeName := NodeName
+	NodeName = "test-node"
+	defer func() { NodeName = originalNodeName }()
+
+	cache := map[string]string{
+		"/calico/bgp/v1/host/test-node/ip_addr_v4": "10.0.0.1",
+		"/calico/bgp/v1/global/as_num":             "64512",
+	}
+	c := newTestClient(cache, nil)
+	c.globalBGPConfig.Spec.ServiceExternalIPs = []v3.ServiceExternalIPBlock{
+		{CIDR: "203.0.113.10/32"},
+	}
+
+	config, err := c.GetBirdBGPConfig(4)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"203.0.113.10/32"}, config.ExternalIPs)
+}
+
 func TestRouterIDGeneration_Hash(t *testing.T) {
 	NodeName = "test-node-hash"
 	require.NoError(t, os.Setenv("CALICO_ROUTER_ID", "hash"))

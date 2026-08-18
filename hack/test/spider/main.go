@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,19 @@ import (
 // packages which need to have their unit tests executed as a result of a given diff.
 
 var shaA, shaB, commitRange, filterDir string
+
+// sentinel marks a completed run, letting callers tell an empty package list
+// apart from a crash.
+const sentinel = "__SPIDER_OK__"
+
+// failClosed reports why the package set is unknown and tells the caller to
+// test everything.
+func failClosed(reason string) {
+	fmt.Fprintf(os.Stderr, "test spider failed, falling back to all tests: %s\n", reason)
+	fmt.Println(".")
+	fmt.Println(sentinel)
+	os.Exit(0)
+}
 
 func init() {
 	flag.StringVar(&shaA, "shaA", "", "First commit in diff calculation")
@@ -72,7 +85,7 @@ func loadPackages() []Package {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+		failClosed(fmt.Sprintf("go list: %s: %s", err, stderr.String()))
 	}
 	splits := strings.SplitAfter(out.String(), "}\n")
 
@@ -88,7 +101,7 @@ func loadPackages() []Package {
 		pkg := Package{}
 		err := json.Unmarshal([]byte(s), &pkg)
 		if err != nil {
-			panic(err)
+			failClosed(fmt.Sprintf("parsing go list output: %s", err))
 		}
 
 		// Filter out packages that aren't part of this repo.
@@ -119,7 +132,7 @@ func loadPackages() []Package {
 
 func getCommits() (string, string) {
 	if shaA == "" && shaB == "" && commitRange == "" {
-		panic("No commit information provided!")
+		failClosed("no commit information provided")
 	}
 
 	if shaA != "" && shaB != "" {
@@ -157,7 +170,7 @@ func main() {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+		failClosed(fmt.Sprintf("git diff %s %s: %s: %s", c1, c2, err, stderr.String()))
 	}
 
 	// First, check if go.mod has changed. If it has, we can skip building a graph of changed / impacted
@@ -170,11 +183,12 @@ func main() {
 		cmd.Stderr = &stderr
 		err := cmd.Run()
 		if err != nil {
-			panic(fmt.Sprintf("%s: %s", err, stderr.String()))
+			failClosed(fmt.Sprintf("listing test packages: %s: %s", err, stderr.String()))
 		}
 		for p := range strings.SplitSeq(out.String(), "\n") {
 			fmt.Println(p)
 		}
+		fmt.Println(sentinel)
 		return
 	}
 
@@ -230,6 +244,7 @@ func main() {
 	for _, s := range sorted {
 		fmt.Println(s)
 	}
+	fmt.Println(sentinel)
 }
 
 type Package struct {

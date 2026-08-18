@@ -12,7 +12,7 @@
 # Required env:
 #   BZ_LOCAL_DIR, BZ_LOGS_DIR, HOME, REPORT_DIR, TEST_TYPE
 # Required for local builds:
-#   E2E_TEST_CONFIG
+#   E2E_TEST_CONFIG or K8S_E2E_FLAGS
 # Required for hashrelease downloads:
 #   RELEASE_STREAM
 #
@@ -32,7 +32,7 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -sS "https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt")
+  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
   echo "[INFO] hashrelease URL: ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   mkdir -p "${HOME}/calico/e2e/bin/k8s"
@@ -44,6 +44,17 @@ fi
 
 if [[ -n "${E2E_BINARY:-}" ]]; then
   echo "[INFO] starting e2e tests..."
+
+  # Pick one selection channel: an empty config runs the whole suite unfiltered.
+  if [[ -n "${E2E_TEST_CONFIG:-}" ]]; then
+    E2E_GINKGO_ARGS=""
+  elif [[ -n "${K8S_E2E_FLAGS:-}" ]]; then
+    E2E_GINKGO_ARGS="${K8S_E2E_FLAGS}"
+  else
+    echo "[ERROR] neither E2E_TEST_CONFIG nor K8S_E2E_FLAGS is set; refusing to run the whole suite"
+    exit 1
+  fi
+
   pushd "${HOME}/calico" || exit
 
   # Pick a runtime image. The local-build path already pulled
@@ -81,6 +92,35 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     auth_mount=(-v "${BZ_LOCAL_DIR}/bin/aws-iam-authenticator:/usr/local/bin/aws-iam-authenticator:ro")
   fi
 
+  # Some provisioners (notably OpenShift) taint control-plane nodes
+  # NoSchedule. The k8s e2e framework waits for *all* nodes to be schedulable
+  # (--allowed-not-ready-nodes 0) and otherwise hangs until the 30m
+  # SynchronizedBeforeSuite timeout, so untaint them first — matching what the
+  # legacy `bz tests` runner did. Harmless (`|| true`) on clusters with no such
+  # taint. Run on the host (API is reachable here; install used it).
+  for _taint in node-role.kubernetes.io/master- node-role.kubernetes.io/control-plane-; do
+    KUBECONFIG="${BZ_LOCAL_DIR}/kubeconfig" ./hack/test/kind/kubectl taint nodes --all "${_taint}" || true
+  done
+
+  # Private clusters (e.g. private AKS) have no public API endpoint; the API is
+  # reachable only through a SOCKS proxy over an SSH tunnel to an in-VNet host.
+  # banzai-core persists that tunnel command (incl. its SSH key) to Taskvars.yml
+  # and the kubeconfig points at the proxy (proxy-url: socks5://localhost:<port>).
+  # The legacy `bz tests` runner opened the tunnel around the test; this runner
+  # bypasses `bz tests`, so open it here for the run and close it after. With
+  # --net=host the container reaches the host's proxy port. No-op (TUNNEL_CMD
+  # empty) for public clusters. `|| true` keeps the read safe under `set -e`.
+  TUNNEL_CMD="$(grep -E '^MASTER_TUNNEL_COMMAND:' "$(dirname "${BZ_LOCAL_DIR}")/Taskvars.yml" 2>/dev/null | sed -E 's/^MASTER_TUNNEL_COMMAND:[[:space:]]*//' || true)"
+  # Only teardown a tunnel this script started; a pre-existing one is someone
+  # else's to manage. The command is a foreground `ssh -qN` (no -f), so the
+  # backgrounded job is the ssh process itself and $! is the PID to kill.
+  TUNNEL_PID=""
+  if [[ -n "${TUNNEL_CMD}" ]] && ! pgrep -fx "${TUNNEL_CMD}" >/dev/null 2>&1; then
+    echo "[INFO] opening SOCKS tunnel for private-cluster API access"
+    ${TUNNEL_CMD} &
+    TUNNEL_PID=$!
+  fi
+
   # Capture the exit code so the JUnit copy below runs even when tests fail
   # (set -e would otherwise bail out before the cp).
   e2e_rc=0
@@ -90,6 +130,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
     -e PRODUCT=${PRODUCT:-calico} \
+    -e E2E_GINKGO_ARGS="${E2E_GINKGO_ARGS}" \
     ${K8S_E2E_DOCKER_EXTRA_FLAGS:-} \
     "${auth_mount[@]}" \
     -v "$(pwd)":/go/src/github.com/projectcalico/calico:rw \
@@ -106,6 +147,9 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
         E2E_OUTPUT_DIR=report \
         E2E_JUNIT_REPORT=junit.xml" \
     |& tee "${BZ_LOGS_DIR}/${TEST_TYPE}-tests.log" || e2e_rc=$?
+
+  # Close the SOCKS tunnel only if we opened it (no-op otherwise).
+  [[ -n "${TUNNEL_PID}" ]] && kill "${TUNNEL_PID}" >/dev/null 2>&1 || true
 
   # Copy JUnit XML to REPORT_DIR so the epilogue publishes it.
   mkdir -p "${REPORT_DIR}"
