@@ -30,6 +30,10 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 	sets := map[string]Lane{}
 	for _, l := range lanes {
 		if !l.RunsE2EBinary() {
+			// run_tests.sh exits 1 on an e2e lane that selects nothing.
+			if l.TestType == "k8s-e2e" && l.Area != "" {
+				return nil, fmt.Errorf("%s (%s) runs the e2e binary but selects nothing", l.Name, l.Source)
+			}
 			continue
 		}
 		name, err := SetName(l)
@@ -98,6 +102,9 @@ func Write(dir string, lanes []Lane, specs map[string][]string) error {
 	index.WriteString("# ci file | lane | test set | specs\n")
 	for _, l := range lanes {
 		set, count := "("+l.TestType+")", "-"
+		if l.Area == "" {
+			set = "(no tests)"
+		}
 		if l.RunsE2EBinary() {
 			name, err := SetName(l)
 			if err != nil {

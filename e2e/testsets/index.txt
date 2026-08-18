@@ -132,7 +132,7 @@
 .semaphore/end-to-end/pipelines/certification.yml | HCP hosted setup and tests / HCP tests - hosted (cert) | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/certification.yml | HCP setup hosting / HCP setup hosting | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/certification.yml | Standalone cluster tests / Standalone cluster tests (cert) | (ocp-cert) | -
-.semaphore/end-to-end/pipelines/cleanup.yml | Cleanup jobs / cleanup job VMs | (k8s-e2e) | -
+.semaphore/end-to-end/pipelines/cleanup.yml | Cleanup jobs / cleanup job VMs | (no tests) | -
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS Private w AKS CNI + Overlay | legacy/iptables/aks-aks-private-w-aks-cni-overlay | 462
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS migrate from vendored Calico CNI to Calico CNI | legacy/iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 426
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w AKS CNI | legacy/iptables/aks-aks-w-aks-cni | 425

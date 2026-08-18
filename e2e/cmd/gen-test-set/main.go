@@ -23,8 +23,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/calico/e2e/pkg/cilanes"
 )
@@ -59,29 +63,44 @@ func run(repoRoot, binary, outDir string) error {
 		return err
 	}
 
-	specs := make(map[string][]string, len(sets))
 	names := make([]string, 0, len(sets))
 	for name := range sets {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+
+	var mu sync.Mutex
+	specs := make(map[string][]string, len(sets))
+	g := new(errgroup.Group)
+	g.SetLimit(runtime.NumCPU())
 	for _, name := range names {
 		args, err := sets[name].SelectionArgs(repoRoot)
 		if err != nil {
 			return err
 		}
-		found, err := dryRun(binary, repoRoot, args)
-		if err != nil {
-			return fmt.Errorf("%s: %w", name, err)
-		}
-		specs[name] = found
-		if len(found) == 0 {
+		g.Go(func() error {
+			found, err := dryRun(binary, repoRoot, args)
+			if err != nil {
+				return fmt.Errorf("%s: %w", name, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			specs[name] = found
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	for _, name := range names {
+		if len(specs[name]) == 0 {
 			// An empty set is a lane burning a cluster on nothing, so report it
 			// rather than failing the whole generation.
 			fmt.Fprintf(os.Stderr, "%5s  %s\n", "EMPTY", name)
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "%5d  %s\n", len(found), name)
+		fmt.Fprintf(os.Stderr, "%5d  %s\n", len(specs[name]), name)
 	}
 
 	return cilanes.Write(filepath.Join(repoRoot, outDir), lanes, specs)
