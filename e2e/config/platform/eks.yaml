@@ -19,4 +19,8 @@ exclude:
         - 'DNS.for.pods.for.Subdomain'
         - 'DNS.for.services'
         - 'DNS.for.the.cluster'
-        - 'DNS.qualified.names.for.services'
+        - 'qualified.names.for.services'
+    - group: "EKS pod networking limits, see CORE-6725"
+      patterns:
+        - 'IPAM.StrictAffinity'
+        - 'DNS.should.provide./etc/hosts'

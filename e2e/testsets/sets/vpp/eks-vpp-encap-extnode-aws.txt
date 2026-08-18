@@ -98,7 +98,6 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
-[sig-calico] [Team:CORE] [Feature:IPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
