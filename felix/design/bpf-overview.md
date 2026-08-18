@@ -41,6 +41,11 @@ documented in [`dataplane.md`](./dataplane.md); this BPF family covers
 only what is BPF-specific — the packet path, the BPF maps, and the
 mode's own managers. A BPF dataplane PR therefore usually needs both.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../../design/MAINTAINING.md).
+
 ## Conventions used in BPF design docs
 
 - `*tables` means "the legacy netfilter dataplane, iptables or
@@ -312,21 +317,6 @@ The per-section review notes cover what a reviewer should check inside
 a given topic. This final section collects the handful of checks that
 don't belong to any single topic — they come up repeatedly in BPF
 dataplane review because several subsystems happen to share them.
-
-### Keep this document in sync with the code
-
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the BPF dataplane, "changes how it works" means a
-new sub-program, a new CT flag, a new mark bit, a new map or map
-field, a new config knob affecting any of those, or any change
-to the packet path or forwarding decision. The relevant section
-of the matching sub-design (and `bpf-overview.md` if cross-cutting
-content is affected) must be updated in the same PR. This file
-and its sibling sub-designs under [`felix/design/`](.) are the
-source of truth.
 
 ### Changes that touch shared maps
 

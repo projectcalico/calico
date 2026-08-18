@@ -129,6 +129,9 @@ the source alone.
 - `design/<topic>/` — designs for subsystems spanning several components (e.g.
   IPAM). Pointer stubs may sit in consumer subdirectories, but the canonical
   content lives here.
+- [`design/MAINTAINING.md`](../design/MAINTAINING.md) — how to maintain any of
+  the above: when a code change earns a doc edit, how terse it should be, and
+  what belongs in the commit message instead.
 - `<component>/CLAUDE.md` — operational guidance only. Not architecture.
 
 Complex components split their design across a directory with an "applies to"
@@ -141,11 +144,31 @@ every matching sub-design.
 1. Before writing or reviewing code in a component, read that component's
    `DESIGN.md` (or, for Felix, the sub-designs matching the paths you touch).
 2. Follow links. A design is a graph, not a single node.
-3. A PR that changes how a component works — its behaviour, data model,
-   configuration surface, or any invariant the design records — must update the
-   relevant `DESIGN.md` in the same PR. Exemptions: bug fix restoring documented
-   behaviour, mechanical refactor, comment or log-message edits, dependency
-   bumps. If in doubt, update the doc.
+3. A design doc records the design, not the change that introduced it, and
+   **the default is no edit**. Edit one only when a sentence in it is now
+   false, a new invariant exists that a future change could silently break, or
+   a new concept exists that the doc's mental model does not name. A new
+   behaviour, flag, field, config key, or bug fix is not by itself any of
+   those.
+
+### Editing a design doc
+
+[`design/MAINTAINING.md`](../design/MAINTAINING.md) is the canonical rule —
+read it before editing any `DESIGN.md`. In short:
+
+- Never copy or paraphrase the commit message or PR description into a design
+  doc. That narrative belongs in git, exactly as for code comments.
+- **In doubt, propose — don't write.** Keep the edit out of the PR: show the
+  user the target file, the target section, and the exact one to three lines
+  you would add, and wait for approval. Raise it at the pre-commit checkpoint,
+  batched into a single ask, so it never blocks the code work. When one of the
+  three conditions clearly holds, just make the edit.
+- A warranted edit is normally **one to three lines**, edited into the section
+  that already covers the area. Fix the existing sentence before adding a new
+  one; a new `###` heading needs a new concept, not a new behaviour. Past about
+  five lines you are narrating the change.
+- Write at an altitude that survives a rename: state the invariant, and name
+  identifiers or files as one orientation pointer per concept.
 
 ## Tests required for code changes
 

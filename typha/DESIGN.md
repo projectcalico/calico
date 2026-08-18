@@ -15,6 +15,11 @@ connection.
   ~50 nodes. The typical operator-managed deployment runs
   Typha as a DaemonSet or Deployment in front of the datastore.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../design/MAINTAINING.md).
+
 ## Cross-cutting
 
 - Combined `calico` binary, restart-on-config-change, health
@@ -24,14 +29,7 @@ connection.
   [`felix/DESIGN.md`](../felix/DESIGN.md) §1 under the data
   flow / lifecycle sections.
 
-## Keep this doc in sync with the code
-
-A PR that changes how Typha works — its fan-out behaviour, the
-datastore-side connection shape, the Felix-facing protocol, or
-any documented invariant — must update this file in the same PR.
-Exemptions: bug fix restoring documented behaviour, mechanical
-refactor with no observable change, comment / log-message edits,
-dependency bumps. If in doubt, update.
+## Gaps
 
 This doc is currently a stub. Sections to flesh out as the
 content grows: fan-out architecture and connection management,

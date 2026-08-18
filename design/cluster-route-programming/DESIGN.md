@@ -29,6 +29,11 @@ choice is a single decision split across two components, two API resources, and
 the node container's BIRD templates.  Getting either half wrong leaves a cluster
 with no cluster routes, or with two components fighting over the same ones.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## 1. The ownership matrix
 
 There are three classes of non-VXLAN, non-WireGuard IP Pool, and the owner of
@@ -315,16 +320,7 @@ way.  This is a documentation and release-note obligation, not a code one.
 - Closing any of these gaps means editing this section, not appending a new
   one.  A gap list that only grows stops being read.
 
-## 6. Keep this doc in sync with the code
-
-A PR that changes which component programs cluster routes, the enum values or
-defaults of either `programClusterRoutes` field, the BIRD kernel-programming
-filter, or the deprecation and removal plan, must update this file in the same
-PR.  Exemptions: a bug fix restoring behaviour this doc already describes, a
-mechanical refactor with no observable change, comment or log-message edits, and
-dependency bumps.  If in doubt, update.
-
-Related designs:
+## 6. Related designs
 
 - [`felix/design/dataplane.md`](../../felix/design/dataplane.md) — the manager
   and route-table architecture that `ipipManager` and `noEncapManager` sit in.

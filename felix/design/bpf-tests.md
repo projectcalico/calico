@@ -31,6 +31,11 @@ PR must include a test, how to choose the level) lives in
 The full set of sub-designs is listed in
 [`felix/DESIGN.md`](../DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../../design/MAINTAINING.md).
+
 ## BPF unit test harness (`bpf/ut/`)
 
 `bpf/ut/bpf_prog_test.go` is the test harness. Each file in
@@ -161,19 +166,11 @@ needs an external client to exercise that path must restrict to
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane is tested in the area this file
-covers must update the relevant section in the same PR — new
-harness pattern, new matrix axis, new UT category, new
-verifier-time gate. Exemptions: (a) bug fix restoring documented
-behaviour, (b) mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) dependency bumps. If in
-doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
 Felix-wide test discipline lives in
 [`.claude/CLAUDE.md` → Tests required for code changes](../../.claude/CLAUDE.md).

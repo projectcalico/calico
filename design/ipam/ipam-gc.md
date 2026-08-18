@@ -20,6 +20,11 @@ rather than restating.
 The controller is a single goroutine fed by `syncerUpdates`, `syncChan`, `nodeDeletionChan`, and `podDeletionChan`. Events are coalesced via `utils.ProcessBatch`. Periodic interval
 is `LeakGracePeriod / 2`, defaulting to 5 minutes; dirty-only scans run between full scans.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## Leak detection
 
 Invariants:

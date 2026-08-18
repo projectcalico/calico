@@ -20,6 +20,11 @@ Operational guidance (build, test, debug recipes) lives in
 [`goldmane/CLAUDE.md`](./CLAUDE.md). This document is for
 architecture, invariants, and the daemon's external surface.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../design/MAINTAINING.md).
+
 ## gRPC services
 
 Defined in `proto/api.proto`. Goldmane exposes three services on a
@@ -179,12 +184,8 @@ is a contract change for dashboards and alerting; record it here.
 
 ## Cross-cutting review notes
 
-- **Keep this document in sync with the code.** A change to the
-  gRPC services, core components, key concepts, config surface,
-  or Prometheus metrics must update the relevant section in the
-  same PR. Exemptions: (a) a bug fix that restores behaviour
-  this doc already describes, (b) a mechanical refactor with no
-  observable change, (c) comment / log-message edits, (d)
-  dependency bumps. If in doubt, update the doc.
+- **Keep this document in sync with the code**, per
+  [`design/MAINTAINING.md`](../design/MAINTAINING.md) and the note at
+  the top of this file.
 - Operational recipes (build, test, debug) do not belong here —
   they live in [`goldmane/CLAUDE.md`](./CLAUDE.md).

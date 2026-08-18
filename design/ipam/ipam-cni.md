@@ -17,6 +17,11 @@ cross-component picture - data model, consumers, repo split - lives in the [inde
 The CNI plugin ships two binaries: `calico` (main CNI) and `calico-ipam` (invoked when `conf.IPAM.Type == "calico-ipam"`). The dispatcher in
 [`cni-plugin/cmd/calico/calico.go`](../../cni-plugin/cmd/calico/calico.go) routes by binary name.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## ADD flow
 
 Invariants:
