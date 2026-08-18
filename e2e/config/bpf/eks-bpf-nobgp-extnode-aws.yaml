@@ -11,6 +11,8 @@ exclude:
   labels:
     - label: Feature:AutoHEPs
       reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
+    - label: Feature:Maglev
+      reason: "maglev needs BPF DSR, which this lane does not enable"
     - label: RequiresBGP
       reason: "Calico is not doing BGP here (Felix routing, or the provider's own CNI with Calico policy-only), so BIRD is not running"
     - label: RequiresXtables
