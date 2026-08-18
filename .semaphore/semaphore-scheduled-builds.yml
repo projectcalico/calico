@@ -881,14 +881,15 @@ blocks:
             - .semaphore/run-and-monitor rapidclient-ci.log make -C e2e/images/rapidclient ci
   - name: E2E test set drift
     run:
-      when: >-
-        true or change_in(['/e2e/', '/.argoci/cron/', '/.semaphore/end-to-end/pipelines/'],
-        {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})
+      when: "true"
     execution_time_limit:
       minutes: 30
     dependencies:
       - Prerequisites
     task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: calico
       jobs:
         - name: "E2E test set drift: check-test-set"
           commands:

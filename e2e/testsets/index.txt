@@ -46,7 +46,8 @@
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | k8s-distros | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-iptables.yaml | migration | legacy/iptables/migration | 1
+.argoci/cron/e2e-iptables.yaml | migration | legacy/iptables/migration | 426
+.argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | legacy/iptables | 425
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | legacy/iptables | 425
@@ -69,8 +70,10 @@
 .argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | legacy/patch-verification | 84
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | legacy/patch-verification/manifests-canal-migration | 1
-.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration | legacy/patch-verification/manifests-flannel-migration | 1
+.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | legacy/patch-verification | 84
+.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
+.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration | legacy/patch-verification | 84
+.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
 .argoci/cron/e2e-patch-verification.yaml | manifests-operator-migration | legacy/patch-verification | 84
 .argoci/cron/e2e-patch-verification.yaml | openshift | legacy/patch-verification | 84
 .argoci/cron/e2e-patch-verification.yaml | operator-helmerator-aks-w-aks-cni-overlay | legacy/patch-verification | 84
@@ -144,7 +147,8 @@
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | legacy/iptables/focused-wireguard-e2e-eks-kdd-calico-cni | 0
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | legacy/iptables | 425
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | legacy/iptables/migration-flannel-migration | 1
+.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | legacy/iptables/migration-flannel-migration | 426
+.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | legacy/iptables/migration-flannel-migration-pre-migration | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | legacy/iptables | 425
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | legacy/iptables | 425
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | legacy/iptables | 425
@@ -174,8 +178,10 @@
 .semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | legacy/patch-verification | 84
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | legacy/patch-verification/manifests-canal-migration | 1
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration | legacy/patch-verification/manifests-flannel-migration | 1
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | legacy/patch-verification | 84
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration | legacy/patch-verification | 84
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / operator migration | legacy/patch-verification | 84
 .semaphore/end-to-end/pipelines/patch-verification.yml | Openshift / Openshift OCP | legacy/patch-verification | 84
 .semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / AKS w AKS CNI + Overlay | legacy/patch-verification | 84

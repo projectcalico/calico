@@ -91,7 +91,7 @@ gen-test-set: bin/k8s/e2e.test
 
 .PHONY: check-test-set
 check-test-set: gen-test-set
-	@git diff --exit-code testsets || \
+	@test -z "$$(git status --porcelain testsets)" || \
 		( echo "e2e/testsets is out of date; run 'make -C e2e gen-test-set' and commit the result" && false )
 
 ###############################################################################
