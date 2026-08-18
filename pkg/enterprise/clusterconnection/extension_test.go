@@ -33,9 +33,12 @@ import (
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller"
+	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
+	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("clusterconnection enterprise controller extension", func() {
@@ -44,11 +47,15 @@ var _ = Describe("clusterconnection enterprise controller extension", func() {
 	// controllerInputs builds a Inputs selecting the enterprise
 	// clusterconnection hook against the given client.
 	controllerInputs := func() controller.Inputs {
+		cm, err := certificatemanager.Create(cli, nil, "", common.OperatorNamespace(), certificatemanager.AllowCACreation())
+		Expect(err).NotTo(HaveOccurred())
 		return controller.Inputs{
 			RenderInputs: render.Inputs{
-				Installation: &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise},
+				Installation:  &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise},
+				TrustedBundle: cm.CreateTrustedBundle(),
 			},
-			Client: cli,
+			Client:             cli,
+			CertificateManager: cm,
 		}
 	}
 
@@ -157,6 +164,21 @@ var _ = Describe("clusterconnection enterprise controller extension", func() {
 			data, ok := render.GuardianRenderDataFromInputs(ri)
 			Expect(ok).To(BeTrue())
 			Expect(data.IncludeEgressNetworkPolicy).To(BeTrue())
+		})
+
+		It("adds the enterprise certificates guardian must trust", func() {
+			var trusted []client.Object
+			for _, name := range []string{render.PacketCaptureServerCert, monitor.PrometheusServerTLSSecretName} {
+				secret, err := certificatemanagement.CreateSelfSignedSecret(name, common.OperatorNamespace(), name, nil)
+				Expect(err).NotTo(HaveOccurred())
+				trusted = append(trusted, secret)
+			}
+			cli = newClient(append(trusted, clusterInformation())...)
+
+			eci, _, err := ext.ClusterConnection().ExtendInputs(ctx, controllerInputs())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(eci.RenderInputs.TrustedBundle.HashAnnotations()).To(HaveKey(ContainSubstring(render.PacketCaptureServerCert)))
+			Expect(eci.RenderInputs.TrustedBundle.HashAnnotations()).To(HaveKey(ContainSubstring(monitor.PrometheusServerTLSSecretName)))
 		})
 
 		It("errors when ClusterInformation is missing", func() {
