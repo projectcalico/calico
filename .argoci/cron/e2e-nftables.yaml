@@ -137,7 +137,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/nftables/eks-calico-cni.yaml
+        value: e2e/config/nftables/eks-xtables-aws-autohep.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPAM_TEST_POOL_SUBNET
