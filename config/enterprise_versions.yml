@@ -1,183 +1,183 @@
 # Components defined here are required to be kept in sync with hack/gen-versions/enterprise.go.tpl
-title: v3.22.6
+title: v3.22.7
 components:
   libcalico-go:
     version: release-calient-v3.22
   manager:
     image: tigera/manager
-    version: v3.22.6
+    version: v3.22.7
   voltron:
     image: tigera/voltron
-    version: v3.22.6
+    version: v3.22.7
   apiserver:
     image: tigera/apiserver
-    version: v3.22.6
+    version: v3.22.7
   queryserver:
     image: tigera/queryserver
-    version: v3.22.6
+    version: v3.22.7
   kube-controllers:
     image: tigera/kube-controllers
-    version: v3.22.6
+    version: v3.22.7
   typha:
     image: tigera/typha
-    version: v3.22.6
+    version: v3.22.7
   node:
     image: tigera/node
-    version: v3.22.6
+    version: v3.22.7
   node-windows:
     image: tigera/node-windows
-    version: v3.22.6
+    version: v3.22.7
   fluentd:
     image: tigera/fluentd
-    version: v3.22.6
+    version: v3.22.7
   fluentd-windows:
     image: tigera/fluentd-windows
-    version: v3.22.6
+    version: v3.22.7
   ui-apis:
     image: tigera/ui-apis
-    version: v3.22.6
+    version: v3.22.7
   linseed:
     image: tigera/linseed
-    version: v3.22.6
+    version: v3.22.7
   es-gateway:
     image: tigera/es-gateway
-    version: v3.22.6
+    version: v3.22.7
   dex:
     image: tigera/dex
-    version: v3.22.6
+    version: v3.22.7
   eck-kibana:
     version: 8.19.20
   kibana:
     image: tigera/kibana
-    version: v3.22.6
+    version: v3.22.7
   eck-elasticsearch:
     version: 8.19.20
   elasticsearch:
     image: tigera/elasticsearch
-    version: v3.22.6
+    version: v3.22.7
   elastic-tsee-installer:
     image: tigera/intrusion-detection-job-installer
-    version: v3.22.6
+    version: v3.22.7
   es-curator:
     image: tigera/es-curator
-    version: v3.22.6
+    version: v3.22.7
   intrusion-detection-controller:
     image: tigera/intrusion-detection-controller
-    version: v3.22.6
+    version: v3.22.7
   waf-http-filter:
     image: tigera/waf-http-filter
-    version: v3.22.6
+    version: v3.22.7
   webhooks-processor:
     image: tigera/webhooks-processor
-    version: v3.22.6
+    version: v3.22.7
   compliance-controller:
     image: tigera/compliance-controller
-    version: v3.22.6
+    version: v3.22.7
   compliance-reporter:
     image: tigera/compliance-reporter
-    version: v3.22.6
+    version: v3.22.7
   compliance-snapshotter:
     image: tigera/compliance-snapshotter
-    version: v3.22.6
+    version: v3.22.7
   compliance-server:
     image: tigera/compliance-server
-    version: v3.22.6
+    version: v3.22.7
   compliance-benchmarker:
     image: tigera/compliance-benchmarker
-    version: v3.22.6
+    version: v3.22.7
   guardian:
     image: tigera/guardian
-    version: v3.22.6
+    version: v3.22.7
   tigera-cni:
     image: tigera/cni
-    version: v3.22.6
+    version: v3.22.7
   tigera-cni-windows:
     image: tigera/cni-windows
-    version: v3.22.6
+    version: v3.22.7
   elasticsearch-metrics:
     image: tigera/elasticsearch-metrics
-    version: v3.22.6
+    version: v3.22.7
   packetcapture:
     image: tigera/packetcapture
-    version: v3.22.6
+    version: v3.22.7
   policy-recommendation:
     image: tigera/policy-recommendation
-    version: v3.22.6
+    version: v3.22.7
   # coreos-prometheus holds the version of prometheus built for tigera/prometheus,
   # which prometheus operator uses to validate.
   coreos-prometheus:
     version: v3.13.2
   prometheus:
     image: tigera/prometheus
-    version: v3.22.6
+    version: v3.22.7
   # coreos-prometheus holds the version of alertmanager built for tigera/alertmanager,
   # which prometheus operator uses to validate.
   coreos-alertmanager:
     version: v0.33.1
   alertmanager:
     image: tigera/alertmanager
-    version: v3.22.6
+    version: v3.22.7
   tigera-prometheus-service:
     image: tigera/prometheus-service
-    version: v3.22.6
+    version: v3.22.7
   deep-packet-inspection:
     image: tigera/deep-packet-inspection
-    version: v3.22.6
+    version: v3.22.7
   flexvol:
     image: tigera/pod2daemon-flexvol
-    version: v3.22.6
+    version: v3.22.7
   csi:
     image: tigera/csi
-    version: v3.22.6
+    version: v3.22.7
   csi-node-driver-registrar:
     image: tigera/node-driver-registrar
-    version: v3.22.6
+    version: v3.22.7
   # The components below are third-party images that have been retagged under
   # quay.io/tigera so all enterprise images come from the same repository and org.
   elasticsearch-operator:
     image: tigera/eck-operator
-    version: v3.22.6
+    version: v3.22.7
   eck-elasticsearch-operator:
     version: 3.4.1
   l7-collector:
     image: tigera/l7-collector
-    version: v3.22.6
+    version: v3.22.7
   gateway-l7-collector:
     image: tigera/gateway-l7-collector
-    version: v3.22.6
+    version: v3.22.7
   envoy:
     image: tigera/envoy
-    version: v3.22.6
+    version: v3.22.7
   dikastes:
     image: tigera/dikastes
-    version: v3.22.6
+    version: v3.22.7
   l7-admission-controller:
     image: tigera/l7-admission-controller
-    version: v3.22.6
+    version: v3.22.7
   egress-gateway:
     image: tigera/egress-gateway
-    version: v3.22.6
+    version: v3.22.7
   key-cert-provisioner:
     image: tigera/key-cert-provisioner
-    version: v3.22.6
+    version: v3.22.7
   gateway-api-envoy-gateway:
     image: tigera/envoy-gateway
-    version: v3.22.6
+    version: v3.22.7
   gateway-api-envoy-proxy:
     image: tigera/envoy-proxy
-    version: v3.22.6
+    version: v3.22.7
   gateway-api-envoy-ratelimit:
     image: tigera/envoy-ratelimit
-    version: v3.22.6
+    version: v3.22.7
   istio-pilot:
     image: tigera/istio-pilot
-    version: v3.22.6
+    version: v3.22.7
   istio-install-cni:
     image: tigera/istio-install-cni
-    version: v3.22.6
+    version: v3.22.7
   istio-ztunnel:
     image: tigera/istio-ztunnel
-    version: v3.22.6
+    version: v3.22.7
   istio-proxyv2:
     image: tigera/istio-proxyv2
-    version: v3.22.6
+    version: v3.22.7
