@@ -425,7 +425,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: e2e/config/iptables/xtables-wireguard.yaml
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD
@@ -453,7 +453,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/wireguard.yaml
+        value: e2e/config/iptables/xtables-wireguard.yaml
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENABLE_WIREGUARD

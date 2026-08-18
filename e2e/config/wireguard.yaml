@@ -1,10 +1,16 @@
 # Copyright (c) 2026 Tigera, Inc. All rights reserved.
 #
-# WireGuard lanes: the encryption specs only, on a cluster provisioned with
-# ENABLE_WIREGUARD.
+# WireGuard lanes on a managed control plane: the encryption specs only.
 #
-# Extends nothing on purpose. base.yaml excludes Feature:Wireguard for every
-# other lane and merge() cannot re-include an excluded label.
+# Narrow on purpose. Widening one of these to a full suite means working out
+# which specs a vendored-CNI cluster can pass, and that needs a manual run per
+# platform. The kubeadm lanes use iptables/xtables-wireguard.yaml instead.
+
+extends: base.yaml
 
 include:
   - Feature:Wireguard
+
+enable:
+  - label: Feature:Wireguard
+    reason: "ENABLE_WIREGUARD is set on these lanes"

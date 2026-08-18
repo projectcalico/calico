@@ -394,7 +394,7 @@ blocks:
         - name: PROVISIONER
           value: "aws-kubeadm"
         - name: E2E_TEST_CONFIG
-          value: e2e/config/wireguard.yaml
+          value: e2e/config/iptables/xtables-wireguard.yaml
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
@@ -425,7 +425,7 @@ blocks:
         - name: PROVISIONER
           value: "aws-kubeadm"
         - name: E2E_TEST_CONFIG
-          value: e2e/config/wireguard.yaml
+          value: e2e/config/iptables/xtables-wireguard.yaml
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
