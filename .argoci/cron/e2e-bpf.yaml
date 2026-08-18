@@ -250,6 +250,8 @@ steps:
             value: Netkit
     commands: |
       .argoci/scripts/body_standard.sh
+  # These AKS lanes pin stable instead of the stable-3 default, because AKS offers
+  # 1.33 only under its long-term support plan and bz init rejects it.
   - name: bpf-run-matrix-aks-w-aks-cni
     services:
       - docker
@@ -265,6 +267,8 @@ steps:
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable
     matrix:
       - name: azr-aks
         env:
@@ -293,6 +297,8 @@ steps:
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable
       - name: PROVISIONER
         value: azr-aks
     commands: |
@@ -318,6 +324,8 @@ steps:
         value: --env EKS_CNI
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -754,6 +762,9 @@ steps:
         value: 10.244.0.0/16
       - name: K8S_E2E_FLAGS
         value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
+      # AKS offers the stable-3 default (1.33) only under its long-term support plan.
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
