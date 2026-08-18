@@ -19,6 +19,7 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/components"
+	"github.com/tigera/operator/pkg/controller/typhaautoscaler"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/imageoverride"
@@ -32,6 +33,10 @@ type Extension struct {
 	variant operatorv1.ProductVariant
 	opts    eoptions.Options
 	images  *imageoverride.Overrides
+
+	// typhaAutoscaler scales the non-cluster-host Typha deployment. Nil until the
+	// first reconcile that sees a NonClusterHost resource.
+	typhaAutoscaler *typhaautoscaler.Autoscaler
 }
 
 var _ extensions.InstallationExtension = &Extension{}
@@ -60,14 +65,15 @@ func (e *Extension) Images() *imageoverride.Overrides {
 
 // Modify dispatches over the components the installation controller renders.
 func (e *Extension) Modify(c render.Component, ri render.Inputs) render.Component {
-	switch c.(type) {
+	switch comp := c.(type) {
 	case render.NodeComponent:
 		return extensions.Decorate(c, ri, e.variant, func(objs, del []client.Object) ([]client.Object, []client.Object) {
 			return modifyNode(ri, objs, del)
 		})
 	case render.TyphaComponent:
+		cfg := comp.TyphaConfig()
 		return extensions.Decorate(c, ri, e.variant, func(objs, del []client.Object) ([]client.Object, []client.Object) {
-			return modifyTypha(ri, objs, del)
+			return modifyTypha(ri, cfg, objs, del)
 		})
 	case kubecontrollers.CalicoComponent:
 		return extensions.Decorate(c, ri, e.variant, func(objs, del []client.Object) ([]client.Object, []client.Object) {

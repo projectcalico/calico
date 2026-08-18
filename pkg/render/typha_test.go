@@ -63,12 +63,6 @@ var _ = Describe("Typha rendering tests", func() {
 				Type: operatorv1.PluginCalico,
 			},
 		}
-		nonclusterhost := &operatorv1.NonClusterHost{
-			Spec: operatorv1.NonClusterHostSpec{
-				Endpoint:      "https://127.0.0.1:9443",
-				TyphaEndpoint: "127.0.0.1:5473",
-			},
-		}
 		scheme := runtime.NewScheme()
 		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
 		cli = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
@@ -81,7 +75,6 @@ var _ = Describe("Typha rendering tests", func() {
 			Installation:    installation,
 			ClusterDomain:   defaultClusterDomain,
 			FelixHealthPort: 9099,
-			NonClusterHost:  nonclusterhost,
 		}
 	})
 
@@ -149,9 +142,7 @@ var _ = Describe("Typha rendering tests", func() {
 			{name: "calico-typha", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 			{name: "calico-typha", ns: "calico-system", group: "policy", version: "v1", kind: "PodDisruptionBudget"},
 			{name: "calico-typha", ns: "calico-system", group: "", version: "v1", kind: "Service"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "", version: "v1", kind: "Service"},
 			{name: "calico-typha", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
 		}
 
 		component := render.Typha(&cfg)
@@ -192,101 +183,6 @@ var _ = Describe("Typha rendering tests", func() {
 			}))
 	})
 
-	It("should render a separate Typha deployment for non-cluster hosts", func() {
-		cfg.TLS.NodeNonClusterHostCommonName = "typha-client-noncluster-host"
-		component := render.Typha(&cfg)
-		resources, _ := component.Objects()
-
-		dResource := rtest.GetResource(resources, "calico-typha-noncluster-host", "calico-system", "apps", "v1", "Deployment")
-		Expect(dResource).ToNot(BeNil())
-		d, ok := dResource.(*appsv1.Deployment)
-		Expect(ok).To(BeTrue())
-		Expect(d).NotTo(BeNil())
-
-		Expect(d.Spec.Template.Annotations).NotTo(HaveKey(cfg.TLS.TyphaSecret.HashAnnotationKey()))
-		Expect(d.Spec.Template.Annotations).To(HaveKeyWithValue(cfg.TLS.TyphaSecretNonClusterHost.HashAnnotationKey(), cfg.TLS.TyphaSecretNonClusterHost.HashAnnotationValue()))
-		Expect(d.Spec.Template.Spec.Affinity).To(BeNil())
-		Expect(d.Spec.Template.Spec.HostNetwork).To(BeFalse())
-		Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(d.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-			corev1.EnvVar{Name: "TYPHA_CLIENTCN", Value: "typha-client-noncluster-host"},
-			corev1.EnvVar{Name: "TYPHA_HEALTHHOST", Value: "0.0.0.0"},
-			corev1.EnvVar{Name: "TYPHA_SERVERCERTFILE", Value: "/typha-certs-noncluster-host/tls.crt"},
-			corev1.EnvVar{Name: "TYPHA_SERVERKEYFILE", Value: "/typha-certs-noncluster-host/tls.key"},
-		))
-		Expect(d.Spec.Template.Spec.Containers[0].LivenessProbe.ProbeHandler.HTTPGet.Host).To(BeEmpty())
-		Expect(d.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.HTTPGet.Host).To(BeEmpty())
-	})
-
-	It("should strip the host-network apiserver endpoint from the non-cluster-host Typha and fall back to the default Service", func() {
-		cfg.K8sServiceEp = k8sapi.ServiceEndpoint{Host: "proxy.local", Port: "6444"}
-
-		component := render.Typha(&cfg)
-		resources, _ := component.Objects()
-
-		// NCH Typha is pod-networked; let kubelet's default service injection take over.
-		d := rtest.GetResource(resources, "calico-typha-noncluster-host", "calico-system", "apps", "v1", "Deployment").(*appsv1.Deployment)
-		for _, e := range d.Spec.Template.Spec.Containers[0].Env {
-			Expect(e.Name).ToNot(Equal("KUBERNETES_SERVICE_HOST"))
-			Expect(e.Name).ToNot(Equal("KUBERNETES_SERVICE_PORT"))
-		}
-
-		// The host-networked Typha still gets the configured endpoint.
-		dMain := rtest.GetResource(resources, "calico-typha", "calico-system", "apps", "v1", "Deployment").(*appsv1.Deployment)
-		Expect(dMain.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-			corev1.EnvVar{Name: "KUBERNETES_SERVICE_HOST", Value: "proxy.local"},
-			corev1.EnvVar{Name: "KUBERNETES_SERVICE_PORT", Value: "6444"},
-		))
-	})
-
-	It("should respect an explicit pod-network apiserver endpoint on the non-cluster-host Typha when configured", func() {
-		cfg.K8sServiceEp = k8sapi.ServiceEndpoint{Host: "proxy.local", Port: "6444"}
-		cfg.K8sServiceEpPodNetwork = k8sapi.ServiceEndpoint{Host: "10.96.0.1", Port: "443"}
-
-		component := render.Typha(&cfg)
-		resources, _ := component.Objects()
-
-		d := rtest.GetResource(resources, "calico-typha-noncluster-host", "calico-system", "apps", "v1", "Deployment").(*appsv1.Deployment)
-		Expect(d.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-			corev1.EnvVar{Name: "KUBERNETES_SERVICE_HOST", Value: "10.96.0.1"},
-			corev1.EnvVar{Name: "KUBERNETES_SERVICE_PORT", Value: "443"},
-		))
-	})
-
-	It("should use custom client common name when specified for non-cluster host Typha deployment", func() {
-		cfg.TLS.NodeNonClusterHostCommonName = "custom-nch-cn"
-		component := render.Typha(&cfg)
-		resources, _ := component.Objects()
-
-		dResource := rtest.GetResource(resources, "calico-typha-noncluster-host", "calico-system", "apps", "v1", "Deployment")
-		Expect(dResource).ToNot(BeNil())
-		d, ok := dResource.(*appsv1.Deployment)
-		Expect(ok).To(BeTrue())
-		Expect(d).NotTo(BeNil())
-
-		Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(d.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-			corev1.EnvVar{Name: "TYPHA_CLIENTCN", Value: "custom-nch-cn"},
-		))
-	})
-
-	It("should use custom client uri-san when specified for non-cluster host Typha deployment", func() {
-		cfg.TLS.NodeNonClusterHostURISAN = "spiffe://custom-nch-uri-san"
-		component := render.Typha(&cfg)
-		resources, _ := component.Objects()
-
-		dResource := rtest.GetResource(resources, "calico-typha-noncluster-host", "calico-system", "apps", "v1", "Deployment")
-		Expect(dResource).ToNot(BeNil())
-		d, ok := dResource.(*appsv1.Deployment)
-		Expect(ok).To(BeTrue())
-		Expect(d).NotTo(BeNil())
-
-		Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
-		Expect(d.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
-			corev1.EnvVar{Name: "TYPHA_CLIENTURISAN", Value: "spiffe://custom-nch-uri-san"},
-		))
-	})
-
 	It("should include updates needed for migration of core components from kube-system namespace", func() {
 		expectedResources := []struct {
 			name    string
@@ -301,9 +197,7 @@ var _ = Describe("Typha rendering tests", func() {
 			{name: "calico-typha", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 			{name: "calico-typha", ns: "calico-system", group: "policy", version: "v1", kind: "PodDisruptionBudget"},
 			{name: "calico-typha", ns: "calico-system", group: "", version: "v1", kind: "Service"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "", version: "v1", kind: "Service"},
 			{name: "calico-typha", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
 		}
 
 		cfg.MigrateNamespaces = true
@@ -495,9 +389,7 @@ var _ = Describe("Typha rendering tests", func() {
 			{name: "calico-typha", ns: "", group: "rbac.authorization.k8s.io", version: "v1", kind: "ClusterRoleBinding"},
 			{name: "calico-typha", ns: "calico-system", group: "policy", version: "v1", kind: "PodDisruptionBudget"},
 			{name: "calico-typha", ns: "calico-system", group: "", version: "v1", kind: "Service"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "", version: "v1", kind: "Service"},
 			{name: "calico-typha", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
-			{name: "calico-typha-noncluster-host", ns: "calico-system", group: "apps", version: "v1", kind: "Deployment"},
 		}
 
 		component := render.Typha(&cfg)

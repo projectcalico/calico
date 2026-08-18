@@ -59,6 +59,14 @@ import (
 func modifyKubeControllersPolicy(ri render.Inputs, objs, del []client.Object) ([]client.Object, []client.Object) {
 	data := installationData(ri)
 
+	// The non-cluster-host typha policy renders here, with the other component
+	// policies, so it lands after the API server is up.
+	if data.nonClusterHost.enabled {
+		add, remove := nonClusterHostPolicy(ri)
+		objs = append(objs, add...)
+		del = append(del, remove...)
+	}
+
 	policy, ok := extensions.FindObject[*v3.NetworkPolicy](objs, kubecontrollers.KubeControllerNetworkPolicyName)
 	if !ok {
 		return objs, del

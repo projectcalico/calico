@@ -18,9 +18,12 @@
 package controller
 
 import (
+	"context"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
+	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/render"
 )
 
@@ -43,4 +46,12 @@ type Inputs struct {
 
 	Client             client.Client
 	CertificateManager certificatemanager.CertificateManager
+
+	// Status and ShutdownContext are set by the controllers whose extension owns a
+	// background goroutine. Everywhere else they are nil.
+	Status          status.StatusManager
+	ShutdownContext context.Context
+
+	// Terminating reports that the resource this controller owns is being deleted.
+	Terminating bool
 }

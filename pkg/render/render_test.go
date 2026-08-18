@@ -401,18 +401,14 @@ func getTyphaNodeTLS(cli client.Client, certificateManager certificatemanager.Ce
 	typhaKeyPair, err := certificateManager.GetOrCreateKeyPair(cli, render.TyphaTLSSecretName, common.OperatorNamespace(), []string{render.FelixCommonName})
 	Expect(err).NotTo(HaveOccurred())
 
-	typhaNonClusterHostKeyPair, err := certificateManager.GetOrCreateKeyPair(cli, render.TyphaTLSSecretName+render.TyphaNonClusterHostSuffix, common.OperatorNamespace(), []string{render.FelixCommonName + render.TyphaNonClusterHostSuffix})
-	Expect(err).NotTo(HaveOccurred())
-
 	trustedBundle := certificateManager.CreateTrustedBundle(nodeKeyPair, typhaKeyPair)
 
 	return &render.TyphaNodeTLS{
-		TrustedBundle:             trustedBundle,
-		TyphaSecret:               typhaKeyPair,
-		TyphaSecretNonClusterHost: typhaNonClusterHostKeyPair,
-		TyphaCommonName:           render.TyphaCommonName,
-		NodeSecret:                nodeKeyPair,
-		NodeCommonName:            render.FelixCommonName,
+		TrustedBundle:   trustedBundle,
+		TyphaSecret:     typhaKeyPair,
+		TyphaCommonName: render.TyphaCommonName,
+		NodeSecret:      nodeKeyPair,
+		NodeCommonName:  render.FelixCommonName,
 	}
 }
 

@@ -85,17 +85,13 @@ var (
 
 // TyphaNodeTLS holds configuration for Node and Typha to establish TLS.
 type TyphaNodeTLS struct {
-	TrustedBundle             certificatemanagement.TrustedBundle
-	TyphaSecret               certificatemanagement.KeyPairInterface
-	TyphaSecretNonClusterHost certificatemanagement.KeyPairInterface
-	TyphaCommonName           string
-	TyphaURISAN               string
-	NodeSecret                certificatemanagement.KeyPairInterface
-	NodeCommonName            string
-	NodeURISAN                string
-
-	NodeNonClusterHostCommonName string
-	NodeNonClusterHostURISAN     string
+	TrustedBundle   certificatemanagement.TrustedBundle
+	TyphaSecret     certificatemanagement.KeyPairInterface
+	TyphaCommonName string
+	TyphaURISAN     string
+	NodeSecret      certificatemanagement.KeyPairInterface
+	NodeCommonName  string
+	NodeURISAN      string
 }
 
 // NodeConfiguration is the public API used to provide information to the render code to

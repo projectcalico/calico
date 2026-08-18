@@ -25,7 +25,7 @@ import (
 	"github.com/tigera/operator/pkg/render"
 )
 
-func modifyTypha(ri render.Inputs, objs, del []client.Object) ([]client.Object, []client.Object) {
+func modifyTypha(ri render.Inputs, cfg *render.TyphaConfiguration, objs, del []client.Object) ([]client.Object, []client.Object) {
 	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, render.TyphaClusterRoleName); ok {
 		role.Rules = append(role.Rules, rbacv1.PolicyRule{
 			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
@@ -41,6 +41,10 @@ func modifyTypha(ri render.Inputs, objs, del []client.Object) ([]client.Object, 
 			},
 			Verbs: []string{"get", "list", "watch"},
 		})
+	}
+
+	if data := installationData(ri).nonClusterHost; data.enabled {
+		objs = addNonClusterHostTypha(cfg, data, objs)
 	}
 
 	// Both Typha deployments need the interface mode, or the non-cluster-host one

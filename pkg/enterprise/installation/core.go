@@ -76,6 +76,9 @@ type installationRenderData struct {
 	managementCluster bool
 
 	waf wafRenderData
+
+	// nonClusterHost carries the second Typha the typha modifier renders.
+	nonClusterHost nonClusterHostRenderData
 }
 
 // installationData pulls the installation extension's render data back out of the
@@ -232,6 +235,16 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		return ci, nil, err
 	}
 
+	nonClusterHost, nonClusterHostTyphaTLS, err := buildNonClusterHostData(ctx, ci)
+	if err != nil {
+		return ci, nil, err
+	}
+	if nonClusterHost.enabled && !ci.Terminating {
+		if err := e.ensureTyphaAutoscaler(ci); err != nil {
+			return ci, nil, err
+		}
+	}
+
 	// The rbacsync controller reconciles the ClusterRoles backing the Manager UI's
 	// RBAC management feature.
 	rbacManagementEnabled, err := utils.RBACManagementEnabled(ctx, ci.Client, e.variant, e.opts.MultiTenant)
@@ -249,6 +262,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 		managedCluster:            managementClusterConnection != nil,
 		managementCluster:         managementCluster != nil,
 		waf:                       waf,
+		nonClusterHost:            nonClusterHost,
 	}
 
 	prometheusClientCert, err := ci.CertificateManager.GetCertificate(ci.Client, monitor.PrometheusClientTLSSecretName, common.OperatorNamespace())
@@ -286,6 +300,9 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	}
 	if wafWebhookTLS != nil {
 		managed = append(managed, wafWebhookTLS)
+	}
+	if nonClusterHostTyphaTLS != nil {
+		managed = append(managed, nonClusterHostTyphaTLS)
 	}
 	return ci, managed, nil
 }

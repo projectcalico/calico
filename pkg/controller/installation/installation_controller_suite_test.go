@@ -29,13 +29,20 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/enterprise"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+	"github.com/tigera/operator/pkg/extensions"
 )
 
 // testExtensions is the enterprise extension Set the installation controller
 // tests reconcile with, mirroring how main wires it in production. Reconcilers
 // built in these tests put it on their options so the node image overrides and
 // modifiers apply.
-var testExtensions = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{})
+var testExtensions extensions.Extensions
+
+// The installation extension owns background goroutines keyed to a spec's context, so
+// each spec gets its own Set.
+var _ = ginkgo.BeforeEach(func() {
+	testExtensions = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{})
+})
 
 func TestInstallation(t *testing.T) {
 	// Disable WatchListClient for tests. In client-go v0.35+, this feature defaults to true and
