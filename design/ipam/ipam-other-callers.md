@@ -17,6 +17,11 @@ If a caller grows enough complexity to warrant its own sub-design, lift it out o
 The unifying thread: every caller uses a distinct handle convention. Don't change a handle format in one place without checking the callers that depend on it - `calicoctl datastore
 migrate` parses the tunnel prefixes, and the CNI DEL path releases by both the handle and the workload-ID forms.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## calicoctl
 
 [`calicoctl/calicoctl/commands/ipam/`](../../calicoctl/calicoctl/commands/ipam/) is the operator-facing CRUD surface for IPAM state. `show`, `check`, and `release` are the

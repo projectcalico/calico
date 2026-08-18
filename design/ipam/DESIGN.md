@@ -14,6 +14,11 @@ Calico's IPAM is the subsystem that allocates pod, tunnel, and LoadBalancer IPs 
 `libcalico-go/lib/ipam`, but it's invoked from `cni-plugin`, `kube-controllers`, `node`, `calicoctl`, and (read-only) from Felix. The design lives at `design/ipam/` rather
 than under any one component for the same reason.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; when one is
+> warranted it is normally one to three lines in a section that is
+> already there. See [`design/MAINTAINING.md`](../MAINTAINING.md).
+
 ## 1. Architecture overview
 
 ### Data model
@@ -81,10 +86,9 @@ anything goes.
   the glob doesn't list narrowly. When in doubt, pull the topic-relevant sub-design.
 - **Review notes are the checklist.** Each sub-design embeds per-section review notes describing the invariants a PR must respect. At write-time, respect them; at review-time,
   apply them.
-- **Update rule.** A change to how IPAM works in a given area must update the relevant sub-design in this directory in the same PR. This index is also updated when the
-  sub-design table, an `applies to` scope, or §1's architecture overview changes. Exemptions: (a) a bug fix that restores behavior the doc already describes, (b) a mechanical
-  refactor with no observable change, (c) comment or log-message edits, (d) dependency bumps. If in doubt, update. The path-scoped
-  [`.github/instructions/ipam.instructions.md`](../../.github/instructions/ipam.instructions.md) file wires this rule into Copilot's automated review.
+- **Update rule.** See [`design/MAINTAINING.md`](../MAINTAINING.md) and the note at the top of each file. An edit that is warranted goes in the sub-design covering the area;
+  this index is edited when the sub-design table, an `applies to` scope, or §1's architecture overview changes. The path-scoped
+  [`.github/instructions/ipam.instructions.md`](../../.github/instructions/ipam.instructions.md) file wires the rule into Copilot's automated review.
 
 ## 4. Cross-cutting review rubric
 
