@@ -27,6 +27,13 @@ This document has two parts:
 Operational guidance (how to build, test, debug, use tooling) is
 separate and lives in [`felix/CLAUDE.md`](./CLAUDE.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../design/MAINTAINING.md)
+> before adding to this file.
+
 ## 1. Architecture overview
 
 ### Data flow
@@ -280,16 +287,19 @@ absence as "read the code and ask"; do not assume anything goes.
   per-section review notes describing the invariants a PR must
   respect. At write-time, respect them; at review-time, apply
   them.
-- **Update rule.** A change to how Felix works in a given area
-  must update the relevant file under
-  [`felix/design/`](./design/) in the same PR — typically the
-  sub-design covering the area. This index
-  (`felix/DESIGN.md`) is also updated when the sub-design
+- **Update rule.** [`design/MAINTAINING.md`](../design/MAINTAINING.md)
+  governs edits to these files: the default is no edit, and an
+  edit that does belong is normally one to three lines in a
+  section that is already there. A change to how Felix works in
+  a given area earns one only if it falsifies a sentence in the
+  relevant sub-design under [`felix/design/`](./design/), or
+  introduces an invariant or concept no sub-design names. This
+  index (`felix/DESIGN.md`) is edited when the sub-design
   table, a `applies to` scope, or §1's architecture overview
   changes. Exemptions: (a) a bug fix that restores behaviour
   the doc already describes, (b) a mechanical refactor with no
   observable change, (c) comment or log-message edits, (d)
-  dependency bumps. If in doubt, update. The path-scoped
+  dependency bumps. The path-scoped
   [`.github/instructions/*.instructions.md`](../.github/instructions/)
   files wire this rule into Copilot's automated review.
 

@@ -36,15 +36,22 @@ both.
 
 ## Update rule
 
-A PR that **changes how cluster routes are programmed** — which
-component owns which encapsulation type, the enum values or
-defaults of either `programClusterRoutes` field, the BIRD
-kernel-programming filter, or the deprecation and removal plan —
-must update `design/cluster-route-programming/DESIGN.md` in the
-same PR.
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) is the
+canonical rule. **The default is no edit**, and an edit that does
+belong is normally one to three lines in a section that is
+already there.
 
-**Exemption.** No doc update is needed if the PR is exclusively
-one of: (a) a bug fix that restores behavior the doc already
+Here, the changes that *usually* earn one are a change to which
+component owns which encapsulation type, to the enum values or
+defaults of either `programClusterRoutes` field, to the BIRD
+kernel-programming filter, or to the deprecation and removal
+plan. Treat that list as candidates, not as a trigger: the edit
+is warranted only if a sentence in
+`design/cluster-route-programming/DESIGN.md` is now false, or the
+change introduces an invariant or a concept the doc does not
+name.
+
+**Exemption.** No doc update at all if the PR is exclusively one
+of: (a) a bug fix that restores behavior the doc already
 describes, (b) a mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) a dependency bump. If in
-doubt, update the doc.
+(c) comment / log-message edits, (d) a dependency bump.

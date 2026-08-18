@@ -45,6 +45,13 @@ is where that contract is written down. Build/test commands are in
 [`felix/CLAUDE.md`](../CLAUDE.md); the whole-Felix overview is in
 [`felix/DESIGN.md`](../DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../../design/MAINTAINING.md)
+> before adding to this file.
+
 ## Conventions
 
 - "WEP"/"HEP" = workload/host endpoint. "Local" = hosted on this
@@ -808,19 +815,26 @@ only to maps that genuinely can't be rebuilt.
 
 ## Keep this document in sync with the code
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
-mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the Linux dataplane, "changes how it works" means: a
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) governs edits
+to this file: **the default is no edit**, and an edit that does
+belong is normally one to three lines in a section that is already
+there — never a paraphrase of the commit message. It is mirrored in
+[`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md) and
+[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md).
+
+For the Linux dataplane, the following are *candidates* for an edit —
+not triggers on their own; they earn one only if they falsify a
+sentence here or introduce an invariant or concept this file does not
+name: a
 new manager or driver, or a change to the manager/driver split; a
 change to the `apply()` ordering or the `OnUpdate`/`CompleteDeferredWork`
 contract; a new kind of kernel resource or a change to how Calico
 resources are identified for resync; a change to the `*tables` Table
 reconciliation, dispatch-chain structure, mark-bit allocation, IP-set
 ordering, or route ownership classification; or a change to the
-`proto.*` dataplane API. Update the relevant section of this file in
-the same PR — and [`calc-graph.md`](./calc-graph.md) too if the
+`proto.*` dataplane API. When one of them does earn an edit, it goes
+in the relevant section of this file in the same PR — and in
+[`calc-graph.md`](./calc-graph.md) too if the
 [dataplane API contract](#the-dataplane-api-calc-graph--dataplane-contract)
 changes. This file is the source of truth for the Linux dataplane's
 invariants.

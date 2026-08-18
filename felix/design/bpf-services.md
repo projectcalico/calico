@@ -24,6 +24,13 @@ model, the fast-path cost rule, and the cross-cutting review notes
 that apply to every BPF change. The full set of sub-designs is
 listed in [`felix/DESIGN.md`](../DESIGN.md).
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../../design/MAINTAINING.md)
+> before adding to this file.
+
 ## Intra-cluster traffic & service NAT
 
 ### The common case: pod to service
@@ -693,13 +700,19 @@ issue.
 
 ## Keep this doc in sync with the code
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) governs edits
+to this file: **the default is no edit**, and an edit that does
+belong is normally one to three lines in a section that is
+already there — never a paraphrase of the commit message.
+
+A change to the BPF dataplane in the area this file covers earns
+one only if it falsifies a sentence here, or introduces an
+invariant or concept this file does not name. A new mechanism,
+flag, map field or config knob, or a change to the packet path, is
+a candidate for that test — not a trigger on its own. Exemptions:
+(a) bug fix restoring documented behaviour, (b) mechanical
+refactor with no observable change, (c) comment / log-message
+edits, (d) dependency bumps.
 
 Cross-cutting rules that apply to **every** BPF change (map
 versioning, mark discipline, sub-program registration, kernel-

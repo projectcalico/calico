@@ -41,6 +41,13 @@ documented in [`dataplane.md`](./dataplane.md); this BPF family covers
 only what is BPF-specific — the packet path, the BPF maps, and the
 mode's own managers. A BPF dataplane PR therefore usually needs both.
 
+> **Editing this file:** a design doc records the design, not the
+> change that introduced it. The default is **no edit**; an edit
+> that does belong is normally one to three lines in a section
+> that is already there. Read
+> [`design/MAINTAINING.md`](../../design/MAINTAINING.md)
+> before adding to this file.
+
 ## Conventions used in BPF design docs
 
 - `*tables` means "the legacy netfilter dataplane, iptables or
@@ -315,18 +322,24 @@ dataplane review because several subsystems happen to share them.
 
 ### Keep this document in sync with the code
 
-The repo-wide doc-update rule
-([`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md),
+[`design/MAINTAINING.md`](../../design/MAINTAINING.md) governs edits
+to these files: **the default is no edit**, and an edit that does
+belong is normally one to three lines in a section that is
+already there — never a paraphrase of the commit message. It is
 mirrored in
-[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md))
-applies. For the BPF dataplane, "changes how it works" means a
-new sub-program, a new CT flag, a new mark bit, a new map or map
-field, a new config knob affecting any of those, or any change
-to the packet path or forwarding decision. The relevant section
-of the matching sub-design (and `bpf-overview.md` if cross-cutting
-content is affected) must be updated in the same PR. This file
-and its sibling sub-designs under [`felix/design/`](.) are the
-source of truth.
+[`.claude/CLAUDE.md` → Documentation map](../../.claude/CLAUDE.md)
+and
+[`.github/copilot-instructions.md`](../../.github/copilot-instructions.md).
+
+In the BPF dataplane, a new sub-program, CT flag, mark bit, map or
+map field, config knob affecting any of those, or a change to the
+packet path or forwarding decision is a *candidate* for an edit —
+not a trigger on its own. It earns one only if it falsifies a
+sentence in the matching sub-design, or introduces an invariant or
+concept no sub-design names; then the edit goes in that
+sub-design (and here, if cross-cutting content is affected) in the
+same PR. This file and its sibling sub-designs under
+[`felix/design/`](.) are the source of truth.
 
 ### Changes that touch shared maps
 
