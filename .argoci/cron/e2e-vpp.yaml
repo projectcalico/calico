@@ -133,12 +133,12 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml
       - name: FAILSAFE_443
         value: "true"
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -155,14 +155,14 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/vpp/eks-vpp-encap-extnode-aws.yaml
       - name: ENABLE_HUGEPAGES
         value: "true"
       - name: FAILSAFE_443
         value: "true"
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Dataplane-BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       - name: PROVISIONER
         value: aws-eks
     matrix:
