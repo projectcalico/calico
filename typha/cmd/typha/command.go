@@ -47,6 +47,7 @@ func NewCommand() *cobra.Command {
 			buildinfo.PrintVersion()
 		},
 	})
+	cmd.AddCommand(newClientCommand())
 
 	return cmd
 }
