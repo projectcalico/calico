@@ -830,3 +830,89 @@ func TestCollectE2EBinariesUnstagedErrors(t *testing.T) {
 	r := &CalicoManager{e2eBinaries: true, outputDir: t.TempDir()}
 	require.Error(t, r.collectE2EBinaries())
 }
+
+// The staging layout is the whole reason a release and a hashrelease differ:
+// ghr populates GitHub release assets from the top level of the upload dir and
+// does not recurse, while the hashrelease server serves the directory tree.
+func TestE2EStagingDir(t *testing.T) {
+	tests := []struct {
+		name          string
+		isHashRelease bool
+		want          string
+	}{
+		{name: "release stages flat for ghr", want: "out"},
+		{name: "hashrelease stages under files/e2e", isHashRelease: true, want: filepath.Join("out", "files", "e2e")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &CalicoManager{outputDir: "out", isHashRelease: tt.isHashRelease}
+			require.Equal(t, tt.want, r.e2eStagingDir())
+		})
+	}
+}
+
+// The e2e-binaries flag belongs to the build step and is never passed to
+// publish, so the release note has to key off what was actually staged.
+func TestPublishGithubReleaseE2ENote(t *testing.T) {
+	const bullet = "e2e-linux-<arch>.test"
+
+	tests := []struct {
+		name        string
+		staged      []string
+		e2eBinaries bool
+		wantNote    bool
+	}{
+		{
+			name:        "staged binaries are listed",
+			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			e2eBinaries: true,
+			wantNote:    true,
+		},
+		{
+			name:        "nothing staged is not listed even with the flag defaulted on",
+			e2eBinaries: true,
+			wantNote:    false,
+		},
+		{
+			name:        "staged binaries are listed even with the flag off",
+			staged:      []string{"e2e-linux-amd64.test"},
+			e2eBinaries: false,
+			wantNote:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputDir := t.TempDir()
+			for _, name := range tt.staged {
+				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte(name), 0o755))
+			}
+
+			f := newFakeRunner()
+			f.on("./bin/gh release view", "release not found", fmt.Errorf("release not found"))
+			f.on("./bin/ghr", "", nil)
+
+			r := &CalicoManager{
+				runner:        f,
+				githubRelease: true,
+				e2eBinaries:   tt.e2eBinaries,
+				calicoVersion: "v3.30.0",
+				githubOrg:     "projectcalico",
+				repo:          "calico",
+				outputDir:     outputDir,
+			}
+			require.NoError(t, r.publishGithubRelease())
+
+			var ghr string
+			for _, c := range f.calls {
+				if strings.HasPrefix(c, "./bin/ghr") {
+					ghr = c
+				}
+			}
+			require.NotEmpty(t, ghr, "ghr was not invoked (calls: %v)", f.calls)
+			require.Equal(t, tt.wantNote, strings.Contains(ghr, bullet),
+				"release note mentions %q = %v, want %v", bullet, strings.Contains(ghr, bullet), tt.wantNote)
+		})
+	}
+}
