@@ -201,3 +201,7 @@ Architecture and invariants live in
 [`goldmane/DESIGN.md`](./DESIGN.md). Do not look here for gRPC
 service shapes, BucketRing semantics, Prometheus metric meanings,
 or env var contracts — look there.
+
+## AI-assisted contribution policy
+
+Contributions written with AI assistance follow [`AI_POLICY.md`](../AI_POLICY.md): disclose the assistance in the PR description, no AI co-author trailers, and leave the change in a state the human author can explain themselves.

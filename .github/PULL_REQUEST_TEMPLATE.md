@@ -6,3 +6,8 @@ why it should be merged, testing done, and links to related issues. -->
 ```release-note
 TBD
 ```
+
+<!-- If AI tools helped write this change, say so here. -->
+**AI assistance:** None.
+
+By opening this PR you take responsibility for every line in it, and you agree to explain the change yourself during review rather than routing review comments back through an agent. See [AI_POLICY.md](../AI_POLICY.md).
