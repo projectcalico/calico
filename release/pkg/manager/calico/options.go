@@ -17,6 +17,7 @@ package calico
 import (
 	"fmt"
 
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/hashreleaseserver"
 	"github.com/projectcalico/calico/release/internal/imagescanner"
 	"github.com/projectcalico/calico/release/internal/registry"
@@ -284,6 +285,20 @@ func WithOperatorBranch(branch string) Option {
 	}
 }
 
+func WithMainBranch(branch string) Option {
+	return func(r *CalicoManager) error {
+		r.mainBranch = branch
+		return nil
+	}
+}
+
+func WithDevTagIdentifier(devTag string) Option {
+	return func(r *CalicoManager) error {
+		r.devTagIdentifier = devTag
+		return nil
+	}
+}
+
 func WithManifests(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.manifests = enabled
@@ -308,6 +323,15 @@ func WithOCPBundle(enabled bool) Option {
 func WithTarball(enabled bool) Option {
 	return func(r *CalicoManager) error {
 		r.tarball = enabled
+		return nil
+	}
+}
+
+// WithBranchCutOptions sets the CLI-supplied inputs for a branch cut, read by
+// CutBranch.
+func WithBranchCutOptions(opts branch.CutOptions) Option {
+	return func(r *CalicoManager) error {
+		r.cutOptions = opts
 		return nil
 	}
 }

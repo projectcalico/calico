@@ -759,6 +759,430 @@ func TestQoSConnLimitIngressRetransmissionOfAccepted(t *testing.T) {
 	Expect(readQoSCount()).To(Equal(uint32(1)))
 }
 
+// TestQoSConnLimitIngressFirstSYN covers the plain first-SYN admission
+// decision at to-wep, both outcomes. The sibling tests in this file all cover
+// retransmission and recycle cases; this is the base case they build on.
+//
+// "First SYN" here means the first SYN seen at *this* hook, not the first in
+// the system: the ingress block in tc.c is gated on is_tcp_syn(), which reads
+// CT_RES_SYN, and calico_ct_lookup only sets that on a lookup hit. The
+// source-side program (from-wep or from-hep) has therefore already created the
+// CT entry by the time the SYN reaches to-wep. What distinguishes a first SYN
+// is that the entry carries neither CONNLIMIT_INGRESS nor
+// CONNLIMIT_INGRESS_REJECTED yet.
+func TestQoSConnLimitIngressFirstSYN(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWfsi"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23460 // remote opener
+		dstPort        uint16 = 8055  // workload listening port
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	qosKey := qos.NewKey(uint32(ifIndex), 1 /* ingress */, qos.IPFamilyV4)
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTFlags := func() uint32 {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueFromBytes(b).Flags()
+	}
+
+	// The CT entry the source-side program created: opener has sent its SYN,
+	// the responder has not replied, and no connlimit flag has been set yet.
+	// current is the counter value this sub-case starts from.
+	seed := func(current uint32) {
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+
+		legA := ctv4.Leg{SynSeen: true, Opener: true}
+		legB := ctv4.Leg{Ifindex: ifIndex}
+		v := ctv4.NewValueNormal(time.Duration(0), 0 /* no connlimit flags */, legA, legB)
+		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+
+		Expect(qosConnMap.Update(qosKey.AsBytes(),
+			qos.NewConnValue(maxConnections, current).AsBytes())).NotTo(HaveOccurred())
+	}
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run("under the limit: counted and admitted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed(1)
+		defer resetQoSMap(qosConnMap)
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			// Admitted: no TCP_RST tail call, packet proceeds normally.
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIngressQoSConnLimit())
+
+		Expect(readQoSCount()).To(Equal(uint32(2)), "first SYN was not counted")
+		Expect(readCTFlags()&ctv4.FlagConnLimitIn).To(Equal(ctv4.FlagConnLimitIn),
+			"admitted SYN must stamp CONNLIMIT_INGRESS, or nothing can decrement it on close")
+		Expect(readCTFlags() & ctv4.FlagConnLimitInRej).To(Equal(uint32(0)))
+	})
+
+	t.Run("at the limit: rejected and not counted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed(maxConnections)
+		defer resetQoSMap(qosConnMap)
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			// Reject path tail-calls PROG_INDEX_TCP_RST, which builds the RST
+			// and forwards it; the final return is TC_ACT_UNSPEC.
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIngressQoSConnLimit())
+
+		// The failed check must not increment.
+		Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+		// Guard against a vacuous pass: REJECTED proves the check ran and
+		// failed, rather than the SYN never reaching the block.
+		Expect(readCTFlags()&ctv4.FlagConnLimitInRej).To(Equal(ctv4.FlagConnLimitInRej),
+			"rejected SYN must stamp CONNLIMIT_INGRESS_REJECTED")
+		Expect(readCTFlags() & ctv4.FlagConnLimitIn).To(Equal(uint32(0)))
+	})
+}
+
+// TestQoSConnLimitEgressFirstSYN covers the plain first-SYN admission decision
+// at from-wep, both outcomes.
+//
+// The egress path differs from ingress in more than direction: the check sits
+// in a different block (tc.c, after policy rather than at to-wep), there is no
+// pre-existing CT entry — this is a genuinely new flow — and CONNLIMIT_EGRESS
+// is applied through ct_ctx_nat->flags as the entry is created rather than
+// stamped onto an existing one. So ingress passing is not evidence that egress
+// does.
+func TestQoSConnLimitEgressFirstSYN(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWfse"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 12349
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	k := ctv4.NewKey(6, srcIP, srcPort, dstIP, dstPort)
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	// No CT entry: a genuinely new outbound flow.
+	seed := func(current uint32) {
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		Expect(qosConnMap.Update(qosKey.AsBytes(),
+			qos.NewConnValue(maxConnections, current).AsBytes())).NotTo(HaveOccurred())
+	}
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run("under the limit: counted and admitted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed(1)
+		defer resetQoSMap(qosConnMap)
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withEgressQoSConnLimit())
+
+		Expect(readQoSCount()).To(Equal(uint32(2)), "first SYN was not counted")
+
+		// The new CT entry must carry CONNLIMIT_EGRESS, or the close and
+		// cleanup paths cannot decrement it.
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred(), "no CT entry was created for the admitted flow")
+		Expect(ctv4.ValueFromBytes(b).Flags()&ctv4.FlagConnLimitOut).
+			To(Equal(ctv4.FlagConnLimitOut), "admitted flow must be stamped CONNLIMIT_EGRESS")
+	})
+
+	t.Run("at the limit: rejected and not counted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed(maxConnections)
+		defer resetQoSMap(qosConnMap)
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			// Note the return code does NOT distinguish reject from admit on
+			// egress: the reject path tail-calls PROG_INDEX_TCP_RST, which
+			// builds the RST and redirects it back to the workload, so both
+			// outcomes return TC_ACT_REDIRECT. Do not use it as the signal
+			// that the limit fired.
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withEgressQoSConnLimit())
+
+		Expect(readQoSCount()).To(Equal(uint32(maxConnections)))
+
+		// This is the discriminator instead. The check sits ahead of the CT
+		// create, and a rejected SYN goes straight to deny, so the flow
+		// leaves no conntrack state — whereas the admitted case above ends
+		// with an entry stamped CONNLIMIT_EGRESS. Without this the assertion
+		// on the counter would pass just as happily if the SYN had never
+		// reached the check at all.
+		_, err := ctMap.Get(k.AsBytes())
+		Expect(err).To(HaveOccurred(),
+			"rejected SYN must not create a CT entry")
+	})
+}
+
+// TestQoSConnLimitV6FirstSYN is the IPv6 counterpart of the first-SYN tests
+// above. The v4 and v6 dataplanes are the same C source compiled twice
+// (IPVER6), so the admission *logic* cannot differ between them; what can
+// differ is whether the v6 programs reach the check at all and which
+// cali_qos_conn entry they address, since family is part of that map's key.
+// Those are what this covers, which is why it does not port every v4 case —
+// the retransmission and recycle paths are family-agnostic and already
+// covered.
+func TestQoSConnLimitV6FirstSYN(t *testing.T) {
+	RegisterTestingT(t)
+
+	hostIP = node1ipV6
+	defer func() { hostIP = node1ip }()
+
+	bpfIfaceName = "HWfs6"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 23461
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMapV6.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKeyV6(dstV6CIDR).AsBytes()
+	rtVal = routes.NewValueV6WithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMapV6.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMapV6)
+
+	ctMap := conntrack.MapV6()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	k := conntrack.NewKeyV6(6, srcIPv6, srcPort, dstIPv6, dstPort)
+	// Family is part of the cali_qos_conn key: a v6 program must address the
+	// family=6 entry, not the v4 one.
+	ingressKey := qos.NewKey(uint32(ifIndex), 1, qos.IPFamilyV6)
+	egressKey := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV6)
+
+	readCount := func(qk qos.Key) uint32 {
+		b, err := qosConnMap.Get(qk.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	readCTFlags := func() uint32 {
+		b, err := ctMap.Get(k.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return ctv4.ValueV6FromBytes(b).Flags()
+	}
+
+	_, _, _, _, synPkt, err := testPacketTCPV6WithPayload(dstIPv6, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run("ingress under the limit: counted and admitted", func(t *testing.T) {
+		RegisterTestingT(t)
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		defer resetQoSMap(qosConnMap)
+
+		// The CT entry the source-side program created, not yet counted.
+		legA := ctv4.Leg{SynSeen: true, Opener: true}
+		legB := ctv4.Leg{Ifindex: ifIndex}
+		v := conntrack.NewValueV6Normal(time.Duration(0), 0, legA, legB)
+		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+		Expect(qosConnMap.Update(ingressKey.AsBytes(),
+			qos.NewConnValue(maxConnections, 1).AsBytes())).NotTo(HaveOccurred())
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIngressQoSConnLimit(), withIPv6())
+
+		Expect(readCount(ingressKey)).To(Equal(uint32(2)), "v6 first SYN was not counted")
+		Expect(readCTFlags() & ctv4.FlagConnLimitIn).To(Equal(ctv4.FlagConnLimitIn))
+	})
+
+	t.Run("ingress at the limit: rejected and not counted", func(t *testing.T) {
+		RegisterTestingT(t)
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		defer resetQoSMap(qosConnMap)
+
+		legA := ctv4.Leg{SynSeen: true, Opener: true}
+		legB := ctv4.Leg{Ifindex: ifIndex}
+		v := conntrack.NewValueV6Normal(time.Duration(0), 0, legA, legB)
+		Expect(ctMap.Update(k.AsBytes(), v.AsBytes()[:])).NotTo(HaveOccurred())
+		Expect(qosConnMap.Update(ingressKey.AsBytes(),
+			qos.NewConnValue(maxConnections, maxConnections).AsBytes())).NotTo(HaveOccurred())
+
+		skbMark = tcdefs.MarkSeen
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		}, withIngressQoSConnLimit(), withIPv6())
+
+		Expect(readCount(ingressKey)).To(Equal(uint32(maxConnections)))
+		// REJECTED proves the check ran and failed, rather than the SYN never
+		// reaching the block — the counter alone cannot tell those apart.
+		Expect(readCTFlags() & ctv4.FlagConnLimitInRej).To(Equal(ctv4.FlagConnLimitInRej))
+	})
+
+	t.Run("egress under the limit: counted and admitted", func(t *testing.T) {
+		RegisterTestingT(t)
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		defer resetQoSMap(qosConnMap)
+
+		// No CT entry: a genuinely new outbound v6 flow.
+		Expect(qosConnMap.Update(egressKey.AsBytes(),
+			qos.NewConnValue(maxConnections, 1).AsBytes())).NotTo(HaveOccurred())
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withEgressQoSConnLimit(), withIPv6())
+
+		Expect(readCount(egressKey)).To(Equal(uint32(2)), "v6 first SYN was not counted")
+		Expect(readCTFlags()&ctv4.FlagConnLimitOut).To(Equal(ctv4.FlagConnLimitOut),
+			"admitted v6 flow must be stamped CONNLIMIT_EGRESS")
+	})
+}
+
+// TestQoSConnLimitV6DualStackCountersAreIndependent verifies that a v6
+// connection increments the family=6 counter and leaves the family=4 counter
+// for the same interface and direction untouched.
+//
+// There is one cali_qos_conn map for both families; they are separated only by
+// the family field of the key, which the C side fills from the compile-time
+// IPVER6 and the Go side from the scanner's configured family. This is the
+// invariant that separation exists for, and it is the one thing a v4-only or
+// v6-only test cannot catch: either would pass unchanged if the family
+// dimension were dropped from the key altogether, because each would simply
+// find the single remaining entry.
+func TestQoSConnLimitV6DualStackCountersAreIndependent(t *testing.T) {
+	RegisterTestingT(t)
+
+	hostIP = node1ipV6
+	defer func() { hostIP = node1ip }()
+
+	bpfIfaceName = "HWds6"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 12350
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKeyV6(srcV6CIDR).AsBytes()
+	rtVal := routes.NewValueV6WithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMapV6.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKeyV6(dstV6CIDR).AsBytes()
+	rtVal = routes.NewValueV6WithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMapV6.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMapV6)
+
+	ctMap := conntrack.MapV6()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	// A dual-stack pod: one egress entry per family on the same ifindex. The
+	// v4 side is mid-flight with two connections of its own.
+	defer resetQoSMap(qosConnMap)
+	resetQoSMap(qosConnMap)
+	v4Key := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV4)
+	v6Key := qos.NewKey(uint32(ifIndex), 0, qos.IPFamilyV6)
+	Expect(qosConnMap.Update(v4Key.AsBytes(),
+		qos.NewConnValue(maxConnections, 2).AsBytes())).NotTo(HaveOccurred())
+	Expect(qosConnMap.Update(v6Key.AsBytes(),
+		qos.NewConnValue(maxConnections, 0).AsBytes())).NotTo(HaveOccurred())
+
+	readCount := func(qk qos.Key) uint32 {
+		b, err := qosConnMap.Get(qk.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	_, _, _, _, synPkt, err := testPacketTCPV6WithPayload(dstIPv6, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	skbMark = 0
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(synPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+	}, withEgressQoSConnLimit(), withIPv6())
+
+	Expect(readCount(v6Key)).To(Equal(uint32(1)),
+		"the v6 connection should have been counted against the v6 entry")
+	Expect(readCount(v4Key)).To(Equal(uint32(2)),
+		"a v6 connection must not touch the v4 counter for the same interface")
+}
+
 // TestQoSConnLimitEgressSpuriousRSTSlotRestoredByRecount verifies that a
 // spurious RST on a live connection costs its egress connlimit slot only until
 // the next recount, rather than permanently.

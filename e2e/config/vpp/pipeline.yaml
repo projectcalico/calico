@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# vpp pipeline: test selection scope.
+#
+# Calico suite. VPP is a third-party dataplane; the old config focused
+# Dataplane:BPF (and Dataplane-BPF, a typo matching nothing), neither of which is
+# what this lane is for.
+#
+# Abstract parent -- no cell points at this file directly. The sibling
+# configs extend it and subtract what their cluster shape cannot run.
+
+extends: ../base.yaml
+
+include:
+  - sig-calico
+
+exclude:
+  labels:
+    - label: Feature:KubeVirt
+      reason: "needs a KubeVirt install; only the kubevirt lanes carry it"
+    - label: Feature:Tiered-Policy
+      reason: "VPP does not implement policy tiers"
+  namePatterns:
+    - pattern: 'doNotTrack'
+      reason: "doNotTrack policy is programmed in the raw table; VPP does not program iptables"
