@@ -539,6 +539,82 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   that exhausts the range, or collides with bits another subsystem
   expects, is a startup/runtime failure.
 
+### Connection transition logging
+
+`LogConnectionTransitions` (`*tables` modes only; enum, `Disabled`
+by default, `FirstResponseAfterLog` enables) extends the policy
+`Log` action with one follow-up log per logged connection,
+recording the first observed response — `<prefix>-est` (first
+genuine reply), `<prefix>-rst` (TCP RST, i.e. connection refused)
+or `<prefix>-icmp-err` (related ICMP error) — so that a user
+reading the kernel log can tell whether a logged connection was
+ever answered. No follow-up log means no response was seen.
+Mechanism and invariants:
+
+- **One connmark bit** (`MarkConnStateLog` in `rules.Config`) means
+  "matched a Log rule; no response seen yet". It is allocated from
+  `MarkBitsManager` *conditionally* (only when the feature is
+  enabled, so the endpoint-mark block isn't shrunk otherwise) and
+  *before* the endpoint-mark block grab. Reserved from packet-mark
+  space so user `CONNMARK --save-mark` rules can't set it
+  spuriously. `Config.validate()`'s reflection scan has an explicit
+  exception allowing this one `Mark*` field to be zero when the
+  feature is disabled.
+- **Setting the bit**: each rendered `Log` rule is followed by a
+  `CONNMARK` rule with the same match (`rules/policy.go`). The
+  connmark rule must NOT carry the `LogActionRateLimit` limit
+  match — the bit has to be set even when the LOG itself is
+  rate-limit-suppressed. Untracked (raw-table) policies skip it;
+  CONNMARK has no effect on NOTRACKed packets.
+- **Checking the bit**: `appendConntrackRules`
+  (`rules/endpoints.go`) prepends, ahead of the
+  RELATED,ESTABLISHED accept rules, a jump to the shared
+  `cali-log-conn` chain matching on the connmark bit AND ctstate
+  RELATED,ESTABLISHED. The ctstate match is load-bearing:
+  same-direction packets (e.g. a retransmitted SYN) still carry the
+  bit but are ctstate NEW and must not be logged as a response. The
+  first packet that reaches the check in RELATED/ESTABLISHED state
+  is necessarily the first response. This lands in every tracked
+  endpoint chain (workload and host, filter and mangle) except the
+  preDNAT mangle chains, which skip it: mangle `cali-PREROUTING`
+  accepts RELATED,ESTABLISHED first, so it could never match
+  there. One static-chain special case:
+  replies to workload→host connections leave via filter `cali-OUTPUT`
+  and RETURN at the workload-interface rules without traversing any
+  per-endpoint chain, so the same check rule is inserted at the top
+  of `cali-OUTPUT`.
+- **The `cali-log-conn` chain** (`rules/static.go`, emitted into
+  both the filter and mangle static chains, per IP version) has
+  three mutually exclusive branches — TCP RST, ICMP-protocol +
+  ctstate RELATED, catch-all established — each a LOG / clear-bit /
+  RETURN triplet. LOG is non-terminating, so each branch must
+  RETURN before the next branch's LOG to keep it to exactly one log
+  per packet. The ICMP branch matches the ICMP protocol explicitly
+  so only real ICMP errors get the `-icmp-err` log (conntrack
+  associates ICMP errors with the *original* connection's entry,
+  which is why they carry its connmark; other RELATED flows, e.g.
+  helper children, fall through to the established branch). The
+  clear rules must NOT be rate-limited: a rate-suppressed LOG still
+  has to consume the transition exactly once.
+- **Log prefixes** come from the dedicated
+  `LogConnectionTransitionsPrefix` param (default
+  `calico-response`), used verbatim — the chain is static and
+  shared by all policies, so `LogPrefix`-style `%`-specifiers
+  cannot be resolved and are rendered literally (the API doc says
+  so) — with the base truncated so suffix plus the `": "` appended
+  by the Log action fit the backend limit (29 chars iptables, 127
+  nftables).
+- **RST visibility**: netfilter hooks run before the TCP stack sees
+  a packet (forwarded traffic never touches the host TCP stack at
+  all), and conntrack only *classifies* an RST (valid → ESTABLISHED
+  reply; bad-seq → INVALID, handled by the existing INVALID rule),
+  so a genuine refused-connection RST always reaches the check
+  rule.
+- **Toggle caveat** (documented, accepted): disabling and
+  re-enabling the feature with a different resulting bit layout can
+  produce at most one spurious log per pre-existing connection;
+  stale connmark bits are otherwise inert once the rules are gone.
+
 ### Review notes for this section
 
 - A PR that adds a dispatch rule per endpoint to a flat chain
