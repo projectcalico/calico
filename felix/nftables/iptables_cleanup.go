@@ -200,6 +200,8 @@ func (c *IPTablesNFTCleanup) deleteChains(nft knftables.Interface, table string,
 
 	var referenced []string
 	for _, name := range chains {
+		c.onStillAlive()
+
 		tx := nft.NewTransaction()
 		tx.Delete(&knftables.Chain{Name: name})
 		if err := c.runTransaction(nft, tx); err != nil {
