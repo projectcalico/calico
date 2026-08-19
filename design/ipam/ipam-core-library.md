@@ -69,7 +69,8 @@ A few non-obvious design points:
   fill.
 - `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
   without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
-  `Allocatable=True` is taken at its word and never tested against the others.
+  `Allocatable=True` is taken at its word and never tested against the others. Administratively disabled pools never mask, including while they are terminating, which matches the
+  controller's trie.
 
 **Review notes**
 
