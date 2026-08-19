@@ -77,6 +77,15 @@ var _ = Describe("selectAllocatablePools", func() {
 		Expect(poolNames(selectAllocatablePools(pools, 4))).To(ConsistOf("new"))
 	})
 
+	It("keeps an unmarked pool overlapped only by a disabled pool that is terminating", func() {
+		now := metav1.Now()
+		disabled := poolWithCondition("disabled", "192.168.0.0/16", metav1.ConditionFalse)
+		disabled.Spec.Disabled = true
+		disabled.DeletionTimestamp = &now
+		pools := []v3.IPPool{disabled, unmarkedPool("new", "192.168.1.0/24")}
+		Expect(poolNames(selectAllocatablePools(pools, 4))).To(ConsistOf("new"))
+	})
+
 	It("keeps an allocatable pool even when it overlaps another allocatable pool", func() {
 		pools := []v3.IPPool{
 			poolWithCondition("outer", "10.0.0.0/8", metav1.ConditionTrue),
