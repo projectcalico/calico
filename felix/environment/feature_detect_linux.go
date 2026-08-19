@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -340,45 +341,57 @@ const (
 	IPTablesBackendNFT    = "nft"
 )
 
+// LegacyIPTablesModulesLoaded reports whether the legacy xtables modules are loaded. Stat'ing the
+// file the kernel creates alongside them autoloads nothing, unlike iptables-legacy-save. A var so
+// tests can fake it.
+var LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
+	path := "/proc/net/ip_tables_names"
+	if ipVersion == 6 {
+		path = "/proc/net/ip6_tables_names"
+	}
+	if _, err := os.Stat(path); err != nil {
+		log.WithField("file", path).Info("iptables-legacy not loaded on this host")
+		return false
+	}
+	return true
+}
+
 // GetIptablesBackend attempts to detect the iptables backend being used where Felix is running.
 // This code is duplicating the detection method found at
 // https://github.com/kubernetes-sigs/iptables-wrappers/blob/master/iptables-wrapper-installer.sh#L107
 // If there is a specifiedBackend then it is used but if it does not match the detected
 // backend then a warning is logged.
 func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.CmdFactory, specifiedBackend string) string {
-	ip6NftSave := FindBestBinary(lookPath, 6, "nft", "save")
-	ip4NftSave := FindBestBinary(lookPath, 4, "nft", "save")
+	save := func(backendMode string, ipVersion uint8, args ...string) []byte {
+		if backendMode == IPTablesBackendLegacy && !LegacyIPTablesModulesLoaded(ipVersion) {
+			// Probing an unloaded backend autoloads its modules, putting legacy hooks on a node
+			// that deliberately runs nftables only. Nothing of ours can be there anyway.
+			return nil
+		}
 
-	ip6nm, _ := newCmd(ip6NftSave, "-t", "mangle").Output()
-	log.WithField("ip6n", string(ip6nm)).Debug("Ip6tables save out")
-	ip4nm, _ := newCmd(ip4NftSave, "-t", "mangle").Output()
-	log.WithField("ip4n", string(ip4nm)).Debug("Iptables save out")
+		binary := FindBestBinary(lookPath, ipVersion, backendMode, "save")
+		out, _ := newCmd(binary, args...).Output()
+		log.WithFields(log.Fields{"binary": binary, "args": args, "output": string(out)}).Debug("iptables save output")
+		return out
+	}
+
+	ip6nm := save(IPTablesBackendNFT, 6, "-t", "mangle")
+	ip4nm := save(IPTablesBackendNFT, 4, "-t", "mangle")
 
 	var detectedBackend string
 	if hasKubernetesChains(ip6nm) || hasKubernetesChains(ip4nm) {
 		detectedBackend = IPTablesBackendNFT
 	} else {
-		ip6LgcySave := FindBestBinary(lookPath, 6, "legacy", "save")
-		ip4LgcySave := FindBestBinary(lookPath, 4, "legacy", "save")
-		ip6lm, _ := newCmd(ip6LgcySave, "-t", "mangle").Output()
-		log.WithField("ip6l", string(ip6lm)).Debug("Ip6tables legacy save -t mangle out")
-		ip4lm, _ := newCmd(ip4LgcySave, "-t", "mangle").Output()
-		log.WithField("ip4l", string(ip4lm)).Debug("Iptables legacy save -t mangle out")
+		ip6lm := save(IPTablesBackendLegacy, 6, "-t", "mangle")
+		ip4lm := save(IPTablesBackendLegacy, 4, "-t", "mangle")
 
 		if hasKubernetesChains(ip6lm) || hasKubernetesChains(ip4lm) {
 			detectedBackend = IPTablesBackendLegacy
 		} else {
-			ip6l, _ := newCmd(ip6LgcySave).Output()
-			log.WithField("ip6l", string(ip6l)).Debug("Ip6tables legacy save out")
-			ip4l, _ := newCmd(ip4LgcySave).Output()
-			log.WithField("ip4l", string(ip4l)).Debug("Iptables legacy save out")
-			legacyLines := countRulesInIptableOutput(ip6l) + countRulesInIptableOutput(ip4l)
-
-			ip6n, _ := newCmd(ip6NftSave).Output()
-			log.WithField("ip6n", string(ip6n)).Debug("Ip6tables save out")
-			ip4n, _ := newCmd(ip4NftSave).Output()
-			log.WithField("ip4n", string(ip4n)).Debug("Iptables save out")
-			nftLines := countRulesInIptableOutput(ip6n) + countRulesInIptableOutput(ip4n)
+			legacyLines := countRulesInIptableOutput(save(IPTablesBackendLegacy, 6)) +
+				countRulesInIptableOutput(save(IPTablesBackendLegacy, 4))
+			nftLines := countRulesInIptableOutput(save(IPTablesBackendNFT, 6)) +
+				countRulesInIptableOutput(save(IPTablesBackendNFT, 4))
 			if legacyLines >= nftLines {
 				detectedBackend = IPTablesBackendLegacy // default to legacy mode
 			} else {
@@ -398,9 +411,6 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdshim.Cm
 	return detectedBackend
 }
 
-// FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
-// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
-// Panics if no binary can be found.
 // BackendBinariesPresent reports whether this host has the binaries for the named backend. Without
 // them FindBestBinary falls back to plain iptables, which on a modern distro is iptables-nft.
 func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersion uint8, backendMode string) bool {
@@ -421,6 +431,9 @@ func BackendBinariesPresent(lookPath func(file string) (string, error), ipVersio
 	return true
 }
 
+// FindBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
+// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
+// Panics if no binary can be found.
 func FindBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
 	if lookPath == nil {
 		lookPath = exec.LookPath

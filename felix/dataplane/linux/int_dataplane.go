@@ -469,20 +469,6 @@ const (
 	aksMTUOverhead         = 100
 )
 
-// legacyIPTablesLoaded reports whether the legacy xtables modules are loaded. Stat'ing the file
-// the kernel creates alongside them doesn't autoload anything.
-var legacyIPTablesLoaded = func(ipVersion uint8) bool {
-	path := "/proc/net/ip_tables_names"
-	if ipVersion == 6 {
-		path = "/proc/net/ip6_tables_names"
-	}
-	if _, err := os.Stat(path); err != nil {
-		log.WithField("file", path).Info("iptables-legacy not loaded on this host")
-		return false
-	}
-	return true
-}
-
 // sweepIPTablesNFT reports whether the nftables copies of the shared tables belong to someone else:
 //
 //   - On native nftables, anything iptables-nft left there is stale.
@@ -510,9 +496,15 @@ func legacyIPTablesCleanupTables(
 		return nil
 	}
 
-	// Running iptables-legacy-save against unloaded modules would autoload them, putting legacy
-	// hooks on a node that deliberately runs nftables only.
-	if !legacyIPTablesLoaded(ipVersion) {
+	// And without the nft binaries, the tables Felix programs fall back to plain iptables, which is
+	// then legacy: sweeping it would delete the rules Felix just wrote.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendNFT) {
+		return nil
+	}
+
+	// Reading the legacy tables would autoload the xtables modules, putting legacy hooks on a node
+	// that deliberately runs nftables only.
+	if !environment.LegacyIPTablesModulesLoaded(ipVersion) {
 		return nil
 	}
 

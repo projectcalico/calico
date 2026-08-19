@@ -26,17 +26,17 @@ import (
 var _ = Describe("Legacy iptables cleanup tables", func() {
 	featureDetector := environment.NewFeatureDetector(nil)
 
-	var realLegacyIPTablesLoaded func(ipVersion uint8) bool
+	var realModulesLoaded func(ipVersion uint8) bool
 
 	BeforeEach(func() {
-		realLegacyIPTablesLoaded = legacyIPTablesLoaded
-		legacyIPTablesLoaded = func(ipVersion uint8) bool {
+		realModulesLoaded = environment.LegacyIPTablesModulesLoaded
+		environment.LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
 			return true
 		}
 	})
 
 	AfterEach(func() {
-		legacyIPTablesLoaded = realLegacyIPTablesLoaded
+		environment.LegacyIPTablesModulesLoaded = realModulesLoaded
 	})
 
 	It("sweeps all four tables when the legacy binaries are there", func() {
@@ -59,9 +59,16 @@ var _ = Describe("Legacy iptables cleanup tables", func() {
 		Expect(legacyIPTablesCleanupTables(6, featureDetector, opts, opts)).To(BeEmpty())
 	})
 
+	// Felix would be programming the legacy backend itself, via the plain iptables binaries.
+	It("builds nothing when the nft binaries are missing", func() {
+		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathNoNFT}
+		Expect(legacyIPTablesCleanupTables(4, featureDetector, opts, opts)).To(BeEmpty())
+		Expect(legacyIPTablesCleanupTables(6, featureDetector, opts, opts)).To(BeEmpty())
+	})
+
 	// Reading the legacy tables would autoload the modules onto a pure-nftables node.
 	It("builds nothing when the legacy modules aren't loaded", func() {
-		legacyIPTablesLoaded = func(ipVersion uint8) bool {
+		environment.LegacyIPTablesModulesLoaded = func(ipVersion uint8) bool {
 			return false
 		}
 		opts := iptables.TableOptions{LookPathOverride: testutils.LookPathAll}

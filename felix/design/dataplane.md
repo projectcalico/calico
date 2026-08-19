@@ -521,13 +521,22 @@ Two details that are easy to get wrong:
   interval rather than run on every apply.
 - A `CleanupOnly` table never panics: the backend it names may have no
   kernel support on this host, in which case there is nothing of ours
-  in it anyway. Felix also declines to build the legacy tables at all
-  unless the iptables-legacy binaries are present, because `FindBestBinary`
-  would otherwise fall back to the default `iptables`, and Felix would
-  sweep the backend it is programming. The same check gates the nft
-  view in iptables mode. Nor does it build them unless the legacy
-  modules are already loaded, since `iptables-legacy-save` would
-  autoload them onto a node running pure nftables.
+  in it anyway. It also retries on a latch rather than on every apply,
+  so a backend Felix can't read doesn't burn a retry budget each time
+  round the loop.
+- Felix declines to build the legacy tables at all unless **both**
+  sets of binaries are present. Without the legacy ones,
+  `FindBestBinary` falls back to the default `iptables` and the sweep
+  lands on the backend Felix is programming; without the nft ones, the
+  tables Felix programs take that same fallback and *are* the legacy
+  ones. The first check also gates the nft view in iptables mode.
+- Nor does Felix build them unless the legacy modules are already
+  loaded, since `iptables-legacy-save` would autoload them onto a node
+  running pure nftables. `environment.DetectBackend` shares that check
+  for the same reason, so backend detection no longer probes a backend
+  the kernel hasn't got - which used to load the modules before the
+  cleanup path got a chance to decline, and to count nft's rules as
+  legacy ones when `FindBestBinary` fell back.
 
 Cleanup **never terminates**. A shared table can be written again at
 any point (kube-proxy restarting, say), so one clean read proves
