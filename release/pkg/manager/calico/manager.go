@@ -330,19 +330,19 @@ func (r *CalicoManager) Build() error {
 		} else {
 			logrus.Info("Skipping building windows archive")
 		}
-
-		// Build multi-arch e2e test binaries and copy them into the output directory.
-		if r.e2eBinaries {
-			if err = r.buildE2EBinaries(); err != nil {
-				return err
-			}
-		} else {
-			logrus.Info("Skipping building e2e test binaries")
-		}
 	} else {
 		if err = r.buildOCPBundle(); err != nil {
 			return err
 		}
+	}
+
+	// Build multi-arch e2e test binaries and copy them into the output directory.
+	if r.e2eBinaries {
+		if err = r.buildE2EBinaries(); err != nil {
+			return err
+		}
+	} else {
+		logrus.Info("Skipping building e2e test binaries")
 	}
 
 	// Build and add in the complete release tarball.
@@ -1228,6 +1228,17 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eStagingDir is where buildE2EBinaries puts the per-arch binaries.
+// Hashreleases serve a directory tree, so they go under files/e2e/. A release
+// attaches them to a GitHub release, whose assets are flat and which ghr
+// populates from the top level of the upload directory.
+func (r *CalicoManager) e2eStagingDir() string {
+	if r.isHashRelease {
+		return filepath.Join(r.uploadDir(), "files", "e2e")
+	}
+	return r.uploadDir()
+}
+
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
@@ -1241,26 +1252,38 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		return fmt.Errorf("failed to build e2e binaries: %w", err)
 	}
 
-	// Hard-link the built binaries into the hashrelease output directory
-	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
-	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	// Hard-link the built binaries into the output directory to avoid
+	// duplicating ~1 GB of cross-compiled test binaries on disk.
+	e2eOutputDir := r.e2eStagingDir()
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+	binDir := filepath.Join(e2eDir, "bin", "k8s")
+	entries, err := os.ReadDir(binDir)
 	if err != nil {
 		return fmt.Errorf("reading e2e bin directory: %w", err)
 	}
+	staged := 0
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
 			continue
 		}
-		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
 		dst := filepath.Join(e2eOutputDir, entry.Name())
-		if err := os.Link(src, dst); err != nil {
+		// Replace a leftover link from an earlier build of the same version;
+		// os.Link fails outright on an existing destination.
+		if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("replacing e2e binary %s: %w", entry.Name(), err)
+		}
+		if err := os.Link(filepath.Join(binDir, entry.Name()), dst); err != nil {
 			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
 		}
 		logrus.Infof("Staged e2e binary: %s", entry.Name())
+		staged++
+	}
+	// Nothing staged means the build produced no binaries; a release must not
+	// ship with --e2e-binaries enabled and no e2e assets.
+	if staged == 0 {
+		return fmt.Errorf("no e2e test binaries were produced in %s", binDir)
 	}
 	return nil
 }
@@ -1366,7 +1389,7 @@ Attached to this release are the following artifacts:
 - {helm_chart}: Calico Helm 3 chart (also hosted at oci://quay.io/calico/charts/tigera-operator).
 - {helm_v1_crd_chart}: Calico crd.projectcalico.org/v1 CRD chart.
 - {helm_v3_crd_chart}: Calico projectcalico.org/v3 CRD chart (tech-preview).
-- ocp.tgz: Manifest bundle for OpenShift.
+- ocp.tgz: Manifest bundle for OpenShift.{e2e_binaries}
 
 Additional links:
 
@@ -1375,6 +1398,17 @@ Additional links:
 `
 	ver := version.New(r.calicoVersion)
 	sv := ver.Semver()
+	// Advertise the e2e binaries based on what the build staged, not on
+	// r.e2eBinaries: that flag belongs to the build step and is never passed to
+	// publish, so it always reads as its default here.
+	e2eBinariesNote := ""
+	staged, err := filepath.Glob(filepath.Join(r.uploadDir(), "e2e-linux-*.test"))
+	if err != nil {
+		return fmt.Errorf("looking for staged e2e binaries: %w", err)
+	}
+	if len(staged) > 0 {
+		e2eBinariesNote = "\n- `e2e-linux-<arch>.test`: Version-matched Kubernetes e2e test binaries, one per architecture."
+	}
 	formatters := []string{
 		// Alternating placeholder / filler. We can't use backticks in the multiline string above,
 		// so we replace anything that needs to be backticked into it here.
@@ -1386,6 +1420,7 @@ Additional links:
 		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
 		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV1CRDsChart, r.calicoVersion),
 		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV3CRDsChart, r.calicoVersion),
+		"{e2e_binaries}", e2eBinariesNote,
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
@@ -1399,8 +1434,7 @@ Additional links:
 		r.calicoVersion,
 		r.uploadDir(),
 	}
-	_, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
-	if err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil); err != nil {
 		return fmt.Errorf("failed to publish github release: %w", err)
 	}
 	return nil
