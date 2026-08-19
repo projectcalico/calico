@@ -17,12 +17,10 @@ package render
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
 	"golang.org/x/net/http/httpproxy"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,6 +41,7 @@ import (
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorurl "github.com/tigera/operator/pkg/url"
 )
 
 const (
@@ -563,7 +562,7 @@ func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) ([]string, erro
 			return nil, err
 		}
 
-		httpProxyDestination, err := parseHostPortFromURL(httpProxyURL)
+		httpProxyDestination, err := operatorurl.ParseHostPortFromHTTPProxyURL(httpProxyURL)
 		if err != nil {
 			return nil, err
 		}
@@ -577,7 +576,7 @@ func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) ([]string, erro
 			return nil, err
 		}
 
-		httpsProxyDestination, err := parseHostPortFromURL(httpsProxyURL)
+		httpsProxyDestination, err := operatorurl.ParseHostPortFromHTTPProxyURL(httpsProxyURL)
 		if err != nil {
 			return nil, err
 		}
@@ -615,60 +614,20 @@ func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
 		}, nil
 	}
 
-	// Process specific destinations.
-	var egressRule v3.Rule
-	host, port, err := net.SplitHostPort(destination)
-	if err != nil {
-		return v3.Rule{}, err
+	// Everything else is a concrete host:port. The shared helper picks the
+	// tightest rule it can: an exact net for a literal IP, a Services match for an
+	// in-cluster name, otherwise the domain. Dex renders the domain rule
+	// unconditionally -- unlike the other users of this helper it has no license
+	// input, and narrowing to port-only here would widen the IdP egress.
+	parsed, ok := networkpolicy.ParseExternalDestination(destination)
+	if !ok {
+		return v3.Rule{}, fmt.Errorf("could not parse egress destination %q", destination)
 	}
-	parsedPort, err := numorstring.PortFromString(port)
-	if err != nil {
-		return v3.Rule{}, err
-	}
-	parsedIp := net.ParseIP(host)
-	if parsedIp == nil {
-		// Assume host is a valid hostname.
-		egressRule = v3.Rule{
-			Action:   v3.Allow,
-			Protocol: &networkpolicy.TCPProtocol,
-			Destination: v3.EntityRule{
-				Domains: []string{host},
-				Ports:   []numorstring.Port{parsedPort},
-			},
-		}
-	} else {
-		var netSuffix string
-		if parsedIp.To4() != nil {
-			netSuffix = "/32"
-		} else {
-			netSuffix = "/128"
-		}
-
-		egressRule = v3.Rule{
-			Action:   v3.Allow,
-			Protocol: &networkpolicy.TCPProtocol,
-			Destination: v3.EntityRule{
-				Nets:  []string{parsedIp.String() + netSuffix},
-				Ports: []numorstring.Port{parsedPort},
-			},
-		}
+	egressRule := v3.Rule{
+		Action:      v3.Allow,
+		Protocol:    &networkpolicy.TCPProtocol,
+		Destination: networkpolicy.ExternalDestinationEntityRule(parsed, true),
 	}
 
 	return egressRule, nil
-}
-
-func parseHostPortFromURL(url *url.URL) (string, error) {
-	if url.Port() != "" {
-		// Host is already in host:port form.
-		return url.Host, nil
-	}
-
-	switch url.Scheme {
-	case "http":
-		return net.JoinHostPort(url.Host, "80"), nil
-	case "https":
-		return net.JoinHostPort(url.Host, "443"), nil
-	default:
-		return "", fmt.Errorf("unexpected scheme for URL: %s", url.Scheme)
-	}
 }
