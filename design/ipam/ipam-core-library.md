@@ -67,6 +67,9 @@ A few non-obvious design points:
   release](./ipam-gc.md#empty-block-release) safe.
 - The block cap is `min(global MaxBlocksPerHost, request-level)`, defaulting to 20 if both are zero. Once a node reaches it, `allowNewClaim` is forced false; existing blocks still
   fill.
+- `GetEnabledPools` skips a pool that lacks `Allocatable=True` when an allocatable or terminating pool covers its CIDR. The IP pool controller resolves overlap asynchronously, so
+  without this a pool created over an active one is allocatable until the controller's first status write - unbounded while kube-controllers is down. A pool already marked
+  `Allocatable=True` is taken at its word and never tested against the others.
 
 **Review notes**
 
@@ -75,6 +78,8 @@ A few non-obvious design points:
 - Treat pending block affinities as if absent when deciding ownership or advertising routes.
 - Pre-existing blocks may lack `AffinityType`; default to `"host"` on read. https://github.com/projectcalico/calico/pull/11179 was a crash from this assumption.
 - Pool resolution is in the hot path. `ResolvePools` was hand-optimized in https://github.com/projectcalico/calico/pull/9891 - preserve the fast path.
+- Overlap is enforced at pool selection, not only by the IP pool controller. Don't reduce the gate back to a bare `Allocatable=False` check; that reopens the window a new
+  overlapping pool is allocatable in.
 - `MaxBlocksPerHost` defaults are a recurring doc/code drift point (https://github.com/projectcalico/calico/issues/9462). If you change the default in code, update the docs in the
   same PR.
 
