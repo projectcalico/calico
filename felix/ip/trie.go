@@ -251,6 +251,12 @@ func (n *CIDRNode) covers(cidr CIDR) bool {
 	return child.covers(cidr)
 }
 
+// Overlaps returns true if the trie holds a CIDR that intersects the given one, in either
+// direction of containment.
+func (t *CIDRTrie) Overlaps(cidr CIDR) bool {
+	return t.Covers(cidr) || t.Intersects(cidr)
+}
+
 func (t *CIDRTrie) Intersects(cidr CIDR) bool {
 	return t.root.intersects(cidr)
 }

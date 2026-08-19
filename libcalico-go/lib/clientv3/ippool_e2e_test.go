@@ -885,6 +885,41 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err.Error()).To(ContainSubstring("IPPool CIDR cannot be modified"))
 		})
 
+		It("should mark a newly created pool allocatable", func() {
+			By("Creating a pool")
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(ContainElement(SatisfyAll(
+				HaveField("Type", apiv3.IPPoolConditionAllocatable),
+				HaveField("Status", metav1.ConditionTrue),
+			)))
+
+			By("Checking the condition survived the write")
+			pool, err = c.IPPools().Get(ctx, "ippool1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pool.Status).NotTo(BeNil())
+			Expect(pool.Status.Conditions).To(HaveLen(1))
+		})
+
+		It("should not mark a pool created through UnsafeCreate, which skips the overlap check", func() {
+			pool, err := c.IPPools().UnsafeCreate(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.0/24",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+		})
+
 		It("should prevent the creation of a pool with an identical or overlapping CIDR", func() {
 			By("Creating a pool")
 			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
