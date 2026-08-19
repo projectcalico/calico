@@ -16,6 +16,8 @@ package calico
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -540,4 +542,73 @@ func TestRequireOnMainBranch(t *testing.T) {
 	run("checkout", "-q", "-b", "release-v3.33")
 	require.NoError(t, m.requireOnMainBranch("release-v3.33"),
 		"a resume must be allowed when the derived branch exists")
+}
+
+func TestCollectE2EBinaries(t *testing.T) {
+	tests := []struct {
+		name          string
+		e2eBinaries   bool
+		isHashRelease bool
+		staged        []string
+		want          []string
+	}{
+		{
+			name:        "release flattens the staged binaries",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			want:        []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+		},
+		{
+			name:        "unrelated staged files are left behind",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "notes.txt"},
+			want:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:          "hashrelease keeps only the files/e2e layout",
+			e2eBinaries:   true,
+			isHashRelease: true,
+			staged:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "disabled does nothing",
+			e2eBinaries: false,
+			staged:      []string{"e2e-linux-amd64.test"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputDir := t.TempDir()
+			e2eDir := filepath.Join(outputDir, "files", "e2e")
+			require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+			for _, name := range tt.staged {
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
+			}
+
+			r := &CalicoManager{
+				e2eBinaries:   tt.e2eBinaries,
+				isHashRelease: tt.isHashRelease,
+				outputDir:     outputDir,
+			}
+			require.NoError(t, r.collectE2EBinaries())
+
+			entries, err := os.ReadDir(outputDir)
+			require.NoError(t, err)
+			var got []string
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					got = append(got, entry.Name())
+				}
+			}
+			require.ElementsMatch(t, tt.want, got)
+		})
+	}
+}
+
+// A missing files/e2e directory means the build never staged anything, which
+// would otherwise ship a release with no e2e binaries and no warning.
+func TestCollectE2EBinariesUnstagedErrors(t *testing.T) {
+	r := &CalicoManager{e2eBinaries: true, outputDir: t.TempDir()}
+	require.Error(t, r.collectE2EBinaries())
 }
