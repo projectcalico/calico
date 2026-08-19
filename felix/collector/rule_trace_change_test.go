@@ -59,6 +59,8 @@ func (m *muCapture) Report(u any) error {
 	return nil
 }
 
+const ageOutTimeout = 200 * time.Millisecond
+
 var (
 	zombieDstKey = model.WorkloadEndpointKey{
 		Hostname: "localhost", OrchestratorID: "orchestrator",
@@ -112,7 +114,7 @@ func newZombieTestCollector(t *testing.T) (*collector, *muCapture) {
 	}
 	lm := newMockLookupsCache(epMap, map[[64]byte]*calc.RuleID{}, nil, nil)
 	conf := &Config{
-		AgeTimeout:            200 * time.Millisecond,
+		AgeTimeout:            ageOutTimeout,
 		InitialReportingDelay: 0,
 		ExportingInterval:     time.Hour, // ticker not used; we call checkEpStats directly
 		FlowLogsFlushInterval: time.Hour,
@@ -135,27 +137,34 @@ func ingressHit(t tuple.Tuple, rid *calc.RuleID) types.PacketInfo {
 	}
 }
 
-// assertDenyAggDrains runs flush cycles against the deny aggregator and fails
-// if the final cycle still exports anything: a flow surviving repeated flushes
-// with no incoming metric updates is a leaked reference that would be
-// re-exported forever.
+// assertDenyAggDrains flushes the deny aggregator and fails if anything is
+// exported after the expired flow's final record: a flow surviving flushes with
+// no incoming metric updates is a leaked reference that would be re-exported
+// forever.
 func assertDenyAggDrains(t *testing.T, cap *muCapture) {
 	t.Helper()
-	var last []*flowlog.FlowLog
-	for range 4 {
-		last = cap.denyAgg.GetAndCalibrate()
+	cap.denyAgg.GetAndCalibrate() // final report for the expired deny flow
+	for i := range 3 {
+		for _, fl := range cap.denyAgg.GetAndCalibrate() {
+			t.Errorf("leaked flow in deny aggregator on flush %d: action=%v reporter=%v pktsIn=%d numFlows=%d policies=%v",
+				i+2, fl.Action, fl.Reporter, fl.PacketsIn, fl.NumFlows, fl.FlowEnforcedPolicySet)
+		}
 	}
-	for _, fl := range last {
-		t.Errorf("leaked flow in deny aggregator: action=%v reporter=%v pktsIn=%d numFlows=%d policies=%v",
-			fl.Action, fl.Reporter, fl.PacketsIn, fl.NumFlows, fl.FlowEnforcedPolicySet)
-	}
+}
+
+// Sleeping against the collector's real clock flakes on a loaded CI agent, so
+// these tests move a flow's timestamps instead. Reporting gates on
+// ruleUpdatedAt and expiry on updatedAt, so this must leave updatedAt alone or
+// the flow ages out before it is ever reported.
+func ripenForReport(d *Data) {
+	d.ruleUpdatedAt -= time.Second
 }
 
 func denyThenReport(t *testing.T, c *collector, tup tuple.Tuple) {
 	t.Helper()
 	c.applyPacketInfo(ingressHit(tup, zombieEOTDenyHit))
-	time.Sleep(5 * time.Millisecond) // let monotime advance past RuleUpdatedAt
-	c.checkEpStats()                 // report (InitialReportingDelay=0)
+	ripenForReport(c.epStats[tup])
+	c.checkEpStats() // report (InitialReportingDelay=0)
 	if data := c.epStats[tup]; data == nil || !data.Reported {
 		t.Fatalf("setup: deny flow not reported, data=%v", data)
 	}
@@ -163,7 +172,9 @@ func denyThenReport(t *testing.T, c *collector, tup tuple.Tuple) {
 
 func ageOut(t *testing.T, c *collector, tup tuple.Tuple) {
 	t.Helper()
-	time.Sleep(250 * time.Millisecond) // > AgeTimeout
+	data := c.epStats[tup]
+	data.updatedAt -= 2 * ageOutTimeout
+	data.ruleUpdatedAt -= 2 * ageOutTimeout
 	c.checkEpStats()
 	if _, ok := c.epStats[tup]; ok {
 		t.Fatalf("flow %v still in epStats after age timeout", tup)
@@ -186,7 +197,7 @@ func TestDenyAggregatorDrains_SameIndexVerdictFlip(t *testing.T) {
 	tup := tuple.Make(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 	denyThenReport(t, c, tup)
 	c.applyPacketInfo(ingressHit(tup, zombiePolicyAllow)) // same idx 0 -> conflict -> expire+replace
-	time.Sleep(5 * time.Millisecond)
+	ripenForReport(c.epStats[tup])
 	c.checkEpStats() // report new allow state
 	ageOut(t, c, tup)
 	assertDenyAggDrains(t, cap)
@@ -201,7 +212,7 @@ func TestDenyAggregatorDrains_VerdictMovesToEmptySlot(t *testing.T) {
 	tup := tuple.Make(remoteIp1, localIp1, proto_tcp, srcPort, dstPort)
 	denyThenReport(t, c, tup)
 	c.applyPacketInfo(ingressHit(tup, zombieProfileAllow)) // profile idx 1, empty slot
-	time.Sleep(5 * time.Millisecond)
+	ripenForReport(c.epStats[tup])
 	c.checkEpStats()
 	ageOut(t, c, tup)
 	assertDenyAggDrains(t, cap)
@@ -218,13 +229,14 @@ func TestDenyAggregatorDrains_UnknownPolicyHitThenConntrack(t *testing.T) {
 	// conntrack now sees the (allowed) connection.
 	data := c.getDataAndUpdateEndpoints(tup, false, false)
 	c.applyConntrackStatUpdate(data, 10, 1000, 8, 800, false)
-	time.Sleep(5 * time.Millisecond)
+	ripenForReport(c.epStats[tup])
 	c.checkEpStats() // reports conn stats with stale deny trace
-	// conntrack entry expires later.
+	// conntrack entry expires later, which removes the flow on its own.
 	data = c.getDataAndUpdateEndpoints(tup, true, false)
 	c.applyConntrackStatUpdate(data, 12, 1200, 9, 900, true)
-	time.Sleep(250 * time.Millisecond)
-	c.checkEpStats()
+	if _, ok := c.epStats[tup]; ok {
+		t.Fatalf("flow %v still in epStats after conntrack expiry", tup)
+	}
 	assertDenyAggDrains(t, cap)
 }
 
@@ -255,7 +267,7 @@ func TestDenyAggregatorDrains_MatchDataSwapProfileFlip(t *testing.T) {
 	}, nil, nil, nil)
 
 	c.applyPacketInfo(ingressHit(tup, zombieProfileAllow)) // profile idx 0 -> conflict with EOT deny
-	time.Sleep(5 * time.Millisecond)
+	ripenForReport(c.epStats[tup])
 	c.checkEpStats()
 	ageOut(t, c, tup)
 	assertDenyAggDrains(t, cap)
