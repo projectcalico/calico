@@ -23,6 +23,7 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -127,15 +128,15 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 // unmarked pool stays usable until something overlaps it.
 func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool) *apiv3.IPPool {
 	marked := pool.DeepCopy()
-	marked.Status = &apiv3.IPPoolStatus{
-		Conditions: []metav1.Condition{{
-			Type:               apiv3.IPPoolConditionAllocatable,
-			Status:             metav1.ConditionTrue,
-			Reason:             apiv3.IPPoolReasonOK,
-			Message:            "IPPool is available for IP allocation.",
-			LastTransitionTime: metav1.Now(),
-		}},
+	if marked.Status == nil {
+		marked.Status = &apiv3.IPPoolStatus{}
 	}
+	meta.SetStatusCondition(&marked.Status.Conditions, metav1.Condition{
+		Type:    apiv3.IPPoolConditionAllocatable,
+		Status:  metav1.ConditionTrue,
+		Reason:  apiv3.IPPoolReasonOK,
+		Message: "IPPool is available for IP allocation.",
+	})
 
 	out, err := r.UpdateStatus(ctx, marked, options.SetOptions{})
 	if err != nil {
