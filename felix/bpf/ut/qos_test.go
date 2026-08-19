@@ -1180,3 +1180,110 @@ func TestQoSConnLimitV6DualStackCountersAreIndependent(t *testing.T) {
 	Expect(readCount(v4Key)).To(Equal(uint32(2)),
 		"a v6 connection must not touch the v4 counter for the same interface")
 }
+
+// TestQoSConnLimitEgressGatedOnConfiguredFlag verifies that the egress
+// connection-limit check is gated on EGRESS_CONN_LIMIT_CONFIGURED, matching
+// the ingress check and the egress CT stamp.
+//
+// The check at tc.c:1574 ran on every from-WEP TCP SYN and fired whenever a
+// cali_qos_conn entry with max_connections > 0 existed, while the stamp that
+// marks the CT entry CONNLIMIT_EGRESS was gated on the global. Felix writes
+// the map entry and sets ap.EgressConnLimitConfigured in the same pass
+// (bpf_ep_mgr.go), but the program only picks the global up when it is
+// reattached, so a connection opened in that window was counted without being
+// flagged — and qos_connlimit_decrement_for_ct returns early for an entry
+// carrying neither CONNLIMIT_INGRESS nor _EGRESS, so neither the close path
+// nor the cleanup path could decrement it.
+//
+// ConnLimitScanner rebases current_count on pod identity rather than on those
+// flags, so the drift was transient rather than a leak. The asymmetry is still
+// worth removing: gating both on the global closes the window and skips the
+// map lookup entirely for endpoints with no egress limit, which is what the
+// design doc already describes — "the per-direction ... flags gate the BPF
+// connlimit code path entirely when no limit is configured for that attach
+// point".
+func TestQoSConnLimitEgressGatedOnConfiguredFlag(t *testing.T) {
+	RegisterTestingT(t)
+
+	bpfIfaceName = "HWegg"
+	defer func() { bpfIfaceName = "" }()
+
+	const (
+		// ifIndex must match the BPF UT's default skb ifindex so the
+		// workload RPF check passes.
+		ifIndex               = 1
+		maxConnections        = 3
+		srcPort        uint16 = 12348
+		dstPort        uint16 = 8055
+	)
+
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	rtKey = routes.NewKey(dstV4CIDR).AsBytes()
+	rtVal = routes.NewValueWithIfIndex(routes.FlagsRemoteWorkload|routes.FlagInIPAMPool, ifIndex).AsBytes()
+	Expect(rtMap.Update(rtKey, rtVal)).NotTo(HaveOccurred())
+	defer resetRTMap(rtMap)
+
+	ctMap := conntrack.Map()
+	Expect(ctMap.EnsureExists()).NotTo(HaveOccurred())
+	defer resetCTMap(ctMap)
+
+	qosKey := qos.NewKey(uint32(ifIndex), 0 /* egress */, qos.IPFamilyV4)
+
+	readQoSCount := func() uint32 {
+		b, err := qosConnMap.Get(qosKey.AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+		return qos.ConnValueFromBytes(b).CurrentCount()
+	}
+
+	// A configured limit with the counter at zero -- the map entry Felix has
+	// already written. Whether it is enforced is what the two cases differ on.
+	seed := func() {
+		resetCTMap(ctMap)
+		resetQoSMap(qosConnMap)
+		Expect(qosConnMap.Update(qosKey.AsBytes(),
+			qos.NewConnValue(maxConnections, 0).AsBytes())).NotTo(HaveOccurred())
+	}
+
+	_, _, _, _, synPkt, err := testPacketTCPV4WithPayload(dstIP, srcPort, dstPort, true /* syn */, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Positive control. Without it the case below would pass for any reason
+	// the SYN failed to reach the check at all.
+	t.Run("global set: SYN is counted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed()
+		defer resetQoSMap(qosConnMap)
+
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		}, withEgressQoSConnLimit())
+
+		Expect(readQoSCount()).To(Equal(uint32(1)))
+	})
+
+	t.Run("global clear: SYN is not counted", func(t *testing.T) {
+		RegisterTestingT(t)
+		seed()
+		defer resetQoSMap(qosConnMap)
+
+		// No withEgressQoSConnLimit(): the program as it is attached before
+		// Felix reattaches it with the new global, while the map entry
+		// seeded above is already in place.
+		skbMark = 0
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(synPkt)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_REDIRECT))
+		})
+
+		Expect(readQoSCount()).To(Equal(uint32(0)),
+			"egress connlimit check ran without EGRESS_CONN_LIMIT_CONFIGURED; "+
+				"the connection is counted but the CT stamp at tc.c:1621 is gated, "+
+				"so nothing can decrement it")
+	})
+}
