@@ -2165,7 +2165,7 @@ var _ = Describe("Static with connection transition logging", func() {
 			MarkEndpoint:             0xff000,
 			MarkNonCaliEndpoint:      0x1000,
 			LogConnectionTransitions: true,
-			ConnStateLogMark:         connStateLogMark,
+			MarkConnStateLog:         connStateLogMark,
 		}
 	})
 
@@ -2295,7 +2295,7 @@ var _ = Describe("Static with connection transition logging", func() {
 	Describe("with the feature disabled", func() {
 		BeforeEach(func() {
 			conf.LogConnectionTransitions = false
-			conf.ConnStateLogMark = 0
+			conf.MarkConnStateLog = 0
 		})
 
 		It("should not render the chain or the cali-OUTPUT check rule", func() {

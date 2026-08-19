@@ -503,16 +503,15 @@ reading the kernel log can tell whether a logged connection was
 ever answered. No follow-up log means no response was seen.
 Mechanism and invariants:
 
-- **One connmark bit** (`ConnStateLogMark` in `rules.Config`) means
+- **One connmark bit** (`MarkConnStateLog` in `rules.Config`) means
   "matched a Log rule; no response seen yet". It is allocated from
   `MarkBitsManager` *conditionally* (only when the feature is
   enabled, so the endpoint-mark block isn't shrunk otherwise) and
-  *before* the endpoint-mark block grab. It must stay a subset of
-  the packet-mark mask because the packet mark is commonly saved
-  to/restored from the connmark. Like `WireguardMark`, the field is
-  deliberately not named `Mark*`, keeping it out of
-  `Config.validate()`'s reflection scan which requires every
-  `Mark*` field to be non-zero.
+  *before* the endpoint-mark block grab. Reserved from packet-mark
+  space so user `CONNMARK --save-mark` rules can't set it
+  spuriously. `Config.validate()`'s reflection scan has an explicit
+  exception allowing this one `Mark*` field to be zero when the
+  feature is disabled.
 - **Setting the bit**: each rendered `Log` rule is followed by a
   `CONNMARK` rule with the same match (`rules/policy.go`). The
   connmark rule must NOT carry the `LogActionRateLimit` limit
@@ -528,10 +527,10 @@ Mechanism and invariants:
   bit but are ctstate NEW and must not be logged as a response. The
   first packet that reaches the check in RELATED/ESTABLISHED state
   is necessarily the first response. This lands in every tracked
-  endpoint chain (workload and host, filter and mangle); in preDNAT
-  mangle chains the rule is dead (mangle `cali-PREROUTING` accepts
-  RELATED,ESTABLISHED first) but is left in place to keep
-  `appendConntrackRules` uniform. One static-chain special case:
+  endpoint chain (workload and host, filter and mangle) except the
+  preDNAT mangle chains, which skip it: mangle `cali-PREROUTING`
+  accepts RELATED,ESTABLISHED first, so it could never match
+  there. One static-chain special case:
   replies to workload→host connections leave via filter `cali-OUTPUT`
   and RETURN at the workload-interface rules without traversing any
   per-endpoint chain, so the same check rule is inserted at the top

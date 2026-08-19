@@ -454,11 +454,11 @@ type Config struct {
 	// transition suffix ("-est" etc.) is appended to it.  Used verbatim: unlike LogPrefix,
 	// %-specifiers are not substituted (the rules are shared by all policies).
 	LogConnectionTransitionsPrefix string
-	// ConnStateLogMark is the connmark bit used when LogConnectionTransitions is
+	// MarkConnStateLog is the connmark bit used when LogConnectionTransitions is
 	// enabled; it means "connection matched a Log rule but no response has been seen yet".
-	// Deliberately not named Mark* so that validate()'s reflection scan doesn't require it
-	// when the feature is disabled (it is only allocated when enabled).
-	ConnStateLogMark uint32
+	// Only allocated when the feature is enabled; validate() has an explicit exception
+	// allowing it to be zero otherwise.
+	MarkConnStateLog uint32
 
 	EndpointToHostAction string
 	FilterAllowAction    string
@@ -509,6 +509,10 @@ func (c *Config) validate() {
 				log.WithField("field", fieldName).Debug("Ignoring unused field in BPF mode.")
 				continue
 			}
+			if fieldName == "MarkConnStateLog" && !c.LogConnectionTransitions {
+				// Only allocated when connection transition logging is enabled.
+				continue
+			}
 			bits := myValue.Field(i).Interface().(uint32)
 			if bits == 0 {
 				log.WithField("field", fieldName).Panic(
@@ -525,17 +529,6 @@ func (c *Config) validate() {
 	if found == 0 {
 		// Check the reflection found something we were expecting.
 		log.Panic("Didn't find any MarkXXX fields.")
-	}
-
-	// ConnStateLogMark is only allocated when the feature is enabled so it is checked
-	// explicitly rather than via the Mark* reflection scan above.
-	if c.LogConnectionTransitions {
-		if c.ConnStateLogMark == 0 {
-			log.Panic("ConnStateLogMark not set but LogConnectionTransitions is enabled.")
-		}
-		if usedBits&c.ConnStateLogMark > 0 {
-			log.Panic("ConnStateLogMark overlapped with another mark field's bits.")
-		}
 	}
 }
 

@@ -636,7 +636,7 @@ func (r *DefaultRuleRenderer) CombineMatchAndActionsForProtoRule(
 			// packets, so skip it there.
 			rules = append(rules, generictables.Rule{
 				Match:  r.NewMatch(),
-				Action: r.SetConnmark(r.ConnStateLogMark, r.ConnStateLogMark),
+				Action: r.SetConnmark(r.MarkConnStateLog, r.MarkConnStateLog),
 			})
 		}
 	}

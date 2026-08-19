@@ -172,7 +172,7 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 				It("should render a workload endpoint with connection transition logging", func() {
 					cfg := rrConfigNormalMangleReturn
 					cfg.LogConnectionTransitions = true
-					cfg.ConnStateLogMark = 0x10000
+					cfg.MarkConnStateLog = 0x10000
 					connStateRenderer := NewRenderer(cfg, false)
 
 					toWlOpts := append(commonRuleBuilderOpts,
@@ -209,10 +209,13 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
 
-				It("should render host endpoint mangle chains with pre-DNAT policies and connection transition logging", func() {
+				It("should skip the connection transition check rule in pre-DNAT mangle chains", func() {
+					// Mangle cali-PREROUTING accepts RELATED,ESTABLISHED traffic before the
+					// pre-DNAT chains run, so the check rule could never match there and is
+					// not rendered (the builder omits it for pre-DNAT chains too).
 					cfg := rrConfigNormalMangleReturn
 					cfg.LogConnectionTransitions = true
-					cfg.ConnStateLogMark = 0x10000
+					cfg.MarkConnStateLog = 0x10000
 					connStateRenderer := NewRenderer(cfg, false)
 
 					fromHostOpts := append(commonRuleBuilderOpts,
@@ -234,6 +237,97 @@ func endpointRulesTests(flowLogsEnabled bool, dropActionOverride string) func() 
 							Name:            "default",
 							IngressPolicies: []*proto.PolicyID{{Name: "c", Kind: v3.KindGlobalNetworkPolicy}},
 						}}),
+					)
+					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
+				})
+
+				It("should render host endpoint forward (ApplyOnForward) chains with connection transition logging", func() {
+					cfg := rrConfigNormalMangleReturn
+					cfg.LogConnectionTransitions = true
+					cfg.MarkConnStateLog = 0x10000
+					connStateRenderer := NewRenderer(cfg, false)
+
+					toHostOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withEgress(),
+						withPolicies(gnpAE, gnpBE),
+						withProfiles("prof1", "prof2"),
+						forHostEndpoint(),
+					)
+					toHostRules := newRuleBuilder(toHostOpts...).build()
+
+					fromHostOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withPolicies(gnpAI, gnpBI),
+						withProfiles("prof1", "prof2"),
+						forHostEndpoint(),
+					)
+					fromHostRules := newRuleBuilder(fromHostOpts...).build()
+
+					toHostFWOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withPolicies(gnpAFE, gnpBFE),
+						withForwardPolicies(),
+						withEgress(),
+						forHostEndpoint(),
+					)
+					toHostFWRules := newRuleBuilder(toHostFWOpts...).build()
+
+					fromHostFWOpts := append(commonRuleBuilderOpts,
+						withConnStateLog(0x10000),
+						withPolicies(gnpAFI, gnpBFI),
+						withForwardPolicies(),
+						forHostEndpoint(),
+					)
+					fromHostFWRules := newRuleBuilder(fromHostFWOpts...).build()
+
+					expected := trimSMChain(kubeIPVSEnabled, []*generictables.Chain{
+						{
+							Name:  "cali-th-eth0",
+							Rules: toHostRules,
+						},
+						{
+							Name:  "cali-fh-eth0",
+							Rules: fromHostRules,
+						},
+						{
+							Name:  "cali-thfw-eth0",
+							Rules: toHostFWRules,
+						},
+						{
+							Name:  "cali-fhfw-eth0",
+							Rules: fromHostFWRules,
+						},
+						{
+							Name:  "cali-sm-eth0",
+							Rules: setEndpointMarkRules(0xa200, 0xff00),
+						},
+					})
+					actual := connStateRenderer.HostEndpointToFilterChains("eth0",
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "ai", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "ae", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "be", Kind: v3.KindGlobalNetworkPolicy},
+							},
+						}}),
+						tiersToSinglePolGroups([]*proto.TierInfo{{
+							Name: "default",
+							IngressPolicies: []*proto.PolicyID{
+								{Name: "afi", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfi", Kind: v3.KindGlobalNetworkPolicy},
+							},
+							EgressPolicies: []*proto.PolicyID{
+								{Name: "afe", Kind: v3.KindGlobalNetworkPolicy},
+								{Name: "bfe", Kind: v3.KindGlobalNetworkPolicy},
+							},
+						}}),
+						epMarkMapper,
+						[]string{"prof1", "prof2"},
 					)
 					Expect(actual).To(Equal(expected), cmp.Diff(actual, expected))
 				})
@@ -1677,7 +1771,7 @@ func (b *ruleBuilder) build() []generictables.Rule {
 func (b *ruleBuilder) conntrackRules() []generictables.Rule {
 	var rules []generictables.Rule
 
-	if b.connStateLogMark != 0 {
+	if b.connStateLogMark != 0 && !b.forPreDNAT {
 		rules = append(rules, generictables.Rule{
 			Match: Match().
 				ConnMarkMatchesWithMask(b.connStateLogMark, b.connStateLogMark).

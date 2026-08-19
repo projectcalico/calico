@@ -3022,12 +3022,15 @@ spec:
                   description: |-
                     LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
                     first observed response for each connection that matched a policy rule with a Log action.
-                    When set to FirstResponseAfterLog, each such connection gets one follow-up log:
-                    "<prefix>-est" when the first reply packet is seen, "<prefix>-rst" when the response is a
-                    TCP RST (connection refused), or "<prefix>-icmp-err" when the response is a related ICMP
-                    error (e.g. port unreachable), where <prefix> is LogConnectionTransitionsPrefix. A
-                    connection with no follow-up log never received a response. Enabling this consumes one bit
-                    from the Iptables/NftablesMarkMask space. Not supported in eBPF mode. [Default: Disabled]
+                    When set to FirstResponseAfterLog, each such connection gets one follow-up log, prefixed
+                    with LogConnectionTransitionsPrefix plus a suffix identifying the transition: "-est" when
+                    the first reply packet is seen, "-rst" when the response is a TCP RST (connection refused),
+                    or "-icmp-err" when the response is a related ICMP error (e.g. port unreachable). The log
+                    body is the standard kernel packet log of the response packet, so the flow is identified by
+                    its 5-tuple and can be correlated with the original policy Log line (with source and
+                    destination swapped). A connection with no follow-up log never received a response.
+                    Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in
+                    eBPF mode. [Default: Disabled]
                   enum:
                     - Disabled
                     - FirstResponseAfterLog

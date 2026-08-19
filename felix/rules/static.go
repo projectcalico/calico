@@ -1068,7 +1068,7 @@ func (r *DefaultRuleRenderer) StaticNATOutputChains(ipVersion uint8) []*generict
 func (r *DefaultRuleRenderer) connStateLogRule() generictables.Rule {
 	return generictables.Rule{
 		Match: r.NewMatch().
-			ConnMarkMatchesWithMask(r.ConnStateLogMark, r.ConnStateLogMark).
+			ConnMarkMatchesWithMask(r.MarkConnStateLog, r.MarkConnStateLog).
 			ConntrackState("RELATED,ESTABLISHED"),
 		Action: r.Jump(ChainConnStateLog),
 	}
@@ -1107,7 +1107,7 @@ func (r *DefaultRuleRenderer) connStateLogChain(ipVersion uint8) *generictables.
 			},
 			generictables.Rule{
 				Match:  match(),
-				Action: r.SetConnmark(0, r.ConnStateLogMark),
+				Action: r.SetConnmark(0, r.MarkConnStateLog),
 			},
 			generictables.Rule{
 				Match:  match(),
