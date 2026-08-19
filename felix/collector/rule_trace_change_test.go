@@ -154,15 +154,10 @@ func assertDenyAggDrains(t *testing.T, cap *muCapture) {
 
 // Sleeping against the collector's real clock flakes on a loaded CI agent, so
 // these tests move a flow's timestamps instead. Reporting gates on
-// ruleUpdatedAt and expiry on updatedAt, so ripening must not touch updatedAt
-// or the flow ages out before it is ever reported.
+// ruleUpdatedAt and expiry on updatedAt, so this must leave updatedAt alone or
+// the flow ages out before it is ever reported.
 func ripenForReport(d *Data) {
 	d.ruleUpdatedAt -= time.Second
-}
-
-func rewindPastAgeTimeout(d *Data) {
-	d.updatedAt -= 2 * ageOutTimeout
-	d.ruleUpdatedAt -= 2 * ageOutTimeout
 }
 
 func denyThenReport(t *testing.T, c *collector, tup tuple.Tuple) {
@@ -177,7 +172,9 @@ func denyThenReport(t *testing.T, c *collector, tup tuple.Tuple) {
 
 func ageOut(t *testing.T, c *collector, tup tuple.Tuple) {
 	t.Helper()
-	rewindPastAgeTimeout(c.epStats[tup])
+	data := c.epStats[tup]
+	data.updatedAt -= 2 * ageOutTimeout
+	data.ruleUpdatedAt -= 2 * ageOutTimeout
 	c.checkEpStats()
 	if _, ok := c.epStats[tup]; ok {
 		t.Fatalf("flow %v still in epStats after age timeout", tup)
