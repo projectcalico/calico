@@ -245,6 +245,20 @@ var _ = Describe("Rule Trace", func() {
 			})
 		})
 	})
+	Describe("Verdict moving to a different match index", func() {
+		BeforeEach(func() {
+			rm := data.AddRuleID(denyIngressRid0, 0, 0, 0)
+			Expect(rm).To(Equal(collector.RuleMatchSet))
+		})
+		It("should conflict when a verdict arrives at an empty higher index", func() {
+			Expect(data.AddRuleID(allowIngressRid1, 1, 0, 0)).To(Equal(collector.RuleMatchIsDifferent))
+		})
+		It("should leave the existing trace untouched on the conflict", func() {
+			Expect(data.AddRuleID(allowIngressRid1, 1, 0, 0)).To(Equal(collector.RuleMatchIsDifferent))
+			Expect(data.IngressRuleTrace.Path()).To(HaveLen(1))
+			Expect(data.IngressAction()).To(Equal(rules.RuleActionDeny))
+		})
+	})
 	Describe("RuleTraces with next Tier", func() {
 		BeforeEach(func() {
 			rm := data.AddRuleID(nextTierIngressRid0, 0, 0, 0)
