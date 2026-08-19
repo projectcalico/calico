@@ -58,7 +58,7 @@ WINDOWS_VERSIONS ?= ltsc2019 ltsc2022
 
 # The CNI plugin and flannel code that will be cloned and rebuilt with this repo's go-build image
 # whenever the cni-plugin image is created.
-CNI_VERSION=master
+CNI_VERSION=9ffe547cb3b66f80dd32a00fc69a6d0082b55321
 FLANNEL_VERSION=main
 
 # The libbpf version to use
