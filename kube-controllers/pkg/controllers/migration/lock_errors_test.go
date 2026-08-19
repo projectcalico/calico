@@ -33,6 +33,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 	rtfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/migration/migrators"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -122,12 +123,12 @@ func savedAPIServiceJSON(t *testing.T) string {
 func newErrorTestController(
 	t *testing.T,
 	bc *mockBackendClient,
-	dm *DatastoreMigration,
+	dm *migrationv1.DatastoreMigration,
 ) (*migrationController, *fakeapiregclient.Clientset, *recordingMigrator) {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, apiv3.AddToScheme, AddToScheme} {
+	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, apiv3.AddToScheme, migrationv1.AddToScheme} {
 		if err := add(scheme); err != nil {
 			t.Fatalf("building scheme: %v", err)
 		}
@@ -136,7 +137,7 @@ func newErrorTestController(
 	rtCli := rtfake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(dm).
-		WithStatusSubresource(&DatastoreMigration{}).
+		WithStatusSubresource(&migrationv1.DatastoreMigration{}).
 		Build()
 
 	rec := &recordingMigrator{}
@@ -155,16 +156,21 @@ func newErrorTestController(
 
 // migratingCR returns a DatastoreMigration CR in the Migrating phase with the
 // finalizer and a saved APIService annotation.
-func migratingCR(t *testing.T) *DatastoreMigration {
+func migratingCR(t *testing.T) *migrationv1.DatastoreMigration {
 	t.Helper()
-	return &DatastoreMigration{
+	// StartedAt is written by the same status update that sets Migrating.
+	startedAt := metav1.Now()
+	return &migrationv1.DatastoreMigration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        defaultMigrationName,
 			Finalizers:  []string{finalizerName},
 			Annotations: map[string]string{savedAPIServiceAnnotation: savedAPIServiceJSON(t)},
 		},
-		Spec:   DatastoreMigrationSpec{Type: DatastoreMigrationTypeAPIServerToCRDs},
-		Status: DatastoreMigrationStatus{Phase: DatastoreMigrationPhaseMigrating},
+		Spec: migrationv1.DatastoreMigrationSpec{Type: migrationv1.DatastoreMigrationTypeAPIServerToCRDs},
+		Status: migrationv1.DatastoreMigrationStatus{
+			Phase:     migrationv1.DatastoreMigrationPhaseMigrating,
+			StartedAt: &startedAt,
+		},
 	}
 }
 
@@ -187,9 +193,9 @@ func TestLockDatastore_BackendUpdateError(t *testing.T) {
 	g.Expect(rec.listV1Called).To(BeFalse(), "no migrator should run while the v1 lock is unset")
 	g.Expect(m.queue.NumRequeues(defaultMigrationName)).To(Equal(1), "the failure should be retried, not dropped")
 
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(m.rtClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
-	g.Expect(dm.Status.Phase).To(Equal(DatastoreMigrationPhaseMigrating))
+	g.Expect(dm.Status.Phase).To(Equal(migrationv1.DatastoreMigrationPhaseMigrating))
 	g.Expect(dm.Status.Message).To(ContainSubstring("locking v1 ClusterInformation"))
 	g.Expect(dm.Status.Message).To(ContainSubstring("simulated backend unavailable"))
 
@@ -209,7 +215,7 @@ func TestAbort_BackendUpdateError(t *testing.T) {
 	}
 	m, fakeAPIReg, _ := newErrorTestController(t, bc, migratingCR(t))
 
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(m.rtClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
 	g.Expect(m.rtClient.Delete(ctx, dm)).To(Succeed())
 
@@ -239,7 +245,7 @@ func TestAbort_V1ClusterInfoDoesNotExist(t *testing.T) {
 	}
 	m, fakeAPIReg, _ := newErrorTestController(t, bc, migratingCR(t))
 
-	dm := &DatastoreMigration{}
+	dm := &migrationv1.DatastoreMigration{}
 	g.Expect(m.rtClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, dm)).To(Succeed())
 	g.Expect(m.rtClient.Delete(ctx, dm)).To(Succeed())
 
@@ -248,7 +254,7 @@ func TestAbort_V1ClusterInfoDoesNotExist(t *testing.T) {
 
 	g.Expect(m.queue.NumRequeues(defaultMigrationName)).To(Equal(0), "abort should have succeeded")
 
-	err := m.rtClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, &DatastoreMigration{})
+	err := m.rtClient.Get(ctx, types.NamespacedName{Name: defaultMigrationName}, &migrationv1.DatastoreMigration{})
 	g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "finalizer should be removed so the CR is collected")
 
 	apiSvc, err := fakeAPIReg.ApiregistrationV1().APIServices().Get(ctx, apiServiceName, metav1.GetOptions{})

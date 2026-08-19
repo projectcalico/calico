@@ -3,6 +3,8 @@ package policy
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +18,8 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
+	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -64,6 +68,9 @@ var _ = describe.CalicoDescribe(
 			installed, err := utils.WhiskerInstalled(cli)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(installed).To(BeTrue(), "Whisker is not installed in the cluster")
+
+			whiskerHTTPSClient, err = buildWhiskerHTTPSClient(context.TODO(), cli)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		Context("Test presence in flow logs", func() {
@@ -128,14 +135,14 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedKubernetesNetworkPolicy.Name,
-						"default",
-						whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
-						whiskerv1.Action(0), // Action is empty for StagedKubernetesNetworkPolicy
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name: stagedKubernetesNetworkPolicy.Name,
+						tier: "default",
+						kind: whiskerv1.PolicyKindStagedKubernetesNetworkPolicy,
+
+						// Action is empty for StagedKubernetesNetworkPolicy.
+						action: whiskerv1.Action(0),
+					})
 				})
 
 				AfterEach(func() {
@@ -164,15 +171,12 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedPolicyName,
-						stagedPolicy.Spec.Tier,
-						whiskerv1.PolicyKindStagedNetworkPolicy,
-						whiskerv1.ActionDeny,
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name:   stagedPolicyName,
+						tier:   stagedPolicy.Spec.Tier,
+						kind:   whiskerv1.PolicyKindStagedNetworkPolicy,
+						action: whiskerv1.ActionDeny,
+					})
 				})
 
 				AfterEach(func() {
@@ -201,14 +205,12 @@ var _ = describe.CalicoDescribe(
 				})
 
 				framework.ConformanceIt("Validate name, tier, action", func() {
-					verifyFlowCount(url, 2)
-					verifyFlowContainsStagedPolicy(
-						url,
-						stagedGlobalNetworkPolicyName,
-						stagedGlobalNetworkPolicy.Spec.Tier,
-						whiskerv1.PolicyKindStagedGlobalNetworkPolicy,
-						whiskerv1.ActionDeny,
-					)
+					expectFlowWithStagedPolicy(url, checker, client1, server.ClusterIP().Port(serverPort), stagedPolicyHit{
+						name:   stagedGlobalNetworkPolicyName,
+						tier:   stagedGlobalNetworkPolicy.Spec.Tier,
+						kind:   whiskerv1.PolicyKindStagedGlobalNetworkPolicy,
+						action: whiskerv1.ActionDeny,
+					})
 				})
 
 				AfterEach(func() {
@@ -342,8 +344,44 @@ var _ = describe.CalicoDescribe(
 		})
 	})
 
+// whiskerHTTPSClient verifies whisker-backend's certificate against the
+// cluster CA bundle. Populated once the bundle is read in BeforeEach.
+var whiskerHTTPSClient *http.Client
+
+// buildWhiskerHTTPSClient reads the cluster's CA bundle and returns a client
+// that trusts certificates signed by it, such as whisker-backend's.
+func buildWhiskerHTTPSClient(ctx context.Context, cli ctrlclient.Client) (*http.Client, error) {
+	bundle := &corev1.ConfigMap{}
+	err := cli.Get(ctx, ctrlclient.ObjectKey{Namespace: "calico-system", Name: "tigera-ca-bundle"}, bundle)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tigera-ca-bundle: %w", err)
+	}
+
+	rootCAs := x509.NewCertPool()
+	appended := false
+	for _, pem := range bundle.Data {
+		if rootCAs.AppendCertsFromPEM([]byte(pem)) {
+			appended = true
+		}
+	}
+	if !appended {
+		return nil, fmt.Errorf("no CA certificates found in tigera-ca-bundle")
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: rootCAs}},
+		Timeout:   30 * time.Second,
+	}, nil
+}
+
+// whiskerGet fetches a whisker-backend URL over HTTPS, verifying the
+// backend's certificate against the cluster CA bundle.
+func whiskerGet(baseURL string) (*http.Response, error) {
+	return whiskerHTTPSClient.Get("https://" + baseURL)
+}
+
 func buildURL(port int, sourceNamespace, destinationNamespace, startTime string) string {
-	baseURL := fmt.Sprintf("http://localhost:%d/flows", port)
+	baseURL := fmt.Sprintf("localhost:%d/flows", port)
 
 	f := whiskerv1.Filters{
 		SourceNamespaces: whiskerv1.FilterMatches[string]{
@@ -366,7 +404,7 @@ func buildURL(port int, sourceNamespace, destinationNamespace, startTime string)
 func verifyPortForward(url string) {
 	// Port forward should be working and whisker-backend should return 200 status
 	Eventually(func() error {
-		resp, err := http.Get(url)
+		resp, err := whiskerGet(url)
 		if err != nil {
 			return err
 		}
@@ -385,76 +423,68 @@ func verifyPortForward(url string) {
 	}, 30*time.Second, 1*time.Second).Should(Not(HaveOccurred()))
 }
 
-func verifyFlowCount(url string, count int) {
-	var response apiutil.List[whiskerv1.FlowResponse]
-
-	EventuallyWithOffset(1, func() error {
-		resp, err := http.Get(url)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = resp.Body.Close() }()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
-		}
-
-		if err = json.Unmarshal(body, &response); err != nil {
-			return err
-		}
-
-		if len(response.Items) != count {
-			return fmt.Errorf(
-				"expected %d flow items, got %d\n%s",
-				count, len(response.Items), formatFlowDiagnostics(response.Items),
-			)
-		}
-
-		return nil
-	}, 150*time.Second, 5*time.Second).Should(Not(HaveOccurred()))
-}
-
-func verifyFlowContainsStagedPolicy(url, name, tier string, kind whiskerv1.PolicyKind, action whiskerv1.Action) {
-	var response apiutil.List[whiskerv1.FlowResponse]
-	containsStagedPolicy := false
-
-	resp, err := http.Get(url)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+func getWhiskerFlows(url string) ([]whiskerv1.FlowResponse, error) {
+	resp, err := whiskerGet(url)
+	if err != nil {
+		return nil, err
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-
-	ExpectWithOffset(1, resp.StatusCode).To(Equal(http.StatusOK), "unexpected status code from whisker-backend, body: %s", string(body))
-	err = json.Unmarshal(body, &response)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred())
-	ExpectWithOffset(1, kind).NotTo(Equal(""), "BUG: kind should not be empty")
-
-	matchesPolicyHit := func(p *whiskerv1.PolicyHit) bool {
-		return p != nil && p.Name == name && p.Tier == tier && p.Kind == kind && p.Action == action
+	if err != nil {
+		return nil, err
 	}
 
-	for _, item := range response.Items {
-		for _, pending := range item.Policies.Pending {
-			if matchesPolicyHit(pending) || matchesPolicyHit(pending.Trigger) {
-				containsStagedPolicy = true
-				break
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var response apiutil.List[whiskerv1.FlowResponse]
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	return response.Items, nil
+}
+
+// stagedPolicyHit is the pending policy a flow is expected to report.
+type stagedPolicyHit struct {
+	name   string
+	tier   string
+	kind   whiskerv1.PolicyKind
+	action whiskerv1.Action
+}
+
+func (h stagedPolicyHit) matches(p *whiskerv1.PolicyHit) bool {
+	return p != nil && p.Name == h.name && p.Tier == h.tier && p.Kind == h.kind && p.Action == h.action
+}
+
+// expectFlowWithStagedPolicy re-probes while polling, since Felix only evaluates pending policy for connections it still tracks.
+func expectFlowWithStagedPolicy(url string, checker conncheck.ConnectionTester, cl conncheck.Client, target conncheck.Target, want stagedPolicyHit) {
+	EventuallyWithOffset(1, func() error {
+		if _, err := checker.Connect(cl, target); err != nil {
+			logrus.WithError(err).Warnf("Probe from %s to %s failed, checking flows anyway", cl.Name(), target.String())
+		}
+
+		flows, err := getWhiskerFlows(url)
+		if err != nil {
+			return err
+		}
+
+		for _, flow := range flows {
+			for _, pending := range flow.Policies.Pending {
+				if pending == nil {
+					continue
+				}
+				if want.matches(pending) || want.matches(pending.Trigger) {
+					return nil
+				}
 			}
 		}
-	}
-
-	Expect(containsStagedPolicy).Should(
-		BeTrue(),
-		fmt.Sprintf(
-			"Could not find staged policy: Kind:%s Name:%s Tier:%s Action:%s\n%s",
-			kind, name, tier, action, formatFlowDiagnostics(response.Items),
-		),
-	)
+		return fmt.Errorf(
+			"no flow reports staged policy as pending: Kind:%s Name:%s Tier:%s Action:%s\n%s",
+			want.kind, want.name, want.tier, want.action, formatFlowDiagnostics(flows),
+		)
+	}, 150*time.Second, 5*time.Second).Should(Succeed(), "timed out waiting for a flow reporting staged policy %s", want.name)
 }
 
 func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
@@ -478,7 +508,7 @@ func formatFlowDiagnostics(flows []whiskerv1.FlowResponse) string {
 			diag.WriteString("      pending:\n")
 			for _, p := range item.Policies.Pending {
 				diag.WriteString(fmt.Sprintf("        - %s\n", formatPolicyHit(p)))
-				if p.Trigger != nil {
+				if p != nil && p.Trigger != nil {
 					diag.WriteString(fmt.Sprintf("          triggered-by:\n            %s\n", formatPolicyHit(p.Trigger)))
 				}
 			}

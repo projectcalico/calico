@@ -243,12 +243,14 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+# Local-development default only. CI never reaches it: run_tests.sh always passes
+# E2E_TEST_CONFIG on make's command line, and a command-line assignment overrides
+# ?= even when its value is empty.
+E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
 K8S_NETPOL_UNSUPPORTED_FEATURES ?= ""
-CLUSTER_ROUTING ?= BIRD
 
 # rapidclient (packet-size / maglev helper image) for the kind e2e lanes. Fork PRs
 # can't push to quay, so the packet-size lane (e2e-test-bpf) builds the image from PR
@@ -279,7 +281,7 @@ kind-migration-test:
 ## Create a kind cluster and run the conformance e2e tests.
 e2e-test:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
@@ -304,7 +306,7 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
 ## Build the rapidclient helper image from PR source and load it into the kind
 ## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
@@ -328,7 +330,7 @@ external-node-load-rapidclient:
 ## Create a kind cluster and run the ClusterNetworkPolicy specific e2e tests.
 e2e-test-clusternetworkpolicy:
 	$(MAKE) -C e2e build
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) kind-up
 	$(MAKE) e2e-run-cnp KUBECONFIG=$(KIND_KUBECONFIG)
 
 ## Run the general e2e tests against the cluster at $KUBECONFIG.
@@ -433,7 +435,7 @@ e2e-run-gateway-conformance: e2e-gateway-setup
 .PHONY: e2e-test-gateway-conformance
 e2e-test-gateway-conformance:
 	$(MAKE) -C e2e bin/gateway/e2e.test
-	CLUSTER_ROUTING=$(CLUSTER_ROUTING) $(MAKE) kind-up
+	$(MAKE) kind-up
 	$(MAKE) e2e-run-gateway-conformance KUBECONFIG=$(KIND_KUBECONFIG)
 
 ###############################################################################
@@ -465,7 +467,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr bin/helm
+release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release

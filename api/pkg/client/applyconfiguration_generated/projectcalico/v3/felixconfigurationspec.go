@@ -310,10 +310,28 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// always clean up expected routes that use the configured DeviceRouteProtocol.  To add your own routes, you must
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
-	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-	// it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
+	// ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+	// a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+	// with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+	// vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+	// are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+	// one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+	// vxlanMode both Never.
+	//
+	// - Disabled: Felix programs no cluster routes.
+	// - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+	// - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+	// - Enabled: Felix programs them for both.
+	//
+	// This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+	// makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+	// kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+	// routes at all.
+	//
+	// Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+	// values do, is deprecated as of v3.33 and will be removed in v3.35.
+	//
+	// [Default: EnabledIPIPOnly]
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
 	// when using Calico for workload networking.  This should be disabled only on hosts where Calico is used solely for

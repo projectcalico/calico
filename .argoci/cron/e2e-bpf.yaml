@@ -125,6 +125,15 @@ steps:
         value: "3"
       - name: CLUSTER_ROUTING_MODE
         value: Felix
+      # This run picks its tests with a config rather than a focus/skip pair:
+      # e2e/config/bpf-aws-single-subnet.yaml holds the same selection the
+      # focus/skip used to give, Maglev tests included.
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf-aws-single-subnet.yaml
+      # Maglev needs DSR, and this is the one run whose cluster otherwise suits
+      # it: BPF, an external node, one subnet, no encapsulation.
+      - name: ENABLE_BPF_DSR
+        value: "true"
       - name: ENABLE_EXTERNAL_NODE
         value: "true"
       - name: ENCAPSULATION_TYPE
@@ -135,8 +144,6 @@ steps:
         value: dual
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP)
       - name: KUBE_PROXY_MANAGEMENT
         value: Enabled
       - name: PROVISIONER
@@ -159,6 +166,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/bpf-aws.yaml
       - name: BGP_STATUS
         value: Enabled
       - name: CLUSTER_NODES
@@ -173,8 +182,6 @@ steps:
         value: 10.0.0.0/29
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: PROVISIONER
         value: aws-talos
       - name: VPC_SUBNETS
@@ -186,6 +193,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/bpf-v3crd-extnode.yaml
       - name: BPF_NETWORK_BOOTSTRAP
         value: Enabled
       - name: CLUSTER_NODES
@@ -198,8 +207,6 @@ steps:
         value: "true"
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       # The BPF suite's canary on new Kubernetes; the rest of these runs sit on stable-3.
       - name: K8S_VERSION
         value: beta-or-stable
@@ -217,7 +224,7 @@ steps:
       - http-cache-proxy
     env:
       - name: CLUSTER_IMAGE
-        value: ubuntu-2204-lts
+        value: ubuntu-2404-lts-amd64
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -235,10 +242,12 @@ steps:
         env:
           - name: USE_VXLAN
             value: "true"
-      - name: "false"
+      - name: false-netkit
         env:
           - name: USE_VXLAN
             value: "false"
+          - name: LINUX_POD_INTERFACE_TYPE
+            value: Netkit
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aks-w-aks-cni
@@ -246,6 +255,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/aks-bpf-nobgp.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -254,8 +265,6 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
     matrix:
       - name: azr-aks
         env:
@@ -268,6 +277,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/aks-bpf.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -282,8 +293,6 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: PROVISIONER
         value: azr-aks
     commands: |
@@ -293,6 +302,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/aks-bpf-encap-nobgp.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -307,8 +318,6 @@ steps:
         value: 10.244.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -413,6 +422,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/bpf-nobgp-extnode-aws.yaml
       - name: AWS_K8S_CNI_VERSION
         value: NA
       - name: CLUSTER_NODES
@@ -423,8 +434,6 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: NUM_ADDON_PODS
         value: "45"
       - name: PROVISIONER
@@ -441,6 +450,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -455,8 +466,6 @@ steps:
         value: 172.16.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -466,32 +475,37 @@ steps:
             value: calico
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: bpf-run-matrix-bpf-eks-aws-cni-lb
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: CLUSTER_NODES
-        value: "3"
-      - name: ENABLE_EXTERNAL_NODE
-        value: "true"
-      - name: INSTALLER
-        value: operator
-      - name: K8S_E2E_DOCKER_EXTRA_FLAGS
-        value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
-      - name: NUM_ADDON_PODS
-        value: "45"
-      - name: PROVISIONER
-        value: aws-eks
-    matrix:
-      - name: aws
-        env:
-          - name: EKS_CNI
-            value: aws
-    commands: |
-      .argoci/scripts/body_standard.sh
+  # PAUSED (2026-08-06): this cell focused Dataplane:LB, which has no specs in the in-repo
+  # e2e suite (describe.WithDataplane(LB) is unused). Pointed at the new suite it
+  # selects nothing and still passes, so it is paused rather than converted.
+  # Uncomment when load-balancer specs land in e2e/pkg/tests, or delete this block.
+  # Discussion: projectcalico/calico#13452.
+  # - name: bpf-run-matrix-bpf-eks-aws-cni-lb
+  #   services:
+  #     - docker
+  #     - http-cache-proxy
+  #   env:
+  #     - name: CLUSTER_NODES
+  #       value: "3"
+  #     - name: ENABLE_EXTERNAL_NODE
+  #       value: "true"
+  #     - name: INSTALLER
+  #       value: operator
+  #     - name: K8S_E2E_DOCKER_EXTRA_FLAGS
+  #       value: --env EKS_CNI
+  #     - name: K8S_E2E_FLAGS
+  #       value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+  #     - name: NUM_ADDON_PODS
+  #       value: "45"
+  #     - name: PROVISIONER
+  #       value: aws-eks
+  #   matrix:
+  #     - name: aws
+  #       env:
+  #         - name: EKS_CNI
+  #           value: aws
+  #   commands: |
+  #     .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-kubeadm-dual-stack
     services:
       - docker
@@ -648,6 +662,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/bpf-extnode-aws.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: ENABLE_EXTERNAL_NODE
@@ -656,8 +672,6 @@ steps:
         value: 10.0.0.0/29
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env NETWORK_MTU
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_MTU
         value: "9001"
       - name: PROVISIONER
@@ -676,6 +690,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/xtables-extnode-aws.yaml
       - name: CLUSTER_NODES
         value: "3"
       - name: DATAPLANE
@@ -686,8 +702,6 @@ steps:
         value: 10.0.0.0/29
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env NETWORK_MTU
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|WireGuard|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_MTU
         value: "9001"
       - name: PROVISIONER
@@ -701,28 +715,35 @@ steps:
             value: None
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: bpf-mode-switch
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: DATAPLANE
-        value: CalicoIptables
-      - name: ENABLE_EXTERNAL_NODE
-        value: "true"
-      - name: INSTALLER
-        value: operator
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
-      - name: PROVISIONER
-        value: gcp-kubeadm
-    commands: |
-      .argoci/scripts/body_standard.sh
+  # PAUSED (2026-08-06): this cell focused a BPF ModeSwitch spec, which has no match in the
+  # in-repo e2e suite. Pointed at the new suite it selects nothing and still
+  # passes, so it is paused rather than converted. Uncomment when a mode-switch
+  # spec lands in e2e/pkg/tests, or delete this block.
+  # Discussion: projectcalico/calico#13452.
+  # - name: bpf-mode-switch
+  #   services:
+  #     - docker
+  #     - http-cache-proxy
+  #   env:
+  #     - name: DATAPLANE
+  #       value: CalicoIptables
+  #     - name: ENABLE_EXTERNAL_NODE
+  #       value: "true"
+  #     - name: INSTALLER
+  #       value: operator
+  #     - name: K8S_E2E_FLAGS
+  #       value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
+  #     - name: PROVISIONER
+  #       value: gcp-kubeadm
+  #   commands: |
+  #     .argoci/scripts/body_standard.sh
   - name: wireguard
     services:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/aks-bpf-encap-nobgp.yaml
       - name: AZ_CREATE_MODE
         value: AKS
       - name: AZ_NETWORK_PLUGIN
@@ -733,8 +754,6 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Maglev)
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -773,7 +792,7 @@ steps:
       - http-cache-proxy
     env:
       - name: E2E_TEST_CONFIG
-        value: e2e/config/gcp-kubevirt.yaml
+        value: e2e/config/gcp/kubevirt.yaml
       - name: K8S_VERSION
         value: stable-1.35
       - name: NUM_KUBEVIRT_VMS

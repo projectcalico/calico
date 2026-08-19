@@ -456,6 +456,7 @@ local:key-cert-provisioner/pkg/cfg
 local:key-cert-provisioner/pkg/k8s
 local:key-cert-provisioner/pkg/keycert
 local:key-cert-provisioner/pkg/tls
+local:kube-controllers/pkg/apis/migration/v1
 local:kube-controllers/pkg/cache
 local:kube-controllers/pkg/config
 local:kube-controllers/pkg/controllers/controller

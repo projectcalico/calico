@@ -347,7 +347,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/controllers/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -842,9 +842,9 @@ blocks:
         - name: RUN_LOCAL_TESTS
           value: "true"
         - name: E2E_TEST_CONFIG
-          # Test selection is driven by the config file; see gcp-bpf.yaml for the
+          # Test selection is driven by the config file; see gcp/bpf.yaml for the
           # include/exclude rationale.
-          value: "e2e/config/gcp-bpf.yaml"
+          value: "e2e/config/gcp/bpf.yaml"
         - name: USE_API_SERVER
           value: "false"
         - name: ENABLE_EXTERNAL_NODE
@@ -879,6 +879,43 @@ blocks:
         - name: "E2E images: rapidclient CI"
           commands:
             - .semaphore/run-and-monitor rapidclient-ci.log make -C e2e/images/rapidclient ci
+  - name: E2E test set drift
+    run:
+      when: "true"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: calico
+      jobs:
+        - name: "E2E test set drift: check-test-set"
+          commands:
+            - .semaphore/run-and-monitor e2e-check-test-set.log make -C e2e check-test-set
+  - name: "E2E unit tests"
+    run:
+      when: "true"
+    execution_time_limit:
+      minutes: 30
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - cd e2e
+      jobs:
+        - name: "E2E unit tests: CI"
+          commands:
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --name "${SEMAPHORE_JOB_NAME}" ./report/*.xml || true'
   - name: E2E script & pipeline validations
     run:
       when: >-
@@ -918,6 +955,12 @@ blocks:
         - name: "E2E tests: Conformance (cluster routing: BIRD)"
           commands:
             - .semaphore/run-and-monitor e2e-test.log make e2e-test
+          env_vars:
+            # Pin the mode: leaving it unset now means Felix owns the IPIP routes,
+            # and this lane's Feature:BGPPeer tests require BGP to be the sole
+            # routing mechanism.
+            - name: EXTRA_VALUES_FILES
+              value: "hack/test/kind/infra/values-bird-routing.yaml"
         - name: "E2E tests: Conformance (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-felix-routing.log make e2e-test
@@ -927,7 +970,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "crd.projectcalico.org/v1"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: ClusterNetworkPolicy (cluster routing: Felix)"
           commands:
             - .semaphore/run-and-monitor e2e-test-cnp.log make e2e-test-clusternetworkpolicy
@@ -937,7 +980,7 @@ blocks:
             - name: KIND_CALICO_API_GROUP
               value: "projectcalico.org/v3"
             - name: E2E_TEST_CONFIG
-              value: "e2e/config/kind-felix-routing.yaml"
+              value: "e2e/config/kind/felix-routing.yaml"
         - name: "E2E tests: sig-calico (dataplane: BPF)"
           commands:
             - .semaphore/run-and-monitor e2e-test-bpf.log make e2e-test-bpf
@@ -1491,7 +1534,13 @@ blocks:
         - name: BUILD_CACHE_GROUP
           value: "calico"
         - name: E2E_TEST_CONFIG
-          value: "e2e/config/kind-kubevirt.yaml"
+          value: "e2e/config/kind/kubevirt.yaml"
+        # Live migration's route-priority propagation is built on confd and BIRD
+        # programming the cluster routes, and IPIP is not going to gain support
+        # for Felix-programmed live migration. Pin the mode rather than rely on
+        # the default, which from v3.33 gives Felix the IPIP routes.
+        - name: EXTRA_VALUES_FILES
+          value: "hack/test/kind/infra/values-bird-routing.yaml"
       agent:
         machine:
           type: f1-standard-4
@@ -1656,6 +1705,11 @@ blocks:
       when: "true"
     dependencies:
       - "Prerequisites"
+      # cache-test-artifacts ships these images to the test VMs. Without the
+      # dependency the VMs build from source instead, which fails on the VM.
+      - "Build: calico image"
+      - "Build: node image"
+      - "Build: whisker image"
     task:
       env_vars:
         - name: BUILD_CACHE_GROUP
@@ -2040,8 +2094,17 @@ after_pipeline:
               failed) result=fail ;;
               *) echo "pipeline result '${SEMAPHORE_PIPELINE_RESULT}' — not recorded"; exit 0 ;;
             esac
-            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\nresult: %s\npipeline: %s' \
-              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            # pipeline_id, not just workflow_id: a partial re-run of failed
+            # blocks runs under the SAME workflow id, so the workflow alone
+            # cannot say which run this is. This task runs inside the pipeline
+            # that just finished — the re-run itself — so it is the one place
+            # that knows, and passing it on is what lets the monitor tell a
+            # re-run apart from a repeated delivery of the same run.
+            msg=$(printf 'repo: calico\nbranch: %s\nworkflow_id: %s\npipeline_id: %s\nresult: %s\npipeline: %s' \
+              "$SEMAPHORE_GIT_BRANCH" "$SEMAPHORE_WORKFLOW_ID" "$SEMAPHORE_PIPELINE_ID" "$result" "${SEMAPHORE_PIPELINE_NAME:-calico}")
+            # Echo the payload: it is the only record of what the agent was
+            # told, and it is where an unset variable shows up as an empty field.
+            echo "branch-monitor: sending"; echo "$msg"
             req=$(jq -n --arg t "$msg" '{jsonrpc:"2.0",id:"1",method:"message/stream",params:{message:{role:"user",kind:"message",messageId:"1",parts:[{kind:"text",text:$t}]}}}')
             # We only need the trigger to land: the agent records the run and posts
             # to Slack itself, and its task runs to completion server-side even if
