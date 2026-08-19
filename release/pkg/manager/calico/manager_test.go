@@ -14,7 +14,13 @@
 
 package calico
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestOwnerFromRemoteURL(t *testing.T) {
 	tests := []struct {
@@ -93,4 +99,108 @@ func TestOwnerFromRemoteURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCollectE2EBinaries(t *testing.T) {
+	tests := []struct {
+		name          string
+		e2eBinaries   bool
+		isHashRelease bool
+		staged        []string
+		preexisting   []string
+		want          []string
+		wantErr       bool
+	}{
+		{
+			name:        "release flattens the staged binaries",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			want:        []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+		},
+		{
+			name:        "unrelated staged files are left behind",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "notes.txt"},
+			want:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "a rerun relinks over the previous build",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test"},
+			want:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "staging with no binaries errors",
+			e2eBinaries: true,
+			staged:      []string{"notes.txt"},
+			wantErr:     true,
+		},
+		{
+			name:        "empty staging errors",
+			e2eBinaries: true,
+			wantErr:     true,
+		},
+		{
+			name:          "hashrelease keeps only the files/e2e layout",
+			e2eBinaries:   true,
+			isHashRelease: true,
+			staged:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "disabled does nothing",
+			e2eBinaries: false,
+			staged:      []string{"e2e-linux-amd64.test"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			outputDir := t.TempDir()
+			e2eDir := filepath.Join(outputDir, "files", "e2e")
+			require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+			for _, name := range tt.staged {
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
+			}
+			for _, name := range tt.preexisting {
+				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte("stale"), 0o755))
+			}
+
+			r := &CalicoManager{
+				e2eBinaries:   tt.e2eBinaries,
+				isHashRelease: tt.isHashRelease,
+				outputDir:     outputDir,
+			}
+			err := r.collectE2EBinaries()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			entries, err := os.ReadDir(outputDir)
+			require.NoError(t, err)
+			var got []string
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					got = append(got, entry.Name())
+				}
+			}
+			require.ElementsMatch(t, tt.want, got)
+
+			// A collected binary must carry the staged content, not a stale leftover.
+			for _, name := range tt.want {
+				content, err := os.ReadFile(filepath.Join(outputDir, name))
+				require.NoError(t, err)
+				require.Equal(t, name, string(content))
+			}
+		})
+	}
+}
+
+// A missing files/e2e directory means the build never staged anything, which
+// would otherwise ship a release with no e2e binaries and no warning.
+func TestCollectE2EBinariesUnstagedErrors(t *testing.T) {
+	r := &CalicoManager{e2eBinaries: true, outputDir: t.TempDir()}
+	require.Error(t, r.collectE2EBinaries())
 }
