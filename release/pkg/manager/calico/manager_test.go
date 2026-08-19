@@ -672,7 +672,9 @@ func TestCollectE2EBinaries(t *testing.T) {
 		e2eBinaries   bool
 		isHashRelease bool
 		staged        []string
+		preexisting   []string
 		want          []string
+		wantErr       bool
 	}{
 		{
 			name:        "release flattens the staged binaries",
@@ -685,6 +687,24 @@ func TestCollectE2EBinaries(t *testing.T) {
 			e2eBinaries: true,
 			staged:      []string{"e2e-linux-amd64.test", "notes.txt"},
 			want:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "a rerun relinks over the previous build",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test"},
+			preexisting: []string{"e2e-linux-amd64.test"},
+			want:        []string{"e2e-linux-amd64.test"},
+		},
+		{
+			name:        "staging with no binaries errors",
+			e2eBinaries: true,
+			staged:      []string{"notes.txt"},
+			wantErr:     true,
+		},
+		{
+			name:        "empty staging errors",
+			e2eBinaries: true,
+			wantErr:     true,
 		},
 		{
 			name:          "hashrelease keeps only the files/e2e layout",
@@ -707,13 +727,21 @@ func TestCollectE2EBinaries(t *testing.T) {
 			for _, name := range tt.staged {
 				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
 			}
+			for _, name := range tt.preexisting {
+				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte("stale"), 0o755))
+			}
 
 			r := &CalicoManager{
 				e2eBinaries:   tt.e2eBinaries,
 				isHashRelease: tt.isHashRelease,
 				outputDir:     outputDir,
 			}
-			require.NoError(t, r.collectE2EBinaries())
+			err := r.collectE2EBinaries()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
 
 			entries, err := os.ReadDir(outputDir)
 			require.NoError(t, err)
@@ -724,6 +752,13 @@ func TestCollectE2EBinaries(t *testing.T) {
 				}
 			}
 			require.ElementsMatch(t, tt.want, got)
+
+			// A collected binary must carry the staged content, not a stale leftover.
+			for _, name := range tt.want {
+				content, err := os.ReadFile(filepath.Join(outputDir, name))
+				require.NoError(t, err)
+				require.Equal(t, name, string(content))
+			}
 		})
 	}
 }
