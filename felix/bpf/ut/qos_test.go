@@ -1185,7 +1185,7 @@ func TestQoSConnLimitV6DualStackCountersAreIndependent(t *testing.T) {
 // connection-limit check is gated on EGRESS_CONN_LIMIT_CONFIGURED, matching
 // the ingress check and the egress CT stamp.
 //
-// The check at tc.c:1574 ran on every from-WEP TCP SYN and fired whenever a
+// The egress check ran on every from-WEP TCP SYN and fired whenever a
 // cali_qos_conn entry with max_connections > 0 existed, while the stamp that
 // marks the CT entry CONNLIMIT_EGRESS was gated on the global. Felix writes
 // the map entry and sets ap.EgressConnLimitConfigured in the same pass
@@ -1283,7 +1283,7 @@ func TestQoSConnLimitEgressGatedOnConfiguredFlag(t *testing.T) {
 
 		Expect(readQoSCount()).To(Equal(uint32(0)),
 			"egress connlimit check ran without EGRESS_CONN_LIMIT_CONFIGURED; "+
-				"the connection is counted but the CT stamp at tc.c:1621 is gated, "+
+				"the connection is counted but the CT stamp is gated, "+
 				"so nothing can decrement it")
 	})
 }
