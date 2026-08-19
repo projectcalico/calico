@@ -340,19 +340,19 @@ func (r *CalicoManager) Build() error {
 		} else {
 			logrus.Info("Skipping building windows archive")
 		}
-
-		// Build multi-arch e2e test binaries and copy them into the output directory.
-		if r.e2eBinaries {
-			if err = r.buildE2EBinaries(); err != nil {
-				return err
-			}
-		} else {
-			logrus.Info("Skipping building e2e test binaries")
-		}
 	} else {
 		if err = r.buildOCPBundle(); err != nil {
 			return err
 		}
+	}
+
+	// Build multi-arch e2e test binaries and copy them into the output directory.
+	if r.e2eBinaries {
+		if err = r.buildE2EBinaries(); err != nil {
+			return err
+		}
+	} else {
+		logrus.Info("Skipping building e2e test binaries")
 	}
 
 	// Build and add in the complete release tarball.
@@ -1030,6 +1030,9 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	if err := r.collectOCPBundle(); err != nil {
 		return err
 	}
+	if err := r.collectE2EBinaries(); err != nil {
+		return err
+	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
@@ -1110,6 +1113,32 @@ func (r *CalicoManager) collectOCPBundle() error {
 	uploadDir := r.uploadDir()
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return fmt.Errorf("failed to copy OCP bundle: %w", err)
+	}
+	return nil
+}
+
+// collectE2EBinaries flattens the staged e2e test binaries into the upload
+// directory. buildE2EBinaries stages them under files/e2e/ for the hashrelease
+// server, but GitHub release assets are flat and ghr does not recurse into
+// subdirectories, so a release needs a copy at the top level. Hard links keep
+// the duplicate free.
+func (r *CalicoManager) collectE2EBinaries() error {
+	if !r.e2eBinaries || r.isHashRelease {
+		return nil
+	}
+	uploadDir := r.uploadDir()
+	e2eDir := filepath.Join(uploadDir, "files", "e2e")
+	entries, err := os.ReadDir(e2eDir)
+	if err != nil {
+		return fmt.Errorf("reading staged e2e binaries: %w", err)
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
+			continue
+		}
+		if err := os.Link(filepath.Join(e2eDir, entry.Name()), filepath.Join(uploadDir, entry.Name())); err != nil {
+			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
+		}
 	}
 	return nil
 }
@@ -1395,6 +1424,7 @@ Attached to this release are the following artifacts:
 - {helm_v1_crd_chart}: Calico crd.projectcalico.org/v1 CRD chart.
 - {helm_v3_crd_chart}: Calico projectcalico.org/v3 CRD chart (tech-preview).
 - ocp.tgz: Manifest bundle for OpenShift.
+- {e2e_binaries}: Version-matched Kubernetes e2e test binaries, one per architecture.
 
 Additional links:
 
@@ -1414,6 +1444,7 @@ Additional links:
 		"{helm_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.TigeraOperatorChart, r.calicoVersion),
 		"{helm_v1_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV1CRDsChart, r.calicoVersion),
 		"{helm_v3_crd_chart}", fmt.Sprintf("`%s-%s.tgz`", utils.ProjectCalicoV3CRDsChart, r.calicoVersion),
+		"{e2e_binaries}", "`e2e-linux-<arch>.test`",
 	}
 	replacer := strings.NewReplacer(formatters...)
 	releaseNote := replacer.Replace(releaseNoteTemplate)
