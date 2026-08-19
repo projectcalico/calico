@@ -144,6 +144,19 @@ func add(_ manager.Manager, c ctrlruntime.Controller) error {
 		return fmt.Errorf("monitor-controller failed to watch ManagementClusterConnection resource: %w", err)
 	}
 
+	// LogCollector decides whether the OpenTelemetry Collector's ServiceMonitor and
+	// the egress rule that reaches it are rendered, so enabling or disabling export
+	// has to wake this controller.
+	if err = c.WatchObject(&operatorv1.LogCollector{}, &handler.EnqueueRequestForObject{}); err != nil {
+		return fmt.Errorf("monitor-controller failed to watch LogCollector resource: %w", err)
+	}
+
+	// Both also follow the collector's Service; without this watch they would wait
+	// for the periodic reconcile.
+	if err = utils.AddServiceWatch(c, render.OpenTelemetryCollectorName, render.OpenTelemetryCollectorNamespace); err != nil {
+		return fmt.Errorf("monitor-controller failed to watch the OpenTelemetry Collector Service: %w", err)
+	}
+
 	if err = c.WatchObject(&v3.FelixConfiguration{}, &handler.EnqueueRequestForObject{}); err != nil {
 		return fmt.Errorf("monitor-controller failed to watch FelixConfiguration resource: %w", err)
 	}
@@ -279,6 +292,32 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 	gracePeriod := utils.ParseGracePeriod(license.Status.GracePeriod)
 	licenseStatus := utils.GetLicenseStatus(license, gracePeriod)
 	licenseExpired := licenseStatus == utils.LicenseStatusExpired
+
+	// The collector's ServiceMonitor and the Prometheus egress rule that reaches it
+	// live here, but follow LogCollector. Gate them on the same conditions the otel
+	// controller deploys on, so the two cannot disagree.
+	openTelemetryEnabled := false
+	logCollector, err := utils.GetIfExists[operatorv1.LogCollector](ctx, utils.DefaultEnterpriseInstanceKey, r.client)
+	if err != nil {
+		// Requeue instead of assuming "disabled", which would flap both resources
+		// on an apiserver blip.
+		r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading LogCollector", err, reqLogger)
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+	}
+	if logCollector != nil {
+		openTelemetryEnabled = logCollector.Spec.OpenTelemetry.Deployable(utils.IsFeatureActive(license, common.OpenTelemetryCollectorFeature))
+	}
+	if openTelemetryEnabled {
+		// A valid, licensed spec is not enough: the otel controller stops short of
+		// rendering when material an exporter names is missing. Follow the Service,
+		// which exists only once the collector was actually deployed.
+		present, err := r.openTelemetryServicePresent(ctx)
+		if err != nil {
+			r.status.SetDegraded(operatorv1.ResourceReadError, "Error reading the OpenTelemetry Collector Service", err, reqLogger)
+			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+		}
+		openTelemetryEnabled = present
+	}
 
 	// When in the grace period, schedule a requeue so the controller automatically
 	// transitions to expired state when the grace period elapses.
@@ -450,6 +489,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 		KubeControllerPort:            kubeControllersMetricsPort,
 		FelixPrometheusMetricsEnabled: utils.IsFelixPrometheusMetricsEnabled(felixConfiguration),
 		LicenseExpired:                licenseExpired,
+		OpenTelemetryEnabled:          openTelemetryEnabled,
 		OperatorMetricsEnabled:        operatorMetricsEnabled,
 		OperatorNamespace:             common.OperatorNamespace(),
 		OperatorName:                  common.OperatorName(),
@@ -580,6 +620,19 @@ func fillDefaults(instance *operatorv1.Monitor) {
 // PrometheusTLSServerDNSNames returns all the DNS names valid for the prometheus server TLS asset.
 func PrometheusTLSServerDNSNames(clusterDomain string) []string {
 	return dns.GetServiceDNSNames(monitor.PrometheusServiceServiceName, common.TigeraPrometheusNamespace, clusterDomain)
+}
+
+// openTelemetryServicePresent reports whether the otel controller has got as far
+// as creating the Service the ServiceMonitor selects.
+func (r *ReconcileMonitor) openTelemetryServicePresent(ctx context.Context) (bool, error) {
+	key := client.ObjectKey{Name: render.OpenTelemetryCollectorName, Namespace: render.OpenTelemetryCollectorNamespace}
+	if err := r.client.Get(ctx, key, &corev1.Service{}); err != nil {
+		if errors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 //go:embed alertmanager-config.yaml

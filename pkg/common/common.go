@@ -34,6 +34,8 @@ const (
 	EgressAccessControlFeature = "egress-access-control"
 	// PolicyRecommendation feature name
 	PolicyRecommendationFeature = "policy-recommendation"
+	// OpenTelemetryCollectorFeature gates the OpenTelemetry Collector component in the license.
+	OpenTelemetryCollectorFeature = "otel-collector"
 	// MultipleOwnersLabel used to indicate multiple owner references.
 	// If the render code places this label on an object, the object mergeState machinery will merge owner
 	// references with any that already exist on the object rather than replace the owner references. Further

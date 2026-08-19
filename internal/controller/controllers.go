@@ -195,6 +195,12 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "PodIPRecovery", err)
 	}
+	if err := (&OpenTelemetryCollectorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr, options); err != nil {
+		return fmt.Errorf("failed to create controller %s: %v", "OpenTelemetry", err)
+	}
 	// +kubebuilder:scaffold:builder
 	return nil
 }
