@@ -34,7 +34,17 @@ elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Upgrade runs set RELEASE_STREAM to the downlevel version they install first,
   # but the tests run against the uplevel one.
   E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt")
+  if [[ -z "${E2E_STREAM}" ]]; then
+    echo "[ERROR] neither UPLEVEL_RELEASE_STREAM nor RELEASE_STREAM is set; cannot resolve an e2e binary"
+    exit 1
+  fi
+  E2E_STREAM_URL="https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt"
+  # Assign inside `if` so the diagnostic below runs: this script is sourced under
+  # `set -e`, where a bare command substitution would exit here instead.
+  if ! HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "${E2E_STREAM_URL}"); then
+    echo "[ERROR] no hashrelease published for stream ${E2E_STREAM} at ${E2E_STREAM_URL}"
+    exit 1
+  fi
   echo "[INFO] hashrelease URL (stream ${E2E_STREAM}): ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
   E2E_BINARY_URL="${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test"
