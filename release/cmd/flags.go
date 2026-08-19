@@ -515,9 +515,10 @@ var (
 			helmIndexFlag(envHelmIndexLegacy, envBuildHelmIndex, envReleaseHelmIndex),
 			tarballFlag,
 			windowsArchiveFlag(envBuildWindowsArchive, envReleaseWindowsArchive),
+			e2eBinariesFlag,
 		}
 		if hashrelease {
-			f = append(f, e2eBinariesFlag, releaseNotesFlag)
+			f = append(f, releaseNotesFlag)
 		}
 		return f
 	}
