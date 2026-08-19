@@ -1095,8 +1095,10 @@ var _ = Describe("Disabled table cache invalidation", func() {
 	var table *nftables.NftablesTable
 	var featureDetector *environment.FeatureDetector
 	var f *fakeNFT
+	var mockNow time.Time
 
 	BeforeEach(func() {
+		mockNow = time.Date(2026, 8, 19, 0, 0, 0, 0, time.UTC)
 		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
 			f = NewFake(fam, name)
 			return f, nil
@@ -1112,6 +1114,7 @@ var _ = Describe("Disabled table cache invalidation", func() {
 				LookPathOverride: testutils.LookPathNoLegacy,
 				OpRecorder:       logrusr.NewSummarizer("test loop"),
 				Disabled:         true,
+				NowOverride:      func() time.Time { return mockNow },
 			},
 			true,
 		)
@@ -1170,10 +1173,15 @@ var _ = Describe("Disabled table cache invalidation", func() {
 			Expect(func() { table.Apply() }).NotTo(Panic())
 		})
 
-		It("cleans up once the dataplane accepts it again", func() {
+		It("holds off until the retry is due, then cleans up", func() {
 			table.Apply()
 
 			f.RunErrors = 0
+			listCalls := f.ListCallCount
+			table.Apply()
+			Expect(f.ListCallCount).To(Equal(listCalls), "Expected no retry before the next attempt was due")
+
+			mockNow = mockNow.Add(10 * time.Minute)
 			table.Apply()
 			_, err := f.Fake().List(context.Background(), "chain")
 			Expect(err).To(HaveOccurred(), "Expected table to be deleted once cleanup succeeded")

@@ -56,6 +56,9 @@ const (
 	// veth is gone for good - mustn't keep us reprogramming forever.
 	FlowtablePruneRetryDelay = 5 * time.Second
 	MaxFlowtablePruneRetries = 5
+
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled.
+	defaultCleanupRetryInterval = 180 * time.Second
 )
 
 type FlowTableHandler interface {
@@ -224,6 +227,10 @@ type NftablesTable struct {
 	// When true, the table will not program any rules or chains and insted functions
 	// solely to clean up any existing rules and chains that may be programmed.
 	disabled bool
+
+	// nextCleanupAttempt holds off a disabled table after a failure. Nothing else latches it, and a
+	// table we can't clean up would otherwise burn its whole retry budget on every apply.
+	nextCleanupAttempt time.Time
 
 	// baseChains is the set of base chains for this table. This is typically the
 	// package-level baseChains variable, but for ARP family tables it uses arpBaseChains.
@@ -1124,6 +1131,10 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		}
 	}()
 
+	if t.disabled && now.Before(t.nextCleanupAttempt) {
+		return t.nextCleanupAttempt.Sub(now)
+	}
+
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
@@ -1170,7 +1181,7 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				// left to enforce. Retry on the next pass rather than taking Felix down.
 				t.logCxt.WithError(err).Warn("Failed to clean up nftables, will retry on the next refresh")
 				t.InvalidateDataplaneCache("cleanup failed")
-				return t.refreshInterval
+				return t.scheduleCleanupRetry(now)
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
 				t.dumpTableState()
@@ -1203,6 +1214,17 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		rescheduleAfter = FlowtablePruneRetryDelay
 	}
 	return
+}
+
+// scheduleCleanupRetry holds this table off until the next attempt is due, and returns how long
+// that is.
+func (t *NftablesTable) scheduleCleanupRetry(now time.Time) time.Duration {
+	delay := t.refreshInterval
+	if delay <= 0 {
+		delay = defaultCleanupRetryInterval
+	}
+	t.nextCleanupAttempt = now.Add(delay)
+	return delay
 }
 
 // queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same
