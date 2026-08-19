@@ -544,106 +544,88 @@ func TestRequireOnMainBranch(t *testing.T) {
 		"a resume must be allowed when the derived branch exists")
 }
 
-func TestCollectE2EBinaries(t *testing.T) {
+// The staging layout is the whole reason a release and a hashrelease differ:
+// ghr populates GitHub release assets from the top level of the upload dir and
+// does not recurse, while the hashrelease server serves the directory tree.
+func TestE2EStagingDir(t *testing.T) {
 	tests := []struct {
 		name          string
-		e2eBinaries   bool
 		isHashRelease bool
-		staged        []string
-		preexisting   []string
-		want          []string
-		wantErr       bool
+		want          string
+	}{
+		{name: "release stages flat for ghr", want: "out"},
+		{name: "hashrelease stages under files/e2e", isHashRelease: true, want: filepath.Join("out", "files", "e2e")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &CalicoManager{outputDir: "out", isHashRelease: tt.isHashRelease}
+			require.Equal(t, tt.want, r.e2eStagingDir())
+		})
+	}
+}
+
+// The e2e-binaries flag belongs to the build step and is never passed to
+// publish, so the release note has to key off what was actually staged.
+func TestPublishGithubReleaseE2ENote(t *testing.T) {
+	const bullet = "e2e-linux-<arch>.test"
+
+	tests := []struct {
+		name        string
+		staged      []string
+		e2eBinaries bool
+		wantNote    bool
 	}{
 		{
-			name:        "release flattens the staged binaries",
-			e2eBinaries: true,
+			name:        "staged binaries are listed",
 			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
-			want:        []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			e2eBinaries: true,
+			wantNote:    true,
 		},
 		{
-			name:        "unrelated staged files are left behind",
+			name:        "nothing staged is not listed even with the flag defaulted on",
 			e2eBinaries: true,
-			staged:      []string{"e2e-linux-amd64.test", "notes.txt"},
-			want:        []string{"e2e-linux-amd64.test"},
+			wantNote:    false,
 		},
 		{
-			name:        "a rerun relinks over the previous build",
-			e2eBinaries: true,
+			name:        "staged binaries are listed even with the flag off",
 			staged:      []string{"e2e-linux-amd64.test"},
-			preexisting: []string{"e2e-linux-amd64.test"},
-			want:        []string{"e2e-linux-amd64.test"},
-		},
-		{
-			name:        "staging with no binaries errors",
-			e2eBinaries: true,
-			staged:      []string{"notes.txt"},
-			wantErr:     true,
-		},
-		{
-			name:        "empty staging errors",
-			e2eBinaries: true,
-			wantErr:     true,
-		},
-		{
-			name:          "hashrelease keeps only the files/e2e layout",
-			e2eBinaries:   true,
-			isHashRelease: true,
-			staged:        []string{"e2e-linux-amd64.test"},
-		},
-		{
-			name:        "disabled does nothing",
 			e2eBinaries: false,
-			staged:      []string{"e2e-linux-amd64.test"},
+			wantNote:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outputDir := t.TempDir()
-			e2eDir := filepath.Join(outputDir, "files", "e2e")
-			require.NoError(t, os.MkdirAll(e2eDir, 0o755))
 			for _, name := range tt.staged {
-				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte(name), 0o755))
 			}
-			for _, name := range tt.preexisting {
-				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte("stale"), 0o755))
-			}
+
+			f := newFakeRunner()
+			f.on("./bin/gh release view", "release not found", fmt.Errorf("release not found"))
+			f.on("./bin/ghr", "", nil)
 
 			r := &CalicoManager{
+				runner:        f,
+				githubRelease: true,
 				e2eBinaries:   tt.e2eBinaries,
-				isHashRelease: tt.isHashRelease,
+				calicoVersion: "v3.30.0",
+				githubOrg:     "projectcalico",
+				repo:          "calico",
 				outputDir:     outputDir,
 			}
-			err := r.collectE2EBinaries()
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
+			require.NoError(t, r.publishGithubRelease())
 
-			entries, err := os.ReadDir(outputDir)
-			require.NoError(t, err)
-			var got []string
-			for _, entry := range entries {
-				if !entry.IsDir() {
-					got = append(got, entry.Name())
+			var ghr string
+			for _, c := range f.calls {
+				if strings.HasPrefix(c, "./bin/ghr") {
+					ghr = c
 				}
 			}
-			require.ElementsMatch(t, tt.want, got)
-
-			// A collected binary must carry the staged content, not a stale leftover.
-			for _, name := range tt.want {
-				content, err := os.ReadFile(filepath.Join(outputDir, name))
-				require.NoError(t, err)
-				require.Equal(t, name, string(content))
-			}
+			require.NotEmpty(t, ghr, "ghr was not invoked (calls: %v)", f.calls)
+			require.Equal(t, tt.wantNote, strings.Contains(ghr, bullet),
+				"release note mentions %q = %v, want %v", bullet, strings.Contains(ghr, bullet), tt.wantNote)
 		})
 	}
-}
-
-// A missing files/e2e directory means the build never staged anything, which
-// would otherwise ship a release with no e2e binaries and no warning.
-func TestCollectE2EBinariesUnstagedErrors(t *testing.T) {
-	r := &CalicoManager{e2eBinaries: true, outputDir: t.TempDir()}
-	require.Error(t, r.collectE2EBinaries())
 }

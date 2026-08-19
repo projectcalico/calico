@@ -1040,9 +1040,6 @@ func (r *CalicoManager) collectGithubArtifacts() error {
 	if err := r.collectOCPBundle(); err != nil {
 		return err
 	}
-	if err := r.collectE2EBinaries(); err != nil {
-		return err
-	}
 
 	// Generate a SHA256SUMS file containing the checksums for each artifact
 	// that we attach to the release. These can be confirmed by end users via the following command:
@@ -1123,45 +1120,6 @@ func (r *CalicoManager) collectOCPBundle() error {
 	uploadDir := r.uploadDir()
 	if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"bin/ocp.tgz", uploadDir}, nil); err != nil {
 		return fmt.Errorf("failed to copy OCP bundle: %w", err)
-	}
-	return nil
-}
-
-// collectE2EBinaries flattens the staged e2e test binaries into the upload
-// directory. buildE2EBinaries stages them under files/e2e/ for the hashrelease
-// server, but GitHub release assets are flat and ghr does not recurse into
-// subdirectories, so a release needs a copy at the top level. Hard links keep
-// the duplicate free.
-func (r *CalicoManager) collectE2EBinaries() error {
-	if !r.e2eBinaries || r.isHashRelease {
-		return nil
-	}
-	uploadDir := r.uploadDir()
-	e2eDir := filepath.Join(uploadDir, "files", "e2e")
-	entries, err := os.ReadDir(e2eDir)
-	if err != nil {
-		return fmt.Errorf("reading staged e2e binaries: %w", err)
-	}
-	linked := 0
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
-			continue
-		}
-		dst := filepath.Join(uploadDir, entry.Name())
-		// Replace any leftover from an earlier build of the same version, so a
-		// rerun behaves like the sibling collect steps, which copy over.
-		if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("replacing e2e binary %s: %w", entry.Name(), err)
-		}
-		if err := os.Link(filepath.Join(e2eDir, entry.Name()), dst); err != nil {
-			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
-		}
-		linked++
-	}
-	// An empty staging dir means the build produced nothing; shipping a release
-	// with --e2e-binaries enabled and no e2e assets should not pass silently.
-	if linked == 0 {
-		return fmt.Errorf("no e2e test binaries staged in %s", e2eDir)
 	}
 	return nil
 }
@@ -1281,6 +1239,17 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eStagingDir is where buildE2EBinaries puts the per-arch binaries.
+// Hashreleases serve a directory tree, so they go under files/e2e/. A release
+// attaches them to a GitHub release, whose assets are flat and which ghr
+// populates from the top level of the upload directory.
+func (r *CalicoManager) e2eStagingDir() string {
+	if r.isHashRelease {
+		return filepath.Join(r.uploadDir(), "files", "e2e")
+	}
+	return r.uploadDir()
+}
+
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
@@ -1294,31 +1263,38 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		return fmt.Errorf("failed to build e2e binaries: %w", err)
 	}
 
-	// Hard-link the built binaries into the hashrelease output directory
-	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
-	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	// Hard-link the built binaries into the output directory to avoid
+	// duplicating ~1 GB of cross-compiled test binaries on disk.
+	e2eOutputDir := r.e2eStagingDir()
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+	binDir := filepath.Join(e2eDir, "bin", "k8s")
+	entries, err := os.ReadDir(binDir)
 	if err != nil {
 		return fmt.Errorf("reading e2e bin directory: %w", err)
 	}
+	staged := 0
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
 			continue
 		}
-		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
 		dst := filepath.Join(e2eOutputDir, entry.Name())
 		// Replace a leftover link from an earlier build of the same version;
 		// os.Link fails outright on an existing destination.
 		if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("replacing e2e binary %s: %w", entry.Name(), err)
 		}
-		if err := os.Link(src, dst); err != nil {
+		if err := os.Link(filepath.Join(binDir, entry.Name()), dst); err != nil {
 			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
 		}
 		logrus.Infof("Staged e2e binary: %s", entry.Name())
+		staged++
+	}
+	// Nothing staged means the build produced no binaries; a release must not
+	// ship with --e2e-binaries enabled and no e2e assets.
+	if staged == 0 {
+		return fmt.Errorf("no e2e test binaries were produced in %s", binDir)
 	}
 	return nil
 }
@@ -1460,9 +1436,15 @@ Additional links:
 `
 	ver := version.New(r.calicoVersion)
 	sv := ver.Semver()
-	// Only advertise the e2e binaries when the build actually produced them.
+	// Advertise the e2e binaries based on what the build staged, not on
+	// r.e2eBinaries: that flag belongs to the build step and is never passed to
+	// publish, so it always reads as its default here.
 	e2eBinariesNote := ""
-	if r.e2eBinaries {
+	staged, err := filepath.Glob(filepath.Join(r.uploadDir(), "e2e-linux-*.test"))
+	if err != nil {
+		return fmt.Errorf("looking for staged e2e binaries: %w", err)
+	}
+	if len(staged) > 0 {
 		e2eBinariesNote = "\n- `e2e-linux-<arch>.test`: Version-matched Kubernetes e2e test binaries, one per architecture."
 	}
 	formatters := []string{
@@ -1497,8 +1479,7 @@ Additional links:
 		r.calicoVersion,
 		r.uploadDir(),
 	}
-	_, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
-	if err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil); err != nil {
 		return fmt.Errorf("failed to publish github release: %w", err)
 	}
 	return nil
@@ -1887,6 +1868,11 @@ func derivedBranchEdits(derived, stream, operatorBranch string) []branch.Edit {
 		{File: "test-tools/mocknode/mock-node.yaml", Pattern: `([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+`, Replacement: fmt.Sprintf(`${1}${2}%s`, derived)},
 		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=master\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="${RELEASE_STREAM:=%s}"`, stream)},
 		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="master"\} # Default to master`, Replacement: fmt.Sprintf(`: ${RELEASE_STREAM:="%s"} # Default to %s`, stream, stream)},
+		// The upgrade lanes test the branch's own stream after upgrading, so the
+		// uplevel has to follow the cut. Required: left at master, a fresh branch
+		// would silently run master's e2e suite against its own build.
+		{File: ".argoci/cron/e2e-upgrade.yaml", Pattern: `export UPLEVEL_RELEASE_STREAM="\$\{UPLEVEL_RELEASE_STREAM:-master\}"`, Replacement: fmt.Sprintf(`export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-%s}"`, stream), Required: true},
+		{File: ".semaphore/end-to-end/pipelines/upgrade.yml", Pattern: `(- name: UPLEVEL_RELEASE_STREAM.*\n[[:space:]]+value: )master`, Replacement: fmt.Sprintf(`${1}%s`, stream), Required: true},
 	}
 }
 
