@@ -37,6 +37,8 @@ global_job_config:
       value: calico
     - name: UPLEVEL_PRE_RELEASE
       value: "true"
+    - name: UPLEVEL_RELEASE_STREAM # the version under test after the upgrade
+      value: master
     - name: CALICOCTL_INSTALL_TYPE
       value: "container"
     - name: FUNCTIONAL_AREA
