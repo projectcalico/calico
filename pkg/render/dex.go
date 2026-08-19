@@ -623,11 +623,9 @@ func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
 	if !ok {
 		return v3.Rule{}, fmt.Errorf("could not parse egress destination %q", destination)
 	}
-	egressRule := v3.Rule{
+	return v3.Rule{
 		Action:      v3.Allow,
 		Protocol:    &networkpolicy.TCPProtocol,
 		Destination: networkpolicy.ExternalDestinationEntityRule(parsed, true),
-	}
-
-	return egressRule, nil
+	}, nil
 }
