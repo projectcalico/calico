@@ -313,6 +313,10 @@ type Table struct {
 	// cleanupOnly means we only sweep this table, so we never panic over it.
 	cleanupOnly bool
 
+	// resyncOpName names our resync in the loop summary. A cleanup-only table shares its name with
+	// the table Felix programs, so it needs its own.
+	resyncOpName string
+
 	// nextCleanupAttempt holds off a cleanup-only table after a failure. Nothing else latches it,
 	// and a backend that never reads would otherwise burn its whole retry budget on every apply.
 	nextCleanupAttempt time.Time
@@ -494,6 +498,11 @@ func NewTable(
 	if iptablesVariant == "nft" {
 		log.Info("Enabling iptables-in-nftables-mode workarounds.")
 		table.nftablesMode = true
+	}
+
+	table.resyncOpName = fmt.Sprintf("resync-%v-v%d", name, ipVersion)
+	if options.CleanupOnly {
+		table.resyncOpName = fmt.Sprintf("cleanup-iptables-%v-%v-v%d", iptablesVariant, name, ipVersion)
 	}
 
 	table.iptablesRestoreCmd = environment.FindBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
@@ -715,7 +724,7 @@ func (t *Table) loadDataplaneState() bool {
 
 	// Load the hashes from the dataplane.
 	t.logCxt.Debug("Loading current iptables state and checking it is correct.")
-	t.opReporter.RecordOperation(fmt.Sprintf("resync-%v-v%d", t.name, t.ipVersion))
+	t.opReporter.RecordOperation(t.resyncOpName)
 
 	t.lastReadTime = t.timeNow()
 	dataplaneHashes, dataplaneRules, ok := t.getHashesAndRulesFromDataplane()
