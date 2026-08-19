@@ -22,6 +22,8 @@ import (
 	"github.com/google/nftables"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 )
 
 // fakeNftReader stands in for the netlink client, failing the rule dump for one chain.
@@ -71,7 +73,7 @@ var _ = Describe("iptables cleanup, reading the tables over netlink", func() {
 	})
 
 	read := func() (map[string]*iptablesTableState, error) {
-		return readTablesFrom(reader, nftables.TableFamilyIPv4, sharedTables, func() { alive++ })
+		return readTablesFrom(reader, nftables.TableFamilyIPv4, rulesdefs.SharedTables, func() { alive++ })
 	}
 
 	It("reads rules from the base chains only", func() {

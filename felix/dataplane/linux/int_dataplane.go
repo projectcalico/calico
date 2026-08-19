@@ -514,10 +514,13 @@ func legacyIPTablesCleanupTables(
 	natOptions.CleanupOnly = true
 
 	var tables []generictables.CleanupTable
-	for _, name := range []string{"filter", "mangle", "raw"} {
-		tables = append(tables, iptables.NewTable(name, ipVersion, rulesdefs.RuleHashPrefix, featureDetector, options))
+	for _, name := range rulesdefs.SharedTables {
+		tableOptions := options
+		if name == "nat" {
+			tableOptions = natOptions
+		}
+		tables = append(tables, iptables.NewTable(name, ipVersion, rulesdefs.RuleHashPrefix, featureDetector, tableOptions))
 	}
-	tables = append(tables, iptables.NewTable("nat", ipVersion, rulesdefs.RuleHashPrefix, featureDetector, natOptions))
 	return tables
 }
 

@@ -27,10 +27,6 @@ import (
 	"github.com/projectcalico/calico/lib/logrusr"
 )
 
-// sharedTables are the tables Calico shares with everything else on the node. Both iptables
-// backends write into their own copies of these.
-var sharedTables = []string{"filter", "nat", "mangle", "raw"}
-
 // defaultSweepInterval paces the sweep when the refresh interval is disabled; it walks every chain
 // in the family, so it can't run on every dataplane apply.
 const defaultSweepInterval = 180 * time.Second
@@ -119,13 +115,13 @@ func (c *IPTablesNFTCleanup) CleanUp() (rescheduleAfter time.Duration) {
 	}
 	c.lastSweep = now
 
-	states, err := c.readTables(c.family, sharedTables, c.onStillAlive)
+	states, err := c.readTables(c.family, rulesdefs.SharedTables, c.onStillAlive)
 	if err != nil {
 		logrus.WithError(err).WithField("family", c.family).Warn("Failed to read the shared tables; will retry the iptables-nft cleanup")
 		return c.refreshInterval
 	}
 
-	for _, table := range sharedTables {
+	for _, table := range rulesdefs.SharedTables {
 		c.onStillAlive()
 
 		state, ok := states[table]

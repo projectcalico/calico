@@ -19,6 +19,10 @@ package rulesdefs
 // RuleHashPrefix prefixes the hash Felix writes into the comment on every rule it owns.
 const RuleHashPrefix = "cali:"
 
+// SharedTables are the tables Calico shares with everything else on the node. Both iptables
+// backends write into their own copies of these.
+var SharedTables = []string{"filter", "nat", "mangle", "raw"}
+
 // AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
 // track of the old names lets us clean them up.
 var AllHistoricChainNamePrefixes = []string{
