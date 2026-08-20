@@ -27,7 +27,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
-	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -81,10 +80,7 @@ var _ = Describe("Calico networkpolicy controller FV tests (etcd mode)", Ordered
 			context.Background(),
 			k8sClient,
 			calicoClient,
-			config.GenericControllerConfig{
-				ReconcilerPeriod: time.Second,
-				NumberOfWorkers:  1,
-			},
+			time.Second,
 		)
 		go ctrl.Run(stopCh)
 	}

@@ -35,12 +35,6 @@ type Config struct {
 	// Minimum log level to emit.
 	LogLevel string `default:"info" split_words:"true"`
 
-	// Number of workers to run for each controller.
-	WorkloadEndpointWorkers int `default:"1" split_words:"true"`
-	ProfileWorkers          int `default:"1" split_words:"true"`
-	PolicyWorkers           int `default:"1" split_words:"true"`
-	NodeWorkers             int `default:"1" split_words:"true"`
-
 	// Path to a kubeconfig file to use for accessing the k8s API.
 	Kubeconfig string `default:"" split_words:"false"`
 
