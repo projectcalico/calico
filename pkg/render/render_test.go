@@ -96,14 +96,12 @@ func allCalicoComponents(
 		FelixHealthPort:   9099,
 	}
 	kcCfg := &kubecontrollers.KubeControllersConfiguration{
-		K8sServiceEp:                k8sServiceEp,
-		Installation:                cr,
-		ManagementCluster:           managementCluster,
-		ManagementClusterConnection: managementClusterConnection,
-		ClusterDomain:               clusterDomain,
-		MetricsPort:                 kubeControllersMetricsPort,
-		Namespace:                   common.CalicoNamespace,
-		BindingNamespaces:           []string{common.CalicoNamespace},
+		K8sServiceEp:      k8sServiceEp,
+		Installation:      cr,
+		ClusterDomain:     clusterDomain,
+		MetricsPort:       kubeControllersMetricsPort,
+		Namespace:         common.CalicoNamespace,
+		BindingNamespaces: []string{common.CalicoNamespace},
 	}
 
 	winCfg := &render.WindowsConfiguration{

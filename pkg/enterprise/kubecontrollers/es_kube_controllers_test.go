@@ -46,7 +46,7 @@ var _ = Describe("es-kube-controllers rendering tests", func() {
 	var (
 		instance     *operatorv1.InstallationSpec
 		k8sServiceEp k8sapi.ServiceEndpoint
-		cfg          rkc.KubeControllersConfiguration
+		cfg          Configuration
 		cli          client.Client
 	)
 
@@ -104,14 +104,16 @@ var _ = Describe("es-kube-controllers rendering tests", func() {
 		certificateManager, err := certificatemanager.Create(cli, nil, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
 		Expect(err).NotTo(HaveOccurred())
 
-		cfg = rkc.KubeControllersConfiguration{
-			K8sServiceEp:      k8sServiceEp,
-			Installation:      instance,
-			ClusterDomain:     dns.DefaultClusterDomain,
-			MetricsPort:       9094,
-			TrustedBundle:     certificateManager.CreateTrustedBundle(),
-			Namespace:         common.CalicoNamespace,
-			BindingNamespaces: []string{common.CalicoNamespace},
+		cfg = Configuration{
+			KubeControllersConfiguration: &rkc.KubeControllersConfiguration{
+				K8sServiceEp:      k8sServiceEp,
+				Installation:      instance,
+				ClusterDomain:     dns.DefaultClusterDomain,
+				MetricsPort:       9094,
+				TrustedBundle:     certificateManager.CreateTrustedBundle(),
+				Namespace:         common.CalicoNamespace,
+				BindingNamespaces: []string{common.CalicoNamespace},
+			},
 		}
 	})
 

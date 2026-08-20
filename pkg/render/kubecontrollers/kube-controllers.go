@@ -72,11 +72,6 @@ type KubeControllersConfiguration struct {
 	Installation   *operatorv1.InstallationSpec
 	Authentication *operatorv1.Authentication
 
-	// ManagementCluster and ManagementClusterConnection are inputs for the enterprise
-	// es-kube-controllers assembler. No base rendering reads them.
-	ManagementCluster           *operatorv1.ManagementCluster
-	ManagementClusterConnection *operatorv1.ManagementClusterConnection
-
 	// ManagedClusterWatchBinding binds kube-controllers to the managed-cluster watch
 	// ClusterRole. The assemblers set it; multi-cluster management is not a core feature.
 	ManagedClusterWatchBinding bool
@@ -93,13 +88,6 @@ type KubeControllersConfiguration struct {
 	KubeControllersGatewaySecret *corev1.Secret
 	TrustedBundle                certificatemanagement.TrustedBundleRO
 
-	// TenantID is the Calico Cloud tenant. Only the enterprise assembler consumes it.
-	TenantID string
-
-	// Cloud reports whether this is a Calico Cloud install. Only the enterprise
-	// es-kube-controllers assembler consumes it.
-	Cloud bool
-
 	// ImageOverrides lets a variant swap the kube-controllers image. The controller
 	// wires in the operator's image overrides; nil resolves to the core image.
 	ImageOverrides *imageoverride.Overrides
@@ -109,10 +97,6 @@ type KubeControllersConfiguration struct {
 
 	// List of namespaces that are running a kube-controllers instance that need a cluster role binding.
 	BindingNamespaces []string
-
-	// Tenant object provides tenant configuration for both single and multi-tenant modes.
-	// If this is nil, then we should run in zero-tenant mode.
-	Tenant *operatorv1.Tenant
 
 	// The fields below parameterize the generic kube-controllers component. The
 	// variant assemblers (NewCalicoKubeControllers, the enterprise es builder)

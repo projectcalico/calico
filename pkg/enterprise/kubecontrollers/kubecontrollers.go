@@ -51,7 +51,7 @@ const (
 // component. es-kube-controllers is a distinct deployment (talks to Elasticsearch via
 // es-gateway) reconciled by the logstorage kube-controllers controller, so it's
 // assembled here rather than through the render-time modifier mechanism.
-func NewElasticsearchKubeControllers(cfg *rkc.KubeControllersConfiguration) render.Component {
+func NewElasticsearchKubeControllers(cfg *Configuration) render.Component {
 	cfg.Name = EsKubeController
 	cfg.ConfigName = "elasticsearch"
 	cfg.RoleName = EsKubeControllerRole
@@ -59,7 +59,7 @@ func NewElasticsearchKubeControllers(cfg *rkc.KubeControllersConfiguration) rend
 	cfg.MetricsName = EsKubeControllerMetrics
 	cfg.DisableConfigAPI = cfg.Tenant.MultiTenant()
 
-	cfg.Rules = rkc.KubeControllersRoleCommonRules(cfg)
+	cfg.Rules = rkc.KubeControllersRoleCommonRules(cfg.KubeControllersConfiguration)
 	cfg.Rules = append(cfg.Rules, KubeControllersEnterpriseCommonRules(false, cfg.ManagementClusterConnection != nil)...)
 	// Calico Cloud's es-kube-controllers provisions RBAC for managed-cluster access, so it needs to
 	// create and update cluster roles and bindings. Enterprise only reads them.
@@ -101,11 +101,11 @@ func NewElasticsearchKubeControllers(cfg *rkc.KubeControllersConfiguration) rend
 	cfg.DeprecatedNetworkPolicyName = "es-kube-controller-access"
 	cfg.ExtraEnv = esKubeControllersEnv(cfg)
 
-	return rkc.NewKubeControllers(cfg)
+	return rkc.NewKubeControllers(cfg.KubeControllersConfiguration)
 }
 
 // esKubeControllersEnv builds the enterprise env vars for es-calico-kube-controllers.
-func esKubeControllersEnv(cfg *rkc.KubeControllersConfiguration) []corev1.EnvVar {
+func esKubeControllersEnv(cfg *Configuration) []corev1.EnvVar {
 	var env []corev1.EnvVar
 
 	if cfg.Tenant != nil {
@@ -305,7 +305,7 @@ func wafRules() []rbacv1.PolicyRule {
 	}
 }
 
-func esKubeControllersCalicoSystemPolicy(cfg *rkc.KubeControllersConfiguration) *v3.NetworkPolicy {
+func esKubeControllersCalicoSystemPolicy(cfg *Configuration) *v3.NetworkPolicy {
 	if cfg.ManagementClusterConnection != nil {
 		return nil
 	}

@@ -348,22 +348,25 @@ func (r *ESKubeControllersController) Reconcile(ctx context.Context, request rec
 		K8sServiceEp:                 k8sapi.Endpoint,
 		K8sServiceEpPodNetwork:       k8sapi.PodNetworkEndpoint,
 		Installation:                 installationSpec,
-		ManagementCluster:            managementCluster,
 		ClusterDomain:                r.clusterDomain,
 		Authentication:               authentication,
 		KubeControllersGatewaySecret: kubeControllersUserSecret,
 		TrustedBundle:                trustedBundle,
 		Namespace:                    helper.InstallNamespace(),
 		BindingNamespaces:            namespaces,
+	}
+	esKubeControllersCfg := entkubecontrollers.Configuration{
+		KubeControllersConfiguration: &kubeControllersCfg,
+		ManagementCluster:            managementCluster,
 		Tenant:                       nil,
 		Cloud:                        r.cloud,
 	}
 	if r.cloud {
-		if result, proceed, err := r.esKubeControllersAddCloudModificationsToConfig(&kubeControllersCfg, reqLogger, ctx); err != nil || !proceed {
+		if result, proceed, err := r.esKubeControllersAddCloudModificationsToConfig(&esKubeControllersCfg, reqLogger, ctx); err != nil || !proceed {
 			return result, err
 		}
 	}
-	esKubeControllerComponents := entkubecontrollers.NewElasticsearchKubeControllers(&kubeControllersCfg)
+	esKubeControllerComponents := entkubecontrollers.NewElasticsearchKubeControllers(&esKubeControllersCfg)
 
 	imageSet, err := imageset.GetImageSet(ctx, r.client, r.variant)
 	if err != nil {

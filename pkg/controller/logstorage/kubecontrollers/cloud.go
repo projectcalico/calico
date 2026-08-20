@@ -21,8 +21,8 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/utils"
+	entkubecontrollers "github.com/tigera/operator/pkg/enterprise/kubecontrollers"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
 	corev1 "k8s.io/api/core/v1"
@@ -69,8 +69,8 @@ func (r *ESKubeControllersController) esGatewayAddCloudModificationsToConfig(c *
 	return true, nil
 }
 
-// esKubeControllersAddCloudModificationsToConfig modifies the provided *kubecontrollers.KubeControllersConfiguration to include Calico Cloud specific configuration.
-func (r *ESKubeControllersController) esKubeControllersAddCloudModificationsToConfig(c *kubecontrollers.KubeControllersConfiguration, reqLogger logr.Logger, ctx context.Context) (reconcile.Result, bool, error) {
+// esKubeControllersAddCloudModificationsToConfig modifies the provided *entkubecontrollers.Configuration to include Calico Cloud specific configuration.
+func (r *ESKubeControllersController) esKubeControllersAddCloudModificationsToConfig(c *entkubecontrollers.Configuration, reqLogger logr.Logger, ctx context.Context) (reconcile.Result, bool, error) {
 	if r.cloud && r.elasticExternal && !r.multiTenant {
 		cloudConfig, err := eutils.GetCloudConfig(ctx, r.client)
 		if err != nil {

@@ -704,11 +704,6 @@ var _ = Describe("kube-controllers rendering tests", func() {
 				} else {
 					cfg.Installation.KubernetesProvider = operatorv1.ProviderNone
 				}
-				if scenario.ManagedCluster {
-					cfg.ManagementClusterConnection = &operatorv1.ManagementClusterConnection{}
-				} else {
-					cfg.ManagementClusterConnection = nil
-				}
 				instance.Variant = operatorv1.CalicoEnterprise
 				defaultDenyPolicy := &v3.NetworkPolicy{
 					ObjectMeta: metav1.ObjectMeta{
