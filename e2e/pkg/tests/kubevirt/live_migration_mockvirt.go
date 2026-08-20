@@ -17,6 +17,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -154,6 +155,32 @@ var _ = describe.CalicoDescribe(
 				g.Expect(m).To(Equal(normalRouteMetric),
 					"target node kernel route metric should revert to 1024 after second migration convergence")
 			}, metricRevertTimeout, 2*time.Second).Should(Succeed())
+		})
+
+		// MockVirt variant of the target-node route preference test (shared
+		// choreography in live_migration_target_route.go): all route-level
+		// assertions of the real-KubeVirt variant, with ICMP cadence probes —
+		// mock virt-launcher pods answer ping but run no guest TCP server.
+		// The stale-/32 contest observation is opportunistic here because
+		// MockVirt does not model the source pod's ~9s teardown delay.
+		It("should prefer the local workload route on the migration target node", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), targetRouteMigrationTimeout)
+			defer cancel()
+
+			runTargetRouteMigrationTest(ctx, f, cli, targetRouteTestParams{
+				vmName: "e2e-mockvirt-target-route",
+				startProbe: func(ctx context.Context, client conncheck.Client, vmIP string) continuityProbe {
+					name := "ping-stream-" + client.Name()
+					cp := conncheck.StartStream(ctx, name,
+						conncheck.NewPodSource(f, client),
+						conncheck.WithStreamCommand("ping", "-i", "0.5", vmIP))
+					return continuityProbe{name: name, cp: cp, filter: func(l string) bool {
+						return strings.Contains(l, "bytes from")
+					}}
+				},
+				contestGuardHard:   false,
+				requireZeroSeqGaps: false,
+			})
 		})
 
 		It("should not have /32 host route on target node after a migration timeout", func() {
