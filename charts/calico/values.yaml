@@ -21,6 +21,20 @@ flannelMigration:
 # Some defaults used in the templates.
 useV3CRDs: false
 includeCRDs: true
+
+# Enables the Calico authorization webhook, which enforces tier-based RBAC on reads
+# (GET/LIST/WATCH) of tiered policy resources. Self-hosted clusters only: it requires
+# --authorization-config on the kube-apiserver, which managed control planes do not expose.
+# Off by default, and off means off: the webhook process answers NoOpinion on /authz, does
+# not run the policy tier cache, and is not granted read access to policy resources.
+# See webhooks/config/README.md for the install procedure.
+authzWebhookEnabled: false
+
+# Pins the calico-webhooks Service's spec.clusterIP. Leave empty to let Kubernetes
+# allocate a ClusterIP normally. Set this where the kube-apiserver's authorization
+# config has to name the webhook's address before the Service exists (e.g. kind
+# clusters, where --authorization-config is written to disk before cluster bringup).
+authzWebhookClusterIP: ""
 imagePullPolicy: IfNotPresent
 mtu: "1440"
 ipam: "calico-ipam"

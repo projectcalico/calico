@@ -1,0 +1,69 @@
+# Kubernetes AuthorizationConfiguration for Calico tier-based RBAC.
+#
+# Inserts the Calico authorization webhook between the Node and RBAC authorizers:
+#
+#   Node -> Calico Webhook -> RBAC
+#
+# The webhook enforces tier-based access control for reads (GET/LIST/WATCH) of tiered policy
+# resources. Mutating operations are covered by the tiered RBAC admission webhook instead,
+# which unlike this one can read the object body. The webhook returns Denied or NoOpinion and
+# never Allowed, so base RBAC still applies to every request it lets through.
+#
+# --authorization-config is mutually exclusive with --authorization-mode. This file replaces
+# the --authorization-mode=Node,RBAC flag entirely.
+#
+# See README.md in this directory for the install and break-glass procedures.
+apiVersion: apiserver.config.k8s.io/v1
+kind: AuthorizationConfiguration
+authorizers:
+  - type: Node
+    name: node
+  - type: Webhook
+    name: calico-tiered-rbac
+    webhook:
+      # decisionTimeout in webhooks/pkg/authz/authz.go must stay below this, so a slow decision
+      # denies one request rather than failing the webhook. A drift test asserts it.
+      timeout: 3s
+      # authorizedTTL is inert (we never return Allowed). unauthorizedTTL caches Denied and
+      # NoOpinion, so it bounds how long a stale decision survives a policy moving tier.
+      # Mirrored by hand as authzUnauthorizedTTL in e2e/pkg/tests/policy/tiered_rbac_reads.go.
+      authorizedTTL: 5m
+      unauthorizedTTL: 30s
+      # Fail closed, bounded by the matchConditions below. See README.md for break-glass.
+      failurePolicy: Deny
+      subjectAccessReviewVersion: v1
+      matchConditionSubjectAccessReviewVersion: v1
+      connectionInfo:
+        type: KubeConfigFile
+        kubeConfigFile: /etc/kubernetes/authz/calico-authz-webhook-kubeconfig.yaml
+      matchConditions:
+        # Only tiered policy reads reach the webhook. The Go side NoOpinions everything else
+        # anyway, so this changes no decisions - it just keeps the failurePolicy: Deny blast
+        # radius off the rest of the group, and stops the webhook recursing into itself via the
+        # SubjectAccessReviews the tier decision issues for tiers and tier.<resource>.
+        # These lists mirror tierauth.TieredPolicyResources and readVerbs; a drift test in
+        # webhooks/pkg/authz keeps them in sync.
+        - expression: >-
+            has(request.resourceAttributes)
+            && request.resourceAttributes.group == 'projectcalico.org'
+            && has(request.resourceAttributes.verb)
+            && request.resourceAttributes.verb in ['get', 'list', 'watch']
+            && has(request.resourceAttributes.resource)
+            && request.resourceAttributes.resource in [
+              'networkpolicies',
+              'globalnetworkpolicies',
+              'stagednetworkpolicies',
+              'stagedglobalnetworkpolicies',
+              'stagedkubernetesnetworkpolicies'
+            ]
+        # Never gate Calico's own components: the webhook's informers read the resources it
+        # authorizes, so gating them deadlocks informer bootstrap under failurePolicy: Deny.
+        # Listed by name rather than namespace, since kube-system holds far more than these.
+        - expression: >-
+            !(has(request.user) && request.user in [
+              'system:serviceaccount:kube-system:calico-webhooks',
+              'system:serviceaccount:kube-system:calico-node',
+              'system:serviceaccount:kube-system:calico-kube-controllers'
+            ])
+  - type: RBAC
+    name: rbac
