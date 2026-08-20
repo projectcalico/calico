@@ -366,9 +366,9 @@ blocks:
             - name: E2E_TEST_CONFIG
               value: e2e/config/iptables/xtables.yaml
             - name: RKE_VERSION
-              value: "v1.7.1" # https://github.com/rancher/rke/releases/tag/v1.7.1
+              value: "v1.8.14" # https://github.com/rancher/rke/releases/tag/v1.8.14
             - name: K8S_VERSION
-              value: "v1.31.3" # RKE 1.7.1. supports: v1.31.3, v1.30.7, v1.29.11, v1.28.15
+              value: "v1.32.13" # RKE 1.8.14 supports: v1.32.13, v1.31.14, v1.30.14
 
   - name: WireGuard VXLAN k8s-e2e
     dependencies: []
