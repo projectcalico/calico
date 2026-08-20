@@ -76,6 +76,7 @@ var features = map[string]bool{
 	"Datapath":        true,
 	"Istio":           true,
 	"KubeVirt":        true,
+	"Typha":           true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
@@ -111,6 +112,14 @@ func RequiresCalicoAPIServer() any {
 // or cloud clusters with appropriate configuration.
 func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
+}
+
+// RequiresTypha marks tests that depend on Typha (the datastore fan-out proxy)
+// being deployed. Operator-managed clusters deploy Typha by default; clusters
+// that do not run Typha must exclude these tests via the RequiresTypha label in
+// their test-selection config. Tests must not self-skip on Typha-less clusters.
+func RequiresTypha() any {
+	return framework.WithLabel("RequiresTypha")
 }
 
 // RequiresGoldmane marks tests that depend on Goldmane (and Whisker) being installed

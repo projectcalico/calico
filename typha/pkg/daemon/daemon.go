@@ -336,6 +336,7 @@ func (t *TyphaDaemon) CreateServer() {
 			CAFile:                         t.ConfigParams.CAFile,
 			ClientCN:                       t.ConfigParams.ClientCN,
 			ClientURISAN:                   t.ConfigParams.ClientURISAN,
+			SocketPath:                     syncserver.DefaultSocketPath,
 		},
 	)
 }

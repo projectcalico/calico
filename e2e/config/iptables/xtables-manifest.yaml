@@ -21,3 +21,5 @@ exclude:
       reason: "manifest install; goldmane/whisker ship enabled in the operator chart but the MANIFEST_FILE installers do not include them"
     - label: RequiresOperator
       reason: "manifest install (no tigera-operator), so a CR this test creates would never be reconciled"
+    - label: RequiresTypha
+      reason: "manifest install; calico.yaml ships no calico-typha Deployment, so Typha-dependent specs have nothing to target"
