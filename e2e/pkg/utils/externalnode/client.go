@@ -46,8 +46,14 @@ func NewClientManualConfig(ip, key, user string) *Client {
 	return &Client{extIP: ip, extKey: key, extUser: user}
 }
 
+// IP returns the external node's first internal address. The ssh probe that
+// discovers them can come back empty, which is a broken external node rather
+// than a test failure, so say which node had none.
 func (e *Client) IP() string {
-	return e.IPs()[0]
+	ips := e.IPs()
+	Expect(ips).NotTo(BeEmpty(), fmt.Sprintf(
+		"no internal IPs discovered on external node %s", e.extIP))
+	return ips[0]
 }
 
 func (e *Client) IPs() []string {
