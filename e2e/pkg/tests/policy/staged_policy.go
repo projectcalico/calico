@@ -42,6 +42,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.RequiresGoldmane(),
+	describe.WithNoTierPrefix(),
 	"staged network policy",
 	func() {
 		var (
