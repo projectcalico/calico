@@ -7,83 +7,154 @@ OpenStack](https://docs.projectcalico.org/master/getting-started/openstack/insta
 or [on bare metal
 hosts](https://docs.projectcalico.org/master/getting-started/bare-metal/installation/).
 
-A single
+    make build
 
-    make release-publish
+builds a set of packages corresponding to current Calico master code, into
+`output/`, and
 
-command will build and publish a set of packages corresponding to
-current Calico master code, to our PPA and RPM repo named "master";
-similarly,
+    make publish
 
-    make release-publish VERSION=vX.Y.Z
+uploads them to our PPA and RPM repo named "master".  `VERSION=vX.Y.Z` builds
+and publishes for version X.Y.Z instead, to the PPA and RPM repo named
+"calico-X.Y".
 
-will build and publish a set of packages for version X.Y.Z, to our PPA
-and RPM repo named "calico-X.Y".
-
-This file documents everything needed to understand how our packaging
-works, what components we package, and why.
+This file documents how to run the pipeline, what we package, and why.  The
+design - the target graph, the invariants, and the reasoning - is in
+[`DESIGN.md`](DESIGN.md).
 
 ## Usage
 
-`make release-publish`, with the following required environment
-variables.
+Build, publish and test are independent phases.  Run them together or one at a
+time; nothing is rebuilt that is already built, and nothing is uploaded that is
+already uploaded, so a failed run can simply be repeated.
 
--  `HOST` and `GCLOUD_ARGS` set to indicate the GCP name of the RPM
-   host, and a GCP identity that permits logging into that host.
+    make images                  # the per-platform build containers
+    make build                   # deb source packages and RPMs, into output/
+    make build-binaries          # binary .debs, for local install and testing
+    make test                    # install what we built, in clean containers
+    make publish                 # upload everything
+    make clean                   # remove output/
 
--  `SECRET_KEY` set to a file containing the GPG secret key for a
-   member of the [Project Calico team on
-   Launchpad](https://launchpad.net/~project-calico).
+    make print-config            # what VERSION resolves to, before doing anything
+    make help                    # every target
 
-Supported, optional environment variables:
+Finer-grained targets exist for everything: `build-ubuntu`, `build-rhel`,
+`build-ubuntu-felix`, `build-binaries-noble`, `test-ubuntu-jammy`,
+`publish-ubuntu`, `publish-rhel-gar`, `publish-rhel-bpo`, and so on.
 
--  `VERSION`: specify the Calico version to build packages for.
-   Default is `master`.
+`make release` and `make release-publish` are kept for CI compatibility: they
+clean first and then do the same work, which is what the shell script this
+replaced always did.
 
--  `REPO_NAME`: override the PPA and RPM repo name to publish to.
-   Default is automatically derived from `VERSION`.
+### Tools you need
 
--  `STEPS`: override the parts of the process to execute.  Default is
-   all of the following:
+Building needs `docker`, `rsync`, `dch` (from `devscripts`) and `patchelf`.
+Publishing RPMs additionally needs `gcloud`, `jq` and `rpm`.  Each target
+checks for what it uses and names anything missing.
 
-   -  `bld_images`: Build required container images for building
-      packages for each target platform.
+### Publishing
 
-   -  `net_cal`: Build networking-calico packages.
+Publishing to the PPA needs a signing key for a member of the [Project Calico
+team on Launchpad](https://launchpad.net/~project-calico), as either:
 
-   -  `felix`: Build Felix packages.
+-  `SECRET_KEY_ID` - a key id, fingerprint or uid in your own GnuPG keyring.
+   The key is exported into a private temporary directory for the duration of
+   one upload and deleted afterwards.  If the key has a passphrase, gpg-agent
+   prompts for it; set `SECRET_KEY_PASSPHRASE_FILE` for unattended use.
 
-   -  `calicoctl`: Build calicoctl packages.
+-  `SECRET_KEY` - a path to a key file.  This wins if both are set, which is
+   how CI still works unchanged.
 
-   -  `etcd3gw`: Build etcd3gw packages (RPM only).
+Publishing RPMs needs `HOST` and `GCLOUD_ARGS` to point at the RPM host and a
+GCP identity that can log into it.  Both now default to the real values, so a
+local run needs no setup.
 
-   -  `dnsmasq`: Build dnsmasq packages.
-
-   -  `pub_debs`: Publish all Debian packages.
-
-   -  `pub_rpms`: Publish all RPMs.
-
-Note that `pub_debs` means uploading Debian source packages to
-Launchpad, and it can still take a long time for Launchpad to build
-and publish binary Debian packages.  Usually about an hour, but
-occasionally many hours.  A package is only really ready for use when
+Uploading Debian *source* packages to Launchpad is not the end of the story:
+Launchpad then builds and publishes the binary packages itself, usually in about
+an hour, occasionally many hours.  A package is only really ready for use when
 its line on the PPA package details page ([for
 example](https://launchpad.net/~project-calico/+archive/ubuntu/master/+packages))
-has a green tick in the Build Status column and a date in the
-Published column.
+has a green tick in the Build Status column and a date in the Published column.
+`make build-binaries` exists so that you do not have to wait for that to find
+out whether a source package builds at all.
 
-(RPMs, on the other hand, are ready immediately after the `pub_rpms` step.)
+(RPMs, on the other hand, are ready as soon as `make publish-rhel` finishes.)
+
+### Configuration
+
+Everything is overridable on the command line or from the environment; see
+[`mk/config.mk`](mk/config.mk) for the full list and the defaults.  The ones
+worth knowing:
+
+-  `VERSION`: the Calico version to build packages for.  Default `master`.
+
+-  `REPO_NAME`, `GCLOUD_REPO_NAME`: the PPA/RPM repo and Google Artifact
+   Registry repo to publish to.  Both are derived from `VERSION`.
+
+-  `UBUNTU_SERIES`, `EL_VERSIONS`: which platforms to build for.
+
+-  `FORCE_VERSION`, `DEB_VERSION`, `RPM_VERSION`: override the version that
+   would otherwise come from git state.
+
+### The calico-felix binary in these packages
+
+The `calico-felix` we package is **not** `felix/bin/calico-felix`. It is built
+separately, by [`mk/felix-el8.mk`](mk/felix-el8.mk), inside the EL 8 build
+container, and lands in `output/felix-el8/bin/calico-felix`.
+
+The reason is glibc. `calico/go-build` is AlmaLinux 9 based, so a binary from it
+needs `GLIBC_2.34` and will not run on EL 8 (2.28) or Ubuntu 20.04 (2.31) - the
+RPM's generated `Requires: libc.so.6(GLIBC_2.34)` cannot even be satisfied.
+Building in the oldest distribution we package for gives one binary that runs on
+all of them:
+
+| built in | glibc floor | runs on |
+|---|---|---|
+| calico/go-build (AlmaLinux 9) | 2.34 | jammy, noble, EL 9+ |
+| this pipeline's el8 image | 2.28 | focal, jammy, noble, EL 8+ |
+
+So `libbpf.a` and the cgo binary are rebuilt in the el8 image, exactly as
+calico-private does for calico-node's RHEL 8 RPM (`node/Makefile.rhel8`). The BPF
+programs are clang-built kernel bytecode and are unaffected, so they still come
+from felix's normal `make build-bpf`.
+
+`make felix-binary` builds just that binary, if you want to inspect it:
+
+    make felix-binary
+    objdump -T output/felix-el8/bin/calico-felix | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1
+
+Delete `mk/felix-el8.mk` and its `include` line once every platform we package
+for has a glibc at least as new as go-build's.
+
+### Iterating locally
+
+`output/` is the state: a target whose file is already there does not run
+again.  So after a failed publish, `make publish` picks up where it stopped,
+and after changing one component, `make build-ubuntu-felix` rebuilds only that.
+
+The one thing to know is that the shipped binaries -
+`output/felix-el8/bin/calico-felix` and `calicoctl/bin/calicoctl` - are built once
+per `output/` tree, and recorded by a stamp under `output/.stamps/`.  If you
+change a component's source and want the packages to pick it up, remove its stamp
+(or run `make clean`).
 
 ## Packaging platforms
 
 We build and publish packages for these platforms:
 
--  Ubuntu 20.04 (Focal) and 22.04 (Jammy). The hosting for these
-   packages is in PPAs at https://launchpad.net/~project-calico.
+-  Ubuntu 20.04 (Focal), 22.04 (Jammy) and 24.04 (Noble). The hosting
+   for these packages is in PPAs at https://launchpad.net/~project-calico.
 
--  CentOS 7 or RHEL 7.  The hosting for these packages is in RPM repos
-   at binaries.projectcalico.org (for example
-   http://binaries.projectcalico.org/rpm/calico-3.8/).
+-  RHEL 8 and its rebuilds (AlmaLinux, Rocky, CentOS Stream 8).  The
+   hosting for these packages is in RPM repos at
+   binaries.projectcalico.org (for example
+   http://binaries.projectcalico.org/rpm/calico-3.8/), and in a Google
+   Artifact Registry yum repo.
+
+   EL 8 is the floor rather than a target: it is the oldest EL we build
+   for, so the binaries we build there run on EL 9 and later too.  RPMs
+   for CentOS/RHEL 7 are no longer built - EL 7 is EOL, and its glibc
+   2.17 could not run our `calico-felix` binary even before that.
 
 ## Public PPAs and RPM repositories
 
@@ -108,13 +179,17 @@ The components that we package and host are:
    convenience for hosts that are already installing Calico from these
    repositories.
 
--  etcd3gw - for CentOS/RHEL 7 only.
+Two components used to be packaged here and no longer are, both because
+they existed only for CentOS/RHEL 7:
 
-   Note: for Ubuntu there is no packaging for etcd3gw, and we instead
+-  etcd3gw.  Its spec built Python 2 packages, which EL 8 cannot.  As for
+   Ubuntu, which never had etcd3gw packaging, we
    [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
--  dnsmasq - see below.
+-  dnsmasq.  We built it only because CentOS 7 was stuck on 2.76 and our
+   patches need 2.79; EL 8 ships 2.79 itself.  See below for the history,
+   which is still worth keeping.
 
 For OpenStack and bare metal installs we don't currently need any
 other Calico components.
@@ -152,10 +227,12 @@ releases is as follows.
 -  2018-01-18 Remove limit of 67 on the number of VMs per compute node
 -  v2.79
 
-To get all of these patches requires Dnsmasq v2.79 or later.  Our Ubuntu
-platforms have that, but not CentOS/RHEL 7, so for CentOS/RHEL we build
-and host v2.79 packages ourselves.  The source for that comes from the
-following tags in [our Dnsmasq
+To get all of these patches requires Dnsmasq v2.79 or later.  Every platform we
+now package for has that: our Ubuntu series all do, and EL 8 ships 2.79.  Only
+CentOS/RHEL 7, stuck on 2.76, did not - which is why we used to build and host
+v2.79 ourselves, from the `rpm_2.79` branch of [our Dnsmasq
 fork](https://github.com/projectcalico/calico-dnsmasq).
 
--  For CentOS/RHEL 7, `rpm_2.79`.
+We therefore no longer build it, and the component is gone from
+[`mk/components.mk`](mk/components.mk) - which keeps a comment saying so, and
+where the fork is, in case a platform ever regresses below 2.79.

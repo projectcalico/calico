@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Print the script that refreshes an RPM repo's metadata on the RPM host.
+#
+# Usage: refresh-rpm-repo <repo> [remote-dir] [signing-key-name]
+#
+# The output is meant to be piped into a shell on the host:
+#
+#   refresh-rpm-repo master | gcloud compute ssh ... binaries-projectcalico-org
+#
+# It prunes superseded RPMs, re-signs everything with the Project Calico
+# Maintainers key, publishes the matching public key so that installers can
+# verify signatures, and regenerates the repo index.
+
+set -eu -o pipefail
+
+if [ $# -lt 1 ]; then
+    echo >&2 "usage: $(basename "$0") <repo> [remote-dir] [signing-key-name]"
+    exit 1
+fi
+
+repo=$1
+dir=${2:-/usr/share/nginx/html/rpm}
+key=${3:-Project Calico Maintainers}
+
+# The </dev/null on the --resign line is critical: without it rpm consumes the
+# rest of this script while trying to read a pass phrase from stdin.  No pass
+# phrase is actually needed, because the host's key does not have one.
+cat <<EOF
+set -x
+rm -f \`repomanage --old ${dir}/${repo}\`
+rpm --define '_gpg_name ${key}' --resign ${dir}/${repo}/*/*.rpm </dev/null
+gpg --export -a "${key}" > ${dir}/${repo}/key
+createrepo ${dir}/${repo}
+EOF

@@ -1,0 +1,32 @@
+#!/bin/bash
+#
+# Write debian/changelog in a staging copy.
+#
+# Usage: write-deb-changelog <stagedir> <package> <version> <series> <message>
+#
+# <version> includes the epoch, if the package uses one, and the -<series>
+# revision: '3:3.31.0~rc0.post267-noble'.
+#
+# The changelog is written into the staging copy, never into the source tree, so
+# that the series build in parallel without racing over one file.
+
+set -eu -o pipefail
+
+if [ $# -ne 5 ]; then
+    echo >&2 "usage: $(basename "$0") <stagedir> <package> <version> <series> <message>"
+    exit 1
+fi
+
+stagedir=$1
+package=$2
+version=$3
+series=$4
+message=$5
+
+cd "${stagedir}"
+
+# --controlmaint takes the maintainer from debian/control, so this needs no
+# DEBFULLNAME/DEBEMAIL in the environment.
+rm -f debian/changelog debian/changelog.dch
+dch --controlmaint --create --package "${package}" -v "${version}" "${message}"
+dch --controlmaint --release --distribution "${series}" ""

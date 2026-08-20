@@ -1,0 +1,104 @@
+#!/bin/bash
+#
+# Sign one Debian source package and upload it to a PPA.
+#
+# Usage: publish-deb-source <changes-file> <ppa> <sources-index>
+#
+# <sources-index> is a decompressed Sources file listing what the PPA already
+# has; if it already has this package at this version the upload is skipped,
+# because Launchpad would reject it.
+#
+# The signing key is obtained here, used, and destroyed: it lives in a private
+# temporary directory for the duration of this one upload, and never under
+# output/ (which CI archives).  Either
+#
+#   SECRET_KEY     - path to a key file (legacy; wins if both are set), or
+#   SECRET_KEY_ID  - a key id, fingerprint or uid in the local keyring
+#
+# must be set.  SECRET_KEY_PASSPHRASE_FILE makes a protected key usable
+# unattended; without it, gpg-agent prompts as usual.
+
+set -eu -o pipefail
+
+if [ $# -ne 3 ]; then
+    echo >&2 "usage: $(basename "$0") <changes-file> <ppa> <sources-index>"
+    exit 1
+fi
+
+changes=$1
+ppa=$2
+index=$3
+utils=$(dirname "$(realpath "$0")")
+
+outputdir=$(cd "$(dirname "${changes}")" && pwd)
+filename=$(basename "${changes}")
+base=${filename%_source.changes}
+package=${base%%_*}
+series=${base##*-}
+upload_stamp="${outputdir}/${base}_source.ppa.upload"
+
+# The epoch is part of the version in both the .changes file and the PPA index,
+# but not of the file names; strip it from both sides and compare.
+version=$(awk '/^Version:/ { print $2; exit }' "${changes}")
+version=${version#*:}
+
+if [ -s "${index}" ] && \
+   awk '/^Package:/ { p = $2 } /^Version:/ { v = $2; sub(/^[0-9]+:/, "", v); print p, v }' "${index}" |
+   grep -qxF "${package} ${version}"; then
+    echo "[${series} ${package}] the PPA already has ${version}, skipping"
+    touch "${upload_stamp}"
+    exit 0
+fi
+
+keydir=$(mktemp -d -t calico-publish-debs.XXXXXX)
+trap 'rm -rf "${keydir}"' EXIT
+chmod 700 "${keydir}"
+
+if [ -n "${SECRET_KEY:-}" ]; then
+    if [ ! -r "${SECRET_KEY}" ] || [ ! -s "${SECRET_KEY}" ]; then
+        echo >&2 "[error] SECRET_KEY is set to ${SECRET_KEY}, which is not a readable, non-empty file"
+        exit 1
+    fi
+    install -m 600 "${SECRET_KEY}" "${keydir}/key"
+elif [ -n "${SECRET_KEY_ID:-}" ]; then
+    "${utils}/export-secret-key" "${SECRET_KEY_ID}" "${keydir}/key"
+else
+    echo >&2 "[error] uploading to Launchpad needs a signing key: set SECRET_KEY_ID to a"
+    echo >&2 "        key in your keyring, or SECRET_KEY to a key file"
+    exit 1
+fi
+
+# With several keys in one keyring, '*@' would sign with whichever matches
+# first, so prefer the key we were told to use.
+if [ -n "${SECRET_KEY_ID:-}" ]; then
+    debsign_args=("-k${SECRET_KEY_ID}")
+else
+    debsign_args=("-k*@")
+fi
+
+# debsign runs gpg inside the container, where there is no agent to ask for a
+# passphrase, so an unattended protected key needs loopback mode.
+if [ -n "${SECRET_KEY_PASSPHRASE_FILE:-}" ]; then
+    install -m 600 "${SECRET_KEY_PASSPHRASE_FILE}" "${keydir}/passphrase"
+    cat > "${keydir}/gpg-loopback" <<'EOF'
+#!/bin/sh
+exec gpg --batch --pinentry-mode loopback --passphrase-file /keydir/passphrase "$@"
+EOF
+    chmod 755 "${keydir}/gpg-loopback"
+    debsign_args+=("-p/keydir/gpg-loopback")
+fi
+
+echo "[${series} ${package}] signing ${filename}"
+docker run --rm \
+    -v "${outputdir}:/code" \
+    -v "${keydir}:/keydir" \
+    -w /code \
+    "calico-build/${series}" \
+    /bin/sh -c "gpg --quiet --import --batch /keydir/key && debsign ${debsign_args[*]} --no-re-sign ${filename}"
+
+echo "[${series} ${package}] uploading ${filename} to ${ppa}"
+docker run --rm \
+    -v "${outputdir}:/code" \
+    -w /code \
+    "calico-build/${series}" \
+    dput -u "${ppa}" "${filename}"

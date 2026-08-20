@@ -10,6 +10,12 @@ Group:          Applications/Engineering
 
 %define _unpackaged_files_terminate_build 0
 
+# EL 8 and later generate a -debugsource subpackage alongside -debuginfo, which
+# needs the sources the binary was compiled from to be present under the build
+# root.  calicoctl is built elsewhere (see release/packaging), so there are none,
+# and the empty subpackage fails the build.  -debuginfo is still produced.
+%undefine _debugsource_packages
+
 
 %description
 Project Calico is an open source solution for virtual networking in

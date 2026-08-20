@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# Point a staged calico-felix binary at Debian's libpcap soname.
+#
+# Usage: patch-felix-libpcap <stagedir> [version]
+#
+# Felix is built on RHEL/UBI and so links against libpcap.so.1, while Debian
+# still ships libpcap.so.0.8.  Patching the staging copy - rather than the
+# binary the prepare step produced - means the RPM build keeps the pristine
+# binary, which is why RPMs no longer have to be built before debs.
+#
+# FIXME remove this once Debian's libpcap soname catches up.
+
+set -eu -o pipefail
+
+if [ $# -lt 1 ]; then
+    echo >&2 "usage: $(basename "$0") <stagedir> [version]"
+    exit 1
+fi
+
+binary=$1/bin/calico-felix
+
+if [ ! -f "${binary}" ]; then
+    echo >&2 "[error] ${binary} does not exist; did the prepare step run?"
+    exit 1
+fi
+
+patchelf --replace-needed libpcap.so.1 libpcap.so.0.8 "${binary}"

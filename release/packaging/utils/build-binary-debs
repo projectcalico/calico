@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# Build binary .debs from the source packages for one Ubuntu series.
+#
+# Usage: build-binary-debs <series>
+#
+# Runs inside calico-build/<series>, with output/ mounted at /output (override
+# with OUTPUT_DIR).  For each .dsc of that series it unpacks the source package
+# and builds it, so the .deb files land in /output/binaries/<series>/.
+#
+# This validates a source package before Launchpad ever sees it.
+
+set -eu -o pipefail
+
+if [ $# -ne 1 ]; then
+    echo >&2 "usage: $(basename "$0") <series>"
+    exit 1
+fi
+
+series=$1
+outdir=${OUTPUT_DIR:-/output}
+destdir=${outdir}/binaries/${series}
+
+shopt -s nullglob
+dscs=("${outdir}"/*-"${series}".dsc)
+if [ ${#dscs[@]} -eq 0 ]; then
+    echo >&2 "[error] no *-${series}.dsc source packages in ${outdir}"
+    exit 1
+fi
+
+mkdir -p "${destdir}"
+
+for dsc in "${dscs[@]}"; do
+    package=$(basename "${dsc}" .dsc)
+    package=${package%%_*}
+    builddir=${destdir}/${package}
+
+    echo "=== ${series}: building ${package} ==="
+    rm -rf "${builddir}"
+    dpkg-source -x "${dsc}" "${builddir}"
+
+    if ! dpkg-checkbuilddeps "${builddir}/debian/control"; then
+        # The build image is meant to carry every Build-Depends already, so this
+        # is a bug in install-ubuntu-build-deps rather than something to paper
+        # over.  Try to recover anyway, which needs root.
+        echo "[warning] ${package} has unsatisfied build dependencies in this image"
+        if [ "$(id -u)" -eq 0 ]; then
+            (cd "${builddir}" && mk-build-deps -ir -t "apt-get -y -q --no-install-recommends")
+        else
+            echo >&2 "[error] cannot install them as uid $(id -u):" \
+                     "add them to docker-build-images/install-ubuntu-build-deps," \
+                     "or re-run with DOCKER_USER=root to let mk-build-deps do it"
+            exit 1
+        fi
+    fi
+
+    # -b: binary only.  The .debs are written to the parent directory, which is
+    # binaries/<series>/.
+    (cd "${builddir}" && dpkg-buildpackage -b -uc -us)
+done
+
+echo "=== ${series}: binary packages in ${destdir} ==="
+ls -1 "${destdir}"/*.deb

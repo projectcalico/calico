@@ -1,10 +1,20 @@
 # docker-bake.hcl
+#
+# This lives in release/packaging, not in docker-build-images, because the build
+# context is the whole packaging directory.  See .dockerignore for what that
+# context leaves out.
 
 # To use a different arch, define it in an environment variable;
 # for example, `ARCH=ppc64le docker buildx bake`.
 variable "ARCH" {
     default = "amd64"
 }
+
+# The Go release the el8 image installs, so that it can build calico-felix
+# against EL 8's glibc.  Set by mk/images.mk from the repo's GO_VERSION; no
+# default, so an unset value fails the build rather than silently pinning a
+# stale toolchain.
+variable "GO_VERSION" {}
 
 # The default Ubuntu stream
 variable "STREAM" {
@@ -29,18 +39,18 @@ variable "UBUNTU_REPO_OVERRIDE" {
 # everything.
 
 group "default" {
-    targets = ["ubuntu", "centos"]
+    targets = ["ubuntu", "rhel"]
 }
 
-# All centos images
-group "centos" {
-    targets = ["centos7"]
+# All EL images
+group "rhel" {
+    targets = ["el8"]
 }
 
 # All Ubuntu builds - in one big matrix, using one Dockerfile
 target "ubuntu" {
   name = "ubuntu-${STREAM}-${ARCH}"
-  dockerfile = "ubuntu.Dockerfile"
+  dockerfile = "docker-build-images/ubuntu.Dockerfile"
   matrix = {
     STREAM = ["focal", "jammy", "noble"]
     ARCH = ["amd64"]
@@ -53,12 +63,15 @@ target "ubuntu" {
   tags = ["calico-build/${STREAM}"]
 }
 
-# CentOS builds
-target "centos7" {
-  dockerfile = "centos7-build.Dockerfile.${ARCH}"
+# EL builds.  This image both builds the RPMs and builds the calico-felix binary
+# that every package ships - see docker-build-images/el8-build.Dockerfile.
+target "el8" {
+  dockerfile = "docker-build-images/el8-build.Dockerfile"
   args = {
+    ARCH = ARCH
+    GO_VERSION = "${GO_VERSION}"
     UID = UID
     GID = GID
   }
-  tags = ["calico-build/centos7"]
+  tags = ["calico-build/el8"]
 }
