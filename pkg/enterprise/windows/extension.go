@@ -124,9 +124,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 // daemonset configuration (flow/DNS log env, prometheus reporter, trusted DNS
 // servers, the calico log volume, and the prometheus reporter keypair mount).
 func modifyWindows(ri render.Inputs, objs, del []client.Object) ([]client.Object, []client.Object) {
-	if ds, ok := extensions.FindObject[*appsv1.DaemonSet](objs, common.WindowsDaemonSetName); ok {
-		modifyWindowsDaemonSet(ri, ds)
-	}
+	modifyWindowsDaemonSet(ri, extensions.MustFindObject[*appsv1.DaemonSet](objs, common.WindowsDaemonSetName))
 
 	return append(objs, windowsNodeMetricsService(ri)), del
 }

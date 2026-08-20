@@ -49,19 +49,18 @@ const (
 // daemonset configuration (flow/DNS log env, prometheus reporter, BGP metrics
 // readiness check, multi-interface mode, and the calico log volume).
 func modifyNode(ri render.Inputs, objs, del []client.Object) ([]client.Object, []client.Object) {
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, render.CalicoNodeObjectName); ok {
-		role.Rules = append(role.Rules, nodeEnterpriseRules()...)
-	}
+	role := extensions.MustFindObject[*rbacv1.ClusterRole](objs, render.CalicoNodeObjectName)
+	role.Rules = append(role.Rules, nodeEnterpriseRules()...)
 
 	// The Network resource is only available in Enterprise / Cloud at this time.
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, render.CalicoCNIPluginObjectName); ok {
-		role.Rules = append(role.Rules, rbacv1.PolicyRule{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{"networks"},
-			Verbs:     []string{"get"},
-		})
-	}
+	cni := extensions.MustFindObject[*rbacv1.ClusterRole](objs, render.CalicoCNIPluginObjectName)
+	cni.Rules = append(cni.Rules, rbacv1.PolicyRule{
+		APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+		Resources: []string{"networks"},
+		Verbs:     []string{"get"},
+	})
 
+	// The daemonset is queued for deletion, not created, while the CNI finalizer is being removed.
 	if ds, ok := extensions.FindObject[*appsv1.DaemonSet](objs, common.NodeDaemonSetName); ok {
 		modifyNodeDaemonSet(ri, ds)
 	}

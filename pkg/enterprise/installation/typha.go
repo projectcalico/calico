@@ -26,22 +26,21 @@ import (
 )
 
 func modifyTypha(ri render.Inputs, cfg *render.TyphaConfiguration, objs, del []client.Object) ([]client.Object, []client.Object) {
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, render.TyphaClusterRoleName); ok {
-		role.Rules = append(role.Rules, rbacv1.PolicyRule{
-			APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
-			Resources: []string{
-				"bfdconfigurations",
-				"deeppacketinspections",
-				"egressgatewaypolicies",
-				"externalnetworks",
-				"licensekeys",
-				"networks",
-				"packetcaptures",
-				"remoteclusterconfigurations",
-			},
-			Verbs: []string{"get", "list", "watch"},
-		})
-	}
+	role := extensions.MustFindObject[*rbacv1.ClusterRole](objs, render.TyphaClusterRoleName)
+	role.Rules = append(role.Rules, rbacv1.PolicyRule{
+		APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+		Resources: []string{
+			"bfdconfigurations",
+			"deeppacketinspections",
+			"egressgatewaypolicies",
+			"externalnetworks",
+			"licensekeys",
+			"networks",
+			"packetcaptures",
+			"remoteclusterconfigurations",
+		},
+		Verbs: []string{"get", "list", "watch"},
+	})
 
 	if data := installationData(ri).nonClusterHost; data.enabled {
 		objs = addNonClusterHostTypha(cfg, data, objs)
@@ -52,6 +51,7 @@ func modifyTypha(ri render.Inputs, cfg *render.TyphaConfiguration, objs, del []c
 	net := ri.Installation.CalicoNetwork
 	if net != nil && net.MultiInterfaceMode != nil {
 		for _, name := range []string{common.TyphaDeploymentName, common.TyphaDeploymentName + render.TyphaNonClusterHostSuffix} {
+			// The non-cluster-host deployment only renders when that feature is enabled.
 			dep, ok := extensions.FindObject[*appsv1.Deployment](objs, name)
 			if !ok {
 				continue

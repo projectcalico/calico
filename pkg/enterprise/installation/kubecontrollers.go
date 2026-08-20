@@ -106,6 +106,7 @@ func modifyKubeControllersPolicy(ri render.Inputs, objs, del []client.Object) ([
 func modifyKubeControllers(ri render.Inputs, objs, del []client.Object) ([]client.Object, []client.Object) {
 	data := installationData(ri)
 
+	// Nothing is created while the installation is terminating.
 	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, kubecontrollers.KubeControllerRole); ok {
 		role.Rules = append(role.Rules, data.kubeControllerRules...)
 	}
@@ -120,6 +121,7 @@ func modifyKubeControllers(ri render.Inputs, objs, del []client.Object) ([]clien
 		))
 	}
 
+	// The deployment is queued for deletion, not created, when no controllers are enabled.
 	if dp, ok := extensions.FindObject[*appsv1.Deployment](objs, kubecontrollers.KubeController); ok {
 		modifyKubeControllersDeployment(ri, dp, data)
 	}

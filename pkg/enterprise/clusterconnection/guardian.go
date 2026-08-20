@@ -198,17 +198,13 @@ func enterpriseGuardianPolicySpec(gpc *render.GuardianConfiguration) (v3.Network
 func modifyGuardian(ri render.Inputs, cfg *render.GuardianConfiguration, objs, del []client.Object) ([]client.Object, []client.Object) {
 	gc := guardianInputsFrom(cfg)
 
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](objs, render.GuardianClusterRoleName); ok {
-		role.Rules = guardianEnterpriseRules(gc)
-	}
+	role := extensions.MustFindObject[*rbacv1.ClusterRole](objs, render.GuardianClusterRoleName)
+	role.Rules = guardianEnterpriseRules(gc)
 
-	if svc, ok := extensions.FindObject[*corev1.Service](objs, render.GuardianServiceName); ok {
-		svc.Spec.Ports = append(svc.Spec.Ports, guardianEnterpriseServicePorts()...)
-	}
+	svc := extensions.MustFindObject[*corev1.Service](objs, render.GuardianServiceName)
+	svc.Spec.Ports = append(svc.Spec.Ports, guardianEnterpriseServicePorts()...)
 
-	if dep, ok := extensions.FindObject[*appsv1.Deployment](objs, render.GuardianDeploymentName); ok {
-		addGuardianEnterpriseEnv(gc, dep)
-	}
+	addGuardianEnterpriseEnv(gc, extensions.MustFindObject[*appsv1.Deployment](objs, render.GuardianDeploymentName))
 
 	return append(objs,
 		guardianSecretsRole(),
