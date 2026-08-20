@@ -7,7 +7,7 @@
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 | legacy/bpf | 424
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | legacy/bpf | 424
 .argoci/cron/e2e-bpf.yaml | bpf-mini-scale-runs | (scale-test) | -
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 209
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 207
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-calico-cni | bpf/aks-bpf | 212
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-encap | legacy/bpf/bpf-run-matrix-aws-encap | 574
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kops-rhel8-2 | legacy/bpf/bpf-run-matrix-aws-kops-rhel8-2 | 550
@@ -17,7 +17,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 557
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-talos-no-encap-dsr | bpf/bpf-aws | 215
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | bpf/aks-bpf-encap-nobgp | 207
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 216
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 214
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-calico-cni | bpf/eks-bpf-encap-extnode-aws | 205
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-dsr | bpf/bpf-v3crd-extnode | 215
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 574
@@ -111,13 +111,13 @@
 .semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | legacy/bpf | 424
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mini-scale runs / gcp-bpf - mini-scale | (scale-test) | -
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mode switch / gcp-bpf - mode switch | legacy/bpf/bpf-mode-switch-gcp-bpf-mode-switch | 0
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 209
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 207
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ Calico-CNI | bpf/aks-bpf | 212
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap | legacy/bpf/bpf-run-matrix-aws-encap | 574
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS single subnet, dual IP-family | bpf-aws-single-subnet | 557
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS-Talos, no encap, DSR | bpf/bpf-aws | 215
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 207
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 216
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 214
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ calico CNI | bpf/eks-bpf-encap-extnode-aws | 205
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP encap w/ NodeLocal DNSCache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 574
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP, DSR | bpf/bpf-v3crd-extnode | 215
