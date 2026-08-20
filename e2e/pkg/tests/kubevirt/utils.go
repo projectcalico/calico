@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/utils/ptr"
@@ -50,6 +51,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
+	libkubevirt "github.com/projectcalico/calico/libcalico-go/lib/kubevirt"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 )
@@ -829,6 +831,20 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	}
 	Fail(fmt.Sprintf("no third worker node found (node1=%s, node2=%s); need at least 3 schedulable workers for the double-migration eBGP test", node1, node2))
 	return ""
+}
+
+// isKubeVirtInstalled reports whether the kubevirt.io API group is served by
+// the cluster under test. Tests use this to Skip (rather than Fail) on clusters
+// that don't have KubeVirt installed — e.g. when the shared e2e suite runs on a
+// pipeline that doesn't provision KubeVirt. Delegates to libcalico-go's
+// IsKubeVirtInstalled so the detection logic has a single source of truth.
+func isKubeVirtInstalled(f *framework.Framework) bool {
+	GinkgoHelper()
+	disc, err := discovery.NewDiscoveryClientForConfig(f.ClientConfig())
+	Expect(err).NotTo(HaveOccurred(), "failed to create discovery client")
+	installed, err := libkubevirt.IsKubeVirtInstalled(disc)
+	Expect(err).NotTo(HaveOccurred(), "failed to check whether KubeVirt is installed")
+	return installed
 }
 
 // isMockVirtDeployed returns true if the cluster is running MockVirt (simulated
