@@ -90,22 +90,35 @@ func (m ipPortProtoIPSetMember[IPType]) PortNumber() uint16 {
 }
 
 func MakeCIDROrIPOnly(cidr ip.CIDR) CIDROrIPOnlyIPSetMember {
-	if cidr.IsSingleAddress() {
-		return MakeSingleIP(cidr.Addr())
-	}
 	switch cidr := cidr.(type) {
 	case ip.V4CIDR:
-		return cidrIPSetMember[ip.V4CIDR]{
-			cidr: cidr,
-		}
+		return MakeCIDROrIPOnlyV4(cidr)
 	case ip.V6CIDR:
-		return cidrIPSetMember[ip.V6CIDR]{
-			cidr: cidr,
-		}
+		return MakeCIDROrIPOnlyV6(cidr)
 	default:
 		logrus.WithField("cidr", cidr).Panic("Unknown CIDR type.")
 		panic("Unknown CIDR type.")
 	}
+}
+
+// MakeCIDROrIPOnlyV4 / MakeCIDROrIPOnlyV6 are the typed leaf
+// constructors used by callers that already know the CIDR family.
+// They collapse /32 v4 (or /128 v6) into the single-IP member form
+// and otherwise return a typed cidrIPSetMember that preserves the
+// prefix. Calling these directly avoids the ip.CIDR interface
+// dispatch through MakeCIDROrIPOnly.
+func MakeCIDROrIPOnlyV4(cidr ip.V4CIDR) CIDROrIPOnlyIPSetMember {
+	if cidr.IsSingleAddress() {
+		return MakeSingleIPv4(cidr.AddrV4())
+	}
+	return cidrIPSetMember[ip.V4CIDR]{cidr: cidr}
+}
+
+func MakeCIDROrIPOnlyV6(cidr ip.V6CIDR) CIDROrIPOnlyIPSetMember {
+	if cidr.IsSingleAddress() {
+		return MakeSingleIPv6(cidr.AddrV6())
+	}
+	return cidrIPSetMember[ip.V6CIDR]{cidr: cidr}
 }
 
 type CIDROrIPOnlyIPSetMember interface {
@@ -147,6 +160,35 @@ func MakeSingleIP(addr ip.Addr) CIDROrIPOnlyIPSetMember {
 		logrus.WithField("cidr", addr).Panic("Unknown CIDR type.")
 		panic("Unknown CIDR type.")
 	}
+}
+
+// MakeSingleIPv4 / MakeSingleIPv6 are specialised constructors used
+// in hot label-index paths where the address type is known statically
+// at the call site. They avoid the ip.Addr interface boxing that
+// MakeSingleIP would otherwise perform on the argument.
+func MakeSingleIPv4(addr ip.V4Addr) CIDROrIPOnlyIPSetMember {
+	return ipAddrIPSetMember[ip.V4Addr]{addr: addr}
+}
+
+func MakeSingleIPv6(addr ip.V6Addr) CIDROrIPOnlyIPSetMember {
+	return ipAddrIPSetMember[ip.V6Addr]{addr: addr}
+}
+
+// MakeIPPortProtoV4 / MakeIPPortProtoV6 are the specialised versions of
+// MakeIPPortProto for callers that already know the address type. They
+// avoid the ip.Addr interface boxing.
+func MakeIPPortProtoV4(addr ip.V4Addr, port uint16, proto Protocol) IPSetMember {
+	if port == 0 && proto == ProtocolNone {
+		return MakeSingleIPv4(addr)
+	}
+	return ipPortProtoIPSetMember[ip.V4Addr]{addr: addr, port: port, proto: proto}
+}
+
+func MakeIPPortProtoV6(addr ip.V6Addr, port uint16, proto Protocol) IPSetMember {
+	if port == 0 && proto == ProtocolNone {
+		return MakeSingleIPv6(addr)
+	}
+	return ipPortProtoIPSetMember[ip.V6Addr]{addr: addr, port: port, proto: proto}
 }
 
 type ipAddrIPSetMember[AddrType ip.Addr] struct {
