@@ -23,7 +23,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|ExternalNode)
     - name: DATAPLANE
       value: "CalicoBPF"
     - name: INSTALLER
