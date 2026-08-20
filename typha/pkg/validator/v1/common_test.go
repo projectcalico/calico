@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	api "github.com/projectcalico/calico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/scope"
-	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
+	validator "github.com/projectcalico/calico/typha/pkg/validator/v1"
 )
 
 var _ = Describe("Test ValidateMetadataIDsAssigned function", func() {
