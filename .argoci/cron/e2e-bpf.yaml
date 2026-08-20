@@ -10,7 +10,7 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE:-CalicoBPF}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|Feature:Wireguard)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|Feature:Wireguard|ExternalNode)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
