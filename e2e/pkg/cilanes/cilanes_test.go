@@ -22,7 +22,7 @@ import (
 
 const argoFixture = `
 globalPrologue: |
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=default}"
+  export E2E_TEST_CONFIG="${E2E_TEST_CONFIG:-e2e/config/iptables/xtables.yaml}"
   export INSTALLER="${INSTALLER:-operator}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
   export TEST_TYPE="${OTHER_TYPE:-nonsense}"
@@ -30,18 +30,10 @@ steps:
   - name: inherits-default
     commands: |
       .argoci/scripts/body_standard.sh
-  - name: overrides-flags
-    env:
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=special
-    commands: |
-      .argoci/scripts/body_standard.sh
-  - name: uses-config
+  - name: overrides-config
     env:
       - name: E2E_TEST_CONFIG
         value: e2e/config/vpp/eks.yaml
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=ignored
     commands: |
       .argoci/scripts/body_standard.sh
   - name: openstack
@@ -59,10 +51,10 @@ steps:
         env:
           - name: CNI
             value: calico
-      - name: focused
+      - name: encap
         env:
-          - name: K8S_E2E_FLAGS
-            value: --ginkgo.focus=matrixed
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/xtables-encap-nobgp.yaml
     commands: |
       .argoci/scripts/body_standard.sh
 `
@@ -79,42 +71,35 @@ func TestParseArgo(t *testing.T) {
 	}
 
 	inherited := byName["inherits-default"]
-	Expect(inherited.Flags).To(Equal("--ginkgo.focus=default"))
-	Expect(inherited.PipelineDefault).To(BeTrue())
+	Expect(inherited.Config).To(Equal("e2e/config/iptables/xtables.yaml"))
 	Expect(inherited.TestType).To(Equal("k8s-e2e"))
 	Expect(inherited.Area).To(Equal("iptables.yml"))
 	Expect(inherited.RunsE2EBinary()).To(BeTrue())
 
 	// The prologue's TEST_TYPE defaults off a different variable, so it does not
 	// resolve to a value the parser can use.
-	Expect(byName["overrides-flags"].PipelineDefault).To(BeFalse())
-	Expect(byName["overrides-flags"].Selection()).To(Equal("flags:--ginkgo.focus=special"))
-
-	// A config wins over flags, matching run_tests.sh.
-	Expect(byName["uses-config"].Selection()).To(Equal("config:e2e/config/vpp/eks.yaml"))
+	Expect(byName["overrides-config"].Config).To(Equal("e2e/config/vpp/eks.yaml"))
 
 	openstack := byName["openstack"]
 	Expect(openstack.TestType).To(Equal("openstack-e2e"))
 	Expect(openstack.RunsE2EBinary()).To(BeFalse())
 
 	// The migration job runs the suite twice, so it resolves to two lanes.
-	Expect(byName["migration"].Flags).To(Equal("--ginkgo.focus=default"))
-	Expect(byName["migration"].PipelineDefault).To(BeTrue())
-	Expect(byName["migration [pre-migration]"].Flags).To(Equal(flannelMigrationPreFlags))
-	Expect(byName["migration [pre-migration]"].PipelineDefault).To(BeFalse())
+	Expect(byName["migration"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+	Expect(byName["migration [pre-migration]"].Config).To(Equal(flannelMigrationPreConfig))
 
 	// The CNI axis leaves the selection alone, so its entries collapse into the
 	// unsuffixed step.
 	Expect(byName).To(HaveKey("matrix-step"))
-	Expect(byName["matrix-step"].Flags).To(Equal("--ginkgo.focus=default"))
-	Expect(byName["matrix-step [focused]"].Flags).To(Equal("--ginkgo.focus=matrixed"))
+	Expect(byName["matrix-step"].Config).To(Equal("e2e/config/iptables/xtables.yaml"))
+	Expect(byName["matrix-step [encap]"].Config).To(Equal("e2e/config/iptables/xtables-encap-nobgp.yaml"))
 }
 
 const semaphoreFixture = `
 global_job_config:
   env_vars:
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=default
+    - name: E2E_TEST_CONFIG
+      value: e2e/config/nftables/xtables.yaml
     - name: FUNCTIONAL_AREA
       value: nftables.yml
 blocks:
@@ -148,8 +133,8 @@ blocks:
       jobs:
         - name: matrixed
           matrix:
-            - env_var: K8S_E2E_FLAGS
-              values: ["--ginkgo.focus=one"]
+            - env_var: E2E_TEST_CONFIG
+              values: ["e2e/config/nftables/xtables.yaml"]
           commands:
             - body_standard.sh
 `
@@ -165,16 +150,16 @@ func TestParseSemaphore(t *testing.T) {
 		byName[l.Name] = l
 	}
 
-	Expect(byName["Block one / inherits"].PipelineDefault).To(BeTrue())
-	Expect(byName["Block one / configured"].Selection()).To(Equal("config:e2e/config/nftables/eks.yaml"))
+	Expect(byName["Block one / inherits"].Config).To(Equal("e2e/config/nftables/xtables.yaml"))
+	Expect(byName["Block one / configured"].Config).To(Equal("e2e/config/nftables/eks.yaml"))
 	Expect(byName["Block one / inherits"].Area).To(Equal("nftables.yml"))
 
 	// A non-selection axis leaves the job as one lane.
-	Expect(byName["Block one / matrixed"].Flags).To(Equal("--ginkgo.focus=default"))
+	Expect(byName["Block one / matrixed"].Config).To(Equal("e2e/config/nftables/xtables.yaml"))
 
 	// No pipeline varies the selection by matrix, so the parser refuses to guess.
 	_, err = parseSemaphore("pipeline.yml", []byte(semaphoreSelectionMatrix))
-	Expect(err).To(MatchError(ContainSubstring("matrix on K8S_E2E_FLAGS")))
+	Expect(err).To(MatchError(ContainSubstring("matrix on E2E_TEST_CONFIG")))
 }
 
 func TestSelectionArgs(t *testing.T) {
@@ -183,10 +168,6 @@ func TestSelectionArgs(t *testing.T) {
 	args, err := Lane{Config: "e2e/config/vpp/eks.yaml"}.SelectionArgs("/repo")
 	Expect(err).NotTo(HaveOccurred())
 	Expect(args).To(Equal([]string{"--calico.test-config=/repo/e2e/config/vpp/eks.yaml"}))
-
-	args, err = Lane{Flags: "--ginkgo.focus=a --ginkgo.skip=b"}.SelectionArgs("/repo")
-	Expect(err).NotTo(HaveOccurred())
-	Expect(args).To(Equal([]string{"--ginkgo.focus=a", "--ginkgo.skip=b"}))
 
 	_, err = Lane{Name: "empty"}.SelectionArgs("/repo")
 	Expect(err).To(HaveOccurred())
