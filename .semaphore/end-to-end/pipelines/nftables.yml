@@ -23,7 +23,7 @@ global_job_config:
   env_vars:
     # The skips for sig-* are tests that are not relevant to OSS Calico
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|Feature:Wireguard)
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
