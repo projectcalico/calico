@@ -11,7 +11,7 @@ globalPrologue: |
   export ENABLE_AUTOHEP="${ENABLE_AUTOHEP:-true}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-nftables.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard|ExternalNode)}"
   export K8S_VERSION="${K8S_VERSION:-stable-3}"
   export KUBE_PROXY_MODE="${KUBE_PROXY_MODE:-nftables}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
