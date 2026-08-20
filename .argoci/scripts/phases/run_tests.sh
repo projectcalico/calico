@@ -20,6 +20,13 @@ for _var in BZ_LOCAL_DIR BZ_LOGS_DIR HOME REPORT_DIR TEST_TYPE; do
   if [[ -z "${!_var}" ]]; then echo "[ERROR] ${_var} is required but not set"; exit 1; fi
 done
 
+# This branch runs the enterprise k8s-e2e suite, which compiles in Egress Gateway specs
+# that need an operator CRD Calico does not ship. Ginkgo ORs repeated --skip values.
+if [[ -n "${K8S_E2E_FLAGS:-}" ]]; then
+  K8S_E2E_FLAGS="${K8S_E2E_FLAGS} --ginkgo.skip=Feature:EgressGateway"
+  export K8S_E2E_FLAGS
+fi
+
 if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
   # Build the e2e binary from the local source tree.
   echo "[INFO] building e2e binary from local source..."
