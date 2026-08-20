@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -48,11 +49,12 @@ const (
 )
 
 type connectionTester struct {
-	f            *framework.Framework
-	servers      map[string]*Server
-	clients      map[string]*Client
-	expectations map[string]*Expectation
-	deployed     bool
+	f              *framework.Framework
+	servers        map[string]*Server
+	clients        map[string]*Client
+	expectations   map[string]*Expectation
+	deployed       bool
+	executeTimeout time.Duration
 }
 
 type ConnectionTester interface {
@@ -64,6 +66,7 @@ type ConnectionTester interface {
 	StopClient(client *Client)
 
 	// Methods for one-shot execution.
+	WithTimeout(d time.Duration)
 	ExpectSuccess(client *Client, targets ...Target)
 	ExpectFailure(client *Client, targets ...Target)
 	Execute()
@@ -106,6 +109,12 @@ func (c *connectionTester) ResetExpectations() {
 		framework.Fail(fmt.Sprintf("ResetExpectations() called before all expectations were tested: %v", err), 1)
 	}
 	c.expectations = make(map[string]*Expectation)
+	c.executeTimeout = 0
+}
+
+// WithTimeout sets the timeout for the next Execute() call.
+func (c *connectionTester) WithTimeout(d time.Duration) {
+	c.executeTimeout = d
 }
 
 func (c *connectionTester) Deploy() {
@@ -399,7 +408,11 @@ func (c *connectionTester) Execute() {
 	// Context to control overall timeout for all connections. After it times out, we'll forcefully
 	// terminate any remaining connections. This avoids deadlocking the test waiting for results if
 	// something goes wrong.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	timeout := c.executeTimeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	// Launch all of the connections in parallel. We'll wait for them all to finish at the end and report on success / failure.
@@ -544,7 +557,16 @@ func (c *connectionTester) command(t Target) string {
 		// Linux.
 		switch t.GetProtocol() {
 		case TCP:
-			cmd = fmt.Sprintf("wget -qO- -T 5 %s", t.Destination())
+			cmd = fmt.Sprintf("wget -qO- -T 5 http://%s", t.Destination())
+		case TCPConnect:
+			host, port, err := net.SplitHostPort(t.Destination())
+			if err != nil {
+				framework.Failf("TCPConnect target must have a port: %v", err)
+			}
+			// `-z` zero-I/O mode is supported by both BusyBox (Alpine) and
+			// OpenBSD (Netshoot) nc, but BusyBox's `nc -h` doesn't advertise
+			// it. Don't "fix" this to nc -vz; -v isn't BusyBox-compatible.
+			cmd = fmt.Sprintf("nc -w 3 -z %s %s", host, port)
 		case ICMP:
 			cmd = fmt.Sprintf("ping -c 5 %s", t.Destination())
 		case HTTP:
