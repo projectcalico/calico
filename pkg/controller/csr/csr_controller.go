@@ -20,40 +20,34 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
-	"reflect"
 	"strings"
 	"time"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
+	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/monitor"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
-	rmonitor "github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
-	authv1 "k8s.io/api/authorization/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -98,70 +92,40 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return err
 	}
 
-	c, err := ctrlruntime.NewController(controllerName, mgr, controller.Options{Reconciler: reconciler})
+	c, err := ctrlruntime.NewController(controllerName, mgr, ctrl.Options{Reconciler: reconciler})
 	if err != nil {
 		return err
 	}
 
-	if opts.Variant.IsEnterprise() {
-		if err = c.WatchObject(&operatorv1.Monitor{}, &handler.EnqueueRequestForObject{}); err != nil {
-			return fmt.Errorf("monitor-controller failed to watch primary resource: %w", err)
-		}
+	if err = opts.Extensions.CSR().Watches(c); err != nil {
+		return fmt.Errorf("csr-controller failed to set up extension watches: %w", err)
 	}
 
 	if err = c.WatchObject(&operatorv1.Installation{}, &handler.EnqueueRequestForObject{}); err != nil {
-		return fmt.Errorf("monitor-controller failed to watch primary resource: %w", err)
+		return fmt.Errorf("csr-controller failed to watch Installation: %w", err)
 	}
 
 	return utils.AddCSRWatchWithRelevancyFn(c, relevantCSR)
 }
 
-type tlsAsset struct {
-	serviceaccountName      string
-	serviceaccountNamespace string
-	validDNSNames           []string
-}
-
 func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (reconcile.Reconciler, error) {
+	// Looks up HostEndpoints with a spec.node field selector. Serving that from the
+	// manager's cache would need a registered field index and an informer holding every
+	// HostEndpoint in the cluster, for a lookup that only ever wants one.
 	calicoClient, err := calicoclient.NewForConfig(mgr.GetConfig())
 	if err != nil {
 		return nil, err
 	}
 
 	return &reconcileCSR{
-		client:           mgr.GetClient(),
-		clientset:        opts.K8sClientset,
-		calicoClient:     calicoClient,
-		scheme:           mgr.GetScheme(),
-		provider:         opts.DetectedProvider,
-		clusterDomain:    opts.ClusterDomain,
-		allowedTLSAssets: allowedAssets(opts.ClusterDomain),
-		variant:          opts.Variant,
+		client:        mgr.GetClient(),
+		clientset:     opts.K8sClientset,
+		calicoClient:  calicoClient,
+		scheme:        mgr.GetScheme(),
+		provider:      opts.DetectedProvider,
+		clusterDomain: opts.ClusterDomain,
+		extensions:    opts.Extensions,
 	}, nil
-}
-
-// allowedAssets To prevent any abuse of this controller for obtaining a fraudulent certificate, this controller
-// will only approve a pre-defined list of assets, based on their 'requestor', dns names and namespaces.
-// Some of the information a CSR will contain:
-//   - Name: The name is based on the secret name + a pod suffix. We use the secret name as the key to index the map.
-//   - Requestor: this is the user identity tied to the request. This will be matched against the sa + namespace.
-//   - DNS names: these will be checked against pre-defined dns names for that specific secret name.
-//
-// The combination of this information (among other checks) will help us reject/approve requests.
-func allowedAssets(clusterDomain string) map[string]tlsAsset {
-	return map[string]tlsAsset{
-		rmonitor.PrometheusServerTLSSecretName: {
-			serviceaccountName:      rmonitor.PrometheusServiceAccountName,
-			serviceaccountNamespace: rmonitor.TigeraPrometheusObjectName,
-			validDNSNames:           monitor.PrometheusTLSServerDNSNames(clusterDomain),
-		},
-		// The node-certs-noncluster-host signing request originates from non-cluster hosts.
-		// To accommodate our customers' use of different non-cluster service accounts,
-		// we will perform a SubjectAccessReview to validate the requestor's permission.
-		render.NodeTLSSecretNameNonClusterHost: {
-			validDNSNames: []string{render.FelixCommonName + render.TyphaNonClusterHostSuffix},
-		},
-	}
 }
 
 // blank assignment to verify that ReconcileCompliance implements reconcile.Reconciler
@@ -171,14 +135,13 @@ var _ reconcile.Reconciler = &reconcileCSR{}
 // conditions for signer name "tigera.io/operator-signer". This is the controller that monitors, approves and signs
 // these CSRs. It will only sign requests that are pre-defined and reject others in order to avoid malicious requests.
 type reconcileCSR struct {
-	client           client.Client
-	clientset        kubernetes.Interface
-	calicoClient     calicoclient.Interface
-	scheme           *runtime.Scheme
-	provider         operatorv1.Provider
-	clusterDomain    string
-	allowedTLSAssets map[string]tlsAsset
-	variant          operatorv1.ProductVariant
+	client        client.Client
+	clientset     kubernetes.Interface
+	calicoClient  calicoclient.Interface
+	scheme        *runtime.Scheme
+	provider      operatorv1.Provider
+	clusterDomain string
+	extensions    extensions.Extensions
 }
 
 func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -194,27 +157,20 @@ func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request)
 		return reconcile.Result{}, err
 	}
 
-	needsCSRRole := instance.Spec.CertificateManagement != nil
-	if !needsCSRRole && r.variant.IsEnterprise() {
-		monitorCR := &operatorv1.Monitor{}
-		if err := r.client.Get(ctx, utils.DefaultEnterpriseInstanceKey, monitorCR); err != nil {
-			if apierrors.IsNotFound(err) {
-				return reconcile.Result{}, nil
-			}
-			return reconcile.Result{}, err
-		}
-		needsCSRRole = monitorCR.Spec.ExternalPrometheus != nil
-
-		// Check whether the non-cluster host feature is enabled.
-		// Non-cluster hosts generate CSRs to establish mTLS connections with the cluster.
-		if !needsCSRRole {
-			nonclusterhost, err := eutils.GetNonClusterHost(ctx, r.client)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			needsCSRRole = nonclusterhost != nil
-		}
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{Installation: &instance.Spec, ClusterDomain: r.clusterDomain},
+		Client:       r.client,
+		K8sClientset: r.clientset,
+		CalicoClient: r.calicoClient,
 	}
+	ci, _, err := r.extensions.CSR().ExtendInputs(ctx, ci)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	csrData := render.CSRDataFromInputs(ci.RenderInputs)
+
+	needsCSRRole := instance.Spec.CertificateManagement != nil || csrData.RequiresSigningRole
 
 	componentHandler := utils.NewComponentHandler(log, r.client, r.scheme, instance)
 	var passthrough render.Component
@@ -253,17 +209,9 @@ func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request)
 
 		reqLogger.V(5).Info("Inspecting CSR with name : %v.", csr.Name)
 		var certificateTemplate *x509.Certificate
-		var err error
-		if v, ok := csr.Labels["nonclusterhost.tigera.io/hostname"]; ok {
-			var hep *v3.HostEndpoint
-			if hep, err = r.getHostEndpoint(ctx, v); err == nil {
-				certificateTemplate, err = validate(r.clientset, &csr, hep, r.allowedTLSAssets)
-			}
-		} else {
-			var pod *corev1.Pod
-			if pod, err = r.getPod(ctx, &csr); err == nil {
-				certificateTemplate, err = validate(r.clientset, &csr, pod, r.allowedTLSAssets)
-			}
+		subject, err := r.subject(ctx, &csr, csrData.ResolveSubject)
+		if err == nil {
+			certificateTemplate, err = validate(ctx, &csr, subject, csrData.AllowedAssets)
 		}
 
 		if err != nil {
@@ -310,8 +258,20 @@ func (r *reconcileCSR) Reconcile(ctx context.Context, request reconcile.Request)
 	return reconcile.Result{}, nil
 }
 
-type PodOrHostEndpoint interface {
-	*corev1.Pod | *v3.HostEndpoint
+// subject identifies the workload behind a CSR, deferring to the variant for
+// requests that no pod issued.
+func (r *reconcileCSR) subject(ctx context.Context, csr *certificatesv1.CertificateSigningRequest, resolve render.CSRSubjectResolver) (*render.CSRSubject, error) {
+	pod, err := r.getPod(ctx, csr)
+	if err != nil {
+		return nil, err
+	}
+	if pod != nil {
+		return &render.CSRSubject{Name: pod.Name, IP: pod.Status.PodIP}, nil
+	}
+	if resolve == nil {
+		return nil, nil
+	}
+	return resolve(ctx, csr)
 }
 
 // validate Criteria include:
@@ -322,27 +282,16 @@ type PodOrHostEndpoint interface {
 // - Verify that the CSR was not previously denied or failed.
 // - Verify that the public key matches the signature on the CSR for the provider algorithm.
 // - Key usages are fixed, so the CSR won't be able to affect these settings.
-func validate[T PodOrHostEndpoint](
-	clientset kubernetes.Interface,
+func validate(
+	ctx context.Context,
 	csr *certificatesv1.CertificateSigningRequest,
-	obj T,
-	allowedTLSAssets map[string]tlsAsset,
+	subject *render.CSRSubject,
+	allowedTLSAssets map[string]render.TLSAsset,
 ) (*x509.Certificate, error) {
-	iv := reflect.ValueOf(obj)
-	if !iv.IsValid() || iv.IsNil() {
+	if subject == nil {
 		return nil, fmt.Errorf("invalid: no object can be associated with CSR %s", csr.Name)
 	}
-
-	var expectedName, expectedIP string
-	switch o := any(obj).(type) {
-	case *corev1.Pod:
-		expectedName = o.Name
-		expectedIP = o.Status.PodIP
-	case *v3.HostEndpoint:
-		expectedName = o.Spec.Node
-	default:
-		return nil, fmt.Errorf("invalid: unexpected type %T", obj)
-	}
+	expectedName, expectedIP := subject.Name, subject.IP
 
 	firstBlock, restBlocks := pem.Decode(csr.Spec.Request)
 	if firstBlock == nil {
@@ -375,40 +324,20 @@ func validate[T PodOrHostEndpoint](
 	}
 
 	// Validate whether the requestor of the CSR is registered for the given CSR
-	if asset.serviceaccountNamespace != "" && asset.serviceaccountName != "" {
-		if fmt.Sprintf("system:serviceaccount:%s:%s", asset.serviceaccountNamespace, asset.serviceaccountName) != csr.Spec.Username {
-			return nil, fmt.Errorf("invalid requestor %s for CSR with name %s", csr.Spec.Username, csr.Name)
-		}
-	} else {
-		// This CSR originates from non-cluster hosts. We allow multiple service accounts for different groups
-		// of non-cluster hosts. To ensure proper access control, we need to validate the requestor's permission.
-		review := &authv1.SubjectAccessReview{
-			Spec: authv1.SubjectAccessReviewSpec{
-				User:   csr.Spec.Username,
-				Groups: csr.Spec.Groups,
-				UID:    csr.Spec.UID,
-				Extra:  convertExtraValue(csr.Spec.Extra),
-				ResourceAttributes: &authv1.ResourceAttributes{
-					Group:       "certificates.tigera.io",
-					Resource:    "certificatesigningrequests",
-					Subresource: "common-name",
-					Verb:        "create",
-					Name:        render.TyphaCommonName + render.TyphaNonClusterHostSuffix,
-				},
-			},
-		}
-
-		if allowed, err := performSubjectAccessReview(clientset, review); err != nil {
+	if asset.Authorize != nil {
+		if allowed, err := asset.Authorize(ctx, csr); err != nil {
 			return nil, err
 		} else if !allowed {
 			return nil, fmt.Errorf("authorization failed: user %s is not allowed to create CSR %s", csr.Spec.Username, csr.Name)
 		}
+	} else if fmt.Sprintf("system:serviceaccount:%s:%s", asset.ServiceAccountNamespace, asset.ServiceAccountName) != csr.Spec.Username {
+		return nil, fmt.Errorf("invalid requestor %s for CSR with name %s", csr.Spec.Username, csr.Name)
 	}
 
 	// Validate whether the DNS names are permitted for the request.
 	for _, name := range append(certificateRequest.DNSNames, certificateRequest.Subject.CommonName) {
 		var found bool
-		for _, valid := range asset.validDNSNames {
+		for _, valid := range asset.ValidDNSNames {
 			if valid == name {
 				found = true
 				break
@@ -449,24 +378,6 @@ func validate[T PodOrHostEndpoint](
 		DNSNames:    certificateRequest.DNSNames,
 		IPAddresses: certificateRequest.IPAddresses,
 	}, nil
-}
-
-func convertExtraValue(extra map[string]certificatesv1.ExtraValue) map[string]authv1.ExtraValue {
-	res := make(map[string]authv1.ExtraValue)
-	for k, v := range extra {
-		res[k] = authv1.ExtraValue(v)
-	}
-	return res
-}
-
-func performSubjectAccessReview(clientset kubernetes.Interface, review *authv1.SubjectAccessReview) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.TODO(), 10*time.Second)
-	defer cancel()
-	result, err := clientset.AuthorizationV1().SubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
-	if err != nil {
-		return false, err
-	}
-	return result.Status.Allowed, nil
 }
 
 // getPod fetches the pod that issued a CSR based on the information in the CSR.
@@ -510,22 +421,4 @@ func (r *reconcileCSR) getPod(ctx context.Context, csr *certificatesv1.Certifica
 	}
 
 	return nil, nil
-}
-
-func (r *reconcileCSR) getHostEndpoint(ctx context.Context, hostname string) (*v3.HostEndpoint, error) {
-	if hostname == "" {
-		return nil, errors.New("hostname can not be empty")
-	}
-
-	hepList, err := r.calicoClient.ProjectcalicoV3().HostEndpoints().List(ctx, metav1.ListOptions{FieldSelector: fmt.Sprintf("spec.node=%s", hostname)})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if len(hepList.Items) == 0 {
-		return nil, nil
-	}
-	return &hepList.Items[0], nil
 }

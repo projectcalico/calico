@@ -23,12 +23,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"net"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	authv1 "k8s.io/api/authorization/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -36,23 +36,94 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/common"
+	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/monitor"
 	"github.com/tigera/operator/pkg/controller/status"
+	"github.com/tigera/operator/pkg/ctrlruntime"
 	ctrlrclient "github.com/tigera/operator/pkg/ctrlruntime/client"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
+
+// stubExtension contributes the signable assets, standing in for whatever a variant adds.
+type stubExtension struct {
+	extensions.CSRExtension
+	needsRole bool
+}
+
+func (s stubExtension) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
+	ci.RenderInputs.Extension = render.CSRData{
+		AllowedAssets:       stubAssets(),
+		RequiresSigningRole: s.needsRole,
+		ResolveSubject:      stubSubjectResolver,
+	}
+	return ci, nil, nil
+}
+
+func (s stubExtension) Watches(ctrlruntime.Controller) error {
+	return nil
+}
+
+func stubAssets() map[string]render.TLSAsset {
+	return map[string]render.TLSAsset{
+		stubSecretName: {
+			ServiceAccountName:      stubServiceAccount,
+			ServiceAccountNamespace: stubNamespace,
+			ValidDNSNames:           stubDNSNames,
+		},
+		stubAuthorizedSecretName: {
+			ValidDNSNames: []string{stubAuthorizedDNSName},
+			Authorize: func(context.Context, *certificatesv1.CertificateSigningRequest) (bool, error) {
+				return stubAuthorizeAllowed, nil
+			},
+		},
+	}
+}
+
+// stubSubjectResolver stands in for a variant that recognizes requests no pod issued.
+func stubSubjectResolver(_ context.Context, csr *certificatesv1.CertificateSigningRequest) (*render.CSRSubject, error) {
+	name, ok := csr.Labels[stubSubjectLabel]
+	if !ok {
+		return nil, nil
+	}
+	if name == "" {
+		return nil, errors.New("subject can not be empty")
+	}
+	return &render.CSRSubject{Name: name}, nil
+}
+
+func stubExtensions(needsRole bool) extensions.Extensions {
+	return extensions.New(extensions.Set{CSR: stubExtension{needsRole: needsRole}})
+}
+
+const (
+	stubSecretName     = "stub-server-tls"
+	stubServiceAccount = "stub-server"
+	stubNamespace      = "stub-ns"
+	stubPodName        = "stub-server-0"
+
+	// The stub-authorized asset stands in for one that any of several service
+	// accounts may request, so the variant authorizes it instead.
+	stubAuthorizedSecretName = "stub-authorized-tls"
+	stubAuthorizedDNSName    = "stub-authorized"
+	stubSubjectLabel         = "stub.tigera.io/subject"
+	stubSubjectName          = "stub-subject"
+)
+
+// stubAuthorizeAllowed is the verdict the stub asset's authorizer returns.
+var stubAuthorizeAllowed = true
+
+var stubDNSNames = []string{"stub-server", "stub-server.stub-ns", "stub-server.stub-ns.svc", "stub-server.stub-ns.svc.cluster.local"}
 
 var _ = Describe("CSR controller tests", func() {
 	var (
@@ -88,24 +159,19 @@ var _ = Describe("CSR controller tests", func() {
 			},
 		}
 		Expect(cli.Create(ctx, installation)).NotTo(HaveOccurred())
-		Expect(cli.Create(ctx, &operatorv1.Monitor{
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-			Spec:       operatorv1.MonitorSpec{ExternalPrometheus: &operatorv1.ExternalPrometheus{Namespace: "default"}},
-		})).NotTo(HaveOccurred())
 		certificateManager, err = certificatemanager.Create(cli, &installation.Spec, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cli.Create(ctx, certificateManager.KeyPair().Secret(common.OperatorNamespace()))).NotTo(HaveOccurred())
 		mockStatus = &status.MockStatus{}
 		mockStatus.On("OnCRFound").Return()
 		r = reconcileCSR{
-			client:           cli,
-			clientset:        clientset,
-			calicoClient:     calicoClientset,
-			scheme:           scheme,
-			provider:         operatorv1.ProviderNone,
-			clusterDomain:    dns.DefaultClusterDomain,
-			allowedTLSAssets: allowedAssets(dns.DefaultClusterDomain),
-			variant:          operatorv1.CalicoEnterprise,
+			client:        cli,
+			clientset:     clientset,
+			calicoClient:  calicoClientset,
+			scheme:        scheme,
+			provider:      operatorv1.ProviderNone,
+			clusterDomain: dns.DefaultClusterDomain,
+			extensions:    stubExtensions(true),
 		}
 	})
 
@@ -172,15 +238,19 @@ var _ = Describe("CSR controller tests", func() {
 	})
 
 	DescribeTable("csr validation for pods", func(csr *certificatesv1.CertificateSigningRequest, pod *corev1.Pod, expectError, expectRelevant bool) {
-		certificate, err := validate(clientset, csr, pod, allowedAssets(dns.DefaultClusterDomain))
+		var subject *render.CSRSubject
+		if pod != nil {
+			subject = &render.CSRSubject{Name: pod.Name, IP: pod.Status.PodIP}
+		}
+		certificate, err := validate(ctx, csr, subject, stubAssets())
 		if expectError {
 			Expect(err).To(HaveOccurred())
 		} else if expectRelevant {
 			Expect(relevantCSR(csr)).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(certificate.ExtKeyUsage).To(Equal(extKeyUsage))
-			Expect(certificate.DNSNames).To(Equal(monitor.PrometheusTLSServerDNSNames(dns.DefaultClusterDomain)))
-			Expect(certificate.Subject.CommonName).To(Equal(monitor.PrometheusTLSServerDNSNames(dns.DefaultClusterDomain)[0]))
+			Expect(certificate.DNSNames).To(Equal(stubDNSNames))
+			Expect(certificate.Subject.CommonName).To(Equal(stubDNSNames[0]))
 			Expect(certificate.IPAddresses).To(Equal([]net.IP{net.ParseIP(pod.Status.PodIP).To4()}))
 			Expect(certificate.IsCA).To(BeFalse())
 		} else {
@@ -200,39 +270,33 @@ var _ = Describe("CSR controller tests", func() {
 		Entry("irrelevant signer name", invalidPodCSR(invalidX509CR(), validPod(), invalidSignername), validPod(), false, false),
 	)
 
-	DescribeTable("csr validation for non-cluster hosts", func(csr *certificatesv1.CertificateSigningRequest, hep *v3.HostEndpoint, expectError, expectRelevant, subjectAccessReviewAllowed bool) {
-		clientset.PrependReactor("create", "subjectaccessreviews", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
-			return true, &authv1.SubjectAccessReview{
-				Status: authv1.SubjectAccessReviewStatus{
-					Allowed: subjectAccessReviewAllowed,
-				},
-			}, nil
-		})
-		certificate, err := validate(clientset, csr, hep, allowedAssets(dns.DefaultClusterDomain))
+	DescribeTable("csr validation for subjects the variant authorizes", func(csr *certificatesv1.CertificateSigningRequest, subject *render.CSRSubject, expectError, expectRelevant, authorized bool) {
+		stubAuthorizeAllowed = authorized
+		certificate, err := validate(ctx, csr, subject, stubAssets())
 		if expectError {
 			Expect(err).To(HaveOccurred())
 		} else if expectRelevant {
 			Expect(relevantCSR(csr)).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certificate.ExtKeyUsage).To(Equal(extKeyUsage))
-			Expect(certificate.DNSNames).To(Equal([]string{"typha-client-noncluster-host"}))
-			Expect(certificate.Subject.CommonName).To(Equal("typha-client-noncluster-host"))
+			Expect(certificate.DNSNames).To(Equal([]string{stubAuthorizedDNSName}))
+			Expect(certificate.Subject.CommonName).To(Equal(stubAuthorizedDNSName))
 			Expect(certificate.IsCA).To(BeFalse())
 		} else {
 			Expect(relevantCSR(csr)).To(BeFalse())
 		}
 	},
-		Entry("valid CSR / happy flow", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), validHostEndpoint(), false, true, true),
-		Entry("valid CSR / no hep", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), nil, true, true, true),
-		Entry("valid CSR / subject access review denied", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), validHostEndpoint(), true, true, false),
-		Entry("unrecognized csr name", invalidNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint(), invalidName), validHostEndpoint(), true, true, true),
-		Entry("invalid certificate request", invalidNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint(), invalidRequest), validHostEndpoint(), true, true, true),
-		Entry("previously denied csr", invalidNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint(), invalidDenied), validHostEndpoint(), false, false, true),
-		Entry("previously failed csr", invalidNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint(), invalidFailed), validHostEndpoint(), false, false, true),
-		Entry("bad DNS names in x509 certificate request", invalidNonClusterHostCSR(invalidX509CR(invalidDNSNames), validHostEndpoint()), validHostEndpoint(), true, true, true),
-		Entry("bad CN in x509 certificate request", invalidNonClusterHostCSR(invalidX509CR(invalidCN), validHostEndpoint()), validHostEndpoint(), true, true, true),
-		Entry("bad IP in x509 certificate request", invalidNonClusterHostCSR(invalidX509CR(invalidIP), validHostEndpoint()), validHostEndpoint(), true, true, true),
-		Entry("irrelevant signer name", invalidNonClusterHostCSR(invalidX509CR(), validHostEndpoint(), invalidSignername), validHostEndpoint(), false, false, true),
+		Entry("valid CSR / happy flow", validAuthorizedCSR(validAuthorizedX509CR()), stubSubject(), false, true, true),
+		Entry("valid CSR / no subject", validAuthorizedCSR(validAuthorizedX509CR()), nil, true, true, true),
+		Entry("valid CSR / requestor not authorized", validAuthorizedCSR(validAuthorizedX509CR()), stubSubject(), true, true, false),
+		Entry("unrecognized csr name", invalidAuthorizedCSR(validAuthorizedX509CR(), invalidName), stubSubject(), true, true, true),
+		Entry("invalid certificate request", invalidAuthorizedCSR(validAuthorizedX509CR(), invalidRequest), stubSubject(), true, true, true),
+		Entry("previously denied csr", invalidAuthorizedCSR(validAuthorizedX509CR(), invalidDenied), stubSubject(), false, false, true),
+		Entry("previously failed csr", invalidAuthorizedCSR(validAuthorizedX509CR(), invalidFailed), stubSubject(), false, false, true),
+		Entry("bad DNS names in x509 certificate request", invalidAuthorizedCSR(invalidX509CR(invalidDNSNames)), stubSubject(), true, true, true),
+		Entry("bad CN in x509 certificate request", invalidAuthorizedCSR(invalidX509CR(invalidCN)), stubSubject(), true, true, true),
+		Entry("bad IP in x509 certificate request", invalidAuthorizedCSR(invalidX509CR(invalidIP)), stubSubject(), true, true, true),
+		Entry("irrelevant signer name", invalidAuthorizedCSR(invalidX509CR(), invalidSignername), stubSubject(), false, false, true),
 	)
 
 	DescribeTable("getPod", func(csr *certificatesv1.CertificateSigningRequest, pod *corev1.Pod, expectPodNil bool) {
@@ -258,45 +322,27 @@ var _ = Describe("CSR controller tests", func() {
 		Entry("Invalid CSR, irrelevant pod UIDs len", invalidPodCSR(invalidX509CR(), validPod(), invalidExtraPodUIDsLen), validPod(), true),
 	)
 
-	DescribeTable("getHostEndpoint", func(csr *certificatesv1.CertificateSigningRequest, hep *v3.HostEndpoint, expectHepNil bool) {
-		if hep != nil {
-			Expect(cli.Create(ctx, hep)).NotTo(HaveOccurred())
-			// When we list HostEndpoints, we use a field selector to filter host endpoint by their spec.node.
-			// The default fake client's List method does not support filed selectors, so we need to add a reactor to handle this.
-			calicoClientset.PrependReactor("list", "hostendpoints", func(action testing.Action) (handled bool, ret runtime.Object, err error) {
-				listAction, ok := action.(testing.ListAction)
-				Expect(ok).To(BeTrue())
-				fieldSelector := listAction.GetListRestrictions().Fields
-				value, found := fieldSelector.RequiresExactMatch("spec.node")
-				Expect(found).To(BeTrue())
-				if value == hep.Spec.Node {
-					return true, &v3.HostEndpointList{
-						Items: []v3.HostEndpoint{*hep},
-					}, nil
-				}
-				return true, &v3.HostEndpointList{}, nil
-			})
+	DescribeTable("subject resolution", func(csr *certificatesv1.CertificateSigningRequest, pod *corev1.Pod, expectedName string) {
+		if pod != nil {
+			Expect(cli.Create(ctx, pod)).NotTo(HaveOccurred())
 		}
-		v, ok := csr.Labels["nonclusterhost.tigera.io/hostname"]
-		Expect(ok).To(BeTrue())
-		foundHep, err := r.getHostEndpoint(ctx, v)
+		subject, err := r.subject(ctx, csr, stubSubjectResolver)
 		Expect(err).NotTo(HaveOccurred())
-		if expectHepNil {
-			Expect(foundHep).To(BeNil())
+		if expectedName == "" {
+			Expect(subject).To(BeNil())
 		} else {
-			Expect(foundHep).NotTo(BeNil())
+			Expect(subject.Name).To(Equal(expectedName))
 		}
 	},
-		Entry("Valid CSR, hep found", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), validHostEndpoint(), false),
-		Entry("Valid CSR, no hep found", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), nil, true),
-		Entry("Valid CSR, no matching hep found due to different hostname", validNonClusterHostCSR(validNonClusterHostX509CR(), validHostEndpoint()), invalidHostEndpoint(invalidName), true),
-		Entry("Invalid CSR label, irrelevant hep", invalidNonClusterHostCSR(invalidX509CR(), validHostEndpoint(), invalidLabel), validHostEndpoint(), true),
+		Entry("a pod issued the request", validPodCSR(validPodX509CR(), validPod()), validPod(), stubPodName),
+		Entry("the variant recognizes the request", validAuthorizedCSR(validAuthorizedX509CR()), nil, stubSubjectName),
+		Entry("nobody recognizes the request", invalidPodCSR(validPodX509CR(), validPod(), invalidExtraPodNames), nil, ""),
 	)
 })
 
 func validPodX509CR() *x509.CertificateRequest {
 	subj := pkix.Name{
-		CommonName: "prometheus-http-api",
+		CommonName: "stub-server",
 	}
 	extKeyUsages := []asn1.ObjectIdentifier{
 		// ExtKeyUsageServerAuth
@@ -309,7 +355,7 @@ func validPodX509CR() *x509.CertificateRequest {
 	Expect(err).NotTo(HaveOccurred())
 	return &x509.CertificateRequest{
 		Subject:            subj,
-		DNSNames:           []string{"prometheus-http-api", "prometheus-http-api.tigera-prometheus", "prometheus-http-api.tigera-prometheus.svc", "prometheus-http-api.tigera-prometheus.svc.cluster.local"},
+		DNSNames:           stubDNSNames,
 		IPAddresses:        []net.IP{net.ParseIP("1.2.3.4")},
 		SignatureAlgorithm: x509.SHA256WithRSA,
 		ExtraExtensions: []pkix.Extension{
@@ -321,9 +367,9 @@ func validPodX509CR() *x509.CertificateRequest {
 	}
 }
 
-func validNonClusterHostX509CR() *x509.CertificateRequest {
+func validAuthorizedX509CR() *x509.CertificateRequest {
 	subj := pkix.Name{
-		CommonName: "typha-client-noncluster-host",
+		CommonName: stubAuthorizedDNSName,
 	}
 	extKeyUsages := []asn1.ObjectIdentifier{
 		// ExtKeyUsageServerAuth
@@ -336,7 +382,7 @@ func validNonClusterHostX509CR() *x509.CertificateRequest {
 	Expect(err).NotTo(HaveOccurred())
 	return &x509.CertificateRequest{
 		Subject:            subj,
-		DNSNames:           []string{"typha-client-noncluster-host"},
+		DNSNames:           []string{stubAuthorizedDNSName},
 		SignatureAlgorithm: x509.SHA256WithRSA,
 		ExtraExtensions: []pkix.Extension{
 			{
@@ -357,10 +403,10 @@ func validPodCSR(cr *x509.CertificateRequest, pod *corev1.Pod) *certificatesv1.C
 	Expect(err).NotTo(HaveOccurred())
 	return &certificatesv1.CertificateSigningRequest{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "calico-node-prometheus-tls:prometheus-calico-node-prometheus-0",
+			Name: stubSecretName + ":" + stubPodName,
 			Labels: map[string]string{
-				"k8s-app":                "tigera-prometheus",
-				"operator.tigera.io/csr": "tigera-prometheus",
+				"k8s-app":                stubServiceAccount,
+				"operator.tigera.io/csr": stubServiceAccount,
 			},
 		},
 		Spec: certificatesv1.CertificateSigningRequestSpec{
@@ -368,7 +414,7 @@ func validPodCSR(cr *x509.CertificateRequest, pod *corev1.Pod) *certificatesv1.C
 				Type: "CERTIFICATE REQUEST", Bytes: certificateRequest,
 			}),
 			SignerName: "tigera.io/operator-signer",
-			Username:   "system:serviceaccount:tigera-prometheus:prometheus",
+			Username:   "system:serviceaccount:" + stubNamespace + ":" + stubServiceAccount,
 			Extra: map[string]certificatesv1.ExtraValue{
 				"authentication.kubernetes.io/pod-name": []string{pod.Name},
 				"authentication.kubernetes.io/pod-uid":  []string{string(pod.UID)},
@@ -378,7 +424,7 @@ func validPodCSR(cr *x509.CertificateRequest, pod *corev1.Pod) *certificatesv1.C
 	}
 }
 
-func validNonClusterHostCSR(cr *x509.CertificateRequest, hep *v3.HostEndpoint) *certificatesv1.CertificateSigningRequest {
+func validAuthorizedCSR(cr *x509.CertificateRequest) *certificatesv1.CertificateSigningRequest {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).NotTo(HaveOccurred())
 	buf := bytes.NewBuffer([]byte{})
@@ -388,11 +434,11 @@ func validNonClusterHostCSR(cr *x509.CertificateRequest, hep *v3.HostEndpoint) *
 	Expect(err).NotTo(HaveOccurred())
 	return &certificatesv1.CertificateSigningRequest{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "node-certs-noncluster-host:" + hep.Spec.Node,
+			Name: stubAuthorizedSecretName + ":" + stubSubjectName,
 			Labels: map[string]string{
-				"k8s-app":                           "calico-node",
-				"nonclusterhost.tigera.io/hostname": hep.Spec.Node,
-				"operator.tigera.io/csr":            "calico-node",
+				"k8s-app":                stubServiceAccount,
+				stubSubjectLabel:         stubSubjectName,
+				"operator.tigera.io/csr": stubServiceAccount,
 			},
 		},
 		Spec: certificatesv1.CertificateSigningRequestSpec{
@@ -400,7 +446,7 @@ func validNonClusterHostCSR(cr *x509.CertificateRequest, hep *v3.HostEndpoint) *
 				Type: "CERTIFICATE REQUEST", Bytes: certificateRequest,
 			}),
 			SignerName: "tigera.io/operator-signer",
-			Username:   "system:serviceaccount:calico-system:tigera-noncluster-host",
+			Username:   "system:serviceaccount:" + stubNamespace + ":some-other-account",
 		},
 		Status: certificatesv1.CertificateSigningRequestStatus{},
 	}
@@ -408,19 +454,23 @@ func validNonClusterHostCSR(cr *x509.CertificateRequest, hep *v3.HostEndpoint) *
 
 type invalidation int
 
+func stubSubject() *render.CSRSubject {
+	return &render.CSRSubject{Name: stubSubjectName}
+}
+
 func validPod() *corev1.Pod {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "prometheus-calico-node-prometheus-0",
-			Namespace: "tigera-prometheus",
+			Name:      stubPodName,
+			Namespace: stubNamespace,
 			Labels: map[string]string{
-				"k8s-app": "tigera-prometheus",
+				"k8s-app": stubServiceAccount,
 			},
 			UID: "uid",
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: "prometheus",
+			ServiceAccountName: stubServiceAccount,
 		},
 		Status: corev1.PodStatus{
 			PodIP: "1.2.3.4",
@@ -428,25 +478,9 @@ func validPod() *corev1.Pod {
 	}
 }
 
-func validHostEndpoint() *v3.HostEndpoint {
-	return &v3.HostEndpoint{
-		TypeMeta: metav1.TypeMeta{Kind: "HostEndpoint", APIVersion: "projectcalico.org/v3"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "some-hep",
-		},
-		Spec: v3.HostEndpointSpec{
-			ExpectedIPs:   []string{"1.2.3.4", "5.6.7.8"},
-			InterfaceName: "eth0",
-			Node:          "some-node",
-			Profiles:      []string{"some-profile"},
-		},
-	}
-}
-
 const (
 	invalidUID invalidation = iota
 	invalidName
-	invalidLabel
 	invalidUserName
 	invalidRequest
 	invalidDenied
@@ -490,7 +524,7 @@ func invalidPodCSR(cr *x509.CertificateRequest, pod *corev1.Pod, invalidations .
 		case invalidExtraPodNames:
 			csr.Spec.Extra["authentication.kubernetes.io/pod-name"] = []string{"a"}
 		case invalidExtraPodNamesLen:
-			csr.Spec.Extra["authentication.kubernetes.io/pod-name"] = []string{"prometheus-calico-node-prometheus-0", "b"}
+			csr.Spec.Extra["authentication.kubernetes.io/pod-name"] = []string{stubPodName, "b"}
 		case invalidExtraPodUIDs:
 			csr.Spec.Extra["authentication.kubernetes.io/pod-uid"] = []string{"a"}
 		case invalidExtraPodUIDsLen:
@@ -500,14 +534,12 @@ func invalidPodCSR(cr *x509.CertificateRequest, pod *corev1.Pod, invalidations .
 	return csr
 }
 
-func invalidNonClusterHostCSR(cr *x509.CertificateRequest, hep *v3.HostEndpoint, invalidations ...invalidation) *certificatesv1.CertificateSigningRequest {
-	csr := validNonClusterHostCSR(cr, hep)
+func invalidAuthorizedCSR(cr *x509.CertificateRequest, invalidations ...invalidation) *certificatesv1.CertificateSigningRequest {
+	csr := validAuthorizedCSR(cr)
 	for _, i := range invalidations {
 		switch i {
 		case invalidName:
 			csr.Name = "invalid"
-		case invalidLabel:
-			csr.Labels["nonclusterhost.tigera.io/hostname"] = "invalid"
 		case invalidRequest:
 			csr.Spec.Request = []byte("invalid")
 		case invalidDenied:
@@ -543,17 +575,6 @@ func invalidPod(invalidations ...invalidation) *corev1.Pod {
 		}
 	}
 	return pod
-}
-
-func invalidHostEndpoint(invalidation ...invalidation) *v3.HostEndpoint {
-	hep := validHostEndpoint()
-	for _, i := range invalidation {
-		switch i {
-		case invalidName:
-			hep.Spec.Node = "invalid"
-		}
-	}
-	return hep
 }
 
 func invalidX509CR(invalidations ...invalidation) *x509.CertificateRequest {

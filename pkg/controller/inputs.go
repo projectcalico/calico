@@ -20,7 +20,10 @@ package controller
 import (
 	"context"
 
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -36,6 +39,7 @@ const (
 	Windows           Name = "windows"
 	APIServer         Name = "apiserver"
 	ClusterConnection Name = "clusterconnection"
+	CSR               Name = "csr"
 )
 
 // Inputs is what a controller hands its variant extension: the render-phase inputs
@@ -54,4 +58,9 @@ type Inputs struct {
 
 	// Terminating reports that the resource this controller owns is being deleted.
 	Terminating bool
+
+	// K8sClientset and CalicoClient are set only by controllers whose extensions
+	// read resources the cached client cannot serve.
+	K8sClientset kubernetes.Interface
+	CalicoClient calicoclient.Interface
 }
