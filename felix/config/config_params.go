@@ -1306,7 +1306,10 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
-	return config.RouteTableRanges
+	// Clone so that callers cannot mutate our copy of the config; change detection
+	// compares the parsed value, so an in-place reorder would look like the user
+	// changing the setting.
+	return slices.Clone(config.RouteTableRanges)
 }
 
 func (config *Config) GetBPFAttachType() v3.BPFAttachOption {
