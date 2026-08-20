@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,13 +27,18 @@ const (
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName={sknp}
+// +kubebuilder:printcolumn:name="Validation",type=string,JSONPath=".status.conditions[?(@.type=='Valid')].message",description="Policy validation status"
 
-// StagedKubernetesNetworkPolicy is a staged GlobalNetworkPolicy.
+// StagedKubernetesNetworkPolicy is a staged KubernetesNetworkPolicy.
 type StagedKubernetesNetworkPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              StagedKubernetesNetworkPolicySpec `json:"spec"`
+
+	// +optional
+	Status *PolicyStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 type StagedKubernetesNetworkPolicySpec struct {
