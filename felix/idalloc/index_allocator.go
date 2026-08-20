@@ -38,10 +38,8 @@ type IndexAllocator struct {
 // NewIndexAllocator returns an index allocator from the provided indexRanges
 // any indices falling within the specified exclusions will not be returned, even if designated by indexRanges
 func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *IndexAllocator {
-	// Sort a copy in descending order of Max bound.  The caller's slice may be
-	// Felix's live RouteTableRanges config; reordering it in place would make the
-	// config compare unequal to a fresh parse of the same raw values, which Felix
-	// reads as a config change and restarts for.
+	// Sort in descending order of Max bound.  Using Sorted... (not Sort...) to
+	// avoid mutating caller's slice.
 	indexRanges = slices.SortedFunc(slices.Values(indexRanges), func(a, b IndexRange) int {
 		return cmp.Compare(b.Max, a.Max)
 	})

@@ -107,8 +107,6 @@ var _ = Describe("IndexAllocator", func() {
 		})
 
 		It("should not reorder the caller's slice", func() {
-			// Felix passes its live RouteTableRanges config here; sorting it in
-			// place makes Felix see a config change and restart in a loop.
 			ranges := []IndexRange{{Min: 1, Max: 250}, {Min: 1000, Max: 1500}}
 			NewIndexAllocator(ranges, nil)
 			Expect(ranges).To(Equal([]IndexRange{{Min: 1, Max: 250}, {Min: 1000, Max: 1500}}))

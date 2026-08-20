@@ -1306,9 +1306,7 @@ func (config *Config) RouteTableIndices() []idalloc.IndexRange {
 	} else if config.RouteTableRange != (idalloc.IndexRange{}) {
 		log.Warn("Both `RouteTableRanges` and deprecated `RouteTableRange` options are set. `RouteTableRanges` value will be given precedence.")
 	}
-	// Clone so that callers cannot mutate our copy of the config; change detection
-	// compares the parsed value, so an in-place reorder would look like the user
-	// changing the setting.
+	// Clone so that callers cannot mutate our copy of the config.
 	return slices.Clone(config.RouteTableRanges)
 }
 
