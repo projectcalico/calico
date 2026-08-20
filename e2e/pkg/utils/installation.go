@@ -18,6 +18,7 @@ import (
 	"context"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -46,4 +47,18 @@ func UsesCalicoIPAM(cli ctrlclient.Client) bool {
 		return false
 	}
 	return true
+}
+
+// RequireBGPEnabled fails the test unless the operator has Calico's BGP networking
+// enabled. Lanes whose clusters run in another networking mode should exclude the
+// RequiresBGP label instead of running these tests.
+func RequireBGPEnabled(cli ctrlclient.Client) {
+	installation := &operatorv1.Installation{}
+	if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation); err != nil {
+		framework.Failf("Error querying Installation resource: %v", err)
+	}
+	network := installation.Spec.CalicoNetwork
+	if network == nil || network.BGP == nil || *network.BGP != operatorv1.BGPEnabled {
+		framework.Failf("BGP is not enabled in this cluster, so the lane should exclude the RequiresBGP label")
+	}
 }
