@@ -69,7 +69,7 @@ var _ = describe.CalicoDescribe(
 			utils.RequireNodeCount(f, 2)
 
 			var err error
-			cli, err = e2eclient.NewAPIClient(f.ClientConfig())
+			cli, err = e2eclient.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred(), "failed to build controller-runtime client")
 		})
 
