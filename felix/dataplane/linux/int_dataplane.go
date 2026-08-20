@@ -78,6 +78,7 @@ import (
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
@@ -356,6 +357,7 @@ type InternalDataplane struct {
 
 	mainRouteTables []routetable.SyncerInterface
 	allTables       []generictables.Table
+	cleanupTables   []generictables.CleanupTable
 	mangleTables    []generictables.Table
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
@@ -467,6 +469,61 @@ const (
 	aksMTUOverhead         = 100
 )
 
+// sweepIPTablesNFT reports whether the nftables copies of the shared tables belong to someone else:
+//
+//   - On native nftables, anything iptables-nft left there is stale.
+//   - On iptables-legacy, so is anything iptables-nft wrote. Only if the legacy binaries are real,
+//     though: without them Felix programs these very tables.
+func sweepIPTablesNFT(ipVersion uint8, nftablesEnabled bool, backendMode string, lookPath func(string) (string, error)) bool {
+	if nftablesEnabled {
+		return true
+	}
+	return backendMode == environment.IPTablesBackendLegacy &&
+		environment.BackendBinariesPresent(lookPath, ipVersion, environment.IPTablesBackendLegacy)
+}
+
+// legacyIPTablesCleanupTables returns tables that sweep the legacy copies of the shared tables.
+// They're cleanup-only: iptables-legacy is unreadable on some distros, and holds nothing of ours
+// there anyway.
+func legacyIPTablesCleanupTables(
+	ipVersion uint8,
+	featureDetector environment.FeatureDetectorIface,
+	options iptables.TableOptions,
+	natOptions iptables.TableOptions,
+) []generictables.CleanupTable {
+	// Without the legacy binaries these tables would drive iptables-nft, where Felix programs.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendLegacy) {
+		return nil
+	}
+
+	// And without the nft binaries, the tables Felix programs fall back to plain iptables, which is
+	// then legacy: sweeping it would delete the rules Felix just wrote.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendNFT) {
+		return nil
+	}
+
+	// Reading the legacy tables would autoload the xtables modules, putting legacy hooks on a node
+	// that deliberately runs nftables only.
+	if !environment.LegacyIPTablesModulesLoaded(ipVersion) {
+		return nil
+	}
+
+	options.BackendMode = environment.IPTablesBackendLegacy
+	options.CleanupOnly = true
+	natOptions.BackendMode = environment.IPTablesBackendLegacy
+	natOptions.CleanupOnly = true
+
+	var tables []generictables.CleanupTable
+	for _, name := range rulesdefs.SharedTables {
+		tableOptions := options
+		if name == "nat" {
+			tableOptions = natOptions
+		}
+		tables = append(tables, iptables.NewTable(name, ipVersion, rulesdefs.RuleHashPrefix, featureDetector, tableOptions))
+	}
+	return tables
+}
+
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
@@ -560,7 +617,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Most tables need the same options.
 	iptablesOptions := iptables.TableOptions{
-		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
@@ -579,7 +636,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		NewDataplane:     config.NewNftablesDataplane,
 	}
 
-	var cleanupTables []generictables.Table
+	var cleanupTables []generictables.CleanupTable
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
@@ -588,10 +645,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Delete the ip kube-proxy and ip6 kube-proxy tables in nftables.
 		nftablesKPOptions := nftablesOptions
 		nftablesKPOptions.Disabled = true
-		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT)
 		if config.IPv6Enabled {
-			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 			cleanupTables = append(cleanupTables, kubeProxyTableV6NFT)
 		}
 	}
@@ -611,12 +668,31 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
+	// If we're on native nftables or iptables-nft, clean up iptables-legacy, assuming it's
+	// available in the kernel.
+	if nftablesEnabled || backendMode == environment.IPTablesBackendNFT {
+		cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(4, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		if config.IPv6Enabled {
+			cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(6, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		}
+	}
+
+	// And the other direction: clean up what iptables-nft left in the nftables copies of the
+	// shared tables. HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes,
+	// since in BPF mode it also covers kube-proxy's chains.
+	if sweepIPTablesNFT(4, nftablesEnabled, backendMode, config.LookPathOverride) {
+		cleanupTables = append(cleanupTables, nftables.NewIPTablesNFTCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+	}
+	if config.IPv6Enabled && sweepIPTablesNFT(6, nftablesEnabled, backendMode, config.LookPathOverride) {
+		cleanupTables = append(cleanupTables, nftables.NewIPTablesNFTCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+	}
+
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 
 	// This is required when nftables mode is configured; but also useful for cleanup in other modes.
-	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
+	nftablesV4RootTable := nftables.NewTable("calico", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 
 	if nftablesEnabled {
 		// Create nftables Table implementations.
@@ -624,13 +700,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
 		rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
 		filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+	} else {
+		// Create iptables table implementations.
+		mangleTableV4IPT = iptables.NewTable("mangle", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV4IPT = iptables.NewTable("nat", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV4IPT = iptables.NewTable("raw", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		filterTableV4IPT = iptables.NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
-
-	// Create iptables table implementations.
-	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
@@ -643,14 +719,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		rawTableV4 = rawTableV4NFT
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
-
-		// Cleanup iptables.
-		cleanupTables = append(cleanupTables,
-			mangleTableV4IPT,
-			natTableV4IPT,
-			rawTableV4IPT,
-			filterTableV4IPT,
-		)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
@@ -894,22 +962,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipsetsManager := dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
 	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
-	// iptables / nftables specific filter Table implementations for IPv6.
-	var filterTableV6NFT, filterTableV6IPT generictables.Table
+	// Required when nftables mode is configured, and for cleanup in the other modes.
+	nftablesV6RootTable := nftables.NewTable("calico", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 
-	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
-	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
-
-	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-
-	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
 	if nftablesEnabled {
-		filterTableV6 = filterTableV6NFT
+		filterTableV6 = nftables.NewTableLayer("filter", nftablesV6RootTable)
 	} else {
-		filterTableV6 = filterTableV6IPT
+		filterTableV6 = iptables.NewTable("filter", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
 
 	dp.RegisterManager(ipsetsManager)
@@ -1233,7 +1293,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			OpRecorder:       dp.loopSummarizer,
 			NewDataplane:     config.NewNftablesDataplane,
 		}
-		arpRootTable = nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
+		arpRootTable = nftables.NewARPTable("calico-arp", rulesdefs.RuleHashPrefix, featureDetector, arpTableOptions, false)
 	}
 	var arpFilterTable generictables.Table
 	var arpMaps nftables.MapsDataplane
@@ -1372,12 +1432,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
 			natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
 			rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+		} else {
+			// Define iptables table implementations for IPv6.
+			mangleTableV6IPT = iptables.NewTable("mangle", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+			natTableV6IPT = iptables.NewTable("nat", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+			rawTableV6IPT = iptables.NewTable("raw", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 		}
-
-		// Define iptables table implementations for IPv6.
-		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
 		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
@@ -1388,14 +1448,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			natTableV6 = natTableV6NFT
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
-
-			// Cleanup iptables.
-			cleanupTables = append(cleanupTables,
-				mangleTableV6IPT,
-				natTableV6IPT,
-				rawTableV6IPT,
-				filterTableV6IPT,
-			)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.
@@ -1594,8 +1646,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
-	// Include cleanup tables in allTables so that they are cleaned up.
-	dp.allTables = append(dp.allTables, cleanupTables...)
+	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
 	dp.ipSets = append(dp.ipSets, cleanupIPSets...)
 
 	// Register that we will report liveness and readiness.
@@ -2926,10 +2977,11 @@ func (d *InternalDataplane) apply() {
 	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
 	var iptablesWG sync.WaitGroup
-	for _, t := range d.allTables {
+	runTable := func(f func() time.Duration) {
 		iptablesWG.Add(1)
-		go func(t generictables.Table) {
-			tableReschedAfter := t.Apply()
+		go func() {
+			defer iptablesWG.Done()
+			tableReschedAfter := f()
 
 			reschedDelayMutex.Lock()
 			defer reschedDelayMutex.Unlock()
@@ -2937,8 +2989,15 @@ func (d *InternalDataplane) apply() {
 				reschedDelay = tableReschedAfter
 			}
 			d.reportHealth()
-			iptablesWG.Done()
-		}(t)
+		}()
+	}
+	for _, t := range d.allTables {
+		runTable(t.Apply)
+	}
+
+	// Sweep the tables we're no longer programming, for whatever a previous Felix left in them.
+	for _, t := range d.cleanupTables {
+		runTable(t.CleanUp)
 	}
 	iptablesWG.Wait()
 
