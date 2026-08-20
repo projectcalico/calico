@@ -13,14 +13,33 @@ import (
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
+	"google.golang.org/grpc"
 
+	"github.com/projectcalico/calico/goldmane/pkg/client"
 	"github.com/projectcalico/calico/lib/std/cryptoutils"
 	jsontestutil "github.com/projectcalico/calico/lib/std/testutils/json"
+	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	wconfig "github.com/projectcalico/calico/whisker-backend/pkg/config"
+	goldmaneupstream "github.com/projectcalico/calico/whisker-backend/pkg/upstream/goldmane"
 )
 
 type ObjWithErr[T any] struct {
 	Obj T
 	Err error
+}
+
+// newGoldmaneFlowsBackend builds the Goldmane flows backend Run would wire
+// itself, so tests can pass it via WithFlowsBackend — the enterprise
+// newFlowsBackend requires an in-cluster Kubernetes environment for
+// authentication.
+func newGoldmaneFlowsBackend(cfg *wconfig.Config) whiskerv1.FlowsBackend {
+	creds, err := client.ClientCredentials(cfg.TLSCertPath, cfg.TLSKeyPath, cfg.CACertPath)
+	Expect(err).ShouldNot(HaveOccurred())
+
+	gmCli, err := client.NewFlowsAPIClient(cfg.GoldmaneHost, grpc.WithTransportCredentials(creds))
+	Expect(err).ShouldNot(HaveOccurred())
+
+	return goldmaneupstream.NewBackend(gmCli)
 }
 
 func createKeyCertPair(dir string) (*os.File, *os.File) {

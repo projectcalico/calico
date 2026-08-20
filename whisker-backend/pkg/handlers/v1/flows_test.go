@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package v1_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -25,59 +26,53 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
-	climocks "github.com/projectcalico/calico/goldmane/pkg/client/mocks"
 	"github.com/projectcalico/calico/goldmane/proto"
-	protomock "github.com/projectcalico/calico/goldmane/proto/mocks"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/apiutil"
 	"github.com/projectcalico/calico/lib/httpmachinery/pkg/testutil"
 	"github.com/projectcalico/calico/lib/std/ptr"
 	"github.com/projectcalico/calico/lib/std/time"
 	whiskerv1 "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1"
+	v1mocks "github.com/projectcalico/calico/whisker-backend/pkg/apis/v1/mocks"
+	"github.com/projectcalico/calico/whisker-backend/pkg/auth"
 	hdlrv1 "github.com/projectcalico/calico/whisker-backend/pkg/handlers/v1"
 )
 
 func TestListFlows(t *testing.T) {
 	sc := setupTest(t)
 
-	fsCli := new(climocks.FlowsClient)
-	fsCli.On("List", mock.Anything, mock.Anything).Return(
-		&proto.ListMetadata{
-			TotalPages: 5,
-		},
-		[]*proto.FlowResult{
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("List", mock.Anything, mock.Anything).Return(
+		5,
+		[]whiskerv1.FlowResponse{
 			{
-				Flow: &proto.Flow{
-					Key: &proto.FlowKey{
-						SourceNamespace: "default",
-						SourceName:      "test-pod",
-						Policies: &proto.PolicyTrace{
-							EnforcedPolicies: []*proto.PolicyHit{
-								{
-									Kind:        proto.PolicyKind_GlobalNetworkPolicy,
-									Name:        "test-policy",
-									Namespace:   "test-ns",
-									Tier:        "test-tier",
-									Action:      proto.Action_Allow,
-									PolicyIndex: 1,
-									RuleIndex:   2,
-								},
-							},
-							PendingPolicies: []*proto.PolicyHit{
-								{
-									Kind:      proto.PolicyKind_NetworkPolicy,
-									Name:      "test-policy",
-									Namespace: "test-ns",
-									Tier:      "test-tier",
-									Action:    proto.Action_Deny,
-								},
-							},
+				SourceNamespace: "default",
+				SourceName:      "test-pod",
+				Policies: whiskerv1.PolicyTrace{
+					Enforced: []*whiskerv1.PolicyHit{
+						{
+							Kind:        whiskerv1.PolicyKindGlobalNetworkPolicy,
+							Name:        "test-policy",
+							Namespace:   "test-ns",
+							Tier:        "test-tier",
+							Action:      whiskerv1.ActionAllow,
+							PolicyIndex: 1,
+							RuleIndex:   2,
+						},
+					},
+					Pending: []*whiskerv1.PolicyHit{
+						{
+							Kind:      whiskerv1.PolicyKindNetworkPolicy,
+							Name:      "test-policy",
+							Namespace: "test-ns",
+							Tier:      "test-tier",
+							Action:    whiskerv1.ActionDeny,
 						},
 					},
 				},
 			},
 		}, nil)
 
-	hdlr := hdlrv1.NewFlows(fsCli)
+	hdlr := hdlrv1.NewFlows(backend)
 	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
 	Expect(rsp.Status()).Should(Equal(http.StatusOK))
 	recorder := httptest.NewRecorder()
@@ -103,22 +98,22 @@ func TestListFlows(t *testing.T) {
 					Policies: whiskerv1.PolicyTrace{
 						Enforced: []*whiskerv1.PolicyHit{
 							{
-								Kind:        whiskerv1.PolicyKind(proto.PolicyKind_GlobalNetworkPolicy),
+								Kind:        whiskerv1.PolicyKindGlobalNetworkPolicy,
 								Name:        "test-policy",
 								Namespace:   "test-ns",
 								Tier:        "test-tier",
-								Action:      whiskerv1.Action(proto.Action_Allow),
+								Action:      whiskerv1.ActionAllow,
 								PolicyIndex: 1,
 								RuleIndex:   2,
 							},
 						},
 						Pending: []*whiskerv1.PolicyHit{
 							{
-								Kind:      whiskerv1.PolicyKind(proto.PolicyKind_NetworkPolicy),
+								Kind:      whiskerv1.PolicyKindNetworkPolicy,
 								Name:      "test-policy",
 								Namespace: "test-ns",
 								Tier:      "test-tier",
-								Action:    whiskerv1.Action(proto.Action_Deny),
+								Action:    whiskerv1.ActionDeny,
 							},
 						},
 					},
@@ -130,23 +125,19 @@ func TestListFlows(t *testing.T) {
 func TestWatchFlows(t *testing.T) {
 	sc := setupTest(t)
 
-	fsCli := new(climocks.FlowsClient)
-	flowStream := new(protomock.Flows_StreamClient)
+	backend := new(v1mocks.StreamingFlowsBackend)
+	flowStream := new(v1mocks.FlowStream)
 
-	flowStream.On("Recv").Return(&proto.FlowResult{
-		Flow: &proto.Flow{
-			Key: &proto.FlowKey{
-				SourceNamespace: "default",
-				SourceName:      "test-pod",
-				Reporter:        proto.Reporter_Src,
-				Action:          proto.Action_Pass,
-			},
-		},
+	flowStream.On("Recv").Return(&whiskerv1.FlowResponse{
+		SourceNamespace: "default",
+		SourceName:      "test-pod",
+		Reporter:        whiskerv1.ReporterSrc,
+		Action:          whiskerv1.ActionPass,
 	}, nil).Once()
 	flowStream.On("Recv").Return(nil, io.EOF).Once()
 
-	fsCli.On("Stream", mock.Anything, mock.Anything).Return(flowStream, nil)
-	hdlr := hdlrv1.NewFlows(fsCli)
+	backend.On("Stream", mock.Anything, mock.Anything).Return(flowStream, nil)
+	hdlr := hdlrv1.NewFlows(backend)
 	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
 	Expect(rsp.Status()).Should(Equal(http.StatusOK))
 
@@ -175,196 +166,25 @@ func TestWatchFlows(t *testing.T) {
 			EndTime:         zerotime,
 			SourceNamespace: "default",
 			SourceName:      "test-pod",
-			Action:          whiskerv1.Action(proto.Action_Pass),
-			Reporter:        whiskerv1.Reporter(proto.Reporter_Src),
+			Action:          whiskerv1.ActionPass,
+			Reporter:        whiskerv1.ReporterSrc,
 		},
 	}
 	Expect(flows).Should(Equal(expected))
 }
 
-func TestWatchFlowsParameterConversion(t *testing.T) {
-	sc := setupTest(t)
-
-	var req *proto.FlowStreamRequest
-
-	now := time.Now()
-	tt := []struct {
-		description       string
-		params            whiskerv1.ListFlowsParams
-		expected          *proto.FlowStreamRequest
-		configureFlowsCli func(*climocks.FlowsClient)
-	}{
-		{
-			description: "Watch set to true",
-			params: whiskerv1.ListFlowsParams{
-				Watch:        true,
-				StartTimeGte: now.Unix(),
-				Filters: whiskerv1.Filters{
-					SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
-					SourceNames:      []whiskerv1.FilterMatch[string]{{V: "src-name"}},
-					DestNamespaces:   []whiskerv1.FilterMatch[string]{{V: "dst-ns"}},
-					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
-					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
-					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
-					PendingActions:   whiskerv1.PendingActions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
-					Reporter:         whiskerv1.ReporterSrc,
-					Policies: []whiskerv1.PolicyMatch{{
-						Kind:      whiskerv1.PolicyKindCalicoNetworkPolicy,
-						Tier:      whiskerv1.NewFilterMatch("default-tier", whiskerv1.MatchTypeExact),
-						Name:      whiskerv1.NewFilterMatch("name", whiskerv1.MatchTypeExact),
-						Namespace: whiskerv1.NewFilterMatch("namespace", whiskerv1.MatchTypeExact),
-						Action:    whiskerv1.ActionDeny,
-					}},
-				},
-			},
-			expected: &proto.FlowStreamRequest{
-				StartTimeGte: now.Unix(),
-				Filter: &proto.Filter{
-					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
-					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},
-					DestNamespaces:   []*proto.StringMatch{{Value: "dst-ns"}},
-					DestNames:        []*proto.StringMatch{{Value: "dst-name"}},
-					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
-					DestPorts:        []*proto.PortMatch{{Port: 6060}},
-					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
-					PendingActions:   []proto.Action{proto.Action_Pass, proto.Action_Allow},
-					Reporter:         proto.Reporter_Src,
-					Policies: []*proto.PolicyMatch{{
-						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:      &proto.StringMatch{Value: "default-tier"},
-						Name:      &proto.StringMatch{Value: "name"},
-						Namespace: &proto.StringMatch{Value: "namespace"},
-						Action:    proto.Action_Deny,
-					}},
-				},
-			},
-			configureFlowsCli: func(fsCli *climocks.FlowsClient) {
-				fsCli.On("Stream", mock.Anything, mock.MatchedBy(func(arg *proto.FlowStreamRequest) bool {
-					req = arg
-					return true
-				})).Return(nil, context.Canceled).Once()
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.description, func(t *testing.T) {
-			req = nil
-
-			mockFsCli := new(climocks.FlowsClient)
-			tc.configureFlowsCli(mockFsCli)
-
-			hdlr := hdlrv1.NewFlows(mockFsCli)
-			rsp := hdlr.ListOrStream(sc.apiCtx, tc.params)
-			Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
-			Expect(req.String()).Should(Equal(tc.expected.String()))
-		})
-	}
-}
-
-func TestListFlowsParameterConversion(t *testing.T) {
-	sc := setupTest(t)
-
-	var req *proto.FlowListRequest
-
-	now := time.Now()
-	tt := []struct {
-		description       string
-		params            whiskerv1.ListFlowsParams
-		expected          *proto.FlowListRequest
-		configureFlowsCli func(*climocks.FlowsClient)
-	}{
-		{
-			description: "Watch set to false",
-			params: whiskerv1.ListFlowsParams{
-				SortBy: whiskerv1.SortBys{
-					whiskerv1.SortBy(proto.SortBy_SourceType), whiskerv1.SortBy(proto.SortBy_SourceNamespace), whiskerv1.SortBy(proto.SortBy_SourceName),
-					whiskerv1.SortBy(proto.SortBy_DestType), whiskerv1.SortBy(proto.SortBy_DestNamespace), whiskerv1.SortBy(proto.SortBy_DestName),
-					whiskerv1.SortBy(proto.SortBy_Time),
-				},
-				StartTimeGte: now.Unix(),
-				Filters: whiskerv1.Filters{
-					Policies: []whiskerv1.PolicyMatch{{
-						Kind:      whiskerv1.PolicyKindCalicoNetworkPolicy,
-						Tier:      whiskerv1.NewFilterMatch("default-tier", whiskerv1.MatchTypeExact),
-						Name:      whiskerv1.NewFilterMatch("name", whiskerv1.MatchTypeExact),
-						Namespace: whiskerv1.NewFilterMatch("namespace", whiskerv1.MatchTypeExact),
-					}},
-					SourceNamespaces: []whiskerv1.FilterMatch[string]{{V: "src-ns"}},
-					SourceNames:      []whiskerv1.FilterMatch[string]{{V: "src-name"}},
-					DestNamespaces:   []whiskerv1.FilterMatch[string]{{V: "dst-ns"}},
-					DestNames:        []whiskerv1.FilterMatch[string]{{V: "dst-name"}},
-					Protocols:        []whiskerv1.FilterMatch[string]{{V: "tcp"}},
-					DestPorts:        []whiskerv1.FilterMatch[int64]{{V: 6060}},
-					Actions:          whiskerv1.Actions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
-					PendingActions:   whiskerv1.PendingActions{whiskerv1.Action(proto.Action_Pass), whiskerv1.Action(proto.Action_Allow)},
-					Reporter:         whiskerv1.ReporterSrc,
-				},
-			},
-			expected: &proto.FlowListRequest{
-				SortBy: []*proto.SortOption{
-					{SortBy: proto.SortBy_SourceType}, {SortBy: proto.SortBy_SourceNamespace}, {SortBy: proto.SortBy_SourceName},
-					{SortBy: proto.SortBy_DestType}, {SortBy: proto.SortBy_DestNamespace}, {SortBy: proto.SortBy_DestName},
-					{SortBy: proto.SortBy_Time},
-				},
-				StartTimeGte: now.Unix(),
-				Filter: &proto.Filter{
-					Policies: []*proto.PolicyMatch{{
-						Kind:      proto.PolicyKind_CalicoNetworkPolicy,
-						Tier:      &proto.StringMatch{Value: "default-tier"},
-						Name:      &proto.StringMatch{Value: "name"},
-						Namespace: &proto.StringMatch{Value: "namespace"},
-					}},
-					SourceNamespaces: []*proto.StringMatch{{Value: "src-ns"}},
-					SourceNames:      []*proto.StringMatch{{Value: "src-name"}},
-					DestNamespaces:   []*proto.StringMatch{{Value: "dst-ns"}},
-					DestNames:        []*proto.StringMatch{{Value: "dst-name"}},
-					Protocols:        []*proto.StringMatch{{Value: "tcp"}},
-					DestPorts:        []*proto.PortMatch{{Port: 6060}},
-					Actions:          []proto.Action{proto.Action_Pass, proto.Action_Allow},
-					PendingActions:   []proto.Action{proto.Action_Pass, proto.Action_Allow},
-					Reporter:         proto.Reporter_Src,
-				},
-			},
-			configureFlowsCli: func(fsCli *climocks.FlowsClient) {
-				fsCli.On("List", mock.Anything, mock.MatchedBy(func(arg *proto.FlowListRequest) bool {
-					req = arg
-					return true
-				})).Return(nil, nil, context.Canceled).Once()
-			},
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.description, func(t *testing.T) {
-			req = nil
-
-			mockFsCli := new(climocks.FlowsClient)
-			tc.configureFlowsCli(mockFsCli)
-
-			hdlr := hdlrv1.NewFlows(mockFsCli)
-			rsp := hdlr.ListOrStream(sc.apiCtx, tc.params)
-			Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
-			Expect(req.String()).Should(Equal(tc.expected.String()))
-		})
-	}
-}
-
 func TestListFilterHints(t *testing.T) {
 	sc := setupTest(t)
 
-	fsCli := new(climocks.FlowsClient)
-	fsCli.On("FilterHints", mock.Anything, mock.Anything).Return(
-		&proto.ListMetadata{
-			TotalPages: 5,
-		},
-		[]*proto.FilterHint{
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("FilterHints", mock.Anything, mock.Anything, mock.Anything).Return(
+		5,
+		[]whiskerv1.FlowFilterHintResponse{
 			{Value: "foo"},
 			{Value: "bar"},
 		}, nil)
 
-	hdlr := hdlrv1.NewFlows(fsCli)
+	hdlr := hdlrv1.NewFlows(backend)
 	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
 		Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
 	})
@@ -383,4 +203,238 @@ func TestListFilterHints(t *testing.T) {
 				{Value: "bar"},
 			},
 		}))
+}
+
+func TestListFlows_Error(t *testing.T) {
+	sc := setupTest(t)
+
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("List", mock.Anything, mock.Anything).Return(0, nil, context.Canceled)
+
+	hdlr := hdlrv1.NewFlows(backend)
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
+	Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+}
+
+func TestWatchFlows_StreamError(t *testing.T) {
+	sc := setupTest(t)
+
+	backend := new(v1mocks.StreamingFlowsBackend)
+	backend.On("Stream", mock.Anything, mock.Anything).Return(nil, context.Canceled)
+
+	hdlr := hdlrv1.NewFlows(backend)
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
+	Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+}
+
+func TestWatchFlows_Unsupported(t *testing.T) {
+	sc := setupTest(t)
+
+	// A plain FlowsBackend (e.g. Linseed) does not implement
+	// StreamingFlowsBackend, so a watch request must be rejected with a clean
+	// 400 rather than a generic 500.
+	backend := new(v1mocks.FlowsBackend)
+
+	hdlr := hdlrv1.NewFlows(backend)
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
+	Expect(rsp.Status()).Should(Equal(http.StatusBadRequest))
+}
+
+func TestListFilterHints_Error(t *testing.T) {
+	sc := setupTest(t)
+
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("FilterHints", mock.Anything, mock.Anything, mock.Anything).Return(0, nil, context.Canceled)
+
+	hdlr := hdlrv1.NewFlows(backend)
+	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
+		Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
+	})
+	Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+}
+
+// The tests below pin the handler's RBAC wiring: every serving path (list,
+// stream, filter hints) must run flows through the configured FlowFilterFactory.
+// The filtering logic itself is tested in whisker-backend/pkg/auth; here a fake
+// filter proves the handler actually invokes it — a regression that drops one of
+// these calls disables RBAC without failing any other test.
+
+const redactedByTest = "redacted-by-test"
+
+// fakeFlowFilter denies flows in denyNamespace and marks the policy hits of
+// admitted flows so tests can tell redaction ran.
+type fakeFlowFilter struct {
+	denyNamespace string
+}
+
+func (f *fakeFlowFilter) IncludeFlow(flow *whiskerv1.FlowResponse) (bool, error) {
+	return flow.SourceNamespace != f.denyNamespace, nil
+}
+
+func (f *fakeFlowFilter) RedactPolicies(flow *whiskerv1.FlowResponse) error {
+	for _, hit := range flow.Policies.Enforced {
+		hit.Name = redactedByTest
+	}
+	return nil
+}
+
+func fakeFilterFactory(denyNamespace string) auth.FlowFilterFactory {
+	return func(context.Context) (auth.FlowFilter, error) {
+		return &fakeFlowFilter{denyNamespace: denyNamespace}, nil
+	}
+}
+
+func flowWithPolicy(ns string) whiskerv1.FlowResponse {
+	return whiskerv1.FlowResponse{
+		SourceNamespace: ns,
+		SourceName:      "app",
+		Policies: whiskerv1.PolicyTrace{
+			Enforced: []*whiskerv1.PolicyHit{{Name: "secret-policy"}},
+		},
+	}
+}
+
+func TestListFlows_AppliesRBACFilter(t *testing.T) {
+	sc := setupTest(t)
+
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("List", mock.Anything, mock.Anything).Return(
+		1, []whiskerv1.FlowResponse{flowWithPolicy("allowed"), flowWithPolicy("denied")}, nil)
+
+	hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(fakeFilterFactory("denied")))
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
+	Expect(rsp.Status()).Should(Equal(http.StatusOK))
+
+	recorder := httptest.NewRecorder()
+	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
+	flows := testutil.MustUnmarshal[apiutil.List[whiskerv1.FlowResponse]](t, recorder.Body.Bytes())
+
+	Expect(flows.Items).Should(HaveLen(1))
+	Expect(flows.Items[0].SourceNamespace).Should(Equal("allowed"))
+	Expect(flows.Items[0].Policies.Enforced[0].Name).Should(Equal(redactedByTest))
+}
+
+func TestListFlows_RBACEmptiedPageReportsZeroPages(t *testing.T) {
+	sc := setupTest(t)
+
+	// The backend found a page of flows, but the RBAC filter admits none of
+	// them. The UI must not be told there is a page to render with nothing in
+	// it — an emptied single-page result reports zero pages.
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("List", mock.Anything, mock.Anything).Return(
+		1, []whiskerv1.FlowResponse{flowWithPolicy("denied")}, nil)
+
+	hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(fakeFilterFactory("denied")))
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
+	Expect(rsp.Status()).Should(Equal(http.StatusOK))
+
+	recorder := httptest.NewRecorder()
+	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
+	flows := testutil.MustUnmarshal[apiutil.List[whiskerv1.FlowResponse]](t, recorder.Body.Bytes())
+
+	Expect(flows.Items).Should(BeEmpty())
+	Expect(flows.Meta.TotalPages).Should(Equal(0))
+}
+
+func TestWatchFlows_AppliesRBACFilter(t *testing.T) {
+	sc := setupTest(t)
+
+	backend := new(v1mocks.StreamingFlowsBackend)
+	flowStream := new(v1mocks.FlowStream)
+	flowStream.On("Recv").Return(ptr.ToPtr(flowWithPolicy("denied")), nil).Once()
+	flowStream.On("Recv").Return(ptr.ToPtr(flowWithPolicy("allowed")), nil).Once()
+	flowStream.On("Recv").Return(nil, io.EOF).Once()
+	backend.On("Stream", mock.Anything, mock.Anything).Return(flowStream, nil)
+
+	hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(fakeFilterFactory("denied")))
+	rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
+	Expect(rsp.Status()).Should(Equal(http.StatusOK))
+
+	recorder := httptest.NewRecorder()
+	Expect(rsp.ResponseWriter().WriteResponse(sc.apiCtx, http.StatusOK, recorder)).ShouldNot(HaveOccurred())
+
+	var flows []whiskerv1.FlowResponse
+	for data := range strings.SplitSeq(recorder.Body.String(), "\n\n") {
+		if len(data) == 0 {
+			continue
+		}
+		flow := testutil.MustUnmarshal[whiskerv1.FlowResponse](t, []byte(strings.TrimPrefix(data, "data: ")))
+		flows = append(flows, *flow)
+	}
+
+	Expect(flows).Should(HaveLen(1))
+	Expect(flows[0].SourceNamespace).Should(Equal("allowed"))
+	Expect(flows[0].Policies.Enforced[0].Name).Should(Equal(redactedByTest))
+}
+
+func TestListFilterHints_PassesRBACPredicate(t *testing.T) {
+	sc := setupTest(t)
+
+	// The handler cannot filter hints itself (backends derive them from source
+	// flows), so it must hand the backend a predicate built from the filter
+	// factory. Capture it and check it behaves like the configured filter,
+	// including in-place redaction of admitted flows.
+	var includeFlow whiskerv1.FlowFilterFunc
+	backend := new(v1mocks.FlowsBackend)
+	backend.On("FilterHints", mock.Anything, mock.Anything, mock.MatchedBy(func(f whiskerv1.FlowFilterFunc) bool {
+		includeFlow = f
+		return true
+	})).Return(1, []whiskerv1.FlowFilterHintResponse{{Value: "foo"}}, nil)
+
+	hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(fakeFilterFactory("denied")))
+	rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
+		Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
+	})
+	Expect(rsp.Status()).Should(Equal(http.StatusOK))
+
+	Expect(includeFlow).ShouldNot(BeNil())
+	denied := flowWithPolicy("denied")
+	ok, err := includeFlow(&denied)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(ok).Should(BeFalse())
+
+	allowed := flowWithPolicy("allowed")
+	ok, err = includeFlow(&allowed)
+	Expect(err).ShouldNot(HaveOccurred())
+	Expect(ok).Should(BeTrue())
+	Expect(allowed.Policies.Enforced[0].Name).Should(Equal(redactedByTest))
+}
+
+func TestFlows_RBACFilterFactoryError(t *testing.T) {
+	// A factory failure (e.g. no authenticated user in the context) must fail
+	// the request on every path, never fall through to unfiltered results.
+	factory := auth.FlowFilterFactory(func(context.Context) (auth.FlowFilter, error) {
+		return nil, errors.New("no user in context")
+	})
+
+	t.Run("list", func(t *testing.T) {
+		sc := setupTest(t)
+		backend := new(v1mocks.FlowsBackend)
+		backend.On("List", mock.Anything, mock.Anything).Return(1, []whiskerv1.FlowResponse{flowWithPolicy("ns")}, nil)
+
+		hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(factory))
+		rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{})
+		Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+	})
+
+	t.Run("watch", func(t *testing.T) {
+		sc := setupTest(t)
+		backend := new(v1mocks.StreamingFlowsBackend)
+		backend.On("Stream", mock.Anything, mock.Anything).Return(new(v1mocks.FlowStream), nil)
+
+		hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(factory))
+		rsp := hdlr.ListOrStream(sc.apiCtx, whiskerv1.ListFlowsParams{Watch: true})
+		Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+	})
+
+	t.Run("hints", func(t *testing.T) {
+		sc := setupTest(t)
+		backend := new(v1mocks.FlowsBackend)
+
+		hdlr := hdlrv1.NewFlows(backend, hdlrv1.WithFlowFilterFactory(factory))
+		rsp := hdlr.ListFilterHints(sc.apiCtx, whiskerv1.FlowFilterHintsRequest{
+			Type: ptr.ToPtr(whiskerv1.FilterType(proto.FilterType_FilterTypeDestNamespace)),
+		})
+		Expect(rsp.Status()).Should(Equal(http.StatusInternalServerError))
+	})
 }

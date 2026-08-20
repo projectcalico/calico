@@ -86,9 +86,10 @@ func TestServerTLS(t *testing.T) {
 		ServerTLSKeyPath:  serverKeyFile.Name(),
 	}
 	whiskerCfg.ConfigureLogging()
+	backend := newGoldmaneFlowsBackend(whiskerCfg)
 
 	wg.Go(func() {
-		whiskerbackend.Run(ctx, whiskerCfg)
+		whiskerbackend.Run(ctx, whiskerCfg, whiskerbackend.WithFlowsBackend(backend))
 	})
 
 	httpsClient := newHTTPSClient(serverCertFile.Name())
