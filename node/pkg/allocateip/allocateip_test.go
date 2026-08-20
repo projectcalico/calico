@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	gnet "net"
+	"sync/atomic"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -1018,6 +1020,62 @@ var _ = Describe("Running as daemon", func() {
 		By("shutting down the daemon")
 		cancel()
 		Eventually(completed).Should(BeClosed(), "2s", "200ms")
+	})
+})
+
+var _ = Describe("Periodic resync", func() {
+	// The syncer feeding the reconciler is purely edge-triggered, so a missed
+	// trigger is missed permanently. These exercise the run loop's own timer, with
+	// no syncer activity at all, so they need no datastore.
+
+	newReconciler := func(interval time.Duration, calls *int32, err error) reconciler {
+		return reconciler{
+			ch:             make(chan struct{}),
+			resyncInterval: interval,
+			reconcile: func() error {
+				atomic.AddInt32(calls, 1)
+				return err
+			},
+		}
+	}
+
+	runDaemon := func(r reconciler) (context.CancelFunc, chan struct{}) {
+		ctx, cancel := context.WithCancel(context.Background())
+		completed := make(chan struct{})
+		go func() {
+			defer close(completed)
+			_ = r.run(ctx)
+		}()
+		return cancel, completed
+	}
+
+	It("should reconcile repeatedly when the syncer reports nothing", func() {
+		var calls int32
+		cancel, completed := runDaemon(newReconciler(10*time.Millisecond, &calls, nil))
+		defer cancel()
+
+		Eventually(func() int32 {
+			return atomic.LoadInt32(&calls)
+		}, "5s", "10ms").Should(BeNumerically(">=", 3))
+
+		cancel()
+		Eventually(completed, "5s", "10ms").Should(BeClosed())
+	})
+
+	It("should keep running when a periodic resync fails", func() {
+		// A resync exists to recover from transient failures, so it must not itself
+		// become a new way to kill calico/node. The next tick retries.
+		var calls int32
+		cancel, completed := runDaemon(newReconciler(10*time.Millisecond, &calls, errors.New("transient failure")))
+		defer cancel()
+
+		Eventually(func() int32 {
+			return atomic.LoadInt32(&calls)
+		}, "5s", "10ms").Should(BeNumerically(">=", 3))
+		Expect(completed).NotTo(BeClosed())
+
+		cancel()
+		Eventually(completed, "5s", "10ms").Should(BeClosed())
 	})
 })
 
