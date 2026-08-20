@@ -16,6 +16,8 @@ package networking
 
 import (
 	"context"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -51,7 +53,7 @@ var _ = describe.CalicoDescribe(
 		var testServer conncheck.Server
 		var testClient conncheck.Client
 		var scraper *metrics.MetricScraper
-		var clientNode string
+		var clientNode, serverNode, serverNodeIP string
 
 		f := utils.NewDefaultFramework("wireguard")
 
@@ -90,11 +92,14 @@ var _ = describe.CalicoDescribe(
 			testClient = conncheck.NewClient("client", f.Namespace, conncheck.WithClientCustomizer(conncheck.AvoidEachOther))
 			checker.AddServer(testServer)
 			checker.AddClient(testClient)
+			ginkgo.DeferCleanup(checker.Stop)
 			checker.Deploy()
 
 			clientNode = testClient.Pod().Spec.NodeName
+			serverNode = testServer.Pod().Spec.NodeName
 			Expect(clientNode).NotTo(BeEmpty(), "Client pod has not been scheduled to a node")
-			Expect(testServer.Pod().Spec.NodeName).NotTo(Equal(clientNode), "Client and server pods share a node")
+			Expect(serverNode).NotTo(Equal(clientNode), "Client and server pods share a node")
+			serverNodeIP = nodeInternalIP(f, serverNode)
 
 			var cleanupScraper func() error
 			scraper, cleanupScraper, err = metrics.NewMetricScraper(f, nodeInternalIP(f, clientNode), metricsPort)
@@ -102,21 +107,23 @@ var _ = describe.CalicoDescribe(
 			ginkgo.DeferCleanup(cleanupScraper)
 		})
 
-		ginkgo.AfterEach(func() {
-			checker.Stop()
-		})
-
 		ginkgo.It("should carry pod traffic between nodes over the tunnel", func() {
-			bytesSent := scraper.MetricSum("wireguard_bytes_sent")
+			// Specs run in parallel, so summing every peer would let unrelated
+			// cross-node traffic satisfy the assertion. Felix labels each series
+			// with the peer's tunnel endpoint, which is the peer node's IP.
+			endpointPrefix := net.JoinHostPort(serverNodeIP, "")
+			bytesSent := scraper.MetricSumWhere("wireguard_bytes_sent", func(labels map[string]string) bool {
+				return strings.HasPrefix(labels["peer_endpoint"], endpointPrefix)
+			})
 
-			ginkgo.By("Reading the sending node's WireGuard byte counter")
+			ginkgo.By("Reading the sending node's WireGuard byte counter for the receiving node")
 			var before float64
 			Eventually(func() error {
 				var err error
 				before, err = bytesSent()
 				return err
 			}).WithTimeout(90*time.Second).WithPolling(5*time.Second).Should(Succeed(),
-				"Felix on node %s should report WireGuard traffic to its peers", clientNode)
+				"Felix on node %s should report WireGuard traffic to peer node %s", clientNode, serverNode)
 
 			ginkgo.By("Sending pod-to-pod traffic to the other node")
 			checker.ExpectSuccess(testClient, testServer.ClusterIPs()...)
@@ -124,7 +131,7 @@ var _ = describe.CalicoDescribe(
 
 			Eventually(bytesSent).WithTimeout(90*time.Second).WithPolling(5*time.Second).
 				Should(BeNumerically(">", before),
-					"WireGuard byte counter on node %s did not advance, so the tunnel is not carrying traffic", clientNode)
+					"WireGuard byte counter on node %s for peer node %s did not advance, so the tunnel is not carrying this traffic", clientNode, serverNode)
 		})
 	})
 

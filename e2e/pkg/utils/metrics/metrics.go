@@ -131,6 +131,12 @@ func (scraper *MetricScraper) Metric(metricName string) func() (float64, error) 
 // MetricSum returns a func which can be repeatedly-called to poll the sum of
 // every series of a metric, across all label values.
 func (scraper *MetricScraper) MetricSum(metricName string) func() (float64, error) {
+	return scraper.MetricSumWhere(metricName, nil)
+}
+
+// MetricSumWhere is MetricSum restricted to the series whose labels satisfy
+// match. It errors when no series matches, naming the ones it skipped.
+func (scraper *MetricScraper) MetricSumWhere(metricName string, match func(labels map[string]string) bool) func() (float64, error) {
 	return func() (float64, error) {
 		output, url, err := scraper.scrape(metricName)
 		if err != nil {
@@ -139,12 +145,17 @@ func (scraper *MetricScraper) MetricSum(metricName string) func() (float64, erro
 
 		found := false
 		var sum float64
+		var skipped []string
 		for _, line := range strings.Split(output, "\n") {
 			if !strings.HasPrefix(line, metricName+" ") && !strings.HasPrefix(line, metricName+"{") {
 				continue
 			}
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
+				continue
+			}
+			if match != nil && !match(parseLabels(line)) {
+				skipped = append(skipped, parts[0])
 				continue
 			}
 			v, err := strconv.ParseFloat(parts[len(parts)-1], 64)
@@ -156,10 +167,38 @@ func (scraper *MetricScraper) MetricSum(metricName string) func() (float64, erro
 		}
 
 		if !found {
+			if len(skipped) > 0 {
+				return 0, fmt.Errorf("no series of %s from %s matched; skipped %s", metricName, url, strings.Join(skipped, ", "))
+			}
 			return 0, fmt.Errorf("metric %s not found in response from %s", metricName, url)
 		}
 		return sum, nil
 	}
+}
+
+// parseLabels pulls the label set out of one Prometheus text-format series.
+func parseLabels(line string) map[string]string {
+	start := strings.Index(line, "{")
+	end := strings.LastIndex(line, "}")
+	if start < 0 || end < start {
+		return nil
+	}
+
+	labels := map[string]string{}
+	rest := line[start+1 : end]
+	for rest != "" {
+		name, after, ok := strings.Cut(rest, `="`)
+		if !ok {
+			break
+		}
+		value, after, ok := strings.Cut(after, `"`)
+		if !ok {
+			break
+		}
+		labels[strings.TrimLeft(name, ", ")] = value
+		rest = after
+	}
+	return labels
 }
 
 func (scraper *MetricScraper) scrape(metricName string) (output, url string, err error) {
