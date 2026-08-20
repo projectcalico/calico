@@ -21,23 +21,6 @@ defaults:
   secretBundles:
     - banzai-secrets
 steps:
-  - name: calico-windows-azr-aso-2022-stable-bpf-vxlan
-    services:
-      - docker
-      - http-cache-proxy
-    env:
-      - name: DATAPLANE
-        value: CalicoBPF
-      - name: ENCAPSULATION_TYPE
-        value: VXLAN
-      - name: K8S_VERSION
-        value: stable-1
-      - name: PROVISIONER
-        value: azr-aso
-      - name: WINDOWS_OS
-        value: "2022"
-    commands: |
-      .argoci/scripts/body_standard.sh
   - name: calico-windows-azr-aso-2022-stable-1-nftables-vxlan
     services:
       - docker
