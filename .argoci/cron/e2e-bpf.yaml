@@ -265,6 +265,8 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
     matrix:
       - name: azr-aks
         env:
@@ -293,6 +295,8 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
       - name: PROVISIONER
         value: azr-aks
     commands: |
@@ -318,6 +322,8 @@ steps:
         value: 10.244.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -754,6 +760,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
