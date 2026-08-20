@@ -58,13 +58,10 @@ func New(config apiconfig.CalicoAPIConfig) (Interface, error) {
 		return nil, err
 	}
 
-	// Enable in-process CRD validation (CEL rules, OpenAPI constraints,
-	// schema defaulting) for etcd mode. In KDD mode the kube-apiserver
-	// handles this on admission, so we skip it to avoid the expensive
-	// CEL compilation cost.
-	if config.Spec.DatastoreType == apiconfig.EtcdV3 {
-		validator.SetCRDValidationEnabled(true)
-	}
+	// Only etcd mode runs CRD validation (CEL rules, OpenAPI constraints,
+	// schema defaulting) in-process. In KDD mode the kube-apiserver handles
+	// it on admission.
+	validator.SetCRDValidationEnabled(config.Spec.DatastoreType == apiconfig.EtcdV3)
 
 	return NewFromBackend(config, be), nil
 }

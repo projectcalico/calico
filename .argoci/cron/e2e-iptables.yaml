@@ -409,9 +409,9 @@ steps:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables.yaml
       - name: K8S_VERSION
-        value: v1.31.3
+        value: v1.32.13
       - name: RKE_VERSION
-        value: v1.7.1
+        value: v1.8.14
     matrix:
       - name: gcp-rancher
         env:

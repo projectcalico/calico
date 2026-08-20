@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,8 @@
 // limitations under the License.
 
 /*
-Package validator implements common field and structure validation that is
-used to validate the API structures supplied on the client interface, and
-is also used internally to validate the information stored in the backend
-datastore.
+Package v1 validates the v1 model objects Felix and Typha receive from the
+datastore. This is dataplane validation, not API validation: the CRD schema
+and its CEL rules cover the API.
 */
 package v1
