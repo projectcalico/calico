@@ -23,17 +23,21 @@ zone=${ZONE:-europe-west3-c}
 project=${GCP_PROJECT:-unique-caldron-775}
 
 vm_pub_key=""
-for attempt in $(seq 1 20); do
+# The host key is published to guest attributes by GCP's guest agent early in
+# boot.  Wait up to ~2min: a cold-booting VM occasionally takes longer than the
+# old ~40s budget to get that far, especially now that VMs are spread across the
+# region's zones (see run-tests-on-vms).
+for attempt in $(seq 1 30); do
   echo "Getting VM ssh key (attempt $attempt)..."
   vm_pub_key=$(gcloud compute instances get-guest-attributes "${vm_name}" --zone="${zone}" --query-path="hostkeys/ssh-ed25519" --format='value(value)') || {
     echo "Failed to get VM ssh key, retrying..."
-    sleep 1
+    sleep 3
     continue
   }
   echo "VM SSH host key: $vm_pub_key"
   if [[ -z "$vm_pub_key" ]]; then
     echo "Empty key, retrying..."
-    sleep 1
+    sleep 3
     continue
   fi
 
@@ -42,6 +46,10 @@ done
 
 if [[ -z "$vm_pub_key" ]]; then
   echo "Failed to get VM ssh key after multiple attempts, exiting."
+  # The guest agent never published the host key, so the VM likely never
+  # finished booting.  Grab the serial console so the failure is diagnosable.
+  echo "Fetching serial console output for debugging:"
+  gcloud compute --project="$project" instances get-serial-port-output "$vm_name" --zone="$zone" --port=1 || true
   exit 22
 fi
 
