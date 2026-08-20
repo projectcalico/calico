@@ -59,6 +59,11 @@ const (
 	// A delete poll runs on its own context, so it always gets the full window
 	// however much of the cleanup budget the steps before it used.
 	whiskerGoneTimeout = 2 * time.Minute
+
+	// gatewayAPICreatedByLabel marks a GatewayAPI CR this suite created, so
+	// cleanup only removes its own and never a CR the cluster came with.
+	gatewayAPICreatedByLabel = "e2e.tigera.io/created-by"
+	gatewayAPICreatedByValue = "ingress-gateway-whisker-e2e"
 )
 
 // This test validates Whisker access via Calico Ingress Gateway: the full
@@ -89,7 +94,9 @@ var _ = describe.CalicoDescribe(
 		)
 
 		ginkgo.BeforeEach(func() {
-			ctx = context.Background()
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(context.Background(), whiskerSpecTimeout)
+			ginkgo.DeferCleanup(cancel)
 
 			scheme := runtime.NewScheme()
 			Expect(operatorv1.AddToScheme(scheme)).NotTo(HaveOccurred(), "registering operator.tigera.io/v1")
@@ -333,10 +340,3 @@ func whiskerCABundle(ctx context.Context, f *framework.Framework) *x509.CertPool
 	Expect(roots.AppendCertsFromPEM([]byte(caCert))).To(BeTrue(), "the CA bundle should parse")
 	return roots
 }
-
-const (
-	// gatewayAPICreatedByLabel marks a GatewayAPI CR this suite created, so
-	// cleanup only removes its own and never a CR the cluster came with.
-	gatewayAPICreatedByLabel = "e2e.tigera.io/created-by"
-	gatewayAPICreatedByValue = "ingress-gateway-whisker-e2e"
-)
