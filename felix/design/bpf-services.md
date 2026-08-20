@@ -29,7 +29,7 @@ listed in [`felix/DESIGN.md`](../DESIGN.md).
 ### The common case: pod to service
 
 > **Note.** Everything in this subsection describes the TC path.
-> When CTLB (Connect-Time Load Balancer (CTLB)) is enabled, a pod's service traffic never takes
+> When [CTLB](#connect-time-load-balancer-ctlb) is enabled, a pod's service traffic never takes
 > this path: CTLB rewrites the destination at `connect(2)` time and
 > the TC program on `cali*` only ever sees pod→pod packets with the
 > backend's address. The TC path below applies when CTLB is
@@ -94,7 +94,7 @@ and the socket pair is set up pod-to-pod-same-address. No packet
 is ever emitted on the network — a substantial deviation from
 `*tables`, where every pod-service-self packet makes a MASQ
 round-trip through the host. This is one of the reasons CTLB is
-an important performance feature (Connect-Time Load Balancer (CTLB)).
+an important performance feature ([CTLB](#connect-time-load-balancer-ctlb)).
 
 Without CTLB, the host would have to loop the packet back, which
 fails: `accept_local` is `0` by default on the pod's veth, and no
@@ -144,34 +144,23 @@ runs:
 1. Look up the `(local-host-IP, dst-port, proto)` tuple in the NAT
    frontend map. If the service exists, pick a backend.
 2. If the chosen backend is a **local** pod, DNAT the packet and
-   forward it to the pod's host-side veth as in Intra-cluster traffic & service NAT.
+   forward it to the pod's host-side veth as in
+   [intra-cluster service NAT](#intra-cluster-traffic--service-nat).
 3. If the chosen backend is on a **remote** node, wrap the packet in a
    VXLAN header ([bpf-encap-fragments-icmp.md → VXLAN in eBPF mode](./bpf-encap-fragments-icmp.md)) with the destination being the node that hosts
    the backend, and hand it to the host stack to route out. The
    packet is marked "seen/approved" so Calico's egress HEP does not
    re-run policy on it.
 
-> **VXLAN ambiguity — worth flagging for readers.** The VXLAN used
-> here for NodePort forwarding is a separate use of the VXLAN
-> device from the pod-to-pod VXLAN overlay. Calico programs both on
-> the same `vxlan.calico` device (flow-mode, see [bpf-encap-fragments-icmp.md → VXLAN in eBPF mode](./bpf-encap-fragments-icmp.md)), but:
->
-> - **NodePort-forwarding VXLAN** (this step) is always present in
->   BPF mode, regardless of whether the overlay uses VXLAN, IPIP,
->   WireGuard, or no encap. It carries external traffic that has
->   hit a NodePort on a node whose selected backend is on a
->   different node. It uses a fixed VNI of **`0xca11c0`**
->   (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`) — reserving that
->   value so receivers can tell NodePort-forwarding packets from
->   overlay packets on the same device.
-> - **Pod-to-pod overlay VXLAN** is what pod→pod traffic uses when
->   the cluster's overlay is configured as VXLAN. Its VNI is the
->   operator-configured overlay VNI, not `0xca11c0`.
->
-> A reader familiar with the overlay may assume one implies the
-> other; it doesn't. The BPF program picks per-packet which
-> semantics apply and sets the VXLAN tunnel key (destination
-> node IP + VNI) accordingly.
+> **Two uses of `vxlan.calico`.** NodePort forwarding and the
+> pod-to-pod overlay share the device (flow-mode, see
+> [bpf-encap-fragments-icmp.md → VXLAN in eBPF mode](./bpf-encap-fragments-icmp.md))
+> and are told apart by VNI. NodePort forwarding is always present in
+> BPF mode whatever the overlay encap is, and uses the reserved VNI
+> **`0xca11c0`** (`CALI_VXLAN_VNI` in `felix/bpf-gpl/nat.h`); overlay
+> traffic uses the operator-configured VNI. The BPF program sets the
+> tunnel key (destination node IP + VNI) per packet, so neither use
+> implies the other.
 
 ### Return path (non-DSR)
 
@@ -215,7 +204,8 @@ accepting of it.
 
 The cluster admin opts in via `BPFExternalServiceMode = dsr` (vs.
 the default `tunnel`) with `BPFDSROptoutCIDRs` for per-destination
-opt-out. DSR is also a prerequisite for Maglev (Maglev load balancer).
+opt-out. DSR is also a prerequisite for
+[Maglev](#maglev-load-balancer).
 
 ### Intra-cluster access to NodePorts
 
@@ -272,13 +262,12 @@ flow — return packets must still match the CT entry.
 
 ## Maglev load balancer
 
-> **Relationship to External traffic (NodePort, DSR).** Maglev layers on top of the NodePort
-> VXLAN-forwarding path described in External traffic (NodePort, DSR). The forwarding mechanics —
-> VXLAN-wrap to the backend node, DSR return, conntrack bookkeeping
-> — are reused unchanged. What Maglev adds is consistent-hash
-> backend selection in place of the usual per-node random/round-robin,
-> plus a re-run of policy on mid-flow packets that may have failed
-> over from another lb-node.
+> **Relationship to [external traffic](#external-traffic-nodeport-dsr).**
+> Maglev reuses that path's forwarding mechanics — VXLAN-wrap to the
+> backend node, DSR return, conntrack bookkeeping — unchanged. It adds
+> consistent-hash backend selection in place of the per-node
+> random/round-robin, and a re-run of policy on mid-flow packets that
+> may have failed over from another lb-node.
 
 ### What it is for
 
@@ -312,10 +301,9 @@ hashing (`jenkins_hash.h`), reduces modulo the LUT size, and reads the
 NAT destination out of the Maglev map. The LUT size is a per-service
 parameter carried in globals (`MAGLEV_LUT_SIZE`).
 
-The selection code is small, but the hashing code _was not_ — the
-original inlined form exceeded the kernel verifier's instruction
-budget when placed inside the main program. Maglev therefore lives in
-its own tail-called sub-program (`calico_tc_maglev` in `tc.c`,
+Maglev lives in its own tail-called sub-program because the hashing
+code inlined into the main program exceeds the verifier's instruction
+budget (`calico_tc_maglev` in `tc.c`,
 registered as `SubProgMaglev` in `felix/bpf/hook/map.go`). The main
 program detects that the target is a Maglev service and tail-calls
 into the Maglev program before policy. Maglev fills in the post-NAT
@@ -330,13 +318,13 @@ where this is true.
 
 ### Mid-flow packets that don't match conntrack
 
-Before Maglev, a mid-flow TCP packet with no conntrack hit was either
-let through to `*tables` (might match a pre-existing kernel CT entry;
-see [bpf-conntrack-flowstate.md → Switching from `*tables` to eBPF](./bpf-conntrack-flowstate.md)) or dropped as unsolicited. Maglev adds a third class: a
-mid-flow packet with no BPF CT hit whose destination is a Maglev
-service. In this case the lb-node has just failed over onto this
-node, so the packet genuinely is mid-flow but this node doesn't know
-it yet. The handling is:
+A mid-flow TCP packet with no BPF conntrack hit is either let through
+to `*tables` (it may match a pre-existing kernel CT entry; see
+[bpf-conntrack-flowstate.md → Switching from `*tables` to eBPF](./bpf-conntrack-flowstate.md)),
+dropped as unsolicited, or — if its destination is a Maglev service —
+treated as a failover: an lb-node has just moved the flow onto this
+node, so the packet genuinely is mid-flow and this node does not know
+it yet. That last case is handled as:
 
 - Tail-call the Maglev program to pick the _same_ backend the previous
   node would have picked.
@@ -363,7 +351,7 @@ miss, go through the new-flow path" signal to the rest of the chain.
   be Maglev because each node has its own NodePort IP — failing over
   to a different node means hashing into a different LUT keyed by a
   different IP.
-- **CTLB.** The connect-time LB (Connect-Time Load Balancer (CTLB)) resolves the service at syscall
+- **CTLB.** The [connect-time LB](#connect-time-load-balancer-ctlb) resolves the service at syscall
   time, before the TC program runs, so Maglev has no visibility. For
   pod-originated traffic this is not a regression (pods don't fail
   over), but it means Maglev is effectively external-traffic-only.
@@ -460,13 +448,14 @@ resolution; flow-lifetime fast-path packets are not affected.
 
 `felix/bpf/proxy/` is Calico's in-Felix replacement for kube-proxy.
 It watches Kubernetes Service, Endpoints and EndpointSlice resources
-and translates them into the BPF maps that the TC programs
-([bpf-xdp.md → XDP programs and the XDP→TC handoff](./bpf-xdp.md)–Maglev load balancer) and the CTLB (Connect-Time Load Balancer (CTLB)) read. When BPF mode is on, Calico
-disables kube-proxy and takes full responsibility for service
-implementation.
+and translates them into the BPF maps that the TC, XDP
+([bpf-xdp.md](./bpf-xdp.md)) and
+[CTLB](#connect-time-load-balancer-ctlb) programs read. When BPF mode
+is on, Calico disables kube-proxy and takes full responsibility for
+service implementation.
 
-This is the userspace half of "service NAT" — the TC-side view
-(Intra-cluster traffic & service NAT–External traffic (NodePort, DSR)) only sees "a map with a frontend pointing at a backend".
+This is the userspace half of "service NAT": the packet-path sections
+above only see "a map with a frontend pointing at a backend".
 The proxy package is what fills those maps, keeps them consistent
 as Services/Endpoints churn, and applies the Kubernetes
 semantics (topology, traffic policies, health, affinity) before
@@ -500,8 +489,8 @@ the BPF program ever runs.
 
 - Frontend map — `(service-IP, port, proto) → service_id`.
 - Backend map — `(service_id, ordinal) → (backend_IP, port)`.
-- Affinity map — see Service session affinity.
-- Maglev LUT — see Maglev load balancer.
+- Affinity map — see [service session affinity](#service-session-affinity).
+- Maglev LUT — see [Maglev](#maglev-load-balancer).
 - Reverse-SNAT map (`cali_v4_srmsg` / `cali_v6_srmsg`) — used by
   the CTLB's `recvmsg` hook to undo destination rewrites.
 
@@ -516,28 +505,18 @@ LoadBalancer) frontends; that is how `applyDerived` points them at one
 block of backends.
 
 IDs are handed out by `newSvcID` and, on restart, re-adopted from the
-maps by `startupBuildPrev`, which pairs each frontend entry with the
-service that must have written it. Re-adoption keeps a restart from
-disrupting traffic, but it means Felix trusts the maps — and Felix is
-not their only writer:
+maps by `startupBuildPrev` so a restart does not disrupt traffic. That
+makes Felix trust maps it does not own alone: they are pinned, so they
+outlive both Felix and calico-node, and under `bpfNetworkBootstrap`
+the `ebpf-bootstrap` init container programs the API server service
+into them before Felix runs (`node/pkg/nodeinit`).
 
-- the maps are pinned, so they outlive both Felix and calico-node;
-- with `bpfNetworkBootstrap` enabled the `ebpf-bootstrap` init
-  container programs the API server service into them on every
-  calico-node start, before Felix runs (`node/pkg/nodeinit`).
-
-So `startupBuildPrev` must **not** adopt an ID it finds shared by two
-different services: adopting it makes the conflict permanent, since
-`applySvc` keeps an unchanged service's ID forever and every later
-restart re-adopts it. Both services are instead left out of
-`prevSvcMap`, which gives each a fresh ID and rewrites its frontends
-and backends; nothing read through a duplicated ID is carried over,
-because those backends may belong to the other service.
-
-The bootstrap writer holds up the other end of the invariant: it
-reuses the ID already recorded for the service it is programming, and
-otherwise picks one no frontend entry uses, rather than assuming an ID
-is free.
+Both writers therefore hold up uniqueness. Felix does not adopt an ID
+it finds shared by two services — adopting it would make the conflict
+permanent, since an unchanged service keeps its ID across every later
+restart — so both are dropped from `prevSvcMap` and rewritten under
+fresh IDs. The bootstrap reuses the ID already recorded for the
+service it programs, and otherwise picks one no frontend entry uses.
 
 ### Semantics it enforces
 
@@ -547,36 +526,16 @@ is free.
 - Topology-aware routing weights backends by zone/region.
 - Unready endpoints excluded; terminating endpoints handled via
   the Kubernetes draining semantics.
-- Session affinity populated and refreshed (Service session affinity).
-- Maglev LUTs regenerated consistently across nodes (Maglev load balancer).
-- The `default/kubernetes` API server service is never allowed to
-  drop to zero backends — see below.
-
-### API server service: never drop to zero backends
-
-With `bpfNetworkBootstrap` enabled, Felix reaches the API server
-*through* the `default/kubernetes` ClusterIP service's NAT entry
-(`KUBERNETES_SERVICE_HOST` is the ClusterIP, and the
-`ebpf-bootstrap` init container seeds the frontend/backend from
-`KUBERNETES_SERVICE_IPS_PORTS` / `KUBERNETES_APISERVER_ENDPOINTS`
-before Felix starts — see `node/pkg/nodeinit/calico-init_linux.go`).
-
-This creates a hazard the generic kube-proxy model doesn't have:
-if that service transiently loses all its (ready) endpoints — e.g.
-the API server's own endpoint reconciler de-lists it across a
-restart — the syncer would write `count=0` and delete the backend,
-**severing Felix's own connection to the API server**. Felix can
-then no longer learn the restored endpoints, so the NAT stays empty
-until calico-node is restarted (which re-seeds it from the init
-container). The deadlock is therefore unique to bootstrap mode.
-
-The syncer therefore retains the last-known-good backend for the
-API server service whenever an update would leave it with zero ready
-endpoints (`apiServerFallbackEps` in `syncer.go`, sourced from
-`prevEpsMap`, which is rebuilt from the BPF maps on restart by
-`startupBuildPrev`). The API server's backend (the control-plane
-host IP) is stable across such an outage, so the retained backend is
-correct; a later update with real ready endpoints overwrites it.
+- Session affinity populated and refreshed
+  ([session affinity](#service-session-affinity)).
+- Maglev LUTs regenerated consistently across nodes
+  ([Maglev](#maglev-load-balancer)).
+- The `default/kubernetes` service keeps its last-known-good backend
+  instead of dropping to zero: under `bpfNetworkBootstrap` Felix
+  reaches the API server through this NAT entry, so an empty backend
+  list is self-severing. Its backend is the control-plane host IP,
+  stable across such an outage, so retaining it is safe. Every other
+  service still drops to zero.
 
 ### Review notes
 
@@ -662,7 +621,7 @@ optimisation rather than a prerequisite. The bpfnat veth workaround
   the packet itself and the cgroup hook never fires. Such packets go
   through the regular TC path instead, which means they depend on
   the bpfnat veth to reach a TC program ([bpf-host-networking.md → Host-networked workaround (bpfnat veth)](./bpf-host-networking.md)).
-- **Per-packet Maglev (Maglev load balancer) does not apply.** CTLB resolves the
+- **Per-packet [Maglev](#maglev-load-balancer) does not apply.** CTLB resolves the
   backend before Maglev's hashing logic has a chance to see the
   packet, so pod-originated traffic to a Maglev service gets a
   non-consistent-hash backend. Since Maglev is intended for external
@@ -691,17 +650,9 @@ issue.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
