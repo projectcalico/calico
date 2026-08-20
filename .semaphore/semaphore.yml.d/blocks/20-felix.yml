@@ -278,8 +278,9 @@
         env_vars:
           - name: FELIX_TEST_GROUP
             value: "bpf-26.04-nft-no-fv-with-ut"
-          - name: FELIX_FV_BPFATTACHTYPE
-            value: "tc"
+          # No FELIX_FV_BPFATTACHTYPE: this job covers netkit attachment, which
+          # the default attach type selects for netkit workload devices. Naming
+          # a single mechanism here would opt the node out of netkit entirely.
           - name: JOB_TIMEOUT_MINUTES
             value: "60"
           - name: FELIX_FV_NETKIT
