@@ -145,7 +145,9 @@ func extractReason(tag string) string {
 }
 
 func registerFieldValidator(key string, fn validator.Func) {
-	validate.RegisterValidation(key, fn)
+	if err := validate.RegisterValidation(key, fn); err != nil {
+		log.WithError(err).Panicf("Failed to register validator %q", key)
+	}
 }
 
 func registerStructValidator(fn validator.StructLevelFunc, t ...any) {

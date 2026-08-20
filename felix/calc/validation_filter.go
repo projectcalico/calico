@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
-	v1v "github.com/projectcalico/calico/libcalico-go/lib/validator/v1"
 	v3v "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
+	v1v "github.com/projectcalico/calico/typha/pkg/validator/v1"
 )
 
 func NewValidationFilter(sink api.SyncerCallbacks, felixConfig *config.Config) *ValidationFilter {
