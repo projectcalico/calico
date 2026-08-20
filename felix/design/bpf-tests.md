@@ -161,19 +161,11 @@ needs an external client to exercise that path must restrict to
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane is tested in the area this file
-covers must update the relevant section in the same PR — new
-harness pattern, new matrix axis, new UT category, new
-verifier-time gate. Exemptions: (a) bug fix restoring documented
-behaviour, (b) mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) dependency bumps. If in
-doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
 Felix-wide test discipline lives in
 [`.claude/CLAUDE.md` → Tests required for code changes](../../.claude/CLAUDE.md).
