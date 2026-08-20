@@ -40860,8 +40860,8 @@ spec:
                 blockSize:
                   description: |-
                     The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
-                    The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
-                    or equal to the size of the pool CIDR.
+                    The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller
+                    than or equal to the size of the pool CIDR.
                   maximum: 128
                   minimum: 0
                   type: integer
@@ -40979,6 +40979,33 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: IPPool CIDR must be strictly masked
+                  reason: FieldValueInvalid
+                  rule: cidr(self.cidr) == cidr(self.cidr).masked()
+                - message: IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16
+                  reason: FieldValueInvalid
+                  rule:
+                    "!cidr('169.254.0.0/16').containsIP(cidr(self.cidr).ip()) &&
+                    !cidr(self.cidr).containsIP('169.254.0.0')"
+                - message: IPPool CIDR overlaps with IPv6 link local range fe80::/10
+                  reason: FieldValueInvalid
+                  rule: "!cidr('fe80::/10').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('fe80::')"
+                - message:
+                    blockSize must be between 20 and 32 for IPv4 pools, and between
+                    116 and 128 for IPv6 pools
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.blockSize) || self.blockSize == 0 || (cidr(self.cidr).ip().family()
+                    == 4 ? self.blockSize >= 20 && self.blockSize <= 32 : self.blockSize
+                    >= 116 && self.blockSize <= 128)"
+                - message:
+                    IP pool size is too small for use with Calico IPAM. It must
+                    be equal to or greater than the block size.
+                  reason: FieldValueInvalid
+                  rule:
+                    "(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength()
+                    <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize :
+                    (cidr(self.cidr).ip().family() == 4 ? 26 : 122))"
             status:
               properties:
                 conditions:
