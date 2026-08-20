@@ -6,6 +6,8 @@
 # Tests requiring real QEMU-backed VMs are excluded via the
 # RequiresRealKubeVirt label.
 
+extends: ../base.yaml
+
 include:
   - Feature:KubeVirt
 
