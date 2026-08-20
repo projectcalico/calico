@@ -47,6 +47,12 @@ if [[ "${PROVISIONER:-}" == azr-* ]]; then
     echo "[WARN] azr-* provisioner but az CLI or AZ_SP_ID missing; azure auth skipped"
   fi
 fi
+# Despite the name this is an Azure *subscription name*, not a project or a
+# resource group: azr-aso/azr-capi select the subscription by matching it
+# against `az account list` output. The spelling is banzai-core's variable, so
+# it can't be renamed from here. banzai-core defaults it to the developer
+# subscription; azr-aks ignores it, which is why only the ASO/CAPI paths break.
+export AZ_PROJECT=${AZ_PROJECT:-tigera-dev-ci}
 
 export DOCKER_AUTH_FILE="${DOCKER_AUTH_FILE:-${HOME}/.docker/config.json}"
 chmod 0600 "${HOME}"/.keys/* 2>/dev/null || true
