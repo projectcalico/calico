@@ -23,7 +23,7 @@ global_job_config:
     - name: banzai-secrets
   env_vars:
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|Feature:KubeVirt)
     - name: DATAPLANE
       value: "CalicoBPF"
     - name: INSTALLER
@@ -284,7 +284,7 @@ blocks:
             # The skip "EndpointSlice\|Services\sshould" is needed to skip Endpoint slice tests which are only possible in k8s 1.21+
             # The skip "Ingress.API|IngressClass.API" is needed to skip Ingress tests which are only possible in k8s 1.21+
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev)
+              value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev|Feature:KubeVirt)
 
         - name: aws-lb-bpf
           execution_time_limit:
@@ -320,7 +320,7 @@ blocks:
             # - [It] "DNS should resolve DNS of partial qualified names for services"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:KubeVirt)
 
         - name: aws-lb-iptables
           execution_time_limit:
@@ -358,7 +358,7 @@ blocks:
             # - [It] "DNS should resolve DNS of partial qualified names for services"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:KubeVirt)
 
         - name: EKS w/ aws CNI
           execution_time_limit:
@@ -416,7 +416,7 @@ blocks:
             - name: INSTALLER
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
+              value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev|Feature:KubeVirt)
             - name: NUM_ADDON_PODS
               value: "45" # there are 3 nodes, each with 3 ENIs and each ENI can have 12 IPs.
 
@@ -439,7 +439,7 @@ blocks:
             - name: INSTALLER
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise)
+              value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise|Feature:KubeVirt)
             - name: K8S_E2E_DOCKER_EXTRA_FLAGS
               value: --env IP_FAMILY
             - name: NAT_OUTGOING_V6
@@ -476,7 +476,7 @@ blocks:
             # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
             # Hopefully we'll fix the DataPath ones soon.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev|Feature:KubeVirt)
             - name: K8S_VERSION
               value: "stable-1"
             - name: NAT_OUTGOING_V6
@@ -514,7 +514,7 @@ blocks:
             # See https://tigera.atlassian.net/browse/CORE-6725 for the extra skips.
             # Hopefully we'll fix the DataPath ones soon.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|WireGuard|HostPort|EndpointSlices.pointing.to.API.Server|Feature:KubeVirt)
             - name: NAT_OUTGOING
               value: "Enabled"
             - name: ENCAPSULATION_TYPE
@@ -534,7 +534,7 @@ blocks:
         - name: CLUSTER_NODES
           value: "3"
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev)
+          value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev|Feature:KubeVirt)
 
   - name: BPF mini-scale runs
     dependencies: []
@@ -631,7 +631,7 @@ blocks:
             - name: DATAPLANE
               value: "CalicoIptables"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
+              value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev|Feature:KubeVirt)
 
   - name: Wireguard
     dependencies: []

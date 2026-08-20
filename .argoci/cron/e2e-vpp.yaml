@@ -18,7 +18,7 @@ globalPrologue: |
   export INSTALLER="${INSTALLER:-operator}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
   export K8S_E2E_DOCKER_EXTRA_FLAGS="${K8S_E2E_DOCKER_EXTRA_FLAGS:--e CLIENT_TYPE=k8s}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev)}"
+  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|wireguard|Wireguard|WireGuard|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|Feature:KubeVirt)}"
   export K8S_VERSION="${K8S_VERSION:-stable-1}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export RELEASE_STREAM="${RELEASE_STREAM:-master}"

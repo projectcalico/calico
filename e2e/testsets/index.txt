@@ -4,13 +4,13 @@
 .argoci/cron/e2e-benchmarking.yaml | tiger-bench | (tiger-bench) | -
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-bpf-9k-mtu | bpf/bpf-extnode-aws | 219
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-iptables-9k-mtu | bpf/xtables-extnode-aws | 223
-.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 | legacy/bpf | 424
-.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | legacy/bpf | 424
+.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 | legacy/bpf | 412
+.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | legacy/bpf | 412
 .argoci/cron/e2e-bpf.yaml | bpf-mini-scale-runs | (scale-test) | -
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 209
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-calico-cni | bpf/aks-bpf | 212
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-encap | legacy/bpf/bpf-run-matrix-aws-encap | 574
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kops-rhel8-2 | legacy/bpf/bpf-run-matrix-aws-kops-rhel8-2 | 550
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-encap | legacy/bpf/bpf-run-matrix-aws-encap | 562
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kops-rhel8-2 | legacy/bpf/bpf-run-matrix-aws-kops-rhel8-2 | 538
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kubeadm-dual-stack | legacy/bpf/bpf-run-matrix-aws-kubeadm-dual-stack | 292
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-bpf | legacy/bpf/bpf-run-matrix-aws-lb-bpf | 328
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables | legacy/bpf/bpf-run-matrix-aws-lb-iptables | 328
@@ -20,20 +20,20 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-calico-cni | bpf/eks-bpf-encap-extnode-aws | 205
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-dsr | bpf/bpf-v3crd-extnode | 215
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 574
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv4 | 412
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv6 | 412
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 562
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv4 | 400
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv6 | 400
 .argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf | (usage-reporting) | -
 .argoci/cron/e2e-bpf.yaml | wireguard | bpf/aks-bpf-encap-nobgp | 207
 .argoci/cron/e2e-certification.yaml | hcp-hosted-setup-and-tests | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | hcp-setup-hosting | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | standalone-cluster-tests | (ocp-cert) | -
-.argoci/cron/e2e-iptables.yaml | aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | legacy/iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 426
-.argoci/cron/e2e-iptables.yaml | aks-aks-private-w-aks-cni-overlay | legacy/iptables/aks-aks-private-w-aks-cni-overlay | 462
-.argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | legacy/iptables/aks-aks-w-aks-cni | 425
-.argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni | legacy/iptables/aks-aks-w-calico-cni | 426
-.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 | legacy/iptables | 425
+.argoci/cron/e2e-iptables.yaml | aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | legacy/iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 414
+.argoci/cron/e2e-iptables.yaml | aks-aks-private-w-aks-cni-overlay | legacy/iptables/aks-aks-private-w-aks-cni-overlay | 451
+.argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | legacy/iptables/aks-aks-w-aks-cni | 413
+.argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni | legacy/iptables/aks-aks-w-calico-cni | 414
+.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 | legacy/iptables | 413
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-eks-arm64-calico-cni | legacy/iptables/arm64-smoke-tests-eks-arm64-calico-cni | 294
 .argoci/cron/e2e-iptables.yaml | autohep-test | iptables/xtables-autohep | 222
 .argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 207
@@ -50,22 +50,22 @@
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 192
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 185
-.argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 425
+.argoci/cron/e2e-iptables.yaml | openshift-ocp | legacy/iptables | 413
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 219
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 219
 .argoci/cron/e2e-iptables.yaml | usage-reporting | (usage-reporting) | -
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 462
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 426
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | legacy/iptables/wireguard-regression-k8s-e2e-kdd-old | 401
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 451
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 414
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | legacy/iptables/wireguard-regression-k8s-e2e-kdd-old | 389
 .argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | legacy/nftables | 194
+.argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | legacy/nftables | 182
+.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | legacy/nftables | 182
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 212
-.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-aws | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-gcp | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-nftables-talos | legacy/nftables | 194
+.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | legacy/nftables | 182
+.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | legacy/nftables | 182
+.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-aws | legacy/nftables | 182
+.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-gcp | legacy/nftables | 182
+.argoci/cron/e2e-nftables.yaml | nftables-talos-nftables-talos | legacy/nftables | 182
 .argoci/cron/e2e-openstack.yaml | full-fv | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region | (openstack-e2e) | -
 .argoci/cron/e2e-patch-verification.yaml | kind-tests | legacy/patch-verification | 84
@@ -91,39 +91,39 @@
 .argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables | legacy/upgrade | 84
 .argoci/cron/e2e-upgrade.yaml | calico-tests-openshift | legacy/upgrade | 84
 .argoci/cron/e2e-upgrade.yaml | calico-tests-rke2 | legacy/upgrade | 84
-.argoci/cron/e2e-vpp.yaml | iptables-openshift | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-v3-28-regression-test | legacy/vpp | 140
+.argoci/cron/e2e-vpp.yaml | iptables-openshift | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-v3-28-regression-test | legacy/vpp | 128
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks | vpp/eks-vpp-encap-extnode-aws | 116
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks-dpdk | vpp/eks-vpp-encap-extnode-aws | 116
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-ipsec-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-vx-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-wg-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | vpp-openshift | legacy/vpp | 140
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-ipsec-huge | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-vx-huge | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-wg-huge | legacy/vpp | 128
+.argoci/cron/e2e-vpp.yaml | vpp-openshift | legacy/vpp | 128
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | legacy/windows | 8
 .argoci/cron/e2e-windows.yaml | calico-windows-azr-aso-2022-stable-nftables-vxlan | legacy/windows | 8
 .semaphore/end-to-end/pipelines/benchmarking.yml | Benchmarks / Benchmark tests Calico | (benchmark) | -
 .semaphore/end-to-end/pipelines/benchmarking.yml | Tiger-bench / Tiger-bench tests Calico | (tiger-bench) | -
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-bpf - 9k MTU | bpf/bpf-extnode-aws | 219
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-iptables - 9k MTU | bpf/xtables-extnode-aws | 223
-.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 | legacy/bpf | 424
-.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | legacy/bpf | 424
+.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 | legacy/bpf | 412
+.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | legacy/bpf | 412
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mini-scale runs / gcp-bpf - mini-scale | (scale-test) | -
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mode switch / gcp-bpf - mode switch | legacy/bpf/bpf-mode-switch-gcp-bpf-mode-switch | 0
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 209
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ Calico-CNI | bpf/aks-bpf | 212
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap | legacy/bpf/bpf-run-matrix-aws-encap | 574
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap | legacy/bpf/bpf-run-matrix-aws-encap | 562
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS single subnet, dual IP-family | bpf-aws-single-subnet | 557
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS-Talos, no encap, DSR | bpf/bpf-aws | 215
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 207
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 216
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ calico CNI | bpf/eks-bpf-encap-extnode-aws | 205
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP encap w/ NodeLocal DNSCache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 574
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP encap w/ NodeLocal DNSCache | legacy/bpf/bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache | 562
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP, DSR | bpf/bpf-v3crd-extnode | 215
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / Kops w/ calico CNI IPv4 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv4 | 412
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / Kops w/ calico CNI IPv6 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv6 | 412
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-kops RHEL8.2 | legacy/bpf/bpf-run-matrix-aws-kops-rhel8-2 | 550
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / Kops w/ calico CNI IPv4 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv4 | 400
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / Kops w/ calico CNI IPv6 | legacy/bpf/bpf-run-matrix-kops-w-calico-cni-ipv6 | 400
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-kops RHEL8.2 | legacy/bpf/bpf-run-matrix-aws-kops-rhel8-2 | 538
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-kubeadm dual stack | legacy/bpf/bpf-run-matrix-aws-kubeadm-dual-stack | 292
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-bpf | legacy/bpf/bpf-run-matrix-aws-lb-bpf | 328
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-iptables | legacy/bpf/bpf-run-matrix-aws-lb-iptables | 328
@@ -135,11 +135,11 @@
 .semaphore/end-to-end/pipelines/certification.yml | HCP setup hosting / HCP setup hosting | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/certification.yml | Standalone cluster tests / Standalone cluster tests (cert) | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/cleanup.yml | Cleanup jobs / cleanup job VMs | (no tests) | -
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS Private w AKS CNI + Overlay | legacy/iptables/aks-aks-private-w-aks-cni-overlay | 462
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS migrate from vendored Calico CNI to Calico CNI | legacy/iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 426
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w AKS CNI | legacy/iptables/aks-aks-w-aks-cni | 425
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w Calico CNI | legacy/iptables/aks-aks-w-calico-cni | 426
-.semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS Private w AKS CNI + Overlay | legacy/iptables/aks-aks-private-w-aks-cni-overlay | 451
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS migrate from vendored Calico CNI to Calico CNI | legacy/iptables/aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | 414
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w AKS CNI | legacy/iptables/aks-aks-w-aks-cni | 413
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w Calico CNI | legacy/iptables/aks-aks-w-calico-cni | 414
+.semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 | legacy/iptables | 413
 .semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / EKS - ARM64 - Calico CNI | legacy/iptables/arm64-smoke-tests-eks-arm64-calico-cni | 294
 .semaphore/end-to-end/pipelines/iptables.yml | AutoHEP test / Test with AutoHEP enabled | iptables/xtables-autohep | 222
 .semaphore/end-to-end/pipelines/iptables.yml | Distro support / kdd | iptables/xtables-encap-nobgp | 214
@@ -151,14 +151,14 @@
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | legacy/iptables/migration-flannel-migration-pre-migration | 1
-.semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | legacy/iptables | 425
+.semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | legacy/iptables | 413
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | iptables/xtables | 219
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | iptables/xtables | 219
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard VXLAN k8s-e2e / wireguard-vxlan-aws-kubeadm | legacy/iptables/wireguard-vxlan-k8s-e2e-wireguard-vxlan-aws-kubeadm | 0
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard k8s-e2e / aws-kubeadm-calico-cni with/without IP-in-IP | legacy/iptables/wireguard-k8s-e2e-aws-kubeadm-calico-cni-with-without-ip-in-ip | 0
-.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / AKS w AKS CNI + Overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 462
-.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 426
-.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - old | legacy/iptables/wireguard-regression-k8s-e2e-kdd-old | 401
+.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / AKS w AKS CNI + Overlay | legacy/iptables/wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | 451
+.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - new | legacy/iptables/wireguard-regression-k8s-e2e-kdd-new | 414
+.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - old | legacy/iptables/wireguard-regression-k8s-e2e-kdd-old | 389
 .semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 207
 .semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - new | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - old | iptables/xtables-manifest | 211
@@ -169,13 +169,13 @@
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 212
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, arm64, WG / Nftables mode, arm64, WG | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (AWS) | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | legacy/nftables | 194
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, arm64, WG / Nftables mode, arm64, WG | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (AWS) | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | legacy/nftables | 182
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | legacy/nftables | 182
 .semaphore/end-to-end/pipelines/patch-verification.yml | KinD tests / IPv6 | legacy/patch-verification | 84
 .semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | legacy/patch-verification | 84
@@ -199,15 +199,15 @@
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / RKE2 | legacy/upgrade | 84
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - bpf | legacy/upgrade | 84
 .semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - iptables | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/vpp.yml | Iptables (Openshift) / Iptables (Openshift) | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | VPP-openshift / VPP-openshift | legacy/vpp | 140
+.semaphore/end-to-end/pipelines/vpp.yml | Iptables (Openshift) / Iptables (Openshift) | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | VPP-openshift / VPP-openshift | legacy/vpp | 128
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS | vpp/eks-vpp-encap-extnode-aws | 116
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS-dpdk | vpp/eks-vpp-encap-extnode-aws | 116
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-IPSec-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-VX-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-WG-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | legacy/vpp | 140
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-IPSec-Huge | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-VX-Huge | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-WG-Huge | legacy/vpp | 128
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | legacy/vpp | 128
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | legacy/windows | 8
 .semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | legacy/windows | 8

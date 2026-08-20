@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -55,7 +56,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			if !isMockVirtDeployed(f) {
-				Fail("KubeVirt-MockVirt tests selected but cluster does not have MockVirt deployed")
+				framework.Failf("MockVirt is not deployed in this cluster, so the lane should exclude the RequiresMockVirt label")
 			}
 			// Double migration needs 3 workers: source, first target, second target.
 			utils.RequireNodeCount(f, 3)
