@@ -32,7 +32,6 @@ import (
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
-	"github.com/projectcalico/calico/libcalico-go/lib/net"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 	validator "github.com/projectcalico/calico/libcalico-go/lib/validator/v3"
@@ -221,41 +220,12 @@ type poolAccessor struct {
 	client *client
 }
 
-func filterIPPool(pool *v3.IPPool, ipVersion int) bool {
-	if !pool.DeletionTimestamp.IsZero() {
-		log.Debugf("Skipping deleting IP pool (%s)", pool.Name)
-		return false
-	}
-	if pool.Spec.Disabled {
-		log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-		return false
-	}
-
-	if pool.Status != nil {
-		// Skip any pools that have been marked as unavailable for allocations by the IP pool controller in kube-controllers.
-		for _, condition := range pool.Status.Conditions {
-			if condition.Type == v3.IPPoolConditionAllocatable && condition.Status == metav1.ConditionFalse {
-				log.Debugf("Skipping IP pool (%s) with condition Allocatable=false", pool.Name)
-				return false
-			}
-		}
-	}
-
-	if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-		log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
-		return true
-	} else if err != nil {
-		log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
-	} else {
-		log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
-	}
-	return false
-}
-
 func (p poolAccessor) GetEnabledPools(ctx context.Context, ipVersion int) ([]v3.IPPool, error) {
-	return p.getPools(ctx, func(pool *v3.IPPool) bool {
-		return filterIPPool(pool, ipVersion)
-	})
+	pools, err := p.client.IPPools().List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return selectAllocatablePools(pools.Items, ipVersion), nil
 }
 
 func (p poolAccessor) getPools(ctx context.Context, filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
