@@ -30,7 +30,7 @@ const (
 	egOwningGatewayNameLabel      = "gateway.envoyproxy.io/owning-gateway-name"
 	egOwningGatewayNamespaceLabel = "gateway.envoyproxy.io/owning-gateway-namespace"
 
-	gatewayProxyReadyTimeout = 3 * time.Minute
+	gatewayProxyReadyTimeout = 5 * time.Minute
 	gatewayProxyPollInterval = 5 * time.Second
 )
 
@@ -94,10 +94,22 @@ func GatewayProxyBaseURL(ctx context.Context, clientset kubernetes.Interface, gw
 					chosen = p.Port
 				}
 			}
-			if chosen != 0 {
-				svcNS, svcName, remotePort = svc.Namespace, svc.Name, chosen
-				return nil
+			if chosen == 0 {
+				continue
 			}
+			// The Service exists as soon as the Gateway is accepted, but
+			// forwarding to it fails with a bare "connection refused" until a
+			// proxy Pod is actually serving, which on a cluster that is still
+			// installing Envoy Gateway can take minutes.
+			ready, err := proxyPodServing(listCtx, clientset, svc.Namespace, selector)
+			if err != nil {
+				return err
+			}
+			if !ready {
+				return fmt.Errorf("no serving Envoy Gateway proxy Pod for Gateway %s/%s yet", gwNamespace, gwName)
+			}
+			svcNS, svcName, remotePort = svc.Namespace, svc.Name, chosen
+			return nil
 		}
 		return fmt.Errorf("no Envoy Gateway proxy Service with a ClusterIP+TCP port for Gateway %s/%s yet", gwNamespace, gwName)
 	}).WithTimeout(gatewayProxyReadyTimeout).WithPolling(gatewayProxyPollInterval).Should(
@@ -110,4 +122,28 @@ func GatewayProxyBaseURL(ctx context.Context, clientset kubernetes.Interface, gw
 
 	stop := func() { close(stopCh) }
 	return fmt.Sprintf("%s://127.0.0.1:%d", scheme, localPort), stop
+}
+
+// proxyPodServing reports whether a proxy Pod behind the Gateway is ready to
+// take traffic. A Gateway reaching Accepted says nothing about its data plane:
+// the Gateway API controller sets that from configuration alone, so the Service
+// can exist well before any Pod backs it.
+func proxyPodServing(ctx context.Context, clientset kubernetes.Interface, namespace, selector string) (bool, error) {
+	pods, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
+	if err != nil {
+		return false, fmt.Errorf("failed to list proxy Pods: %w", err)
+	}
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != corev1.PodRunning || pod.DeletionTimestamp != nil {
+			continue
+		}
+		for _, cond := range pod.Status.Conditions {
+			// PodReady covers every container, so a proxy still starting one of
+			// them does not count as serving.
+			if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
