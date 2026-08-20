@@ -50,6 +50,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
@@ -1199,23 +1200,23 @@ var _ = Describe("Manager controller tests", func() {
 				}
 				Expect(c.Create(ctx, managementCluster)).NotTo(HaveOccurred())
 
-				certificateManagerTenantA, err := certificatemanager.Create(c, nil, "", tenantANamespace, certificatemanager.AllowCACreation(), certificatemanager.WithTenant(tenantA))
+				certificateManagerTenantA, err := entcertificatemanager.Create(c, nil, "", tenantANamespace, tenantA, certificatemanager.AllowCACreation())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, certificateManagerTenantA.KeyPair().Secret(tenantANamespace)))
 				managerTLSTenantA, err := certificateManagerTenantA.GetOrCreateKeyPair(c, render.ManagerInternalTLSSecretName, tenantANamespace, []string{render.ManagerInternalTLSSecretName})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, managerTLSTenantA.Secret(tenantANamespace))).NotTo(HaveOccurred())
-				bundleA, err := certificateManagerTenantA.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
+				bundleA, err := entcertificatemanager.CreateTenantBundleWithSystemRootCertificates(certificateManagerTenantA)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, bundleA.ConfigMap(tenantANamespace))).NotTo(HaveOccurred())
 
-				certificateManagerTenantB, err := certificatemanager.Create(c, nil, "", tenantBNamespace, certificatemanager.AllowCACreation(), certificatemanager.WithTenant(tenantB))
+				certificateManagerTenantB, err := entcertificatemanager.Create(c, nil, "", tenantBNamespace, tenantB, certificatemanager.AllowCACreation())
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, certificateManagerTenantB.KeyPair().Secret(tenantBNamespace)))
 				managerTLSTenantB, err := certificateManagerTenantB.GetOrCreateKeyPair(c, render.ManagerInternalTLSSecretName, tenantBNamespace, []string{render.ManagerInternalTLSSecretName})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, managerTLSTenantB.Secret(tenantBNamespace))).NotTo(HaveOccurred())
-				bundleB, err := certificateManagerTenantB.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
+				bundleB, err := entcertificatemanager.CreateTenantBundleWithSystemRootCertificates(certificateManagerTenantB)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(c.Create(ctx, bundleB.ConfigMap(tenantBNamespace))).NotTo(HaveOccurred())
 
@@ -1383,13 +1384,13 @@ var _ = Describe("Manager controller tests", func() {
 					Expect(c.Create(ctx, tenantC)).NotTo(HaveOccurred())
 
 					// Create certificates for this tenant.
-					certificateManagerTenantC, err := certificatemanager.Create(c, nil, "", tenantCNamespace, certificatemanager.AllowCACreation(), certificatemanager.WithTenant(tenantC))
+					certificateManagerTenantC, err := entcertificatemanager.Create(c, nil, "", tenantCNamespace, tenantC, certificatemanager.AllowCACreation())
 					Expect(err).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, certificateManagerTenantC.KeyPair().Secret(tenantCNamespace)))
 					managerTLStenantC, err := certificateManagerTenantC.GetOrCreateKeyPair(c, render.ManagerInternalTLSSecretName, tenantCNamespace, []string{render.ManagerInternalTLSSecretName})
 					Expect(err).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, managerTLStenantC.Secret(tenantCNamespace))).NotTo(HaveOccurred())
-					bundleB, err := certificateManagerTenantC.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
+					bundleB, err := entcertificatemanager.CreateTenantBundleWithSystemRootCertificates(certificateManagerTenantC)
 					Expect(err).NotTo(HaveOccurred())
 					Expect(c.Create(ctx, bundleB.ConfigMap(tenantCNamespace))).NotTo(HaveOccurred())
 

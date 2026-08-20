@@ -47,6 +47,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
@@ -368,11 +369,8 @@ func (r *LinseedSubController) Reconcile(ctx context.Context, request reconcile.
 	}
 
 	// Collect the certificates we need to provision Linseed. These will have been provisioned already by the ES secrets controller.
-	opts := []certificatemanager.Option{
-		certificatemanager.WithLogger(reqLogger),
-		certificatemanager.WithTenant(tenant),
-	}
-	cm, err := certificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), opts...)
+	opts := []certificatemanager.Option{certificatemanager.WithLogger(reqLogger)}
+	cm, err := entcertificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), tenant, opts...)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err

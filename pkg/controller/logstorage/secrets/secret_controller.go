@@ -41,6 +41,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
@@ -302,8 +303,8 @@ func (r *SecretSubController) Reconcile(ctx context.Context, request reconcile.R
 	cm = operatorSigner
 	if r.multiTenant {
 		// Override with a tenant-scoped certificate manager which uses the CA in the tenant's namespace.
-		opts := []certificatemanager.Option{certificatemanager.WithLogger(reqLogger), certificatemanager.WithTenant(tenant)}
-		cm, err = certificatemanager.Create(r.client, installationSpec, r.clusterDomain, helper.InstallNamespace(), opts...)
+		opts := []certificatemanager.Option{certificatemanager.WithLogger(reqLogger)}
+		cm, err = entcertificatemanager.Create(r.client, installationSpec, r.clusterDomain, helper.InstallNamespace(), tenant, opts...)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error building certificate manager", err, reqLogger)
 			return reconcile.Result{}, err

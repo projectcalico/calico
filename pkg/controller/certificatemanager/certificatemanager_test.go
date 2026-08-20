@@ -612,28 +612,16 @@ var _ = Describe("Test CertificateManagement suite", func() {
 			Expect(keyPair.Secret(appNs).Data[corev1.TLSCertKey]).NotTo(BeNil())
 		})
 
-		It("should render correct CA secret name for single-tenant configuration", func() {
-			singleTenant := operatorv1.Tenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "single-tenant",
-					Namespace: "",
-				},
-			}
-			zeroTenantCM, err := certificatemanager.Create(cli, installation, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation(), certificatemanager.WithTenant(&singleTenant))
+		It("should default the CA secret name", func() {
+			cm, err := certificatemanager.Create(cli, installation, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
-			Expect(zeroTenantCM.KeyPair().GetName()).To(Equal(certificatemanagement.CASecretName))
+			Expect(cm.KeyPair().GetName()).To(Equal(certificatemanagement.CASecretName))
 		})
 
-		It("should render correct CA secret name for multi-tenant configuration", func() {
-			singleTenant := operatorv1.Tenant{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "multi-tenant",
-					Namespace: "tenant-namespace-a",
-				},
-			}
-			singleTenantCM, err := certificatemanager.Create(cli, installation, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation(), certificatemanager.WithTenant(&singleTenant))
+		It("should read the CA from the secret name it is given", func() {
+			cm, err := certificatemanager.Create(cli, installation, clusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation(), certificatemanager.WithCASecretName("my-own-ca"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(singleTenantCM.KeyPair().GetName()).To(Equal(certificatemanagement.TenantCASecretName))
+			Expect(cm.KeyPair().GetName()).To(Equal("my-own-ca"))
 		})
 	})
 
@@ -743,50 +731,6 @@ var _ = Describe("Test CertificateManagement suite", func() {
 			bundle := configMap.Data[certificatemanagement.RHELRootCertificateBundleName]
 			numBlocks := strings.Count(bundle, "-----BEGIN CERTIFICATE-----")
 			Expect(numBlocks > 1).To(BeTrue()) // We expect tens of them most likely.
-		})
-
-		It("should load the system certificates into a multi-tenant bundle", func() {
-			if runtime.GOOS != "linux" {
-				Skip("Skip for users that run this test outside of a container on incompatible systems.")
-			}
-			trustedBundle, err := certificateManager.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
-			Expect(err).NotTo(HaveOccurred())
-
-			configMap := trustedBundle.ConfigMap(appNs)
-			Expect(configMap.Name).To(Equal("tigera-ca-bundle-system-certs"))
-
-			Expect(configMap.Namespace).To(Equal(appNs))
-			Expect(configMap.Annotations).To(HaveKey("tigera-operator.hash.operator.tigera.io/tigera-ca-private"))
-			Expect(configMap.Annotations).To(HaveKey("hash.operator.tigera.io/system"))
-			Expect(configMap.TypeMeta).To(Equal(metav1.TypeMeta{Kind: "ConfigMap", APIVersion: "v1"}))
-
-			By("counting the number of pem blocks in the configmap")
-			bundle := configMap.Data[certificatemanagement.RHELRootCertificateBundleName]
-			numBlocks := strings.Count(bundle, "-----BEGIN CERTIFICATE-----")
-			Expect(numBlocks > 1).To(BeTrue()) // We expect tens of them most likely.
-
-			By("verifying the volume is correct")
-			volume := trustedBundle.Volume()
-			Expect(volume.ConfigMap).NotTo(BeNil())
-			Expect(volume.Name).To(Equal("tigera-ca-bundle-system-certs"))
-			Expect(volume.VolumeSource.ConfigMap.Name).To(Equal("tigera-ca-bundle-system-certs"))
-
-			By("verifying the volume mount is correct")
-			mounts := trustedBundle.VolumeMounts(rmeta.OSTypeLinux)
-			Expect(mounts).To(HaveLen(2))
-			Expect(mounts).To(Equal([]corev1.VolumeMount{
-				{
-					Name:      "tigera-ca-bundle-system-certs",
-					MountPath: "/etc/pki/tls/certs",
-					ReadOnly:  true,
-				},
-				{
-					Name:      "tigera-ca-bundle-system-certs",
-					MountPath: "/etc/pki/tls/cert.pem",
-					SubPath:   "ca-bundle.crt",
-					ReadOnly:  true,
-				},
-			}))
 		})
 
 		It("should create a hash for both secrets even if the same pem is used twice", func() {

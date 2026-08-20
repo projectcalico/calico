@@ -28,6 +28,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/dashboards"
 	batchv1 "k8s.io/api/batch/v1"
@@ -336,11 +337,8 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 	}
 
 	// Collect the certificates we need to provision Dashboards. These will have been provisioned already by the ES secrets controller.
-	opts := []certificatemanager.Option{
-		certificatemanager.WithLogger(reqLogger),
-		certificatemanager.WithTenant(tenant),
-	}
-	cm, err := certificatemanager.Create(d.client, installationSpec, d.clusterDomain, helper.TruthNamespace(), opts...)
+	opts := []certificatemanager.Option{certificatemanager.WithLogger(reqLogger)}
+	cm, err := entcertificatemanager.Create(d.client, installationSpec, d.clusterDomain, helper.TruthNamespace(), tenant, opts...)
 	if err != nil {
 		d.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err

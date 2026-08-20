@@ -48,6 +48,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
@@ -741,10 +742,10 @@ var _ = Describe("IntrusionDetection controller tests", func() {
 			err := c.Create(ctx, &operatorv1.IntrusionDetection{ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure", Namespace: tenantANamespace}})
 			Expect(err).NotTo(HaveOccurred())
 
-			certificateManagerTenantA, err := certificatemanager.Create(c, nil, "", tenantANamespace, certificatemanager.AllowCACreation(), certificatemanager.WithTenant(tenantA))
+			certificateManagerTenantA, err := entcertificatemanager.Create(c, nil, "", tenantANamespace, tenantA, certificatemanager.AllowCACreation())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, certificateManagerTenantA.KeyPair().Secret(tenantANamespace)))
-			tenantABundle, err := certificateManagerTenantA.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
+			tenantABundle, err := entcertificatemanager.CreateTenantBundleWithSystemRootCertificates(certificateManagerTenantA)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(c.Create(ctx, tenantABundle.ConfigMap(tenantANamespace))).NotTo(HaveOccurred())
 

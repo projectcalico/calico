@@ -27,6 +27,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
@@ -153,9 +154,8 @@ func (r *TenantController) Reconcile(ctx context.Context, request reconcile.Requ
 	opts := []certificatemanager.Option{
 		certificatemanager.AllowCACreation(),
 		certificatemanager.WithLogger(logc),
-		certificatemanager.WithTenant(tenant),
 	}
-	cm, err := certificatemanager.Create(r.client, installationSpec, r.clusterDomain, tenant.Namespace, opts...)
+	cm, err := entcertificatemanager.Create(r.client, installationSpec, r.clusterDomain, tenant.Namespace, tenant, opts...)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create CA", err, logc)
 		return reconcile.Result{}, err
@@ -185,7 +185,7 @@ func (r *TenantController) Reconcile(ctx context.Context, request reconcile.Requ
 	// We also need a trusted bundle that includes the system root certificates in addition to the certificates
 	// listed above, so that components that talk to public endpoints can verify them. In a multi-tenant cluster, this
 	// bundle will co-exist in the same namespace as the default trusted bundle, but with a different name.
-	trustedBundleWithSystemCAs, err := cm.CreateMultiTenantTrustedBundleWithSystemRootCertificates()
+	trustedBundleWithSystemCAs, err := entcertificatemanager.CreateTenantBundleWithSystemRootCertificates(cm)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error querying system root certificates", err, logc)
 		return reconcile.Result{}, err

@@ -42,6 +42,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
@@ -372,11 +373,8 @@ func (r *ReconcilePolicyRecommendation) Reconcile(ctx context.Context, request r
 	var components []render.Component
 
 	if !isManagedCluster {
-		opts := []certificatemanager.Option{
-			certificatemanager.WithLogger(logc),
-			certificatemanager.WithTenant(tenant),
-		}
-		certificateManager, err := certificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), opts...)
+		opts := []certificatemanager.Option{certificatemanager.WithLogger(logc)}
+		certificateManager, err := entcertificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), tenant, opts...)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, logc)
 			return reconcile.Result{}, err

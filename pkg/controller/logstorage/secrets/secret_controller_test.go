@@ -47,6 +47,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/secret"
@@ -620,12 +621,12 @@ var _ = Describe("LogStorage Secrets controller", func() {
 			Expect(cli.Create(ctx, externalKibanaSecret)).ShouldNot(HaveOccurred())
 
 			// Create a per-tenant CA secret for the test, and create its KeyPair.
-			cm, err := certificatemanager.Create(cli,
+			cm, err := entcertificatemanager.Create(cli,
 				&install.Spec,
 				dns.DefaultClusterDomain,
 				tenantNS,
-				certificatemanager.AllowCACreation(),
-				certificatemanager.WithTenant(tenant))
+				tenant,
+				certificatemanager.AllowCACreation())
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(cli.Create(ctx, cm.KeyPair().Secret(tenantNS))).ShouldNot(HaveOccurred())
 		})

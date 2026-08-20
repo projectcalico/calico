@@ -80,10 +80,10 @@ func CreateTrustedBundleWithSystemRootCertificates(ca CertificateInterface, cert
 	return createTrustedBundle(true, TrustedCertConfigMapName, ca, certificates...)
 }
 
-// CreateMultiTenantTrustedBundleWithSystemRootCertificates creates a TrustedBundle with system root certificates that is
-// appropraite for a multi-tenant cluster, in which each tenant needs multiple trusted bundles.
-func CreateMultiTenantTrustedBundleWithSystemRootCertificates(ca CertificateInterface, certificates ...CertificateInterface) (TrustedBundle, error) {
-	return createTrustedBundle(true, TrustedCertConfigMapNamePublic, ca, certificates...)
+// CreateTrustedBundleWithName creates a TrustedBundle backed by a ConfigMap of the given name.
+// Callers that need more than one bundle in a single namespace use this to keep them apart.
+func CreateTrustedBundleWithName(name string, includeSystem bool, ca CertificateInterface, certificates ...CertificateInterface) (TrustedBundle, error) {
+	return createTrustedBundle(includeSystem, name, ca, certificates...)
 }
 
 // createTrustedBundle creates a TrustedBundle, which provides standardized methods for mounting a bundle of certificates to trust.

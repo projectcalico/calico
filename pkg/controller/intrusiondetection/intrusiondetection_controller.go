@@ -49,6 +49,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
@@ -359,12 +360,8 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 		}
 	}
 
-	// When creating the certificate manager, pass in the logger and tenant (if one exists).
-	opts := []certificatemanager.Option{
-		certificatemanager.WithLogger(reqLogger),
-		certificatemanager.WithTenant(tenant),
-	}
-	certificateManager, err := certificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), opts...)
+	opts := []certificatemanager.Option{certificatemanager.WithLogger(reqLogger)}
+	certificateManager, err := entcertificatemanager.Create(r.client, installationSpec, r.opts.ClusterDomain, helper.TruthNamespace(), tenant, opts...)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
@@ -423,7 +420,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 	trustedBundle := bundleMaker.(certificatemanagement.TrustedBundleRO)
 	if r.opts.MultiTenant {
 		// For multi-tenant systems, we load the pre-created bundle for this tenant instead of using the one we built here.
-		trustedBundle, err = certificateManager.LoadMultiTenantTrustedBundleWithRootCertificates(ctx, r.client, helper.InstallNamespace())
+		trustedBundle, err = entcertificatemanager.LoadTenantBundleWithSystemRootCertificates(ctx, certificateManager, r.client, helper.InstallNamespace())
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting trusted bundle", err, reqLogger)
 			return reconcile.Result{}, err

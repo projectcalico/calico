@@ -47,6 +47,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/linseed"
@@ -332,11 +333,8 @@ var _ = Describe("LogStorage Linseed controller", func() {
 			mockStatus.On("ClearDegraded")
 
 			// Create a CA secret for the test, and create its KeyPair.
-			opts := []certificatemanager.Option{
-				certificatemanager.AllowCACreation(),
-				certificatemanager.WithTenant(tenant),
-			}
-			cm, err := certificatemanager.Create(cli, &install.Spec, dns.DefaultClusterDomain, tenantNS, opts...)
+			opts := []certificatemanager.Option{certificatemanager.AllowCACreation()}
+			cm, err := entcertificatemanager.Create(cli, &install.Spec, dns.DefaultClusterDomain, tenantNS, tenant, opts...)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(cli.Create(ctx, cm.KeyPair().Secret(tenantNS))).ShouldNot(HaveOccurred())
 
