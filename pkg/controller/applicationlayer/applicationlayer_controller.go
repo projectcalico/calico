@@ -28,6 +28,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/tigera/operator/pkg/enterprise/policysync"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/applicationlayer"
 	"github.com/tigera/operator/pkg/render/applicationlayer/ruleset"
@@ -487,7 +488,7 @@ func (r *ReconcileApplicationLayer) isSidecarInjectionEnabled(applicationLayerSp
 }
 
 func (r *ReconcileApplicationLayer) getPolicySyncPathPrefix(fcSpec *v3.FelixConfigurationSpec, al *operatorv1.ApplicationLayer, istioNeeds bool) string {
-	alNeeds := utils.ApplicationLayerRequiresPolicySync(al)
+	alNeeds := policysync.ApplicationLayerRequires(al)
 	return utils.DesiredPolicySyncPathPrefix(fcSpec.PolicySyncPathPrefix, alNeeds, istioNeeds)
 }
 

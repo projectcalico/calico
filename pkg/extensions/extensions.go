@@ -22,6 +22,7 @@ type Set struct {
 	APIServer         APIServerExtension
 	ClusterConnection ClusterConnectionExtension
 	Tiers             TiersExtension
+	Istio             IstioExtension
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -69,4 +70,11 @@ func (e Extensions) Tiers() TiersExtension {
 		return noopTiers{}
 	}
 	return e.set.Tiers
+}
+
+func (e Extensions) Istio() IstioExtension {
+	if e.set.Istio == nil {
+		return noopIstio{}
+	}
+	return e.set.Istio
 }

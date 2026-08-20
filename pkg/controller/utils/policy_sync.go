@@ -25,34 +25,6 @@ import (
 // ambient waypoint l7-collector, EGW).
 const DefaultPolicySyncPrefix = "/var/run/nodeagent"
 
-// ApplicationLayerRequiresPolicySync reports whether the given
-// ApplicationLayer CR has any feature enabled that requires
-// policySyncPathPrefix to be set on FelixConfiguration. A nil receiver
-// returns false (the AL CR is absent or being deleted).
-func ApplicationLayerRequiresPolicySync(al *operatorv1.ApplicationLayer) bool {
-	if al == nil {
-		return false
-	}
-	spec := &al.Spec
-	if spec.LogCollection != nil && spec.LogCollection.CollectLogs != nil &&
-		*spec.LogCollection.CollectLogs == operatorv1.L7LogCollectionEnabled {
-		return true
-	}
-	if spec.WebApplicationFirewall != nil &&
-		*spec.WebApplicationFirewall == operatorv1.WAFEnabled {
-		return true
-	}
-	if spec.ApplicationLayerPolicy != nil &&
-		*spec.ApplicationLayerPolicy == operatorv1.ApplicationLayerPolicyEnabled {
-		return true
-	}
-	if spec.SidecarInjection != nil &&
-		*spec.SidecarInjection == operatorv1.SidecarEnabled {
-		return true
-	}
-	return false
-}
-
 // IstioRequiresPolicySync reports whether an Istio CR is active in a way
 // that requires policySyncPathPrefix to be set. The L7 ambient waypoint
 // resources (l7-collector sidecar + EnvoyFilter) are rendered when the

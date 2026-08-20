@@ -23,47 +23,6 @@ import (
 )
 
 var _ = Describe("policySyncPathPrefix coordination predicates", func() {
-	Describe("ApplicationLayerRequiresPolicySync", func() {
-		It("returns false for a nil receiver", func() {
-			Expect(utils.ApplicationLayerRequiresPolicySync(nil)).To(BeFalse())
-		})
-
-		It("returns false when no feature is enabled", func() {
-			Expect(utils.ApplicationLayerRequiresPolicySync(&operatorv1.ApplicationLayer{})).To(BeFalse())
-		})
-
-		It("returns true when LogCollection is enabled", func() {
-			enabled := operatorv1.L7LogCollectionEnabled
-			al := &operatorv1.ApplicationLayer{
-				Spec: operatorv1.ApplicationLayerSpec{
-					LogCollection: &operatorv1.LogCollectionSpec{CollectLogs: &enabled},
-				},
-			}
-			Expect(utils.ApplicationLayerRequiresPolicySync(al)).To(BeTrue())
-		})
-
-		It("returns true when WAF is enabled", func() {
-			enabled := operatorv1.WAFEnabled
-			Expect(utils.ApplicationLayerRequiresPolicySync(&operatorv1.ApplicationLayer{
-				Spec: operatorv1.ApplicationLayerSpec{WebApplicationFirewall: &enabled},
-			})).To(BeTrue())
-		})
-
-		It("returns true when ApplicationLayerPolicy is enabled", func() {
-			enabled := operatorv1.ApplicationLayerPolicyEnabled
-			Expect(utils.ApplicationLayerRequiresPolicySync(&operatorv1.ApplicationLayer{
-				Spec: operatorv1.ApplicationLayerSpec{ApplicationLayerPolicy: &enabled},
-			})).To(BeTrue())
-		})
-
-		It("returns true when SidecarInjection is enabled", func() {
-			enabled := operatorv1.SidecarEnabled
-			Expect(utils.ApplicationLayerRequiresPolicySync(&operatorv1.ApplicationLayer{
-				Spec: operatorv1.ApplicationLayerSpec{SidecarInjection: &enabled},
-			})).To(BeTrue())
-		})
-	})
-
 	Describe("IstioRequiresPolicySync", func() {
 		It("returns false when the Istio CR is absent", func() {
 			Expect(utils.IstioRequiresPolicySync(nil, operatorv1.CalicoEnterprise)).To(BeFalse())

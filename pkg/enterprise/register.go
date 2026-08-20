@@ -19,6 +19,7 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/apiserver"
 	"github.com/tigera/operator/pkg/enterprise/clusterconnection"
 	"github.com/tigera/operator/pkg/enterprise/installation"
+	"github.com/tigera/operator/pkg/enterprise/istio"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/enterprise/tiers"
 	"github.com/tigera/operator/pkg/enterprise/windows"
@@ -38,6 +39,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			APIServer:         apiserver.New(variant, o),
 			ClusterConnection: clusterconnection.New(variant),
 			Tiers:             tiers.New(o),
+			Istio:             istio.New(),
 		})
 	}
 

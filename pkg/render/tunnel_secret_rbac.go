@@ -17,34 +17,26 @@ package render
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TunnelSecretName returns the name of the tunnel CA secret based on the ManagementCluster spec.
-// If the ManagementCluster has a custom TLS secret name configured, that is returned; otherwise
-// the default VoltronTunnelSecretName is used.
-func TunnelSecretName(mc *operatorv1.ManagementCluster) string {
-	if mc != nil && mc.Spec.TLS != nil && mc.Spec.TLS.SecretName != "" {
-		return mc.Spec.TLS.SecretName
-	}
-	return VoltronTunnelSecretName
-}
-
 // TunnelSecretRBAC returns RBAC objects granting get access to the tunnel CA secret.
 // For multi-tenant management clusters, this returns a ClusterRole/ClusterRoleBinding so the
 // service account can read per-tenant secrets across namespaces. For single-tenant clusters,
-// this returns a namespace-scoped Role/RoleBinding in calico-system.
-func TunnelSecretRBAC(rbacName string, serviceAccountName string, mc *operatorv1.ManagementCluster, multiTenant bool) []client.Object {
-	secretName := TunnelSecretName(mc)
+// this returns a namespace-scoped Role/RoleBinding in calico-system. An empty secret name
+// selects the default tunnel CA secret.
+func TunnelSecretRBAC(rbacName string, serviceAccountName string, tunnelSecretName string, multiTenant bool) []client.Object {
+	if tunnelSecretName == "" {
+		tunnelSecretName = VoltronTunnelSecretName
+	}
 	rules := []rbacv1.PolicyRule{
 		{
 			APIGroups:     []string{""},
 			Resources:     []string{"secrets"},
 			Verbs:         []string{"get"},
-			ResourceNames: []string{secretName},
+			ResourceNames: []string{tunnelSecretName},
 		},
 	}
 

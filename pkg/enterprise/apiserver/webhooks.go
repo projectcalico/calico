@@ -43,7 +43,7 @@ const (
 
 // modifyWebhooks layers audit logging, the mutating webhooks, the extra RBAC, and
 // management-cluster support onto the rendered objects.
-func modifyWebhooks(cfg *webhooks.Configuration, managementCluster *operatorv1.ManagementCluster, multiTenant bool, create, del []client.Object) ([]client.Object, []client.Object) {
+func modifyWebhooks(cfg *webhooks.Configuration, mc *operatorv1.ManagementCluster, multiTenant bool, create, del []client.Object) ([]client.Object, []client.Object) {
 	dep := extensions.MustFindObject[*appsv1.Deployment](create, webhooks.WebhooksName)
 	enableAuditLogging(dep, cfg.Installation)
 
@@ -54,16 +54,16 @@ func modifyWebhooks(cfg *webhooks.Configuration, managementCluster *operatorv1.M
 	cr.Rules = append(cr.Rules, enterpriseRules()...)
 
 	mwc := mutatingWebhookConfiguration(cfg)
-	if managementCluster == nil {
+	if mc == nil {
 		// Not a management cluster, so clean up the tunnel secret RBAC.
 		return append(create, mwc), append(del, tunnelSecretRBACMeta()...)
 	}
 
 	ctr := render.MustContainer(&dep.Spec.Template.Spec, webhooks.WebhooksName)
-	ctr.Args = append(ctr.Args, managedClusterArgs(managementCluster, multiTenant)...)
+	ctr.Args = append(ctr.Args, managedClusterArgs(mc, multiTenant)...)
 	mwc.Webhooks = append(mwc.Webhooks, managedClusterWebhook(cfg))
 	create = append(create, mwc)
-	create = append(create, render.TunnelSecretRBAC(webhooks.WebhooksSecretsRBACName, webhooks.WebhooksName, managementCluster, multiTenant)...)
+	create = append(create, render.TunnelSecretRBAC(webhooks.WebhooksSecretsRBACName, webhooks.WebhooksName, tunnelSecretName(mc), multiTenant)...)
 
 	return create, del
 }
@@ -210,8 +210,9 @@ func managedClusterArgs(mc *operatorv1.ManagementCluster, multiTenant bool) []st
 	if mc.Spec.Address != "" {
 		args = append(args, fmt.Sprintf("--mcm-management-cluster-addr=%s", mc.Spec.Address))
 	}
-	args = append(args, fmt.Sprintf("--mcm-tunnel-secret-name=%s", render.TunnelSecretName(mc)))
-	if mc.Spec.TLS != nil && mc.Spec.TLS.SecretName == render.ManagerTLSSecretName {
+	secretName := tunnelSecretName(mc)
+	args = append(args, fmt.Sprintf("--mcm-tunnel-secret-name=%s", secretName))
+	if secretName == render.ManagerTLSSecretName {
 		args = append(args, "--mcm-management-cluster-ca-type=Public")
 	}
 	if multiTenant {

@@ -40,7 +40,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
 	"github.com/tigera/operator/pkg/render/istio"
@@ -120,6 +120,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) *Reconci
 		scheme:   mgr.GetScheme(),
 		status:   status.New(mgr.GetClient(), "istio", opts.KubernetesVersion),
 		provider: opts.DetectedProvider,
+		ext:      opts.Extensions,
 	}
 
 	r.status.Run(opts.ShutdownContext)
@@ -132,6 +133,7 @@ type ReconcileIstio struct {
 	scheme   *runtime.Scheme
 	status   status.StatusManager
 	provider operatorv1.Provider
+	ext      extensions.Extensions
 }
 
 func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
@@ -373,13 +375,8 @@ func (r *ReconcileIstio) configureIstioDSCPMark(instance *operatorv1.Istio, fc *
 	return true, nil
 }
 
-// configurePolicySyncPathPrefix reconciles FelixConfiguration.policySyncPathPrefix
-// for the Istio side. The L7 ambient waypoint pod's l7-collector sidecar
-// dials Felix's nodeagent socket, which Felix only opens when this field
-// is set. The applicationlayer controller writes this same field for the
-// Dikastes/sidecar/WAF flow; both controllers consult each other's state
-// (via utils.{ApplicationLayerRequiresPolicySync,IstioRequiresPolicySync})
-// so that deleting one CR does not strand the other.
+// configurePolicySyncPathPrefix reconciles FelixConfiguration.policySyncPathPrefix,
+// which the variant extension shares with this controller.
 func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, instance *operatorv1.Istio, fc *v3.FelixConfiguration, remove bool) (bool, error) {
 	var istioNeeds bool
 	if !remove {
@@ -398,11 +395,10 @@ func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, inst
 		istioNeeds = utils.IstioRequiresPolicySync(instance, variant)
 	}
 
-	al, err := eutils.GetApplicationLayer(ctx, r.Client)
+	alNeeds, err := r.ext.Istio().PolicySyncRequired(ctx, r.Client)
 	if err != nil {
 		return false, err
 	}
-	alNeeds := utils.ApplicationLayerRequiresPolicySync(al)
 
 	desired := utils.DesiredPolicySyncPathPrefix(fc.Spec.PolicySyncPathPrefix, alNeeds, istioNeeds)
 	if fc.Spec.PolicySyncPathPrefix == desired {
