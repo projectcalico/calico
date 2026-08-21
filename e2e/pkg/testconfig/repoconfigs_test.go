@@ -222,18 +222,6 @@ func TestFragmentsAreNotUsedDirectly(t *testing.T) {
 // Asserted in both directions below, so a config added without a cell fails
 // immediately and a stale entry fails too.
 var unwiredConfigs = map[string]bool{
-	"bpf/bpf-encap-extnode-aws.yaml":                  true,
-	"bpf/bpf-encap-nobgp-extnode-aws.yaml":            true,
-	"bpf/bpf-extnode.yaml":                            true,
-	"bpf/bpf-v3crd-extnode-aws.yaml":                  true,
-	"bpf/bpf.yaml":                                    true,
-	"bpf/eks-bpf-nobgp-extnode-aws.yaml":              true,
-	"bpf/eks-xtables-encap-extnode-aws.yaml":          true,
-	"bpf/kops-bpf-encap-extnode-aws.yaml":             true,
-	"bpf/kops-bpf-extnode-aws.yaml":                   true,
-	"bpf/kops-xtables-encap-extnode-aws.yaml":         true,
-	"bpf/kops-xtables-extnode-aws.yaml":               true,
-	"bpf/xtables-encap-extnode-aws.yaml":              true,
 	"iptables/aks-xtables-encap.yaml":                 true,
 	"iptables/aks-xtables-nobgp.yaml":                 true,
 	"iptables/aks-xtables.yaml":                       true,
