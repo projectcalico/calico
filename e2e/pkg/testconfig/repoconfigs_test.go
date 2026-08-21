@@ -222,13 +222,7 @@ func TestFragmentsAreNotUsedDirectly(t *testing.T) {
 // Asserted in both directions below, so a config added without a cell fails
 // immediately and a stale entry fails too.
 var unwiredConfigs = map[string]bool{
-	"iptables/aks-xtables-encap.yaml":                 true,
-	"iptables/aks-xtables-nobgp.yaml":                 true,
-	"iptables/aks-xtables.yaml":                       true,
-	"iptables/eks-xtables-aws.yaml":                   true,
 	"iptables/gke-xtables-nobgp-v3crd.yaml":           true,
-	"iptables/xtables-aws.yaml":                       true,
-	"iptables/xtables-v3crd-aws.yaml":                 true,
 	"nftables/eks-xtables-nobgp-aws-autohep.yaml":     true,
 	"nftables/xtables-autohep.yaml":                   true,
 	"nftables/xtables-encap-autohep.yaml":             true,
