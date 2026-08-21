@@ -25,6 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	clusternetpol "sigs.k8s.io/network-policy-api/apis/v1alpha2"
+	netpolicyclient "sigs.k8s.io/network-policy-api/pkg/client/clientset/versioned/typed/apis/v1alpha2"
 
 	"github.com/projectcalico/calico/lib/std/uniquelabels"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
@@ -787,6 +789,85 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (passive mode)", test
 		syncTester.ExpectValueMatches(
 			model.GlobalConfigKey{Name: "Variant"},
 			MatchRegexp("Calico"),
+		)
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (ClusterNetworkPolicy)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	const kcnpName = "felixsyncer-test-kcnp"
+
+	var be api.Client
+	var syncTester *testutils.SyncerTester
+	var kcnpClient *netpolicyclient.PolicyV1alpha2Client
+	var err error
+
+	BeforeEach(func() {
+		// Create the backend client to obtain a syncer interface.
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// ClusterNetworkPolicies are upstream Kubernetes resources, so they are created
+		// through their own client rather than the Calico one.
+		cfg, err := clientcmd.BuildConfigFromFlags("", "/kubeconfig.yaml")
+		Expect(err).NotTo(HaveOccurred())
+		kcnpClient, err = netpolicyclient.NewForConfig(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create a SyncerTester to receive the syncer callback events and to allow us
+		// to assert state.
+		syncTester = testutils.NewSyncerTester()
+	})
+
+	AfterEach(func() {
+		if kcnpClient != nil {
+			_ = kcnpClient.ClusterNetworkPolicies().Delete(context.Background(), kcnpName, metav1.DeleteOptions{})
+		}
+	})
+
+	It("should send ClusterNetworkPolicy updates over the syncer", func() {
+		syncer := felixsyncer.New(be, config.Spec, syncTester, true)
+		syncer.Start()
+		defer syncer.Stop()
+
+		syncTester.ExpectStatusUpdate(api.WaitForDatastore)
+		syncTester.ExpectStatusUpdate(api.ResyncInProgress)
+		syncTester.ExpectStatusUpdate(api.InSync)
+
+		By("Creating a ClusterNetworkPolicy in the admin tier")
+		_, err = kcnpClient.ClusterNetworkPolicies().Create(
+			context.Background(),
+			&clusternetpol.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: kcnpName},
+				Spec: clusternetpol.ClusterNetworkPolicySpec{
+					Priority: 100,
+					Tier:     clusternetpol.AdminTier,
+					Subject: clusternetpol.ClusterNetworkPolicySubject{
+						Namespaces: &metav1.LabelSelector{},
+					},
+					Ingress: []clusternetpol.ClusterNetworkPolicyIngressRule{{
+						Name:   "deny-all-ingress",
+						Action: clusternetpol.ClusterNetworkPolicyRuleActionDeny,
+						From: []clusternetpol.ClusterNetworkPolicyIngressPeer{{
+							Namespaces: &metav1.LabelSelector{},
+						}},
+					}},
+				},
+			},
+			metav1.CreateOptions{},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking the policy is sent over the syncer in the kube-admin tier")
+		syncTester.ExpectValueMatches(
+			model.PolicyKey{Name: kcnpName, Kind: model.KindKubernetesClusterNetworkPolicy},
+			WithTransform(func(v any) string {
+				policy, ok := v.(*model.Policy)
+				if !ok {
+					return ""
+				}
+				return policy.Tier
+			}, Equal(names.KubeAdminTierName)),
 		)
 	})
 })
