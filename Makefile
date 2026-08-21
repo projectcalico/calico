@@ -243,10 +243,12 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-# Local-development default only. CI never reaches it: run_tests.sh always passes
-# E2E_TEST_CONFIG on make's command line, and a command-line assignment overrides
-# ?= even when its value is empty.
-E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
+# Local-development defaults, declared per target so a bare `make e2e-test-bpf`
+# still runs the BPF selection. Both CI paths override them: run_tests.sh passes
+# E2E_TEST_CONFIG on make's command line, and the kind jobs declare it in the
+# Semaphore job env, which is where gen-test-set reads the selection from.
+e2e-test: E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
+e2e-test-bpf: E2E_TEST_CONFIG ?= e2e/config/kind/bpf.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
@@ -282,7 +284,7 @@ kind-migration-test:
 e2e-test:
 	$(MAKE) -C e2e build
 	$(MAKE) kind-up
-	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
+	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG) E2E_TEST_CONFIG=$(E2E_TEST_CONFIG)
 
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
 ## the sig-calico BPF e2e tests (including the ExternalNode specs).
@@ -306,7 +308,7 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
+		E2E_TEST_CONFIG=$(E2E_TEST_CONFIG)
 
 ## Build the rapidclient helper image from PR source and load it into the kind
 ## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:

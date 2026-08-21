@@ -76,7 +76,7 @@ func TestResolveSets(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 
 	// An e2e lane that lost its selection is a lane that would exit 1.
-	_, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "broken", Area: "bpf.yml", TestType: "k8s-e2e"}})
+	_, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "broken", Area: "bpf.yml", TestType: "k8s-e2e", RunsE2E: true}})
 	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
 }
 

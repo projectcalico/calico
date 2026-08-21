@@ -30,8 +30,9 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 	sets := map[string]Lane{}
 	for _, l := range lanes {
 		if !l.RunsE2EBinary() {
-			// run_tests.sh exits 1 on an e2e lane that selects nothing.
-			if l.TestType == "k8s-e2e" && l.Area != "" {
+			// run_tests.sh exits 1 on an e2e lane that selects nothing, and
+			// --fail-on-empty does the same for the kind lanes.
+			if l.RunsE2E {
 				return nil, fmt.Errorf("%s (%s) runs the e2e binary but selects nothing", l.Name, l.Source)
 			}
 			continue
