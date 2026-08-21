@@ -16,54 +16,58 @@ package images
 
 import (
 	"os"
+	"strings"
 
 	"k8s.io/kubernetes/test/e2e/framework"
 )
 
-const (
+// The e2e images live in public registries. Lanes whose clusters cannot reach
+// those registries set E2E_IMAGE_MIRROR to a host that carries the same
+// repository paths, and every reference below is rewritten onto it.
+var (
 	// Alpine provides a minimal POSIX shell environment (sh, wget, nc, ping,
 	// sleep). Used for client pods that need to run shell scripts or standard
 	// CLI tools; Agnhost is distroless and doesn't ship a shell.
-	Alpine = "docker.io/alpine:3"
+	Alpine = mirrored("docker.io/alpine:3")
 
 	// Porter is Calico's multi-protocol TCP/UDP test server. Used as the
 	// server image on Windows nodes, since Agnhost has no Windows binary.
-	Porter = "calico/porter"
+	Porter = mirrored("calico/porter")
 
 	// TestWebserver is a minimal HTTP server from the K8s e2e image set. Used
 	// as the default Linux server in conncheck when tests don't need any of
 	// Agnhost's extra endpoints (/clientip, /dial, UDP echo, etc.).
-	TestWebserver = "gcr.io/kubernetes-e2e-test-images/test-webserver:1.0"
+	TestWebserver = mirrored("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0")
 
 	// Agnhost is Kubernetes' swiss-army e2e image. Used via `netexec` for
 	// multi-protocol servers (HTTP/UDP/SCTP on one pod) and via other
 	// subcommands for common test helpers. Version is pinned; bump deliberately.
-	Agnhost = "registry.k8s.io/e2e-test-images/agnhost:2.47"
+	Agnhost = mirrored("registry.k8s.io/e2e-test-images/agnhost:2.47")
 
 	// Iperf3 is a TCP/UDP bandwidth generator, used by iperfcheck for throughput
 	// tests. No upstream K8s test image provides iperf3.
-	Iperf3 = "docker.io/networkstatic/iperf3:latest"
+	Iperf3 = mirrored("docker.io/networkstatic/iperf3:latest")
 
 	// Socat is an alpine+socat container, used for ad-hoc UDP listeners and
 	// protocol proxying that agnhost's fixed handlers can't express (e.g. raw
 	// UDP echo without the "echo " prefix, or a listener on a non-default port).
-	Socat = "docker.io/alpine/socat:1.8.0.1"
+	Socat = mirrored("docker.io/alpine/socat:1.8.0.1")
 
 	// Netshoot is a network troubleshooting image (curl, tcpdump, nc, ping,
 	// iproute2). Used when tests need raw network tools the default client
 	// images don't ship, most notably tcpdump for packet capture in the
 	// wireguard and encap tests.
-	Netshoot = "docker.io/nicolaka/netshoot:v0.13"
+	Netshoot = mirrored("docker.io/nicolaka/netshoot:v0.13")
 
 	// EchoServer is an alias for Agnhost, used as a convention indicator.
 	// Use with `netexec --http-port=PORT` args. Hit /clientip for source IP.
 	EchoServer = Agnhost
 
 	// KubeVirtUbuntu: Ubuntu 20.04 containerDisk for KubeVirt VM e2e tests.
-	KubeVirtUbuntu = "mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30"
+	KubeVirtUbuntu = mirrored("mcas/kubevirt-ubuntu-20.04@sha256:35158058769932812d8ec3ba76985b6f3b02ba288e33a22c77445a7b7f8b3e30")
 
 	// CalicoBIRD: Calico BIRD 1.x. Keep in sync with BIRD_VERSION in metadata.mk.
-	CalicoBIRD = "calico/bird:v0.3.3-211-g9111ec3c"
+	CalicoBIRD = mirrored("calico/bird:v0.3.3-211-g9111ec3c")
 )
 
 // rapidClientRepo is the multi-mode rapidclient image (client mode by default;
@@ -109,13 +113,28 @@ func WindowsClientImage() string {
 	}
 	switch opsys {
 	case "1809", "1909", "1903", "2004", "20H2":
-		return "mcr.microsoft.com/windows/servercore:" + opsys
+		return mirrored("mcr.microsoft.com/windows/servercore:" + opsys)
 	case "2022":
 		// For 2022, servercore uses "ltsc2022" and does not have the image tag
 		// "2022" (unlike previous Windows versions).
-		return "mcr.microsoft.com/windows/servercore:ltsc2022"
+		return mirrored("mcr.microsoft.com/windows/servercore:ltsc2022")
 	default:
 		framework.Failf("Windows OS version currently not supported: %s", opsys)
 	}
 	return ""
+}
+
+// mirrored rewrites an image's registry host onto E2E_IMAGE_MIRROR, leaving the
+// repository path and tag alone. A reference with no host is treated as a Docker
+// Hub one, which is what the container runtime assumes.
+func mirrored(ref string) string {
+	mirror := os.Getenv("E2E_IMAGE_MIRROR")
+	if mirror == "" {
+		return ref
+	}
+	path := ref
+	if host, rest, found := strings.Cut(ref, "/"); found && (strings.ContainsAny(host, ".:") || host == "localhost") {
+		path = rest
+	}
+	return strings.TrimSuffix(mirror, "/") + "/" + path
 }

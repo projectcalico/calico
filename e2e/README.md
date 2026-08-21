@@ -29,3 +29,13 @@ To run Calico conformance tests against your cluster:
 ```
 KUBECONFIG=<path to kubconfig> ./bin/k8s/e2e.test --ginkgo.focus="sig-calico.*Conformance"
 ```
+
+## Test workload images
+
+The test workloads pull from public registries (Docker Hub, `registry.k8s.io`, `gcr.io`). On a cluster whose nodes cannot reach those registries, set `E2E_IMAGE_MIRROR` to a registry host that carries the same repository paths, and every workload image is pulled from there instead:
+
+```
+E2E_IMAGE_MIRROR=my-registry.example.com KUBECONFIG=<path to kubeconfig> ./bin/k8s/e2e.test
+```
+
+Calico's own images are unaffected: they come from the install under test, not from this setting.
