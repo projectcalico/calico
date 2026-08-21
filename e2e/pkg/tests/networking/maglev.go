@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2025 Tigera, Inc. All rights reserved.
+Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,10 +73,7 @@ var _ = describe.CalicoDescribe(
 
 		BeforeEach(func() {
 			// Initialize external node for testing
-			extNode = externalnode.NewClient()
-			if extNode == nil {
-				Skip("External node not available - required for Maglev testing")
-			}
+			extNode = externalnode.MustNewClient()
 
 			// Get available nodes for pod distribution
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

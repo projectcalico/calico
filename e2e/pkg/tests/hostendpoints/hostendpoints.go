@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -360,14 +360,7 @@ var _ = describe.CalicoDescribe(
 			})
 
 			It("should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation)", describe.WithExternalNode(), func() {
-				extClient := externalnode.NewClient()
-				if extClient == nil {
-					if describe.IncludesFocus("ExternalNode") {
-						framework.Failf("External node client not available")
-					} else {
-						Skip("Skipping test that requires an external node")
-					}
-				}
+				extClient := externalnode.MustNewClient()
 
 				// Wrap the external node as a conncheck Client so the probes
 				// go through the standard ConnectionTester machinery.

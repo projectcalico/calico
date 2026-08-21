@@ -60,7 +60,6 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests should create host endpoints for each node [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests with policies in place with egress policy should block one node 1 from reaching node 0 on port 9091 with egress policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests with policies in place with ingress policy should block one node 1 from entering node 0 on port 9090 with ingress policy [Serial]
-[sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation) [ExternalNode] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections to the specified port in a doNotTrack deny policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow inbound connections with an allow-all [Serial]
@@ -94,7 +93,6 @@
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGP export tests should not export pools with export disabled [Serial]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGPPeer should support BGP peers [Serial]
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [ExternalNode] using UDP and TCP external to nodeport
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to pod, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to service, different nodes
@@ -123,8 +121,6 @@
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N10: pod0 -> node1 NodePort -> pod0
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N11: pod0 -> node1 NodePort -> pod1 (hairpin)
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Egress Datapath NodePort access scenario-0N12: pod0 -> node1 NodePort -> pod2 (pod on other node)
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [ExternalNode] scenario-14: external hostNet=false -> node0NodePort
-[sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath external node [ExternalNode] scenario-15: external hostNet=false -> svcNodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-10: node1 hostNet=true -> node1NodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-11: node0 hostNet=false -> node1NodePort
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Workload Ingress Datapath scenario-12: node0 hostNet=true -> node1NodePort
@@ -184,11 +180,8 @@
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge iBGP routes after live migration
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should enforce NetworkPolicy after live migration
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should not have /32 host route on target node after a migration timeout
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration eBGP external client [ExternalNode] should maintain TCP connection from eBGP external client across two consecutive migrations
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should maintain TCP connection over iBGP across two consecutive live migrations
 [sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] Automatic MTU tests should select the correct MTU for the platform
-[sig-calico] [Team:CORE] [Feature:Maglev] [Category:Networking] [ExternalNode] [Dataplane:BPF] [RequiresAWS] Maglev load balancing tests test service ip load balancing behavior before and after maglev annotation (IPv4) [Serial]
-[sig-calico] [Team:CORE] [Feature:Maglev] [Category:Networking] [ExternalNode] [Dataplane:BPF] [RequiresAWS] Maglev load balancing tests test service ip load balancing behavior before and after maglev annotation (IPv6) [Serial]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
