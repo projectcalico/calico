@@ -9,6 +9,8 @@ extends: pipeline.yaml
 
 exclude:
   labels:
+    - label: Feature:Maglev
+      reason: "maglev needs BPF DSR, which this lane does not enable"
     - label: RequiresAWS
       reason: "not an AWS lane; these specs need AWS VPC routing"
     - label: RequiresXtables
