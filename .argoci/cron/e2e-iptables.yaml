@@ -618,7 +618,7 @@ steps:
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
       - name: E2E_TEST_CONFIG
-        value: e2e/config/iptables/aks-xtables-nobgp.yaml
+        value: e2e/config/iptables/aks-xtables-nobgp-wireguard.yaml
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER

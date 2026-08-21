@@ -583,7 +583,7 @@ blocks:
             - name: AZ_CREATE_MODE
               value: AKS
             - name: E2E_TEST_CONFIG
-              value: e2e/config/iptables/aks-xtables-nobgp.yaml
+              value: e2e/config/iptables/aks-xtables-nobgp-wireguard.yaml
 
       env_vars:
         - name: USE_HASH_RELEASE
