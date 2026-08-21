@@ -51,8 +51,17 @@ const (
 
 // calculateDefaultFelixSyncerEntries determines the expected set of Felix configuration for the currently configured
 // cluster.
-func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.DatastoreType) (expected []model.KVPair) {
+func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, cfg apiconfig.CalicoAPIConfig) (expected []model.KVPair) {
+	dt := cfg.Spec.DatastoreType
 	defaultProfileRules := []model.Rule{{Action: "allow"}}
+
+	// Backend Clean() deliberately leaves the protected built-in tiers behind - they cannot
+	// be deleted (see KubeClient.Clean), so for KDD whichever of them have already been
+	// created against this cluster are still there and the syncer reports them. Which ones
+	// exist depends on what else has run against the cluster, so discover them rather than
+	// assuming the datastore has none.
+	expected = append(expected, existingTierEntries(cfg)...)
+
 	// Add 2 for the default-allow profile that is always there.
 	// However, no profile labels are in the list because the
 	// default-allow profile doesn't specify labels.
@@ -198,6 +207,31 @@ func calculateDefaultFelixSyncerEntries(cs kubernetes.Interface, dt apiconfig.Da
 	return
 }
 
+// existingTierEntries returns the felix syncer entries for the Tiers that are currently in the
+// datastore. Used to account for the protected built-in tiers, which survive a backend Clean().
+func existingTierEntries(cfg apiconfig.CalicoAPIConfig) (expected []model.KVPair) {
+	c, err := clientv3.New(cfg)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	tiers, err := c.Tiers().List(context.Background(), options.ListOptions{})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	for _, tier := range tiers.Items {
+		// List() defaults Order and DefaultAction, matching what the syncer's update
+		// processor sees. Any action other than Pass is reported as Deny.
+		action := apiv3.Deny
+		if *tier.Spec.DefaultAction == apiv3.Pass {
+			action = apiv3.Pass
+		}
+		expected = append(expected, model.KVPair{
+			Key:   model.TierKey{Name: tier.Name},
+			Value: &model.Tier{Order: tier.Spec.Order, DefaultAction: action},
+		})
+	}
+
+	return
+}
+
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	var ctx context.Context
 	var c clientv3.Interface
@@ -254,7 +288,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectStatusUpdate(api.InSync)
 
 			By("Checking updates match those expected.")
-			defaultCacheEntries := calculateDefaultFelixSyncerEntries(cs, config.Spec.DatastoreType)
+			defaultCacheEntries := calculateDefaultFelixSyncerEntries(cs, config)
 			expectedCacheSize += len(defaultCacheEntries)
 			for _, r := range defaultCacheEntries {
 				// Expect the correct cache values.
