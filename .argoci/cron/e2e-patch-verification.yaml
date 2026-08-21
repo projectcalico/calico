@@ -31,8 +31,6 @@ steps:
         value: CalicoIptables
       - name: E2E_TEST_CONFIG
         value: e2e/config/patch-verification/xtables.yaml
-      - name: ENABLE_AUTO_HEP
-        value: "true"
       - name: INSTALLER
         value: helmerator
       - name: IPV4_POD_CIDR
@@ -316,8 +314,6 @@ steps:
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
         value: e2e/config/patch-verification/bpf-encap-aws.yaml
-      - name: ENABLE_AUTO_HEP
-        value: "true"
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -347,8 +343,6 @@ steps:
         value: CalicoNftables
       - name: E2E_TEST_CONFIG
         value: e2e/config/patch-verification/xtables-aws.yaml
-      - name: ENABLE_AUTO_HEP
-        value: "true"
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -380,8 +374,6 @@ steps:
         value: CalicoBPF
       - name: E2E_TEST_CONFIG
         value: e2e/config/patch-verification/bpf-encap.yaml
-      - name: ENABLE_AUTO_HEP
-        value: "true"
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
