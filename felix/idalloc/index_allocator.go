@@ -15,8 +15,9 @@
 package idalloc
 
 import (
+	"cmp"
 	"errors"
-	"sort"
+	"slices"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
@@ -29,19 +30,6 @@ func (r IndexRange) contains(a int) bool {
 	return r.Min <= a && r.Max >= a
 }
 
-// ByMaxIndex sorts collections of IndexRange structs in order of their starting/lower index
-type ByMaxIndex []IndexRange
-
-// Len is the number of indexranges in the collection
-func (i ByMaxIndex) Len() int { return len(i) }
-
-// Less reports whether the element with index a
-// must sort before the element with index b.
-func (i ByMaxIndex) Less(a, b int) bool { return i[a].Max < i[b].Max }
-
-// Swap swaps the elements with indexes a and b.
-func (i ByMaxIndex) Swap(a, b int) { i[a], i[b] = i[b], i[a] }
-
 type IndexAllocator struct {
 	indexStack *stack
 	exclusions []IndexRange
@@ -50,10 +38,11 @@ type IndexAllocator struct {
 // NewIndexAllocator returns an index allocator from the provided indexRanges
 // any indices falling within the specified exclusions will not be returned, even if designated by indexRanges
 func NewIndexAllocator(indexRanges []IndexRange, exclusions []IndexRange) *IndexAllocator {
-	// sort index ranges in descending order of their Max bound
-	if len(indexRanges) > 1 {
-		sort.Sort(sort.Reverse(ByMaxIndex(indexRanges)))
-	}
+	// Sort in descending order of Max bound.  Using Sorted... (not Sort...) to
+	// avoid mutating caller's slice.
+	indexRanges = slices.SortedFunc(slices.Values(indexRanges), func(a, b IndexRange) int {
+		return cmp.Compare(b.Max, a.Max)
+	})
 
 	r := &IndexAllocator{
 		indexStack: &stack{},
