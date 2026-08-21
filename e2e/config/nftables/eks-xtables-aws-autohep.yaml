@@ -7,6 +7,10 @@
 
 extends: [pipeline.yaml, ../platform/eks.yaml]
 
+enable:
+  - label: Feature:AutoHEPs
+    reason: "this lane exists to cover auto host endpoints"
+
 exclude:
   labels:
     - label: Dataplane:BPF
