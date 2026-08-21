@@ -121,12 +121,13 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	if err != nil {
 		return pool, err
 	}
-	return r.markAllocatable(ctx, pool), nil
+	return r.markAllocatable(ctx, pool, opts), nil
 }
 
 // markAllocatable records that the pool cleared the overlap check. Failure is not fatal, since an
-// unmarked pool stays usable until something overlaps it.
-func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool) *apiv3.IPPool {
+// unmarked pool stays usable until something overlaps it. The create's options carry through so a
+// pool created with a TTL keeps it.
+func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool, opts options.SetOptions) *apiv3.IPPool {
 	marked := pool.DeepCopy()
 	if marked.Status == nil {
 		marked.Status = &apiv3.IPPoolStatus{}
@@ -138,7 +139,7 @@ func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool) *apiv3
 		Message: "IPPool is available for IP allocation.",
 	})
 
-	out, err := r.UpdateStatus(ctx, marked, options.SetOptions{})
+	out, err := r.UpdateStatus(ctx, marked, opts)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool.Name).Warn("Failed to mark new IPPool allocatable")
 		return pool
