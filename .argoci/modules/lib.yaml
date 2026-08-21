@@ -1,0 +1,52 @@
+# Migrated from .semaphore/semaphore.yml.d/blocks/20-lib.yml
+#
+# The first component moved off Semaphore, and the reference for the ones that
+# follow. Deliberately the smallest real block in the repo: one job, no
+# producer/consumer artifact coupling, no kind cluster.
+#
+# A module contributes steps to .argoci/ciworkflow.yaml's DAG. It may carry
+# `inputs:`, `steps:`, `onExit:` and `defaults:` and nothing else — generateName,
+# schedule, notifications and labels belong to the workflow as a whole.
+#
+# Step names share one flat namespace across every module, which is what lets
+# `depends:` cross files unqualified. Prefix names with the component so a
+# collision (a hard error) stays unlikely.
+#
+# No `inputs:` here: this module is used once, purely to keep the root file
+# small. Declare inputs when the same module is included by more than one
+# workflow with different values.
+#
+# Differences from the Semaphore block, all deliberate:
+#   - No `dependencies: [Prerequisites]`. That was a dummy always-skipped block
+#     used to group the pre-flight checks. Depending on it here would be actively
+#     harmful: a dropped dependency now cascades, so gating a pre-flight check
+#     out would drop every component that named it. Pre-flight runs as its own
+#     steps in the same DAG, and branch protection — not the DAG — is what makes
+#     it blocking.
+#   - No `run-and-monitor` wrapper. It exists to keep Semaphore's log under the
+#     trim threshold and to spot hangs, using `expect` and a TTY. Argo captures
+#     the log itself. The hang detection is genuinely lost — see the skill's gap
+#     ledger.
+version: condensed-module
+
+defaults:
+  # The Semaphore block's own `execution_time_limit: minutes: 30`, which applied
+  # to every job in it. Overrides the root's 1h for this file's steps only.
+  #
+  # On expiry the step is SIGTERMed, so the epilogue below still runs within
+  # terminationGracePeriodSeconds (240s) and the JUnit upload survives a timeout.
+  timeout: 30m
+
+steps:
+  - name: lib-ci
+    commands: |
+      cd lib
+      make ci
+    epilogue: |
+      # The commands above run in a backgrounded subshell that the step shell
+      # waits on; this epilogue fires from a trap in that parent shell, so it
+      # does NOT inherit the `cd lib` — re-derive the path.
+      cd "${CI_HOME}/${CI_GIT_DIR}/lib"
+      # Semaphore published these to its own test-results service; here they go
+      # to the step's artifact storage, where the viewer picks them up.
+      artifact push job report --destination test-results || true
