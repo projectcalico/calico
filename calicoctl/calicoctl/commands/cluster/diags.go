@@ -718,100 +718,7 @@ func bpfJSONCmd(curNodeDir, nodeName, namespace, podName, info, sub, file string
 
 func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName string, bpfEnabled bool) {
 	fmt.Printf("Collecting dataplane diags for calico-node: %s\n", podName)
-	cmds := []common.Cmd{
-		// ip diagnostics
-		{
-			Info:     fmt.Sprintf("Collect iptables (legacy) for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- iptables-legacy-save -c", namespace, podName),
-			FilePath: fmt.Sprintf("%s/iptables-legacy-save.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect iptables (nft) for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- iptables-nft-save -c", namespace, podName),
-			FilePath: fmt.Sprintf("%s/iptables-nft-save.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect nftables for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- nft -n -a list ruleset", namespace, podName),
-			FilePath: fmt.Sprintf("%s/nft-ruleset.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ip routes for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip route show table all", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-route.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ipv6 routes for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip -6 route show table all", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-route-v6.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ip rule for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip rule", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-rule.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ip addr for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip addr", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-addr.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ip link for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip link", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-link.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ip neigh for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip neigh", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ip-neigh.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect ipset list for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ipset list", namespace, podName),
-			FilePath: fmt.Sprintf("%s/ipset-list.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect conntrack stats for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
-			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
-		},
-		{
-			Info:     fmt.Sprintf("Collect tc qdisc for node %s", nodeName),
-			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- tc qdisc show", namespace, podName),
-			FilePath: fmt.Sprintf("%s/tc-qdisc.txt", curNodeDir),
-		},
-	}
-	if bpfEnabled {
-		// eBPF diagnostics. The calico-bpf tool is reached via the combined
-		// calico binary's `component node bpf` subcommand. The dumps are
-		// collected in JSON format (the tool's --json flag) so the bundle
-		// carries machine-parseable output, falling back to plain text against
-		// older calico-node versions. The bpftool listings below have no
-		// equivalent calico-bpf JSON path here and stay as plain text.
-		cmds = append(cmds,
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack", "conntrack dump", "bpf-conntrack"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ipsets", "ipsets dump", "bpf-ipsets"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat", "nat dump", "bpf-nat"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "routes", "routes dump", "bpf-routes"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "counters", "counters dump", "bpf-counters"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "arp", "arp dump", "bpf-arp"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ifstate", "ifstate dump", "bpf-ifstate"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack stats", "conntrack stats", "bpf-conntrack-stats"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat affinity", "nat aff", "bpf-nat-aff"),
-			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat maglev table", "nat maglev", "bpf-nat-maglev"),
-			common.Cmd{
-				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
-				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
-				FilePath: fmt.Sprintf("%s/bpf-prog.txt", curNodeDir),
-			},
-			common.Cmd{
-				Info:     fmt.Sprintf("Collect eBPF map for node %s", nodeName),
-				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map list", namespace, podName),
-				FilePath: fmt.Sprintf("%s/bpf-maps.txt", curNodeDir),
-			},
-		)
-	}
-	common.ExecAllCmdsWriteToFile(cmds)
+	common.ExecAllCmdsWriteToFile(calicoNodeDiagsCmds(curNodeDir, nodeName, namespace, podName, bpfEnabled))
 
 	if bpfEnabled {
 		output, err := common.ExecCmd(fmt.Sprintf(
@@ -868,6 +775,130 @@ func collectCalicoNodeDiags(curNodeDir string, nodeName, namespace, podName stri
 		}
 		common.ExecAllCmdsWriteToFile(cmds)
 	}
+}
+
+// calicoNodeDiagsCmds returns the dataplane dump commands to run in the
+// calico-node container on one node.
+func calicoNodeDiagsCmds(curNodeDir string, nodeName, namespace, podName string, bpfEnabled bool) []common.Cmd {
+	cmds := []common.Cmd{
+		// ip diagnostics
+		{
+			Info:     fmt.Sprintf("Collect iptables (legacy) for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- iptables-legacy-save -c", namespace, podName),
+			FilePath: fmt.Sprintf("%s/iptables-legacy-save.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect iptables (nft) for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- iptables-nft-save -c", namespace, podName),
+			FilePath: fmt.Sprintf("%s/iptables-nft-save.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect nftables for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- nft -n -a list ruleset", namespace, podName),
+			FilePath: fmt.Sprintf("%s/nft-ruleset.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ip routes for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip route show table all", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-route.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ipv6 routes for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip -6 route show table all", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-route-v6.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ip rule for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip rule", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-rule.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ip addr for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip addr", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-addr.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ip link for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip link", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-link.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ip neigh for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip neigh", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-neigh.txt", curNodeDir),
+		},
+		// Bridge state. `ip link` above elides the link details that matter on a
+		// bridged node — the bridge's vlan_filtering setting, each port's
+		// bridge_slave flags, and a VLAN sub-device's VID — hence the -d
+		// variant here; the bridge dumps then cover per-port VLAN membership
+		// and the FDB, which `ip` does not report at all.
+		{
+			Info:     fmt.Sprintf("Collect ip link details for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ip -d link show", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ip-link-details.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect bridge ports for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bridge -d link show", namespace, podName),
+			FilePath: fmt.Sprintf("%s/bridge-link.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect bridge VLANs for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bridge vlan show", namespace, podName),
+			FilePath: fmt.Sprintf("%s/bridge-vlan.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect bridge FDB for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bridge fdb show", namespace, podName),
+			FilePath: fmt.Sprintf("%s/bridge-fdb.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect ipset list for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- ipset list", namespace, podName),
+			FilePath: fmt.Sprintf("%s/ipset-list.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect conntrack stats for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- conntrack -LSC", namespace, podName),
+			FilePath: fmt.Sprintf("%s/conntrack-list.txt", curNodeDir),
+		},
+		{
+			Info:     fmt.Sprintf("Collect tc qdisc for node %s", nodeName),
+			CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- tc qdisc show", namespace, podName),
+			FilePath: fmt.Sprintf("%s/tc-qdisc.txt", curNodeDir),
+		},
+	}
+	if bpfEnabled {
+		// eBPF diagnostics. The calico-bpf tool is reached via the combined
+		// calico binary's `component node bpf` subcommand. The dumps are
+		// collected in JSON format (the tool's --json flag) so the bundle
+		// carries machine-parseable output, falling back to plain text against
+		// older calico-node versions. The bpftool listings below have no
+		// equivalent calico-bpf JSON path here and stay as plain text.
+		cmds = append(cmds,
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack", "conntrack dump", "bpf-conntrack"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ipsets", "ipsets dump", "bpf-ipsets"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat", "nat dump", "bpf-nat"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "routes", "routes dump", "bpf-routes"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "counters", "counters dump", "bpf-counters"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "arp", "arp dump", "bpf-arp"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "ifstate", "ifstate dump", "bpf-ifstate"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "conntrack stats", "conntrack stats", "bpf-conntrack-stats"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat affinity", "nat aff", "bpf-nat-aff"),
+			bpfJSONCmd(curNodeDir, nodeName, namespace, podName, "nat maglev table", "nat maglev", "bpf-nat-maglev"),
+			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF prog for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool prog list", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-prog.txt", curNodeDir),
+			},
+			common.Cmd{
+				Info:     fmt.Sprintf("Collect eBPF map for node %s", nodeName),
+				CmdStr:   fmt.Sprintf("kubectl exec -n %s -t %s -c calico-node -- bpftool map list", namespace, podName),
+				FilePath: fmt.Sprintf("%s/bpf-maps.txt", curNodeDir),
+			},
+		)
+	}
+	return cmds
 }
 
 func collectUnsupportedAnnotations(tempDir string, directoryName string) {
