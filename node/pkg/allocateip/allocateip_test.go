@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/calico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/ipam"
@@ -278,7 +279,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node has the same IP on it.
@@ -322,7 +323,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -366,7 +367,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -413,7 +414,7 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Run the allocateip code.
-		err = reconcileTunnelAddrs(nodename, c, felixconfig.New())
+		err = reconcileTunnelAddrs(context.Background(), nodename, c, felixconfig.New())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the node no longer has the same IP on it.
@@ -1018,6 +1019,55 @@ var _ = Describe("Running as daemon", func() {
 		By("shutting down the daemon")
 		cancel()
 		Eventually(completed).Should(BeClosed(), "2s", "200ms")
+	})
+})
+
+var _ = Describe("Reconciliation triggers", func() {
+	const nodename = "test.node"
+
+	var r *reconciler
+
+	nodeUpdate := func(labels map[string]string) bapi.Update {
+		return bapi.Update{
+			KVPair: model.KVPair{
+				Key: model.ResourceKey{
+					Kind: internalapi.KindNode,
+					Name: nodename,
+				},
+				Value: &internalapi.Node{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   nodename,
+						Labels: labels,
+					},
+					Status: internalapi.NodeStatus{
+						WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
+					},
+				},
+			},
+			UpdateType: bapi.UpdateTypeKVUpdated,
+		}
+	}
+
+	BeforeEach(func() {
+		r = &reconciler{
+			nodename: nodename,
+			// Buffered so that the triggers can be read back without a run loop.
+			ch:                   make(chan struct{}, 1),
+			data:                 make(map[string]any),
+			initialSyncCompleted: true,
+		}
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
+		Expect(r.ch).To(Receive(), "expected the first update to trigger")
+	})
+
+	It("should trigger a reconcile when only the node labels change", func() {
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "two"})})
+		Expect(r.ch).To(Receive())
+	})
+
+	It("should not trigger a reconcile when the node is unchanged", func() {
+		r.OnUpdates([]bapi.Update{nodeUpdate(map[string]string{"rack": "one"})})
+		Expect(r.ch).ToNot(Receive())
 	})
 })
 
