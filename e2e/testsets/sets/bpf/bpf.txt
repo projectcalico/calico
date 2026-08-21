@@ -32,6 +32,8 @@
 [sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
+[sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGP export tests should not export pools with export disabled [Serial]
+[sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGPPeer should support BGP peers [Serial]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to pod, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to service, different nodes
@@ -98,12 +100,10 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-2N1 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=true, ingress [Serial]
-[sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] egress-2N2 ApplyOnForward=false, egress [Serial]
-[sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] egress-2N2 ApplyOnForward=true, egress [Serial]
-[sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=false, ingress [Serial]
-[sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
+[sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] IP-in-IP tests should assign an IPIP address to the tunl0 interface [Serial]
+[sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] IP-in-IP tests should support toggling IPIP on and off [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
