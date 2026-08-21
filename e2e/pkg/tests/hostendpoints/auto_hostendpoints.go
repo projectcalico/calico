@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -44,6 +44,11 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
 	describe.WithSerial(),
 	describe.WithFeature("AutoHEPs"),
+	// Ordered so the auto host endpoint enable/disable and node discovery run
+	// once for the whole container instead of once per spec. Toggling auto HEPs
+	// reconfigures kube-controllers and waits for host endpoints to appear (or
+	// disappear), which is slow, and none of these specs need a fresh toggle.
+	ginkgo.Ordered,
 	"auto host endpoint tests",
 	func() {
 		f := utils.NewDefaultFramework("auto-hep")
@@ -53,6 +58,9 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			cli         ctrlclient.Client
 			originalKCC v3.KubeControllersConfiguration
 			testKCC     v3.KubeControllersConfiguration
+
+			// hepSetupDone guards the one-time, container-scoped setup below.
+			hepSetupDone bool
 		)
 		const port9090 = 9090
 		const port9091 = 9091
@@ -85,13 +93,20 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 		}
 
 		ginkgo.BeforeEach(func() {
-			// The following code tries to get config information from k8s ConfigMap.
-			// A framework clientset is needed to access k8s configmap but it will only be created in the context of BeforeEach or IT.
-			// Current solution is to use BeforeEach because this function is not a test case.
-			// This will avoid complexity of creating a client by ourselves.
+			// A framework clientset is needed to reach the KubeControllersConfiguration, but it's
+			// only created in the context of a BeforeEach or an It. Build the client here rather
+			// than rolling our own. This part is cheap, so it stays per-spec; the auto HEP toggle
+			// and node discovery below run once, guarded by hepSetupDone, because the framework
+			// client isn't available in a BeforeAll (it's populated in the framework's own
+			// BeforeEach, which runs after BeforeAll in an Ordered container).
 			var err error
 			cli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
+
+			if hepSetupDone {
+				return
+			}
+			hepSetupDone = true
 
 			// Sanity check: make sure we have a default kubecontrollersconfiguration.
 			originalKCC = v3.KubeControllersConfiguration{}
@@ -103,7 +118,7 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 
 			// Turn on default auto host endpoints if not already enabled.
 			if !GetAutoHEPsEnabled(originalKCC) {
-				logrus.Info("BeforeEach: auto host endpoints not previously enabled so enabling")
+				logrus.Info("BeforeAll: auto host endpoints not previously enabled so enabling")
 				// Enabled creation of auto host endpoints and creation of default host endpoints.
 				// Initialise nil pointer fields so we can set the values below.
 				if testKCC.Spec.Controllers.Node == nil {
@@ -118,7 +133,6 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 				WaitForAutoHEPs(cli, true)
 			}
 
-			logrus.Info("BeforeEach for auto host endpoint")
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -132,10 +146,10 @@ var _ = describe.CalicoDescribe(describe.WithTeam(describe.Core),
 			}
 		})
 
-		ginkgo.AfterEach(func() {
+		ginkgo.AfterAll(func() {
 			// We've updated the kubecontrollersconfiguration, so we need to restore it to its original state.
 			if !reflect.DeepEqual(getHostEndpointConfig(originalKCC), getHostEndpointConfig(testKCC)) {
-				logrus.Info("AfterEach: auto host endpoints not previously enabled so disabling")
+				logrus.Info("AfterAll: auto host endpoints not previously enabled so disabling")
 				updateHostEndpointConfig(cli, originalKCC)
 				WaitForAutoHEPs(cli, false)
 			}
