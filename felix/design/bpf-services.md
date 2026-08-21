@@ -547,6 +547,40 @@ the BPF program ever runs.
 - Reverse-SNAT map (`cali_v4_srmsg` / `cali_v6_srmsg`) — used by
   the CTLB's `recvmsg` hook to undo destination rewrites.
 
+### Service IDs, and the second writer of these maps
+
+A service ID indexes the service's own block of the backend map, so
+**no two services may hold the same ID** — their backends would sit at
+the same `(id, ordinal)` keys and overwrite each other on every sync,
+leaving one frontend NATing to the other's backends. A service does
+share its ID with all of its *own* derived (NodePort, ExternalIP,
+LoadBalancer) frontends; that is how `applyDerived` points them at one
+block of backends.
+
+IDs are handed out by `newSvcID` and, on restart, re-adopted from the
+maps by `startupBuildPrev`, which pairs each frontend entry with the
+service that must have written it. Re-adoption keeps a restart from
+disrupting traffic, but it means Felix trusts the maps — and Felix is
+not their only writer:
+
+- the maps are pinned, so they outlive both Felix and calico-node;
+- with `bpfNetworkBootstrap` enabled the `ebpf-bootstrap` init
+  container programs the API server service into them on every
+  calico-node start, before Felix runs (`node/pkg/nodeinit`).
+
+So `startupBuildPrev` must **not** adopt an ID it finds shared by two
+different services: adopting it makes the conflict permanent, since
+`applySvc` keeps an unchanged service's ID forever and every later
+restart re-adopts it. Both services are instead left out of
+`prevSvcMap`, which gives each a fresh ID and rewrites its frontends
+and backends; nothing read through a duplicated ID is carried over,
+because those backends may belong to the other service.
+
+The bootstrap writer holds up the other end of the invariant: it
+reuses the ID already recorded for the service it is programming, and
+otherwise picks one no frontend entry uses, rather than assuming an ID
+is free.
+
 ### Semantics it enforces
 
 - Backend selection honours `externalTrafficPolicy=Local`
@@ -607,6 +641,11 @@ correct; a later update with real ready endpoints overwrites it.
   be wrong: a normal service legitimately scaling to zero must clear
   its backends so clients get a connection refusal rather than NAT
   to a dead backend.
+- Anything that writes a service ID — in Felix or in the bootstrap
+  init container — must keep IDs unique across services (above). A
+  change to either writer needs to hold up its end: Felix does not
+  adopt duplicated IDs from the maps, and the bootstrap does not claim
+  an ID that is already in use.
 
 
 

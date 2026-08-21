@@ -858,7 +858,7 @@ func schema_pkg_apis_projectcalico_v3_BGPConfigurationSpec(ref common.ReferenceC
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Enabled, confd and BIRD program that route. When ProgramClusterRoutes is Disabled, it is expected that Felix will program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Enabled]",
+							Description: "ProgramClusterRoutes controls which \"cluster routes\" are programmed by Calico's BGP stack, i.e. the routes that a node needs in order to reach workloads on other nodes.  It only applies to IP Pools with vxlanMode: Never; the cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.  The routes that BIRD does not program here are expected to be programmed by Felix instead.  Below, an IPIP IP Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and vxlanMode both Never.\n\n- Disabled: BIRD programs no cluster routes. - EnabledNoEncapOnly: BIRD programs them for unencapsulated IP Pools. - EnabledIPIPOnly: BIRD programs them for IPIP IP Pools. - Enabled: BIRD programs them for both.\n\nThis field must be kept consistent with FelixConfiguration.ProgramClusterRoutes, which makes the same choice from Felix's side.  If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the routes; if neither is, there will be no cluster routes at all.\n\nNote: asking BIRD to program IPIP cluster routes, which the Enabled and EnabledIPIPOnly values do, is deprecated as of v3.33 and will be removed in v3.35.\n\n[Default: EnabledNoEncapOnly]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -3554,7 +3554,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"programClusterRoutes": {
 						SchemaProps: spec.SchemaProps{
-							Description: "ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node, when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled, it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route. Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]",
+							Description: "ProgramClusterRoutes controls which \"cluster routes\" Felix programs, i.e. the routes that a node needs in order to reach workloads on other nodes.  It only applies to IP Pools with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and vxlanMode both Never.\n\n- Disabled: Felix programs no cluster routes. - EnabledIPIPOnly: Felix programs them for IPIP IP Pools. - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools. - Enabled: Felix programs them for both.\n\nThis field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same kind of IP Pool they will fight over the routes; if neither is, there will be no cluster routes at all.\n\nNote: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly values do, is deprecated as of v3.33 and will be removed in v3.35.\n\n[Default: EnabledIPIPOnly]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4060,7 +4060,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfAttachType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `TCX` is used where available to enable easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available. [Default: TCX]",
+							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available. Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism instead of the netkit API, which is required before downgrading to a release without netkit support. [Default: Netkit]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5681,7 +5681,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"blockSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6. The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than or equal to the size of the pool CIDR.",
+							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6. The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller than or equal to the size of the pool CIDR.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

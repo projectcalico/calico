@@ -480,7 +480,7 @@ static CALI_BPF_INLINE void calico_tc_process_ct_lookup(struct cali_tc_ctx *ctx)
 			goto deny;
 		}
 
-		if (ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
+		if (is_tcp_syn(ctx)) {
 			CALI_DEBUG("Forcing policy on SYN");
 			if (ct_result_rc(ctx->state->ct_result.rc) == CALI_CT_ESTABLISHED_DNAT) {
 				/* Set DNAT info for policy */
@@ -1461,7 +1461,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	 * pass (~30s).
 	 */
 	if (CALI_F_TO_WEP && !policy_skipped && INGRESS_CONN_LIMIT_CONFIGURED &&
-			ct_result_is_syn(ctx->state->ct_result.rc) &&
+			is_tcp_syn(ctx) &&
 			!(ctx->state->ct_result.flags & CALI_CT_FLAG_CONNLIMIT_INGRESS)) {
 		/* First SYN OR retransmission of a previously-rejected SYN. */
 		struct calico_ct_key ck;
@@ -1498,7 +1498,7 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
 	}
 
 	// Set Istio DSCP mark, if traffic originates from a workload that's part of the mesh.
-	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && ctx->state->ip_proto == IPPROTO_TCP && ct_result_is_syn(ctx->state->ct_result.rc)) {
+	if (CALI_F_TO_WEP && ISTIO_DSCP >= 0 && is_tcp_syn(ctx)) {
 		ipv46_addr_t src_ip = ctx->state->ip_src;
 		struct ip_set_key sip = {0};
 #ifdef IPVER6
@@ -1570,8 +1570,15 @@ int calico_tc_skb_new_flow_entrypoint(struct __sk_buff *skb)
 	/* Check egress connection limit for new TCP connections from WEP.
 	 * Atomically check the limit and increment the counter in the QoS map.
 	 * The Go-side CT scanner periodically recounts and corrects drift.
+	 *
+	 * Gated on EGRESS_CONN_LIMIT_CONFIGURED to match the CONNLIMIT_EGRESS
+	 * stamp below and the ingress check. Felix writes the cali_qos_conn
+	 * entry before the program is reattached with the new global, so
+	 * without this a connection opened in that window is counted but not
+	 * stamped, and nothing can decrement it until the next recount.
 	 */
 	if (CALI_F_FROM_WEP && state->ip_proto == IPPROTO_TCP &&
+			EGRESS_CONN_LIMIT_CONFIGURED &&
 			!(state->flags & CALI_ST_SUPPRESS_CT_STATE)) {
 		if (qos_connlimit_check_and_increment(ctx) < 0) {
 			CALI_DEBUG("Egress connection limit exceeded, rejecting with TCP RST");
@@ -1922,7 +1929,7 @@ static CALI_BPF_INLINE void calico_tc_skb_accepted(struct cali_tc_ctx *ctx)
 		goto do_post_nat;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
-		if (!ct_result_is_syn(state->ct_result.rc)) {
+		if (!is_tcp_syn(ctx)) {
 			seen_mark = CALI_SKB_MARK_BYPASS;
 			CALI_DEBUG("marking CALI_SKB_MARK_BYPASS");
 		}

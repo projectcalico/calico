@@ -1316,6 +1316,14 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoLibHostPath:
+                  default: /var/lib/calico
+                  description: |-
+                    CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                    host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                  maxLength: 1024
+                  type: string
                 calicoNetwork:
                   description:
                     CalicoNetwork specifies networking configuration options
@@ -1346,13 +1354,22 @@ spec:
                       type: string
                     clusterRoutingMode:
                       description: |-
-                        ClusterRoutingMode controls how nodes get a route to a workload on another node,
-                        when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                        confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                        Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                        ClusterRoutingMode controls which component programs the routes that a node needs in order to reach
+                        workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; the routes for IP Pools
+                        with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
+                        In BIRD mode, confd and BIRD program the routes for both IPIP and unencapsulated IP Pools.
+                        In Felix mode, Felix programs the routes for both IPIP and unencapsulated IP Pools.
+                        In FelixIPIPOnly mode, Felix programs the routes for IPIP IP Pools, and confd and BIRD program them
+                        for unencapsulated IP Pools.
+                        If not specified, the operator writes neither FelixConfiguration.programClusterRoutes nor
+                        BGPConfiguration.programClusterRoutes, so Calico's own defaults apply; as of Calico v3.33 those
+                        defaults are equivalent to FelixIPIPOnly.
+                        Note that BIRD programming of IPIP routes, which the BIRD mode selects, is deprecated as of
+                        Calico v3.33 and is intended for removal in v3.35.
                       enum:
                         - BIRD
                         - Felix
+                        - FelixIPIPOnly
                       type: string
                     containerIPForwarding:
                       description: |-
@@ -2826,6 +2843,37 @@ spec:
                                               otherwise to an implementation-defined value. Requests cannot exceed Limits.
                                               More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                             type: object
+                                        type: object
+                                      startupProbe:
+                                        description: |-
+                                          StartupProbe allows customization of the startup probe timing parameters.
+                                          The probe handler is set by the operator.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
                                         type: object
                                     required:
                                       - name
@@ -4385,6 +4433,15 @@ spec:
                           type: object
                       type: object
                   type: object
+                calicoRunHostPath:
+                  default: /var/run/calico
+                  description: |-
+                    CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                    /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                    host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                    operator continues using that path after a manifest-to-operator migration.
+                  maxLength: 1024
+                  type: string
                 calicoWindowsUpgradeDaemonSet:
                   description: |-
                     Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -9318,7 +9375,7 @@ spec:
                   description: |-
                     Variant is the product to install - one of Calico or CalicoEnterprise.
                     TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                    Default: Calico
+                    If left unset, the operator fills in the variant it is running as.
                   enum:
                     - Calico
                     - CalicoEnterprise
@@ -10675,6 +10732,14 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoLibHostPath:
+                      default: /var/lib/calico
+                      description: |-
+                        CalicoLibHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/lib/calico. Pair this with CalicoRunHostPath when Calico data lives under a non-standard
+                        host directory (for example microk8s uses /var/snap/microk8s/current/var/lib/calico).
+                      maxLength: 1024
+                      type: string
                     calicoNetwork:
                       description:
                         CalicoNetwork specifies networking configuration
@@ -10705,13 +10770,22 @@ spec:
                           type: string
                         clusterRoutingMode:
                           description: |-
-                            ClusterRoutingMode controls how nodes get a route to a workload on another node,
-                            when that workload's IP comes from an IP Pool with vxlanMode: Never. When ClusterRoutingMode is BIRD,
-                            confd and BIRD program that route. When ClusterRoutingMode is Felix, it is expected that Felix will program that route.
-                            Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: BIRD]
+                            ClusterRoutingMode controls which component programs the routes that a node needs in order to reach
+                            workloads on other nodes. It only applies to IP Pools with vxlanMode: Never; the routes for IP Pools
+                            with vxlanMode: Always or vxlanMode: CrossSubnet are always programmed by Felix.
+                            In BIRD mode, confd and BIRD program the routes for both IPIP and unencapsulated IP Pools.
+                            In Felix mode, Felix programs the routes for both IPIP and unencapsulated IP Pools.
+                            In FelixIPIPOnly mode, Felix programs the routes for IPIP IP Pools, and confd and BIRD program them
+                            for unencapsulated IP Pools.
+                            If not specified, the operator writes neither FelixConfiguration.programClusterRoutes nor
+                            BGPConfiguration.programClusterRoutes, so Calico's own defaults apply; as of Calico v3.33 those
+                            defaults are equivalent to FelixIPIPOnly.
+                            Note that BIRD programming of IPIP routes, which the BIRD mode selects, is deprecated as of
+                            Calico v3.33 and is intended for removal in v3.35.
                           enum:
                             - BIRD
                             - Felix
+                            - FelixIPIPOnly
                           type: string
                         containerIPForwarding:
                           description: |-
@@ -12212,6 +12286,37 @@ spec:
                                                   otherwise to an implementation-defined value. Requests cannot exceed Limits.
                                                   More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                                                 type: object
+                                            type: object
+                                          startupProbe:
+                                            description: |-
+                                              StartupProbe allows customization of the startup probe timing parameters.
+                                              The probe handler is set by the operator.
+                                            properties:
+                                              failureThreshold:
+                                                description: |-
+                                                  FailureThreshold is the minimum consecutive failures for the probe
+                                                  to be considered failed after having succeeded.
+                                                format: int32
+                                                type: integer
+                                              initialDelaySeconds:
+                                                description: |-
+                                                  InitialDelaySeconds is the number of seconds after the container
+                                                  starts before the probe is initiated.
+                                                format: int32
+                                                type: integer
+                                              periodSeconds:
+                                                description:
+                                                  PeriodSeconds is how often
+                                                  (in seconds) to perform the probe.
+                                                format: int32
+                                                type: integer
+                                              timeoutSeconds:
+                                                description:
+                                                  TimeoutSeconds is the number
+                                                  of seconds after which the probe times
+                                                  out.
+                                                format: int32
+                                                type: integer
                                             type: object
                                         required:
                                           - name
@@ -13794,6 +13899,15 @@ spec:
                               type: object
                           type: object
                       type: object
+                    calicoRunHostPath:
+                      default: /var/run/calico
+                      description: |-
+                        CalicoRunHostPath optionally specifies the host path mounted into calico-node containers at
+                        /var/run/calico. Environments such as microk8s place Calico runtime state under a non-standard
+                        host directory (for example /var/snap/microk8s/current/var/run/calico); set this field so the
+                        operator continues using that path after a manifest-to-operator migration.
+                      maxLength: 1024
+                      type: string
                     calicoWindowsUpgradeDaemonSet:
                       description: |-
                         Deprecated. The CalicoWindowsUpgradeDaemonSet is deprecated and will be removed from the API in the future.
@@ -18807,7 +18921,7 @@ spec:
                       description: |-
                         Variant is the product to install - one of Calico or CalicoEnterprise.
                         TigeraSecureEnterprise is also accepted as a deprecated alias for CalicoEnterprise.
-                        Default: Calico
+                        If left unset, the operator fills in the variant it is running as.
                       enum:
                         - Calico
                         - CalicoEnterprise

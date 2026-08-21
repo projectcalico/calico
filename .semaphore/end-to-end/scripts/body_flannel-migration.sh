@@ -22,9 +22,9 @@ export MIGRATION_MANIFEST=${MIGRATION_MANIFEST:-"manifests/flannel-migration/mig
 
 if [ "${USE_HASH_RELEASE}" == "true" ]; then
   echo "[INFO] Using hash release for flannel migration"
-  LATEST_HASHREL="https://latest-os.docs.eng.tigera.net/${RELEASE_STREAM}.txt"
+  LATEST_HASHREL="https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt"
   echo "Checking ${LATEST_HASHREL} for latest hash release url..."
-  DOCS_URL=$(curl --retry 9 --retry-all-errors -sS ${LATEST_HASHREL})
+  DOCS_URL=$(curl --retry 9 --retry-all-errors -fsS ${LATEST_HASHREL})
   echo "Using $DOCS_URL for hash release base url"
 else
   if [[ "${RELEASE_STREAM}" == "master" ]]; then
@@ -115,8 +115,10 @@ kubectl apply -f - < ./flannel.yaml
 sleep 30 # wait for flannel to come up
 kubectl get po -A -owide
 
-# Run a basic services test to check that flannel networking is working.
-K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' \
+# Run a basic services test to check that flannel networking is working. The
+# job's own config selects the post-migration run, so clear it here.
+E2E_TEST_CONFIG='' \
+  K8S_E2E_FLAGS='--ginkgo.focus=should.serve.a.basic.endpoint.from.pods' \
   ./bz.sh tests:run |& tee >(gzip --stdout > "${BZ_LOGS_DIR}/e2e-tests-pre.log")
 
 kubectl delete -n kube-system ds cni-installer || true  # remove the CNI installer daemonset

@@ -24,10 +24,11 @@ import (
 // It defines which tests to include and exclude using Ginkgo v2 labels and
 // test name patterns.
 type Config struct {
-	// Extends is an optional path to a parent config file (relative to this
-	// file's directory). The parent's include and exclude lists are inherited
-	// and appended to by this config.
-	Extends string `yaml:"extends,omitempty"`
+	// Extends names parent config files (relative to this file's directory)
+	// whose include and exclude lists this config inherits. Parents are merged
+	// left-to-right and this config's own entries are appended last, so a lane
+	// can compose a pipeline's scope with a shared platform exclusion list.
+	Extends ExtendsList `yaml:"extends,omitempty"`
 
 	// Include is a list of label expressions. Tests matching ANY of these
 	// expressions are selected to run. When a parent config is extended,
@@ -37,6 +38,39 @@ type Config struct {
 	// Exclude defines labels and name patterns to exclude from the selected
 	// tests. When a parent config is extended, exclude entries are appended.
 	Exclude Exclude `yaml:"exclude,omitempty"`
+
+	// Enable cancels a label exclusion this config inherits, for a lane whose
+	// cluster does provide what the label needs. Each entry must match a label
+	// an ancestor excludes.
+	Enable []EnableLabel `yaml:"enable,omitempty"`
+}
+
+// ExtendsList is the parent list for a config. It accepts a bare string for the
+// single-parent case and a sequence for composition:
+//
+//	extends: pipeline.yaml
+//	extends: [pipeline.yaml, ../platform/eks.yaml]
+type ExtendsList []string
+
+// UnmarshalYAML implements custom unmarshaling for ExtendsList to support both
+// the bare string and sequence forms.
+func (e *ExtendsList) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		*e = ExtendsList{value.Value}
+		return nil
+	}
+
+	var parents []string
+	if err := value.Decode(&parents); err != nil {
+		return fmt.Errorf("invalid extends (want a path or a list of paths): %w", err)
+	}
+	for i, p := range parents {
+		if p == "" {
+			return fmt.Errorf("extends[%d] is empty (line %d)", i, value.Line)
+		}
+	}
+	*e = parents
+	return nil
 }
 
 // IncludeEntry is a label expression to include in the test selection. It
@@ -71,6 +105,15 @@ func (e *IncludeEntry) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*e = IncludeEntry(r)
 	return nil
+}
+
+// EnableLabel is an inherited label exclusion to cancel.
+type EnableLabel struct {
+	// Label is the Ginkgo label to re-include (e.g., "Feature:Wireguard").
+	Label string `yaml:"label"`
+
+	// Reason documents what this lane provides that the label needs. Required.
+	Reason string `yaml:"reason"`
 }
 
 // Exclude defines what to exclude from the test selection.

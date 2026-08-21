@@ -35,9 +35,10 @@ require (
 	github.com/google/go-containerregistry v0.21.6
 	github.com/google/go-github/v53 v53.2.0
 	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
+	github.com/google/nftables v0.3.0
 	github.com/google/safetext v0.0.0-20260330151545-1fb717a317c5
 	github.com/google/uuid v1.6.0
-	github.com/gopacket/gopacket v1.4.0
+	github.com/gopacket/gopacket v1.6.1
 	github.com/gruntwork-io/terratest v1.0.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/ishidawataru/sctp v0.0.0-20251114114122-19ddcbc6aae2
@@ -92,6 +93,7 @@ require (
 	go.etcd.io/etcd/client/v2 v2.305.31
 	go.etcd.io/etcd/client/v3 v3.7.0
 	go.yaml.in/yaml/v3 v3.0.4
+	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 	golang.org/x/mod v0.38.0
 	golang.org/x/net v0.57.0
 	golang.org/x/oauth2 v0.36.0
@@ -119,8 +121,8 @@ require (
 	k8s.io/kubectl v0.37.0-beta.0
 	k8s.io/kubernetes v1.37.0-beta.0
 	k8s.io/utils v0.0.0-20260626114624-be93311217bd
-	kubevirt.io/api v1.8.3
-	kubevirt.io/client-go v1.8.3
+	kubevirt.io/api v1.9.0
+	kubevirt.io/client-go v1.9.0-beta.0.0.20260731113834-b7f13e6a8fd7
 	modernc.org/memory v1.11.0
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/gateway-api v1.5.1
@@ -300,7 +302,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-zglob v0.0.2-0.20190814121620-e3c945676326 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
-	github.com/mdlayher/netlink v1.7.2 // indirect
+	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
@@ -445,12 +447,4 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.37.0-beta.0
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.37.0-beta.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.0-beta.0
-
-	// Upstream kubevirt.io/client-go/log registers a global "-v" flag in its
-	// init(), which collides with the "-v" flag the k8s e2e framework already
-	// registers, panicking ("flag redefined: v") at startup in any test binary
-	// that links the kubevirt clientset (pulled in via libcalico-go's k8s
-	// backend). The fork comments out that registration; keep this replace until
-	// upstream drops the global flag.
-	kubevirt.io/client-go => github.com/tigera/kubevirt-client-go v1.7.0-tigera1
 )

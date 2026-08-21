@@ -36,8 +36,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
-	"github.com/projectcalico/calico/felix/logutils"
-	logutilslc "github.com/projectcalico/calico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
@@ -57,6 +56,9 @@ const (
 	// veth is gone for good - mustn't keep us reprogramming forever.
 	FlowtablePruneRetryDelay = 5 * time.Second
 	MaxFlowtablePruneRetries = 5
+
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled.
+	defaultCleanupRetryInterval = 180 * time.Second
 )
 
 type FlowTableHandler interface {
@@ -226,6 +228,10 @@ type NftablesTable struct {
 	// solely to clean up any existing rules and chains that may be programmed.
 	disabled bool
 
+	// nextCleanupAttempt holds off a disabled table after a failure. Nothing else latches it, and a
+	// table we can't clean up would otherwise burn its whole retry budget on every apply.
+	nextCleanupAttempt time.Time
+
 	// baseChains is the set of base chains for this table. This is typically the
 	// package-level baseChains variable, but for ARP family tables it uses arpBaseChains.
 	baseChainDefs map[string]knftables.Chain
@@ -293,6 +299,9 @@ type NftablesTable struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
+	// recreatePending is set by queueTableRecreate after repeated programming failures.
+	recreatePending bool
+
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 
@@ -311,7 +320,7 @@ type NftablesTable struct {
 	peakNftablesWriteTime time.Duration
 
 	logCxt               *logrus.Entry
-	updateRateLimitedLog *logutilslc.RateLimitedLogger
+	updateRateLimitedLog *logrusr.RateLimitedLogger
 
 	gaugeNumChains                  prometheus.Gauge
 	gaugeNumRules                   prometheus.Gauge
@@ -330,7 +339,7 @@ type NftablesTable struct {
 	listInterfaces func() ([]string, error)
 
 	onStillAlive func()
-	opReporter   logutils.OpRecorder
+	opReporter   logrusr.OpRecorder
 	reason       string
 
 	contextTimeout time.Duration
@@ -364,7 +373,7 @@ type TableOptions struct {
 	OnStillAlive func()
 
 	// OpRecorder to tell when we do resyncs etc.
-	OpRecorder logutils.OpRecorder
+	OpRecorder logrusr.OpRecorder
 }
 
 func NewTable(
@@ -467,7 +476,7 @@ func newTable(
 		}
 	}
 
-	// Allow override of exec.Command() and time.Sleep() for test purposes.
+	// Allow override of time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
@@ -514,9 +523,9 @@ func newTable(
 		dirtyChains:            set.New[string](),
 		chainToDataplaneHashes: map[string][]string{},
 		logCxt:                 logrus.WithFields(logFields),
-		updateRateLimitedLog: logutilslc.NewRateLimitedLogger(
-			logutilslc.OptInterval(30*time.Second),
-			logutilslc.OptBurst(100),
+		updateRateLimitedLog: logrusr.NewRateLimitedLogger(
+			logrusr.OptInterval(30*time.Second),
+			logrusr.OptBurst(100),
 		).WithFields(logFields),
 		hashCommentPrefix: hashPrefix,
 		ourChainsRegexp:   ourChainsRegexp,
@@ -562,6 +571,13 @@ func (n *NftablesTable) Name() string {
 
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+// CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
+// when nftables is disabled an ordinary apply deletes the whole table. That's safe because we
+// don't share the Calico table with any other writers.
+func (n *NftablesTable) CleanUp() time.Duration {
+	return n.Apply()
 }
 
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
@@ -1115,6 +1131,10 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		}
 	}()
 
+	if t.disabled && now.Before(t.nextCleanupAttempt) {
+		return t.nextCleanupAttempt.Sub(now)
+	}
+
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
@@ -1138,21 +1158,16 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
-				if retries < 6 {
-					// If we hit multiple failures in a row, trigger a full table rebuild on the next iteration.
-					// This can help in case we are trying to make a change that is incompatible with the current table state.
-					t.logCxt.Warn("Recreating table due to prior nftables programming error")
-					tx := t.nft.NewTransaction()
-					tx.Delete(&knftables.Table{})
-					tx.Add(&knftables.Table{})
-
-					if err := t.runTransaction(tx); err != nil {
-						t.logCxt.WithError(err).Warn("Failed to delete table, continuing anyway")
-					}
+				if retries < 6 && !t.disabled {
+					// If we hit multiple failures in a row, rebuild the table from scratch on the next
+					// iteration. This can help in case we are trying to make a change that is
+					// incompatible with the current table state.
+					t.logCxt.Warn("Queueing table recreate due to prior nftables programming error")
+					t.queueTableRecreate()
+				} else {
+					// Reload the data plane state in case we're out of sync.
+					t.loadDataplaneState()
 				}
-
-				// Reload the data plane state in case we're out of sync.
-				t.loadDataplaneState()
 
 				retries--
 				t.logCxt.WithError(err).Warn("Failed to program nftables, will retry")
@@ -1161,6 +1176,12 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue
+			} else if t.disabled {
+				// A table we only sweep, so its state moves under us and there is nothing of ours
+				// left to enforce. Retry on the next pass rather than taking Felix down.
+				t.logCxt.WithError(err).Warn("Failed to clean up nftables, will retry on the next refresh")
+				t.InvalidateDataplaneCache("cleanup failed")
+				return t.scheduleCleanupRetry(now)
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
 				t.dumpTableState()
@@ -1195,6 +1216,45 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 	return
 }
 
+// scheduleCleanupRetry holds this table off until the next attempt is due, and returns how long
+// that is.
+func (t *NftablesTable) scheduleCleanupRetry(now time.Time) time.Duration {
+	delay := t.refreshInterval
+	if delay <= 0 {
+		delay = defaultCleanupRetryInterval
+	}
+	t.nextCleanupAttempt = now.Add(delay)
+	return delay
+}
+
+// queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same
+// transaction that rewrites the whole ruleset, so the table is never left without its base chains.
+func (t *NftablesTable) queueTableRecreate() {
+	if t.recreatePending {
+		// Already queued, and the desired state cannot change mid-retry, so nothing to redo.
+		return
+	}
+	t.recreatePending = true
+
+	// Nothing in the table survives the recreate, so drop our view of it and mark everything we
+	// want back as dirty.
+	t.chainToDataplaneHashes = map[string][]string{}
+	t.dirtyChains = set.New[string]()
+	for chainName := range t.chainNameToChain {
+		if _, present := t.desiredStateOfChain(chainName); present {
+			t.markChainDirty(chainName)
+		}
+	}
+	for chainName := range t.baseChainDefs {
+		t.dirtyBaseChains.Add(chainName)
+	}
+	t.flowtableDirty = t.flowtableEnabled
+
+	// We already know what the table will contain, so there is nothing to be gained from reading
+	// it back before the retry.
+	t.inSyncWithDataPlane = true
+}
+
 func (t *NftablesTable) applyUpdates() error {
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
@@ -1211,11 +1271,28 @@ func (t *NftablesTable) applyUpdates() error {
 	// - Create any new maps.
 	// - Create any new chains / rules.
 	// - Add elements to maps.
+	// The recreate below takes the sets and maps with it, and each layer tracks its own view of
+	// what it programmed. Drop those views here, next to the recreate they depend on, so the two
+	// cannot get out of step.
+	if t.recreatePending && !t.disabled {
+		t.QueueResync()
+		t.InvalidateMapsCache()
+	}
+
 	mapUpdates := t.MapUpdates()
 
-	if !t.disabled && len(t.chainToDataplaneHashes) == 0 {
-		// Table is enabled, but doesn't exist in the dataplane yet.
-		tx.Add(&knftables.Table{})
+	if !t.disabled {
+		if t.recreatePending {
+			// nftables commits the whole transaction or none of it, so folding the recreate in with
+			// the rewrite below means the table is never left standing without its base chains. The
+			// leading Add keeps the Delete from failing if the table is already gone.
+			tx.Add(&knftables.Table{})
+			tx.Delete(&knftables.Table{})
+			tx.Add(&knftables.Table{})
+		} else if len(t.chainToDataplaneHashes) == 0 {
+			// Table is enabled, but doesn't exist in the dataplane yet.
+			tx.Add(&knftables.Table{})
+		}
 	}
 
 	// Add in any new maps we need to create.
@@ -1437,6 +1514,7 @@ func (t *NftablesTable) applyUpdates() error {
 	// was actually a no-op update.
 	t.dirtyChains = set.New[string]()
 	t.dirtyBaseChains = set.New[string]()
+	t.recreatePending = false
 	if !keepFlowtableDirty {
 		t.flowtableDirty = false
 

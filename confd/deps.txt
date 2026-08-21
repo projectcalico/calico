@@ -69,6 +69,7 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.1
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
+go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 golang.org/x/crypto v0.54.0
 golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 golang.org/x/net v0.57.0
@@ -98,7 +99,8 @@ k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 k8s.io/utils v0.0.0-20260626114624-be93311217bd
-kubevirt.io/api v1.8.3
+kubevirt.io/api v1.9.0
+kubevirt.io/client-go v1.9.0-beta.0.0.20260731113834-b7f13e6a8fd7
 kubevirt.io/containerized-data-importer-api v1.64.0
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
@@ -115,10 +117,11 @@ local:confd/pkg/backends
 local:confd/pkg/backends/calico
 local:confd/pkg/backends/types
 local:confd/pkg/config
-local:confd/pkg/log
 local:confd/pkg/resource/template
 local:confd/pkg/run
 local:crypto/pkg/tls
+local:lib/logrusr
+local:lib/std/log
 local:lib/std/uniquelabels
 local:lib/std/uniquestr
 local:libcalico-go/lib/apiconfig
@@ -140,8 +143,6 @@ local:libcalico-go/lib/clientv3
 local:libcalico-go/lib/epstatusfile
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
 local:libcalico-go/lib/net

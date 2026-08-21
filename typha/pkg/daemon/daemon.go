@@ -44,7 +44,7 @@ import (
 	"github.com/projectcalico/calico/typha/pkg/config"
 	"github.com/projectcalico/calico/typha/pkg/jitter"
 	"github.com/projectcalico/calico/typha/pkg/k8s"
-	"github.com/projectcalico/calico/typha/pkg/logutils"
+	"github.com/projectcalico/calico/typha/pkg/logging"
 	"github.com/projectcalico/calico/typha/pkg/snapcache"
 	"github.com/projectcalico/calico/typha/pkg/syncproto"
 	"github.com/projectcalico/calico/typha/pkg/syncserver"
@@ -109,8 +109,8 @@ func New() *TyphaDaemon {
 			}
 			return ClientV3Shim{client.(RealClientV3), config}, nil
 		},
-		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
-		ConfigureLogging:      logutils.ConfigureLogging,
+		ConfigureEarlyLogging: logging.ConfigureEarlyLogging,
+		ConfigureLogging:      logging.ConfigureLogging,
 		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
 	}
 }
@@ -323,6 +323,7 @@ func (t *TyphaDaemon) CreateServer() {
 			PingInterval:                   t.ConfigParams.ServerPingIntervalSecs,
 			PongTimeout:                    t.ConfigParams.ServerPongTimeoutSecs,
 			HandshakeTimeout:               t.ConfigParams.ServerHandshakeTimeoutSecs,
+			WriteTimeout:                   t.ConfigParams.ServerWriteTimeoutSecs,
 			DropInterval:                   t.ConfigParams.ConnectionDropIntervalSecs,
 			ShutdownTimeout:                t.ConfigParams.ShutdownTimeoutSecs,
 			ShutdownMaxDropInterval:        t.ConfigParams.ShutdownConnectionDropIntervalMaxSecs,

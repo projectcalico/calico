@@ -1532,7 +1532,9 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
+	@curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-crane.tar.gz $(CRANE_URL)
+	@tar xz -C $(REPO_ROOT)/bin -f /tmp/calico-crane.tar.gz crane
+	@rm -f /tmp/calico-crane.tar.gz
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1940,8 +1942,9 @@ else
 endif
 	touch $@
 
-# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
-MIN_K8S_VERSION ?= v1.31.0
+# Minimum supported Kubernetes version. 1.32 is the first release that estimates
+# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
+MIN_K8S_VERSION ?= v1.32.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").

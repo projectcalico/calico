@@ -14,7 +14,10 @@
 
 package infrastructure
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 // NFTMode returns true if FV tests are configured to use nftables backend.
 func NFTMode() bool {
@@ -25,4 +28,12 @@ func NFTMode() bool {
 // instead of veth pairs for workload endpoints.
 func NetkitMode() bool {
 	return os.Getenv("FELIX_FV_NETKIT") == "Enabled"
+}
+
+// NetkitAttachMode returns true if Felix drives those netkit devices through
+// the netkit attach API. Only TCX and TC opt out of it; unset and Netkit both
+// select it — a separate question from what kind of device it is.
+func NetkitAttachMode() bool {
+	attachType := strings.ToLower(os.Getenv("FELIX_FV_BPFATTACHTYPE"))
+	return NetkitMode() && (attachType == "" || attachType == "netkit")
 }

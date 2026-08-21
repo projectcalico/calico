@@ -48,14 +48,19 @@ check-copyright:
 .PHONY: gen-files
 gen-files:
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/controllers/migration/... output:crd:dir=pkg/controllers/migration/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/apis/migration/... output:crd:dir=pkg/apis/migration/v1/crd/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) object paths=./pkg/apis/migration/...'
 
 ###############################################################################
 # Tests
 ###############################################################################
 ifeq ($(SEMAPHORE_GIT_REF_TYPE), pull-request)
 # Determine the tests to run using the test spider tool, which emits a list of impacted packages.
-MAYBE_WHAT=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+SPIDER_OUTPUT:=$(shell $(DOCKER_GO_BUILD) sh -c 'go run ../hack/test/spider -commit-range=${SEMAPHORE_GIT_COMMIT_RANGE} -filter-dir kube-controllers/')
+ifeq ($(filter __SPIDER_OK__,$(SPIDER_OUTPUT)),)
+$(error test spider did not complete - refusing to run zero tests. See its output above)
+endif
+MAYBE_WHAT:=$(filter-out __SPIDER_OK__,$(SPIDER_OUTPUT))
 else
 # By default, run all tests.
 MAYBE_WHAT=.

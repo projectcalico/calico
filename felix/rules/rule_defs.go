@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,6 +64,10 @@ const (
 	ChainEgressDSCP      = ChainNamePrefix + "egress-dscp"
 	IPSetIDDSCPEndpoints = "dscp-src-net"
 
+	// IPSetIDNoFlowOffload holds the IPs of endpoints whose traffic must not take the
+	// nftables flowtable fast path.
+	IPSetIDNoFlowOffload = "no-flow-offload"
+
 	IPSetIDNetworkPools         = "network-ip-pools"
 	IPSetIDNATOutgoingMasqPools = "masq-ipam-pools"
 
@@ -122,8 +126,6 @@ const (
 	HostFromEndpointForwardPfx = ChainNamePrefix + "fhfw-"
 
 	RPFChain = ChainNamePrefix + "rpf"
-
-	RuleHashPrefix = "cali:"
 
 	// NFLOGPrefixMaxLength is NFLOG max prefix length which is 64 characters.
 	// Ref: http://ipset.netfilter.org/iptables-extensions.man.html#lbDI
@@ -225,27 +227,8 @@ type (
 )
 
 var (
-	// AllHistoricChainNamePrefixes lists all the prefixes that we've used for chains.  Keeping
-	// track of the old names lets us clean them up.
-	AllHistoricChainNamePrefixes = []string{
-		// Current.
-		"cali-",
-
-		// Early RCs of Felix 2.1 used "cali" as the prefix for some chains rather than
-		// "cali-".  This led to name clashes with the DHCP agent, which uses "calico-" as
-		// its prefix.  We need to explicitly list these exceptions.
-		"califw-",
-		"calitw-",
-		"califh-",
-		"calith-",
-		"calipi-",
-		"calipo-",
-
-		// Pre Felix v2.1.
-		"felix-",
-	}
-	// AllHistoricIPSetNamePrefixes, similarly contains all the prefixes we've ever used for IP
-	// sets.
+	// AllHistoricIPSetNamePrefixes contains all the prefixes we've ever used for IP sets, so that
+	// we can clean up the old ones.
 	AllHistoricIPSetNamePrefixes = []string{"felix-", "cali"}
 	// LegacyV4IPSetNames contains some extra IP set names that were used in older versions of
 	// Felix and don't fit our versioned pattern.
@@ -466,6 +449,7 @@ type Config struct {
 	ServiceLoopPrevention          string
 
 	NFTablesMode             string
+	NFTablesEnabled          bool
 	NFTablesFlowTableOffload bool
 	FlowLogsEnabled          bool
 

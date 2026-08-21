@@ -67,8 +67,9 @@ github.com/google/btree v1.1.3
 github.com/google/cel-go v0.29.0
 github.com/google/gnostic-models v0.7.0
 github.com/google/go-cmp v0.7.0
+github.com/google/nftables v0.3.0
 github.com/google/uuid v1.6.0
-github.com/gopacket/gopacket v1.4.0
+github.com/gopacket/gopacket v1.6.1
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
 github.com/ishidawataru/sctp v0.0.0-20251114114122-19ddcbc6aae2
@@ -88,7 +89,7 @@ github.com/mdlayher/arp v0.0.0-20260528070854-93566ba168e9
 github.com/mdlayher/ethernet v0.0.0-20220221185849-529eae5b6118
 github.com/mdlayher/genetlink v1.3.2
 github.com/mdlayher/ndp v1.1.0
-github.com/mdlayher/netlink v1.7.2
+github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42
 github.com/mdlayher/packet v1.1.2
 github.com/mdlayher/socket v0.5.1
 github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
@@ -134,6 +135,7 @@ go.uber.org/multierr v1.11.0
 go.uber.org/zap v1.27.1
 go.yaml.in/yaml/v2 v2.4.4
 go.yaml.in/yaml/v3 v3.0.4
+go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
 golang.org/x/crypto v0.54.0
 golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
 golang.org/x/mod v0.38.0
@@ -170,7 +172,8 @@ k8s.io/kube-openapi v0.0.0-20260618221249-bc653b64f974
 k8s.io/kubelet v0.37.0-beta.0
 k8s.io/kubernetes v1.37.0-beta.0
 k8s.io/utils v0.0.0-20260626114624-be93311217bd
-kubevirt.io/api v1.8.3
+kubevirt.io/api v1.9.0
+kubevirt.io/client-go v1.9.0-beta.0.0.20260731113834-b7f13e6a8fd7
 kubevirt.io/containerized-data-importer-api v1.64.0
 kubevirt.io/controller-lifecycle-operator-sdk/api v0.2.4
 modernc.org/memory v1.11.0
@@ -283,7 +286,6 @@ local:felix/labelindex/ipsetmember
 local:felix/labelindex/labelnamevalueindex
 local:felix/labelindex/labelrestrictionindex
 local:felix/linkaddrs
-local:felix/logutils
 local:felix/markbits
 local:felix/multidict
 local:felix/netlinkshim
@@ -299,6 +301,7 @@ local:felix/routerule
 local:felix/routetable
 local:felix/routetable/ownershippol
 local:felix/rules
+local:felix/rules/rulesdefs
 local:felix/serviceindex
 local:felix/statusrep
 local:felix/stringutils
@@ -317,6 +320,7 @@ local:goldmane/pkg/stream
 local:goldmane/pkg/types
 local:goldmane/proto
 local:lib/datastructures/hashring
+local:lib/logrusr
 local:lib/std/chanutil
 local:lib/std/log
 local:lib/std/time
@@ -350,8 +354,6 @@ local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
 local:libcalico-go/lib/ipam
 local:libcalico-go/lib/ipam/vmipam
-local:libcalico-go/lib/logutils
-local:libcalico-go/lib/logutils/logformat
 local:libcalico-go/lib/metricsserver
 local:libcalico-go/lib/names
 local:libcalico-go/lib/namespace
@@ -367,7 +369,6 @@ local:libcalico-go/lib/selector
 local:libcalico-go/lib/selector/parser
 local:libcalico-go/lib/selector/tokenizer
 local:libcalico-go/lib/set
-local:libcalico-go/lib/validator/v1
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
@@ -378,3 +379,4 @@ local:typha/pkg/discovery
 local:typha/pkg/syncclient
 local:typha/pkg/syncproto
 local:typha/pkg/tlsutils
+local:typha/pkg/validator/v1

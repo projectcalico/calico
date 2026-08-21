@@ -39,11 +39,11 @@ import (
 	"github.com/projectcalico/calico/felix/config"
 	dp "github.com/projectcalico/calico/felix/dataplane"
 	"github.com/projectcalico/calico/felix/jitter"
-	"github.com/projectcalico/calico/felix/logutils"
 	"github.com/projectcalico/calico/felix/policysync"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/statusrep"
 	"github.com/projectcalico/calico/felix/usagerep"
+	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend"
@@ -59,7 +59,6 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/dispatcher"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
-	lclogutils "github.com/projectcalico/calico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/metricsserver"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
@@ -115,7 +114,7 @@ const (
 func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
 	// Special-case handling for environment variable-configured logging:
 	// Initialise early so we can trace out config parsing.
-	logutils.ConfigureEarlyLogging()
+	logrusr.ConfigureEarlyLoggingFromEnv("felix")
 
 	ctx := context.Background()
 
@@ -275,7 +274,7 @@ configRetry:
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
-		configParams.Encapsulation.NoEncapEnabled = encapCalculator.NoEncapEnabled()
+		configParams.Encapsulation.NoEncapNeeded = encapCalculator.NoEncapNeeded()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -357,7 +356,7 @@ configRetry:
 
 	// If we get here, we've loaded the configuration successfully.
 	// Update log levels before we do anything else.
-	logutils.ConfigureLogging(configParams)
+	ConfigureLogging(configParams)
 	// Since we may have enabled more logging, log with the build context
 	// again.
 	buildInfoLogCxt.WithField("config", configParams).Info(
@@ -372,6 +371,9 @@ configRetry:
 	doGoRuntimeSetup(configParams)
 
 	applyBPFOverrides(configParams, dp.SupportsBPF)
+
+	// Resolve NFTablesMode=Auto now, before anything reads the dataplane-specific config.
+	configParams.NFTablesEnabled = dp.NFTablesEnabled(configParams)
 
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
@@ -647,7 +649,7 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
-			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
+			usagerep.StaticItems{KubernetesVersion: kubernetesVersion, NFTablesEnabled: configParams.NFTablesEnabled},
 			configParams.UsageReportingInitialDelaySecs,
 			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
@@ -759,7 +761,7 @@ configRetry:
 	}
 
 	// Register signal handlers to dump memory/CPU profiles.
-	logutils.RegisterProfilingSignalHandlers(configParams)
+	RegisterProfilingSignalHandlers(configParams)
 
 	// Now monitor the worker process and our worker threads and shut
 	// down the process gracefully if they fail.
@@ -931,8 +933,8 @@ func exitWithCustomRC(rc int, message string) {
 	// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 	// all the in-flight logs get written before we exit.
 	log.WithFields(log.Fields{
-		"rc":                       rc,
-		lclogutils.FieldForceFlush: true,
+		"rc":                    rc,
+		logrusr.FieldForceFlush: true,
 	}).Info(message)
 	os.Exit(rc)
 }
@@ -1461,8 +1463,11 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				defer fc.configLock.Unlock()
 				return fc.config.Encapsulation
 			}()
+			// Note, "NoEncapEnabled" should have been named "NoEncapNeeded", but we
+			// can't change this now in the proto API, as 3rd parties might be relying
+			// on it.
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapNeeded {
 				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}
