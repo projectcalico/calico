@@ -6,7 +6,7 @@
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-iptables-9k-mtu | bpf/xtables-extnode-aws | 223
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | bpf/aks-bpf-nobgp | 209
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | bpf/aks-bpf | 212
-.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | bpf/bpf | 215
+.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | bpf/bpf | 216
 .argoci/cron/e2e-bpf.yaml | bpf-mini-scale-runs | (scale-test) | -
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 209
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-calico-cni | bpf/aks-bpf | 212
@@ -121,7 +121,7 @@
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-iptables - 9k MTU | bpf/xtables-extnode-aws | 223
 .semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 w/ AKS-CNI | bpf/aks-bpf-nobgp | 209
 .semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 w/ Calico-CNI | bpf/aks-bpf | 212
-.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | bpf/bpf | 215
+.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | bpf/bpf | 216
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mini-scale runs / gcp-bpf - mini-scale | (scale-test) | -
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 209
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ Calico-CNI | bpf/aks-bpf | 212
