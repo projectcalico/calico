@@ -549,8 +549,15 @@ var _ = describe.CalicoDescribe(
 				framework.Failf("unsupported dest %q for external scenario", s.dest)
 			}
 
+			// One probe costs an ssh round trip plus at most probeTimeout for the
+			// request. Poll intervals and hold windows are sized against that: a
+			// window shorter than a single probe only ever runs one probe, which
+			// asserts nothing about whether a state persists.
 			const (
 				probeTimeout    = 5 * time.Second
+				probePoll       = 8 * time.Second
+				probeSettle     = 30 * time.Second
+				probeHold       = 25 * time.Second
 				wgetMaxCode     = 8   // GNU wget only exits 0-8; anything above is not wget speaking.
 				sshKilledCode   = 124 // ExecTimeout's local `timeout` wrapper killed ssh.
 				cmdNotFoundCode = 127 // The remote shell could not find wget.
@@ -609,15 +616,15 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Verifying baseline: external node can reach the server before any policy")
-			Eventually(tryConnect, 30*time.Second, 2*time.Second).Should(Succeed())
+			Eventually(tryConnect, probeSettle, probePoll).Should(Succeed())
 
 			By("Installing deny-all ingress policy")
 			denyAll := ingressCreateDenyAllPolicy(f)
 			DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 
 			By("Verifying external node is blocked after deny-all")
-			Eventually(tryConnectBlocked, 30*time.Second, 2*time.Second).Should(Succeed())
-			Consistently(tryConnectBlocked, 5*time.Second, 1*time.Second).Should(Succeed())
+			Eventually(tryConnectBlocked, probeSettle, probePoll).Should(Succeed())
+			Consistently(tryConnectBlocked, probeHold, probePoll).Should(Succeed())
 
 			// Build /32 (IPv4) or /128 (IPv6) CIDRs for the external node's source IPs.
 			cidrs := make([]string, 0, len(extIPs))
@@ -635,12 +642,12 @@ var _ = describe.CalicoDescribe(
 			switch expect {
 			case noSNAT:
 				By("Verifying external node is allowed (CIDR policy, source IP preserved)")
-				Eventually(tryConnect, 30*time.Second, 2*time.Second).Should(Succeed())
+				Eventually(tryConnect, probeSettle, probePoll).Should(Succeed())
 
 			case snatNoWorkingPolicy:
 				// SNAT rewrites the source IP so the CIDR allow rule never matches.
 				By("Verifying external node is still blocked (SNAT breaks CIDR policy)")
-				Consistently(tryConnectBlocked, 10*time.Second, 2*time.Second).Should(Succeed())
+				Consistently(tryConnectBlocked, probeHold, probePoll).Should(Succeed())
 			}
 		}
 
