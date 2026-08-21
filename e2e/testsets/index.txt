@@ -74,41 +74,43 @@
 .argoci/cron/e2e-nftables.yaml | nftables-talos-nftables-talos | legacy/nftables | 194
 .argoci/cron/e2e-openstack.yaml | full-fv | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region | (openstack-e2e) | -
-.argoci/cron/e2e-patch-verification.yaml | kind-tests | legacy/patch-verification | 84
+.argoci/cron/e2e-patch-verification.yaml | kind-tests | patch-verification/xtables | 83
 .argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | manifests-canal | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | legacy/patch-verification | 84
+.argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | patch-verification/xtables-encap-manifest | 80
+.argoci/cron/e2e-patch-verification.yaml | manifests-canal | patch-verification/xtables-manifest | 80
+.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | patch-verification/xtables-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
-.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration | legacy/patch-verification | 84
+.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration | patch-verification/xtables-encap-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
-.argoci/cron/e2e-patch-verification.yaml | manifests-operator-migration | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | openshift | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-aks-w-aks-cni-overlay | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-eks-w-aws-cni | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-eks-w-calico-cni | legacy/patch-verification/operator-helmerator-eks-w-calico-cni | 78
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-rke2 | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-containerd | legacy/patch-verification | 84
-.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-docker | legacy/patch-verification | 84
-.argoci/cron/e2e-test.yaml | calico-tests | legacy/test | 24
-.argoci/cron/e2e-upgrade.yaml | calico-tests-aks-byo-cni-w-azurelinux | legacy/upgrade | 84
-.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | legacy/upgrade/calico-tests-eks | 74
-.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-bpf | legacy/upgrade | 84
-.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables | legacy/upgrade | 84
-.argoci/cron/e2e-upgrade.yaml | calico-tests-openshift | legacy/upgrade | 84
-.argoci/cron/e2e-upgrade.yaml | calico-tests-rke2 | legacy/upgrade | 84
-.argoci/cron/e2e-vpp.yaml | iptables-openshift | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-v3-28-regression-test | legacy/vpp | 140
+.argoci/cron/e2e-patch-verification.yaml | manifests-operator-migration | patch-verification/xtables-encap-manifest | 80
+.argoci/cron/e2e-patch-verification.yaml | openshift | patch-verification/bpf-aws | 83
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-aks-w-aks-cni-overlay | patch-verification/aks-xtables-nobgp | 83
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-eks-w-aws-cni | patch-verification/eks-bpf-nobgp-aws | 74
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-eks-w-calico-cni | patch-verification/eks-bpf-encap-aws | 74
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-rke2 | patch-verification/bpf-encap | 83
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-containerd | patch-verification/bpf-encap-aws | 83
+.argoci/cron/e2e-patch-verification.yaml | operator-helmerator-windows-aws-kubeadm-docker | patch-verification/xtables-aws | 83
+.argoci/cron/e2e-test.yaml | calico-tests | test/bpf | 23
+.argoci/cron/e2e-upgrade.yaml | calico-tests-aks-byo-cni-w-azurelinux | upgrade/aks-xtables | 83
+.argoci/cron/e2e-upgrade.yaml | calico-tests-eks | upgrade/eks-bpf-aws-manifest | 71
+.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-bpf | upgrade/bpf | 83
+.argoci/cron/e2e-upgrade.yaml | calico-tests-kubeadm-iptables | upgrade/xtables-aws | 83
+.argoci/cron/e2e-upgrade.yaml | calico-tests-openshift | upgrade/xtables-aws | 83
+.argoci/cron/e2e-upgrade.yaml | calico-tests-rke2 | upgrade/xtables | 83
+.argoci/cron/e2e-vpp.yaml | iptables-openshift | vpp/xtables-encap-extnode-aws | 121
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-v3-28-regression-test [gcp-kubeadm-calico-vpp-nohuge-yaml-v3-28-v3-28-0] | vpp/vpp-encap-extnode | 117
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks | vpp/eks-vpp-encap-extnode-aws | 116
 .argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-eks-dpdk | vpp/eks-vpp-encap-extnode-aws | 116
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-ipsec-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-vx-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-wg-huge | legacy/vpp | 140
-.argoci/cron/e2e-vpp.yaml | vpp-openshift | legacy/vpp | 140
-.argoci/cron/e2e-windows.yaml | calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | legacy/windows | 8
-.argoci/cron/e2e-windows.yaml | calico-windows-azr-aso-2022-stable-nftables-vxlan | legacy/windows | 8
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm [aws-kubeadm-calico-vpp-nohuge-yaml] | vpp/vpp-encap-extnode-aws | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm [gcp-kubeadm-calico-vpp-nohuge-yaml] | vpp/vpp-encap-extnode | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge [aws-kubeadm-calico-vpp-dpdk-yaml] | vpp/vpp-encap-extnode-aws | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-huge [gcp-kubeadm-calico-vpp-dpdk-yaml] | vpp/vpp-encap-extnode | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-ipsec-huge [aws-kubeadm-calico-vpp-dpdk-yaml] | vpp/vpp-encap-extnode-aws | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-vx-huge [gcp-kubeadm-calico-vpp-dpdk-yaml] | vpp/vpp-encap-extnode | 117
+.argoci/cron/e2e-vpp.yaml | k8s-e2e-st-vpp-kadm-wg-huge [gcp-kubeadm-calico-vpp-dpdk-yaml] | vpp/vpp-encap-extnode | 117
+.argoci/cron/e2e-vpp.yaml | vpp-openshift | vpp/vpp-encap-extnode-aws | 117
+.argoci/cron/e2e-windows.yaml | calico-windows-azr-aks-2022-stable-1-iptables-no-encap-azure-cni | windows/aks-xtables-nobgp | 8
+.argoci/cron/e2e-windows.yaml | calico-windows-azr-aso-2022-stable-nftables-vxlan | windows/xtables-encap | 8
 .semaphore/end-to-end/pipelines/benchmarking.yml | Benchmarks / Benchmark tests Calico | (benchmark) | -
 .semaphore/end-to-end/pipelines/benchmarking.yml | Tiger-bench / Tiger-bench tests Calico | (tiger-bench) | -
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-bpf - 9k MTU | bpf/bpf-extnode-aws | 219
@@ -182,38 +184,40 @@
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (AWS) | legacy/nftables | 194
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | legacy/nftables | 194
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/patch-verification.yml | KinD tests / IPv6 | legacy/patch-verification | 84
+.semaphore/end-to-end/pipelines/patch-verification.yml | KinD tests / IPv6 | patch-verification/xtables | 83
 .semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | legacy/patch-verification | 84
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | patch-verification/xtables-encap-manifest | 80
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal | patch-verification/xtables-manifest | 80
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | patch-verification/xtables-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration | legacy/patch-verification | 84
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration | patch-verification/xtables-encap-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / operator migration | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Openshift / Openshift OCP | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / AKS w AKS CNI + Overlay | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / EKS w/ aws CNI | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / EKS w/ calico CNI | legacy/patch-verification/operator-helmerator-eks-w-calico-cni | 78
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / RKE2 | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / windows - aws-kubeadm - containerd | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / windows - aws-kubeadm - docker | legacy/patch-verification | 84
-.semaphore/end-to-end/pipelines/test.yml | calico tests / kubeadm - bpf | legacy/test | 24
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests - openshift / Openshift | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / AKS - BYO CNI w/ AzureLinux | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / EKS | legacy/upgrade/calico-tests-eks | 74
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / RKE2 | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - bpf | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - iptables | legacy/upgrade | 84
-.semaphore/end-to-end/pipelines/vpp.yml | Iptables (Openshift) / Iptables (Openshift) | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | VPP-openshift / VPP-openshift | legacy/vpp | 140
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / operator migration | patch-verification/xtables-encap-manifest | 80
+.semaphore/end-to-end/pipelines/patch-verification.yml | Openshift / Openshift OCP | patch-verification/bpf-aws | 83
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / AKS w AKS CNI + Overlay | patch-verification/aks-xtables-nobgp | 83
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / EKS w/ aws CNI | patch-verification/eks-bpf-nobgp-aws | 74
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / EKS w/ calico CNI | patch-verification/eks-bpf-encap-aws | 74
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / RKE2 | patch-verification/bpf-encap | 83
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / windows - aws-kubeadm - containerd | patch-verification/bpf-encap-aws | 83
+.semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / windows - aws-kubeadm - docker | patch-verification/xtables-aws | 83
+.semaphore/end-to-end/pipelines/test.yml | calico tests / kubeadm - bpf | test/bpf | 23
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests - openshift / Openshift | upgrade/xtables-aws | 83
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / AKS - BYO CNI w/ AzureLinux | upgrade/aks-xtables | 83
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / EKS | upgrade/eks-bpf-aws-manifest | 71
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / RKE2 | upgrade/xtables | 83
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - bpf | upgrade/bpf | 83
+.semaphore/end-to-end/pipelines/upgrade.yml | calico tests / kubeadm - iptables | upgrade/xtables-aws | 83
+.semaphore/end-to-end/pipelines/vpp.yml | Iptables (Openshift) / Iptables (Openshift) | vpp/xtables-encap-extnode-aws | 121
+.semaphore/end-to-end/pipelines/vpp.yml | VPP-openshift / VPP-openshift | vpp/vpp-encap-extnode-aws | 117
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS | vpp/eks-vpp-encap-extnode-aws | 116
 .semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-EKS-dpdk | vpp/eks-vpp-encap-extnode-aws | 116
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-IPSec-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-VX-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-WG-Huge | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | legacy/vpp | 140
-.semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | legacy/windows | 8
-.semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | legacy/windows | 8
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm - aws | vpp/vpp-encap-extnode-aws | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm - gcp | vpp/vpp-encap-extnode | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge - aws | vpp/vpp-encap-extnode-aws | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-Huge - gcp | vpp/vpp-encap-extnode | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-IPSec-Huge | vpp/vpp-encap-extnode-aws | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-VX-Huge | vpp/vpp-encap-extnode | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / VPP-kadm-WG-Huge | vpp/vpp-encap-extnode | 117
+.semaphore/end-to-end/pipelines/vpp.yml | k8s-e2e ST / v3.28 regression test | vpp/vpp-encap-extnode | 117
+.semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aks, 2022, stable-1, iptables, no encap, azure CNI | windows/aks-xtables-nobgp | 8
+.semaphore/end-to-end/pipelines/windows.yml | Calico Windows / azr-aso, 2022, stable, nftables, vxlan | windows/xtables-encap | 8
