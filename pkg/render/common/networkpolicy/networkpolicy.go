@@ -338,9 +338,8 @@ var PrometheusSourceEntityRule = v3.EntityRule{
 	Selector:          PrometheusSelector,
 }
 
-// ParseHostPort splits a strict "host:port" destination. It deliberately does
-// not accept a URL: a caller whose field is documented as host:port should fail
-// loudly on a URL rather than silently take the scheme's default port.
+// ParseHostPort splits a "host:port" destination. A URL is rejected rather than
+// accepted with the scheme's default port.
 func ParseHostPort(destination string) (string, numorstring.Port, error) {
 	host, portStr, err := net.SplitHostPort(destination)
 	if err != nil {
@@ -353,21 +352,17 @@ func ParseHostPort(destination string) (string, numorstring.Port, error) {
 	return host, port, nil
 }
 
-// EntityRuleForHostPort builds the tightest destination rule for a host that is
-// already parsed: an exact net for a literal IP, a Services match for an
-// in-cluster Service name, otherwise the domain.
+// EntityRuleForHostPort builds the tightest destination rule for a host: an
+// exact net for a literal IP, otherwise the domain. It always constrains the
+// destination, never returning a ports-only rule.
 //
-// It never returns a rule with no destination constraint. A rule carrying only
-// ports allows every host on those ports, and whether that is acceptable is the
-// component's call, not this helper's -- callers that cannot use the rule are
-// expected to drop it or degrade rather than ship a broad allow.
+// Service matching is opt-in via clusterDomain, since a Services match cannot
+// carry ports.
 func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port) v3.EntityRule {
-	// An in-cluster Service is matched by service, not by domain: Calico resolves
-	// Domains rules from observed DNS answers, which does not cover a ClusterIP
-	// reached through the cluster domain. A service match carries the Service's
-	// own ports; Calico rejects a rule that sets both.
-	if ns, name, ok := ClusterServiceWithDomain(host, clusterDomain); ok {
-		return CreateServiceSelectorEntityRule(ns, name)
+	if clusterDomain != "" {
+		if ns, name, ok := ClusterServiceWithDomain(host, clusterDomain); ok {
+			return CreateServiceSelectorEntityRule(ns, name)
+		}
 	}
 
 	rule := v3.EntityRule{Ports: ports}
@@ -394,11 +389,9 @@ func EntityRuleForDestination(destination, clusterDomain string) (v3.EntityRule,
 }
 
 // ClusterServiceWithDomain reports the namespace and name of an in-cluster
-// Service DNS name. It is deliberately strict: the host must be
-// <service>.<namespace>.svc, optionally followed by the cluster domain and an
-// optional trailing dot. Without the cluster domain a name like
-// proxy.corp.svc.example.com is indistinguishable from an in-cluster Service,
-// and treating it as one would silently retarget the rule.
+// Service DNS name: <service>.<namespace>.svc, optionally followed by the
+// cluster domain and a trailing dot. Anything longer is an external host that
+// merely carries an "svc" label.
 func ClusterServiceWithDomain(host, clusterDomain string) (namespace, name string, ok bool) {
 	host = strings.TrimSuffix(host, ".")
 	if clusterDomain = strings.Trim(clusterDomain, "."); clusterDomain != "" {

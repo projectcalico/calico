@@ -1026,9 +1026,6 @@ var _ = Describe("OpenTelemetry rendering", func() {
 		})
 
 		It("should never emit a rule that allows any host", func() {
-			// The shared helper always constrains the destination. A ports-only rule
-			// would let the collector reach anything on that port, and that is not a
-			// default this component gets to choose.
 			cfg := &otelcollector.Configuration{
 				Installation: defaultInstallation,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
@@ -1063,7 +1060,6 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objs, otelcollector.OpenTelemetryCollectorPolicyName, otelcollector.OpenTelemetryCollectorNamespace)
 			Expect(err).ShouldNot(HaveOccurred())
-			// https, the only scheme the API accepts, so 443.
 			Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
 				Domains: []string{"otlp.example.com"}, Ports: networkpolicy.Ports(443),
 			})))

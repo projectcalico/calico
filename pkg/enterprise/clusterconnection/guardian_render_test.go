@@ -405,27 +405,22 @@ var _ = Describe("Guardian enterprise rendering tests", func() {
 				Expect(hasDomainRule).To(BeTrue(), "Domain-based egress rule should be present when IncludeEgressNetworkPolicy is true")
 			})
 
-			It("should render an in-cluster management address as a service match without the license feature", func() {
-				// A <svc>.<ns>.svc destination is matched by service, which needs no
-				// license -- only a domain rule does. Gating it on the feature would
-				// leave an unlicensed cluster with no rule for its own tunnel.
-				renderGuardianPolicy("voltron.tigera-manager.svc:9449", false, operatorv1.CalicoEnterprise, false)
+			It("should render an exact net for a literal IP without the license feature", func() {
+				renderGuardianPolicy("10.20.30.40:9449", false, operatorv1.CalicoEnterprise, false)
 
 				policyName := types.NamespacedName{Name: "calico-system.guardian-access", Namespace: "calico-system"}
 				policy := testutils.GetCalicoSystemPolicyFromResources(policyName, resources)
 				Expect(policy).NotTo(BeNil())
 
-				// The kube-apiserver rule is also a service match, so look for the
-				// tunnel destination by name rather than taking the first one.
-				var svc *v3.ServiceMatch
+				var found bool
 				for _, rule := range policy.Spec.Egress {
-					if s := rule.Destination.Services; s != nil && s.Name == "voltron" {
-						svc = s
-						break
+					for _, n := range rule.Destination.Nets {
+						if n == "10.20.30.40/32" {
+							found = true
+						}
 					}
 				}
-				Expect(svc).NotTo(BeNil(), "in-cluster tunnel destination should render a service match")
-				Expect(svc.Namespace).To(Equal("tigera-manager"))
+				Expect(found).To(BeTrue(), "an IP tunnel destination should render an exact net")
 			})
 		})
 

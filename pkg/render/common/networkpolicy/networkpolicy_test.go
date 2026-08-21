@@ -44,8 +44,6 @@ var _ = Describe("egress destination rules", func() {
 		Entry("bare .svc with a trailing dot", "lgtm.otel-demo.svc.", "", "otel-demo", "lgtm", true),
 		Entry("with the cluster domain", "lgtm.otel-demo.svc.cluster.local", "cluster.local", "otel-demo", "lgtm", true),
 		Entry("with the cluster domain and a trailing dot", "lgtm.otel-demo.svc.cluster.local.", "cluster.local", "otel-demo", "lgtm", true),
-		// The case that motivated making this strict: an external host that merely
-		// contains an "svc" label must not be retargeted at a cluster Service.
 		Entry("external host containing an svc label", "proxy.corp.svc.example.com", "cluster.local", "", "", false),
 		Entry("external host containing an svc label, no cluster domain", "proxy.corp.svc.example.com", "", "", "", false),
 		Entry("a plain hostname", "otlp.example.com", "cluster.local", "", "", false),
@@ -81,8 +79,6 @@ var _ = Describe("egress destination rules", func() {
 		})
 
 		It("never returns a rule that constrains only the port", func() {
-			// A ports-only rule allows every host on that port. Whether that is
-			// acceptable is the component's decision, not this helper's.
 			for _, host := range []string{"otlp.example.com", "10.1.2.3", "lgtm.otel-demo.svc"} {
 				r := networkpolicy.EntityRuleForHostPort(host, "cluster.local", port(443))
 				Expect(r.Services != nil || len(r.Nets) > 0 || len(r.Domains) > 0).To(BeTrue(),
@@ -100,8 +96,6 @@ var _ = Describe("egress destination rules", func() {
 		})
 
 		It("rejects a URL rather than defaulting the port from its scheme", func() {
-			// Guardian's field is documented as host:port; a URL there is a
-			// misconfiguration and must fail loudly instead of silently becoming 443.
 			_, _, err := networkpolicy.ParseHostPort("https://mgmt.example.com")
 			Expect(err).To(HaveOccurred())
 		})

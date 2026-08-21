@@ -118,8 +118,6 @@ type Configuration struct {
 	OpenShift     bool
 	Installation  *operatorv1.InstallationSpec
 	OpenTelemetry *operatorv1.OpenTelemetrySpec
-	// ClusterDomain lets an exporter pointed at an in-cluster Service be matched
-	// by service rather than by domain.
 	ClusterDomain string
 	// ReceiverTLSSecret is the server keypair for the OTLP receiver (mTLS termination).
 	ReceiverTLSSecret certificatemanagement.KeyPairInterface
@@ -833,10 +831,9 @@ func (c *component) statefulSet() *appsv1.StatefulSet {
 	}
 }
 
-// exporterDestination resolves the egress destination for an exporter. Unlike
-// the other users of the shared helper this field is a URL, so the host and
-// port are taken from the URL here -- with the port defaulted from the scheme
-// when it is not explicit -- and only the tightest-rule step is shared.
+// exporterDestination resolves the egress destination for an exporter. The
+// endpoint is a URL, so the host and port come from it, defaulting the port
+// from the scheme.
 func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain string) (v3.EntityRule, error) {
 	u, err := url.Parse(exp.Endpoint)
 	if err != nil {
@@ -848,7 +845,6 @@ func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain str
 	}
 	portStr := u.Port()
 	if portStr == "" {
-		// https is the only scheme the API accepts.
 		portStr = "443"
 	}
 	port, err := numorstring.PortFromString(portStr)
@@ -868,9 +864,6 @@ func (c *component) networkPolicy() *v3.NetworkPolicy {
 	for _, exp := range c.cfg.OpenTelemetry.Exporters {
 		dest, err := exporterDestination(exp, c.cfg.ClusterDomain)
 		if err != nil {
-			// Validate rejects an endpoint this cannot parse, so reaching here means
-			// a stale CRD let one through. Skip the rule rather than widening it:
-			// the default-deny then blocks that exporter, which is the safe failure.
 			continue
 		}
 		egressRules = append(egressRules, v3.Rule{
