@@ -16,6 +16,7 @@ globalPrologue: |
   export TEST_TYPE="${TEST_TYPE:-k8s-e2e}"
   export UPLEVEL_PRE_RELEASE="${UPLEVEL_PRE_RELEASE:-true}"
   export UPLEVEL_PRODUCT="${UPLEVEL_PRODUCT:-calico}"
+  export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-master}"
   export USE_HASH_RELEASE="${USE_HASH_RELEASE:-false}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
