@@ -23,7 +23,7 @@ global_job_config:
   env_vars:
     # This should match the default flags with the additional skip of the "Proxy version v1". There is a problem with the server pod failing to bind to the port for listening.
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard)
+      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|Feature:Wireguard)
     - name: DATAPLANE
       value: "CalicoIptables"
     - name: IPV4_POD_CIDR
@@ -107,7 +107,7 @@ blocks:
               value: "t4g.large"
             #  Details for why we skip these: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+              value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Wireguard)
 
   - name: AKS
     dependencies: []
@@ -144,7 +144,7 @@ blocks:
             - name: INSTALLER # This is a "quick" workaround for a semver error we're getting with Helm, likely a banzai issue.
               value: "operator"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity|Feature:Wireguard)
         - name: AKS Private w AKS CNI + Overlay
           execution_time_limit:
             hours: 7
@@ -162,7 +162,7 @@ blocks:
               # External node is not supported on Azure yet, so we should skip external node tests: "ExternalNode|outside.the.cluster|external.to.nodeport"
               # This uses AKS-CNI, so Strict Affinity and MTU tests do not apply: "MTU|StrictAffinity"
             - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+              value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Wireguard)
             - name: CLUSTER_MODE
               value: "private"
 
@@ -183,7 +183,7 @@ blocks:
 
       env_vars:
         - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+          value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:Wireguard)
         - name: PROVISIONER
           value: "azr-aks"
         - name: INSTALLER
@@ -366,9 +366,9 @@ blocks:
             - name: E2E_TEST_CONFIG
               value: e2e/config/iptables/xtables.yaml
             - name: RKE_VERSION
-              value: "v1.7.1" # https://github.com/rancher/rke/releases/tag/v1.7.1
+              value: "v1.8.14" # https://github.com/rancher/rke/releases/tag/v1.8.14
             - name: K8S_VERSION
-              value: "v1.31.3" # RKE 1.7.1. supports: v1.31.3, v1.30.7, v1.29.11, v1.28.15
+              value: "v1.32.13" # RKE 1.8.14 supports: v1.32.13, v1.31.14, v1.30.14
 
   - name: WireGuard VXLAN k8s-e2e
     dependencies: []
@@ -393,8 +393,8 @@ blocks:
           value: "true"
         - name: PROVISIONER
           value: "aws-kubeadm"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(WireGuard)
+        - name: E2E_TEST_CONFIG
+          value: e2e/config/iptables/xtables-wireguard.yaml
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
@@ -424,8 +424,8 @@ blocks:
           value: "true"
         - name: PROVISIONER
           value: "aws-kubeadm"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=(WireGuard)
+        - name: E2E_TEST_CONFIG
+          value: e2e/config/iptables/xtables-wireguard.yaml
           # Single VPC only
         - name: VPC_SUBNETS
           value: '["172.16.101.0/24"]'
@@ -605,8 +605,8 @@ blocks:
           value: "true"
         - name: ENABLE_WIREGUARD
           value: "true"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        - name: E2E_TEST_CONFIG
+          value: e2e/config/wireguard.yaml
 
   - name: Focused WireGuard E2E (AKS with Calico CNI)
     dependencies: []
@@ -633,8 +633,8 @@ blocks:
           value: "true"
         - name: ENABLE_WIREGUARD
           value: "true"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        - name: E2E_TEST_CONFIG
+          value: e2e/config/wireguard.yaml
         - name: AKS_CNI
           value: "calico"
 
@@ -671,8 +671,6 @@ blocks:
             # - [It] "DNS should provide DNS for services"
             # - [It] "DNS should provide DNS for the cluster"
             # See details: https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks#install-eks-with-calico-networking:~:text=Calico%20networking%20cannot,on%20this%20setting.
-            - name: K8S_E2E_FLAGS
-              value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
       env_vars:
         - name: AWS_K8S_CNI_VERSION
           value: "NA"
@@ -686,8 +684,8 @@ blocks:
           value: "true"
         - name: ENABLE_WIREGUARD
           value: "true"
-        - name: K8S_E2E_FLAGS
-          value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+        - name: E2E_TEST_CONFIG
+          value: e2e/config/wireguard.yaml
 
   # This is the old every-other-week tests
   - name: Distro support

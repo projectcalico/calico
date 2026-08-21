@@ -25,12 +25,10 @@ exclude:
       reason: "Calico runs policy-only behind the Azure CNI, so BIRD is not running"
     - label: RequiresCalicoAPIServer
       reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses Azure IPAM"
 
   namePatterns:
-    - group: "requires Calico IPAM, but this cluster uses Azure IPAM"
-      patterns:
-        - 'IPAM.GC'
-
     - group: "NodePort traffic is blocked between nodes by the AKS network security group"
       patterns:
         - 'scenario-7:'
