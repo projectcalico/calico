@@ -1,6 +1,17 @@
 version: v2
+
+# One entry, deliberately. Calico's CI is a single composed workflow
+# (.argoci/ciworkflow.yaml) assembled from per-component fragments under
+# .argoci/steps/ — see that file for why it is not one workflow per component.
+#
+# Gating therefore happens INSIDE the workflow, at each include, not here: this
+# entry always runs and the fragments decide what ends up in the DAG. That also
+# means the one check below reports on every PR, so it can be a required check —
+# which a per-component entry never could, since a workflow whose runWhen says
+# "no" posts no status at all.
 workflows:
-  - name: argoci
+  - name: calico
     workflowFile: .argoci/ciworkflow.yaml
     runWhen:
       alwaysRunOnPR: true
+      alwaysRunOnMerge: true
