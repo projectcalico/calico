@@ -1551,7 +1551,7 @@ var _ = Describe("BPF Syncer NAT service ID conflicts", func() {
 	}
 
 	newSyncer := func() *proxy.Syncer {
-		syncer, err := proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize)
+		syncer, err := proxy.NewSyncer(4, nodeIPs, svcs, eps, mgEps, aff, rt, nil, maglevLUTSize, 0)
 		Expect(err).NotTo(HaveOccurred())
 		return syncer
 	}
