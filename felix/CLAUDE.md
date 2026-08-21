@@ -103,3 +103,7 @@ Felix parameters are declared in `config/config_params.go` with types and valida
 ## Design and review criteria
 
 Architecture, invariants, and review criteria live in the design index [`felix/DESIGN.md`](./DESIGN.md) and the per-topic sub-designs under [`felix/design/`](./design/). Path-scoped Copilot rules that reference each sub-design live under [`.github/instructions/`](../.github/instructions/). Do not look here for dataplane invariants, calc-graph internals, or rule-generation rules — look in the matching sub-design.
+
+## AI-assisted contribution policy
+
+Contributions written with AI assistance follow [`AI_POLICY.md`](../AI_POLICY.md): disclose the assistance in the PR description, no AI co-author trailers, and leave the change in a state the human author can explain themselves.

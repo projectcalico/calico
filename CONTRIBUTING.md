@@ -20,6 +20,10 @@ for both you and your reviewer!
 Simple bug fixes can just be raised as a pull request. Make sure you describe the bug in the pull request description,
 and please try to reproduce the bug in a unit test. This will help ensure the bug stays fixed!
 
+### Did AI tools help write it?
+
+That's fine, and it doesn't change the process below. It does mean you should read [AI_POLICY.md](AI_POLICY.md) first: you are responsible for every line you submit, you need to disclose the assistance in the PR description, and you need to be able to explain the change yourself during review.
+
 ### Writing, testing, and building the code
 
 For more detailed information on the development process for Calico, see the [developer guide](DEVELOPER_GUIDE.md).
