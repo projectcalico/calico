@@ -442,11 +442,16 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			outRes3, err := c.IPPools().Delete(ctx, name1, options.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Checking for three events, create res2 and disable and delete res1")
+			By("Checking for four events, create and mark res2, and disable and delete res1")
 			testWatcher1.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes2,
+					Object: beforeStatus(outRes2),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes2,
+					Previous: beforeStatus(outRes2),
 				},
 				{
 					Type:     watch.Modified,
@@ -479,11 +484,21 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testWatcher2.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes1,
+					Object: beforeStatus(outRes1),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes1,
+					Previous: beforeStatus(outRes1),
 				},
 				{
 					Type:   watch.Added,
-					Object: outRes2,
+					Object: beforeStatus(outRes2),
+				},
+				{
+					Type:     watch.Modified,
+					Object:   outRes2,
+					Previous: beforeStatus(outRes2),
 				},
 				{
 					Type:     watch.Modified,
@@ -512,7 +527,12 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				testWatcher2_1.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 					{
 						Type:   watch.Added,
-						Object: outRes1,
+						Object: beforeStatus(outRes1),
+					},
+					{
+						Type:     watch.Modified,
+						Object:   outRes1,
+						Previous: beforeStatus(outRes1),
 					},
 					{
 						Type:     watch.Modified,
@@ -528,6 +548,8 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 
 			By("Starting a watcher not specifying a rev - expect the current snapshot")
+			stored2, err := c.IPPools().Get(ctx, name2, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 			w, err = c.IPPools().Watch(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			testWatcher3 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)
@@ -535,7 +557,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			testWatcher3.ExpectEvents(apiv3.KindIPPool, []watch.Event{
 				{
 					Type:   watch.Added,
-					Object: outRes4,
+					Object: stored2,
 				},
 			})
 			testWatcher3.Stop()
@@ -562,7 +584,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 				},
 				{
 					Type:   watch.Added,
-					Object: outRes4,
+					Object: stored2,
 				},
 			})
 			testWatcher4.Stop()
@@ -1280,3 +1302,11 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 		})
 	})
 })
+
+// beforeStatus returns the pool as it was stored before Create marked it allocatable, which is
+// what the create's watch event carries.
+func beforeStatus(pool *apiv3.IPPool) *apiv3.IPPool {
+	out := pool.DeepCopy()
+	out.Status = nil
+	return out
+}
