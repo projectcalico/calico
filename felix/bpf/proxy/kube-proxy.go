@@ -17,6 +17,7 @@ package proxy
 import (
 	"net"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -53,6 +54,8 @@ type KubeProxy struct {
 	excludedCIDRs *ip.CIDRTrie
 
 	dsrEnabled bool
+
+	ctlbUDPAffinityTimeo time.Duration
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
@@ -136,7 +139,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	}
 
 	syncer, err := NewSyncer(kp.ipFamily, withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap,
-		kp.rt, kp.excludedCIDRs)
+		kp.rt, kp.excludedCIDRs, kp.ctlbUDPAffinityTimeo)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
