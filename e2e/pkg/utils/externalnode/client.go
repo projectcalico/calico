@@ -4,6 +4,7 @@ package externalnode
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -133,8 +134,15 @@ func (e *Client) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, e
 	outstr := strings.TrimSpace(string(out))
 	logrus.Infof("Output: %q", outstr)
 	if err != nil {
-		err := err.(*exec.ExitError)
-		logrus.Infof("Stderr: %s", string(err.Stderr))
+		// Not every failure is an ExitError — a missing ssh binary or a context
+		// cancellation is not — and asserting the type would panic the whole
+		// Ginkgo node rather than failing the caller's assertion.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			logrus.Infof("Stderr: %s", string(exitErr.Stderr))
+		} else {
+			logrus.Infof("Command failed without an exit status: %v", err)
+		}
 	}
 	return outstr, err
 }
