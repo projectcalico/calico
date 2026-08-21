@@ -135,6 +135,21 @@ func RequiresBGPMesh() any {
 	return framework.WithLabel("RequiresBGPMesh")
 }
 
+// RequiresOperator marks tests that need tigera-operator running to reconcile a CR
+// they create. Manifest-installed clusters (INSTALLER=manual/packaged, i.e. a
+// MANIFEST_FILE like calico.yaml) have no operator, so such a test blocks until its
+// wait times out rather than skipping.
+func RequiresOperator() any {
+	return framework.WithLabel("RequiresOperator")
+}
+
+// RequiresCalicoIPAM marks tests that need Calico to be the IPAM plugin. Clusters
+// running a provider's CNI and IPAM (AWS VPC, Azure, GKE host-local) keep no
+// Calico IPAM state for these specs to read.
+func RequiresCalicoIPAM() any {
+	return framework.WithLabel("RequiresCalicoIPAM")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {
