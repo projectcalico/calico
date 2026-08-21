@@ -10,7 +10,6 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE:-CalicoBPF}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-bpf.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|Feature:Wireguard)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
@@ -25,6 +24,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/bpf.yaml
       - name: ENABLE_WIREGUARD
         value: "true"
       - name: GOOGLE_MACHINE_TYPE
@@ -70,6 +71,8 @@ steps:
             value: azure
           - name: CLUSTER_MODE
             value: ""
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/aks-bpf-nobgp.yaml
       - name: stable-1-none-
         env:
           - name: K8S_VERSION
@@ -78,6 +81,8 @@ steps:
             value: none
           - name: CLUSTER_MODE
             value: ""
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/aks-bpf.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-encap
@@ -93,8 +98,6 @@ steps:
         value: 10.0.0.0/29
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev|Feature:Wireguard)
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -106,10 +109,14 @@ steps:
         env:
           - name: USE_VXLAN
             value: "true"
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-encap-v3crd-extnode-aws.yaml
       - name: "false"
         env:
           - name: USE_VXLAN
             value: "false"
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-v3crd-extnode-aws.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aws-single-subnet-dual-ip-family
@@ -233,8 +240,6 @@ steps:
         value: "true"
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|Feature:SCTP|Feature:Maglev|Feature:Wireguard)
       - name: PROVISIONER
         value: gcp-kubeadm
     matrix:
@@ -242,12 +247,16 @@ steps:
         env:
           - name: USE_VXLAN
             value: "true"
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-encap-extnode.yaml
       - name: false-netkit
         env:
           - name: USE_VXLAN
             value: "false"
           - name: LINUX_POD_INTERFACE_TYPE
             value: Netkit
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-extnode.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-aks-w-aks-cni
@@ -265,6 +274,8 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
     matrix:
       - name: azr-aks
         env:
@@ -293,6 +304,8 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
       - name: PROVISIONER
         value: azr-aks
     commands: |
@@ -318,6 +331,8 @@ steps:
         value: 10.244.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -337,8 +352,8 @@ steps:
         value: "true"
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|Conformance|Dataplane:BPF|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Feature:SCTP|Feature:Maglev|Feature:Wireguard)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/kops-bpf-extnode-aws.yaml
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -366,8 +381,8 @@ steps:
         value: 172.16.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Wireguard)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/eks-bpf-encap-extnode-aws.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -402,8 +417,8 @@ steps:
         value: 172.16.0.0/16
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[calico\]|\[Conformance\]|Host-Protection) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:SCTP|Feature:Maglev|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Wireguard)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/bpf/eks-xtables-encap-extnode-aws.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -494,7 +509,7 @@ steps:
   #     - name: K8S_E2E_DOCKER_EXTRA_FLAGS
   #       value: --env EKS_CNI
   #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev|Feature:Wireguard)
+  #       value: --ginkgo.focus=(Dataplane:LB) --ginkgo.skip=(Feature:Maglev)
   #     - name: NUM_ADDON_PODS
   #       value: "45"
   #     - name: PROVISIONER
@@ -527,8 +542,6 @@ steps:
         value: fd00:10:244::/64
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env IP_FAMILY
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|HostPort|EndpointSlices.pointing.to.API.Server|sig-calico-enterprise|Feature:Wireguard)
       - name: NAT_OUTGOING
         value: Enabled
       - name: NAT_OUTGOING_V6
@@ -542,12 +555,16 @@ steps:
             value: dual
           - name: DATAPLANE
             value: CalicoBPF
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/bpf-encap-extnode-aws.yaml
       - name: dual-calicoiptables
         env:
           - name: IP_FAMILY
             value: dual
           - name: DATAPLANE
             value: CalicoIptables
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/xtables-encap-extnode-aws.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv6
@@ -573,8 +590,6 @@ steps:
         value: fd00:10:244::/64
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|DataPath|HostPorts|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Maglev|Feature:Wireguard)
       - name: K8S_VERSION
         value: stable-1
       - name: NAT_OUTGOING_V6
@@ -590,12 +605,16 @@ steps:
             value: CalicoBPF
           - name: IP_FAMILY
             value: ipv6
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
       - name: calicoiptables-ipv6
         env:
           - name: DATAPLANE
             value: CalicoIptables
           - name: IP_FAMILY
             value: ipv6
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-run-matrix-kops-w-calico-cni-ipv4
@@ -617,8 +636,6 @@ steps:
         value: operator
       - name: K8S_E2E_DOCKER_EXTRA_FLAGS
         value: --env EKS_CNI
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|\[Dataplane:BPF\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|v1.should.proxy.through.a.service|DNS.should.resolve|DNS.should.provide|IPAM.StrictAffinity|Feature:SCTP|Feature:Maglev|DataPath|HostPorts|HostPort|EndpointSlices.pointing.to.API.Server|Feature:Wireguard)
       - name: NAT_OUTGOING
         value: Enabled
       - name: PROVISIONER
@@ -632,12 +649,16 @@ steps:
             value: CalicoBPF
           - name: IP_FAMILY
             value: ipv4
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-bpf-encap-nobgp-extnode-aws.yaml
       - name: calicoiptables-ipv4
         env:
           - name: DATAPLANE
             value: CalicoIptables
           - name: IP_FAMILY
             value: ipv4
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/bpf/kops-xtables-encap-nobgp-extnode-aws.yaml
     commands: |
       .argoci/scripts/body_standard.sh
   - name: bpf-mini-scale-runs
@@ -732,7 +753,7 @@ steps:
   #     - name: INSTALLER
   #       value: operator
   #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev|Feature:Wireguard)
+  #       value: --ginkgo.focus=(Dataplane:BPF.*ModeSwitch.*external-node-to-nodePort) --ginkgo.skip=(Feature:Maglev)
   #     - name: PROVISIONER
   #       value: gcp-kubeadm
   #   commands: |
@@ -754,6 +775,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
+      - name: K8S_VERSION
+        value: stable
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
