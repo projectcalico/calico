@@ -49,6 +49,7 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			&mock.DummyMap{},
 			proxy.NewRTCache(),
 			nil,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 
