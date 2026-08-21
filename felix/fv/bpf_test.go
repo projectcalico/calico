@@ -3022,7 +3022,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						waitForSvcProgrammed := func(ip string, port uint16) {
 							natFtKey := natFEKey(ip, port)
 							EventuallyWithOffset(1, func() bool {
-								m, be, _ := dumpNATMapsAny(family, tc.Felixes[0])
+								m, be := dumpNATMapsAny(family, tc.Felixes[0])
 
 								v, ok := m[natFtKey]
 								if !ok || v.Count() == 0 {
@@ -3078,7 +3078,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 								syncSvcKey := natFEKey(syncSvcIP, 80)
 								Eventually(func() bool {
-									m, _, _ := dumpNATMapsAny(family, tc.Felixes[0])
+									m, _ := dumpNATMapsAny(family, tc.Felixes[0])
 									_, ok := m[syncSvcKey]
 									return ok
 								}, "10s", "300ms").Should(BeTrue(), "kube-proxy did not sync the extra service")
