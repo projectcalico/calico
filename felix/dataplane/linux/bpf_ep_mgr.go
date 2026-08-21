@@ -1563,6 +1563,12 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceStateUpdate) {
 			iface.info.ifIndex = 0
 			iface.info.masterIfIndex = 0
 			iface.info.ifaceType = 0
+			// The interface is gone, so every scrap of state we derived from
+			// it is stale; drop it wholesale rather than field by field.
+			// withIface only forgets an interface once its bpfInterface is
+			// back to the zero value, so a field left set here would leak the
+			// entry for the lifetime of the process.
+			iface.dpState = zeroIface.dpState
 		}
 		// Capture the WEP binding + (possibly zero) ifIndex so we can
 		// refresh the connlimit pod info snapshot after the withIface
@@ -1623,7 +1629,11 @@ func (m *bpfEndpointManager) onWorkloadEndpointRemove(msg *proto.WorkloadEndpoin
 	}
 
 	m.withIface(oldWEP.Name, func(iface *bpfInterface) bool {
+		// Clear everything we learned from the endpoint, not just its ID:
+		// withIface only forgets an interface once its bpfInterface is back
+		// to the zero value.
 		iface.info.endpointID = nil
+		iface.info.hasIstioDSCP = false
 		return false
 	})
 	// Remove policy debug info if any
