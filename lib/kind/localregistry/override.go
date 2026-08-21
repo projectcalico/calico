@@ -51,8 +51,9 @@ func (f *Registry) OverrideFromDaemon(ctx context.Context, upstreamRef, localDoc
 	if err != nil {
 		return fmt.Errorf("temp file: %w", err)
 	}
-	tar.Close()
-	defer os.Remove(tar.Name())
+	// Only the name is wanted; the writer below reopens it.
+	_ = tar.Close()
+	defer func() { _ = os.Remove(tar.Name()) }()
 
 	// Reuse the docker CLI (already a hard dependency of kind) to snapshot
 	// the daemon image to a tarball crane can read.

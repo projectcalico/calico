@@ -56,7 +56,7 @@ func manifestDigestVia(t *testing.T, facadeAddr, ns, repo, ref string) string {
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET %s: status %d: %s", url, resp.StatusCode, body)
