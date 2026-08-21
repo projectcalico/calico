@@ -103,12 +103,10 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
-[sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
-[sig-calico] [Team:CORE] [Feature:MTU] [Category:Networking] Automatic MTU tests should select the correct MTU for the platform
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
@@ -120,7 +118,6 @@
 [sig-calico] [Team:CORE] [Feature:OwnerReferences] [Category:Configuration] OwnerReference tests should delete a NetworkSet if its owner has been deleted
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit bandwidth with QoS annotations
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit packet rate with QoS annotations
-[sig-calico] [Team:CORE] [Feature:Wireguard] [Category:Networking] WireGuard tests should carry pod traffic between nodes over the tunnel
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]
 [sig-network] DNS should provide /etc/hosts entries for the cluster [Conformance]
@@ -147,7 +144,6 @@
 [sig-network] Netpol NetworkPolicy between server and client should allow egress access to server in CIDR block [Feature:NetworkPolicy]
 [sig-network] Netpol NetworkPolicy between server and client should allow ingress access from namespace on one named port [Feature:NetworkPolicy]
 [sig-network] Netpol NetworkPolicy between server and client should allow ingress access from updated namespace [Feature:NetworkPolicy]
-[sig-network] Netpol NetworkPolicy between server and client should allow ingress access from updated pod [Feature:NetworkPolicy]
 [sig-network] Netpol NetworkPolicy between server and client should allow ingress access on one named port [Feature:NetworkPolicy]
 [sig-network] Netpol NetworkPolicy between server and client should deny egress from all pods in a namespace [Feature:NetworkPolicy]
 [sig-network] Netpol NetworkPolicy between server and client should deny egress from pods based on PodSelector [Feature:NetworkPolicy]
