@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,28 @@ type requestCache struct {
 	srcIPStr       string
 	dstIPStr       string
 	dstIPProtoPort string
+
+	// Memoized identity, indexed by flowSide. Resolving it parses a SPIFFE ID and copies
+	// two label maps, and the match functions ask for it once per rule.
+	identities [numFlowSides]identity
+}
+
+// flowSide identifies which end of the flow an identity belongs to.
+type flowSide int
+
+const (
+	sourceSide flowSide = iota
+	destSide
+	numFlowSides
+)
+
+// identity is the resolved peer and namespace for one side of the flow. A nil peer means
+// the side carries no principal, or one that could not be parsed; both cases match any
+// rule, because Dikastes falls back on IP addresses for plain-text requests.
+type identity struct {
+	peer      *peer
+	namespace *namespace
+	resolved  bool
 }
 
 type peer struct {
@@ -72,39 +94,45 @@ func NewRequestCache(store *policystore.PolicyStore, request Flow) *requestCache
 
 // getSrcPeer returns the source peer.
 func (r *requestCache) getSrcPeer() *peer {
-	if principal := r.GetSourcePrincipal(); principal != nil {
-		return r.initPeer(*principal, r.GetSourceLabels())
-	}
-
-	return nil
+	return r.getIdentity(sourceSide).peer
 }
 
 // getDstPeer returns the destination peer.
 func (r *requestCache) getDstPeer() *peer {
-	if principal := r.GetDestPrincipal(); principal != nil {
-		return r.initPeer(*principal, r.GetDestLabels())
-	}
-
-	return nil
+	return r.getIdentity(destSide).peer
 }
 
-// getSourceNamespace returns the namespace of the source peer.
+// getSrcNamespace returns the namespace of the source peer.
 func (r *requestCache) getSrcNamespace() *namespace {
-	if peer := r.getSrcPeer(); peer != nil {
-		return r.initNamespace(peer.Namespace)
-	}
-
-	return nil
+	return r.getIdentity(sourceSide).namespace
 }
 
 // getDstNamespace returns the namespace of the destination peer.
 func (r *requestCache) getDstNamespace() *namespace {
-	if peer := r.getDstPeer(); peer != nil {
-		return r.initNamespace(peer.Namespace)
+	return r.getIdentity(destSide).namespace
+}
 
+// getIdentity returns the peer and namespace for one side of the flow, resolving them from
+// the request and the store on first use and memoizing the result for the rest of the
+// request.
+func (r *requestCache) getIdentity(side flowSide) identity {
+	id := &r.identities[side]
+	if id.resolved {
+		return *id
 	}
+	id.resolved = true
 
-	return nil
+	principal, labels := r.GetSourcePrincipal(), r.GetSourceLabels()
+	if side == destSide {
+		principal, labels = r.GetDestPrincipal(), r.GetDestLabels()
+	}
+	if principal == nil {
+		return *id
+	}
+	if id.peer = r.initPeer(*principal, labels); id.peer != nil {
+		id.namespace = r.initNamespace(id.peer.Namespace)
+	}
+	return *id
 }
 
 // getSrcIPStr returns the source IP in string form, memoized across the request.
@@ -137,7 +165,7 @@ func (r *requestCache) getDstIPProtoPortStr() string {
 func (r *requestCache) getIPSet(id string) policystore.IPSet {
 	s, ok := r.store.IPSetByID[id]
 	if !ok {
-		log.WithField("ipset", id).Warn("IPSet not found")
+		rlogIPSetMissing.Warnf("IPSet not found: %s", id)
 		return nil
 	}
 	return s
@@ -160,7 +188,7 @@ func (r *requestCache) initNamespace(name string) *namespace {
 func (r *requestCache) initPeer(principal string, labels map[string]string) *peer {
 	peer, err := parseSpiffeID(principal)
 	if err != nil {
-		log.WithError(err).Error("failed to parse source principal")
+		rlogBadPrincipal.Errorf("failed to parse principal: %v", err)
 		return nil
 	}
 	peer.Labels = make(map[string]string)
