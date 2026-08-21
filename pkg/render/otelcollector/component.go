@@ -21,11 +21,13 @@ import (
 	_ "embed"
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"strings"
 	"text/template"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"github.com/tigera/api/pkg/lib/numorstring"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
@@ -116,6 +118,9 @@ type Configuration struct {
 	OpenShift     bool
 	Installation  *operatorv1.InstallationSpec
 	OpenTelemetry *operatorv1.OpenTelemetrySpec
+	// ClusterDomain lets an exporter pointed at an in-cluster Service be matched
+	// by service rather than by domain.
+	ClusterDomain string
 	// ReceiverTLSSecret is the server keypair for the OTLP receiver (mTLS termination).
 	ReceiverTLSSecret certificatemanagement.KeyPairInterface
 	TrustedCertBundle certificatemanagement.TrustedBundleRO
@@ -131,10 +136,6 @@ type Configuration struct {
 	// headers, keyed by Secret name. Values reach the collector as environment
 	// variables so credentials never land in the rendered ConfigMap.
 	ExporterAuthSecrets map[string]*corev1.Secret
-	// DomainEgressAllowed reports whether the license carries the
-	// egress-access-control feature, without which NetworkPolicy cannot name a
-	// destination by domain and egress rules fall back to port-only.
-	DomainEgressAllowed bool
 	// Disabled renders the component for removal instead of creation, so turning
 	// the feature off cleans up after itself rather than leaving the collector
 	// and its RBAC behind.
@@ -832,25 +833,29 @@ func (c *component) statefulSet() *appsv1.StatefulSet {
 	}
 }
 
-// exporterDestination resolves the egress destination for an exporter. The OTLP
-// exporters accept a bare host and supply the port themselves, which
-// ParseExternalDestination cannot infer, so fall back to the protocol's default
-// port instead of returning nothing — an exporter with no rule is silently
-// dropped by the default-deny, with the operator still reporting Available.
-func exporterDestination(exp operatorv1.OpenTelemetryExporter) networkpolicy.ExternalDestination {
-	if dest, ok := networkpolicy.ParseExternalDestination(exp.Endpoint); ok {
-		return dest
+// exporterDestination resolves the egress destination for an exporter. Unlike
+// the other users of the shared helper this field is a URL, so the host and
+// port are taken from the URL here -- with the port defaulted from the scheme
+// when it is not explicit -- and only the tightest-rule step is shared.
+func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain string) (v3.EntityRule, error) {
+	u, err := url.Parse(exp.Endpoint)
+	if err != nil {
+		return v3.EntityRule{}, err
 	}
-	port := uint16(OTLPGRPCPort)
-	if exp.Protocol == operatorv1.OpenTelemetryProtocolHTTP {
-		port = OTLPHTTPPort
+	host := u.Hostname()
+	if host == "" {
+		return v3.EntityRule{}, fmt.Errorf("exporter endpoint %q has no host", exp.Endpoint)
 	}
-	// A bare host carries no scheme or path, so it is safe to name directly.
-	// Anything more exotic falls through to a port-only rule.
-	if !strings.ContainsAny(exp.Endpoint, "/:") {
-		return networkpolicy.ExternalDestination{Host: exp.Endpoint, Port: port}
+	portStr := u.Port()
+	if portStr == "" {
+		// https is the only scheme the API accepts.
+		portStr = "443"
 	}
-	return networkpolicy.ExternalDestination{Port: port}
+	port, err := numorstring.PortFromString(portStr)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	return networkpolicy.EntityRuleForHostPort(host, clusterDomain, port), nil
 }
 
 func (c *component) networkPolicy() *v3.NetworkPolicy {
@@ -861,10 +866,17 @@ func (c *component) networkPolicy() *v3.NetworkPolicy {
 	// ports: the exporters below are the only egress destinations we need, and a
 	// catch-all would let the collector reach any host on 4317/4318.
 	for _, exp := range c.cfg.OpenTelemetry.Exporters {
+		dest, err := exporterDestination(exp, c.cfg.ClusterDomain)
+		if err != nil {
+			// Validate rejects an endpoint this cannot parse, so reaching here means
+			// a stale CRD let one through. Skip the rule rather than widening it:
+			// the default-deny then blocks that exporter, which is the safe failure.
+			continue
+		}
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicy.ExternalDestinationEntityRule(exporterDestination(exp), c.cfg.DomainEgressAllowed),
+			Destination: dest,
 		})
 	}
 

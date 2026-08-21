@@ -527,8 +527,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should match in-cluster exporters by service rather than domain", func() {
 			cfg := &otelcollector.Configuration{
-				Installation:        defaultInstallation,
-				DomainEgressAllowed: true,
+				Installation:  defaultInstallation,
+				ClusterDomain: "cluster.local",
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{
 						{Name: "incluster", Endpoint: "https://lgtm.otel-demo.svc.cluster.local:4317"},
@@ -999,14 +999,13 @@ var _ = Describe("OpenTelemetry rendering", func() {
 			Expect(np.Spec.Ingress[1].Destination.Ports).To(Equal(networkpolicy.Ports(otelcollector.InternalMetricsPort)))
 		})
 
-		It("should pin the egress destination to the exporter host when licensed for domain egress", func() {
+		It("should pin the egress destination to the exporter host", func() {
 			cfg := &otelcollector.Configuration{
-				Installation:        defaultInstallation,
-				DomainEgressAllowed: true,
+				Installation: defaultInstallation,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{
 						{Name: "byname", Endpoint: "https://otlp.example.com:4317"},
-						{Name: "byip", Endpoint: "10.1.2.3:4318"},
+						{Name: "byip", Endpoint: "https://10.1.2.3:4318"},
 					},
 				},
 			}
@@ -1024,17 +1023,14 @@ var _ = Describe("OpenTelemetry rendering", func() {
 			Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
 				Nets: []string{"10.1.2.3/32"}, Ports: networkpolicy.Ports(4318),
 			})))
-
-			// No catch-all allowing any host on the OTLP ports.
-			Expect(np.Spec.Egress).NotTo(ContainElement(HaveField("Destination", v3.EntityRule{
-				Ports: networkpolicy.Ports(otelcollector.OTLPGRPCPort, otelcollector.OTLPHTTPPort),
-			})))
 		})
 
-		It("should fall back to a port-only rule for hostnames without the domain egress license", func() {
+		It("should never emit a rule that allows any host", func() {
+			// The shared helper always constrains the destination. A ports-only rule
+			// would let the collector reach anything on that port, and that is not a
+			// default this component gets to choose.
 			cfg := &otelcollector.Configuration{
-				Installation:        defaultInstallation,
-				DomainEgressAllowed: false,
+				Installation: defaultInstallation,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "byname", Endpoint: "https://otlp.example.com:4317"}},
 				},
@@ -1046,43 +1042,32 @@ var _ = Describe("OpenTelemetry rendering", func() {
 			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objs, otelcollector.OpenTelemetryCollectorPolicyName, otelcollector.OpenTelemetryCollectorNamespace)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Domains require the egress-access-control feature. Without it we still
-			// have to permit the traffic, so the port is all we can constrain.
-			Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
-				Ports: networkpolicy.Ports(4317),
-			})))
+			for _, r := range np.Spec.Egress {
+				d := r.Destination
+				if len(d.Ports) > 0 && d.Services == nil && len(d.Nets) == 0 && len(d.Domains) == 0 && d.Selector == "" && d.NamespaceSelector == "" {
+					Fail("egress rule constrains only the port, allowing any host")
+				}
+			}
 		})
 
-		DescribeTable("should always emit a rule for an endpoint carrying no port",
-			func(protocol operatorv1.OpenTelemetryExporterProtocol, wantPort uint16) {
-				// The endpoint Pattern normally requires a scheme, so a bare host
-				// only reaches here if the CRD is out of date. Rendering no rule at
-				// all left the default-deny silently dropping every export while the
-				// operator still reported Available, so fall back to the protocol's
-				// default port rather than emitting nothing.
-				cfg := &otelcollector.Configuration{
-					Installation:        defaultInstallation,
-					DomainEgressAllowed: true,
-					OpenTelemetry: &operatorv1.OpenTelemetrySpec{
-						Exporters: []operatorv1.OpenTelemetryExporter{
-							{Name: "noport", Endpoint: "otlp.example.com", Protocol: protocol},
-						},
-					},
-				}
-				comp, err := otelcollector.OpenTelemetryCollector(cfg)
-				Expect(err).NotTo(HaveOccurred())
-				objs, _ := comp.Objects()
+		It("should default the port from the scheme when the endpoint carries none", func() {
+			cfg := &otelcollector.Configuration{
+				Installation: defaultInstallation,
+				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
+					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "noport", Endpoint: "https://otlp.example.com"}},
+				},
+			}
+			comp, err := otelcollector.OpenTelemetryCollector(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			objs, _ := comp.Objects()
 
-				np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objs, otelcollector.OpenTelemetryCollectorPolicyName, otelcollector.OpenTelemetryCollectorNamespace)
-				Expect(err).ShouldNot(HaveOccurred())
-				Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
-					Ports:   networkpolicy.Ports(wantPort),
-					Domains: []string{"otlp.example.com"},
-				})))
-			},
-			Entry("gRPC defaults to 4317", operatorv1.OpenTelemetryProtocolGRPC, uint16(4317)),
-			Entry("HTTP defaults to 4318", operatorv1.OpenTelemetryProtocolHTTP, uint16(4318)),
-		)
+			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objs, otelcollector.OpenTelemetryCollectorPolicyName, otelcollector.OpenTelemetryCollectorNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+			// https, the only scheme the API accepts, so 443.
+			Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
+				Domains: []string{"otlp.example.com"}, Ports: networkpolicy.Ports(443),
+			})))
+		})
 	})
 
 	Context("StatefulSet overrides", func() {

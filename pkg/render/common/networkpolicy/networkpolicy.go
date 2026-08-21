@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"strconv"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -339,78 +338,40 @@ var PrometheusSourceEntityRule = v3.EntityRule{
 	Selector:          PrometheusSelector,
 }
 
-// ExternalDestination is a parsed egress target: the host as written plus the
-// resolved TCP port.
-type ExternalDestination struct {
-	Host string
-	Port uint16
-}
-
-// ParseExternalDestination extracts the host and port from an endpoint, which may
-// be a bare "host:port" or a URL. When a URL carries no explicit port the scheme's
-// default is used. It reports false when no port can be determined.
-func ParseExternalDestination(endpoint string) (ExternalDestination, bool) {
-	if host, portStr, err := net.SplitHostPort(endpoint); err == nil {
-		if p, err := strconv.Atoi(portStr); err == nil && p > 0 && p <= 65535 {
-			return ExternalDestination{Host: host, Port: uint16(p)}, true
-		}
-	}
-	u, err := url.Parse(endpoint)
+// ParseHostPort splits a strict "host:port" destination. It deliberately does
+// not accept a URL: a caller whose field is documented as host:port should fail
+// loudly on a URL rather than silently take the scheme's default port.
+func ParseHostPort(destination string) (string, numorstring.Port, error) {
+	host, portStr, err := net.SplitHostPort(destination)
 	if err != nil {
-		return ExternalDestination{}, false
+		return "", numorstring.Port{}, err
 	}
-	if portStr := u.Port(); portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil && p > 0 && p <= 65535 {
-			return ExternalDestination{Host: u.Hostname(), Port: uint16(p)}, true
-		}
+	port, err := numorstring.PortFromString(portStr)
+	if err != nil {
+		return "", numorstring.Port{}, err
 	}
-	switch u.Scheme {
-	case "https":
-		return ExternalDestination{Host: u.Hostname(), Port: 443}, true
-	case "http":
-		return ExternalDestination{Host: u.Hostname(), Port: 80}, true
-	}
-	return ExternalDestination{}, false
+	return host, port, nil
 }
 
-// clusterService splits an in-cluster Service DNS name --
-// <service>.<namespace>.svc[.cluster.local] -- into its namespace and name.
-// Each element is checked with the upstream DNS-label validator rather than a
-// pattern of our own.
-func clusterService(host string) (namespace, name string, ok bool) {
-	parts := strings.Split(host, ".")
-	if len(parts) < 3 || parts[2] != "svc" {
-		return "", "", false
-	}
-	for _, p := range append([]string{parts[0], parts[1]}, parts[3:]...) {
-		if len(validation.IsDNS1123Label(p)) > 0 {
-			return "", "", false
-		}
-	}
-	return parts[1], parts[0], true
-}
-
-// ExternalDestinationEntityRule builds the tightest destination rule available for
-// an external endpoint:
+// EntityRuleForHostPort builds the tightest destination rule for a host that is
+// already parsed: an exact net for a literal IP, a Services match for an
+// in-cluster Service name, otherwise the domain.
 //
-//   - a literal IP becomes an exact /32 or /128 net;
-//   - a hostname becomes a Domains rule, but only when allowDomains is set —
-//     domain-based rules require the egress-access-control license feature;
-//   - otherwise the destination is left open and only the port is constrained.
-//
-// The last case is a deliberate fallback: without the license feature we cannot
-// name the host, and dropping the rule entirely would break egress.
-func ExternalDestinationEntityRule(dest ExternalDestination, allowDomains bool) v3.EntityRule {
-	rule := v3.EntityRule{Ports: Ports(dest.Port)}
+// It never returns a rule with no destination constraint. A rule carrying only
+// ports allows every host on those ports, and whether that is acceptable is the
+// component's call, not this helper's -- callers that cannot use the rule are
+// expected to drop it or degrade rather than ship a broad allow.
+func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port) v3.EntityRule {
 	// An in-cluster Service is matched by service, not by domain: Calico resolves
 	// Domains rules from observed DNS answers, which does not cover a ClusterIP
-	// reached through the cluster domain.
-	if ns, name, ok := clusterService(dest.Host); ok {
-		// A service match carries the Service's own ports; Calico rejects a rule
-		// that sets both ("cannot specify ports with a service selector").
+	// reached through the cluster domain. A service match carries the Service's
+	// own ports; Calico rejects a rule that sets both.
+	if ns, name, ok := ClusterServiceWithDomain(host, clusterDomain); ok {
 		return CreateServiceSelectorEntityRule(ns, name)
 	}
-	if ip := net.ParseIP(dest.Host); ip != nil {
+
+	rule := v3.EntityRule{Ports: ports}
+	if ip := net.ParseIP(host); ip != nil {
 		suffix := "/128"
 		if ip.To4() != nil {
 			suffix = "/32"
@@ -418,8 +379,39 @@ func ExternalDestinationEntityRule(dest ExternalDestination, allowDomains bool) 
 		rule.Nets = []string{ip.String() + suffix}
 		return rule
 	}
-	if allowDomains && dest.Host != "" {
-		rule.Domains = []string{dest.Host}
-	}
+	rule.Domains = []string{host}
 	return rule
+}
+
+// EntityRuleForDestination is ParseHostPort followed by EntityRuleForHostPort,
+// for the common case where a component holds a "host:port" string.
+func EntityRuleForDestination(destination, clusterDomain string) (v3.EntityRule, error) {
+	host, port, err := ParseHostPort(destination)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	return EntityRuleForHostPort(host, clusterDomain, port), nil
+}
+
+// ClusterServiceWithDomain reports the namespace and name of an in-cluster
+// Service DNS name. It is deliberately strict: the host must be
+// <service>.<namespace>.svc, optionally followed by the cluster domain and an
+// optional trailing dot. Without the cluster domain a name like
+// proxy.corp.svc.example.com is indistinguishable from an in-cluster Service,
+// and treating it as one would silently retarget the rule.
+func ClusterServiceWithDomain(host, clusterDomain string) (namespace, name string, ok bool) {
+	host = strings.TrimSuffix(host, ".")
+	if clusterDomain = strings.Trim(clusterDomain, "."); clusterDomain != "" {
+		host = strings.TrimSuffix(host, "."+clusterDomain)
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) != 3 || parts[2] != "svc" {
+		return "", "", false
+	}
+	for _, p := range parts[:2] {
+		if len(validation.IsDNS1123Label(p)) > 0 {
+			return "", "", false
+		}
+	}
+	return parts[1], parts[0], true
 }

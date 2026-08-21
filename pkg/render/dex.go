@@ -522,14 +522,8 @@ func (c *dexComponent) resolveEgressRulesByDestination() map[string]v3.Rule {
 	egressRulesByDestination := make(map[string]v3.Rule)
 	processedPodProxies := ProcessPodProxies(c.cfg.PodProxies)
 	for i, podProxy := range processedPodProxies {
-		egressDestinations, err := resolveEgressDestinationsForPod(podProxy)
-		if err != nil {
-			log.Error(err, fmt.Sprintf("failed to resolve egress destinations for pod %d, skipping for policy rendering", i))
-			continue
-		}
-
-		for _, egressDestination := range egressDestinations {
-			egressRule, err := resolveEgressRuleForDestination(egressDestination)
+		for _, egressDestination := range resolveEgressDestinationsForPod(podProxy) {
+			egressRule, err := resolveEgressRuleForDestination(egressDestination, c.cfg.ClusterDomain)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("failed to resolve egress rule for pod %d, skipping for policy rendering", i))
 				continue
@@ -545,7 +539,7 @@ func (c *dexComponent) resolveEgressRulesByDestination() map[string]v3.Rule {
 // resolveEgressDestinationsForPod collects all possible http proxy destinations and all possible IdP destinations.
 // In the future, this function may return only the specific destinations it expects Dex pods to connect to given the
 // current issuer configuration (in the Authentication CR) and the HTTP proxy configuration.
-func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) ([]string, error) {
+func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) []string {
 	var egressDestinations []string
 
 	if podProxy == nil {
@@ -556,41 +550,35 @@ func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) ([]string, erro
 	// an IdP could live at any IP.
 	// idp-resolution: In the future, we could resolve a single destination by resolving our expected IdP
 	// issuer URL and using podProxy.ProxyFunc to resolve a single expected destination URL.
-	if podProxy.HTTPProxy != "" {
-		httpProxyURL, err := url.Parse(podProxy.HTTPProxy)
-		if err != nil {
-			return nil, err
+	//
+	// A proxy value we cannot parse costs only its own rule. Returning an error
+	// here used to abandon the whole pod, taking the catch-alls below with it, so
+	// one bad proxy string silently removed that pod's IdP egress entirely.
+	for _, proxy := range []string{podProxy.HTTPProxy, podProxy.HTTPSProxy} {
+		if proxy == "" {
+			continue
 		}
-
-		httpProxyDestination, err := operatorurl.ParseHostPortFromHTTPProxyURL(httpProxyURL)
+		proxyURL, err := url.Parse(proxy)
 		if err != nil {
-			return nil, err
+			log.Error(err, fmt.Sprintf("ignoring unparseable proxy %q when rendering Dex egress", proxy))
+			continue
 		}
-
-		egressDestinations = append(egressDestinations, httpProxyDestination)
+		destination, err := operatorurl.ParseHostPortFromHTTPProxyURL(proxyURL)
+		if err != nil {
+			log.Error(err, fmt.Sprintf("ignoring proxy %q when rendering Dex egress", proxy))
+			continue
+		}
+		egressDestinations = append(egressDestinations, destination)
 	}
 
-	if podProxy.HTTPSProxy != "" {
-		httpsProxyURL, err := url.Parse(podProxy.HTTPSProxy)
-		if err != nil {
-			return nil, err
-		}
-
-		httpsProxyDestination, err := operatorurl.ParseHostPortFromHTTPProxyURL(httpsProxyURL)
-		if err != nil {
-			return nil, err
-		}
-
-		egressDestinations = append(egressDestinations, httpsProxyDestination)
-	}
-
+	// Always allowed: an IdP could live at any address.
 	egressDestinations = append(egressDestinations, "0.0.0.0/0")
 	egressDestinations = append(egressDestinations, "::/0")
 
-	return egressDestinations, nil
+	return egressDestinations
 }
 
-func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
+func resolveEgressRuleForDestination(destination, clusterDomain string) (v3.Rule, error) {
 	// Support "any" destinations that signify any potential IdP destination IP.
 	// idp-resolution: These cases can be removed if we are able to resolve specific IdP destinations based on the Authentication config.
 	if destination == "0.0.0.0/0" {
@@ -616,16 +604,14 @@ func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
 
 	// Everything else is a concrete host:port. The shared helper picks the
 	// tightest rule it can: an exact net for a literal IP, a Services match for an
-	// in-cluster name, otherwise the domain. Dex renders the domain rule
-	// unconditionally -- unlike the other users of this helper it has no license
-	// input, and narrowing to port-only here would widen the IdP egress.
-	parsed, ok := networkpolicy.ParseExternalDestination(destination)
-	if !ok {
-		return v3.Rule{}, fmt.Errorf("could not parse egress destination %q", destination)
+	// in-cluster name, otherwise the domain.
+	dest, err := networkpolicy.EntityRuleForDestination(destination, clusterDomain)
+	if err != nil {
+		return v3.Rule{}, err
 	}
 	return v3.Rule{
 		Action:      v3.Allow,
 		Protocol:    &networkpolicy.TCPProtocol,
-		Destination: networkpolicy.ExternalDestinationEntityRule(parsed, true),
+		Destination: dest,
 	}, nil
 }

@@ -15,7 +15,6 @@
 package clusterconnection
 
 import (
-	"fmt"
 	"net/url"
 
 	"github.com/sirupsen/logrus"
@@ -130,18 +129,20 @@ func enterpriseGuardianPolicySpec(gpc *render.GuardianConfiguration) (v3.Network
 			continue
 		}
 
-		parsed, ok := networkpolicy.ParseExternalDestination(tunnelDestinationHostPort)
-		if !ok {
-			return v3.NetworkPolicySpec{}, fmt.Errorf("could not parse tunnel destination %q", tunnelDestinationHostPort)
+		// No cluster domain: the tunnel destination is the management cluster, an
+		// address outside this cluster. gpc.URL is documented as host:port, so parse
+		// it strictly: a URL here is a
+		// misconfiguration and should fail the render rather than quietly become the
+		// scheme's default port.
+		dest, err := networkpolicy.EntityRuleForDestination(tunnelDestinationHostPort, "")
+		if err != nil {
+			return v3.NetworkPolicySpec{}, err
 		}
 
-		// Only a domain destination needs the EgressAccessControl feature; an IP or
-		// an in-cluster Service does not. Ask for the rule with the feature we
-		// actually have, and skip it only when that left nothing to match on --
-		// the Pass rule below already governs the tunnel, and a port-only allow
-		// here would be wider than what ships today.
-		dest := networkpolicy.ExternalDestinationEntityRule(parsed, gpc.IncludeEgressNetworkPolicy)
-		if dest.Services == nil && len(dest.Nets) == 0 && len(dest.Domains) == 0 {
+		// Only a domain destination needs the EgressAccessControl feature. Without
+		// it, drop the rule -- the Pass below already governs the tunnel, and a
+		// broad allow is not this component's call to make.
+		if len(dest.Domains) > 0 && !gpc.IncludeEgressNetworkPolicy {
 			continue
 		}
 
