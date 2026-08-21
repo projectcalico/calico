@@ -9,7 +9,6 @@ globalPrologue: |
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-patch-verification.yml}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:Wireguard)}"
   export K8S_VERSION="${K8S_VERSION:-stable-3}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
@@ -30,8 +29,8 @@ steps:
         value: Calico
       - name: DATAPLANE
         value: CalicoIptables
-      - name: ENABLE_AUTO_HEP
-        value: "true"
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables.yaml
       - name: INSTALLER
         value: helmerator
       - name: IPV4_POD_CIDR
@@ -63,6 +62,8 @@ steps:
         value: CalicoIptables
       - name: DOWNLEVEL_MANIFEST
         value: https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -92,6 +93,8 @@ steps:
         value: ubuntu-2204-lts
       - name: DATAPLANE
         value: CalicoIptables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-manifest.yaml
       - name: GOOGLE_MACHINE_TYPE
         value: e2-standard-2
       - name: INSTALLER
@@ -123,6 +126,8 @@ steps:
         value: CalicoIptables
       - name: DOWNLEVEL_MANIFEST
         value: https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/canal.yaml
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-manifest.yaml
       - name: GOOGLE_MACHINE_TYPE
         value: e2-standard-2
       - name: INSTALLER
@@ -148,6 +153,8 @@ steps:
         value: ubuntu-2404-lts-amd64
       - name: DATAPLANE
         value: CalicoIptables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
       - name: ENCAPSULATION_TYPE
         value: IPIP
       - name: GOOGLE_MACHINE_TYPE
@@ -181,6 +188,8 @@ steps:
         value: ubuntu-2404-lts-amd64
       - name: DATAPLANE
         value: CalicoNftables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-encap-manifest.yaml
       - name: ENCAPSULATION_TYPE
         value: IPIP
       - name: GOOGLE_MACHINE_TYPE
@@ -214,6 +223,8 @@ steps:
         value: AKS
       - name: CNI_PLUGIN
         value: AzureVNET
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/aks-xtables-nobgp.yaml
       - name: INSTALLER
         value: operator
       - name: IPV4_POD_CIDR
@@ -239,6 +250,8 @@ steps:
         value: Calico
       - name: DATAPLANE
         value: CalicoBPF
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/eks-bpf-encap-aws.yaml
       - name: EKS_AMI_FAMILY
         value: AmazonLinux2023
       - name: ENABLE_NODE_LOCAL_DNS_CACHE
@@ -255,8 +268,6 @@ steps:
         value: 172.16.0.0/16
       - name: IP_FAMILY
         value: ipv4
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.........DNS)
       - name: K8S_VERSION
         value: stable-3
       - name: PROVISIONER
@@ -276,6 +287,8 @@ steps:
         value: AmazonVPC
       - name: DATAPLANE
         value: CalicoBPF
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/eks-bpf-nobgp-aws.yaml
       - name: INSTALLER
         value: operator
       - name: IPAM_TEST_POOL_SUBNET
@@ -299,8 +312,8 @@ steps:
         value: Calico
       - name: DATAPLANE
         value: CalicoBPF
-      - name: ENABLE_AUTO_HEP
-        value: "true"
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/bpf-encap-aws.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -328,8 +341,8 @@ steps:
         value: Calico
       - name: DATAPLANE
         value: CalicoNftables
-      - name: ENABLE_AUTO_HEP
-        value: "true"
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/xtables-aws.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: INSTALLER
@@ -359,8 +372,8 @@ steps:
         value: Calico
       - name: DATAPLANE
         value: CalicoBPF
-      - name: ENABLE_AUTO_HEP
-        value: "true"
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/bpf-encap.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: INSTALLER
@@ -397,6 +410,8 @@ steps:
     env:
       - name: DATAPLANE
         value: CalicoBPF
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/patch-verification/bpf-aws.yaml
       - name: INSTALLER
         value: operator
       - name: IP_FAMILY
