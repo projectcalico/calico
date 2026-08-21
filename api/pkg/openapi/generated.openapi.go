@@ -4060,7 +4060,7 @@ func schema_pkg_apis_projectcalico_v3_FelixConfigurationSpec(ref common.Referenc
 					},
 					"bpfAttachType": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `TCX` is used where available to enable easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available. [Default: TCX]",
+							Description: "BPFAttachType controls how are the BPF programs at the network interfaces attached. By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available. Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism instead of the netkit API, which is required before downgrading to a release without netkit support. [Default: Netkit]",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5681,7 +5681,7 @@ func schema_pkg_apis_projectcalico_v3_IPPoolSpec(ref common.ReferenceCallback) c
 					},
 					"blockSize": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6. The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than or equal to the size of the pool CIDR.",
+							Description: "The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6. The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller than or equal to the size of the pool CIDR.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

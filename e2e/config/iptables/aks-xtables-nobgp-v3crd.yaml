@@ -5,9 +5,35 @@
 # Selection scope comes from pipeline.yaml; this file adds only what this
 # lane's cluster shape rules out.
 
-extends: aks-xtables-nobgp.yaml
+extends: [pipeline.yaml, ../platform/aks.yaml]
 
 exclude:
   labels:
+    - label: Dataplane:BPF
+      reason: "not a BPF dataplane; maglev needs BPF and only self-skips on a missing external node, so it would fail rather than skip"
+    - label: ExternalNode
+      reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
+    - label: Feature:AutoHEPs
+      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
+    - label: Feature:Istio
+      reason: "Istio ambient policy enforcement is not configured on this lane"
+    - label: NoEncap
+      reason: "requires Calico-managed routing, but this cluster runs the Azure CNI"
+    - label: RequiresAWS
+      reason: "not an AWS lane; these specs need AWS VPC routing"
+    - label: RequiresBGP
+      reason: "Calico runs policy-only behind the Azure CNI, so BIRD is not running"
     - label: RequiresCalicoAPIServer
       reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses Azure IPAM"
+
+  namePatterns:
+    - group: "NodePort traffic is blocked between nodes by the AKS network security group"
+      patterns:
+        - 'scenario-7:'
+        - 'scenario-12:'
+
+    - group: "needs the multi-mode rapidclient server image, which is only side-loaded into kind and gcp-kubeadm clusters"
+      patterns:
+        - 'Packet.Size.Verification'

@@ -23,13 +23,10 @@ exclude:
       reason: "Calico runs policy-only behind the AWS VPC CNI, so BIRD is not running"
     - label: RequiresCalicoAPIServer
       reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses AWS VPC IPAM"
 
   namePatterns:
-    - group: "requires Calico IPAM, but this cluster uses AWS VPC IPAM"
-      patterns:
-        - 'IPAM.StrictAffinity'
-        - 'IPAM.GC'
-
     - group: "NodePort traffic is blocked by the EKS node security group"
       patterns:
         - 'scenario-7:'

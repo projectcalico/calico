@@ -296,10 +296,10 @@ func BPFAttachType() string {
 }
 
 // bpfProgPinDir returns the BPF program pin directory for the current
-// attach mode.  In netkit mode, workload programs are pinned under
-// NetkitPinDir; in TCX mode they use TcxPinDir.
+// attach mode.  Netkit-attached workload programs are pinned under
+// NetkitPinDir; TCX ones use TcxPinDir.
 func bpfProgPinDir() string {
-	if infrastructure.NetkitMode() {
+	if infrastructure.NetkitAttachMode() {
 		return bpfdefs.NetkitPinDir
 	}
 	return bpfdefs.TcxPinDir
@@ -952,10 +952,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				It("should recover if the BPF programs are removed", func() {
-					// A workload on a netkit device is netkit-attached whatever
-					// BPFAttachType asks for, so its programs are removed by
-					// unpinning the link, and it has no qdisc to delete.
-					tcAttached := BPFAttachType() == "tc" && !infrastructure.NetkitMode()
+					// Only legacy TC hangs the programs off a qdisc. Netkit- and
+					// TCX-attached workloads are removed by unpinning the link
+					// and have no qdisc to delete.
+					tcAttached := BPFAttachType() == "tc"
 
 					flapInterface := func() {
 						By("Flapping interface")

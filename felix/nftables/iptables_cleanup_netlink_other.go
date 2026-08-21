@@ -1,5 +1,5 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-Package validator implements common field and structure validation that is
-used to validate the API structures supplied on the client interface, and
-is also used internally to validate the information stored in the backend
-datastore.
-*/
-package v1
+//go:build !linux
+
+package nftables
+
+import "sigs.k8s.io/knftables"
+
+// readTablesViaNetlink reports no tables off Linux, where there is no nftables to clean up. The
+// netlink client we use for the real read doesn't build anywhere else.
+func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
+	return nil, nil
+}
