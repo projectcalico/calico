@@ -16,8 +16,10 @@ package networking
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os/exec"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -545,19 +547,63 @@ var _ = describe.CalicoDescribe(
 				framework.Failf("unsupported dest %q for external scenario", s.dest)
 			}
 
+			const (
+				probeTimeout    = 5 * time.Second
+				wgetMaxCode     = 8   // GNU wget only exits 0-8; anything above is not wget speaking.
+				sshKilledCode   = 124 // ExecTimeout's local `timeout` wrapper killed ssh.
+				cmdNotFoundCode = 127 // The remote shell could not find wget.
+			)
+
+			// probe makes exactly one connection attempt and reports wget's exit
+			// status. `-t 1` is essential: wget retries 20 times by default, which
+			// outlasts the ssh wrapper's own timeout, so a dropped-packet block and
+			// a stalled ssh would both surface as the wrapper killing the command.
+			// Omitting `-q` keeps wget's reason for failing in the log.
+			probe := func() (int, string) {
+				cmd := fmt.Sprintf("wget -O- -t 1 -T %d http://%s/clientip",
+					int(probeTimeout.Seconds()), targetAddr)
+				out, err := extNode.Exec("sh", "-c", cmd)
+				if err == nil {
+					return 0, out
+				}
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) {
+					return exitErr.ExitCode(), out
+				}
+				return -1, out
+			}
+
 			tryConnect := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				return err
+				code, out := probe()
+				if code != 0 {
+					return fmt.Errorf("expected connection to succeed, wget exited %d (output %q)", code, out)
+				}
+				return nil
 			}
 
 			tryConnectBlocked := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				if err != nil {
-					return nil // blocked as expected
+				code, out := probe()
+				switch {
+				case code == 0:
+					return fmt.Errorf("expected connection to be blocked but it succeeded (output %q)", out)
+				case code >= 1 && code <= wgetMaxCode:
+					// Only wget's own exit codes are evidence about policy: they mean
+					// wget ran to completion and the connection failed.
+					return nil
+				case code == sshKilledCode:
+					// The ssh wrapper killed the command, so this attempt carries no
+					// information about policy. Reporting it as a block would let an
+					// unenforced policy pass as enforced.
+					return fmt.Errorf("probe inconclusive: ssh was killed before wget returned, " +
+						"so a policy block cannot be distinguished from a stalled connection")
+				case code == cmdNotFoundCode:
+					return fmt.Errorf("probe inconclusive: wget is not installed on the external node")
+				default:
+					// ssh exits 255 on a transport failure; -1 means the command
+					// produced no exit status at all. Counting these as blocks would
+					// let an unreachable external node pass as an enforced policy.
+					return fmt.Errorf("probe inconclusive: probe transport failed (exit %d), not a wget result", code)
 				}
-				return fmt.Errorf("expected connection to be blocked but it succeeded")
 			}
 
 			By("Verifying baseline: external node can reach the server before any policy")
