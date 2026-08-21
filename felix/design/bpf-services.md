@@ -485,7 +485,13 @@ node-local clients coalesce onto one backend at any timeout value.
   long, must therefore cover **every** writer — including the CTLB's
   enforced UDP affinity, which has no `sessionAffinity` on the service
   to key off. An entry the syncer does not recognise is deleted on the
-  next sync, which silently un-pins a live client.
+  next sync, which silently un-pins a live client. There are two
+  frontend writers — `writeSvc()` and, for a `LoadBalancer` or
+  `ExternalIP` frontend with `loadBalancerSourceRanges`,
+  `writeLBSrcRangeSvcNATKeys()` — and both must register the frontend
+  with `registerStickyFrontend()`. The BPF programs key affinity
+  entries on the destination alone, so all of a service's source-range
+  frontends share the affinity key of its zero-source-range frontend.
 
 
 

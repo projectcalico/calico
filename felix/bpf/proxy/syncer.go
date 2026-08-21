@@ -1031,6 +1031,11 @@ func (s *Syncer) writeLBSrcRangeSvcNATKeys(svc k8sp.ServicePort, svcID uint32, c
 		return err
 	}
 
+	// The BPF programs key affinity entries on the destination only, so an entry
+	// created for one of the source-range frontends above has the same affinity
+	// key as the zero-source-range frontend.
+	s.registerStickyFrontend(key, svcID, svc)
+
 	if _, ok := s.bpfSvcs.Desired().Get(key); !ok {
 		// There is no zero cidr source range entry, we need to add a blackhole
 		// entry to make sure that packets not matching any of the source ranges
@@ -1073,16 +1078,24 @@ func (s *Syncer) writeSvc(svc Service, svcID uint32, count, local int, flags uin
 	}
 	s.bpfSvcs.Desired().Set(key, val)
 
-	// we must have written the backends by now so the map exists
-	if s.stickyEps[svcID] != nil {
-		affkey := key.AffinityKeyCopy()
-		s.stickySvcs[affkey] = stickyFrontend{
-			id:    svcID,
-			timeo: s.affinityCleanupTimeo(svc),
-		}
-	}
+	s.registerStickyFrontend(key, svcID, svc)
 
 	return nil
+}
+
+// registerStickyFrontend records that this frontend may hold affinity entries, so
+// that cleanupSticky() keeps them until they expire instead of reclaiming them as
+// orphans. Every writer of a frontend that carries a non-zero affinity timeout
+// must call this.
+func (s *Syncer) registerStickyFrontend(key nat.FrontendKeyInterface, svcID uint32, svc k8sp.ServicePort) {
+	// we must have written the backends by now so the map exists
+	if s.stickyEps[svcID] == nil {
+		return
+	}
+	s.stickySvcs[key.AffinityKeyCopy()] = stickyFrontend{
+		id:    svcID,
+		timeo: s.affinityCleanupTimeo(svc),
+	}
 }
 
 // affinityCleanupTimeo returns how long an affinity entry for this frontend may live
@@ -1096,7 +1109,7 @@ func (s *Syncer) writeSvc(svc Service, svcID uint32, count, local int, flags uin
 // from one socket reach one backend. Those entries expire after
 // ctlbUDPAffinityTimeo. We take whichever timeout is longer so that we never
 // delete an entry that either program still considers valid.
-func (s *Syncer) affinityCleanupTimeo(svc Service) time.Duration {
+func (s *Syncer) affinityCleanupTimeo(svc k8sp.ServicePort) time.Duration {
 	timeo := time.Duration(0)
 	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		timeo = time.Duration(svc.StickyMaxAgeSeconds()) * time.Second
