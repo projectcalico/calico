@@ -173,6 +173,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			&mock.DummyMap{},
 			NewRTCache(),
 			nil,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	} else {
@@ -190,6 +191,7 @@ func runBenchmarkServiceUpdate(b *testing.B, svcCnt, epCnt int, mockMaps bool, o
 			&mock.DummyMap{},
 			NewRTCache(),
 			nil,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 	}
