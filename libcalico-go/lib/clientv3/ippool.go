@@ -23,6 +23,8 @@ import (
 
 	apiv3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -109,11 +111,39 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	out, err := r.client.resources.Create(ctx, opts, apiv3.KindIPPool, res)
-	if out != nil {
-		return out.(*apiv3.IPPool), err
+	if out == nil {
+		return nil, err
 	}
-	return nil, err
+	pool, ok := out.(*apiv3.IPPool)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type %T returned when creating IPPool %s", out, res.Name)
+	}
+	if err != nil {
+		return pool, err
+	}
+	return r.markAllocatable(ctx, pool), nil
+}
 
+// markAllocatable records that the pool cleared the overlap check. Failure is not fatal, since an
+// unmarked pool stays usable until something overlaps it.
+func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool) *apiv3.IPPool {
+	marked := pool.DeepCopy()
+	if marked.Status == nil {
+		marked.Status = &apiv3.IPPoolStatus{}
+	}
+	meta.SetStatusCondition(&marked.Status.Conditions, metav1.Condition{
+		Type:    apiv3.IPPoolConditionAllocatable,
+		Status:  metav1.ConditionTrue,
+		Reason:  apiv3.IPPoolReasonOK,
+		Message: "IPPool is available for IP allocation.",
+	})
+
+	out, err := r.UpdateStatus(ctx, marked, options.SetOptions{})
+	if err != nil {
+		log.WithError(err).WithField("pool", pool.Name).Warn("Failed to mark new IPPool allocatable")
+		return pool
+	}
+	return out
 }
 
 // Update takes the representation of an IPPool and updates it. Returns the stored
