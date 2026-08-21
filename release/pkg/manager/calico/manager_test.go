@@ -14,7 +14,12 @@
 
 package calico
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
 
 func TestOwnerFromRemoteURL(t *testing.T) {
 	tests := []struct {
@@ -91,6 +96,27 @@ func TestOwnerFromRemoteURL(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("ownerFromRemoteURL(%q) = %q, want %q", tt.url, got, tt.want)
 			}
+		})
+	}
+}
+
+// The staging layout is the whole reason a release and a hashrelease differ:
+// ghr populates GitHub release assets from the top level of the upload dir and
+// does not recurse, while the hashrelease server serves the directory tree.
+func TestE2EStagingDir(t *testing.T) {
+	tests := []struct {
+		name          string
+		isHashRelease bool
+		want          string
+	}{
+		{name: "release stages flat for ghr", want: "out"},
+		{name: "hashrelease stages under files/e2e", isHashRelease: true, want: filepath.Join("out", "files", "e2e")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &CalicoManager{outputDir: "out", isHashRelease: tt.isHashRelease}
+			require.Equal(t, tt.want, r.e2eStagingDir())
 		})
 	}
 }
