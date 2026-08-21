@@ -100,6 +100,21 @@ func createGlobalNetworkPolicyTierAttr(verb string) k8sauth.Attributes {
 	}
 }
 
+// createGlobalNetworkPolicyBareWildcardAttr returns the expected attributes for a bare "*" wildcard
+// GlobalNetworkPolicy match.
+func createGlobalNetworkPolicyBareWildcardAttr(verb string) k8sauth.Attributes {
+	return k8sauth.AttributesRecord{
+		User:            testUser,
+		Verb:            verb,
+		APIGroup:        "projectcalico.org",
+		APIVersion:      "v3",
+		Resource:        "tier.globalnetworkpolicies",
+		Name:            "*",
+		ResourceRequest: true,
+		Path:            "/apis/projectcalico.org/v3/tier.globalnetworkpolicies/*",
+	}
+}
+
 // createNetworkPolicyAttr returns the expected RBAC attributes for a NetworkPolicy.
 func createNetworkPolicyAttr(verb string) k8sauth.Attributes {
 	ar := k8sauth.AttributesRecord{
@@ -132,6 +147,22 @@ func createNetworkPolicyTierAttr(verb string) k8sauth.Attributes {
 		Name:            "test-tier.*",
 		ResourceRequest: true,
 		Path:            "/apis/projectcalico.org/v3/namespaces/test-namespace/tier.networkpolicies/test-tier.*",
+	}
+}
+
+// createNetworkPolicyBareWildcardAttr returns the expected attributes for a bare "*" wildcard
+// NetworkPolicy match.
+func createNetworkPolicyBareWildcardAttr(verb string) k8sauth.Attributes {
+	return k8sauth.AttributesRecord{
+		User:            testUser,
+		Verb:            verb,
+		Namespace:       "test-namespace",
+		APIGroup:        "projectcalico.org",
+		APIVersion:      "v3",
+		Resource:        "tier.networkpolicies",
+		Name:            "*",
+		ResourceRequest: true,
+		Path:            "/apis/projectcalico.org/v3/namespaces/test-namespace/tier.networkpolicies/*",
 	}
 }
 
@@ -207,13 +238,16 @@ func createGlobalNetworkPolicyError(verb string, cannotGetTier bool) string {
 
 func TestNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):             k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):               k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):             k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
@@ -242,13 +276,16 @@ func TestNetworkPolicyNoTierGet(t *testing.T) {
 
 func TestGlobalNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                         k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):             k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):               k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):                k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):            k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
@@ -277,13 +314,16 @@ func TestGlobalNetworkPolicyNoTierGet(t *testing.T) {
 
 func TestNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):               k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
@@ -306,13 +346,16 @@ func TestNetworkPolicyTierWildcard(t *testing.T) {
 
 func TestGlobalNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("delete")): k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):               k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):           k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("delete")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("delete")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
@@ -335,13 +378,16 @@ func TestGlobalNetworkPolicyTierWildcard(t *testing.T) {
 
 func TestNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):             k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):               k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("get")):                k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
@@ -364,13 +410,16 @@ func TestNetworkPolicyByName(t *testing.T) {
 
 func TestGlobalNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):             k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):               k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):                k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
@@ -393,13 +442,16 @@ func TestGlobalNetworkPolicyByName(t *testing.T) {
 
 func TestNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                           k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyAttr("delete")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")): k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyAttr("create")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("list")):               k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyAttr("delete")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createNetworkPolicyContext("create"), "test-tier.test-np", "test-tier",
@@ -428,13 +480,16 @@ func TestNetworkPolicyDenied(t *testing.T) {
 
 func TestGlobalNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):     k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):   k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):        k8sauth.DecisionDeny,
-		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):               k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):                k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		createGlobalNetworkPolicyContext("create"), "test-tier.test-gnp", "test-tier",
@@ -541,11 +596,13 @@ func makeNetworkPolicyError(verb, policyName string, cannotGetTier bool) string 
 // tier.* wildcard, which is the only way to restrict creates to a tier.
 func TestNewStyleNetworkPolicyByName(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                              k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):  k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("get")):       k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNetworkPolicyAttr("list", "test-np")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("list")):      k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                 k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):     k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):          k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):  k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("list", "test-np")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
@@ -564,11 +621,13 @@ func TestNewStyleNetworkPolicyByName(t *testing.T) {
 // for bare (new-style) policy names, same as for old-style names.
 func TestNewStyleNetworkPolicyTierWildcard(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNetworkPolicyAttr("create", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("create")):      k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("create", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		makeNetworkPolicyContext("create", "test-np"), "test-np", "test-tier",
@@ -587,11 +646,13 @@ func TestNewStyleNetworkPolicyTierWildcard(t *testing.T) {
 // is correctly denied when neither the exact name nor the tier wildcard match.
 func TestNewStyleNetworkPolicyDenied(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):    k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("get")):         k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionDeny,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionDeny,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionDeny,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
@@ -615,11 +676,13 @@ func TestNewStyleNetworkPolicyDenied(t *testing.T) {
 // and wildcard match would both allow.
 func TestNewStyleNetworkPolicyNoTierGet(t *testing.T) {
 	ta := &testAuth{t, map[string]k8sauth.Decision{
-		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionDeny,
-		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):    k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("get")):         k8sauth.DecisionAllow,
-		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")): k8sauth.DecisionAllow,
-		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):      k8sauth.DecisionAllow,
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):       k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):            k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionAllow,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionAllow,
 	}}
 	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
 		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
@@ -640,6 +703,7 @@ func TestNameDisambiguation(t *testing.T) {
 		getAttributesMapkey(getTierAttr):                                       k8sauth.DecisionAllow,
 		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):           k8sauth.DecisionAllow,
 		getAttributesMapkey(createNetworkPolicyTierAttr("get")):                k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):        k8sauth.DecisionDeny,
 		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-tier.test-np")): k8sauth.DecisionDeny,
 	}}
 
@@ -655,5 +719,86 @@ func TestNameDisambiguation(t *testing.T) {
 		makeNetworkPolicyContext("get", "test-tier.test-np"), "test-tier.test-np", "test-tier",
 	); err == nil {
 		t.Fatalf("No error returned getting old-style NetworkPolicy when only bare name is permitted")
+	}
+}
+
+// TestBareWildcardNetworkPolicy verifies that the bare "*" resource name grants
+// access to any policy in the tier without naming the tier in resourceNames.
+func TestBareWildcardNetworkPolicy(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                                   k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):       k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("list", "test-np")):      k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("create", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionAllow,
+		getAttributesMapkey(makeNetworkPolicyAttr("delete", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("delete")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("delete")): k8sauth.DecisionAllow,
+	}}
+	for _, verb := range []string{"get", "create", "delete"} {
+		if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+			makeNetworkPolicyContext(verb, "test-np"), "test-np", "test-tier",
+		); err != nil {
+			t.Fatalf("Error returned on %s of NetworkPolicy when the bare wildcard permits: %v", verb, err)
+		}
+	}
+
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNetworkPolicyContext("list", "test-np"), "", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned listing NetworkPolicy when the bare wildcard permits: %v", err)
+	}
+}
+
+// TestBareWildcardGlobalNetworkPolicy verifies the bare "*" resource name for
+// cluster-scoped policies.
+func TestBareWildcardGlobalNetworkPolicy(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                                         k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("get")):                k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("get")):            k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("get")):    k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("list")):               k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("list")):           k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("list")):   k8sauth.DecisionAllow,
+		getAttributesMapkey(createGlobalNetworkPolicyAttr("create")):             k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyTierAttr("create")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createGlobalNetworkPolicyBareWildcardAttr("create")): k8sauth.DecisionAllow,
+	}}
+	for _, verb := range []string{"get", "create"} {
+		if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+			createGlobalNetworkPolicyContext(verb), "test-tier.test-gnp", "test-tier",
+		); err != nil {
+			t.Fatalf("Error returned on %s of GlobalNetworkPolicy when the bare wildcard permits: %v", verb, err)
+		}
+	}
+
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		createGlobalNetworkPolicyContext("list"), "", "test-tier",
+	); err != nil {
+		t.Fatalf("Error returned listing GlobalNetworkPolicy when the bare wildcard permits: %v", err)
+	}
+}
+
+// TestBareWildcardNoTierGet verifies that the bare "*" resource name is still
+// scoped by the tier GET check.
+func TestBareWildcardNoTierGet(t *testing.T) {
+	ta := &testAuth{t, map[string]k8sauth.Decision{
+		getAttributesMapkey(getTierAttr):                                k8sauth.DecisionDeny,
+		getAttributesMapkey(makeNetworkPolicyAttr("get", "test-np")):    k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyTierAttr("get")):         k8sauth.DecisionDeny,
+		getAttributesMapkey(createNetworkPolicyBareWildcardAttr("get")): k8sauth.DecisionAllow,
+	}}
+	if err := authorizer.NewTierAuthorizer(ta).AuthorizeTierOperation(
+		makeNetworkPolicyContext("get", "test-np"), "test-np", "test-tier",
+	); err == nil {
+		t.Fatalf("No error returned getting NetworkPolicy with the bare wildcard when tier GET denied")
+	} else if err.Error() != makeNetworkPolicyError("get", "test-np", true) {
+		t.Fatalf("Incorrect error message: %v", err)
 	}
 }
