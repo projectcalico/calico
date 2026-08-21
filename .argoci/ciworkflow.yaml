@@ -20,7 +20,7 @@
 # gated-out steps never reach it, so day to day this stays small. A PR touching
 # metadata.mk or lib.Makefile fires nearly everything — measure the expanded
 # object on such a change before adding many more modules:
-#   hack/argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
+#   argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
 version: condensed
 generateName: calico-
 
@@ -75,11 +75,19 @@ includes:
   # Patterns are regexes matched with an unanchored substring match — anchor
   # every one with ^ or it fires on unrelated paths.
   #
-  # Migrated from blocks/20-lib.yml. Semaphore's trigger was change_in(['/lib/'])
-  # only; matched here exactly so the two can be compared A/B. Sibling blocks
-  # also list metadata.mk and lib.Makefile, and lib arguably should too — logged
-  # as a follow-up rather than changed during the port.
+  # Every module is gated on its component's paths AND on its own file, so
+  # editing a module retests the thing it builds. Semaphore expressed that as
+  # `pipeline_file: 'track'`. Match the module's own path exactly — a broad
+  # `^\.argoci/` would fire every component on any CI edit.
+  #
+  # lib: migrated from blocks/20-lib.yml, whose trigger was change_in(['/lib/'])
+  # with `pipeline_file: 'ignore'`. The component paths are matched exactly so
+  # the two systems can be compared A/B; the module's own path is added because
+  # a module IS the job definition here, with no generation step to catch a
+  # broken one. Sibling Semaphore blocks also list metadata.mk and lib.Makefile,
+  # and lib arguably should too — logged as a follow-up, not changed in the port.
   - path: .argoci/modules/lib.yaml
     changes:
       in:
         - ^lib/
+        - ^\.argoci/modules/lib\.yaml$
