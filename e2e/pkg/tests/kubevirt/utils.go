@@ -31,6 +31,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -831,9 +832,9 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	return ""
 }
 
-// isMockVirtDeployed returns true if the cluster is running MockVirt (simulated
-// KubeVirt). Detection checks the KubeVirt CR's simulationMode field, which the
-// MockVirt deploy script patches to true.
+// isMockVirtDeployed reports whether the cluster runs MockVirt, which the deploy
+// script marks by patching simulationMode on the KubeVirt CR. A cluster with no
+// KubeVirt reports false rather than failing.
 func isMockVirtDeployed(f *framework.Framework) bool {
 	GinkgoHelper()
 	dynClient, err := dynamic.NewForConfig(f.ClientConfig())
@@ -844,6 +845,9 @@ func isMockVirtDeployed(f *framework.Framework) bool {
 		Resource: "kubevirts",
 	}
 	obj, err := dynClient.Resource(kvResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+		return false
+	}
 	Expect(err).NotTo(HaveOccurred(), "failed to get KubeVirt CR kubevirt/kubevirt")
 	simMode, found, err := unstructured.NestedBool(obj.Object,
 		"spec", "configuration", "developerConfiguration", "simulationMode")

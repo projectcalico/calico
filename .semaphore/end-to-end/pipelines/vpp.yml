@@ -37,7 +37,7 @@ global_job_config:
     - name: DATAPLANE
       value: CalicoVPP
     - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|Feature:Wireguard)
+      value: --ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|Feature:Wireguard|Feature:KubeVirt)
     - name: USE_LATEST_RELEASE
       value: "false"
     - name: ENABLE_EXTERNAL_NODE

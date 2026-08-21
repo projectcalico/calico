@@ -170,17 +170,6 @@
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should assign static IP via annotation and preserve it across migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across VMI recreation (reboot)
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP across pod recreation
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should preserve VM IP address across live migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should promote target pod to active IPAM owner after migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should release IPAM handle when VM is deleted
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge eBGP routes after live migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should converge iBGP routes after live migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should enforce NetworkPolicy after live migration
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresMockVirt] [Category:Networking] KubeVirt live migration (MockVirt) should not have /32 host route on target node after a migration timeout
-[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should maintain TCP connection over iBGP across two consecutive live migrations
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should correctly isolate namespaces [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should provide a default allow [Conformance]
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] [RunsOnWindows] Calico NetworkPolicy should support a 'deny egress' policy [Conformance]
