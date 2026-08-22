@@ -27,7 +27,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	. "github.com/projectcalico/calico/felix/rules"
 )
@@ -2100,11 +2100,11 @@ var _ = Describe("Flowtable offload", func() {
 
 	noOffloadSetName := ipSetName(IPSetIDNoFlowOffload, 4)
 	offloadRule := generictables.Rule{
-		Match: nftables.Match().
+		Match: nftrender.Match().
 			ConntrackState("RELATED,ESTABLISHED").
 			NotSourceIPSet(noOffloadSetName).
 			NotDestIPSet(noOffloadSetName),
-		Action:  nftables.FlowOffloadAction{},
+		Action:  nftrender.FlowOffloadAction{},
 		Comment: []string{"Offload established Calico flows."},
 	}
 
@@ -2143,7 +2143,7 @@ func indexOfRuleWithAction(rules []generictables.Rule, action generictables.Acti
 
 func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
 	for i, r := range rules {
-		if jump, ok := r.Action.(*nftables.JumpAction); ok && jump.Target == chainName {
+		if jump, ok := r.Action.(*nftrender.JumpAction); ok && jump.Target == chainName {
 			return i
 		}
 	}
