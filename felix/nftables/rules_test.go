@@ -23,18 +23,19 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 )
 
 var (
 	rules1 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
+		{Match: nftrender.Match().Protocol("tcp"), Action: nftrender.JumpAction{Target: "biff"}},
 	}
 	rules2 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
+		{Match: nftrender.Match().Protocol("tcp"), Action: nftrender.JumpAction{Target: "boff"}},
 	}
 	rules3 = []generictables.Rule{
-		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "biff"}},
-		{Match: nftMatch{clauses: []string{"foobar baz"}}, Action: JumpAction{Target: "boff"}},
+		{Match: nftrender.Match().Protocol("tcp"), Action: nftrender.JumpAction{Target: "biff"}},
+		{Match: nftrender.Match().Protocol("tcp"), Action: nftrender.JumpAction{Target: "boff"}},
 	}
 )
 
@@ -69,8 +70,8 @@ var _ = Describe("Rule hashing tests", func() {
 var _ = Describe("rule comments", func() {
 	Context("Rule with multiple comments", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{clauses: []string{"foobar baz"}},
-			Action:  JumpAction{Target: "biff"},
+			Match:   nftrender.Match().Protocol("tcp"),
+			Action:  nftrender.JumpAction{Target: "biff"},
 			Comment: []string{"boz", "fizz"},
 		}
 
@@ -83,8 +84,8 @@ var _ = Describe("rule comments", func() {
 
 	Context("Rule with comment with newlines", func() {
 		rule := generictables.Rule{
-			Match:  nftMatch{clauses: []string{"foobar baz"}},
-			Action: JumpAction{Target: "biff"},
+			Match:  nftrender.Match().Protocol("tcp"),
+			Action: nftrender.JumpAction{Target: "biff"},
 			Comment: []string{`boz
 fizz`},
 		}
@@ -98,8 +99,8 @@ fizz`},
 
 	Context("Rule with comment longer than 128 characters", func() {
 		rule := generictables.Rule{
-			Match:   nftMatch{clauses: []string{"foobar baz"}},
-			Action:  JumpAction{Target: "biff"},
+			Match:   nftrender.Match().Protocol("tcp"),
+			Action:  nftrender.JumpAction{Target: "biff"},
 			Comment: []string{strings.Repeat("a", 129)},
 		}
 
