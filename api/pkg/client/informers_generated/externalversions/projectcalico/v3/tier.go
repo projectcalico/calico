@@ -20,11 +20,39 @@ import (
 )
 
 // TierInformer provides access to a shared informer and lister for
-// Tiers.
+// Tiers. Prefer using the type-safe variant (see [TypedTierInformer]).
 type TierInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.TierLister
 }
+
+// TypedTierInformer provides access to a shared informer and lister for
+// Tiers, including the type-safe TypedInformer variant.
+// It is a superset of TierInformer.
+type TypedTierInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() TierIndexInformer
+	Lister() projectcalicov3.TierLister
+}
+
+// TierIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type TierIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.Tier]
+
+// TierHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for Tier.
+type TierHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.Tier]
+
+// TierDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for Tier.
+type TierDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.Tier]
+
+// TierFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for Tier.
+type TierFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.Tier]
+
+// TierIndexers is a specialization of [cache.TypedIndexers] for Tier.
+type TierIndexers = cache.TypedIndexers[*apisprojectcalicov3.Tier]
+
+// DeletedTier is a specialization of [cache.DeletedObject] for Tier.
+type DeletedTier = cache.DeletedObject[*apisprojectcalicov3.Tier]
 
 type tierInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type tierInformer struct {
 // NewTierInformer constructs a new informer for Tier type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedTierInformer]).
 func NewTierInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedTierInformer constructs a new informer for Tier type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedTierInformer(client clientset.Interface, resyncPeriod time.Duration, indexers TierIndexers) TierIndexInformer {
+	return NewTypedTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredTierInformer constructs a new informer for Tier type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredTierInformer]).
 func NewFilteredTierInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredTierInformer constructs a new informer for Tier type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredTierInformer(client clientset.Interface, resyncPeriod time.Duration, indexers TierIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) TierIndexInformer {
+	return NewTypedTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewTierInformerWithOptions constructs a new informer for Tier type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedTierInformerWithOptions]).
 func NewTierInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedTierInformerWithOptions(client, options)
+}
+
+// NewTypedTierInformerWithOptions constructs a new informer for Tier type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedTierInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) TierIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "tiers"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Tier](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewTierInformerWithOptions(client clientset.Interface, options internalinte
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *tierInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedTierInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *tierInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.Tier{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *tierInformer) TypedInformer() TierIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Tier](f.factory.InformerFor(&apisprojectcalicov3.Tier{}, f.defaultInformer))
 }
 
 func (f *tierInformer) Lister() projectcalicov3.TierLister {
 	return projectcalicov3.NewTierLister(f.Informer().GetIndexer())
+}
+
+// ToTypedTierInformer converts an untyped informer into a TypedTierInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Tier. If that is not the case, calling type-safe methods of the returned
+// TypedTierInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedTierInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedTierInformer(informer TierInformer) TypedTierInformer {
+	if informer, ok := informer.(TypedTierInformer); ok {
+		return informer
+	}
+	return &tierTypedInformerAdapter{informer}
+}
+
+type tierTypedInformerAdapter struct {
+	TierInformer
+}
+
+func (a *tierTypedInformerAdapter) TypedInformer() TierIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Tier](a.Informer())
+}
+
+// ToTierIndexInformer converts an untyped informer into a TierIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *Tier. If that is not the case, calling type-safe methods of the returned
+// TierIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a TierIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTierIndexInformer(informer cache.SharedIndexInformer) TierIndexInformer {
+	if informer, ok := informer.(TierIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.Tier](informer)
 }
