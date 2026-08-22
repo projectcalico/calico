@@ -201,6 +201,36 @@ var failsafeTests = []failsafeTest{
 		Allowed:       false,
 		FromLocalHost: true,
 	},
+	{
+		Description:  "Outbound DHCP request on failsafe port is allowed",
+		Rules:        &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(0, 0, 0, 0),
+			DstIP:    fsafeDstIP,
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound:     true,
+		Allowed:      true,
+	},
+	{
+		Description:  "Inbound DHCP broadcast response on failsafe port is allowed",
+		Rules:        &denyAllRulesHost,
+		IPHeaderIPv4: &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    srcIP,
+			DstIP:    net.IPv4(255, 255, 255, 255),
+			Protocol: layers.IPProtocolUDP,
+		},
+		Outbound:     false,
+		Allowed:      true,
+	},
 }
 
 func TestFailsafes(t *testing.T) {
