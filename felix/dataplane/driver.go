@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/felix/markbits"
 	"github.com/projectcalico/calico/felix/nfnetlink"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/rules"
 	"github.com/projectcalico/calico/felix/wireguard"
 	"github.com/projectcalico/calico/libcalico-go/lib/health"
@@ -579,7 +580,7 @@ func replaceWildcards(nftEnabled bool, s []string) []string {
 func replaceWildcard(nftEnabled bool, s string) string {
 	// Need to replace the "+" wildcard with "*" for nftables.
 	if nftEnabled && strings.HasSuffix(s, iptables.Wildcard) {
-		return s[:len(s)-1] + nftables.Wildcard
+		return s[:len(s)-1] + nftrender.Wildcard
 	}
 	return s
 }
