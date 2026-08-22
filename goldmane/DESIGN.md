@@ -85,8 +85,36 @@ Felix (per-node) --gRPC--> FlowCollector --> Goldmane main loop --> BucketRing
   upstream endpoint over HTTPS with mTLS. Tracks progress in a
   `ConfigMap` (`flow-emitter-state` in `calico-system`).
 
+### Source and destination IP sets
+
+Flows are aggregated by `FlowKey`, which deliberately excludes IP addresses:
+a single key aggregates traffic across many connections, nodes, and time
+intervals. Putting individual IPs in the key would explode key cardinality
+(e.g. a large Deployment talking to another would create O(n) or O(n²) flows
+instead of one). Instead, the distinct source and destination IPs observed for
+a flow are carried as **bounded sets on the `Flow` message** (`source_ips`,
+`dest_ips`), not on the `FlowKey`.
+
+- Felix collects the IP sets from the underlying connection tuples before the
+  aggregation level zeroes the per-flow tuple, and sends them on each
+  `FlowUpdate`.
+- Goldmane merges these sets as flows with the same key are combined across
+  nodes and time windows (`storage.Window` / `DiachronicFlow`), deduplicating
+  and **truncating to `storage.MaxIPsPerFlow` (100) entries** to cap memory and
+  wire size. Once the cap is reached the sets are best-effort, not exhaustive.
+- The sets are surfaced to consumers via the `Flows` API and the Whisker
+  backend (`source_ips` / `dest_ips` JSON fields).
+
+Source/destination *ports* are intentionally not included: they are typically
+ephemeral and high-volume, which would inflate the sets without adding much
+value. This can be revisited if a compelling use case arises.
+
 ### Review notes
 
+- The IP sets must never move into the `FlowKey` — doing so reintroduces the
+  cardinality explosion described above. Keep them on `Flow` / `Window`.
+- The truncation cap (`MaxIPsPerFlow`) bounds memory; changing it affects the
+  per-flow footprint at scale. Benchmark before raising it.
 - A change to any of the five concepts above — bucket layout,
   rollover cadence, emit semantics, sink reload protocol — is a
   protocol-level change. Callers (Felix's flow reporter, Whisker,

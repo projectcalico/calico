@@ -141,11 +141,17 @@ func (k *FlowKey) DestServicePort() int64 {
 
 // This struct should be an exact copy of the proto.Flow structure, but without the private fields.
 type Flow struct {
-	Key                     *FlowKey
-	StartTime               int64
-	EndTime                 int64
-	SourceLabels            unique.Handle[string]
-	DestLabels              unique.Handle[string]
+	Key          *FlowKey
+	StartTime    int64
+	EndTime      int64
+	SourceLabels unique.Handle[string]
+	DestLabels   unique.Handle[string]
+	// SourceIps and DestIps hold the bounded, best-effort sets of source and destination IP
+	// addresses observed for the connections aggregated into this Flow. They are not part of the
+	// FlowKey: a single key aggregates many connections (and across nodes/time), so the IPs are
+	// stored as sets on the Flow to avoid exploding key cardinality. See goldmane/DESIGN.md.
+	SourceIps               []string
+	DestIps                 []string
 	PacketsIn               int64
 	PacketsOut              int64
 	BytesIn                 int64
@@ -201,6 +207,8 @@ func ProtoToFlow(p *proto.Flow) *Flow {
 		EndTime:                 p.EndTime,
 		SourceLabels:            toHandles(p.SourceLabels),
 		DestLabels:              toHandles(p.DestLabels),
+		SourceIps:               p.SourceIps,
+		DestIps:                 p.DestIps,
 		PacketsIn:               p.PacketsIn,
 		PacketsOut:              p.PacketsOut,
 		BytesIn:                 p.BytesIn,
@@ -276,6 +284,8 @@ func FlowIntoProto(f *Flow, pf *proto.Flow) {
 	pf.EndTime = f.EndTime
 	pf.SourceLabels = fromHandles(f.SourceLabels)
 	pf.DestLabels = fromHandles(f.DestLabels)
+	pf.SourceIps = f.SourceIps
+	pf.DestIps = f.DestIps
 	pf.PacketsIn = f.PacketsIn
 	pf.PacketsOut = f.PacketsOut
 	pf.BytesIn = f.BytesIn
@@ -325,6 +335,8 @@ func FlowToProto(f *Flow) *proto.Flow {
 		EndTime:                 f.EndTime,
 		SourceLabels:            fromHandles(f.SourceLabels),
 		DestLabels:              fromHandles(f.DestLabels),
+		SourceIps:               f.SourceIps,
+		DestIps:                 f.DestIps,
 		PacketsIn:               f.PacketsIn,
 		PacketsOut:              f.PacketsOut,
 		BytesIn:                 f.BytesIn,
