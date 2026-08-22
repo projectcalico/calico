@@ -180,35 +180,42 @@ func WriteNodeConfig(nodeName string) {
 	}
 }
 
-// Set Kubernetes NodeNetworkUnavailable to false when starting
+// Reason/message pairs for the NetworkUnavailable condition. The condition surfaces in
+// `kubectl describe node`, so the message needs to reflect why Calico set it — startup,
+// shutdown, and runtime health failures are all distinct situations.
+const (
+	NetworkReadyReason   = "CalicoIsUp"
+	NetworkReadyMessage  = "Calico is running on this node"
+	NetworkDownReason    = "CalicoIsDown"
+	NetworkDownShutdown  = "Calico is shutting down on this node"
+	NetworkDownUnhealthy = "Calico node health checks are failing on this node"
+)
+
+// SetNodeNetworkUnavailableCondition sets the Kubernetes NetworkUnavailable node condition to
+// value, using the caller-supplied reason and message so the condition describes the actual
+// situation (startup, shutdown, or a runtime health failure).
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
 func SetNodeNetworkUnavailableCondition(
 	clientset kubernetes.Clientset,
 	nodeName string,
 	value bool,
+	reason string,
+	message string,
 	timeout time.Duration,
 ) error {
 	log.Infof("Setting NetworkUnavailable to %t", value)
 
-	var condition kapiv1.NodeCondition
+	status := kapiv1.ConditionFalse
 	if value {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionTrue,
-			Reason:             "CalicoIsDown",
-			Message:            "Calico is shutting down on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
-	} else {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionFalse,
-			Reason:             "CalicoIsUp",
-			Message:            "Calico is running on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
+		status = kapiv1.ConditionTrue
+	}
+	condition := kapiv1.NodeCondition{
+		Type:               kapiv1.NodeNetworkUnavailable,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+		LastHeartbeatTime:  metav1.Now(),
 	}
 
 	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})
@@ -230,6 +237,69 @@ func SetNodeNetworkUnavailableCondition(
 				// Success!
 				return nil
 			}
+		}
+	}
+}
+
+// NetworkReadyTaintEnabled reports whether the operator has asked us to manage the network-ready taint.
+func NetworkReadyTaintEnabled() bool {
+	return os.Getenv(names.NetworkReadyTaintEnvVar) == "true"
+}
+
+// SetNodeNetworkReadyTaint adds (present=true) or removes (present=false) the network-ready taint on
+// the given node. It retries until timeout to ride out transient API errors during startup.
+func SetNodeNetworkReadyTaint(
+	clientset kubernetes.Clientset,
+	nodeName string,
+	present bool,
+	timeout time.Duration,
+) error {
+	to := time.After(timeout)
+	var lastErr error
+	for {
+		select {
+		case <-to:
+			return fmt.Errorf("timed out updating network-ready taint, last error was: %w", lastErr)
+		default:
+			node, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+			if err != nil {
+				lastErr = err
+				log.WithError(err).Warn("Failed to get node for taint update; will retry")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			hasTaint := false
+			var kept []kapiv1.Taint
+			for _, t := range node.Spec.Taints {
+				if t.Key == names.NetworkReadyTaintKey {
+					hasTaint = true
+					continue
+				}
+				kept = append(kept, t)
+			}
+			if hasTaint == present {
+				return nil
+			}
+
+			if present {
+				node.Spec.Taints = append(node.Spec.Taints, kapiv1.Taint{
+					Key:    names.NetworkReadyTaintKey,
+					Effect: kapiv1.TaintEffectNoSchedule,
+				})
+			} else {
+				node.Spec.Taints = kept
+			}
+
+			_, err = clientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
+			if err != nil {
+				lastErr = err
+				log.WithError(err).Warn("Failed to update network-ready taint; will retry")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			log.WithFields(log.Fields{"node": nodeName, "present": present}).Info("Updated network-ready taint")
+			return nil
 		}
 	}
 }
