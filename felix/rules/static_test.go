@@ -2150,6 +2150,172 @@ func indexOfJumpTo(rules []generictables.Rule, chainName string) int {
 	return -1
 }
 
+var _ = Describe("Static with connection transition logging", func() {
+	var rr *DefaultRuleRenderer
+	var conf Config
+
+	const connStateLogMark = uint32(0x100000)
+
+	BeforeEach(func() {
+		conf = Config{
+			WorkloadIfacePrefixes:    []string{"cali"},
+			IPSetConfigV4:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+			IPSetConfigV6:            ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+			MarkAccept:               0x10,
+			MarkPass:                 0x20,
+			MarkScratch0:             0x40,
+			MarkScratch1:             0x80,
+			MarkDrop:                 0x200,
+			MarkEndpoint:             0xff000,
+			MarkNonCaliEndpoint:      0x1000,
+			LogConnectionTransitions: true,
+			MarkConnStateLog:         connStateLogMark,
+		}
+	})
+
+	JustBeforeEach(func() {
+		rr = NewRenderer(conf, false).(*DefaultRuleRenderer)
+	})
+
+	clearMarkAction := iptables.SetConnMarkAction{Mark: 0, Mask: connStateLogMark}
+
+	expLogConnChain := func(icmpProto string) *generictables.Chain {
+		return &generictables.Chain{
+			Name: "cali-log-conn",
+			Rules: []generictables.Rule{
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: iptables.LogAction{Prefix: "calico-response-rst"},
+				},
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match().TCPFlagsSet("RST"),
+					Action: iptables.ReturnAction{},
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: iptables.LogAction{Prefix: "calico-response-icmp-err"},
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match().Protocol(icmpProto).ConntrackState("RELATED"),
+					Action: iptables.ReturnAction{},
+				},
+				{
+					Match:  iptables.Match(),
+					Action: iptables.LogAction{Prefix: "calico-response-est"},
+				},
+				{
+					Match:  iptables.Match(),
+					Action: clearMarkAction,
+				},
+				{
+					Match:  iptables.Match(),
+					Action: iptables.ReturnAction{},
+				},
+			},
+		}
+	}
+
+	It("should include the cali-log-conn chain in the filter table", func() {
+		Expect(findChain(rr.StaticFilterTableChains(4), "cali-log-conn")).To(Equal(expLogConnChain("icmp")))
+		Expect(findChain(rr.StaticFilterTableChains(6), "cali-log-conn")).To(Equal(expLogConnChain("ipv6-icmp")))
+	})
+
+	It("should include the cali-log-conn chain in the mangle table", func() {
+		Expect(findChain(rr.StaticMangleTableChains(4), "cali-log-conn")).To(Equal(expLogConnChain("icmp")))
+		Expect(findChain(rr.StaticMangleTableChains(6), "cali-log-conn")).To(Equal(expLogConnChain("ipv6-icmp")))
+	})
+
+	It("should put the connection state log check at the top of cali-OUTPUT", func() {
+		for _, ipVersion := range []uint8{4, 6} {
+			chain := findChain(rr.StaticFilterTableChains(ipVersion), "cali-OUTPUT")
+			Expect(chain).NotTo(BeNil())
+			Expect(chain.Rules[0]).To(Equal(generictables.Rule{
+				Match: iptables.Match().
+					ConnMarkMatchesWithMask(connStateLogMark, connStateLogMark).
+					ConntrackState("RELATED,ESTABLISHED"),
+				Action: iptables.JumpAction{Target: "cali-log-conn"},
+			}))
+		}
+	})
+
+	Describe("with a log action rate limit", func() {
+		BeforeEach(func() {
+			conf.LogActionRateLimit = "50/minute"
+			conf.LogActionRateLimitBurst = 10
+		})
+
+		It("should rate-limit the LOG rules but not the connmark-clear rules", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			Expect(chain.Rules).To(HaveLen(9))
+			for i, rule := range chain.Rules {
+				if _, ok := rule.Action.(iptables.LogAction); ok {
+					Expect(rule.Match.Render()).To(ContainSubstring("-m limit --limit 50/minute --limit-burst 10"),
+						"expected LOG rule %d to be rate limited", i)
+				} else {
+					Expect(rule.Match.Render()).NotTo(ContainSubstring("-m limit"),
+						"expected non-LOG rule %d not to be rate limited", i)
+				}
+			}
+		})
+	})
+
+	Describe("with a custom prefix containing specifiers", func() {
+		BeforeEach(func() {
+			conf.LogPrefix = "unrelated"
+			conf.LogConnectionTransitionsPrefix = "acme-%n"
+		})
+
+		It("should use the prefix verbatim, ignoring LogPrefix and rendering specifiers literally", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			Expect(chain.Rules[0].Action).To(Equal(iptables.LogAction{Prefix: "acme-%n-rst"}))
+		})
+	})
+
+	Describe("with a long prefix", func() {
+		BeforeEach(func() {
+			conf.LogConnectionTransitionsPrefix = "abcdefghijklmnopqrstuvwxyz0123" // 30 characters.
+		})
+
+		It("should truncate the base so the suffix and trailing colon-space fit iptables' 29 character limit", func() {
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
+			Expect(chain).NotTo(BeNil())
+			// The Log action appends ": ", so prefix+suffix must fit in 27 characters.
+			Expect(chain.Rules[0].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-rst"}))
+			Expect(chain.Rules[3].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqr-icmp-err"}))
+			Expect(chain.Rules[6].Action).To(Equal(iptables.LogAction{Prefix: "abcdefghijklmnopqrstuvw-est"}))
+		})
+	})
+
+	Describe("with the feature disabled", func() {
+		BeforeEach(func() {
+			conf.LogConnectionTransitions = false
+			conf.MarkConnStateLog = 0
+		})
+
+		It("should not render the chain or the cali-OUTPUT check rule", func() {
+			Expect(findChain(rr.StaticFilterTableChains(4), "cali-log-conn")).To(BeNil())
+			Expect(findChain(rr.StaticMangleTableChains(4), "cali-log-conn")).To(BeNil())
+			chain := findChain(rr.StaticFilterTableChains(4), "cali-OUTPUT")
+			Expect(chain).NotTo(BeNil())
+			for _, rule := range chain.Rules {
+				if jump, ok := rule.Action.(iptables.JumpAction); ok {
+					Expect(jump.Target).NotTo(Equal("cali-log-conn"))
+				}
+			}
+		})
+	})
+})
+
 func findChain(chains []*generictables.Chain, name string) *generictables.Chain {
 	for _, chain := range chains {
 		if chain.Name == name {

@@ -44,6 +44,16 @@ var _ = Describe("MatchBuilder failure cases", func() {
 			Match().MarkMatchesWithMask(0x0, 0x0)
 		}).To(Panic())
 	})
+	It("should panic if ConnMarkMatchesWithMask is passed an invalid mark", func() {
+		Expect(func() {
+			Match().ConnMarkMatchesWithMask(0xf, 0x1)
+		}).To(Panic())
+	})
+	It("should panic if ConnMarkMatchesWithMask is passed a 0 mask", func() {
+		Expect(func() {
+			Match().ConnMarkMatchesWithMask(0x0, 0x0)
+		}).To(Panic())
+	})
 })
 
 var _ = DescribeTable("MatchBuilder",
@@ -56,8 +66,11 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("MarkSingleBitSet", Match().MarkSingleBitSet(0x4000), "-m mark --mark 0x4000/0x4000"),
 	Entry("MarkMatchesWithMask", Match().MarkMatchesWithMask(0x400a, 0xf00f), "-m mark --mark 0x400a/0xf00f"),
 	Entry("NotMarkMatchesWithMask", Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "-m mark ! --mark 0x400a/0xf00f"),
+	Entry("ConnMarkMatchesWithMask", Match().ConnMarkMatchesWithMask(0x400a, 0xf00f), "-m connmark --mark 0x400a/0xf00f"),
 	// Conntrack.
 	Entry("ConntrackState", Match().ConntrackState("INVALID"), "-m conntrack --ctstate INVALID"),
+	// TCP flags.
+	Entry("TCPFlagsSet", Match().TCPFlagsSet("RST"), "-p tcp -m tcp --tcp-flags RST RST"),
 	// Interfaces.
 	Entry("InInterface", Match().InInterface("tap1234abcd"), "--in-interface tap1234abcd"),
 	Entry("OutInterface", Match().OutInterface("tap1234abcd"), "--out-interface tap1234abcd"),

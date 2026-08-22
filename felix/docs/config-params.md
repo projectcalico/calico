@@ -414,6 +414,46 @@ Sets the rate limit burst of hitting a Log action when LogActionRateLimit is ena
 | `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (YAML) | `5` |
 
+### `LogConnectionTransitions` (config file) / `logConnectionTransitions` (YAML)
+
+Controls whether Felix emits an additional kernel log recording the
+first observed response for each connection that matched a policy rule with a Log action.
+When set to FirstResponseAfterLog, each such connection gets one follow-up log, prefixed
+with LogConnectionTransitionsPrefix plus a suffix identifying the transition: "-est" when
+the first reply packet is seen, "-rst" when the response is a TCP RST (connection refused),
+or "-icmp-err" when the response is a related ICMP error (e.g. port unreachable). The log
+body is the standard kernel packet log of the response packet, so the flow is identified by
+its 5-tuple and can be correlated with the original policy Log line (with source and
+destination swapped). A connection with no follow-up log never received a response.
+Enabling this consumes one bit from the Iptables/NftablesMarkMask space. Not supported in
+eBPF mode.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogConnectionTransitions` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>FirstResponseAfterLog</code> |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `logConnectionTransitions` (YAML) `LogConnectionTransitions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"FirstResponseAfterLog"</code>. |
+| Default value (YAML) | `Disabled` |
+
+### `LogConnectionTransitionsPrefix` (config file) / `logConnectionTransitionsPrefix` (YAML)
+
+The log prefix used for the logs emitted when
+LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+rules that emit these logs are shared by all policies, so per-policy values cannot be
+substituted and any %-specifiers are rendered literally.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogConnectionTransitionsPrefix` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `calico-response` |
+| `FelixConfiguration` field | `logConnectionTransitionsPrefix` (YAML) `LogConnectionTransitionsPrefix` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `calico-response` |
+
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
 Controls which source code files have their Debug log output included in the logs.

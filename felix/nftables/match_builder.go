@@ -244,6 +244,28 @@ func (m nftMatch) NotMarkMatchesWithMask(mark, mask uint32) generictables.MatchC
 	return m
 }
 
+func (m nftMatch) ConnMarkMatchesWithMask(mark, mask uint32) generictables.MatchCriteria {
+	logCxt := logrus.WithFields(logrus.Fields{
+		"mark": mark,
+		"mask": mask,
+	})
+	if mask == 0 {
+		logCxt.Panic("Bug: mask is 0.")
+	}
+	if mark&mask != mark {
+		logCxt.Panic("Bug: mark is not contained in mask")
+	}
+	m.clauses = append(m.clauses, fmt.Sprintf("ct mark & %#x == %#x", mask, mark))
+	return m
+}
+
+func (m nftMatch) TCPFlagsSet(flags string) generictables.MatchCriteria {
+	// "tcp flags" carries an implicit protocol tcp dependency, so no explicit proto match needed.
+	f := strings.ToLower(flags)
+	m.clauses = append(m.clauses, fmt.Sprintf("tcp flags & %s == %s", f, f))
+	return m
+}
+
 func (m nftMatch) InInterface(ifaceMatch string) generictables.MatchCriteria {
 	m.clauses = append(m.clauses, fmt.Sprintf("iifname %s", ifaceMatch))
 	return m

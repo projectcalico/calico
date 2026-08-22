@@ -44,6 +44,16 @@ var _ = Describe("MatchBuilder failure cases", func() {
 			nftables.Match().MarkMatchesWithMask(0x0, 0x0)
 		}).To(Panic())
 	})
+	It("should panic if ConnMarkMatchesWithMask is passed an invalid mark", func() {
+		Expect(func() {
+			nftables.Match().ConnMarkMatchesWithMask(0xf, 0x1)
+		}).To(Panic())
+	})
+	It("should panic if ConnMarkMatchesWithMask is passed a 0 mask", func() {
+		Expect(func() {
+			nftables.Match().ConnMarkMatchesWithMask(0x0, 0x0)
+		}).To(Panic())
+	})
 })
 
 var _ = DescribeTable("MatchBuilder",
@@ -57,9 +67,13 @@ var _ = DescribeTable("MatchBuilder",
 	Entry("MarkSingleBitSet", nftables.Match().MarkSingleBitSet(0x4000), "meta mark & 0x4000 == 0x4000"),
 	Entry("MarkMatchesWithMask", nftables.Match().MarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0xf00f == 0x400a"),
 	Entry("NotMarkMatchesWithMask", nftables.Match().NotMarkMatchesWithMask(0x400a, 0xf00f), "meta mark & 0xf00f != 0x400a"),
+	Entry("ConnMarkMatchesWithMask", nftables.Match().ConnMarkMatchesWithMask(0x400a, 0xf00f), "ct mark & 0xf00f == 0x400a"),
 
 	// Conntrack.
 	Entry("ConntrackState", nftables.Match().ConntrackState("INVALID"), "ct state invalid"),
+
+	// TCP flags.
+	Entry("TCPFlagsSet", nftables.Match().TCPFlagsSet("RST"), "tcp flags & rst == rst"),
 
 	// Interfaces.
 	Entry("InInterface", nftables.Match().InInterface("tap1234abcd"), "iifname tap1234abcd"),

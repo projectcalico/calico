@@ -1462,6 +1462,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.LogConnectionTransitions != nil {
+		in, out := &in.LogConnectionTransitions, &out.LogConnectionTransitions
+		*out = new(LogConnectionTransitionsMode)
+		**out = **in
+	}
 	if in.IPIPEnabled != nil {
 		in, out := &in.IPIPEnabled, &out.IPIPEnabled
 		*out = new(bool)
