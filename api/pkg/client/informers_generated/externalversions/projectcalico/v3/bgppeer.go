@@ -20,11 +20,39 @@ import (
 )
 
 // BGPPeerInformer provides access to a shared informer and lister for
-// BGPPeers.
+// BGPPeers. Prefer using the type-safe variant (see [TypedBGPPeerInformer]).
 type BGPPeerInformer interface {
 	Informer() cache.SharedIndexInformer
 	Lister() projectcalicov3.BGPPeerLister
 }
+
+// TypedBGPPeerInformer provides access to a shared informer and lister for
+// BGPPeers, including the type-safe TypedInformer variant.
+// It is a superset of BGPPeerInformer.
+type TypedBGPPeerInformer interface {
+	Informer() cache.SharedIndexInformer
+	TypedInformer() BGPPeerIndexInformer
+	Lister() projectcalicov3.BGPPeerLister
+}
+
+// BGPPeerIndexInformer is a wrapper around the underlying [cache.SharedIndexInformer]
+// with type-safe variants of several methods.
+type BGPPeerIndexInformer cache.TypedSharedIndexInformer[*apisprojectcalicov3.BGPPeer]
+
+// BGPPeerHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerFuncs] for BGPPeer.
+type BGPPeerHandlerFuncs = cache.TypedResourceEventHandlerFuncs[*apisprojectcalicov3.BGPPeer]
+
+// BGPPeerDetailedHandlerFuncs is a specialization of [cache.TypedResourceEventHandlerDetailedFuncs] for BGPPeer.
+type BGPPeerDetailedHandlerFuncs = cache.TypedResourceEventHandlerDetailedFuncs[*apisprojectcalicov3.BGPPeer]
+
+// BGPPeerFilteringHandler is a specialization of [cache.TypedFilteringResourceEventHandler] for BGPPeer.
+type BGPPeerFilteringHandler = cache.TypedFilteringResourceEventHandler[*apisprojectcalicov3.BGPPeer]
+
+// BGPPeerIndexers is a specialization of [cache.TypedIndexers] for BGPPeer.
+type BGPPeerIndexers = cache.TypedIndexers[*apisprojectcalicov3.BGPPeer]
+
+// DeletedBGPPeer is a specialization of [cache.DeletedObject] for BGPPeer.
+type DeletedBGPPeer = cache.DeletedObject[*apisprojectcalicov3.BGPPeer]
 
 type bGPPeerInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
@@ -34,25 +62,49 @@ type bGPPeerInformer struct {
 // NewBGPPeerInformer constructs a new informer for BGPPeer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBGPPeerInformer]).
 func NewBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
 	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers})
+}
+
+// NewTypedBGPPeerInformer constructs a new informer for BGPPeer type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BGPPeerIndexers) BGPPeerIndexInformer {
+	return NewTypedBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers)})
 }
 
 // NewFilteredBGPPeerInformer constructs a new informer for BGPPeer type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedFilteredBGPPeerInformer]).
 func NewFilteredBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
-	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+	return NewTypedBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: indexers, TweakListOptions: tweakListOptions})
+}
+
+// NewTypedFilteredBGPPeerInformer constructs a new informer for BGPPeer type.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedFilteredBGPPeerInformer(client clientset.Interface, resyncPeriod time.Duration, indexers BGPPeerIndexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) BGPPeerIndexInformer {
+	return NewTypedBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.TypedIndexersToIndexers(indexers), TweakListOptions: tweakListOptions})
 }
 
 // NewBGPPeerInformerWithOptions constructs a new informer for BGPPeer type with additional options.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
+// If you really need an independent one, prefer using the type-safe variant (see [NewTypedBGPPeerInformerWithOptions]).
 func NewBGPPeerInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) cache.SharedIndexInformer {
+	return NewTypedBGPPeerInformerWithOptions(client, options)
+}
+
+// NewTypedBGPPeerInformerWithOptions constructs a new informer for BGPPeer type with additional options.
+// Always prefer using an informer factory to get a shared informer instead of getting an independent
+// one. This reduces memory footprint and number of connections to the server.
+func NewTypedBGPPeerInformerWithOptions(client clientset.Interface, options internalinterfaces.InformerOptions) BGPPeerIndexInformer {
 	gvr := schema.GroupVersionResource{Group: "projectcalico.org", Version: "v3", Resource: "bgppeers"}
 	identifier := options.InformerName.WithResource(gvr)
 	tweakListOptions := options.TweakListOptions
-	return cache.NewSharedIndexInformerWithOptions(
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPPeer](cache.NewSharedIndexInformerWithOptions(
 		cache.ToListWatcherWithWatchListSemantics(&cache.ListWatch{
 			ListFunc: func(opts v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
@@ -85,17 +137,57 @@ func NewBGPPeerInformerWithOptions(client clientset.Interface, options internali
 			Indexers:     options.Indexers,
 			Identifier:   identifier,
 		},
-	)
+	))
 }
 
 func (f *bGPPeerInformer) defaultInformer(client clientset.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
+	return NewTypedBGPPeerInformerWithOptions(client, internalinterfaces.InformerOptions{ResyncPeriod: resyncPeriod, Indexers: cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, InformerName: f.factory.InformerName(), TweakListOptions: f.tweakListOptions})
 }
 
 func (f *bGPPeerInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&apisprojectcalicov3.BGPPeer{}, f.defaultInformer)
+	return f.TypedInformer()
+}
+
+func (f *bGPPeerInformer) TypedInformer() BGPPeerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPPeer](f.factory.InformerFor(&apisprojectcalicov3.BGPPeer{}, f.defaultInformer))
 }
 
 func (f *bGPPeerInformer) Lister() projectcalicov3.BGPPeerLister {
 	return projectcalicov3.NewBGPPeerLister(f.Informer().GetIndexer())
+}
+
+// ToTypedBGPPeerInformer converts an untyped informer into a TypedBGPPeerInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BGPPeer. If that is not the case, calling type-safe methods of the returned
+// TypedBGPPeerInformer leads to runtime panics. A safer alternative is to pass
+// around a TypedBGPPeerInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToTypedBGPPeerInformer(informer BGPPeerInformer) TypedBGPPeerInformer {
+	if informer, ok := informer.(TypedBGPPeerInformer); ok {
+		return informer
+	}
+	return &bGPPeerTypedInformerAdapter{informer}
+}
+
+type bGPPeerTypedInformerAdapter struct {
+	BGPPeerInformer
+}
+
+func (a *bGPPeerTypedInformerAdapter) TypedInformer() BGPPeerIndexInformer {
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPPeer](a.Informer())
+}
+
+// ToBGPPeerIndexInformer converts an untyped informer into a BGPPeerIndexInformer.
+//
+// WARNING: this conversion is only safe if the informer handles objects of type
+// *BGPPeer. If that is not the case, calling type-safe methods of the returned
+// BGPPeerIndexInformer leads to runtime panics. A safer alternative is to pass
+// around a BGPPeerIndexInformer instances that was obtained from a
+// SharedInformerFactory.
+func ToBGPPeerIndexInformer(informer cache.SharedIndexInformer) BGPPeerIndexInformer {
+	if informer, ok := informer.(BGPPeerIndexInformer); ok {
+		return informer
+	}
+	return cache.NewTypedSharedIndexInformer[*apisprojectcalicov3.BGPPeer](informer)
 }

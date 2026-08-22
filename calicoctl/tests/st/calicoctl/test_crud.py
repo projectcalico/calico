@@ -2387,7 +2387,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.250',
                                 'scope': 'node'}
-                   }, 'cannot unmarshal number into Go struct field BGPPeerSpec.spec.asNumber of type string'),
+                   }, 'cannot unmarshal number into Go value of type string'),
                    ("bgpPeer-invalidIP", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -2666,7 +2666,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-ipip-1'},
                        'spec': {'disabled': 'True',  # disabled value must be a bool
                                 'cidr': "10.0.1.0/24"}
-                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field .spec.disabled of type bool"),
                    ("pool-invalidIpIp2", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2674,7 +2674,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'disabled': 'Maybe',
                            'cidr': "10.0.1.0/24"}
-                   }, "cannot unmarshal string into Go struct field IPPoolSpec.spec.disabled of type bool"),
+                   }, "cannot unmarshal string into Go struct field .spec.disabled of type bool"),
                    ("profile-ICMPtype", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',
