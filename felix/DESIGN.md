@@ -184,6 +184,24 @@ chain setup), `static.go` (boilerplate filter/NAT/mangle chains),
 `nat.go`. A PR adding policy semantics usually touches
 `felix/rules/` and needs matching changes on both backends.
 
+The nftables backend is two packages.
+`felix/nftables/nftrender/` holds the rule-rendering primitives —
+the match builder, the action types, the naming helpers.
+`felix/nftables/` holds the driver that programs tables, sets and
+maps through `sigs.k8s.io/knftables`.
+
+They are separate because Felix also builds for Windows.
+`felix/rules/` needs the nftables primitives to render rules, so it
+must build everywhere; the driver cannot, because knftables reaches
+Linux-only netlink code. Hence the invariant: **code that builds
+for Windows imports `nftrender`, never `felix/nftables`.** Nothing
+local flags a violation — `go build` and the unit tests are Linux —
+so it surfaces as a cross-compile failure in the "Felix: Build
+Windows binaries" and node Windows-image jobs, reported against
+`github.com/google/nftables` rather than the offending import. The
+iptables backend needs no equivalent split; it shells out to
+`iptables-restore` instead of linking a netlink library.
+
 ### Shared networking subsystems
 
 Used by more than one dataplane:
