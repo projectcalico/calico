@@ -665,6 +665,7 @@ var _ = Describe("BPF Proxy", func() {
 
 				testSvc.Annotations = map[string]string{
 					proxy.ReapTerminatingUDPAnnotation: proxy.ReapTerminatingUDPImmediatelly,
+					proxy.NoEndpointsActionAnnotation:  proxy.NoEndpointsActionForward,
 				}
 
 				k8s = fake.NewClientset(testSvc)
@@ -674,13 +675,15 @@ var _ = Describe("BPF Proxy", func() {
 				dp.checkState(func(s proxy.DPSyncerState) {
 					Expect(len(s.SvcMap)).To(Equal(1))
 					Expect(len(s.EpsMap)).To(Equal(0))
-					Expect(s.SvcMap[k8sp.ServicePortName{
+					svc := s.SvcMap[k8sp.ServicePortName{
 						NamespacedName: types.NamespacedName{
 							Namespace: "default",
 							Name:      "testService",
 						},
 						Protocol: v1.ProtocolUDP,
-					}].(proxy.Service).ReapTerminatingUDP()).To(BeTrue())
+					}].(proxy.Service)
+					Expect(svc.ReapTerminatingUDP()).To(BeTrue())
+					Expect(svc.NoEndpointsAction()).To(Equal(proxy.NoEndpointsActionForward))
 				})
 			})
 		})
