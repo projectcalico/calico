@@ -695,13 +695,14 @@ type CalicoNetworkSpec struct {
 	// +optional
 	ClusterRoutingMode *ClusterRoutingMode `json:"clusterRoutingMode,omitempty"`
 
-	// IPPools contains a list of IP pools to manage. If nil, a single IPv4 IP pool
-	// will be created by the operator. If an empty list is provided, the operator will not create any IP pools and will instead
-	// wait for IP pools to be created out-of-band.
+	// IPPools contains a list of IP pools to manage. If nil, the operator chooses: on a cluster with no
+	// operator-managed pools it creates a single IPv4 pool, and on a cluster that already has them it keeps
+	// the pools in use. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
+	// pools it owns and creates none.
 	// IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
 	// +optional
 	// +kubebuilder:validation:MaxItems=25
-	IPPools []IPPool `json:"ipPools,omitempty"`
+	IPPools []IPPool `json:"ipPools"`
 
 	// MTU specifies the maximum transmission unit to use on the pod network.
 	// If not specified, Calico will perform MTU auto-detection based on the cluster network.
@@ -1131,9 +1132,19 @@ type InstallationStatus struct {
 	// +optional
 	ImageSet string `json:"imageSet,omitempty"`
 
-	// Computed is the final installation including overlaid resources.
+	// Computed is the effective installation configuration: the spec, the operator's recorded
+	// defaults, and any overlay Installation merged together. This is what the operator renders from.
 	// +optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
 	Computed *InstallationSpec `json:"computed,omitempty"`
+
+	// Defaults holds the values the operator supplied for fields the spec left unset. Clearing such a
+	// field returns it to the value recorded here, so a running cluster keeps its configuration.
+	// +optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Defaults *InstallationSpec `json:"defaults,omitempty"`
 
 	// CalicoVersion shows the current running version of calico.
 	// CalicoVersion along with Variant is needed to know the exact

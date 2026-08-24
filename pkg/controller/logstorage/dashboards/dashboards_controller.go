@@ -201,7 +201,7 @@ func (d DashboardsSubController) Reconcile(ctx context.Context, request reconcil
 	}
 
 	// Get Installation resource.
-	installationSpec, err := utils.GetInstallationSpec(context.Background(), d.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(context.Background(), d.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			d.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

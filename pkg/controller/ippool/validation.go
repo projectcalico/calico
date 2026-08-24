@@ -23,10 +23,10 @@ import (
 )
 
 // ValidatePools validates the IP pools specified in the Installation object.
-func ValidatePools(instance *operator.Installation) error {
+func ValidatePools(spec *operator.InstallationSpec) error {
 	cidrs := map[string]bool{}
 	names := map[string]bool{}
-	for _, pool := range instance.Spec.CalicoNetwork.IPPools {
+	for _, pool := range spec.CalicoNetwork.IPPools {
 		_, cidr, err := net.ParseCIDR(pool.CIDR)
 		if err != nil {
 			return fmt.Errorf("IP pool CIDR (%s) is invalid: %s", pool.CIDR, err)
@@ -77,12 +77,12 @@ func ValidatePools(instance *operator.Installation) error {
 			return fmt.Errorf("IP pool nodeSelector should be set to all() if allowedUse is LoadBalancer")
 		}
 
-		if instance.Spec.CNI == nil {
+		if spec.CNI == nil {
 			// We expect this to be defaulted by the core Installation controller prior to the IP pool controller
 			// being invoked, but check just in case.
 			return fmt.Errorf("no CNI plugin specified in Installation resource")
 		}
-		if instance.Spec.CNI.Type != operator.PluginCalico {
+		if spec.CNI.Type != operator.PluginCalico {
 			if pool.NodeSelector != "all()" {
 				return fmt.Errorf("IP pool nodeSelector (%s) should be 'all()' when using non-Calico CNI plugin", pool.NodeSelector)
 			}

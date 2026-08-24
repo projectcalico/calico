@@ -152,7 +152,8 @@ var _ = Describe("ManagementClusterConnection controller enterprise tests", func
 			Status: operatorv1.InstallationStatus{
 				Variant: operatorv1.CalicoEnterprise,
 				Computed: &operatorv1.InstallationSpec{
-					Registry:           "my-reg",
+					Variant:            operatorv1.CalicoEnterprise,
+					Registry:           "some.registry.org/",
 					KubernetesProvider: operatorv1.ProviderNone,
 				},
 			},

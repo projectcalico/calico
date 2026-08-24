@@ -182,7 +182,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 	reqLogger.V(2).Info("Reconciling the management cluster connection")
 	result := reconcile.Result{}
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return result, err
 	}

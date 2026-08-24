@@ -160,7 +160,7 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		}
 	}
 
-	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

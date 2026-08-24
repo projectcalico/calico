@@ -185,6 +185,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -230,6 +231,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -333,6 +335,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -385,6 +388,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -443,6 +447,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -502,6 +507,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating GatewayAPI with an EnvoyGatewayConfigRef that doesn't exist yet")

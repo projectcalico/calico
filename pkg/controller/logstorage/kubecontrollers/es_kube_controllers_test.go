@@ -122,8 +122,7 @@ var _ = Describe("LogStorage ES kube-controllers controller", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
@@ -134,6 +133,7 @@ var _ = Describe("LogStorage ES kube-controllers controller", func() {
 				}},
 			},
 		}
+		install.Status.Computed = &install.Spec
 		Expect(cli.Create(ctx, install)).ShouldNot(HaveOccurred())
 
 		// Create a basic LogStorage.

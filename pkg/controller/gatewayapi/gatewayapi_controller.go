@@ -220,7 +220,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	defer r.status.SetMetaData(&gatewayAPI.ObjectMeta)
 
 	// Get the Installation, for private registry and pull secret config.
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

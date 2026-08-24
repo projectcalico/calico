@@ -327,7 +327,7 @@ func (r *ReconcileMonitor) Reconcile(ctx context.Context, request reconcile.Requ
 		graceRequeueAfter = time.Until(license.Status.Expiry.Add(gracePeriod))
 	}
 
-	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

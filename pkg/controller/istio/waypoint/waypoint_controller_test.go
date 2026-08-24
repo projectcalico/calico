@@ -81,6 +81,7 @@ var _ = Describe("Waypoint controller pull secret tests", func() {
 				Variant: operatorv1.Calico,
 			},
 		}
+		installation.Status.Computed = &installation.Spec
 
 		istioCR = &operatorv1.Istio{
 			ObjectMeta: metav1.ObjectMeta{
@@ -415,6 +416,8 @@ var _ = Describe("Waypoint controller pull secret tests", func() {
 				{Name: "new-pull-secret"},
 			}
 			Expect(cli.Update(ctx, inst)).NotTo(HaveOccurred())
+			inst.Status.Computed = inst.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, inst)).NotTo(HaveOccurred())
 
 			_, err = doReconcile()
 			Expect(err).ShouldNot(HaveOccurred())
@@ -439,6 +442,8 @@ var _ = Describe("Waypoint controller pull secret tests", func() {
 				{Name: "second-pull-secret"},
 			}
 			Expect(cli.Update(ctx, inst)).NotTo(HaveOccurred())
+			inst.Status.Computed = inst.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, inst)).NotTo(HaveOccurred())
 
 			createWaypointGateway("waypoint", "user-ns")
 

@@ -75,7 +75,8 @@ var _ = Describe("Application layer controller tests", func() {
 				Status: operatorv1.InstallationStatus{
 					Variant: operatorv1.CalicoEnterprise,
 					Computed: &operatorv1.InstallationSpec{
-						Registry: "my-reg",
+						Variant:  operatorv1.CalicoEnterprise,
+						Registry: "some.registry.org/",
 						// The test is provider agnostic.
 						KubernetesProvider: operatorv1.ProviderNone,
 					},

@@ -120,8 +120,7 @@ var _ = Describe("LogStorage Linseed controller", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
@@ -132,6 +131,7 @@ var _ = Describe("LogStorage Linseed controller", func() {
 				}},
 			},
 		}
+		install.Status.Computed = &install.Spec
 		Expect(cli.Create(ctx, install)).ShouldNot(HaveOccurred())
 
 		pullSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "tigera-pull-secret", Namespace: common.OperatorNamespace()}}

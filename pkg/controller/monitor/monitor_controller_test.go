@@ -110,14 +110,14 @@ var _ = Describe("Monitor controller tests", func() {
 				Generation: 2,
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				Variant:  operatorv1.CalicoEnterprise,
 				Registry: "some.registry.org/",
 			},
 		}
+		installation.Status.Computed = &installation.Spec
 		Expect(cli.Create(ctx, installation)).To(BeNil())
 
 		// Apply the Monitor CR to the fake cluster.

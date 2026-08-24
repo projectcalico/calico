@@ -489,7 +489,7 @@ func (c *componentHandler) CreateOrUpdateOrDelete(ctx context.Context, component
 	// Load the InstallationSpec once and reuse it for every object: createOrUpdateObject needs it
 	// for image pull policy and TLS ciphers, and we use it here to decide whether the user has
 	// disabled policy management.
-	installationSpec, err := GetInstallationSpec(ctx, c.client)
+	installationSpec, err := GetComputedInstallationSpec(ctx, c.client)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}

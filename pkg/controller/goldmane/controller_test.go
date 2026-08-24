@@ -94,7 +94,7 @@ var _ = Describe("Goldmane controller tests", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Status: operatorv1.InstallationStatus{
 				Variant:  operatorv1.Calico,
-				Computed: &operatorv1.InstallationSpec{},
+				Computed: &operatorv1.InstallationSpec{Variant: operatorv1.Calico},
 			},
 			Spec: operatorv1.InstallationSpec{Variant: operatorv1.Calico},
 		})).ToNot(HaveOccurred())

@@ -189,7 +189,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, nil
 	}
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.cli)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)

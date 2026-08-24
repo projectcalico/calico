@@ -189,7 +189,7 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	}
 
 	// Get the Installation, for k8s provider info.
-	installationSpec, err := utils.GetInstallationSpec(ctx, r)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -380,11 +380,10 @@ func (r *ReconcileIstio) configureIstioDSCPMark(instance *operatorv1.Istio, fc *
 func (r *ReconcileIstio) configurePolicySyncPathPrefix(ctx context.Context, instance *operatorv1.Istio, fc *v3.FelixConfiguration, remove bool) (bool, error) {
 	var istioNeeds bool
 	if !remove {
-		// Mirror the renderer gate at pkg/render/istio/istio.go: it reads
-		// installationSpec.Variant (i.e. Installation.Spec.Variant), so the
-		// policy-sync field tracks the renderer's decision to ship the L7
-		// waypoint sidecar even before Status.Variant catches up.
-		installationSpec, err := utils.GetInstallationSpec(ctx, r.Client)
+		// Mirror the renderer gate at pkg/render/istio/istio.go, which reads the same
+		// computed variant, so the policy-sync field tracks the renderer's decision to
+		// ship the L7 waypoint sidecar.
+		installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.Client)
 		if err != nil && !errors.IsNotFound(err) {
 			return false, err
 		}

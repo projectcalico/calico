@@ -243,7 +243,7 @@ func (r *ReconcileEgressGateway) Reconcile(ctx context.Context, request reconcil
 		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
 	}
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Error(err, "Installation not found")

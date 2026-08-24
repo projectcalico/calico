@@ -50,6 +50,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+// createWithComputed publishes the spec as the computed config, the way the core controller
+// does, then creates the Installation.
+func createWithComputed(ctx context.Context, c client.Client, cr *operator.Installation) error {
+	cr.Status.Computed = cr.Spec.DeepCopy()
+	return c.Create(ctx, cr)
+}
+
 var _ = Describe("windows-controller installation tests", func() {
 	var twentySix int32 = 26
 	Context("Reconcile tests", func() {
@@ -221,7 +228,7 @@ var _ = Describe("windows-controller installation tests", func() {
 
 			It("should not render the Windows daemonset when it is disabled in the installation resource", func() {
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).ShouldNot(HaveOccurred())
@@ -238,7 +245,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &disabled
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).ShouldNot(HaveOccurred())
@@ -250,7 +257,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				Expect(degradedErr).To(ConsistOf([]string{}))
 			})
 
-			It("should not render the Windows daemonset when Installation.Status is empty", func() {
+			It("should not render the Windows daemonset when the computed config is not published", func() {
 				// Create the installation resource with no status
 				hns := operator.WindowsDataplaneHNS
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
@@ -258,31 +265,32 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Status = operator.InstallationStatus{}
 				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
 
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err.Error()).To(Equal("InstallationStatus is empty"))
+				result, err := r.Reconcile(ctx, reconcile.Request{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(result.RequeueAfter).To(Equal(utils.StandardRetry))
 
 				// The calico-node-windows daemonset should not be rendered
 				Expect(test.GetResource(c, &dsWin)).To(HaveOccurred())
 				Expect(dsWin.Spec).To(Equal(appsv1.DaemonSetSpec{}))
-				Expect(degradedMsg).To(ConsistOf([]string{"InstallationStatus is empty"}))
-				Expect(degradedErr).To(ConsistOf([]string{"InstallationStatus is empty"}))
+				Expect(degradedMsg).To(ConsistOf([]string{}))
+				Expect(degradedErr).To(ConsistOf([]string{}))
 			})
 
-			It("should not render the Windows daemonset when Spec.WindowsNodes is nil (as when core_controller hasn't still initialized the defaults)", func() {
+			It("should not render the Windows daemonset when the computed config has no WindowsNodes", func() {
 				// Create the installation resource with no WindowsNodes
 				hns := operator.WindowsDataplaneHNS
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 				cr.Spec.WindowsNodes = nil
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err.Error()).To(Equal("Installation.Spec.WindowsNodes is nil"))
+				Expect(err.Error()).To(Equal("Installation.Status.Computed.WindowsNodes is nil"))
 
 				// The calico-node-windows daemonset should not be rendered
 				Expect(test.GetResource(c, &dsWin)).To(HaveOccurred())
 				Expect(dsWin.Spec).To(Equal(appsv1.DaemonSetSpec{}))
-				Expect(degradedMsg).To(ConsistOf([]string{"Installation.Spec.WindowsNodes is nil"}))
-				Expect(degradedErr).To(ConsistOf([]string{"Installation.Spec.WindowsNodes is nil"}))
+				Expect(degradedMsg).To(ConsistOf([]string{"Installation.Status.Computed.WindowsNodes is nil"}))
+				Expect(degradedErr).To(ConsistOf([]string{"Installation.Status.Computed.WindowsNodes is nil"}))
 			})
 
 			It("should not render the Windows daemonset when core_controller hasn't still initialized the defaults", func() {
@@ -296,14 +304,15 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Status = operator.InstallationStatus{}
 				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
 
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err.Error()).To(Equal("InstallationStatus is empty"))
+				result, err := r.Reconcile(ctx, reconcile.Request{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(result.RequeueAfter).To(Equal(utils.StandardRetry))
 
 				// The calico-node-windows daemonset should not be rendered
 				Expect(test.GetResource(c, &dsWin)).To(HaveOccurred())
 				Expect(dsWin.Spec).To(Equal(appsv1.DaemonSetSpec{}))
-				Expect(degradedMsg).To(ConsistOf([]string{"InstallationStatus is empty"}))
-				Expect(degradedErr).To(ConsistOf([]string{"InstallationStatus is empty"}))
+				Expect(degradedMsg).To(ConsistOf([]string{}))
+				Expect(degradedErr).To(ConsistOf([]string{}))
 			})
 
 			It("should render the Windows daemonset when configuration is complete and valid", func() {
@@ -311,7 +320,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				// The calico-node-windows daemonset should not be rendered
 				Expect(test.GetResource(c, &dsWin)).To(HaveOccurred())
@@ -334,7 +343,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				// Delete the configmap
 				endPointCM := &corev1.ConfigMap{
@@ -361,7 +370,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				// Have a configmap with no port
 				endPointCM := &corev1.ConfigMap{
@@ -394,7 +403,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).Should(HaveOccurred())
@@ -422,7 +431,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).To(HaveOccurred())
@@ -455,7 +464,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).To(HaveOccurred())
@@ -489,7 +498,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).To(HaveOccurred())
@@ -509,7 +518,7 @@ var _ = Describe("windows-controller installation tests", func() {
 				cr.Spec.CalicoNetwork.WindowsDataplane = &hns
 
 				// Create the installation resource
-				Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+				Expect(createWithComputed(ctx, c, cr)).NotTo(HaveOccurred())
 
 				_, err := r.Reconcile(ctx, reconcile.Request{})
 				Expect(err).Should(HaveOccurred())
@@ -666,15 +675,10 @@ var _ = Describe("windows-controller installation tests", func() {
 						},
 						Status: operator.InstallationStatus{
 							Variant: operator.Calico,
-							Computed: &operator.InstallationSpec{
-								Registry: "my-reg",
-								// The test is provider agnostic.
-								KubernetesProvider: operator.ProviderNone,
-							},
 						},
 					}
 					Expect(updateInstallationWithDefaults(ctx, r.client, instance, r.opts.DetectedProvider, r.opts.Variant)).NotTo(HaveOccurred())
-					Expect(c.Create(ctx, instance)).NotTo(HaveOccurred())
+					Expect(createWithComputed(ctx, c, instance)).NotTo(HaveOccurred())
 				})
 				AfterEach(func() {
 					cancel()

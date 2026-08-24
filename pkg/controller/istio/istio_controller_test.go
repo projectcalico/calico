@@ -109,6 +109,7 @@ var _ = Describe("Istio controller tests", func() {
 				},
 			},
 		}
+		installation.Status.Computed = &installation.Spec
 
 		istioCR = &operatorv1.Istio{
 			ObjectMeta: metav1.ObjectMeta{
@@ -535,6 +536,8 @@ var _ = Describe("Istio controller tests", func() {
 				inst.Spec.Variant = operatorv1.CalicoEnterprise
 				inst.Status.Variant = operatorv1.CalicoEnterprise
 				Expect(cli.Update(ctx, inst)).NotTo(HaveOccurred())
+				inst.Status.Computed = inst.Spec.DeepCopy()
+				Expect(cli.Status().Update(ctx, inst)).NotTo(HaveOccurred())
 			})
 
 			It("sets policySyncPathPrefix to the operator default when no AL is present", func() {
@@ -875,6 +878,8 @@ var _ = Describe("Istio controller tests", func() {
 			installation.Spec.Variant = operatorv1.CalicoEnterprise
 			installation.Status.Variant = operatorv1.CalicoEnterprise
 			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
+			installation.Status.Computed = installation.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
 
 			r := &ReconcileIstio{
 				Client:   cli,
@@ -906,6 +911,8 @@ var _ = Describe("Istio controller tests", func() {
 			installation.Spec.Variant = operatorv1.CalicoEnterprise
 			installation.Status.Variant = operatorv1.CalicoEnterprise
 			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
+			installation.Status.Computed = installation.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
 
 			// Create ImageSet with all required Istio images for Enterprise
 			imageSet := &operatorv1.ImageSet{

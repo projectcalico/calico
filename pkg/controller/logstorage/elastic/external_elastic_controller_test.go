@@ -112,8 +112,7 @@ var _ = Describe("External ES Controller", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				Variant:  operatorv1.CalicoEnterprise,
@@ -123,6 +122,7 @@ var _ = Describe("External ES Controller", func() {
 				}},
 			},
 		}
+		install.Status.Computed = &install.Spec
 		Expect(cli.Create(ctx, install)).ShouldNot(HaveOccurred())
 
 		// Create the public certs used to verify the Elasticsearch and Kibana.

@@ -104,8 +104,7 @@ var _ = Describe("authentication controller tests", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
@@ -113,6 +112,7 @@ var _ = Describe("authentication controller tests", func() {
 				Registry:             "some.registry.org/",
 			},
 		}
+		installation.Status.Computed = &installation.Spec
 		Expect(cli.Create(ctx, installation)).To(BeNil())
 		Expect(cli.Create(ctx, &operatorv1.APIServer{
 			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
@@ -682,6 +682,8 @@ var _ = Describe("authentication controller tests", func() {
 			}
 			err := cli.Update(ctx, installationCopy)
 			Expect(err).NotTo(HaveOccurred())
+			installationCopy.Status.Computed = installationCopy.Spec.DeepCopy()
+			Expect(cli.Status().Update(ctx, installationCopy)).NotTo(HaveOccurred())
 
 			// Reconcile to create the dex deployment.
 			r := ReconcileAuthentication{

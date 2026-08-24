@@ -71,6 +71,9 @@ var _ = Describe("PodIPRecovery controller", func() {
 	newDefaultInstallation := func() *operatorv1.Installation {
 		return &operatorv1.Installation{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
+			Status: operatorv1.InstallationStatus{
+				Computed: &operatorv1.InstallationSpec{},
+			},
 		}
 	}
 

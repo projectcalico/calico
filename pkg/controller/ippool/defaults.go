@@ -24,6 +24,7 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operator "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/controller/utils"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -65,25 +66,10 @@ func cidrToName(cidr string) (string, error) {
 	return name, nil
 }
 
-// normalizeCIDR returns the canonical string form of the given CIDR, as produced by net.IPNet.String().
-// This allows semantically-equal CIDRs that differ only in textual representation (for example IPv6
-// addresses with leading zeros or differing "::" compression, such as "fd20:5213:94f6:01e9:001f::/96"
-// versus "fd20:5213:94f6:1e9:1f::/96") to compare as equal. The Calico API server normalizes CIDRs when
-// it stores IP pools, so without this the operator can mistake an existing pool for a missing one and
-// enter an infinite delete/recreate loop. If the CIDR cannot be parsed, the original string is returned
-// unchanged so callers fall back to an exact string comparison.
-func normalizeCIDR(cidr string) string {
-	_, nw, err := net.ParseCIDR(cidr)
-	if err != nil {
-		return cidr
-	}
-	return nw.String()
-}
-
 // fillDefaults fills in IP pool defaults on the Installation object. Defaulting of fields other than IP pools occurs
 // in pkg/controller/installation/
-func fillDefaults(ctx context.Context, client client.Client, instance *operator.Installation, currentPools *v3.IPPoolList) error {
-	if instance.Spec.CNI == nil || instance.Spec.CNI.IPAM == nil {
+func fillDefaults(ctx context.Context, client client.Client, spec *operator.InstallationSpec, currentPools *v3.IPPoolList) error {
+	if spec.CNI == nil || spec.CNI.IPAM == nil {
 		// These fields are needed for IP pool defaulting but defaulted themselves by the core Installation controller, which this controller waits for before
 		// running. We should never hit this branch, but handle it just in case.
 		return fmt.Errorf("cannot perform IP pool defaulting until CNI configuration is available")
@@ -92,7 +78,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 	// Only add default CIDRs if there are no existing pools in the cluster. If there are existing pools in the cluster,
 	// then we assume that the user has configured them correctly out-of-band and we should not install any others.
 	if currentPools == nil || len(currentPools.Items) == 0 {
-		if instance.Spec.KubernetesProvider.IsOpenShift() {
+		if spec.KubernetesProvider.IsOpenShift() {
 			// If configured to run in openshift, then also fetch the openshift configuration API.
 			log.V(1).Info("Fetching OpenShift network configuration")
 			openshiftConfig := &configv1.Network{}
@@ -102,7 +88,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 			}
 
 			// Merge in OpenShift configuration.
-			if err := updateInstallationForOpenshiftNetwork(instance, openshiftConfig); err != nil {
+			if err := updateInstallationForOpenshiftNetwork(spec, openshiftConfig); err != nil {
 				return fmt.Errorf("could not resolve CalicoNetwork IPPool and OpenShift network: %s", err.Error())
 			}
 		} else {
@@ -112,7 +98,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 			key := types.NamespacedName{Name: kubeadmConfigMap, Namespace: metav1.NamespaceSystem}
 			if err := client.Get(ctx, key, kubeadmConfig); err == nil {
 				// We found the configmap - merge in kubeadm configuration.
-				if err := updateInstallationForKubeadm(instance, kubeadmConfig); err != nil {
+				if err := updateInstallationForKubeadm(spec, kubeadmConfig); err != nil {
 					return fmt.Errorf("could not resolve CalicoNetwork IPPool and kubeadm configuration: %s", err.Error())
 				}
 			} else if !apierrors.IsNotFound(err) {
@@ -122,19 +108,19 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 
 		// Only default the IP pools if Calico IPAM is being used, and there are no IP pools specified.
 		// Defaulting of the Spec.CNI field occurs in pkg/controller/installation/
-		poolsUnspecified := instance.Spec.CalicoNetwork == nil || instance.Spec.CalicoNetwork.IPPools == nil
-		calicoIPAM := instance.Spec.CNI != nil && instance.Spec.CNI.IPAM != nil && instance.Spec.CNI.IPAM.Type == operator.IPAMPluginCalico
+		poolsUnspecified := spec.CalicoNetwork == nil || spec.CalicoNetwork.IPPools == nil
+		calicoIPAM := spec.CNI != nil && spec.CNI.IPAM != nil && spec.CNI.IPAM.Type == operator.IPAMPluginCalico
 		log.V(1).Info("Checking if we should default IP pool configuration", "calicoIPAM", calicoIPAM, "poolsUnspecified", poolsUnspecified)
 		if poolsUnspecified && calicoIPAM {
-			if instance.Spec.CalicoNetwork == nil {
-				instance.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+			if spec.CalicoNetwork == nil {
+				spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 			}
 
-			switch instance.Spec.KubernetesProvider {
+			switch spec.KubernetesProvider {
 			case operator.ProviderEKS:
 				// On EKS, default to a CIDR that doesn't overlap with the host range,
 				// and also use VXLAN encap by default.
-				instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
+				spec.CalicoNetwork.IPPools = []operator.IPPool{
 					{
 						Name:          defaultPoolName,
 						CIDR:          "172.16.0.0/16",
@@ -142,7 +128,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 					},
 				}
 			default:
-				instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{
+				spec.CalicoNetwork.IPPools = []operator.IPPool{
 					{
 						Name: defaultPoolName,
 						CIDR: "192.168.0.0/16",
@@ -150,32 +136,32 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 				}
 			}
 		}
-	} else if instance.Spec.CalicoNetwork == nil || instance.Spec.CalicoNetwork.IPPools == nil {
+	} else if spec.CalicoNetwork == nil || spec.CalicoNetwork.IPPools == nil {
 		// There are existing IP pools in the cluster, and the installation hasn't specified any. This means IP pools are
 		// being managed out-of-band of the operator API. So, default the installation field to an empty list,
 		// which means "Don't install any IP pools".
-		if instance.Spec.CalicoNetwork == nil {
-			instance.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+		if spec.CalicoNetwork == nil {
+			spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 		}
-		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{}
+		spec.CalicoNetwork.IPPools = []operator.IPPool{}
 	}
 
 	// If there are no CalicoNetwork settings, return early. The code after this point
 	// assumes that there are CalicoNetwork settings to default.
-	if instance.Spec.CalicoNetwork == nil {
+	if spec.CalicoNetwork == nil {
 		return nil
 	}
 
 	currentPoolLookup := map[string]string{}
 	if currentPools != nil {
 		for _, cur := range currentPools.Items {
-			currentPoolLookup[normalizeCIDR(cur.Spec.CIDR)] = cur.Name
+			currentPoolLookup[utils.NormalizeCIDR(cur.Spec.CIDR)] = cur.Name
 		}
 	}
 
 	// Default any fields on each IP pool declared in the Installation object.
-	for i := 0; i < len(instance.Spec.CalicoNetwork.IPPools); i++ {
-		pool := &instance.Spec.CalicoNetwork.IPPools[i]
+	for i := 0; i < len(spec.CalicoNetwork.IPPools); i++ {
+		pool := &spec.CalicoNetwork.IPPools[i]
 
 		if len(pool.AllowedUses) == 0 {
 			pool.AllowedUses = []operator.IPPoolAllowedUse{operator.IPPoolAllowedUseWorkload, operator.IPPoolAllowedUseTunnel}
@@ -186,7 +172,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 		if err == nil && addr.To4() != nil {
 			// This is an IPv4 pool.
 			if pool.Encapsulation == "" {
-				if instance.Spec.CNI.Type == operator.PluginCalico {
+				if spec.CNI.Type == operator.PluginCalico {
 					pool.Encapsulation = operator.EncapsulationIPIP
 				} else {
 					pool.Encapsulation = operator.EncapsulationNone
@@ -223,11 +209,11 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 
 		// Default the name if it's not set.
 		if pool.Name == "" {
-			if name, ok := currentPoolLookup[normalizeCIDR(pool.CIDR)]; ok {
+			if name, ok := currentPoolLookup[utils.NormalizeCIDR(pool.CIDR)]; ok {
 				// There's an existing IP pool with the same CIDR - use that. This allows us to
 				// assume control of IP pools that are already in the cluster.
 				pool.Name = name
-			} else if len(instance.Spec.CalicoNetwork.IPPools) == 1 {
+			} else if len(spec.CalicoNetwork.IPPools) == 1 {
 				// First, attempt to use the standard "default-ipvX-ippool" name for the IP pool.
 				// This is to ensure backwards compatible name generation as a convenience when creating new clusters.
 				if addr.To4() == nil {
@@ -235,7 +221,7 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 				} else {
 					pool.Name = defaultPoolName
 				}
-			} else if len(instance.Spec.CalicoNetwork.IPPools) == 2 && isDualStack(instance) {
+			} else if len(spec.CalicoNetwork.IPPools) == 2 && isDualStack(spec) {
 				// Handle dual-stack in the same way.
 				if addr.To4() == nil {
 					pool.Name = defaultV6PoolName
@@ -258,9 +244,9 @@ func fillDefaults(ctx context.Context, client client.Client, instance *operator.
 	return nil
 }
 
-func isDualStack(i *operator.Installation) bool {
+func isDualStack(spec *operator.InstallationSpec) bool {
 	hasV4, hasV6 := false, false
-	for _, pool := range i.Spec.CalicoNetwork.IPPools {
+	for _, pool := range spec.CalicoNetwork.IPPools {
 		addr, _, err := net.ParseCIDR(pool.CIDR)
 		if err != nil {
 			// No need to return this error because we perform CIDR validation prior to this.
@@ -276,41 +262,41 @@ func isDualStack(i *operator.Installation) bool {
 	return hasV4 && hasV6
 }
 
-func updateInstallationForOpenshiftNetwork(i *operator.Installation, o *configv1.Network) error {
+func updateInstallationForOpenshiftNetwork(spec *operator.InstallationSpec, o *configv1.Network) error {
 	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if i.Spec.CNI != nil && i.Spec.CNI.Type != operator.PluginCalico {
+	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
 		return nil
 	}
-	if i.Spec.CalicoNetwork == nil {
-		i.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+	if spec.CalicoNetwork == nil {
+		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 	}
 
 	platformCIDRs := []string{}
 	for _, c := range o.Spec.ClusterNetwork {
 		platformCIDRs = append(platformCIDRs, c.CIDR)
 	}
-	return mergePlatformPodCIDRs(i, platformCIDRs)
+	return mergePlatformPodCIDRs(spec, platformCIDRs)
 }
 
-func updateInstallationForKubeadm(i *operator.Installation, c *corev1.ConfigMap) error {
+func updateInstallationForKubeadm(spec *operator.InstallationSpec, c *corev1.ConfigMap) error {
 	// If CNI plugin is specified and not Calico then skip any CalicoNetwork initialization
-	if i.Spec.CNI != nil && i.Spec.CNI.Type != operator.PluginCalico {
+	if spec.CNI != nil && spec.CNI.Type != operator.PluginCalico {
 		return nil
 	}
-	if i.Spec.CalicoNetwork == nil {
-		i.Spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
+	if spec.CalicoNetwork == nil {
+		spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
 	}
 
 	platformCIDRs, err := extractKubeadmCIDRs(c)
 	if err != nil {
 		return err
 	}
-	return mergePlatformPodCIDRs(i, platformCIDRs)
+	return mergePlatformPodCIDRs(spec, platformCIDRs)
 }
 
-func mergePlatformPodCIDRs(i *operator.Installation, platformCIDRs []string) error {
+func mergePlatformPodCIDRs(spec *operator.InstallationSpec, platformCIDRs []string) error {
 	// If IPPools is nil, add IPPool with CIDRs detected from platform configuration.
-	if i.Spec.CalicoNetwork.IPPools == nil {
+	if spec.CalicoNetwork.IPPools == nil {
 		if len(platformCIDRs) == 0 {
 			// If the platform has no CIDRs defined as well, then return and let the
 			// normal defaulting happen.
@@ -335,7 +321,7 @@ func mergePlatformPodCIDRs(i *operator.Installation, platformCIDRs []string) err
 					name = ""
 				}
 				v6found = true
-				i.Spec.CalicoNetwork.IPPools = append(i.Spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
+				spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
 			} else {
 				// Treat the first IPv4 CIDR as the default. Subsequent CIDRs will be named based on their CIDR.
 				name := defaultPoolName
@@ -343,16 +329,16 @@ func mergePlatformPodCIDRs(i *operator.Installation, platformCIDRs []string) err
 					name = ""
 				}
 				v4found = true
-				i.Spec.CalicoNetwork.IPPools = append(i.Spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
+				spec.CalicoNetwork.IPPools = append(spec.CalicoNetwork.IPPools, operator.IPPool{Name: name, CIDR: c})
 			}
 		}
-	} else if len(i.Spec.CalicoNetwork.IPPools) == 0 {
+	} else if len(spec.CalicoNetwork.IPPools) == 0 {
 		// Empty IPPools list so nothing to do.
 		return nil
 	} else {
 		// Pools are configured on the Installation. Make sure they are compatible with
 		// the configuration set in the underlying Kubernetes platform.
-		for _, pool := range i.Spec.CalicoNetwork.IPPools {
+		for _, pool := range spec.CalicoNetwork.IPPools {
 			within := false
 			for _, c := range platformCIDRs {
 				within = within || cidrWithinCidr(c, pool.CIDR)

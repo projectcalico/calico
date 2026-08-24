@@ -31,6 +31,7 @@ import (
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
+	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/render"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -63,7 +64,7 @@ var _ = Describe("IP Pool controller tests", func() {
 		Expect(storagev1.SchemeBuilder.AddToScheme(scheme)).NotTo(HaveOccurred())
 
 		// Create a client that will have a crud interface of k8s objects.
-		c = fake.NewClientBuilder().WithScheme(scheme).Build()
+		c = ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
 		ctx, cancel = context.WithCancel(context.Background())
 
 		// Create an object we can use throughout the test to do the compliance reconcile loops.
@@ -124,7 +125,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Set up expected mocks.
 		mockStatus.On("OnCRFound")
@@ -142,9 +143,10 @@ var _ = Describe("IP Pool controller tests", func() {
 		err = c.Get(ctx, utils.DefaultInstanceKey, installation)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		// Verify an IP pool was defaulted.
-		Expect(installation.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
-		pool := installation.Spec.CalicoNetwork.IPPools[0]
+		// Verify an IP pool was defaulted onto the status, not the spec.
+		Expect(installation.Spec.CalicoNetwork).To(BeNil())
+		Expect(installation.Status.Defaults.CalicoNetwork.IPPools).To(HaveLen(1))
+		pool := installation.Status.Defaults.CalicoNetwork.IPPools[0]
 		Expect(pool.CIDR).To(Equal("192.168.0.0/16"))
 
 		// Expect the IP pool to be created in the API server as well.
@@ -170,7 +172,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Create an IP pool. This simulates a user creating an IP pool before the operator has a chance to.
 		ipPool := v3.IPPool{
@@ -195,8 +197,9 @@ var _ = Describe("IP Pool controller tests", func() {
 		err = c.Get(ctx, utils.DefaultInstanceKey, installation)
 		Expect(err).ShouldNot(HaveOccurred())
 
-		// Should be no IP pools defaulted.
-		Expect(installation.Spec.CalicoNetwork.IPPools).To(HaveLen(0))
+		// An explicitly empty pool list is the recorded default, meaning pools are managed out-of-band.
+		Expect(installation.Status.Defaults).NotTo(BeNil())
+		Expect(installation.Status.Defaults.CalicoNetwork.IPPools).To(Equal([]operator.IPPool{}))
 
 		// No new IP pools should exist.
 		ipPools := v3.IPPoolList{}
@@ -228,7 +231,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Set up expected mocks.
 		mockStatus.On("OnCRFound")
@@ -278,7 +281,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Set up expected mocks.
 		mockStatus.On("OnCRFound")
@@ -295,7 +298,7 @@ var _ = Describe("IP Pool controller tests", func() {
 		// when the API server is available.
 		Expect(c.Get(ctx, utils.DefaultInstanceKey, instance)).ShouldNot(HaveOccurred())
 		instance.Spec.CalicoNetwork.IPPools[0].NATOutgoing = "Enabled"
-		Expect(c.Update(ctx, instance)).ShouldNot(HaveOccurred())
+		updateInstallation(ctx, c, instance)
 
 		// Expect a new SetDegraded call.
 		mockStatus.On("SetDegraded", operator.ResourceNotReady, "Unable to modify IP pools while Calico API server is unavailable", nil, mock.Anything)
@@ -324,7 +327,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Set up expected mocks.
 		mockStatus.On("OnCRFound")
@@ -341,7 +344,7 @@ var _ = Describe("IP Pool controller tests", func() {
 		// when the API server is available.
 		Expect(c.Get(ctx, utils.DefaultInstanceKey, instance)).ShouldNot(HaveOccurred())
 		instance.Spec.CalicoNetwork.IPPools = []operator.IPPool{}
-		Expect(c.Update(ctx, instance)).ShouldNot(HaveOccurred())
+		updateInstallation(ctx, c, instance)
 
 		// Assert SetDegraded is called as expected.
 		mockStatus.On("SetDegraded", operator.ResourceNotReady, "Unable to delete IP pools while Calico API server is unavailable", nil, mock.Anything)
@@ -384,7 +387,7 @@ var _ = Describe("IP Pool controller tests", func() {
 				},
 			},
 		}
-		Expect(c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+		createInstallation(ctx, c, instance)
 
 		// Simulate a pool that the API server already normalized to its canonical form and that is
 		// owned by the operator (as indicated by the managed-by label).
@@ -470,9 +473,9 @@ var _ = DescribeTable("Test OpenShift IP pool defaulting",
 
 		// Run the test.
 		if expectSuccess {
-			Expect(fillDefaults(ctx, cli, i, currentPools)).To(BeNil())
+			Expect(fillDefaults(ctx, cli, &i.Spec, currentPools)).To(BeNil())
 		} else {
-			Expect(fillDefaults(ctx, cli, i, currentPools)).NotTo(BeNil())
+			Expect(fillDefaults(ctx, cli, &i.Spec, currentPools)).NotTo(BeNil())
 			return
 		}
 
@@ -684,10 +687,10 @@ var _ = Describe("fillDefaults()", func() {
 		// Fill defaults to make sure we pass other validation. Then remove the Encapsulation.
 		// Fill in prerequisite defaults.
 		fillPrerequisiteDefaults(instance)
-		Expect(fillDefaults(ctx, cli, instance, currentPools)).ToNot(HaveOccurred())
+		Expect(fillDefaults(ctx, cli, &instance.Spec, currentPools)).ToNot(HaveOccurred())
 		instance.Spec.CalicoNetwork.IPPools[0].Encapsulation = ""
 
-		err := ValidatePools(instance)
+		err := ValidatePools(&instance.Spec)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("is invalid for ipPool.encapsulation, should be one of"))
 	})
@@ -711,7 +714,7 @@ var _ = Describe("fillDefaults()", func() {
 			fillPrerequisiteDefaults(i)
 
 			// Run the defaulting function under test.
-			Expect(fillDefaults(ctx, cli, i, currentPools)).ToNot(HaveOccurred())
+			Expect(fillDefaults(ctx, cli, &i.Spec, currentPools)).ToNot(HaveOccurred())
 
 			if i.Spec.CalicoNetwork != nil && i.Spec.CalicoNetwork.IPPools != nil && len(i.Spec.CalicoNetwork.IPPools) != 0 {
 				v4pool := render.GetIPv4Pool(i.Spec.CalicoNetwork.IPPools)
@@ -726,7 +729,7 @@ var _ = Describe("fillDefaults()", func() {
 			}
 
 			// Assert the resulting Installation is valid.
-			Expect(ValidatePools(i)).NotTo(HaveOccurred())
+			Expect(ValidatePools(&i.Spec)).NotTo(HaveOccurred())
 		},
 
 		Entry("Empty config defaults IPPool", &operator.Installation{}, nil, nil),
@@ -803,7 +806,7 @@ var _ = Describe("fillDefaults()", func() {
 			},
 		}
 
-		err := fillDefaults(ctx, cli, instance, currentPools)
+		err := fillDefaults(ctx, cli, &instance.Spec, currentPools)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(instance.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
 
@@ -816,7 +819,7 @@ var _ = Describe("fillDefaults()", func() {
 		Expect(v6pool.BlockSize).NotTo(BeNil())
 		Expect(*v6pool.BlockSize).To(Equal(int32(122)))
 
-		Expect(ValidatePools(instance)).NotTo(HaveOccurred())
+		Expect(ValidatePools(&instance.Spec)).NotTo(HaveOccurred())
 	})
 
 	// Tests for Calico Networking on EKS should go in this context.
@@ -836,11 +839,11 @@ var _ = Describe("fillDefaults()", func() {
 		})
 
 		It("should default properly", func() {
-			err := fillDefaults(ctx, cli, instance, currentPools)
+			err := fillDefaults(ctx, cli, &instance.Spec, currentPools)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(instance.Spec.CalicoNetwork.IPPools[0].Encapsulation).To(Equal(operator.EncapsulationVXLAN))
 			Expect(instance.Spec.CalicoNetwork.IPPools[0].CIDR).To(Equal("172.16.0.0/16"))
-			Expect(ValidatePools(instance)).NotTo(HaveOccurred())
+			Expect(ValidatePools(&instance.Spec)).NotTo(HaveOccurred())
 		})
 	})
 })
@@ -874,12 +877,12 @@ var _ = Describe("validate()", func() {
 				NodeSelector:  "all()",
 			},
 		}
-		err := ValidatePools(instance)
+		err := ValidatePools(&instance.Spec)
 		Expect(err).To(HaveOccurred())
 
 		// Try with a valid block size
 		instance.Spec.CalicoNetwork.IPPools[0].CIDR = "192.168.0.0/26"
-		err = ValidatePools(instance)
+		err = ValidatePools(&instance.Spec)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -900,15 +903,15 @@ var _ = Describe("validate()", func() {
 				NodeSelector:  "all()",
 			},
 		}
-		err := ValidatePools(instance)
+		err := ValidatePools(&instance.Spec)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Try with out-of-bounds sizes now.
 		instance.Spec.CalicoNetwork.IPPools[0].BlockSize = &blockSizeTooBig
-		err = ValidatePools(instance)
+		err = ValidatePools(&instance.Spec)
 		Expect(err).To(HaveOccurred())
 		instance.Spec.CalicoNetwork.IPPools[0].BlockSize = &blockSizeTooSmall
-		err = ValidatePools(instance)
+		err = ValidatePools(&instance.Spec)
 		Expect(err).To(HaveOccurred())
 	})
 })
@@ -932,4 +935,17 @@ func fillPrerequisiteDefaults(i *operator.Installation) {
 	if i.Spec.CNI.IPAM.Type == "" {
 		i.Spec.CNI.IPAM.Type = operator.IPAMPluginCalico
 	}
+}
+
+// createInstallation creates the Installation with its effective config published on the status.
+func createInstallation(ctx context.Context, c client.Client, instance *operator.Installation) {
+	instance.Status.Computed = instance.Spec.DeepCopy()
+	ExpectWithOffset(1, c.Create(ctx, instance)).ShouldNot(HaveOccurred())
+}
+
+// updateInstallation writes the spec and republishes it on the status, as the core controller does.
+func updateInstallation(ctx context.Context, c client.Client, instance *operator.Installation) {
+	ExpectWithOffset(1, c.Update(ctx, instance)).ShouldNot(HaveOccurred())
+	instance.Status.Computed = instance.Spec.DeepCopy()
+	ExpectWithOffset(1, c.Status().Update(ctx, instance)).ShouldNot(HaveOccurred())
 }

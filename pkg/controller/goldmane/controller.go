@@ -171,7 +171,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&goldmaneCR.ObjectMeta)
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if installationSpec == nil {
