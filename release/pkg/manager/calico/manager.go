@@ -1527,6 +1527,9 @@ func (r *CalicoManager) publishContainerImages() error {
 // images just published, so the branch always has a pullable tag between
 // official releases.
 func (r *CalicoManager) publishBranchTag() error {
+	if r.releaseBranchPrefix == "" {
+		return fmt.Errorf("release branch prefix is not set, cannot derive the branch tag")
+	}
 	ver := version.Version(r.calicoVersion)
 	tag := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
 
@@ -1535,9 +1538,12 @@ func (r *CalicoManager) publishBranchTag() error {
 		"CONFIRM=true",
 		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
 	)
+	// The arch images must carry the branch tag before the manifest can list
+	// them as its children.
 	for _, dir := range imageReleaseDirs {
 		fullDir := filepath.Join(r.repoRoot, dir)
-		if _, err := r.makeInDirectoryToFile(fullDir, "push-manifests", "publish-branch-tag", env...); err != nil {
+		target := "retag-build-images-with-registries push-images-to-registries push-manifests"
+		if _, err := r.makeInDirectoryToFile(fullDir, target, "publish-branch-tag", env...); err != nil {
 			return fmt.Errorf("failed to publish branch tag %s for %s: %w", tag, dir, err)
 		}
 	}

@@ -570,6 +570,8 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 		wantPublish   bool
 		wantBranchTag bool
 		wantTag       string
+		prefix        string
+		wantErr       bool
 	}{
 		{
 			name:          "hashrelease also pushes the branch tag",
@@ -598,6 +600,16 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 			wantBranchTag: false,
 		},
 		{
+			// An unset prefix would silently tag images "-v3.33".
+			name:          "missing branch prefix is an error",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			prefix:        "",
+			wantPublish:   true,
+			wantErr:       true,
+		},
+		{
 			name:          "images disabled publishes nothing",
 			version:       "v3.33.0-0.dev-1-gabcdef123456",
 			images:        false,
@@ -611,30 +623,41 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFakeRunner()
 
+			prefix := tt.prefix
+			if prefix == "" && !tt.wantErr {
+				prefix = "release"
+			}
 			r := &CalicoManager{
 				runner:              f,
 				images:              tt.images,
 				isHashRelease:       tt.isHashRelease,
 				calicoVersion:       tt.version,
-				releaseBranchPrefix: "release",
+				releaseBranchPrefix: prefix,
 			}
 
-			if err := r.publishContainerImages(); err != nil {
+			err := r.publishContainerImages()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("publishContainerImages() = nil, want error")
+				}
+				return
+			}
+			if err != nil {
 				t.Fatalf("publishContainerImages() unexpected error: %v", err)
 			}
 
 			if got := f.ran("make -C cmd/calico release-publish"); got != tt.wantPublish {
 				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
 			}
-			if got := f.ran("make -C cmd/calico push-manifests"); got != tt.wantBranchTag {
-				t.Errorf("push-manifests ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+			if got := f.ran("make -C cmd/calico retag-build-images-with-registries"); got != tt.wantBranchTag {
+				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
 			}
 			if tt.wantBranchTag {
+				if got := f.envFor("make -C cmd/calico retag-build-images-with-registries"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				}
 				if got, want := f.count("make -C"), 2*len(imageReleaseDirs)+len(windowsReleaseDirs); got != want {
 					t.Errorf("make invocations = %d, want %d (calls: %v)", got, want, f.calls)
-				}
-				if got := f.envFor("make -C cmd/calico push-manifests"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
-					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
 				}
 			}
 		})

@@ -103,8 +103,9 @@ WARNED_IMAGES=()
 
 while IFS= read -r image; do
   success=0
+  last_err=""
   for attempt in 1 2 3; do
-    if "$CRANE" digest "$image" >/dev/null 2>&1; then
+    if last_err=$("$CRANE" digest "$image" 2>&1 >/dev/null); then
       echo "✅ Available: $image"
       success=1
       break
@@ -118,11 +119,15 @@ while IFS= read -r image; do
   done
 
   if [ "$success" -ne 1 ]; then
-    if [ "$BRANCH_TAG" -eq 1 ] && [[ "$image" == *":$CALICO_VERSION" ]]; then
+    # Only an authoritative "not found" is an unpublished branch tag. Auth
+    # failures and outages must stay fatal or an unreachable registry passes.
+    if [ "$BRANCH_TAG" -eq 1 ] && [[ "$image" == *":$CALICO_VERSION" ]] \
+      && [[ "$last_err" == *MANIFEST_UNKNOWN* || "$last_err" == *NAME_UNKNOWN* || "$last_err" == *"404 Not Found"* ]]; then
       echo "⚠️  NOT FOUND after 3 attempts (branch tag, not fatal): $image"
       WARNED_IMAGES+=("$image")
     else
       echo "❌ NOT FOUND after 3 attempts: $image"
+      [ -n "$last_err" ] && echo "   last error: $last_err"
       FAILED=1
       FAILED_IMAGES+=("$image")
     fi
@@ -134,7 +139,7 @@ done <<< "$manifest_images"
 #########################################
 if [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
   echo ""
-  echo "⚠️  Not yet published under the $CALICO_VERSION branch tag:"
+  echo "⚠️  Not yet published under the $CALICO_VERSION branch tag (a hashrelease from this branch publishes it):"
   for img in "${WARNED_IMAGES[@]}"; do
     echo "   ⚠️  $img"
   done
@@ -148,7 +153,7 @@ if [ "$FAILED" -eq 1 ]; then
   done
   exit 1
 elif [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
-  echo "✅ All images from manifests are available, except branch-tagged images not yet published."
+  echo "✅ All images from manifests are available. The images listed above are tagged with the branch name, which a hashrelease publishes from this branch; they will be available after the next hashrelease."
 else
   echo "✅ All images from manifests are available!"
 fi
