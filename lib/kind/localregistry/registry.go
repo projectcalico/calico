@@ -240,20 +240,25 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == http.MethodGet || r.Method == http.MethodHead {
-		switch kind {
-		case "manifests":
-			if err := f.ensureManifest(r.Context(), ns, repo, ref); err != nil {
-				f.log.Warn("manifest pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
-				http.Error(w, err.Error(), http.StatusBadGateway)
-				return
-			}
-		case "blobs":
-			if err := f.ensureBlob(r.Context(), ns, repo, ref); err != nil {
-				f.log.Warn("blob pull-through failed", "ns", ns, "repo", repo, "digest", ref, "error", err)
-				http.Error(w, err.Error(), http.StatusBadGateway)
-				return
-			}
+	switch {
+	case kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+		// Both GET and HEAD populate — containerd uses HEAD to check
+		// digest existence before the GET, and the manifest itself is
+		// a few KB so pulling on HEAD costs nothing.
+		if err := f.ensureManifest(r.Context(), ns, repo, ref); err != nil {
+			f.log.Warn("manifest pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+	case kind == "blobs" && r.Method == http.MethodGet:
+		// Blobs populate only on GET. A HEAD on a missing blob stays
+		// cheap (returns 404 from the internal store); if the caller
+		// actually needs the bytes they'll follow up with a GET, which
+		// triggers the pull-through.
+		if err := f.ensureBlob(r.Context(), ns, repo, ref); err != nil {
+			f.log.Warn("blob pull-through failed", "ns", ns, "repo", repo, "digest", ref, "error", err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
 		}
 	}
 
@@ -305,7 +310,7 @@ func (f *Registry) ensureManifest(ctx context.Context, ns, repo, ref string) err
 	upstream := joinRef("", ns, repo, ref)
 	f.log.Info("manifest pull-through", "upstream", upstream)
 
-	upstreamRef, err := name.ParseReference(upstream, f.nameOpts()...)
+	upstreamRef, err := name.ParseReference(upstream, f.upstreamNameOpts()...)
 	if err != nil {
 		return fmt.Errorf("parse upstream %s: %w", upstream, err)
 	}
@@ -352,7 +357,7 @@ func (f *Registry) ensureBlob(ctx context.Context, ns, repo, digest string) erro
 	}
 
 	upstream := joinRef("", ns, repo, digest)
-	digestRef, err := name.NewDigest(upstream, f.nameOpts()...)
+	digestRef, err := name.NewDigest(upstream, f.upstreamNameOpts()...)
 	if err != nil {
 		return fmt.Errorf("parse blob digest %s: %w", upstream, err)
 	}
@@ -365,7 +370,7 @@ func (f *Registry) ensureBlob(ctx context.Context, ns, repo, digest string) erro
 		return fmt.Errorf("fetch blob %s: %w", upstream, err)
 	}
 	internalRepoRef := fmt.Sprintf("%s/%s/%s", f.internalHost, safeNS(ns), repo)
-	internalRepo, err := name.NewRepository(internalRepoRef, f.nameOpts()...)
+	internalRepo, err := name.NewRepository(internalRepoRef, f.internalNameOpts()...)
 	if err != nil {
 		return fmt.Errorf("parse internal repo %s: %w", internalRepoRef, err)
 	}
@@ -498,23 +503,15 @@ func (s staticKeychain) Resolve(res authn.Resource) (authn.Authenticator, error)
 	return authn.Anonymous, nil
 }
 
-func (f *Registry) pullOpts(ctx context.Context) []crane.Option {
-	opts := []crane.Option{crane.WithContext(ctx), crane.WithAuthFromKeychain(f.keychain)}
-	if f.cfg.InsecureUpstream {
-		opts = append(opts, crane.Insecure)
-	}
-	return opts
-}
-
 func (f *Registry) pushOpts(ctx context.Context) []crane.Option {
 	// The internal store is plaintext http on loopback, so push is insecure.
 	return []crane.Option{crane.WithContext(ctx), crane.Insecure}
 }
 
-// remoteOpts mirrors pullOpts for the go-containerregistry remote package
-// (ensureManifest / ensureBlob use remote directly rather than crane, so
-// they can operate on manifests and single blobs without touching the full
-// image graph).
+// remoteOpts is the go-containerregistry remote-package counterpart of the
+// old crane pullOpts (ensureManifest / ensureBlob use remote directly rather
+// than crane, so they can operate on a single manifest or blob without
+// touching the full image graph).
 func (f *Registry) remoteOpts(ctx context.Context) []remote.Option {
 	return []remote.Option{
 		remote.WithContext(ctx),
@@ -522,18 +519,28 @@ func (f *Registry) remoteOpts(ctx context.Context) []remote.Option {
 	}
 }
 
-// pushRemoteOpts is the remote counterpart of pushOpts. WriteLayer needs the
-// internal store's scheme to be http, which name.NewRepository controls via
-// name.Insecure — see nameOpts.
+// pushRemoteOpts is the remote counterpart of pushOpts. The internal store
+// is plaintext http on loopback; internalNameOpts is what carries the
+// insecure flag into the WriteLayer call.
 func (f *Registry) pushRemoteOpts(ctx context.Context) []remote.Option {
 	return []remote.Option{remote.WithContext(ctx)}
 }
 
-// nameOpts flags the upstream / internal reference parsing to permit
-// plaintext HTTP. name defaults to https; without name.Insecure the
-// loopback internal store (http-only) can't be addressed, and the
-// InsecureUpstream test config can't reach an http upstream either.
-func (f *Registry) nameOpts() []name.Option {
+// upstreamNameOpts controls how upstream refs (gcr.io/…, docker.io/…) are
+// parsed. Real upstreams are https, so we only pass name.Insecure when the
+// test-only InsecureUpstream is on — otherwise remote.Get on a real registry
+// would fall through to http and fail.
+func (f *Registry) upstreamNameOpts() []name.Option {
+	if f.cfg.InsecureUpstream {
+		return []name.Option{name.Insecure}
+	}
+	return nil
+}
+
+// internalNameOpts always forces plaintext HTTP: the internal loopback
+// store binds http-only, so without name.Insecure name.NewRepository would
+// try to reach it over https and fail.
+func (f *Registry) internalNameOpts() []name.Option {
 	return []name.Option{name.Insecure}
 }
 
