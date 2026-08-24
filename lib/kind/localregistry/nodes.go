@@ -44,8 +44,22 @@ func (f *Registry) ConfigureNodes(ctx context.Context, kindNodes []nodes.Node, u
 	if err != nil {
 		return err
 	}
+	// response_header_timeout / request_timeout / dial_timeout are the
+	// per-host HTTP timeouts containerd applies to the fetcher talking
+	// to this mirror. Defaults are aggressive (seconds), which trips
+	// on a cold pull-through of a large image (Kibana, Elasticsearch)
+	// because ensure() holds the manifest HEAD open for the whole
+	// synchronous crane.Pull + crane.Push cycle — that can be minutes
+	// on the first pull. Generous values here don't slow anything down
+	// on a warm cache (the facade responds in ms once the manifest is
+	// in the internal store); they only take effect while an image is
+	// actively being pulled through. Supported by containerd 2.x, which
+	// is what kindest/node images from kind v0.27+ ship.
 	hostsTOML := fmt.Sprintf(`[host.%q]
   capabilities = ["pull", "resolve"]
+  dial_timeout = "30s"
+  response_header_timeout = "15m"
+  request_timeout = "30m"
 `, endpoint)
 
 	for _, n := range kindNodes {
