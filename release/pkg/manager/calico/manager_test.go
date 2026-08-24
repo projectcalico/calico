@@ -16,6 +16,7 @@ package calico
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -41,6 +42,9 @@ type fakeRunner struct {
 
 	// calls records every command invoked, as "name arg1 arg2 ...".
 	calls []string
+
+	// envs records the env passed alongside each recorded call, by index.
+	envs [][]string
 }
 
 func newFakeRunner() *fakeRunner {
@@ -54,8 +58,13 @@ func (f *fakeRunner) on(key, stdout string, err error) *fakeRunner {
 }
 
 func (f *fakeRunner) record(name string, args []string) (string, error) {
+	return f.recordEnv(name, args, nil)
+}
+
+func (f *fakeRunner) recordEnv(name string, args, env []string) (string, error) {
 	cmd := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	f.calls = append(f.calls, cmd)
+	f.envs = append(f.envs, env)
 	if res, ok := f.responses[cmd]; ok {
 		return res.stdout, res.err
 	}
@@ -73,7 +82,7 @@ func (f *fakeRunner) record(name string, args []string) (string, error) {
 }
 
 func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.record(name, args)
+	return f.recordEnv(name, args, env)
 }
 
 func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
@@ -82,7 +91,7 @@ func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
 }
 
 func (f *fakeRunner) RunInDir(dir, name string, args, env []string) (string, error) {
-	return f.record(name, args)
+	return f.recordEnv(name, args, env)
 }
 
 func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
@@ -91,7 +100,7 @@ func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) err
 }
 
 func (f *fakeRunner) RunInDirToFile(dir, name string, args, env []string, logPath string) (string, error) {
-	return f.record(name, args)
+	return f.recordEnv(name, args, env)
 }
 
 // ran reports whether any recorded call starts with the given command prefix.
@@ -108,6 +117,16 @@ func (f *fakeRunner) count(prefix string) int {
 		}
 	}
 	return n
+}
+
+// envFor returns the env of the first recorded call matching the given prefix.
+func (f *fakeRunner) envFor(prefix string) []string {
+	for i, c := range f.calls {
+		if strings.HasPrefix(c, prefix) {
+			return f.envs[i]
+		}
+	}
+	return nil
 }
 
 func TestTagRelease(t *testing.T) {
@@ -540,4 +559,84 @@ func TestRequireOnMainBranch(t *testing.T) {
 	run("checkout", "-q", "-b", "release-v3.33")
 	require.NoError(t, m.requireOnMainBranch("release-v3.33"),
 		"a resume must be allowed when the derived branch exists")
+}
+
+func TestPublishContainerImagesBranchTag(t *testing.T) {
+	tests := []struct {
+		name          string
+		version       string
+		images        bool
+		isHashRelease bool
+		wantPublish   bool
+		wantBranchTag bool
+		wantTag       string
+	}{
+		{
+			name:          "hashrelease also pushes the branch tag",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			wantPublish:   true,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33",
+		},
+		{
+			name:          "early preview keeps its stream suffix",
+			version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			wantPublish:   true,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33-1",
+		},
+		{
+			name:          "official release does not move the branch tag",
+			version:       "v3.33.0",
+			images:        true,
+			isHashRelease: false,
+			wantPublish:   true,
+			wantBranchTag: false,
+		},
+		{
+			name:          "images disabled publishes nothing",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        false,
+			isHashRelease: true,
+			wantPublish:   false,
+			wantBranchTag: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner()
+
+			r := &CalicoManager{
+				runner:              f,
+				images:              tt.images,
+				isHashRelease:       tt.isHashRelease,
+				calicoVersion:       tt.version,
+				releaseBranchPrefix: "release",
+			}
+
+			if err := r.publishContainerImages(); err != nil {
+				t.Fatalf("publishContainerImages() unexpected error: %v", err)
+			}
+
+			if got := f.ran("make -C cmd/calico release-publish"); got != tt.wantPublish {
+				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
+			}
+			if got := f.ran("make -C cmd/calico push-manifests"); got != tt.wantBranchTag {
+				t.Errorf("push-manifests ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+			}
+			if tt.wantBranchTag {
+				if got, want := f.count("make -C"), 2*len(imageReleaseDirs)+len(windowsReleaseDirs); got != want {
+					t.Errorf("make invocations = %d, want %d (calls: %v)", got, want, f.calls)
+				}
+				if got := f.envFor("make -C cmd/calico push-manifests"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				}
+			}
+		})
+	}
 }

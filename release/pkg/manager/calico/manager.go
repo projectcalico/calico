@@ -1516,6 +1516,31 @@ func (r *CalicoManager) publishContainerImages() error {
 			return err
 		}
 	}
+
+	if r.isHashRelease {
+		return r.publishBranchTag()
+	}
+	return nil
+}
+
+// publishBranchTag moves the branch-named tag (e.g. release-v3.33) onto the
+// images just published, so the branch always has a pullable tag between
+// official releases.
+func (r *CalicoManager) publishBranchTag() error {
+	ver := version.Version(r.calicoVersion)
+	tag := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
+
+	env := append(os.Environ(),
+		fmt.Sprintf("IMAGETAG=%s", tag),
+		"CONFIRM=true",
+		fmt.Sprintf("DEV_REGISTRIES=%s", strings.Join(r.imageRegistries, " ")),
+	)
+	for _, dir := range imageReleaseDirs {
+		fullDir := filepath.Join(r.repoRoot, dir)
+		if _, err := r.makeInDirectoryToFile(fullDir, "push-manifests", "publish-branch-tag", env...); err != nil {
+			return fmt.Errorf("failed to publish branch tag %s for %s: %w", tag, dir, err)
+		}
+	}
 	return nil
 }
 
