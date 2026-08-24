@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,6 +56,23 @@ type Checker struct {
 	CheckSNAT        bool
 	RetriesDisabled  bool
 	StaggerStartBy   time.Duration
+
+	// UniqueSourcePorts gives every expectation its own source port on each
+	// CheckConnectivity call, so that no two connections a checker makes ever
+	// share a 5-tuple.
+	//
+	// Tests that count flows per round of checking need this.  A connection the
+	// destination denies establishes nothing, so it leaves no TIME_WAIT socket
+	// holding its ephemeral port, and the kernel starts its port search for the
+	// next connect() to that same destination from the same offset - which makes
+	// the port just released a likely pick.  A repeat on the same port shares a
+	// 5-tuple with the first attempt, matches the conntrack entry it left behind,
+	// and is reported as one flow rather than two.
+	//
+	// Ports are assigned once per call, ahead of any retry, so a retried attempt
+	// keeps its port and folds into the flow it is retrying instead of counting as
+	// a new one.  An expectation given a port by ExpectWithSrcPort keeps that port.
+	UniqueSourcePorts bool
 
 	// OnFail, if set, will be called instead of ginkgo.Fail().  (Useful for testing the checker itself.)
 	OnFail func(msg string)
@@ -329,6 +347,10 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		}
 	}
 
+	if c.UniqueSourcePorts {
+		c.assignSourcePorts()
+	}
+
 	var expConnectivity []string
 	start := time.Now()
 
@@ -417,6 +439,36 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		c.OnFail(message)
 	} else {
 		ginkgo.Fail(message, callerSkip)
+	}
+}
+
+// Source ports for UniqueSourcePorts are drawn from a window that sits above the
+// well-known ports, below the ephemeral range so the kernel cannot hand the same
+// port to another socket in the same namespace, and clear of the ports that
+// individual tests pin by hand.
+const (
+	uniqueSrcPortFirst = 13000
+	uniqueSrcPortLast  = 16000
+)
+
+// nextUniqueSrcPort counts the source ports handed out to every checker in the
+// process, so that connections made by different checkers cannot collide either.
+// It wraps within the window, which only repeats a port after the whole window
+// has been used - long after any conntrack entry for the earlier connection has
+// gone.
+var nextUniqueSrcPort atomic.Uint32
+
+// assignSourcePorts gives each expectation its own source port, replacing any
+// port assigned by an earlier call but leaving one the caller set alone.
+func (c *Checker) assignSourcePorts() {
+	for i := range c.expectations {
+		e := &c.expectations[i]
+		if e.srcPort != 0 && !e.srcPortAuto {
+			continue
+		}
+		n := nextUniqueSrcPort.Add(1) - 1
+		e.srcPort = uniqueSrcPortFirst + uint16(n%(uniqueSrcPortLast-uniqueSrcPortFirst))
+		e.srcPortAuto = true
 	}
 }
 
@@ -607,6 +659,9 @@ type Expectation struct {
 	clientMTUEnd   int
 
 	srcPort uint16
+	// srcPortAuto records that srcPort was assigned by UniqueSourcePorts rather
+	// than by the caller, and so may be replaced on the next call.
+	srcPortAuto bool
 
 	ErrorStr string
 
