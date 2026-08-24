@@ -104,12 +104,12 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 # The project Go version.
 GO_VERSION?=1.26.7
 # Version of Kubernetes to use for dependencies, tests, and kubectl.
-K8S_VERSION?=v1.36.3
+K8S_VERSION?=v1.36.4
 # The version of LLVM to use for the go-build image.
 LLVM_VERSION?=21.1.8
 # Calico toolchain versions and the calico/go-build image to use.
 GO_BUILD_VER?=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
-CALICO_BASE_VER ?= ubi9-1785953290
+CALICO_BASE_VER ?= ubi9-1787377327
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
 CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
 SRC_FILES=$(shell find ./pkg -name '*.go')
