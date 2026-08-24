@@ -222,12 +222,6 @@ func TestFragmentsAreNotUsedDirectly(t *testing.T) {
 // Asserted in both directions below, so a config added without a cell fails
 // immediately and a stale entry fails too.
 var unwiredConfigs = map[string]bool{
-	"nftables/eks-xtables-nobgp-aws-autohep.yaml":     true,
-	"nftables/xtables-autohep.yaml":                   true,
-	"nftables/xtables-encap-autohep.yaml":             true,
-	"nftables/xtables-encap-aws-autohep.yaml":         true,
-	"nftables/xtables-encap-nobgp-v3crd-autohep.yaml": true,
-	"nftables/xtables-v3crd-aws-autohep.yaml":         true,
 }
 
 // TestNoOrphanedConfigs checks the reverse of TestReferencedConfigsExist: a config
