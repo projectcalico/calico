@@ -190,8 +190,11 @@ echo "Replacing image versions for static manifests"
 for img in $NON_HELM_MANIFEST_IMAGES; do
   new_img=${REGISTRY}/${img}
   echo "Update $img image to $new_img:$CALICO_VERSION"
-  find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
+  find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._:-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
 done
 
-# Version the component list in manifest header comments, which carry no "image:" prefix.
-find . -type f -name "*.yaml" -exec sed -i -E "s|^(#[[:space:]]+)calico/calico:[A-Za-z0-9_.-]*|\1calico/calico:$CALICO_VERSION|g" {} \;
+# Version the manifest header comments, which carry no "image:" prefix.
+find . -type f -name "*.yaml" -exec sed -i -E \
+  -e "s|^(#[[:space:]]+)calico/calico:[A-Za-z0-9_.-]*|\1calico/calico:$CALICO_VERSION|g" \
+  -e "s|^(#[[:space:]]*Calico Version[[:space:]]+)[A-Za-z0-9_.-]*|\1$CALICO_VERSION|g" \
+  -e "s|^(#[[:space:]]*https://\S*/releases#)[A-Za-z0-9_.-]*|\1$CALICO_VERSION|g" {} \;
