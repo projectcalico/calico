@@ -46,7 +46,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: calico-csi
-          image: quay.io/calico/calico:master
+          image: quay.io/calico/calico:release-v3.33
           imagePullPolicy: IfNotPresent
           command: ["/usr/bin/calico", "component", "csi"]
           args:
@@ -72,7 +72,7 @@ spec:
               mountPath: /var/lib/kubelet/
               mountPropagation: "Bidirectional"
         - name: csi-node-driver-registrar
-          image: quay.io/calico/calico:master
+          image: quay.io/calico/calico:release-v3.33
           imagePullPolicy: IfNotPresent
           command: ["/usr/bin/csi-node-driver-registrar"]
           args:
