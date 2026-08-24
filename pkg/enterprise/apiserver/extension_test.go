@@ -48,6 +48,7 @@ import (
 	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/extensions/extensionstest"
 	"github.com/tigera/operator/pkg/render"
+	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
 	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/render/webhooks"
@@ -836,6 +837,35 @@ var _ = Describe("API server enterprise policy modifier", func() {
 		n := len(policy.Spec.Egress)
 		Expect(n).To(BeNumerically(">", 0))
 		Expect(policy.Spec.Egress[n-1].Action).To(Equal(v3.Pass))
+	})
+
+	It("allows egress to Guardian on a managed cluster", func() {
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil,
+			&operatorv1.ManagementClusterConnection{ObjectMeta: metav1.ObjectMeta{Name: utils.DefaultEnterpriseInstanceKey.Name}})
+		eci, _, err := ext.APIServer().ExtendInputs(ctx, ci)
+		ri := eci.RenderInputs
+		Expect(err).NotTo(HaveOccurred())
+
+		policy := applyPolicy(ci, ri)
+		guardian := v3.Rule{
+			Action:      v3.Allow,
+			Protocol:    &networkpolicy.TCPProtocol,
+			Destination: render.GuardianEntityRule,
+		}
+		// The rule is only reached if it precedes the trailing Pass.
+		n := len(policy.Spec.Egress)
+		Expect(policy.Spec.Egress[n-1].Action).To(Equal(v3.Pass))
+		Expect(policy.Spec.Egress[n-2]).To(Equal(guardian))
+	})
+
+	It("omits the Guardian egress rule when the cluster is not managed", func() {
+		ci := apiServerControllerInputs(operatorv1.CalicoEnterprise, nil)
+		eci, _, err := ext.APIServer().ExtendInputs(ctx, ci)
+		ri := eci.RenderInputs
+		Expect(err).NotTo(HaveOccurred())
+
+		policy := applyPolicy(ci, ri)
+		Expect(policy.Spec.Egress).NotTo(ContainElement(HaveField("Destination", render.GuardianEntityRule)))
 	})
 
 	It("adds the L7 admission controller ingress port when sidecar injection is enabled", func() {
