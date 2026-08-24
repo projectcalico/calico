@@ -48,3 +48,16 @@ includes:
       in:
         - ^lib/
         - ^\.argoci/modules/lib\.yaml$
+
+  - path: .argoci/modules/api.yaml
+    changes:
+      in:
+        - ^api/
+        - ^test/
+        - ^metadata\.mk$
+        - ^lib\.Makefile$
+        - ^\.argoci/modules/api\.yaml$
+      exclude:
+        - (^|/)\.gitignore$
+        - (^|/)README\.md$
+        - (^|/)LICENSE$

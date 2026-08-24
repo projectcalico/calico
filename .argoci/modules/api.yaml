@@ -1,0 +1,25 @@
+# The `api` step stands up a kind cluster inside the docker sidecar: the nodes
+# and the local registry become containers there, and their published ports land
+# on the pod loopback the step shares. Both steps bind-mount into the nested
+# build container, which only resolves because the paths sit under /src.
+version: condensed-module
+
+defaults:
+  timeout: 30m
+
+steps:
+  - name: api-ci
+    commands: |
+      cd api
+      make ci
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/api"
+      artifact push job report --destination test-results || true
+
+  - name: api-validation
+    commands: |
+      cd test
+      make ci
+    epilogue: |
+      cd "${CI_HOME}/${CI_GIT_DIR}/test"
+      artifact push job report --destination test-results || true
