@@ -71,14 +71,14 @@
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 216
 .argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 216
 .argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | legacy/nftables | 194
+.argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | nftables/xtables-autohep | 222
+.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 209
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 212
-.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-aws | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-gcp | legacy/nftables | 194
-.argoci/cron/e2e-nftables.yaml | nftables-talos-nftables-talos | legacy/nftables | 194
+.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | nftables/xtables-autohep | 222
+.argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | nftables/xtables-encap-autohep | 218
+.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-aws | nftables/xtables-v3crd-aws-autohep | 218
+.argoci/cron/e2e-nftables.yaml | nftables-talos-native-v3-crds-gcp | nftables/xtables-encap-nobgp-v3crd-autohep | 213
+.argoci/cron/e2e-nftables.yaml | nftables-talos-nftables-talos | nftables/xtables-encap-aws-autohep | 218
 .argoci/cron/e2e-openstack.yaml | full-fv | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region | (openstack-e2e) | -
 .argoci/cron/e2e-patch-verification.yaml | kind-tests | patch-verification/xtables | 83
@@ -189,13 +189,13 @@
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 212
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, arm64, WG / Nftables mode, arm64, WG | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (AWS) | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | legacy/nftables | 194
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | legacy/nftables | 194
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | nftables/eks-xtables-nobgp-aws-autohep | 209
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | nftables/xtables-autohep | 222
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | nftables/xtables-encap-autohep | 218
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, arm64, WG / Nftables mode, arm64, WG | nftables/xtables-autohep | 222
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (AWS) | nftables/xtables-v3crd-aws-autohep | 218
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | nftables/xtables-encap-nobgp-v3crd-autohep | 213
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | nftables/xtables-encap-aws-autohep | 218
 .semaphore/end-to-end/pipelines/patch-verification.yml | KinD tests / IPv6 | patch-verification/xtables | 83
 .semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | patch-verification/xtables-encap-manifest | 80
