@@ -126,10 +126,13 @@ func installAdmissionPolicies(c client.Client) error {
 	return nil
 }
 
-// waitForCRDsReady polls until Calico CRDs are fully usable after admission policy
-// installation. The MAPs target NetworkPolicy, so we verify by doing a create+delete
-// round-trip rather than just a List (which can succeed before the admission chain is ready).
-func waitForCRDsReady(c client.Client) error {
+// waitForAPIReady waits for the CRDs to be served and, where admission policies are
+// installed, for them to be mutating.
+//
+// A successful create proves only the former: an unbound policy rejects nothing and
+// silently fails to mutate, so a slow API server would let the suite start early and
+// the mutation-dependent tests fail intermittently.
+func waitForAPIReady(c client.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	for {
@@ -141,12 +144,20 @@ func waitForCRDsReady(c client.Client) error {
 			Spec: v3.NetworkPolicySpec{Selector: "all()"},
 		}
 		if err := c.Create(ctx, probe); err == nil {
+			mutated := true
+			if admissionPoliciesEnabled {
+				got := &v3.NetworkPolicy{}
+				mutated = c.Get(ctx, client.ObjectKeyFromObject(probe), got) == nil &&
+					got.Spec.Tier == "default"
+			}
 			_ = c.Delete(ctx, probe)
-			return nil
+			if mutated {
+				return nil
+			}
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("timed out waiting for CRDs to become ready")
+			return fmt.Errorf("timed out waiting for the API server to become ready")
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
@@ -208,10 +219,8 @@ func TestMain(m *testing.M) {
 			return
 		}
 
-		// After installing admission policies, the API server may briefly make CRDs
-		// unavailable while reloading. Wait for a known CRD to be usable.
-		if err := waitForCRDsReady(testClient); err != nil {
-			fmt.Fprintf(os.Stderr, "CRDs not ready after admission policy install: %v\n", err)
+		if err := waitForAPIReady(testClient); err != nil {
+			fmt.Fprintf(os.Stderr, "API server not ready after admission policy install: %v\n", err)
 			return
 		}
 	}
