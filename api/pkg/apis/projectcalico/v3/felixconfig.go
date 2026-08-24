@@ -91,12 +91,13 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
-// +kubebuilder:validation:Enum=TC;TCX
+// +kubebuilder:validation:Enum=TC;TCX;Netkit
 type BPFAttachOption string
 
 const (
-	BPFAttachOptionTC  BPFAttachOption = "TC"
-	BPFAttachOptionTCX BPFAttachOption = "TCX"
+	BPFAttachOptionTC     BPFAttachOption = "TC"
+	BPFAttachOptionTCX    BPFAttachOption = "TCX"
+	BPFAttachOptionNetkit BPFAttachOption = "Netkit"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -654,11 +655,29 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-	// it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
-	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+	// a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+	// with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+	// vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+	// are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+	// one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+	// vxlanMode both Never.
+	//
+	// - Disabled: Felix programs no cluster routes.
+	// - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+	// - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+	// - Enabled: Felix programs them for both.
+	//
+	// This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+	// makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+	// kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+	// routes at all.
+	//
+	// Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+	// values do, is deprecated as of v3.33 and will be removed in v3.35.
+	//
+	// [Default: EnabledIPIPOnly]
+	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
@@ -1049,10 +1068,15 @@ type FelixConfigurationSpec struct {
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
-	// By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-	// `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-	// [Default: TCX]
-	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
+	// By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+	// netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+	// easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+	// qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+	// Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+	// instead of the netkit API, which is required before downgrading to a release without netkit
+	// support.
+	// [Default: Netkit]
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX Netkit"`
 
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string

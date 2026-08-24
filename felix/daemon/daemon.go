@@ -274,7 +274,7 @@ configRetry:
 		configParams.Encapsulation.IPIPEnabled = encapCalculator.IPIPEnabled()
 		configParams.Encapsulation.VXLANEnabled = encapCalculator.VXLANEnabled()
 		configParams.Encapsulation.VXLANEnabledV6 = encapCalculator.VXLANEnabledV6()
-		configParams.Encapsulation.NoEncapEnabled = encapCalculator.NoEncapEnabled()
+		configParams.Encapsulation.NoEncapNeeded = encapCalculator.NoEncapNeeded()
 
 		// We now have some config flags that affect how we configure the syncer.
 		// After loading the config from the datastore, reconnect, possibly with new
@@ -371,6 +371,9 @@ configRetry:
 	doGoRuntimeSetup(configParams)
 
 	applyBPFOverrides(configParams, dp.SupportsBPF)
+
+	// Resolve NFTablesMode=Auto now, before anything reads the dataplane-specific config.
+	configParams.NFTablesEnabled = dp.NFTablesEnabled(configParams)
 
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
@@ -646,7 +649,7 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
-			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
+			usagerep.StaticItems{KubernetesVersion: kubernetesVersion, NFTablesEnabled: configParams.NFTablesEnabled},
 			configParams.UsageReportingInitialDelaySecs,
 			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
@@ -1460,8 +1463,11 @@ func (fc *DataplaneConnector) sendMessagesToDataplaneDriver() {
 				defer fc.configLock.Unlock()
 				return fc.config.Encapsulation
 			}()
+			// Note, "NoEncapEnabled" should have been named "NoEncapNeeded", but we
+			// can't change this now in the proto API, as 3rd parties might be relying
+			// on it.
 			if msg.IpipEnabled != encap.IPIPEnabled || msg.VxlanEnabled != encap.VXLANEnabled ||
-				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapEnabled {
+				msg.VxlanEnabledV6 != encap.VXLANEnabledV6 || msg.NoEncapEnabled != encap.NoEncapNeeded {
 				log.Warn("IPIP, VXLAN and/or noencap encapsulation changed, need to restart.")
 				fc.shutDownProcess(reasonEncapChanged)
 			}

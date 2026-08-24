@@ -86,7 +86,7 @@ LIBNFTNL_VER=1.2.8
 LIBNFTNL_SHA256=37fea5d6b5c9b08de7920d298de3cdc942e7ae64b1a3e8b880b2d390ae67ad95
 
 # The operator branch corresponding to this branch.
-OPERATOR_BRANCH ?= master
+OPERATOR_BRANCH       ?= master
 OPERATOR_ORGANIZATION ?= tigera
 OPERATOR_GIT_REPO     ?= operator
 

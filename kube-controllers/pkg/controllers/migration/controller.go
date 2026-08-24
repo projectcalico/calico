@@ -487,8 +487,12 @@ func (m *migrationController) handlePending(logCtx *logrus.Entry, dm *migrationv
 	// re-enter Pending after the drain requeue.
 	if dm.Status.DatastoreLockedAt == nil {
 		wait, err := m.runPendingPrechecks(logCtx, dm)
-		if err != nil || wait {
+		if err != nil {
 			return err
+		}
+		if wait {
+			// The prechecks block on state we don't watch, so poll for the fix.
+			return requeueAfter(m.waitingPollInterval)
 		}
 
 		// Lock v1 before the APIService goes away. Otherwise v3 resolves to

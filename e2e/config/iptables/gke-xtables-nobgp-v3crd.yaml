@@ -1,0 +1,48 @@
+# Copyright (c) 2026 Tigera, Inc. All rights reserved.
+#
+# iptables: xtables dataplane, GKE CNI and host-local IPAM, v3 CRD mode, no external node, on GKE.
+#
+# Selection scope comes from pipeline.yaml; this file adds only what this
+# lane's cluster shape rules out. No GKE lane runs it yet, so it is listed in
+# unwiredConfigs.
+
+extends: pipeline.yaml
+
+exclude:
+  labels:
+    - label: Dataplane:BPF
+      reason: "not a BPF dataplane; maglev needs BPF and only self-skips on a missing external node, so it would fail rather than skip"
+    - label: ExternalNode
+      reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
+    - label: Feature:AutoHEPs
+      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
+    - label: Feature:Istio
+      reason: "Istio ambient policy enforcement is not configured on this lane"
+    - label: NoEncap
+      reason: "requires Calico-managed routing, but this cluster runs the GKE CNI plugin"
+    - label: RequiresAWS
+      reason: "not an AWS lane; these specs need AWS VPC routing"
+    - label: RequiresBGP
+      reason: "Calico runs policy-only behind the GKE CNI plugin, so BIRD is not running"
+    - label: RequiresCalicoAPIServer
+      reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses host-local IPAM"
+
+  namePatterns:
+    - group: "GKE enables the DenyServiceExternalIPs admission plugin, so the suite cannot create a Service with an external IP"
+      patterns:
+        - 'scenario-0EL0:'
+        - 'scenario-0EL1:'
+        - 'scenario-0EC0:'
+        - 'scenario-0EC1:'
+        - 'scenario-0EC2:'
+
+    - group: "expects NodePort traffic to be SNATed to a Calico tunnel address, but this cluster routes pod traffic through the GKE CNI plugin"
+      patterns:
+        - 'scenario-7:'
+        - 'scenario-12:'
+
+    - group: "needs the multi-mode rapidclient server image, which is only side-loaded into kind and gcp-kubeadm clusters"
+      patterns:
+        - 'Packet.Size.Verification'

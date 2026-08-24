@@ -260,6 +260,7 @@ func StartDataplaneDriver(
 			RulesConfig: rules.Config{
 				FlowLogsEnabled:          configParams.FlowLogsEnabled(),
 				NFTablesMode:             configParams.NFTablesMode,
+				NFTablesEnabled:          configParams.NFTablesEnabled,
 				NFTablesFlowTableOffload: configParams.NFTablesFlowTableOffload != string(apiv3.NFTablesFlowTableOffloadDisabled),
 				WorkloadIfacePrefixes:    configParams.InterfacePrefixes(),
 
@@ -339,7 +340,7 @@ func StartDataplaneDriver(
 				NATOutgoingExclusions:              configParams.NATOutgoingExclusions,
 				BPFEnabled:                         configParams.BPFEnabled,
 				BPFOverlayIPOnDevice:               configParams.BPFOverlayHostSourceIP == string(apiv3.BPFOverlayHostSourceIPTunnelAddress),
-				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesMode == "Enabled", configParams.BPFForceTrackPacketsFromIfaces),
+				BPFForceTrackPacketsFromIfaces:     replaceWildcards(configParams.NFTablesEnabled, configParams.BPFForceTrackPacketsFromIfaces),
 				ServiceLoopPrevention:              configParams.ServiceLoopPrevention,
 				IstioAmbientModeEnabled:            configParams.IsIstioAmbientModeEnabled(),
 				IstioDSCPMark:                      configParams.IstioDSCPMark.ToUint8(),
@@ -375,8 +376,9 @@ func StartDataplaneDriver(
 			DeviceRouteSourceAddressIPv6:   configParams.DeviceRouteSourceAddressIPv6,
 			DeviceRouteProtocol:            netlink.RouteProtocol(configParams.DeviceRouteProtocol),
 			RemoveExternalRoutes:           configParams.RemoveExternalRoutes,
-			ProgramClusterRoutes:           configParams.ProgramClusterRoutesEnabled(),
-			NoEncapEnabled:                 configParams.Encapsulation.NoEncapEnabled,
+			ProgramIPIPClusterRoutes:       configParams.ProgramIPIPClusterRoutes(),
+			ProgramNoEncapClusterRoutes:    configParams.ProgramNoEncapClusterRoutes(),
+			NoEncapNeeded:                  configParams.Encapsulation.NoEncapNeeded,
 			IPForwarding:                   configParams.IPForwarding,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,
 			IptablesPostWriteCheckInterval: configParams.IptablesPostWriteCheckIntervalSecs,
@@ -526,6 +528,18 @@ func StartDataplaneDriver(
 
 		return extdataplane.StartExtDataplaneDriver(configParams.DataplaneDriver)
 	}
+}
+
+// NFTablesEnabled resolves the configured NFTablesMode, including Auto, to the dataplane
+// this host will use. Callers must resolve it before anything reads the dataplane-specific
+// config, since Auto depends on runtime detection.
+func NFTablesEnabled(configParams *config.Config) bool {
+	detectKubeProxyNftables := nftables.KubeProxyNftablesEnabledFn(nil)
+	nftEnabled, err := nftables.Enabled(configParams.NFTablesMode, detectKubeProxyNftables, nil)
+	if err != nil {
+		log.WithError(err).Panic("Unable to determine whether to use the nftables dataplane, shutting down")
+	}
+	return nftEnabled
 }
 
 func SupportsBPF() error {
