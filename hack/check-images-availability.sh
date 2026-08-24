@@ -42,6 +42,15 @@ CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
 echo "Using REGISTRY: $REGISTRY"
 echo "Using CALICO_VERSION: $CALICO_VERSION"
 
+# A branch-prefixed version is a moving tag that only exists once a hashrelease
+# has published from that branch, so a miss is expected rather than a failure.
+RELEASE_BRANCH_PREFIX="${RELEASE_BRANCH_PREFIX:-release}"
+BRANCH_TAG=0
+if [[ "$CALICO_VERSION" == "${RELEASE_BRANCH_PREFIX}-"* ]]; then
+  BRANCH_TAG=1
+  echo "⚠️  $CALICO_VERSION is a branch tag; missing images tagged with it will warn, not fail."
+fi
+
 #########################################
 # Step 1: Extract from manifests
 #########################################
@@ -90,6 +99,7 @@ echo "Total unique images: ${count}"
 #########################################
 FAILED=0
 FAILED_IMAGES=()
+WARNED_IMAGES=()
 
 while IFS= read -r image; do
   success=0
@@ -108,15 +118,28 @@ while IFS= read -r image; do
   done
 
   if [ "$success" -ne 1 ]; then
-    echo "❌ NOT FOUND after 3 attempts: $image"
-    FAILED=1
-    FAILED_IMAGES+=("$image")
+    if [ "$BRANCH_TAG" -eq 1 ] && [[ "$image" == *":$CALICO_VERSION" ]]; then
+      echo "⚠️  NOT FOUND after 3 attempts (branch tag, not fatal): $image"
+      WARNED_IMAGES+=("$image")
+    else
+      echo "❌ NOT FOUND after 3 attempts: $image"
+      FAILED=1
+      FAILED_IMAGES+=("$image")
+    fi
   fi
 done <<< "$manifest_images"
 
 #########################################
 # Step 3: Final result
 #########################################
+if [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
+  echo ""
+  echo "⚠️  Not yet published under the $CALICO_VERSION branch tag:"
+  for img in "${WARNED_IMAGES[@]}"; do
+    echo "   ⚠️  $img"
+  done
+fi
+
 if [ "$FAILED" -eq 1 ]; then
   echo ""
   echo "❗ Some images are missing or invalid:"
@@ -124,6 +147,8 @@ if [ "$FAILED" -eq 1 ]; then
     echo "   ❌ $img"
   done
   exit 1
+elif [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
+  echo "✅ All images from manifests are available, except branch-tagged images not yet published."
 else
   echo "✅ All images from manifests are available!"
 fi
