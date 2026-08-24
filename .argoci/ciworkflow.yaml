@@ -1,91 +1,48 @@
-# Root of Calico's per-PR/merge CI, composed from per-component modules under
-# .argoci/modules/. One workflow, one GitHub check, one artifact namespace, one
-# auto-cancel unit — the same shape as the Semaphore pipeline this replaces, with
-# the 60 blocks split across files for maintainability rather than glued into one.
+# One workflow rather than one per component: `depends:` and the artifact
+# namespace are both workflow-scoped, so producers and consumers must share one.
+# A workflow that doesn't run posts no commit status, so a gated one could never
+# be a required check.
 #
-# WHY ONE WORKFLOW AND NOT ONE PER COMPONENT:
-#   - `depends:` only resolves within a workflow, so the producer/consumer graph
-#     (calico image -> Felix/Typha/CNI/node/e2e/...) has to live in one.
-#   - CI_ARTIFACT_STORAGE is keyed on {{workflow.name}}, so one workflow means
-#     producers and consumers already share a namespace with no new mechanism.
-#   - A workflow whose runWhen says "no" posts no GitHub status at all, so
-#     per-component checks could never be required — a PR not touching that
-#     component would be permanently unmergeable.
-#
-# Components are gated per-include instead, which is what keeps a small PR small.
-# A module gated out takes its dependents with it (the cascade), so a consumer
-# never runs against a producer that was skipped.
-#
-# SIZE WATCH: an Argo Workflow object lives in etcd (~1.5MB default limit) and
-# gated-out steps never reach it, so day to day this stays small. A PR touching
-# metadata.mk or lib.Makefile fires nearly everything — measure the expanded
-# object on such a change before adding many more modules:
+# Argo workflow objects live in etcd (~1.5MB). Gated-out steps never reach the
+# object, but a change matching every module fires everything — measure before
+# adding many more:
 #   argoci-expand -o yaml -changed metadata.mk .argoci/ciworkflow.yaml | wc -c
 version: condensed
 generateName: calico-
 
-# Semaphore capped the whole pipeline at 4h. This is the equivalent ceiling; it
-# bounds the DAG itself, catching a hang outside any step's own deadline.
+# Bounds the DAG itself, catching a hang outside any step's own deadline.
 timeout: 4h
 
 globalPrologue: |
-  # Every make target in this repo runs inside calico/go-build, so the pull has
-  # to be authenticated or Docker Hub rate-limits it.
+  # Unauthenticated pulls of the build image are rate-limited.
   echo "$DOCKERHUB_PASSWORD" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
 
-  # lib.Makefile's DOCKER_RUN forwards GOCACHE/GOPATH/GOOS/GOARCH/GOFLAGS into
-  # the build container but NOT GOPROXY, so the Athens proxy the `goproxy`
-  # service points us at would go unused: the module download happens in the
-  # nested container, not this one. EXTRA_DOCKER_ARGS is spliced into every
-  # `docker run`, which is the supported way to add it back.
+  # Module downloads happen in the nested build container, which inherits only
+  # the vars spliced in here — so the proxy is unused without this.
   export EXTRA_DOCKER_ARGS="-e GOPROXY=${GOPROXY}"
 
 defaults:
-  # medium is the only jobSize on spot nodes. Preemption fails the run outright
-  # (ArgoCI has no retry), so a module whose steps prove flaky should override
-  # this with `large`, which pins spot: false.
+  # medium is the only spot jobSize. Preemption fails the run outright, with no
+  # retry, so anything long or flaky wants `large`.
   jobSize: medium
 
-  # Semaphore bounded every job at 1h whether or not anyone wrote it down;
-  # ArgoCI's unset timeout means run-forever. This restores that floor for any
-  # module that does not set its own. A module whose Semaphore block declared
-  # an execution_time_limit overrides this in its own `defaults:`.
+  # An unset timeout means run-forever. A module overrides this when its work
+  # justifies more.
   timeout: 1h
 
-  # Modules layer their own defaults over these: scalars replace, collections
-  # (services, secretBundles, env, scratchVolumes) merge — so a module adding a
-  # service keeps docker and goproxy rather than displacing them.
+  # Modules merge collections with these rather than replacing them.
   services:
-    # docker: every component shells out to `docker run calico/go-build`.
-    #   The nested container bind-mounts the repo, and that path is resolved by
-    #   the dind daemon, not this container — it only works because the docker
-    #   service shares /tmp /src /root /go /dockershare between the two. The
-    #   checkout lands in /src/calico, inside the shared /src, so leave
-    #   workingDir alone.
+    # Nested `docker run` bind-mounts are resolved by the daemon, not this
+    # container, so they only work under the paths the two share.
     - docker
     - goproxy
   secretBundles:
     - docker-hub
 
 includes:
-  # One module per Semaphore block. `changes:` here gates every step in the
-  # file at once, so a component's trigger lives at its include rather than being
-  # repeated on each of its steps.
-  #
-  # Patterns are regexes matched with an unanchored substring match — anchor
-  # every one with ^ or it fires on unrelated paths.
-  #
-  # Every module is gated on its component's paths AND on its own file, so
-  # editing a module retests the thing it builds. Semaphore expressed that as
-  # `pipeline_file: 'track'`. Match the module's own path exactly — a broad
-  # `^\.argoci/` would fire every component on any CI edit.
-  #
-  # lib: migrated from blocks/20-lib.yml, whose trigger was change_in(['/lib/'])
-  # with `pipeline_file: 'ignore'`. The component paths are matched exactly so
-  # the two systems can be compared A/B; the module's own path is added because
-  # a module IS the job definition here, with no generation step to catch a
-  # broken one. Sibling Semaphore blocks also list metadata.mk and lib.Makefile,
-  # and lib arguably should too — logged as a follow-up, not changed in the port.
+  # Each module is gated on its own file as well as its component, so editing a
+  # module retests what it builds. Match the path exactly — a bare `^\.argoci/`
+  # would fire every component on any CI edit.
   - path: .argoci/modules/lib.yaml
     changes:
       in:
