@@ -1,6 +1,12 @@
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:HostPorts] HostPorts tests with host port resources active on :8080 should support Pod HostPorts [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow client to reach server while client is terminating [Conformance]
 [sig-calico] [Team:CORE] [Category:Networking] [Feature:Pods] Pod Termination Grace Period should allow pinging a server pod while it is terminating
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections from specified source addresses in a doNotTrack deny policy (DoS mitigation) [ExternalNode] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections to the specified port in a doNotTrack deny policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
@@ -26,12 +32,6 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC resource-name exact match [RequiresCalicoAPIServer] should allow access to the named policy but deny access to others
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [ExternalNode] using UDP and TCP external to nodeport
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
