@@ -2973,66 +2973,76 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
+						affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
+							if testOpts.ipv6 {
+								aff := dumpAffMapV6(tc.Felixes[0])
+								ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
+
+								// get the only key
+								for k, v := range aff {
+									return k, v
+								}
+							} else {
+								aff := dumpAffMap(tc.Felixes[0])
+								ExpectWithOffset(1, aff).To(HaveLen(1), "expected exactly one affinity entry")
+
+								// get the only key
+								for k, v := range aff {
+									return k, v
+								}
+							}
+
+							Fail("no value in aff map")
+							return nil, nil
+						}
+
+						affLen := func() int {
+							if testOpts.ipv6 {
+								return len(dumpAffMapV6(tc.Felixes[0]))
+							}
+							return len(dumpAffMap(tc.Felixes[0]))
+						}
+
+						family := 4
+						natFEKey := func(ip string, port uint16) nat.FrontendKeyInterface {
+							return nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
+						}
+						if testOpts.ipv6 {
+							family = 6
+							natFEKey = func(ip string, port uint16) nat.FrontendKeyInterface {
+								return nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
+							}
+						}
+
+						// waitForSvcProgrammed waits until felix-0 has the service's NAT
+						// frontend and its first backend. Syncing with the NAT tables stops
+						// us creating an extra affinity entry when the CTLB misses but the
+						// regular DNAT hits, the connection fails, and then the CTLB
+						// succeeds.
+						waitForSvcProgrammed := func(ip string, port uint16) {
+							natFtKey := natFEKey(ip, port)
+							EventuallyWithOffset(1, func() bool {
+								m, be := dumpNATMapsAny(family, tc.Felixes[0])
+
+								v, ok := m[natFtKey]
+								if !ok || v.Count() == 0 {
+									return false
+								}
+
+								_, ok = be[nat.NewNATBackendKey(v.ID(), 0)]
+								return ok
+							}, 10*time.Second).Should(BeTrue(), "service was not programmed")
+						}
+
 						// Since the affinity map is shared by cgroup programs on
 						// all nodes, we must be careful to use only client(s) on a
 						// single node for the experiments.
 						It("should have connectivity from a workload to a service with multiple backends", func() {
-							affKV := func() (nat.AffinityKeyInterface, nat.AffinityValueInterface) {
-								if testOpts.ipv6 {
-									aff := dumpAffMapV6(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
-
-									// get the only key
-									for k, v := range aff {
-										return k, v
-									}
-								} else {
-									aff := dumpAffMap(tc.Felixes[0])
-									ExpectWithOffset(1, aff).To(HaveLen(1))
-
-									// get the only key
-									for k, v := range aff {
-										return k, v
-									}
-								}
-
-								Fail("no value in aff map")
-								return nil, nil
-							}
-
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
 							if setAffinity {
-								// Sync with NAT tables to prevent creating extra entry when
-								// CTLB misses but regular DNAT hits, but connection fails and
-								// then CTLB succeeds.
-								var (
-									family   int
-									natFtKey nat.FrontendKeyInterface
-								)
-
-								if testOpts.ipv6 {
-									natFtKey = nat.NewNATKeyV6Intf(net.ParseIP(ip), port, numericProto)
-									family = 6
-								} else {
-									natFtKey = nat.NewNATKeyIntf(net.ParseIP(ip), port, numericProto)
-									family = 4
-								}
-
-								Eventually(func() bool {
-									m, be := dumpNATMapsAny(family, tc.Felixes[0])
-
-									v, ok := m[natFtKey]
-									if !ok || v.Count() == 0 {
-										return false
-									}
-
-									beKey := nat.NewNATBackendKey(v.ID(), 0)
-
-									_, ok = be[beKey]
-									return ok
-								}, 5*time.Second).Should(BeTrue())
+								waitForSvcProgrammed(ip, port)
 							}
 
 							cc.ExpectSome(w[0][1], TargetIP(ip), port)
@@ -3046,6 +3056,39 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							// This should happen consistently, but that may take quite some time.
 							Expect(val1.Backend()).To(Equal(v2.Backend()))
+
+							// The affinity entry must survive a kube-proxy sync. The
+							// syncer cleans the affinity map on every sync, and it only
+							// knows to keep an entry for a service it expects to have
+							// affinity - which, for unconnected UDP, includes services
+							// without session affinity because the CTLB enforces
+							// affinity for them too.
+							//
+							// Creating an unrelated service forces a sync; once felix
+							// has programmed it, the cleanup has definitely run.
+							By("keeping the affinity across a kube-proxy sync", func() {
+								syncSvcIP := "10.101.0.13"
+								if testOpts.ipv6 {
+									syncSvcIP = "dead:beef::abcd:0:0:13"
+								}
+								syncSvc := k8sService("test-service-sync", syncSvcIP, w[0][0], 80, 8055, 0, testOpts.protocol)
+								_, err := k8sClient.CoreV1().Services(testSvcNamespace).
+									Create(context.Background(), syncSvc, metav1.CreateOptions{})
+								Expect(err).NotTo(HaveOccurred())
+
+								syncSvcKey := natFEKey(syncSvcIP, 80)
+								Eventually(func() bool {
+									m, _ := dumpNATMapsAny(family, tc.Felixes[0])
+									_, ok := m[syncSvcKey]
+									return ok
+								}, "10s", "300ms").Should(BeTrue(), "kube-proxy did not sync the extra service")
+
+								Expect(affLen()).To(Equal(1),
+									"the kube-proxy sync deleted the affinity entry")
+								_, v3 := affKV()
+								Expect(v3.Backend()).To(Equal(val1.Backend()),
+									"the kube-proxy sync changed the affinity backend")
+							})
 
 							cc.ResetExpectations()
 
@@ -3119,6 +3162,47 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								return aff[mkey.(nat.AffinityKey)].Backend()
 							}, 60*time.Second, time.Second).ShouldNot(Equal(mVal.Backend()))
 						})
+
+						// The CTLB enforces its own, short, affinity for unconnected UDP on
+						// every UDP service. A service that asks for session affinity has a
+						// much longer timeout of its own, and that is the one the user asked
+						// for, so it must win.
+						if setAffinity && testOpts.protocol == "udp" && testOpts.udpUnConnected && testOpts.connTimeEnabled {
+							It("should keep the affinity for longer than the CTLB's UDP timeout", func() {
+								ip := testSvc.Spec.ClusterIP
+								port := uint16(testSvc.Spec.Ports[0].Port)
+
+								// Shrink the CTLB's timeout so that the test can idle past it in
+								// a few seconds. The service keeps Kubernetes' default session
+								// affinity timeout of 3 hours.
+								By("restarting felix-0 with a 3s UDP conntrack timeout", func() {
+									tc.Felixes[0].SetEnv(map[string]string{"FELIX_BPFCONNTRACKTIMEOUTS": "UDPTimeout=3s"})
+									tc.Felixes[0].Restart()
+									waitForSvcProgrammed(ip, port)
+								})
+
+								// N.B. Client must be on felix-0 to be subject to ctlb!
+								cc.ExpectSome(w[0][1], TargetIP(ip), port)
+								cc.CheckConnectivity()
+								_, first := affKV()
+
+								// Each round idles for longer than the CTLB's UDP timeout. If the
+								// CTLB applied that timeout it would treat the entry as expired
+								// and re-pick at random, so with three backends a run of rounds
+								// all picking the same backend by luck is vanishingly unlikely.
+								for round := range 8 {
+									time.Sleep(4 * time.Second)
+									cc.CheckConnectivity()
+
+									Expect(affLen()).To(Equal(1),
+										fmt.Sprintf("round %d: affinity entry disappeared", round))
+									_, v := affKV()
+									Expect(v.Backend()).To(Equal(first.Backend()),
+										fmt.Sprintf("round %d: affinity backend changed after idling "+
+											"past the CTLB's UDP timeout", round))
+								}
+							})
+						}
 					}
 
 					Context("with affinity", func() {

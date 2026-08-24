@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"github.com/projectcalico/calico/felix/bpf"
 	"github.com/projectcalico/calico/felix/bpf/nat"
 	"github.com/projectcalico/calico/felix/bpf/proxy"
 	"github.com/projectcalico/calico/felix/ip"
@@ -47,7 +48,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 	externalIP := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2)})
 	twoExternalIPs := makeIPs([]net.IP{net.IPv4(35, 0, 0, 2), net.IPv4(45, 0, 1, 2)})
 
-	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+	s, _ := proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, 0)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -210,7 +211,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 				externalIP,
 				proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&ipnet}),
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, 0)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(3))
@@ -223,7 +224,7 @@ func testfn(makeIPs func(ips []net.IP) proxy.K8sServicePortOption) {
 				v1.ProtocolTCP,
 				externalIP,
 			)
-			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil)
+			s, _ = proxy.NewSyncer(4, nodeIPs, svcs, eps, aff, rt, nil, 0)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(svcs.m).To(HaveLen(2))
@@ -250,5 +251,80 @@ var _ = Describe("BPF Load Balancer source range", func() {
 
 	Context("With LoadBalancer IP", func() {
 		testfn(proxy.K8sSvcWithLoadBalancerIPs)
+	})
+})
+
+// A frontend with source ranges is written by writeLBSrcRangeSvcNATKeys() rather
+// than writeSvc(), so it is the other place that has to tell the affinity map
+// cleanup that the frontend may hold entries.
+var _ = Describe("BPF Load Balancer source range session affinity", func() {
+	svcKey := k8sp.ServicePortName{
+		NamespacedName: types.NamespacedName{Namespace: "default", Name: "sticky-service"},
+	}
+	clusterIP := net.IPv4(10, 0, 0, 2)
+	lbIP := net.IPv4(35, 0, 0, 2)
+	const svcPort = 2222
+	const backendPort = 5555
+	liveBackend := net.IPv4(10, 1, 0, 1)
+	clientIP := net.IPv4(35, 0, 1, 7)
+
+	var (
+		aff   *mockAffinityMap
+		s     *proxy.Syncer
+		state proxy.DPSyncerState
+	)
+
+	BeforeEach(func() {
+		aff = newMockAffinityMap()
+		var err error
+		s, err = proxy.NewSyncer(4, []net.IP{net.IPv4(192, 168, 0, 1)},
+			newMockNATMap(), newMockNATBackendMap(), aff,
+			proxy.NewRTCache(), nil, 0)
+		Expect(err).NotTo(HaveOccurred())
+
+		srcRange := ip.MustParseCIDROrIP("35.0.1.2/24").ToIPNet()
+		state = proxy.DPSyncerState{
+			SvcMap: k8sp.ServicePortMap{
+				svcKey: proxy.NewK8sServicePort(clusterIP, svcPort, v1.ProtocolTCP,
+					proxy.K8sSvcWithLoadBalancerIPs([]net.IP{lbIP}),
+					proxy.K8sSvcWithLBSourceRangeIPs([]*net.IPNet{&srcRange}),
+					proxy.K8sSvcWithStickyClientIP(60),
+				),
+			},
+			EpsMap: k8sp.EndpointsMap{
+				svcKey: []k8sp.Endpoint{
+					proxy.NewEndpointInfo(liveBackend.String(), backendPort,
+						proxy.EndpointInfoOptIsReady(true)),
+				},
+			},
+		}
+		Expect(s.Apply(state)).NotTo(HaveOccurred())
+	})
+
+	// addAffEntry writes the affinity entry that the TC programs would have written
+	// for a connection to the load balancer IP.
+	addAffEntry := func(backend net.IP) {
+		err := aff.Update(
+			nat.NewAffinityKey(clientIP,
+				nat.NewNATKey(lbIP, svcPort, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
+			).AsBytes(),
+			nat.NewAffinityValue(uint64(bpf.KTimeNanos()),
+				nat.NewNATBackendValue(backend, backendPort),
+			).AsBytes(),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff.m).To(HaveLen(1))
+	}
+
+	It("should keep a fresh affinity entry for a source-range frontend", func() {
+		addAffEntry(liveBackend)
+		Expect(s.Apply(state)).NotTo(HaveOccurred())
+		Expect(aff.m).To(HaveLen(1), "affinity entry must survive cleanup")
+	})
+
+	It("should still clean up an affinity entry whose backend is gone", func() {
+		addAffEntry(net.IPv4(10, 9, 9, 9))
+		Expect(s.Apply(state)).NotTo(HaveOccurred())
+		Expect(aff.m).To(BeEmpty())
 	})
 })
