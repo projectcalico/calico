@@ -22,3 +22,6 @@ exclude:
 
     - label: Feature:Wireguard
       reason: "needs a cluster provisioned with WireGuard; the lanes that have one enable this label"
+
+    - label: Feature:AutoHEPs
+      reason: "serial specs that provision host endpoints on every node; the autohep lanes enable this label"

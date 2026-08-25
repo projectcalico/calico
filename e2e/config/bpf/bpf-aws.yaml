@@ -11,7 +11,5 @@ exclude:
   labels:
     - label: ExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
-    - label: Feature:AutoHEPs
-      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
     - label: RequiresXtables
       reason: "BPF/VPP dataplane; these specs exercise iptables/nftables behaviour that does not exist here"
