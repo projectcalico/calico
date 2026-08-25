@@ -135,14 +135,7 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 
 	toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(WhiskerNamespace, c.cfg.PullSecrets...)...)...)
 
-	// Whisker needs to be removed if the installation is not Calico, since it's not supported (yet!) for any other variant.
-	var toDelete []client.Object
-	if c.cfg.Installation.Variant != operatorv1.Calico {
-		toDelete = toCreate
-		toCreate = nil
-	}
-
-	toDelete = append(toDelete, c.deprecatedObjects()...)
+	toDelete := c.deprecatedObjects()
 
 	return toCreate, toDelete
 }

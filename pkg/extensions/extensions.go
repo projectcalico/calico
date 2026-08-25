@@ -25,6 +25,7 @@ type Set struct {
 	CSR               CSRExtension
 	Istio             IstioExtension
 	Goldmane          GoldmaneExtension
+	Whisker           WhiskerExtension
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -93,4 +94,11 @@ func (e Extensions) Goldmane() GoldmaneExtension {
 		return noopGoldmane{}
 	}
 	return e.set.Goldmane
+}
+
+func (e Extensions) Whisker() WhiskerExtension {
+	if e.set.Whisker == nil {
+		return noopWhisker{}
+	}
+	return e.set.Whisker
 }

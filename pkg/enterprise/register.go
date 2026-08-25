@@ -24,6 +24,7 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/istio"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/enterprise/tiers"
+	"github.com/tigera/operator/pkg/enterprise/whisker"
 	"github.com/tigera/operator/pkg/enterprise/windows"
 	"github.com/tigera/operator/pkg/extensions"
 )
@@ -44,6 +45,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			CSR:               csr.New(),
 			Istio:             istio.New(),
 			Goldmane:          goldmane.New(variant),
+			Whisker:           whisker.New(variant),
 		})
 	}
 

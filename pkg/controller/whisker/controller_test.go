@@ -27,6 +27,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	"github.com/tigera/operator/pkg/extensions"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/tls"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -134,6 +135,7 @@ var _ = Describe("whisker controller tests", func() {
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
+				ext:      extensions.Extensions{}.Whisker(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -148,6 +150,7 @@ var _ = Describe("whisker controller tests", func() {
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
+				ext:      extensions.Extensions{}.Whisker(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())
