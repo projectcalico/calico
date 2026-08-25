@@ -65,6 +65,9 @@ func load(path string, seen []string) (*Config, error) {
 		if len(cfg.Enable) > 0 {
 			return nil, fmt.Errorf("%s: enable[0] (%q) has no effect: this config extends nothing", absPath, cfg.Enable[0].Label)
 		}
+		if err := validateResolved(&cfg, absPath); err != nil {
+			return nil, err
+		}
 		return &cfg, nil
 	}
 
@@ -86,7 +89,24 @@ func load(path string, seen []string) (*Config, error) {
 		}
 	}
 
-	return merge(inherited, &cfg), nil
+	resolved := merge(inherited, &cfg)
+	if err := validateResolved(resolved, absPath); err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
+// validateResolved checks a config once its extends chain is folded in, for
+// rules a single file cannot decide on its own.
+func validateResolved(cfg *Config, path string) error {
+	// Ginkgo intersects the label filter with the focus regex, so a config
+	// carrying both selects only specs matching both, never their union.
+	if len(cfg.Include.Labels) > 0 && len(cfg.Include.NamePatterns) > 0 {
+		return fmt.Errorf("%s: include sets both labels (%q) and namePatterns (%q): ginkgo ANDs the two, "+
+			"selecting only specs matching both. Split them into separate configs",
+			path, cfg.Include.Labels[0].Label, strings.Join(cfg.Include.NamePatterns[0].AllPatterns(), "|"))
+	}
+	return nil
 }
 
 func excludesLabel(cfg *Config, label string) bool {

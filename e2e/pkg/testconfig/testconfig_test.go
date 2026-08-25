@@ -242,6 +242,41 @@ exclude:
 	}
 }
 
+func TestLoadRejectsIncludeLabelsAndNamePatterns(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFile(t, dir, "both.yaml", `
+include:
+  labels:
+    - sig-calico
+  namePatterns:
+    - pattern: "should serve a basic endpoint from pods"
+      reason: "smoke check"
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for include setting both labels and namePatterns")
+	}
+}
+
+func TestLoadRejectsIncludeNamePatternsInheritingLabels(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "parent.yaml", `
+include:
+  - sig-calico
+`)
+	path := writeFile(t, dir, "child.yaml", `
+extends: parent.yaml
+include:
+  namePatterns:
+    - pattern: "should serve a basic endpoint from pods"
+      reason: "smoke check"
+`)
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for namePatterns layered onto an inherited label include")
+	}
+}
+
 func TestLoadGroupNamePattern(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "config.yaml", `

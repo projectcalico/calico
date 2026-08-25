@@ -92,7 +92,9 @@ type IncludeList struct {
 	Labels []IncludeEntry `yaml:"labels,omitempty"`
 
 	// NamePatterns is a list of test name regex patterns to select via
-	// --ginkgo.focus, for specs no label expression can reach.
+	// --ginkgo.focus, for specs no label expression can reach. Mutually
+	// exclusive with Labels: ginkgo ANDs the focus regex with the label
+	// filter, so a config setting both is rejected at load.
 	NamePatterns []NamePatternEntry `yaml:"namePatterns,omitempty"`
 }
 
