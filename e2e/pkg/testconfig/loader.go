@@ -107,7 +107,10 @@ func excludesLabel(cfg *Config, label string) bool {
 // specs. First occurrence wins, so the earliest reason is the one kept.
 func merge(parent, child *Config) *Config {
 	merged := &Config{
-		Include: make([]IncludeEntry, 0, len(parent.Include)+len(child.Include)),
+		Include: IncludeList{
+			Labels:       make([]IncludeEntry, 0, len(parent.Include.Labels)+len(child.Include.Labels)),
+			NamePatterns: make([]NamePatternEntry, 0, len(parent.Include.NamePatterns)+len(child.Include.NamePatterns)),
+		},
 		Exclude: Exclude{
 			Labels:       make([]ExcludeLabel, 0, len(parent.Exclude.Labels)+len(child.Exclude.Labels)),
 			NamePatterns: make([]NamePatternEntry, 0, len(parent.Exclude.NamePatterns)+len(child.Exclude.NamePatterns)),
@@ -115,13 +118,25 @@ func merge(parent, child *Config) *Config {
 	}
 
 	seenInclude := map[string]bool{}
-	for _, src := range [][]IncludeEntry{parent.Include, child.Include} {
+	for _, src := range [][]IncludeEntry{parent.Include.Labels, child.Include.Labels} {
 		for _, e := range src {
 			if seenInclude[e.Label] {
 				continue
 			}
 			seenInclude[e.Label] = true
-			merged.Include = append(merged.Include, e)
+			merged.Include.Labels = append(merged.Include.Labels, e)
+		}
+	}
+
+	seenFocus := map[string]bool{}
+	for _, src := range [][]NamePatternEntry{parent.Include.NamePatterns, child.Include.NamePatterns} {
+		for _, e := range src {
+			key := patternKey(e)
+			if seenFocus[key] {
+				continue
+			}
+			seenFocus[key] = true
+			merged.Include.NamePatterns = append(merged.Include.NamePatterns, e)
 		}
 	}
 
@@ -144,7 +159,7 @@ func merge(parent, child *Config) *Config {
 	seenPattern := map[string]bool{}
 	for _, src := range [][]NamePatternEntry{parent.Exclude.NamePatterns, child.Exclude.NamePatterns} {
 		for _, e := range src {
-			key := e.Group + "\x00" + e.Pattern + "\x00" + strings.Join(e.AllPatterns(), "\x00")
+			key := patternKey(e)
 			if seenPattern[key] {
 				continue
 			}
@@ -156,11 +171,15 @@ func merge(parent, child *Config) *Config {
 	return merged
 }
 
+func patternKey(e NamePatternEntry) string {
+	return e.Group + "\x00" + e.Pattern + "\x00" + strings.Join(e.AllPatterns(), "\x00")
+}
+
 // validate checks the structural validity of a config file.
 func validate(cfg *Config, path string) error {
-	for i, entry := range cfg.Include {
+	for i, entry := range cfg.Include.Labels {
 		if entry.Label == "" {
-			return fmt.Errorf("%s: include[%d] must have a non-empty label expression", path, i)
+			return fmt.Errorf("%s: include.labels[%d] must have a non-empty label expression", path, i)
 		}
 	}
 
@@ -173,6 +192,10 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
+	if err := validatePatterns(cfg.Include.NamePatterns, path, "include"); err != nil {
+		return err
+	}
+
 	for i, entry := range cfg.Exclude.Labels {
 		if entry.Label == "" {
 			return fmt.Errorf("%s: exclude.labels[%d] must have a 'label' field", path, i)
@@ -182,16 +205,19 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	for i, entry := range cfg.Exclude.NamePatterns {
+	return validatePatterns(cfg.Exclude.NamePatterns, path, "exclude")
+}
+
+func validatePatterns(entries []NamePatternEntry, path, section string) error {
+	for i, entry := range entries {
 		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("%s: exclude.namePatterns[%d]: %w", path, i, err)
+			return fmt.Errorf("%s: %s.namePatterns[%d]: %w", path, section, i, err)
 		}
 		for _, p := range entry.AllPatterns() {
 			if _, err := regexp.Compile(p); err != nil {
-				return fmt.Errorf("%s: exclude.namePatterns[%d]: invalid regex %q: %w", path, i, p, err)
+				return fmt.Errorf("%s: %s.namePatterns[%d]: invalid regex %q: %w", path, section, i, p, err)
 			}
 		}
 	}
-
 	return nil
 }
