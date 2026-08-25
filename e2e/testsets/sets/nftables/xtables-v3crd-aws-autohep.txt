@@ -4,6 +4,12 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests should create host endpoints for each node [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests with policies in place with egress policy should block one node 1 from reaching node 0 on port 9091 with egress policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:AutoHEPs] auto host endpoint tests with policies in place with ingress policy should block one node 1 from entering node 0 on port 9090 with ingress policy [Serial]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [Feature:Flow-Logs] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests doNotTrack policy should deny connections to the specified port in a doNotTrack deny policy [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow connections using a named port [Conformance] [Serial]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Host-Protection] host endpoint tests should allow inbound connections with an allow-all [Serial]
@@ -24,12 +30,6 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC default tier should not allow updating the default tier
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] BGP password should enforce BGP password authentication [Serial]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGP export tests should not export pools with export disabled [Serial]
 [sig-calico] [Team:CORE] [Feature:BGPPeer] [RequiresBGP] [Category:Networking] [RequiresBGPMesh] BGPPeer should support BGP peers [Serial]

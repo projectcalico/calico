@@ -77,6 +77,7 @@ var features = map[string]bool{
 	"Istio":           true,
 	"KubeVirt":        true,
 	"Wireguard":       true,
+	"Flow-Logs":       true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
