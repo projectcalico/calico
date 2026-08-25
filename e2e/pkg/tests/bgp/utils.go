@@ -48,7 +48,9 @@ func requireBGPIsSoleRoutingMechanism(cli ctrlclient.Client) {
 	var felixOwnsIPIP, felixOwnsNoEncap bool
 	switch programClusterRoutes {
 	case v3.Disabled:
-		// BIRD owns both classes.
+		// Felix programs neither class.  Whether BIRD picks them up is BGPConfiguration's
+		// business, and it is expressible for neither component to; this check only needs
+		// Felix to be keeping out of the way.
 	case v3.EnabledIPIPOnly:
 		felixOwnsIPIP = true
 	case v3.EnabledNoEncapOnly:
