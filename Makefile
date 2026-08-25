@@ -335,11 +335,9 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against the cluster at $KUBECONFIG.
 ## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
-## Selection comes from E2E_TEST_CONFIG, or from E2E_GINKGO_ARGS (legacy
-## focus/skip regexes) when it is empty. E2E_GINKGO_ARGS expands in the shell so
-## its regex metacharacters survive.
-## --fail-on-empty exits non-zero on a run that selects no specs, so a stale focus
-## expression or an over-broad exclude fails the lane instead of passing it.
+## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
+## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
+## --fail-on-empty fails a run that selects no specs instead of passing it.
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)

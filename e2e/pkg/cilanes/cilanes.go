@@ -32,17 +32,16 @@ const (
 	semaphoreDir = ".semaphore/end-to-end/pipelines"
 
 	// The flannel migration script runs the suite once before migrating with a
-	// hardcoded selection, then again with the job's own.
-	flannelMigrationScript   = "body_flannel-migration.sh"
-	flannelMigrationPreFlags = "--ginkgo.focus=should.serve.a.basic.endpoint.from.pods"
-	flannelMigrationPreName  = " [pre-migration]"
+	// hardcoded config, then again with the job's own.
+	flannelMigrationScript    = "body_flannel-migration.sh"
+	flannelMigrationPreConfig = "e2e/config/pre-migration-smoke.yaml"
+	flannelMigrationPreName   = " [pre-migration]"
 )
 
-// Selection variables, in precedence order. run_tests.sh prefers the config and
-// ignores the flags when both are set.
+// Selection variables. run_tests.sh runs the e2e binary against the config
+// named here and refuses to run at all without one.
 const (
 	envConfig   = "E2E_TEST_CONFIG"
-	envFlags    = "K8S_E2E_FLAGS"
 	envTestType = "TEST_TYPE"
 	envArea     = "FUNCTIONAL_AREA"
 	envProvider = "PROVISIONER"
@@ -57,13 +56,8 @@ type Lane struct {
 	// only when it changes the selection.
 	Name string
 
-	// Config is the repo-relative E2E_TEST_CONFIG path, empty when the lane
-	// still selects by regex.
+	// Config is the repo-relative E2E_TEST_CONFIG path.
 	Config string
-
-	// Flags is the raw K8S_E2E_FLAGS value, empty when the lane selects by
-	// config.
-	Flags string
 
 	// Area is the FUNCTIONAL_AREA both CI systems declare, naming the pipeline
 	// a cron lane mirrors.
@@ -72,40 +66,25 @@ type Lane struct {
 	// TestType is the resolved TEST_TYPE. Only "k8s-e2e" lanes run the e2e
 	// binary; the rest defer to `bz tests`.
 	TestType string
-
-	// PipelineDefault reports whether Flags come from the file's global scope
-	// rather than a lane-level override.
-	PipelineDefault bool
 }
 
 // RunsE2EBinary reports whether the lane runs the e2e test binary, and so has a
 // spec list worth generating.
 func (l Lane) RunsE2EBinary() bool {
-	return l.TestType == "k8s-e2e" && (l.Config != "" || l.Flags != "")
-}
-
-// Selection is the effective selection, ignoring flags that a config overrides.
-func (l Lane) Selection() string {
-	if l.Config != "" {
-		return "config:" + l.Config
-	}
-	return "flags:" + l.Flags
+	return l.TestType == "k8s-e2e" && l.Config != ""
 }
 
 // SelectionArgs returns the spec-selecting arguments run_tests.sh would pass
 // to the binary. repoRoot absolutizes the config path, as the binary requires.
 func (l Lane) SelectionArgs(repoRoot string) ([]string, error) {
-	switch {
-	case l.Config != "":
-		abs, err := filepath.Abs(filepath.Join(repoRoot, l.Config))
-		if err != nil {
-			return nil, err
-		}
-		return []string{"--calico.test-config=" + abs}, nil
-	case l.Flags != "":
-		return strings.Fields(l.Flags), nil
+	if l.Config == "" {
+		return nil, fmt.Errorf("lane %q selects nothing", l.Name)
 	}
-	return nil, fmt.Errorf("lane %q selects nothing", l.Name)
+	abs, err := filepath.Abs(filepath.Join(repoRoot, l.Config))
+	if err != nil {
+		return nil, err
+	}
+	return []string{"--calico.test-config=" + abs}, nil
 }
 
 // Load resolves every lane declared under .argoci/cron and
@@ -175,8 +154,8 @@ func (e env) apply(vars []envVar) env {
 
 // lanes builds every Lane one CI job resolves to, which is more than one when
 // the job runs the suite several times.
-func (e env) lanes(source, name, commands, globalFlags string) []Lane {
-	l := e.lane(source, name, globalFlags)
+func (e env) lanes(source, name, commands string) []Lane {
+	l := e.lane(source, name)
 	if !strings.Contains(commands, flannelMigrationScript) {
 		return []Lane{l}
 	}
@@ -184,7 +163,7 @@ func (e env) lanes(source, name, commands, globalFlags string) []Lane {
 		Source:   source,
 		Name:     name + flannelMigrationPreName,
 		Area:     l.Area,
-		Flags:    flannelMigrationPreFlags,
+		Config:   flannelMigrationPreConfig,
 		TestType: l.TestType,
 	}
 	return []Lane{l, pre}
@@ -192,7 +171,7 @@ func (e env) lanes(source, name, commands, globalFlags string) []Lane {
 
 // lane builds a Lane from a resolved environment, applying the same defaulting
 // that .argoci/scripts/global_prologue.sh does for TEST_TYPE.
-func (e env) lane(source, name, globalFlags string) Lane {
+func (e env) lane(source, name string) Lane {
 	testType, ok := e[envTestType]
 	if !ok {
 		testType = "k8s-e2e"
@@ -201,13 +180,11 @@ func (e env) lane(source, name, globalFlags string) Lane {
 		}
 	}
 	return Lane{
-		Source:          source,
-		Name:            name,
-		Area:            e[envArea],
-		Config:          e[envConfig],
-		Flags:           e[envFlags],
-		TestType:        testType,
-		PipelineDefault: e[envFlags] == globalFlags,
+		Source:   source,
+		Name:     name,
+		Area:     e[envArea],
+		Config:   e[envConfig],
+		TestType: testType,
 	}
 }
 
@@ -239,12 +216,12 @@ func parseArgo(source string, data []byte) ([]Lane, error) {
 	for _, step := range wf.Steps {
 		base := global.apply(step.Env)
 		if len(step.Matrix) == 0 {
-			lanes = append(lanes, base.lanes(source, step.Name, step.Commands, global[envFlags])...)
+			lanes = append(lanes, base.lanes(source, step.Name, step.Commands)...)
 			continue
 		}
 		for _, m := range step.Matrix {
 			e := base.apply(m.Env)
-			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name, base, e), step.Commands, global[envFlags])...)
+			lanes = append(lanes, e.lanes(source, matrixName(step.Name, m.Name, base, e), step.Commands)...)
 		}
 	}
 	return dedupe(lanes), nil
@@ -253,7 +230,7 @@ func parseArgo(source string, data []byte) ([]Lane, error) {
 // matrixName suffixes the step name only when the entry changes the selection.
 // CNI and manifest axes share one spec list.
 func matrixName(step, entry string, base, resolved env) string {
-	if base[envConfig] == resolved[envConfig] && base[envFlags] == resolved[envFlags] {
+	if base[envConfig] == resolved[envConfig] {
 		return step
 	}
 	return step + " [" + entry + "]"
@@ -327,11 +304,11 @@ func parseSemaphore(source string, data []byte) ([]Lane, error) {
 			commands := strings.Join(job.Commands, "\n")
 
 			for _, axis := range job.Matrix {
-				if axis.EnvVar == envConfig || axis.EnvVar == envFlags {
+				if axis.EnvVar == envConfig {
 					return nil, fmt.Errorf("job %q: matrix on %s is not modelled", name, axis.EnvVar)
 				}
 			}
-			lanes = append(lanes, base.lanes(source, name, commands, global[envFlags])...)
+			lanes = append(lanes, base.lanes(source, name, commands)...)
 		}
 	}
 	return dedupe(lanes), nil
