@@ -858,6 +858,117 @@ func setupMockVirtEBGPPeering(f *framework.Framework, bird *bgp.ContainerBIRDPee
 	setupEBGPPeeringCommon(f, bird, "kubevirt-mockvirt-lm-", "mockvirt-ebgp-peer-")
 }
 
+// recursiveRoutePrefix is the prefix an external peer advertises with a VM's IP as NEXT_HOP, to
+// stand in for a Service VIP or pod CIDR inside a nested cluster running in that VM.
+//
+// It only has to be routable in BIRD's tables, never actually reached, so nothing needs to answer
+// at it.  It must sit outside every IPPool in the cluster (checked at setup) so it cannot collide
+// with an IPAM allocation, and outside the node subnet so it cannot shadow real infrastructure.
+const recursiveRoutePrefix = "10.99.0.1/32"
+
+// setupRecursiveRoutePeering peers an external BIRD speaker with every node in the cluster and
+// has it advertise recursiveRoutePrefix with vmIP as the NEXT_HOP.  Returns the prefix.
+//
+// Unlike setupEBGPPeeringCommon this peers all nodes rather than just the control plane, because
+// the route has to reach the migration target with its third-party next hop intact.  Going via
+// the control plane instead would mean relying on it to re-export a prefix it cannot itself
+// resolve, through Calico's export filters — a lot of incidental machinery for the assertion at
+// hand.
+func setupRecursiveRoutePeering(f *framework.Framework, peer bgp.BIRDPeer, vmIP string) string {
+	GinkgoHelper()
+	By("Setting up eBGP peering for the nested-cluster prefix")
+
+	lcgc := newLibcalicoClient(f)
+	ctx := context.Background()
+
+	// The prefix must not overlap any IPPool, or Calico's own route programming for the pool
+	// would race with the advertisement.
+	pools, err := lcgc.IPPools().List(ctx, options.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to list IPPools")
+	recursiveIP, _, err := net.ParseCIDR(recursiveRoutePrefix)
+	Expect(err).NotTo(HaveOccurred(), "failed to parse %s", recursiveRoutePrefix)
+	for _, p := range pools.Items {
+		_, poolNet, err := net.ParseCIDR(p.Spec.CIDR)
+		if err != nil {
+			continue
+		}
+		Expect(poolNet.Contains(recursiveIP)).To(BeFalse(),
+			"recursiveRoutePrefix %s overlaps IPPool %s (%s); pick a prefix outside every pool",
+			recursiveRoutePrefix, p.Name, p.Spec.CIDR)
+	}
+
+	nodeList, err := f.ClientSet.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to list nodes")
+	var nodeIPs []string
+	for _, node := range nodeList.Items {
+		addr := node.Annotations["projectcalico.org/IPv4Address"]
+		if addr == "" {
+			continue
+		}
+		ip, _, err := net.ParseCIDR(addr)
+		Expect(err).NotTo(HaveOccurred(), "failed to parse BGP address %q of node %s", addr, node.Name)
+		nodeIPs = append(nodeIPs, ip.String())
+	}
+	Expect(nodeIPs).NotTo(BeEmpty(), "no node found with a projectcalico.org/IPv4Address annotation")
+	logrus.Infof("Peering external BIRD with %d nodes, advertising %s via %s",
+		len(nodeIPs), recursiveRoutePrefix, vmIP)
+
+	podCIDR := discoverPodCIDR(ctx, lcgc)
+	peersConf := bgp.GenerateBIRDPeersConfWithRecursiveRoute(podCIDR, nodeIPs,
+		bgp.RecursiveRoute{Prefix: recursiveRoutePrefix, NextHop: strings.Split(vmIP, "/")[0]})
+	logrus.Infof("Generated BIRD peers config:\n%s", peersConf)
+	peer.ConfigureBIRD(peersConf)
+
+	// Sweep leftovers from runs whose DeferCleanup didn't fire; a BGPPeer pointing at a stale
+	// container IP would otherwise linger on a shared cluster forever. Only old ones, so a
+	// concurrent run of this suite isn't nuked mid-flight (same rule as setupEBGPPeeringCommon).
+	const peerPrefix = "mockvirt-recursive-peer-"
+	staleBefore := time.Now().Add(-30 * time.Minute)
+	if peers, err := lcgc.BGPPeers().List(ctx, options.ListOptions{}); err == nil {
+		for _, bp := range peers.Items {
+			if strings.HasPrefix(bp.Name, peerPrefix) && bp.CreationTimestamp.Time.Before(staleBefore) {
+				_, _ = lcgc.BGPPeers().Delete(ctx, bp.Name, options.DeleteOptions{})
+			}
+		}
+	}
+
+	// No BGPFilter: the peer needs no route from the cluster, and with no import rules confd
+	// renders "import all" so the nodes accept the advertised prefix.
+	peerName := utils.GenerateRandomName(peerPrefix)
+	By("Creating BGPPeer " + peerName + " (all nodes)")
+	bgpPeer := &v3.BGPPeer{
+		ObjectMeta: metav1.ObjectMeta{Name: peerName},
+		Spec: v3.BGPPeerSpec{
+			NodeSelector: "all()",
+			PeerIP:       peer.PeerIP(),
+			ASNumber:     numorstring.ASNumber(65001),
+		},
+	}
+	_, err = lcgc.BGPPeers().Create(ctx, bgpPeer, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "failed to create BGPPeer")
+	DeferCleanup(func() {
+		By("Deleting BGPPeer " + peerName)
+		if _, err := lcgc.BGPPeers().Delete(context.Background(), peerName, options.DeleteOptions{}); err != nil {
+			logrus.WithError(err).Warnf("Failed to delete BGPPeer %s", peerName)
+		}
+	})
+
+	By("Waiting for the eBGP sessions to establish")
+	Eventually(func() error {
+		out, err := peer.CheckBGPSession()
+		if err != nil {
+			return fmt.Errorf("birdcl show protocols: %w", err)
+		}
+		if got := strings.Count(out, "Established"); got < len(nodeIPs) {
+			return fmt.Errorf("%d/%d sessions established:\n%s", got, len(nodeIPs), out)
+		}
+		return nil
+	}, 2*time.Minute, 5*time.Second).Should(Succeed(), "eBGP sessions not established")
+	logrus.Info("eBGP peering established for the nested-cluster prefix")
+
+	return recursiveRoutePrefix
+}
+
 // expectMigrationFailed polls the VMIM until it reaches MigrationFailed
 // phase. Immediately stops polling with a fatal error if MigrationSucceeded is
 // observed (the migration was expected to fail).

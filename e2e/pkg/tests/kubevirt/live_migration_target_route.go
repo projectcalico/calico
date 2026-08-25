@@ -114,6 +114,15 @@ type targetRouteTestParams struct {
 	// through a stall so gaps indicate real segment loss, whereas ping
 	// sequence numbers legitimately skip on drops.
 	requireZeroSeqGaps bool
+	// setupRecursiveRoute, when non-nil, is called once the VM's IP is known and must arrange for
+	// an external BGP speaker to advertise some prefix to the cluster with vmIP as its NEXT_HOP,
+	// returning that prefix.  It stands in for a nested cluster inside the VM advertising a
+	// Service VIP or pod CIDR over BGP, and turns this test from an assertion about BIRD
+	// preference numbers into one about whether such a route still forwards.
+	//
+	// Left nil where no external BIRD peer exists in the environment, in which case the
+	// recursive-next-hop assertions are skipped.
+	setupRecursiveRoute func(ctx context.Context, vmIP string) string
 }
 
 // runTargetRouteMigrationTest runs the shared choreography. The stale /32
@@ -143,6 +152,20 @@ func runTargetRouteMigrationTest(ctx context.Context, f *framework.Framework, cl
 	if p.preflight != nil {
 		By("Waiting for the VM's TCP server to be reachable before migration 1")
 		p.preflight(ctx, remoteClient, remoteTester, vmIP)
+	}
+
+	// Stand up the nested-cluster prefix now, while the VM is still on its original node and
+	// uncontested, and confirm it resolves there.  That establishes the harness works — the peer
+	// really is imposing the VM's IP as NEXT_HOP and the nodes really are importing it — before
+	// the post-migration assertions start treating it as a regression signal.  Without this
+	// gate, a broken advertisement would look identical to a passing test.
+	var recursivePrefix string
+	if p.setupRecursiveRoute != nil {
+		recursivePrefix = p.setupRecursiveRoute(ctx, vmIP)
+		By(fmt.Sprintf("Verifying %s resolves via the VM on its original node %s", recursivePrefix, node1))
+		Eventually(func(g Gomega) {
+			expectRecursivePrefixResolved(g, f, node1, recursivePrefix, vmIP)
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	}
 
 	By("Migrating the VM off the block owner (arms the stale-/32 condition)")
@@ -233,6 +256,13 @@ func runTargetRouteMigrationTest(ctx context.Context, f *framework.Framework, cl
 		g.Expect(local.Best).To(BeTrue(), "local workload route should be selected best")
 		g.Expect(local.Preference).To(Equal(localWorkloadRoutePreference),
 			"local workload route should be raised to the elevated preference")
+
+		// The consequence that actually matters: with the local route best, a route whose next
+		// hop is the VM still resolves.  Checked in the same poll as the preference above so it
+		// is asserted throughout the contested window rather than after it has passed.
+		if recursivePrefix != "" {
+			expectRecursivePrefixResolved(g, f, node3, recursivePrefix, vmIP)
+		}
 	}
 	Eventually(checkTargetRIB, elevatedMetricTimeout, contestPollInterval).Should(Succeed())
 	// The winning state must then hold for the rest of the overlap, not just once.
@@ -245,6 +275,23 @@ func runTargetRouteMigrationTest(ctx context.Context, f *framework.Framework, cl
 	Expect(err).NotTo(HaveOccurred())
 	Expect(out).To(ContainSubstring(" dev cali"),
 		"kernel FIB on the target should resolve the VM via its local veth, got: %s", out)
+
+	if recursivePrefix != "" {
+		// The end of the chain: BIRD's RIB decision has to reach the FIB, because that is what
+		// actually forwards.  Pre-fix this returns "RTNETLINK answers: Host is unreachable" —
+		// packets from pods and host processes on this node are dropped locally even though the
+		// VM is one veth away.
+		By(fmt.Sprintf("Verifying the target node's kernel FIB forwards %s via the VM", recursivePrefix))
+		recursiveIP := strings.Split(recursivePrefix, "/")[0]
+		Eventually(func(g Gomega) {
+			out, err := utils.ExecInCalicoNode(pod3, fmt.Sprintf("ip route get %s", recursiveIP))
+			g.Expect(err).NotTo(HaveOccurred(), "ip route get %s failed: %s", recursiveIP, out)
+			g.Expect(out).To(ContainSubstring("via "+strings.Split(vmIP, "/")[0]),
+				"kernel FIB on the target should forward %s via the VM, got: %s", recursivePrefix, out)
+			g.Expect(out).To(ContainSubstring(" dev cali"),
+				"kernel FIB on the target should forward %s out the VM's veth, got: %s", recursivePrefix, out)
+		}, 15*time.Second, 1*time.Second).Should(Succeed())
+	}
 
 	if p.contestGuardHard {
 		Expect(contestSeen).To(BeTrue(),
@@ -382,17 +429,63 @@ func setupNodePinnedPod(ctx context.Context, f *framework.Framework, name, node 
 }
 
 // queryWorkerBIRDRoute returns the parsed BIRD RIB entries for the VM's /32
-// on a worker node, from "birdcl show route for <ip> all" inside the node's
-// calico-node pod.
+// on a worker node.
 func queryWorkerBIRDRoute(f *framework.Framework, nodeName, vmIP string) ([]bgp.BIRDRoute, error) {
-	ip := strings.Split(vmIP, "/")[0]
+	return queryWorkerBIRDPrefix(f, nodeName, strings.Split(vmIP, "/")[0]+"/32")
+}
+
+// queryWorkerBIRDPrefix returns the parsed BIRD RIB entries for an exact prefix on a worker node,
+// from "birdcl show route <prefix> all" inside the node's calico-node pod.
+//
+// The prefix is queried exactly rather than by longest-prefix lookup ("show route for <ip>"),
+// because "for" silently falls back to a less specific net when the prefix itself is absent — on
+// a node with no /32 for the VM it returns the default route — leaving the caller asserting on a
+// different network than it asked about.
+func queryWorkerBIRDPrefix(f *framework.Framework, nodeName, prefix string) ([]bgp.BIRDRoute, error) {
 	pod := utils.GetCalicoNodePodOnNode(f.ClientSet, nodeName)
 	if pod == nil {
 		return nil, fmt.Errorf("no calico-node pod on %s", nodeName)
 	}
-	out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("birdcl show route for %s all", ip))
+	out, err := utils.ExecInCalicoNode(pod, fmt.Sprintf("birdcl show route %s all", prefix))
 	if err != nil {
 		return nil, fmt.Errorf("birdcl show route failed on %s: %w", nodeName, err)
 	}
 	return bgp.ParseBIRDRouteOutput(out), nil
+}
+
+// expectRecursivePrefixResolved asserts that prefix is in nodeName's BIRD RIB and resolves
+// through the VM's local veth rather than being programmed unreachable.
+//
+// This is the direct regression signal for the bug the kernel-protocol import filter fixes.  The
+// prefix is advertised with vmIP as its NEXT_HOP, so BIRD has to resolve it recursively against
+// this node's RIB, and BIRD refuses to resolve a recursive next hop through another recursive
+// (BGP) route.  While the stale /32 from the migration source is the best route for vmIP the
+// prefix is therefore unreachable — black-holed on the very node now hosting the VM — and once
+// the local veth route wins it resolves via cali*.
+func expectRecursivePrefixResolved(g Gomega, f *framework.Framework, nodeName, prefix, vmIP string) {
+	// Callers pass the VM address in either form; BIRD reports next hops as bare IPs.
+	vmIP = strings.Split(vmIP, "/")[0]
+
+	routes, err := queryWorkerBIRDPrefix(f, nodeName, prefix)
+	g.Expect(err).NotTo(HaveOccurred())
+	g.Expect(routes).NotTo(BeEmpty(),
+		"%s is not in %s's BIRD RIB at all; the external peer is not advertising it (or the node "+
+			"is not importing it), so this test is not exercising recursive next-hop resolution",
+		prefix, nodeName)
+
+	var best *bgp.BIRDRoute
+	for i := range routes {
+		if routes[i].Best {
+			best = &routes[i]
+		}
+	}
+	g.Expect(best).NotTo(BeNil(), "no best route for %s on %s (routes: %+v)", prefix, nodeName, routes)
+	g.Expect(best.BGPNextHop).To(Equal(vmIP),
+		"%s should be advertised with the VM's IP as NEXT_HOP; got %q. Without a third-party "+
+			"next hop there is no recursive resolution to test", prefix, best.BGPNextHop)
+	g.Expect(best.Unreachable).To(BeFalse(),
+		"%s is programmed unreachable on %s: BIRD could not resolve next hop %s, which is the "+
+			"black-hole this test guards against (route: %+v)", prefix, nodeName, vmIP, *best)
+	g.Expect(best.NextHop).To(Equal(vmIP),
+		"%s should resolve via the VM's IP on %s (route: %+v)", prefix, nodeName, *best)
 }
