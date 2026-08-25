@@ -34,20 +34,27 @@ func GetInstallation(cli ctrlclient.Client) *operatorv1.Installation {
 	return installation
 }
 
-// InstallationConfig returns the operator's effective installation config, published on the
-// status. Nil if the cluster isn't operator managed.
+// InstallationConfig returns the operator's effective installation config. Nil if the cluster
+// isn't operator managed.
 func InstallationConfig(cli ctrlclient.Client) *operatorv1.InstallationSpec {
 	installation := GetInstallation(cli)
 	if installation == nil {
 		return nil
 	}
+	return EffectiveSpec(installation)
+}
+
+// EffectiveSpec returns the configuration the operator is running with. Older operators default
+// in place instead of publishing a computed spec.
+func EffectiveSpec(installation *operatorv1.Installation) *operatorv1.InstallationSpec {
+	if installation.Status.Computed == nil {
+		return &installation.Spec
+	}
 	return installation.Status.Computed
 }
 
-// UsesCalicoIPAM reports whether the cluster uses Calico IPAM. If the operator
-// Installation resource is available, it checks the configured IPAM type.
-// Returns true if Calico IPAM is in use or if the IPAM type cannot be determined
-// (e.g., on manifest-based installs without an Installation resource).
+// UsesCalicoIPAM reports whether the cluster uses Calico IPAM. Defaults to true when the IPAM
+// type can't be determined, as on manifest-based installs with no Installation resource.
 func UsesCalicoIPAM(cli ctrlclient.Client) bool {
 	config := InstallationConfig(cli)
 	if config != nil &&
