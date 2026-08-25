@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-# s3-cmd wrapper used by the bucket-upload helpers below (see .semaphore/s3-cmd).
-S3_CMD="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/s3-cmd"
-
 delete_artifacts() {
   echo "[INFO] Deleting artifacts that are already pushed"
   # Validate variables before destructive commands
@@ -63,7 +60,7 @@ run_non_hcp_destroy() {
   bz destroy $VERBOSE |& tee ${BZ_LOGS_DIR}/destroy.log || true
 }
 
-# Upload a file to the S3 results bucket (GS_BUCKET).
+# Upload a file to the GCS bucket.
 # VPP pipelines use their own METADATA path; all others use SEMAPHORE_JOB_ID.
 upload_to_gcs() {
   local src="$1"
@@ -75,25 +72,32 @@ upload_to_gcs() {
   if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" ]]; then
     gcs_dir="${METADATA}"
   fi
-  echo "[INFO] bucket_upload: uploading ${dest_name} to s3://${GS_BUCKET}/${gcs_dir}/"
-  "${S3_CMD}" cp "${src}" "s3://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
+  echo "[INFO] bucket_upload: uploading ${dest_name} to gs://${GS_BUCKET}/${gcs_dir}/"
+  gcloud storage cp "${src}" "gs://${GS_BUCKET}/${gcs_dir}/${dest_name}" || true
 }
 
-# Upload log files to a logs/ subdirectory in the S3 results bucket.
+# Upload log files to a logs/ subdirectory in GCS.
 upload_logs_to_gcs() {
   if [[ -z "${GS_BUCKET}" ]]; then
     return
   fi
   if [[ -z "${BZ_LOGS_DIR}" || ! -d "${BZ_LOGS_DIR}" ]]; then
-    echo "[WARN] BZ_LOGS_DIR is unset or not a directory, skipping log upload to S3."
+    echo "[WARN] BZ_LOGS_DIR is unset or not a directory, skipping log upload to GCS."
     return
   fi
   local gcs_dir="${SEMAPHORE_JOB_ID}"
   if [[ "${FUNCTIONAL_AREA}" == "vpp.yml" ]]; then
     gcs_dir="${METADATA}"
   fi
-  echo "[INFO] bucket_upload: uploading logs to s3://${GS_BUCKET}/${gcs_dir}/logs/"
-  "${S3_CMD}" cp -r "${BZ_LOGS_DIR}/" "s3://${GS_BUCKET}/${gcs_dir}/logs/" || true
+  echo "[INFO] bucket_upload: uploading logs to gs://${GS_BUCKET}/${gcs_dir}/logs/"
+  # Upload the *contents* of BZ_LOGS_DIR. `gcloud storage cp -r <dir>` would
+  # nest them under an extra <dir> basename component (unlike `gsutil cp -r
+  # <dir>/.`), so glob the children instead; nullglob/dotglob keep an empty or
+  # dotfile-only directory correct, and are set in a subshell to avoid leaking.
+  (
+    shopt -s nullglob dotglob
+    gcloud storage cp -r "${BZ_LOGS_DIR}"/* "gs://${GS_BUCKET}/${gcs_dir}/logs/"
+  ) || true
 }
 
 echo "[INFO] starting global_epilogue"
