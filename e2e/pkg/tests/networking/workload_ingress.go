@@ -563,14 +563,15 @@ var _ = describe.CalicoDescribe(
 				cmdNotFoundCode = 127 // The remote shell could not find wget.
 			)
 
+			cmd := fmt.Sprintf("wget -O- -t 1 -T %d http://%s/clientip",
+				int(probeTimeout.Seconds()), targetAddr)
+
 			// probe makes exactly one connection attempt and reports wget's exit
 			// status. `-t 1` is essential: wget retries 20 times by default, which
 			// outlasts the ssh wrapper's own timeout, so a dropped-packet block and
 			// a stalled ssh would both surface as the wrapper killing the command.
 			// Omitting `-q` keeps wget's reason for failing in the log.
 			probe := func() (int, string) {
-				cmd := fmt.Sprintf("wget -O- -t 1 -T %d http://%s/clientip",
-					int(probeTimeout.Seconds()), targetAddr)
 				out, err := extNode.Exec("sh", "-c", cmd)
 				if err == nil {
 					return 0, out
