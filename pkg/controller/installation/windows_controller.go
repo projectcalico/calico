@@ -377,9 +377,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		r.client,
 		r.scheme,
 		instance,
-		utils.WithModifier(func(c render.Component) render.Component {
-			return r.ext.Modify(c, ci.RenderInputs)
-		}),
+		utils.WithExtension(r.ext, ci.RenderInputs),
 	)
 	if err := handler.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)

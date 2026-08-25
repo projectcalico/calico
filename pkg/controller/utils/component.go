@@ -97,6 +97,19 @@ func WithModifier(m ComponentModifier) ComponentHandlerOption {
 	return func(c *componentHandler) { c.modify = m }
 }
 
+// ComponentExtension is the part of a variant's extension that layers itself onto a
+// rendered component.
+type ComponentExtension interface {
+	Modify(c render.Component, ri render.Inputs) render.Component
+}
+
+// WithExtension runs every component through the variant's extension.
+func WithExtension(e ComponentExtension, ri render.Inputs) ComponentHandlerOption {
+	return WithModifier(func(c render.Component) render.Component {
+		return e.Modify(c, ri)
+	})
+}
+
 // cr is allowed to be nil in the case we don't want to put ownership on a resource,
 // this is useful for CRD management so that they are not removed automatically.
 func NewComponentHandler(log logr.Logger, cli client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...ComponentHandlerOption) ComponentHandler {

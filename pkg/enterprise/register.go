@@ -19,6 +19,7 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/apiserver"
 	"github.com/tigera/operator/pkg/enterprise/clusterconnection"
 	"github.com/tigera/operator/pkg/enterprise/csr"
+	"github.com/tigera/operator/pkg/enterprise/goldmane"
 	"github.com/tigera/operator/pkg/enterprise/installation"
 	"github.com/tigera/operator/pkg/enterprise/istio"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
@@ -42,6 +43,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			Tiers:             tiers.New(o),
 			CSR:               csr.New(),
 			Istio:             istio.New(),
+			Goldmane:          goldmane.New(variant),
 		})
 	}
 

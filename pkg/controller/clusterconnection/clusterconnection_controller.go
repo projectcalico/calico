@@ -422,9 +422,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		r.cli,
 		r.scheme,
 		managementClusterConnection,
-		utils.WithModifier(func(c render.Component) render.Component {
-			return r.ext.Modify(c, ci.RenderInputs)
-		}),
+		utils.WithExtension(r.ext, ci.RenderInputs),
 	)
 	guardianCfg := &render.GuardianConfiguration{
 		URL:                         managementClusterConnection.Spec.ManagementClusterAddr,

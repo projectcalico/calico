@@ -367,9 +367,7 @@ func (r *ReconcileAPIServer) Reconcile(ctx context.Context, request reconcile.Re
 		r.client,
 		r.scheme,
 		instance,
-		utils.WithModifier(func(c render.Component) render.Component {
-			return r.ext.Modify(c, ci.RenderInputs)
-		}),
+		utils.WithExtension(r.ext, ci.RenderInputs),
 	)
 
 	var holdCutover bool

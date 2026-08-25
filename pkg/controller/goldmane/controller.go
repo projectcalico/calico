@@ -37,6 +37,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	"github.com/tigera/operator/pkg/render/goldmane"
@@ -127,6 +128,7 @@ func newReconciler(
 		status:        statusMgr,
 		clusterDomain: opts.ClusterDomain,
 		variant:       opts.Variant,
+		ext:           opts.Extensions.Goldmane(),
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -143,6 +145,7 @@ type Reconciler struct {
 	status        status.StatusManager
 	clusterDomain string
 	variant       operatorv1.ProductVariant
+	ext           extensions.GoldmaneExtension
 }
 
 // Reconcile reads that state of the cluster for a Goldmane object and makes changes based on the
@@ -256,7 +259,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	ch := utils.NewComponentHandler(log, r.cli, r.scheme, goldmaneCR)
+	ri := render.Inputs{
+		Installation:  installationSpec,
+		ClusterDomain: r.clusterDomain,
+		TrustedBundle: trustedBundle,
+	}
+	ch := utils.NewComponentHandler(log, r.cli, r.scheme, goldmaneCR, utils.WithExtension(r.ext, ri))
 	cfg := &goldmane.Configuration{
 		PullSecrets:                 pullSecrets,
 		OpenShift:                   r.provider.IsOpenShift(),

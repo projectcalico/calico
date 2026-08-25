@@ -123,15 +123,9 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 
 	objs = append(objs, secret.ToRuntimeObjects(secret.CopyToNamespace(GoldmaneNamespace, c.cfg.PullSecrets...)...)...)
 
-	// Goldmane needs to be removed if the installation is not Calico, since it's not supported (yet!) for any other variant.
 	var objsToDelete []client.Object
-	if c.cfg.Installation.Variant == operatorv1.Calico {
-		if c.metricsPort() == 0 {
-			objsToDelete = append(objsToDelete, c.metricsService())
-		}
-	} else {
-		objsToDelete = objs
-		objs = nil
+	if c.metricsPort() == 0 {
+		objsToDelete = append(objsToDelete, c.metricsService())
 	}
 
 	objsToDelete = append(objsToDelete, c.deprecatedObjects()...)

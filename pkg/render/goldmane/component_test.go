@@ -86,18 +86,6 @@ var _ = Describe("ComponentRendering", func() {
 			},
 			8, 1,
 		),
-		Entry("Should return objects to delete when variant is not Calico",
-			&goldmane.Configuration{
-				Installation: &operatorv1.InstallationSpec{
-					KubernetesProvider: operatorv1.ProviderGKE,
-					Variant:            operatorv1.CalicoEnterprise,
-				},
-				TrustedCertBundle:     certificatemanagement.CreateTrustedBundle(nil),
-				GoldmaneServerKeyPair: defaultTLSKeyPair,
-				Goldmane:              &operatorv1.Goldmane{},
-			},
-			0, 8,
-		),
 	)
 
 	DescribeTable("Goldmane Deployment", func(cfg *goldmane.Configuration, expected *appsv1.Deployment) {

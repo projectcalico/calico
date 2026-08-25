@@ -1146,9 +1146,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		r.client,
 		r.scheme,
 		instance,
-		utils.WithModifier(func(c render.Component) render.Component {
-			return r.ext.Modify(c, ci.RenderInputs)
-		}),
+		utils.WithExtension(r.ext, ci.RenderInputs),
 	)
 
 	// Render namespaces first - this ensures that any other controllers blocked on namespace existence can proceed.
