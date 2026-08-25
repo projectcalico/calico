@@ -97,7 +97,7 @@ func (pr *policyRecommendationComponent) ResolveImages(is *operatorv1.ImageSet) 
 	prefix := pr.cfg.Installation.ImagePrefix
 
 	var err error
-	pr.calicoImage, err = components.GetReference(components.CombinedCalicoImage(pr.cfg.Installation), reg, path, prefix, is)
+	pr.calicoImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 	if err != nil {
 		return err
 	}

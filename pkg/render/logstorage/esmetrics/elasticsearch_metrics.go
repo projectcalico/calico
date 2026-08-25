@@ -82,7 +82,7 @@ func (e *elasticsearchMetrics) ResolveImages(is *operatorv1.ImageSet) error {
 	path := e.cfg.Installation.ImagePath
 	prefix := e.cfg.Installation.ImagePrefix
 
-	e.calicoImage, err = components.GetReference(components.CombinedCalicoImage(e.cfg.Installation), reg, path, prefix, is)
+	e.calicoImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 	if err != nil {
 		return err
 	}

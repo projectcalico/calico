@@ -303,7 +303,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error getting ImageSet: %w", err)
 	}
-	calicoImage, err := components.GetReference(components.CombinedCalicoImage(in), in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
+	calicoImage, err := components.GetReference(components.ComponentTigeraCalico, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 	}

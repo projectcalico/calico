@@ -15,6 +15,8 @@
 package render_test
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -71,7 +73,7 @@ var _ = Describe("Tigera Secure Cloud Manager rendering tests", func() {
 		})
 
 		It("should set image correctly", func() {
-			Expect(voltron.Image).Should(Equal(components.CalicoRegistry + components.CalicoImagePath + components.ComponentCalico.Image + ":" + components.ComponentCalico.Version))
+			Expect(voltron.Image).Should(Equal(fmt.Sprintf("%s%s%s:%s", components.TigeraRegistry, components.TigeraImagePath, components.ComponentTigeraCalico.Image, components.ComponentTigeraCalico.Version)))
 		})
 
 		It("should have env vars", func() {
