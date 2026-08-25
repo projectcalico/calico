@@ -24,6 +24,8 @@ exclude:
       reason: "not an AWS lane; these specs need AWS VPC routing"
     - label: RequiresBGP
       reason: "Calico runs policy-only behind the Azure CNI, so BIRD is not running"
+    - label: RequiresCalicoCNI
+      reason: "this cluster runs the Azure CNI, so Calico does not own the pod network"
 
   namePatterns:
     - group: "requires Calico IPAM, but this cluster uses Azure IPAM"
