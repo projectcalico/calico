@@ -62,6 +62,16 @@ enum cali_ct_type {
 #define CALI_CT_LEG_APPROVED	(1U << 4)
 #define CALI_CT_LEG_OPENER	(1U << 5)
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
+#define CALI_CT_LEG_TUNNEL	(1U << 7) /* the device in ifindex is a tunnel device */
+#define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
+					   * opposite direction, not this direction's
+					   * ingress record; ingress-consistency
+					   * maintenance must leave it alone
+					   */
+#define CALI_CT_LEG_CHECKED	(1U << 9) /* ifindex has been validated against the
+					   * route to this leg's source, no need to
+					   * resolve it again
+					   */
 
 /* This leg has seen the connection close, one way or the other. */
 #define CALI_CT_LEG_CLOSED	(CALI_CT_LEG_FIN_SEEN | CALI_CT_LEG_RST_SEEN)
@@ -76,7 +86,8 @@ struct calico_ct_leg {
 	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
 			* the host, this is the ingress interface index.  For a CT leg
 			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
-			* (0).
+			* (0).  While CALI_CT_LEG_PINNED is set it is instead a resolved
+			* egress for the opposite direction.
 			*/
 };
 
@@ -287,9 +298,11 @@ enum calico_ct_result_type {
 #define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
 #define ct_result_is_to_workload(rc)	((rc) & CT_RES_TO_WORKLOAD)
 
+#define CT_FWD_FLAG_TUNNEL	0x1 /* ifindex_fwd is a tunnel device */
+
 struct calico_ct_result {
 	__s16 rc;
-	__u16 pad;
+	__u16 fwd_flags; /* CT_FWD_FLAG_* properties of ifindex_fwd */
 	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;

@@ -139,6 +139,46 @@ Readers and writers alike have to reach it: a `NAT_FWD` hit gives
 `src_to_dst`/`dst_to_src` into the tracking entry's legs and uses
 `tracking_v` for the fields hanging off the value itself.
 
+### The forwarding hint on a leg
+
+Each leg records the ifindex where that direction's packets ingress,
+and the *opposite* direction reads it as an egress hint
+(`result.ifindex_fwd`) so it can `bpf_redirect` without a FIB lookup.
+That equivalence — "where your packets come from is where mine should
+go" — only holds while a flow is symmetric.
+
+Two flags on the leg (`CALI_CT_LEG_*` in `conntrack_types.h`) make the
+hint self-describing rather than assumed:
+
+- **`TUNNEL`** — the recorded device is a tunnel device, stamped from
+  the ingress program's own `CALI_F_TUNNEL`. A hint is only a valid
+  egress for a destination that must be encapsulated if it is the
+  tunnel itself: `bpf_redirect` writes no headers, so a physical device
+  ignores the tunnel key and puts the raw inner frame on the wire.
+- **`PINNED`** — the ifindex is a resolved egress for the opposite
+  direction, not this direction's ingress record. Ingress-consistency
+  maintenance leaves such a leg alone unless strict RPF is enforced.
+
+A hint is repaired at two points, both while the entry is held:
+
+1. **From the reply side**, once per flow (`CALI_CT_LEG_CHECKED` marks
+   it done, so the route lookup stays off the per-packet path): if the
+   destination needs encapsulation and the hint is not a tunnel, the
+   egress is resolved by FIB and pinned. This is the
+   asymmetrically-routed flow — natively-routed forward, tunneled
+   reply — whose reply would otherwise leave a physical NIC raw.
+2. **From the forward side**, in the loose-RPF arm: `hep_rpf_check`
+   has just computed the device that reaches the packet's source,
+   which is exactly the hint the opposite direction needs, so it is
+   recorded and pinned instead of being discarded.
+
+Pinned hints are cached routing decisions, so they can go stale. A
+device that disappears is the harmful case — `bpf_redirect` does not
+validate an ifindex, and the packet is dropped later with no signal
+back to the program — and is handled by clearing pins for departed
+devices from userspace. A route that moves while the device survives is
+accepted; such a flow is disrupted anyway.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
