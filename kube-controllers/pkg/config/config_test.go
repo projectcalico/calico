@@ -24,6 +24,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/libcalico-go/lib/errors"
@@ -697,6 +698,45 @@ var _ = Describe("Config", func() {
 			Expect(runCfg.Controllers.WorkloadEndpoint.ReconcilerPeriod).To(Equal(time.Second * 31))
 			Expect(runCfg.Controllers.Namespace.ReconcilerPeriod).To(Equal(time.Second * 32))
 			Expect(runCfg.Controllers.ServiceAccount.ReconcilerPeriod).To(Equal(time.Second * 33))
+		})
+	})
+
+	Context("with the profiling port enabled", func() {
+		var cfg *config.Config
+
+		BeforeEach(func() {
+			unsetEnv()
+			cfg = new(config.Config)
+			Expect(cfg.Parse()).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			unsetEnv()
+		})
+
+		runConfigWithProfileHost := func(host *string) config.RunConfig {
+			kcc := config.NewDefaultKubeControllersConfig().DeepCopy()
+			kcc.Spec.DebugProfilePort = ptr.To(int32(9095))
+			kcc.Spec.DebugProfileHost = host
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctrl := config.NewRunConfigController(ctx, *cfg, &mockKCC{get: kcc})
+			return <-ctrl.ConfigChan()
+		}
+
+		It("should default the profiling host to localhost when it is not set", func() {
+			runCfg := runConfigWithProfileHost(nil)
+			Expect(runCfg.DebugProfilePort).To(Equal(int32(9095)))
+			Expect(runCfg.DebugProfileHost).To(Equal("localhost"))
+		})
+
+		It("should use the profiling host from the API", func() {
+			Expect(runConfigWithProfileHost(ptr.To("0.0.0.0")).DebugProfileHost).To(Equal("0.0.0.0"))
+		})
+
+		It("should treat an explicitly empty profiling host as all interfaces", func() {
+			Expect(runConfigWithProfileHost(ptr.To("")).DebugProfileHost).To(BeEmpty())
 		})
 	})
 })
