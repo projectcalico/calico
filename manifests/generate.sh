@@ -44,7 +44,7 @@ OPERATOR_REGISTRY=${OPERATOR_REGISTRY_OVERRIDE:-$defaultOperatorRegistry}
 defaultOperatorImage=$($YQ .tigeraOperator.image <../charts/tigera-operator/values.yaml)
 OPERATOR_IMAGE=${OPERATOR_IMAGE_OVERRIDE:-$defaultOperatorImage}
 
-NON_HELM_MANIFEST_IMAGES="node-windows"
+NON_HELM_MANIFEST_IMAGES="node-windows calico"
 
 echo "Generating manifests for Calico=$CALICO_VERSION and tigera-operator=$OPERATOR_VERSION"
 
@@ -117,20 +117,27 @@ cp v1_crd_projectcalico_org.yaml operator-crds.yaml
 cp ../kube-controllers/pkg/apis/migration/v1/crd/migration.projectcalico.org_datastoremigrations.yaml \
 	migration.projectcalico.org_datastoremigrations.yaml
 
-echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > v3_projectcalico_org.yaml
-for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
-	${HELM} template \
-		--show-only templates/$FILE \
-		--set version=$CALICO_VERSION \
-		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
-		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
-done
-for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
-	${HELM} template \
-		--show-only templates/calico/$FILE \
-		--set version=$CALICO_VERSION \
-		../charts/projectcalico.org.v3 >> v3_projectcalico_org.yaml
-done
+# MutatingAdmissionPolicy is v1 on Kubernetes 1.36 and later, and v1beta1 on 1.34 and 1.35.
+generate_v3_bundle() {
+	local out=$1
+	local map_version=$2
+	echo "# projectcalico.org/v3 and operator.tigera.io/v1 APIs" > $out
+	for FILE in $(ls ../charts/projectcalico.org.v3/templates/*.yaml | xargs -n1 basename); do
+		${HELM} template \
+			--show-only templates/$FILE \
+			--set version=$CALICO_VERSION \
+			--api-versions admissionregistration.k8s.io/$map_version/MutatingAdmissionPolicy \
+			../charts/projectcalico.org.v3 >> $out
+	done
+	for FILE in $(ls ../charts/projectcalico.org.v3/templates/calico/*.yaml | xargs -n1 basename); do
+		${HELM} template \
+			--show-only templates/calico/$FILE \
+			--set version=$CALICO_VERSION \
+			../charts/projectcalico.org.v3 >> $out
+	done
+}
+generate_v3_bundle v3_projectcalico_org.yaml v1
+generate_v3_bundle v3_projectcalico_org-v1beta1.yaml v1beta1
 
 ##########################################################################
 # Build Calico manifests.
@@ -148,6 +155,13 @@ for FILE in $VALUES_FILES; do
 		--api-versions admissionregistration.k8s.io/v1/MutatingAdmissionPolicy \
 		-f ../charts/values/$FILE > $FILE
 done
+
+# calico-v3-crds.yaml is the only values file with admission policies, so it also needs a v1beta1 build.
+${HELM} -n kube-system template \
+	../charts/calico \
+	--set version=$CALICO_VERSION \
+	--api-versions admissionregistration.k8s.io/v1beta1/MutatingAdmissionPolicy \
+	-f ../charts/values/calico-v3-crds.yaml > calico-v3-crds-v1beta1.yaml
 
 ##########################################################################
 # Build tigera-operator manifests for OCP.
@@ -190,5 +204,11 @@ echo "Replacing image versions for static manifests"
 for img in $NON_HELM_MANIFEST_IMAGES; do
   new_img=${REGISTRY}/${img}
   echo "Update $img image to $new_img:$CALICO_VERSION"
-  find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
+  find . -type f -exec sed -i "s|image: [a-zA-Z0-9/._:-]*/${img}:[A-Za-z0-9_.-]*|image: ${new_img}:$CALICO_VERSION|g" {} \;
 done
+
+# Version the manifest header comments, which carry no "image:" prefix.
+find . -type f -name "*.yaml" -exec sed -i -E \
+  -e "s|^(#[[:space:]]+)calico/calico:[A-Za-z0-9_.-]*|\1calico/calico:$CALICO_VERSION|g" \
+  -e "s|^(#[[:space:]]*Calico Version[[:space:]]+)[A-Za-z0-9_.-]*|\1$CALICO_VERSION|g" \
+  -e "s|^(#[[:space:]]*https://\S*/releases#)[A-Za-z0-9_.-]*|\1$CALICO_VERSION|g" {} \;

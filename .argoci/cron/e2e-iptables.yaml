@@ -10,7 +10,6 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE:-CalicoIptables}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|WireGuard)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
@@ -25,6 +24,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/openshift-xtables-encap-aws.yaml
       - name: INSTALLER
         value: operator
       - name: PROVISIONER
@@ -60,6 +61,8 @@ steps:
     matrix:
       - name: stable-1-azure-
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/aks-xtables-nobgp.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -68,6 +71,8 @@ steps:
             value: ""
       - name: stable-1-none-
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/aks-xtables-encap.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -89,8 +94,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/eks-xtables-encap-aws.yaml
       - name: PROVISIONER
         value: aws-eks
       - name: STERN_CHECK
@@ -115,8 +120,8 @@ steps:
         value: VXLAN
       - name: INSTALLER
         value: helmerator
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-encap.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -143,8 +148,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -166,8 +171,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: NETWORK_PLUGIN_MODE
@@ -189,8 +194,8 @@ steps:
         value: Calico
       - name: INSTALLER
         value: operator
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\])
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-encap.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -409,9 +414,9 @@ steps:
       - name: E2E_TEST_CONFIG
         value: e2e/config/iptables/xtables.yaml
       - name: K8S_VERSION
-        value: v1.31.3
+        value: v1.32.13
       - name: RKE_VERSION
-        value: v1.7.1
+        value: v1.8.14
     matrix:
       - name: gcp-rancher
         env:
@@ -419,82 +424,68 @@ steps:
             value: gcp-rancher
     commands: |
       .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: wireguard-vxlan-k8s-e2e
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: ENABLE_EXTERNAL_NODE
-  #       value: "true"
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: IPAM_TEST_POOL_SUBNET
-  #       value: 10.0.0.0/29
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=(WireGuard)
-  #     - name: PROVISIONER
-  #       value: aws-kubeadm
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #     - name: USE_VXLAN
-  #       value: "true"
-  #     - name: VPC_SUBNETS
-  #       value: '["172.16.101.0/24"]'
-  #   matrix:
-  #     - name: beta-or-stable
-  #       env:
-  #         - name: K8S_VERSION
-  #           value: beta-or-stable
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: wireguard-k8s-e2e
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: ENABLE_EXTERNAL_NODE
-  #       value: "true"
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: IPAM_TEST_POOL_SUBNET
-  #       value: 10.0.0.0/29
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=(WireGuard)
-  #     - name: PROVISIONER
-  #       value: aws-kubeadm
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #     - name: VPC_SUBNETS
-  #       value: '["172.16.101.0/24"]'
-  #   matrix:
-  #     - name: stable-true
-  #       env:
-  #         - name: K8S_VERSION
-  #           value: stable
-  #         - name: DISABLE_IPIP
-  #           value: "true"
-  #     - name: stable-false
-  #       env:
-  #         - name: K8S_VERSION
-  #           value: stable
-  #         - name: DISABLE_IPIP
-  #           value: "false"
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
+  - name: wireguard-vxlan-k8s-e2e
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: USE_VXLAN
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: beta-or-stable
+        env:
+          - name: K8S_VERSION
+            value: beta-or-stable
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: wireguard-k8s-e2e
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-wireguard.yaml
+      - name: ENABLE_EXTERNAL_NODE
+        value: "true"
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: IPAM_TEST_POOL_SUBNET
+        value: 10.0.0.0/29
+      - name: PROVISIONER
+        value: aws-kubeadm
+      - name: USE_HASH_RELEASE
+        value: "true"
+      - name: VPC_SUBNETS
+        value: '["172.16.101.0/24"]'
+    matrix:
+      - name: stable-true
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: DISABLE_IPIP
+            value: "true"
+      - name: stable-false
+        env:
+          - name: K8S_VERSION
+            value: stable
+          - name: DISABLE_IPIP
+            value: "false"
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: operator-migration-kind-dual-stack
     jobSize: large
     services:
@@ -566,8 +557,8 @@ steps:
         value: "true"
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-aws.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -592,8 +583,8 @@ steps:
         value: "true"
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-v3crd-aws.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_API_SERVER
@@ -626,8 +617,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp-wireguard.yaml
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
@@ -636,150 +627,122 @@ steps:
         value: "true"
     commands: |
       .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: focused-wireguard-e2e-aks-w-azure-cni
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: ENCAPSULATION_TYPE
-  #       value: None
-  #     - name: INSTALLER
-  #       value: helmerator
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #   matrix:
-  #     - name: azr-aks-stable-3-azurevnet
-  #       env:
-  #         - name: PROVISIONER
-  #           value: azr-aks
-  #         - name: K8S_VERSION
-  #           value: stable-3
-  #         - name: CNI_PLUGIN
-  #           value: AzureVNET
-  #     - name: azr-aks-stable-azurevnet
-  #       env:
-  #         - name: PROVISIONER
-  #           value: azr-aks
-  #         - name: K8S_VERSION
-  #           value: stable
-  #         - name: CNI_PLUGIN
-  #           value: AzureVNET
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: focused-wireguard-e2e-aks-with-calico-cni
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: AKS_CNI
-  #       value: calico
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: ENCAPSULATION_TYPE
-  #       value: VXLAN
-  #     - name: INSTALLER
-  #       value: helmerator
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #   matrix:
-  #     - name: azr-aks-stable-3-calico
-  #       env:
-  #         - name: PROVISIONER
-  #           value: azr-aks
-  #         - name: K8S_VERSION
-  #           value: stable-3
-  #         - name: CNI_PLUGIN
-  #           value: Calico
-  #     - name: azr-aks-stable-calico
-  #       env:
-  #         - name: PROVISIONER
-  #           value: azr-aks
-  #         - name: K8S_VERSION
-  #           value: stable
-  #         - name: CNI_PLUGIN
-  #           value: Calico
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: focused-wireguard-e2e-eks-kdd-aws-cni
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: AWS_K8S_CNI_VERSION
-  #       value: NA
-  #     - name: CNI_PLUGIN
-  #       value: AmazonVPC
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: INSTALLER
-  #       value: helmerator
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\])
-  #     - name: K8S_VERSION
-  #       value: stable-1
-  #     - name: PROVISIONER
-  #       value: aws-eks
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
-  # PAUSED (2026-08-06): this cell focused WireGuard specs, which no longer exist in the
-  # in-repo e2e suite -- they went with the enterprise tests. Pointed at the new
-  # suite it selects nothing and still passes, so it is paused rather than
-  # converted: a green lane that never touches WireGuard hides the gap.
-  # Uncomment when WireGuard specs land in e2e/pkg/tests, or delete this block if
-  # they are not coming back.
-  # Discussion: projectcalico/calico#13452.
-  # - name: focused-wireguard-e2e-eks-kdd-calico-cni
-  #   services:
-  #     - docker
-  #     - http-cache-proxy
-  #   env:
-  #     - name: AWS_K8S_CNI_VERSION
-  #       value: NA
-  #     - name: CNI_PLUGIN
-  #       value: Calico
-  #     - name: ENABLE_WIREGUARD
-  #       value: "true"
-  #     - name: INSTALLER
-  #       value: helmerator
-  #     - name: K8S_E2E_FLAGS
-  #       value: --ginkgo.focus=WireGuard --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services)
-  #     - name: K8S_VERSION
-  #       value: stable-1
-  #     - name: PROVISIONER
-  #       value: aws-eks
-  #     - name: USE_HASH_RELEASE
-  #       value: "true"
-  #   commands: |
-  #     .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-aks-w-azure-cni
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/wireguard.yaml
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: None
+      - name: INSTALLER
+        value: helmerator
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: azr-aks-stable-3-azurevnet
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable-3
+          - name: CNI_PLUGIN
+            value: AzureVNET
+      - name: azr-aks-stable-azurevnet
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable
+          - name: CNI_PLUGIN
+            value: AzureVNET
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-aks-with-calico-cni
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: AKS_CNI
+        value: calico
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/wireguard.yaml
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: ENCAPSULATION_TYPE
+        value: VXLAN
+      - name: INSTALLER
+        value: helmerator
+      - name: USE_HASH_RELEASE
+        value: "true"
+    matrix:
+      - name: azr-aks-stable-3-calico
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable-3
+          - name: CNI_PLUGIN
+            value: Calico
+      - name: azr-aks-stable-calico
+        env:
+          - name: PROVISIONER
+            value: azr-aks
+          - name: K8S_VERSION
+            value: stable
+          - name: CNI_PLUGIN
+            value: Calico
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-eks-kdd-aws-cni
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: CNI_PLUGIN
+        value: AmazonVPC
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/wireguard.yaml
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_HASH_RELEASE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
+  - name: focused-wireguard-e2e-eks-kdd-calico-cni
+    services:
+      - docker
+      - http-cache-proxy
+    env:
+      - name: AWS_K8S_CNI_VERSION
+        value: NA
+      - name: CNI_PLUGIN
+        value: Calico
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/wireguard.yaml
+      - name: ENABLE_WIREGUARD
+        value: "true"
+      - name: INSTALLER
+        value: helmerator
+      - name: K8S_VERSION
+        value: stable-1
+      - name: PROVISIONER
+        value: aws-eks
+      - name: USE_HASH_RELEASE
+        value: "true"
+    commands: |
+      .argoci/scripts/body_standard.sh
   - name: distro-support
     services:
       - docker
