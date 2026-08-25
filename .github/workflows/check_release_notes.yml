@@ -12,8 +12,10 @@ jobs:
   label:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: write
+      checks: write
+      pull-requests: read
     steps:
       - name: Validate Release Notes
         uses: tigera/check-release-notes@main
+        with:
+          github-token: ${{ github.token }}
