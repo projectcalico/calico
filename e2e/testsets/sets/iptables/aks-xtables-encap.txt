@@ -103,7 +103,7 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath xtables-only [RequiresXtables] ingress-2N2 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
-[sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
+[sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] [RequiresOperator] [RequiresCalicoCNI] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
