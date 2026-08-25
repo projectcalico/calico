@@ -10,7 +10,7 @@
         value: "calico"
     prologue:
       commands:
-        - .semaphore/load-cached-images
+        - .semaphore/load-cached-images calico
         - cd kube-controllers
     jobs:
       - name: "kube-controllers: CI"
