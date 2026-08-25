@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -34,6 +34,7 @@ import (
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/api/pkg/lib/numorstring"
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/istio/waypoint"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -63,7 +64,7 @@ var (
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 	r := newReconciler(mgr, opts)
 
-	c, err := ctrlruntime.NewController("istio-controller", mgr, controller.Options{Reconciler: r})
+	c, err := ctrlruntime.NewController("istio-controller", mgr, ctrl.Options{Reconciler: r})
 	if err != nil {
 		return fmt.Errorf("failed to create istio-controller: %w", err)
 	}
@@ -232,10 +233,25 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		Istio:          instance,
 		IstioNamespace: istio.IstioNamespace,
 		Scheme:         r.scheme,
+		ImageOverrides: r.ext.Istio().Images(),
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error initializing Istio components", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{Installation: installationSpec},
+		Client:       r.Client,
+	}
+	ci, err = r.ext.Istio().ExtendInputs(ctx, ci)
+	if err != nil {
+		if reason, ok := extensions.DegradedReason(err); ok {
+			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
+			return reconcile.Result{}, err
+		}
+		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing Istio extension", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
@@ -253,7 +269,10 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 	}
 
 	// Deploy Istio components, passing the Istio CR for the owner this time.
-	err = utils.NewComponentHandler(log, r, r.scheme, instance).CreateOrUpdateOrDelete(ctx, istioComponent, r.status)
+	modifier := utils.WithModifier(func(c render.Component) render.Component {
+		return r.ext.Istio().Modify(c, ci.RenderInputs)
+	})
+	err = utils.NewComponentHandler(log, r, r.scheme, instance, modifier).CreateOrUpdateOrDelete(ctx, istioComponent, r.status)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Calico Istio resources", err, log)
 		return reconcile.Result{}, err

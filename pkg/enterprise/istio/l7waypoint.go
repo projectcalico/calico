@@ -28,6 +28,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
+	ristio "github.com/tigera/operator/pkg/render/istio"
 )
 
 const (
@@ -120,7 +121,7 @@ func renderEnvoyFilterWriterRole(namespace string) *rbacv1.Role {
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
-				APIGroups: []string{envoyFilterGV.Group},
+				APIGroups: []string{ristio.EnvoyFilterGV.Group},
 				Resources: []string{"envoyfilters"},
 				Verbs:     []string{"create", "update", "delete"},
 			},
@@ -261,10 +262,10 @@ func waypointDeploymentOverlay(image string) string {
 // renderALSEnvoyFilter builds the EnvoyFilter that enables gRPC ALS access
 // logging on the waypoint proxy's main_internal listener, streaming logs to
 // the l7-collector sidecar via the shared unix socket.
-func renderALSEnvoyFilter(namespace string) *EnvoyFilter {
-	return &EnvoyFilter{
+func renderALSEnvoyFilter(namespace string) *ristio.EnvoyFilter {
+	return &ristio.EnvoyFilter{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: envoyFilterGV.String(),
+			APIVersion: ristio.EnvoyFilterGV.String(),
 			Kind:       "EnvoyFilter",
 		},
 		ObjectMeta: metav1.ObjectMeta{
@@ -341,10 +342,10 @@ func renderALSEnvoyFilter(namespace string) *EnvoyFilter {
 // client IP from the Forwarded header (set by ztunnel on the HBONE CONNECT
 // request) on the connect_terminate listener and propagates it as filter
 // state to main_internal.
-func renderSrcPortEnvoyFilter(namespace string) *EnvoyFilter {
-	return &EnvoyFilter{
+func renderSrcPortEnvoyFilter(namespace string) *ristio.EnvoyFilter {
+	return &ristio.EnvoyFilter{
 		TypeMeta: metav1.TypeMeta{
-			APIVersion: envoyFilterGV.String(),
+			APIVersion: ristio.EnvoyFilterGV.String(),
 			Kind:       "EnvoyFilter",
 		},
 		ObjectMeta: metav1.ObjectMeta{

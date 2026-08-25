@@ -44,7 +44,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			ClusterConnection: clusterconnection.New(variant),
 			Tiers:             tiers.New(o),
 			CSR:               csr.New(),
-			Istio:             istio.New(),
+			Istio:             istio.New(variant),
 			Goldmane:          goldmane.New(variant),
 			Whisker:           whisker.New(variant),
 			GatewayAPI:        gatewayapi.New(variant),

@@ -43,6 +43,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/status"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	eistio "github.com/tigera/operator/pkg/enterprise/istio"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render/istio"
 	"github.com/tigera/operator/test"
 )
@@ -937,6 +939,7 @@ var _ = Describe("Istio controller tests", func() {
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
+				ext:      extensions.New(extensions.Set{Istio: eistio.New(operatorv1.CalicoEnterprise)}),
 			}
 
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
