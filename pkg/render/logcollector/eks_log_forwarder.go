@@ -282,25 +282,26 @@ func (c *fluentBitComponent) eksLogForwarderClusterRoleBinding() *rbacv1.Cluster
 	}
 }
 
-func (c *fluentBitComponent) eksLogForwarderClusterRole() *rbacv1.ClusterRole {
-	rules := []rbacv1.PolicyRule{
+// eksLogForwarderLinseedRules grants the narrower Linseed access an EKS log
+// forwarder needs: it reads audit logs to find where it left off, and writes
+// only kube audit logs.
+func eksLogForwarderLinseedRules() []rbacv1.PolicyRule {
+	return []rbacv1.PolicyRule{
 		{
-			// Add read access to Linseed APIs.
 			APIGroups: []string{"linseed.tigera.io"},
-			Resources: []string{
-				"auditlogs",
-			},
-			Verbs: []string{"get"},
+			Resources: []string{"auditlogs"},
+			Verbs:     []string{"get"},
 		},
 		{
-			// Add write access to Linseed APIs to flush eks kube audit logs.
 			APIGroups: []string{"linseed.tigera.io"},
-			Resources: []string{
-				"kube_auditlogs",
-			},
-			Verbs: []string{"create"},
+			Resources: []string{"kube_auditlogs"},
+			Verbs:     []string{"create"},
 		},
 	}
+}
+
+func (c *fluentBitComponent) eksLogForwarderClusterRole() *rbacv1.ClusterRole {
+	rules := eksLogForwarderLinseedRules()
 
 	return &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},

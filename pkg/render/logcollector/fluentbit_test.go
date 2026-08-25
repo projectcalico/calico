@@ -1529,6 +1529,50 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 			rtest.ExpectResources(deleteResources, legacyFluentdDeleteResources())
 		})
 
+		It("should render the legacy log collector RBAC on a management cluster", func() {
+			cfg.ManagementCluster = true
+
+			createResources, deleteResources := logcollector.FluentBitShared(cfg).Objects()
+			rtest.ExpectResources(createResources, []client.Object{
+				&v3.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: logcollector.FluentBitPolicyName, Namespace: render.LogCollectorNamespace}},
+				&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-log-collector"}},
+				&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-log-collector"}},
+				&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-eks-log-forwarder"}},
+				&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-eks-log-forwarder"}},
+			})
+
+			// The legacy fluentd cleanup still runs, but the RBAC that authorizes
+			// fluentd clients in managed clusters is not part of it.
+			for _, obj := range deleteResources {
+				Expect(obj.GetName()).NotTo(Equal("tigera-linseed-legacy-log-collector"))
+			}
+
+			// Linseed resolves a managed-cluster client to its service account, so
+			// the binding has to name the fluentd-era accounts.
+			crb := rtest.GetResource(createResources, "tigera-linseed-legacy-log-collector", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
+			Expect(crb.Subjects).To(ConsistOf(
+				rbacv1.Subject{Kind: "ServiceAccount", Name: "fluentd-node", Namespace: "tigera-fluentd"},
+				rbacv1.Subject{Kind: "ServiceAccount", Name: "fluentd-node-windows", Namespace: "tigera-fluentd"},
+			))
+
+			// The fluentd-era EKS forwarder had narrower access, so it keeps its own role.
+			eksCRB := rtest.GetResource(createResources, "tigera-linseed-legacy-eks-log-forwarder", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding").(*rbacv1.ClusterRoleBinding)
+			Expect(eksCRB.Subjects).To(ConsistOf(
+				rbacv1.Subject{Kind: "ServiceAccount", Name: "eks-log-forwarder", Namespace: "tigera-fluentd"},
+			))
+			eksCR := rtest.GetResource(createResources, "tigera-linseed-legacy-eks-log-forwarder", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+			Expect(eksCR.Rules).To(Equal([]rbacv1.PolicyRule{
+				{APIGroups: []string{"linseed.tigera.io"}, Resources: []string{"auditlogs"}, Verbs: []string{"get"}},
+				{APIGroups: []string{"linseed.tigera.io"}, Resources: []string{"kube_auditlogs"}, Verbs: []string{"create"}},
+			}))
+
+			cr := rtest.GetResource(createResources, "tigera-linseed-legacy-log-collector", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+			Expect(cr.Rules).To(HaveLen(1))
+			Expect(cr.Rules[0].APIGroups).To(Equal([]string{"linseed.tigera.io"}))
+			Expect(cr.Rules[0].Verbs).To(Equal([]string{"create"}))
+			Expect(cr.Rules[0].Resources).To(ContainElement("flowlogs"))
+		})
+
 		It("should produce disjoint resources across the shared, Linux and Windows components", func() {
 			// The controller renders all three from one configuration. Turn on
 			// every gated feature so each component emits its full resource set,
@@ -1664,5 +1708,9 @@ func legacyFluentdDeleteResources() []client.Object {
 		&rbacv1.ClusterRoleBinding{TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-fluentd"}},
 		&rbacv1.ClusterRoleBinding{TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-fluentd-windows"}},
 		&corev1.Secret{TypeMeta: metav1.TypeMeta{Kind: "Secret", APIVersion: "v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-fluentd-prometheus-tls", Namespace: common.OperatorNamespace()}},
+		&rbacv1.ClusterRole{TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-log-collector"}},
+		&rbacv1.ClusterRoleBinding{TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-log-collector"}},
+		&rbacv1.ClusterRole{TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-eks-log-forwarder"}},
+		&rbacv1.ClusterRoleBinding{TypeMeta: metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"}, ObjectMeta: metav1.ObjectMeta{Name: "tigera-linseed-legacy-eks-log-forwarder"}},
 	}
 }

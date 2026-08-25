@@ -86,7 +86,14 @@ const (
 	FluentBitConfConfigMapName       = "calico-fluent-bit-conf"
 	EKSLogForwarderConfConfigMapName = "eks-log-forwarder-conf"
 
-	legacyFluentdNamespace = "tigera-fluentd"
+	legacyFluentdNamespace       = "tigera-fluentd"
+	legacyFluentdNodeName        = "fluentd-node"
+	legacyFluentdNodeWindowsName = "fluentd-node-windows"
+
+	// legacyLogCollectorClientName and legacyEKSLogForwarderClientName name the RBAC
+	// that authorizes fluentd-era log collectors in managed clusters.
+	legacyLogCollectorClientName    = "tigera-linseed-legacy-log-collector"
+	legacyEKSLogForwarderClientName = "tigera-linseed-legacy-eks-log-forwarder"
 
 	fluentBitName        = "calico-fluent-bit"
 	fluentBitWindowsName = "calico-fluent-bit-windows"
@@ -155,6 +162,12 @@ type FluentBitConfiguration struct {
 	FluentBitKeyPair certificatemanagement.KeyPairInterface
 	TrustedBundle    certificatemanagement.TrustedBundle
 	ManagedCluster   bool
+
+	// ManagementCluster is true when this cluster manages others. Linseed authorizes a
+	// managed cluster's log writes with a SubjectAccessReview against this cluster, so a
+	// management cluster carries RBAC for its managed clusters' log collectors as well as
+	// its own.
+	ManagementCluster bool
 
 	// Set if running as a multi-tenant management cluster. Configures the management cluster's
 	// own fluent-bit daemonset.
@@ -309,6 +322,21 @@ func (s *fluentBitSharedComponent) Objects() ([]client.Object, []client.Object) 
 	} else {
 		toDelete = append(toDelete, c.externalLinseedService())
 		toDelete = append(toDelete, c.externalLinseedRoleBinding())
+	}
+
+	// Managed clusters that have not upgraded past fluentd still write logs as their
+	// fluentd service accounts, and Linseed authorizes them here. Standalone and managed
+	// clusters have no managed clusters of their own, so they drop the RBAC.
+	legacyClientRBAC := []client.Object{
+		c.legacyLogCollectorClientClusterRole(),
+		c.legacyLogCollectorClientClusterRoleBinding(),
+		c.legacyEKSLogForwarderClientClusterRole(),
+		c.legacyEKSLogForwarderClientClusterRoleBinding(),
+	}
+	if c.cfg.ManagementCluster {
+		objs = append(objs, legacyClientRBAC...)
+	} else {
+		toDelete = append(toDelete, legacyClientRBAC...)
 	}
 
 	// Clean up the legacy fluentd installation on upgrade. Deleting the
