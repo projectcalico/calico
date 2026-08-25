@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -40,41 +39,20 @@ func ResolveSets(lanes []Lane) (map[string]Lane, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s (%s): %w", l.Name, l.Source, err)
 		}
-		prev, ok := sets[name]
-		if ok && prev.Selection() != l.Selection() {
-			return nil, fmt.Errorf("%q resolves to different selections in %s (%s: %s) and %s (%s: %s)",
-				name, prev.Source, prev.Name, prev.Selection(), l.Source, l.Name, l.Selection())
-		}
-		if !ok {
+		if _, ok := sets[name]; !ok {
 			sets[name] = l
 		}
 	}
 	return sets, nil
 }
 
-// SetName is the config path once a lane is converted, and a legacy/ name keyed
-// off FUNCTIONAL_AREA while it still selects by regex.
+// SetName is the lane's config path, relative to e2e/config and without the
+// extension.
 func SetName(l Lane) (string, error) {
-	if l.Config != "" {
-		if !strings.HasPrefix(l.Config, configPrefix) {
-			return "", fmt.Errorf("config %q is not under %s", l.Config, configPrefix)
-		}
-		return strings.TrimSuffix(strings.TrimPrefix(l.Config, configPrefix), ".yaml"), nil
+	if !strings.HasPrefix(l.Config, configPrefix) {
+		return "", fmt.Errorf("config %q is not under %s", l.Config, configPrefix)
 	}
-	if l.Area == "" {
-		return "", fmt.Errorf("lane declares no %s", envArea)
-	}
-	area := strings.TrimSuffix(l.Area, filepath.Ext(l.Area))
-	if l.PipelineDefault {
-		return "legacy/" + area, nil
-	}
-	return "legacy/" + area + "/" + slug(l.Name), nil
-}
-
-var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-
-func slug(s string) string {
-	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
+	return strings.TrimSuffix(strings.TrimPrefix(l.Config, configPrefix), ".yaml"), nil
 }
 
 // Write records the index and one file per set under dir.
