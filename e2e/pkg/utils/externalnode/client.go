@@ -139,9 +139,9 @@ func (e *Client) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, e
 		// Ginkgo node rather than failing the caller's assertion.
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			logrus.Infof("Stderr: %s", string(exitErr.Stderr))
+			logrus.WithError(err).Errorf("Stderr: %s", string(exitErr.Stderr))
 		} else {
-			logrus.Infof("Command failed without an exit status: %v", err)
+			logrus.WithError(err).Errorf("Command failed without an exit status")
 		}
 	}
 	return outstr, err
