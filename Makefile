@@ -70,7 +70,7 @@ check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
 check-images-availability: bin/crane bin/yq
-	cd ./hack && ./check-images-availability.sh
+	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
