@@ -832,27 +832,39 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	return ""
 }
 
+var kubeVirtResource = schema.GroupVersionResource{
+	Group:    "kubevirt.io",
+	Version:  "v1",
+	Resource: "kubevirts",
+}
+
 // isMockVirtDeployed reports whether the cluster runs MockVirt, which the deploy
-// script marks by patching simulationMode on the KubeVirt CR. A cluster with no
-// KubeVirt reports false rather than failing.
+// script marks by patching simulationMode on the KubeVirt CR.
 func isMockVirtDeployed(f *framework.Framework) bool {
 	GinkgoHelper()
 	dynClient, err := dynamic.NewForConfig(f.ClientConfig())
 	Expect(err).NotTo(HaveOccurred(), "failed to create dynamic client")
-	kvResource := schema.GroupVersionResource{
-		Group:    "kubevirt.io",
-		Version:  "v1",
-		Resource: "kubevirts",
-	}
-	obj, err := dynClient.Resource(kvResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
+	deployed, err := mockVirtDeployed(dynClient)
+	Expect(err).NotTo(HaveOccurred(), "failed to read KubeVirt CR kubevirt/kubevirt")
+	return deployed
+}
+
+// mockVirtDeployed reads simulationMode from the KubeVirt CR. A missing CR, or no
+// KubeVirt CRD at all, reports false rather than an error.
+func mockVirtDeployed(dynClient dynamic.Interface) (bool, error) {
+	obj, err := dynClient.Resource(kubeVirtResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
 	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-		return false
+		return false, nil
 	}
-	Expect(err).NotTo(HaveOccurred(), "failed to get KubeVirt CR kubevirt/kubevirt")
+	if err != nil {
+		return false, err
+	}
 	simMode, found, err := unstructured.NestedBool(obj.Object,
 		"spec", "configuration", "developerConfiguration", "simulationMode")
-	Expect(err).NotTo(HaveOccurred(), "failed to read simulationMode from KubeVirt CR")
-	return found && simMode
+	if err != nil {
+		return false, err
+	}
+	return found && simMode, nil
 }
 
 // setupMockVirtEBGPPeering configures eBGP peering between a BIRD container on

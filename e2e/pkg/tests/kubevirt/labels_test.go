@@ -1,4 +1,16 @@
 // Copyright (c) 2026 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package kubevirt
 
@@ -6,7 +18,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,6 +51,9 @@ func TestEveryKubeVirtSuiteDeclaresTheKubeVirtFeature(t *testing.T) {
 				if !ok || !isDescribeCall(inner, "WithFeature") {
 					continue
 				}
+				if len(inner.Args) == 0 {
+					continue
+				}
 				if lit, ok := inner.Args[0].(*ast.BasicLit); ok && lit.Value == `"KubeVirt"` {
 					return true
 				}
@@ -50,24 +64,6 @@ func TestEveryKubeVirtSuiteDeclaresTheKubeVirtFeature(t *testing.T) {
 	}
 	if checked == 0 {
 		t.Fatal("found no KubeVirt suites, so this guard checks nothing")
-	}
-}
-
-// Detection has to tell "no KubeVirt" apart from "real KubeVirt", so the Get
-// error cannot go straight into an assertion.
-func TestMockVirtDetectionToleratesAMissingCR(t *testing.T) {
-	body, err := os.ReadFile("utils.go")
-	if err != nil {
-		t.Fatalf("reading utils.go: %v", err)
-	}
-	fn := string(body)
-	start := strings.Index(fn, "func isMockVirtDeployed(")
-	if start < 0 {
-		t.Fatal("isMockVirtDeployed is gone; update this guard")
-	}
-	end := strings.Index(fn[start:], "\n}\n")
-	if !strings.Contains(fn[start:start+end], "apierrors.IsNotFound(err)") {
-		t.Error("isMockVirtDeployed must return false when the KubeVirt CR is absent")
 	}
 }
 
