@@ -16,8 +16,10 @@ package networking
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
+	"os/exec"
 	"time"
 
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
@@ -545,31 +547,72 @@ var _ = describe.CalicoDescribe(
 				framework.Failf("unsupported dest %q for external scenario", s.dest)
 			}
 
-			tryConnect := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				return err
-			}
+			// One probe costs an ssh round trip plus at most probeTimeout for the
+			// request. Poll intervals and hold windows are sized against that: a
+			// window shorter than a single probe only ever runs one probe, which
+			// asserts nothing about whether a state persists.
+			const (
+				probeTimeout    = 5 * time.Second
+				probePoll       = 8 * time.Second
+				probeSettle     = 30 * time.Second
+				probeHold       = 25 * time.Second
+				wgetMaxCode     = 8   // GNU wget only exits 0-8; anything above is not wget speaking.
+				sshKilledCode   = 124 // ExecTimeout's local `timeout` wrapper killed ssh.
+				cmdNotFoundCode = 127 // The remote shell could not find wget.
+			)
 
-			tryConnectBlocked := func() error {
-				cmd := fmt.Sprintf("wget -qO- -T 5 http://%s/clientip", targetAddr)
-				_, err := extNode.Exec("sh", "-c", cmd)
-				if err != nil {
-					return nil // blocked as expected
+			cmd := fmt.Sprintf("wget -O- -t 1 -T %d http://%s/clientip",
+				int(probeTimeout.Seconds()), targetAddr)
+
+			// probe makes exactly one connection attempt. It returns nil when the
+			// connection succeeded, an error wrapping errBlocked when wget ran to
+			// completion and the connection failed, and any other error when the
+			// attempt says nothing about policy. Only the first two are evidence:
+			// counting an inconclusive probe as a block would let an unenforced
+			// policy, or an unreachable external node, pass as enforced.
+			//
+			// `-t 1` is essential: wget retries 20 times by default, which outlasts
+			// the ssh wrapper's own timeout, so a dropped-packet block and a stalled
+			// ssh would both surface as the wrapper killing the command. Omitting
+			// `-q` keeps wget's reason for failing in the log.
+			errBlocked := errors.New("connection blocked")
+			probe := func() error {
+				out, err := extNode.Exec("sh", "-c", cmd)
+				if err == nil {
+					return nil
 				}
-				return fmt.Errorf("expected connection to be blocked but it succeeded")
+				var exitErr *exec.ExitError
+				if !errors.As(err, &exitErr) {
+					// The command never produced an exit status, e.g. the local
+					// `timeout` or ssh binary is missing.
+					return fmt.Errorf("probe inconclusive: %w (output %q)", err, out)
+				}
+				code := exitErr.ExitCode()
+				switch {
+				case code >= 1 && code <= wgetMaxCode:
+					return fmt.Errorf("%w: wget exited %d (output %q)", errBlocked, code, out)
+				case code == sshKilledCode:
+					return errors.New("probe inconclusive: ssh was killed before wget returned, " +
+						"so a policy block cannot be distinguished from a stalled connection")
+				case code == cmdNotFoundCode:
+					return errors.New("probe inconclusive: wget is not installed on the external node")
+				default:
+					// ssh exits 255 on a transport failure; -1 means the local wrapper
+					// was killed by a signal.
+					return fmt.Errorf("probe inconclusive: probe transport failed (exit %d), not a wget result", code)
+				}
 			}
 
 			By("Verifying baseline: external node can reach the server before any policy")
-			Eventually(tryConnect, 30*time.Second, 2*time.Second).Should(Succeed())
+			Eventually(probe, probeSettle, probePoll).Should(Succeed())
 
 			By("Installing deny-all ingress policy")
 			denyAll := ingressCreateDenyAllPolicy(f)
 			DeferCleanup(ingressDeletePolicy, f, denyAll.Namespace, denyAll.Name)
 
 			By("Verifying external node is blocked after deny-all")
-			Eventually(tryConnectBlocked, 30*time.Second, 2*time.Second).Should(Succeed())
-			Consistently(tryConnectBlocked, 5*time.Second, 1*time.Second).Should(Succeed())
+			Eventually(probe, probeSettle, probePoll).Should(MatchError(errBlocked))
+			Consistently(probe, probeHold, probePoll).Should(MatchError(errBlocked))
 
 			// Build /32 (IPv4) or /128 (IPv6) CIDRs for the external node's source IPs.
 			cidrs := make([]string, 0, len(extIPs))
@@ -587,12 +630,12 @@ var _ = describe.CalicoDescribe(
 			switch expect {
 			case noSNAT:
 				By("Verifying external node is allowed (CIDR policy, source IP preserved)")
-				Eventually(tryConnect, 30*time.Second, 2*time.Second).Should(Succeed())
+				Eventually(probe, probeSettle, probePoll).Should(Succeed())
 
 			case snatNoWorkingPolicy:
 				// SNAT rewrites the source IP so the CIDR allow rule never matches.
 				By("Verifying external node is still blocked (SNAT breaks CIDR policy)")
-				Consistently(tryConnectBlocked, 10*time.Second, 2*time.Second).Should(Succeed())
+				Consistently(probe, probeHold, probePoll).Should(MatchError(errBlocked))
 			}
 		}
 
