@@ -180,13 +180,7 @@ var _ = describe.CalicoDescribe(
 				if isMockVirtDeployed(f) {
 					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
 				}
-				tor := externalnode.NewClient()
-				if tor == nil {
-					// The RequiresExternalNode label gates whether this test runs at
-					// all; once selected, missing credentials are a real failure
-					// rather than a self-skip.
-					Fail("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
-				}
+				tor := externalnode.MustNewClient()
 
 				ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 				defer cancel()
