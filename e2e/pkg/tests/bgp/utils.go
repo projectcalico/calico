@@ -44,8 +44,27 @@ func requireBGPIsSoleRoutingMechanism(cli ctrlclient.Client) {
 	if fc.Spec.ProgramClusterRoutes != nil {
 		programClusterRoutes = *fc.Spec.ProgramClusterRoutes
 	}
-	felixOwnsIPIP := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledIPIPOnly
-	felixOwnsNoEncap := programClusterRoutes == v3.Enabled || programClusterRoutes == v3.EnabledNoEncapOnly
+
+	var felixOwnsIPIP, felixOwnsNoEncap bool
+	switch programClusterRoutes {
+	case v3.Disabled:
+		// Felix programs neither class.  Whether BIRD picks them up is BGPConfiguration's
+		// business, and it is expressible for neither component to; this check only needs
+		// Felix to be keeping out of the way.
+	case v3.EnabledIPIPOnly:
+		felixOwnsIPIP = true
+	case v3.EnabledNoEncapOnly:
+		felixOwnsNoEncap = true
+	case v3.Enabled:
+		felixOwnsIPIP, felixOwnsNoEncap = true, true
+	default:
+		// A value this binary does not recognise, from a cluster whose CRD is newer than the
+		// test.  Felix replaces an unparseable value with the parameter's default, which is
+		// EnabledIPIPOnly, so conclude that rather than "Felix owns neither" -- the latter would
+		// let these tests run against a cluster where Felix is in fact programming the IPIP
+		// cluster routes, and they would fail on connectivity rather than skipping here.
+		felixOwnsIPIP = true
+	}
 
 	fail := func(pool v3.IPPool, why string) {
 		framework.Failf(
