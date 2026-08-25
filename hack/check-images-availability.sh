@@ -42,6 +42,15 @@ CALICO_VERSION="${PRODUCT_VERSION:-$defaultCalicoVersion}"
 echo "Using REGISTRY: $REGISTRY"
 echo "Using CALICO_VERSION: $CALICO_VERSION"
 
+# A branch-prefixed version is a moving tag that only exists once a hashrelease
+# has published from that branch, so a miss is expected rather than a failure.
+RELEASE_BRANCH_PREFIX="${RELEASE_BRANCH_PREFIX:-release}"
+BRANCH_TAG=0
+if [[ "$CALICO_VERSION" == "${RELEASE_BRANCH_PREFIX}-"* ]]; then
+  BRANCH_TAG=1
+  echo "⚠️  $CALICO_VERSION is a branch tag; missing images tagged with it will warn, not fail."
+fi
+
 #########################################
 # Step 1: Extract from manifests
 #########################################
@@ -90,11 +99,13 @@ echo "Total unique images: ${count}"
 #########################################
 FAILED=0
 FAILED_IMAGES=()
+WARNED_IMAGES=()
 
 while IFS= read -r image; do
   success=0
+  last_err=""
   for attempt in 1 2 3; do
-    if "$CRANE" digest "$image" >/dev/null 2>&1; then
+    if last_err=$("$CRANE" digest "$image" 2>&1 >/dev/null); then
       echo "✅ Available: $image"
       success=1
       break
@@ -108,15 +119,32 @@ while IFS= read -r image; do
   done
 
   if [ "$success" -ne 1 ]; then
-    echo "❌ NOT FOUND after 3 attempts: $image"
-    FAILED=1
-    FAILED_IMAGES+=("$image")
+    # Only an authoritative "not found" is an unpublished branch tag. Auth
+    # failures and outages must stay fatal or an unreachable registry passes.
+    if [ "$BRANCH_TAG" -eq 1 ] && [[ "$image" == *":$CALICO_VERSION" ]] \
+      && [[ "$last_err" == *MANIFEST_UNKNOWN* || "$last_err" == *NAME_UNKNOWN* || "$last_err" == *"404 Not Found"* ]]; then
+      echo "⚠️  NOT FOUND after 3 attempts (branch tag, not fatal): $image"
+      WARNED_IMAGES+=("$image")
+    else
+      echo "❌ NOT FOUND after 3 attempts: $image"
+      [ -n "$last_err" ] && echo "   last error: $last_err"
+      FAILED=1
+      FAILED_IMAGES+=("$image")
+    fi
   fi
 done <<< "$manifest_images"
 
 #########################################
 # Step 3: Final result
 #########################################
+if [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
+  echo ""
+  echo "⚠️  Not yet published under the $CALICO_VERSION branch tag (a hashrelease from this branch publishes it):"
+  for img in "${WARNED_IMAGES[@]}"; do
+    echo "   ⚠️  $img"
+  done
+fi
+
 if [ "$FAILED" -eq 1 ]; then
   echo ""
   echo "❗ Some images are missing or invalid:"
@@ -124,6 +152,8 @@ if [ "$FAILED" -eq 1 ]; then
     echo "   ❌ $img"
   done
   exit 1
+elif [ "${#WARNED_IMAGES[@]}" -gt 0 ]; then
+  echo "✅ All images from manifests are available. The images listed above are tagged with the branch name, which a hashrelease publishes from this branch; they will be available after the next hashrelease."
 else
   echo "✅ All images from manifests are available!"
 fi
