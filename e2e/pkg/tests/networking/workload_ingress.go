@@ -552,24 +552,25 @@ var _ = describe.CalicoDescribe(
 			// window shorter than a single probe only ever runs one probe, which
 			// asserts nothing about whether a state persists.
 			const (
-				probeTimeout    = 5 * time.Second
-				probePoll       = 8 * time.Second
-				probeSettle     = 30 * time.Second
-				probeHold       = 25 * time.Second
-				wgetMaxCode     = 8   // GNU wget only exits 0-8; anything above is not wget speaking.
-				sshKilledCode   = 124 // ExecTimeout's local `timeout` wrapper killed ssh.
-				cmdNotFoundCode = 127 // The remote shell could not find wget.
+				probeTimeout           = 5 * time.Second
+				probePoll              = 8 * time.Second
+				probeSettle            = 30 * time.Second
+				probeHold              = 25 * time.Second
+				wgetNetworkFailureCode = 4   // GNU wget: refused, timed out, or unresolvable. The only status that shows a block.
+				wgetServerErrorCode    = 8   // GNU wget's highest status: the server answered with an HTTP error.
+				sshKilledCode          = 124 // ExecTimeout's local `timeout` wrapper killed ssh.
+				cmdNotFoundCode        = 127 // The remote shell could not find wget.
 			)
 
 			cmd := fmt.Sprintf("wget -O- -t 1 -T %d http://%s/clientip",
 				int(probeTimeout.Seconds()), targetAddr)
 
 			// probe makes exactly one connection attempt. It returns nil when the
-			// connection succeeded, an error wrapping errBlocked when wget ran to
-			// completion and the connection failed, and any other error when the
-			// attempt says nothing about policy. Only the first two are evidence:
-			// counting an inconclusive probe as a block would let an unenforced
-			// policy, or an unreachable external node, pass as enforced.
+			// connection succeeded, an error wrapping errBlocked when wget reported
+			// a network failure, and any other error when the attempt says nothing
+			// about policy. Only the first two are evidence: counting any other
+			// probe as a block would let an unenforced policy, or an unreachable
+			// external node, pass as enforced.
 			//
 			// `-t 1` is essential: wget retries 20 times by default, which outlasts
 			// the ssh wrapper's own timeout, so a dropped-packet block and a stalled
@@ -589,8 +590,16 @@ var _ = describe.CalicoDescribe(
 				}
 				code := exitErr.ExitCode()
 				switch {
-				case code >= 1 && code <= wgetMaxCode:
+				case code == wgetNetworkFailureCode:
 					return fmt.Errorf("%w: wget exited %d (output %q)", errBlocked, code, out)
+				case code == wgetServerErrorCode:
+					// The request reached the server and got an answer, so nothing
+					// blocked this connection.
+					return fmt.Errorf("server reached but it returned an HTTP error (wget exited %d, output %q)", code, out)
+				case code >= 1 && code < wgetServerErrorCode:
+					// wget's other statuses are local, TLS, or protocol problems that
+					// say nothing about whether the connection was blocked.
+					return fmt.Errorf("probe inconclusive: wget exited %d, which is not a network failure (output %q)", code, out)
 				case code == sshKilledCode:
 					return errors.New("probe inconclusive: ssh was killed before wget returned, " +
 						"so a policy block cannot be distinguished from a stalled connection")
