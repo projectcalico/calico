@@ -63,8 +63,7 @@ var _ = describe.CalicoDescribe(
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
 
-			// The tests in this file all require BGP, and all require Calico be installed by the operator.
-			utils.ExpectBGPEnabled(cli)
+			utils.RequireBGPEnabled(cli)
 			requireBGPIsSoleRoutingMechanism(cli)
 
 			// Ensure full mesh BGP is functioning before each test.

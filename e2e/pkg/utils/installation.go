@@ -17,8 +17,8 @@ package utils
 import (
 	"context"
 
-	"github.com/onsi/gomega"
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -57,11 +57,16 @@ func UsesCalicoIPAM(cli ctrlclient.Client) bool {
 	return true
 }
 
-// ExpectBGPEnabled asserts that the cluster was installed by the operator with BGP enabled.
-func ExpectBGPEnabled(cli ctrlclient.Client) {
+// RequireBGPEnabled fails the test unless the operator installed the cluster with BGP
+// networking enabled. Lanes whose clusters run in another networking mode should exclude
+// the RequiresBGP label instead of running these tests.
+func RequireBGPEnabled(cli ctrlclient.Client) {
 	config := InstallationConfig(cli)
-	gomega.ExpectWithOffset(1, config).NotTo(gomega.BeNil(), "No computed configuration on the Installation; is this cluster operator managed?")
-	gomega.ExpectWithOffset(1, config.CalicoNetwork).NotTo(gomega.BeNil(), "CalicoNetwork is not configured in the Installation")
-	gomega.ExpectWithOffset(1, config.CalicoNetwork.BGP).NotTo(gomega.BeNil(), "BGP is not enabled in the cluster")
-	gomega.ExpectWithOffset(1, *config.CalicoNetwork.BGP).To(gomega.Equal(operatorv1.BGPEnabled), "BGP is not enabled in the cluster")
+	if config == nil {
+		framework.Failf("No computed configuration on the Installation; is this cluster operator managed?")
+	}
+	network := config.CalicoNetwork
+	if network == nil || network.BGP == nil || *network.BGP != operatorv1.BGPEnabled {
+		framework.Failf("BGP is not enabled in this cluster, so the lane should exclude the RequiresBGP label")
+	}
 }
