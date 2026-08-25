@@ -1231,36 +1231,57 @@ func (r *CalicoManager) buildReleaseTar() error {
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
-	if len(r.architectures) > 0 {
-		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
-	}
-	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
-	if err != nil {
-		logrus.Error(out)
-		return fmt.Errorf("failed to build e2e binaries: %w", err)
-	}
 
-	// Hard-link the built binaries into the hashrelease output directory
-	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
 	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
-	if err != nil {
-		return fmt.Errorf("reading e2e bin directory: %w", err)
+
+	if len(r.architectures) == 0 {
+		// Architectures unspecified: fall back to building the Makefile's default
+		// set in one pass, then hard-link the results into the output directory.
+		out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", os.Environ()...)
+		if err != nil {
+			logrus.Error(out)
+			return fmt.Errorf("failed to build e2e binaries: %w", err)
+		}
+		entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+		if err != nil {
+			return fmt.Errorf("reading e2e bin directory: %w", err)
+		}
+		for _, entry := range entries {
+			if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
+				continue
+			}
+			src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
+			dst := filepath.Join(e2eOutputDir, entry.Name())
+			if err := os.Link(src, dst); err != nil {
+				return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
+			}
+			logrus.Infof("Staged e2e binary: %s", entry.Name())
+		}
+		return nil
 	}
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
-			continue
+
+	// Build one architecture at a time and move each binary into the hashrelease
+	// output directory before building the next. `make build-all` keeps every
+	// cross-compiled test binary (~250 MB each) in e2e/bin/k8s simultaneously,
+	// which can exhaust the build host's disk. Staging per-arch caps the e2e
+	// build's peak footprint at roughly a single binary.
+	for _, arch := range r.architectures {
+		out, err := r.makeInDirectoryWithOutput(e2eDir, "sub-build-"+arch, os.Environ()...)
+		if err != nil {
+			logrus.Error(out)
+			return fmt.Errorf("failed to build e2e binary for %s: %w", arch, err)
 		}
-		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
-		dst := filepath.Join(e2eOutputDir, entry.Name())
-		if err := os.Link(src, dst); err != nil {
-			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
+		name := fmt.Sprintf("e2e-linux-%s.test", arch)
+		src := filepath.Join(e2eDir, "bin", "k8s", name)
+		dst := filepath.Join(e2eOutputDir, name)
+		// Move (not hard-link) so the binary no longer occupies the build dir.
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("staging e2e binary %s: %w", name, err)
 		}
-		logrus.Infof("Staged e2e binary: %s", entry.Name())
+		logrus.Infof("Staged e2e binary: %s", name)
 	}
 	return nil
 }
