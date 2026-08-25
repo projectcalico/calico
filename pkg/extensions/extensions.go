@@ -26,6 +26,7 @@ type Set struct {
 	Istio             IstioExtension
 	Goldmane          GoldmaneExtension
 	Whisker           WhiskerExtension
+	GatewayAPI        GatewayAPIExtension
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -101,4 +102,11 @@ func (e Extensions) Whisker() WhiskerExtension {
 		return noopWhisker{}
 	}
 	return e.set.Whisker
+}
+
+func (e Extensions) GatewayAPI() GatewayAPIExtension {
+	if e.set.GatewayAPI == nil {
+		return noopGatewayAPI{}
+	}
+	return e.set.GatewayAPI
 }

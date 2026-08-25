@@ -42,6 +42,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 )
@@ -64,6 +66,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}).SetupWithManager(mgr, options.ControllerOptions{
 			DetectedProvider: operator.ProviderNone,
 			Variant:          operator.CalicoEnterprise,
+			Extensions:       enterprise.New(operator.CalicoEnterprise, eoptions.Options{}),
 			ManageCRDs:       ManageCRDsDisable,
 			ShutdownContext:  shutdownContext,
 			K8sClientset:     clientset,

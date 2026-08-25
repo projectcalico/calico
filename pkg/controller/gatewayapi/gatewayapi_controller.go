@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
+	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -45,15 +45,16 @@ import (
 	"github.com/go-logr/logr"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
+	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -77,12 +78,13 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		status:              status.New(mgr.GetClient(), "gatewayapi", opts.KubernetesVersion),
 		clusterDomain:       opts.ClusterDomain,
 		variant:             opts.Variant,
+		ext:                 opts.Extensions.GatewayAPI(),
 		multiTenant:         opts.MultiTenant,
 		newComponentHandler: utils.NewComponentHandler,
 	}
 	r.status.Run(opts.ShutdownContext)
 
-	c, err := ctrlruntime.NewController("gatewayapi-controller", mgr, controller.Options{Reconciler: r})
+	c, err := ctrlruntime.NewController("gatewayapi-controller", mgr, ctrl.Options{Reconciler: r})
 	if err != nil {
 		return fmt.Errorf("failed to create gatewayapi-controller: %w", err)
 	}
@@ -181,6 +183,7 @@ type ReconcileGatewayAPI struct {
 	status              status.StatusManager
 	clusterDomain       string
 	variant             operatorv1.ProductVariant
+	ext                 extensions.GatewayAPIExtension
 	multiTenant         bool
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
 	watchEnvoyProxy     func(namespacedName operatorv1.NamespacedName) error
@@ -349,6 +352,7 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		CurrentGatewayClasses:  set.New[string](),
 		IncludeV3NetworkPolicy: includeV3NetworkPolicy,
 		TrustedBundle:          trustedBundle,
+		ImageOverrides:         r.ext.Images(),
 	}
 
 	if gatewayAPI.Spec.EnvoyGatewayConfigRef != nil {
@@ -556,6 +560,26 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 	// Render non-CRD resources for Gateway API support, i.e. for our specific bundled
 	// implementation of the Gateway API.  For these we specify the GatewayAPI CR as the owner,
 	// so that they all get automatically cleaned up if the GatewayAPI CR is removed again.
+	// Run the variant's gateway API extension to build the render inputs (creating no
+	// enterprise artifacts in core).
+	ci := controller.Inputs{
+		RenderInputs: render.Inputs{
+			Installation:  installationSpec,
+			ClusterDomain: r.clusterDomain,
+			TrustedBundle: trustedBundle,
+		},
+		Client: r.client,
+	}
+	ci, err = r.ext.ExtendInputs(ctx, ci)
+	if err != nil {
+		if reason, ok := extensions.DegradedReason(err); ok {
+			r.status.SetDegraded(reason, err.Error(), nil, reqLogger)
+			return reconcile.Result{}, err
+		}
+		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error preparing gateway API extension", err, reqLogger)
+		return reconcile.Result{}, err
+	}
+
 	nonCRDComponent, err := gatewayapi.GatewayAPIImplementationComponent(gatewayConfig)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering Gateway API resources", err, log)
@@ -572,14 +596,17 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		return reconcile.Result{}, err
 	}
 
-	err = r.newComponentHandler(log, r.client, r.scheme, gatewayAPI).CreateOrUpdateOrDelete(ctx, nonCRDComponent, r.status)
+	modifier := utils.WithModifier(func(c render.Component) render.Component {
+		return r.ext.Modify(c, ci.RenderInputs)
+	})
+	err = r.newComponentHandler(log, r.client, r.scheme, gatewayAPI, modifier).CreateOrUpdateOrDelete(ctx, nonCRDComponent, r.status)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Error rendering GatewayAPI resources", err, log)
 		return reconcile.Result{}, err
 	}
 
 	// Per-namespace resources, owned by the namespace's Gateways so the GC cleans them up.
-	if err = r.reconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, r.variant.IsEnterprise(), gwList.Items, ownedClass); err != nil {
+	if err = r.reconcileGatewayNamespaceResources(ctx, trustedBundle, pullSecrets, gwList.Items, ownedClass); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error writing per-namespace Gateway resources", err, log)
 		return reconcile.Result{}, err
 	}
@@ -663,13 +690,13 @@ func (r *ReconcileGatewayAPI) maintainFinalizer(ctx context.Context, gatewayAPI 
 
 // reconcileGatewayNamespaceResources writes the per-namespace resources owned by the namespace's
 // Gateways, so the GC removes them once the last Gateway is gone (and the GatewayAPI CR's deletion
-// doesn't strand them). Reserved namespaces are skipped; trust bundle on both variants, the rest on
-// Enterprise.
+// doesn't strand them). Reserved namespaces are skipped; the trust bundle is written for every
+// variant, and the variant's extension adds whatever else the namespace needs.
 // Each object is written once per owning Gateway, because the component handler takes a single
 // owner. MultipleOwnersLabel makes it merge that owner reference into the references already on the
 // object instead of replacing them, which is what keeps the namespace's other Gateways — and any
 // reference another feature added, such as the waypoint controller's Istio CR — in place.
-func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Context, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, enterprise bool, gateways []gapi.Gateway, ownedClass map[string]bool) error {
+func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Context, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, gateways []gapi.Gateway, ownedClass map[string]bool) error {
 	gatewaysByNamespace := map[string][]*gapi.Gateway{}
 	for i := range gateways {
 		gw := &gateways[i]
@@ -682,7 +709,7 @@ func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Con
 		for _, gw := range gws {
 			// Rendered per pass: the handler stamps its owner reference onto the objects it
 			// is given and strips the label before writing them.
-			objs := gatewayNamespaceObjects(namespace, bundle, pullSecrets, enterprise)
+			objs := gatewayNamespaceObjects(namespace, bundle, r.ext.GatewayNamespaceObjects(namespace, pullSecrets))
 			hdlr := r.newComponentHandler(log, r.client, r.scheme, gw)
 			if err := hdlr.CreateOrUpdateOrDelete(ctx, render.NewPassthrough(objs, nil), nil); err != nil {
 				return err
@@ -694,19 +721,12 @@ func (r *ReconcileGatewayAPI) reconcileGatewayNamespaceResources(ctx context.Con
 
 // gatewayNamespaceObjects returns the resources a namespace hosting our Gateways needs, each marked
 // for merged ownership.
-func gatewayNamespaceObjects(namespace string, bundle certificatemanagement.TrustedBundle, pullSecrets []*corev1.Secret, enterprise bool) []client.Object {
+func gatewayNamespaceObjects(namespace string, bundle certificatemanagement.TrustedBundle, extra []client.Object) []client.Object {
 	var objs []client.Object
 	if bundle != nil {
 		objs = append(objs, bundle.ConfigMap(namespace))
 	}
-	if enterprise {
-		objs = append(objs,
-			gatewayapi.GatewayNamespaceServiceAccount(namespace),
-			gatewayapi.GatewayNamespaceRoleBinding(namespace),
-			render.CreateOperatorSecretsRoleBinding(namespace),
-		)
-		objs = append(objs, secret.ToRuntimeObjects(secret.CopyToNamespace(namespace, pullSecrets...)...)...)
-	}
+	objs = append(objs, extra...)
 	for _, obj := range objs {
 		labels := common.MapExistsOrInitialize(obj.GetLabels())
 		labels[common.MultipleOwnersLabel] = "true"

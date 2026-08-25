@@ -47,6 +47,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	egatewayapi "github.com/tigera/operator/pkg/enterprise/gatewayapi"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
@@ -118,6 +119,7 @@ var _ = Describe("Gateway API controller tests", func() {
 			scheme:              scheme,
 			status:              mockStatus,
 			variant:             operatorv1.CalicoEnterprise,
+			ext:                 egatewayapi.New(operatorv1.CalicoEnterprise),
 			tierWatchReady:      &utils.ReadyFlag{},
 			newComponentHandler: FakeComponentHandler,
 			watchEnvoyProxy:     func(namespacedName operatorv1.NamespacedName) error { return nil },
@@ -758,7 +760,7 @@ var _ = Describe("Gateway API controller tests", func() {
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "other-ns", Name: "gw3", UID: "u3"}, Spec: gapi.GatewaySpec{GatewayClassName: "not-ours"}},
 			{ObjectMeta: metav1.ObjectMeta{Namespace: common.CalicoNamespace, Name: "gw4", UID: "u4"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
 		}
-		Expect(r.reconcileGatewayNamespaceResources(ctx, bundle, pullSecrets, true, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+		Expect(r.reconcileGatewayNamespaceResources(ctx, bundle, pullSecrets, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
 
 		By("creating the bundle + WAF SA/RoleBindings/pull-secret in app-ns, owned by both Gateways")
 		ownerNames := func(o client.Object) []string {
@@ -805,7 +807,7 @@ var _ = Describe("Gateway API controller tests", func() {
 		gateways := []gapi.Gateway{
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "gw1", UID: "u1"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
 		}
-		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, pullSecrets, true, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, pullSecrets, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
 
 		By("keeping the Istio reference and adding our Gateway alongside it")
 		ownerKinds := func(o client.Object) []string {
@@ -844,7 +846,7 @@ var _ = Describe("Gateway API controller tests", func() {
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "gw1", UID: "u1"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "flipped", UID: "u-flipped"}, Spec: gapi.GatewaySpec{GatewayClassName: "not-ours"}},
 		}
-		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, nil, true, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+		Expect(r.reconcileGatewayNamespaceResources(ctx, nil, nil, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
 
 		updatedRB := &rbacv1.RoleBinding{}
 		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "tigera-operator-secrets"}, updatedRB)).NotTo(HaveOccurred())

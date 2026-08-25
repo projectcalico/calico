@@ -19,6 +19,7 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/apiserver"
 	"github.com/tigera/operator/pkg/enterprise/clusterconnection"
 	"github.com/tigera/operator/pkg/enterprise/csr"
+	"github.com/tigera/operator/pkg/enterprise/gatewayapi"
 	"github.com/tigera/operator/pkg/enterprise/goldmane"
 	"github.com/tigera/operator/pkg/enterprise/installation"
 	"github.com/tigera/operator/pkg/enterprise/istio"
@@ -46,6 +47,7 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			Istio:             istio.New(),
 			Goldmane:          goldmane.New(variant),
 			Whisker:           whisker.New(variant),
+			GatewayAPI:        gatewayapi.New(variant),
 		})
 	}
 
