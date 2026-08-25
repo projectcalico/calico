@@ -17,6 +17,7 @@ package utils
 import (
 	"context"
 
+	"github.com/onsi/gomega"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -33,17 +34,36 @@ func GetInstallation(cli ctrlclient.Client) *operatorv1.Installation {
 	return installation
 }
 
+// InstallationConfig returns the operator's effective installation config, published on the
+// status. Nil if the cluster isn't operator managed.
+func InstallationConfig(cli ctrlclient.Client) *operatorv1.InstallationSpec {
+	installation := GetInstallation(cli)
+	if installation == nil {
+		return nil
+	}
+	return installation.Status.Computed
+}
+
 // UsesCalicoIPAM reports whether the cluster uses Calico IPAM. If the operator
 // Installation resource is available, it checks the configured IPAM type.
 // Returns true if Calico IPAM is in use or if the IPAM type cannot be determined
 // (e.g., on manifest-based installs without an Installation resource).
 func UsesCalicoIPAM(cli ctrlclient.Client) bool {
-	installation := GetInstallation(cli)
-	if installation != nil &&
-		installation.Spec.CNI != nil &&
-		installation.Spec.CNI.IPAM != nil &&
-		installation.Spec.CNI.IPAM.Type != operatorv1.IPAMPluginCalico {
+	config := InstallationConfig(cli)
+	if config != nil &&
+		config.CNI != nil &&
+		config.CNI.IPAM != nil &&
+		config.CNI.IPAM.Type != operatorv1.IPAMPluginCalico {
 		return false
 	}
 	return true
+}
+
+// ExpectBGPEnabled asserts that the cluster was installed by the operator with BGP enabled.
+func ExpectBGPEnabled(cli ctrlclient.Client) {
+	config := InstallationConfig(cli)
+	gomega.ExpectWithOffset(1, config).NotTo(gomega.BeNil(), "No computed configuration on the Installation; is this cluster operator managed?")
+	gomega.ExpectWithOffset(1, config.CalicoNetwork).NotTo(gomega.BeNil(), "CalicoNetwork is not configured in the Installation")
+	gomega.ExpectWithOffset(1, config.CalicoNetwork.BGP).NotTo(gomega.BeNil(), "BGP is not enabled in the cluster")
+	gomega.ExpectWithOffset(1, *config.CalicoNetwork.BGP).To(gomega.Equal(operatorv1.BGPEnabled), "BGP is not enabled in the cluster")
 }
