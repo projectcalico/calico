@@ -87,11 +87,11 @@ switch safe:
   dataplanes at once, each with its own policy and conntrack
   state. Detaching is safe because a netkit pair created with
   `NETKIT_POLICY_FORWARD` and no programs forwards like a veth.
-- `wepStateFillJumps` returns jump-map indices to whichever
-  allocator issued them — the two are disjoint — using the
-  `netkitJumps` record, which at start of day comes from the
-  netkit link pin rather than the device type, since the device
-  is still netkit while the mechanism may already have changed.
+- Jump-map indices are returned to whichever allocator issued them;
+  the netkit and TC/TCX allocators are disjoint. At start of day
+  which one issued them is read from the netkit link pin, not the
+  device type — the device is still netkit while the mechanism may
+  already have changed.
 - `ensureQdisc` keys off the mechanism, not the link type, so a
   TC-driven device gets the qdisc it now needs.
 
