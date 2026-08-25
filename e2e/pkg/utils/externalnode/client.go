@@ -1,4 +1,4 @@
-/* Copyright (c) 2020-2021 Tigera, Inc. All rights reserved. */
+/* Copyright (c) 2020-2026 Tigera, Inc. All rights reserved. */
 
 package externalnode
 
@@ -13,6 +13,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -38,6 +39,16 @@ func NewClient() *Client {
 		extIP:   config.ExtNodeIP(),
 		extKey:  config.ExtNodeSSHKey(),
 		extUser: config.ExtNodeUsername(),
+	}
+	return client
+}
+
+// MustNewClient returns a client for the external node, failing the test if the
+// cluster has none.
+func MustNewClient() *Client {
+	client := NewClient()
+	if client == nil {
+		framework.Failf("No external node is configured, so the lane should exclude the ExternalNode label")
 	}
 	return client
 }
