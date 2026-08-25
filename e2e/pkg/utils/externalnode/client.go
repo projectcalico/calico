@@ -145,9 +145,9 @@ func (e *Client) ExecTimeout(timeoutSecs int, shell, opt, cmd string) (string, e
 	outstr := strings.TrimSpace(string(out))
 	logrus.Infof("Output: %q", outstr)
 	if err != nil {
-		// Not every failure is an ExitError — a missing ssh binary or a context
-		// cancellation is not — and asserting the type would panic the whole
-		// Ginkgo node rather than failing the caller's assertion.
+		// Not every failure is an ExitError — a missing `timeout` binary is not,
+		// nor is an I/O error reading the output — and asserting the type would
+		// panic the whole Ginkgo node rather than failing the caller's assertion.
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
 			logrus.WithError(err).Errorf("Stderr: %s", string(exitErr.Stderr))
