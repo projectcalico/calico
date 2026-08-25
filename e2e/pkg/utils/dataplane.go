@@ -82,12 +82,10 @@ func DetectCalicoDataplane(cli ctrlclient.Client) CalicoDataplane {
 	defer cancel()
 
 	// Prefer the Installation CR (operator-managed clusters).
-	installation := &operatorv1.Installation{}
-	if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation); err == nil &&
-		installation.Spec.CalicoNetwork != nil &&
-		installation.Spec.CalicoNetwork.LinuxDataplane != nil {
+	config := InstallationConfig(cli)
+	if config != nil && config.CalicoNetwork != nil && config.CalicoNetwork.LinuxDataplane != nil {
 		var dp CalicoDataplane
-		switch *installation.Spec.CalicoNetwork.LinuxDataplane {
+		switch *config.CalicoNetwork.LinuxDataplane {
 		case operatorv1.LinuxDataplaneBPF:
 			dp = DataplaneBPF
 		case operatorv1.LinuxDataplaneVPP:
