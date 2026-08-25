@@ -1094,43 +1094,36 @@ func (r *DefaultRuleRenderer) connStateLogRule() generictables.Rule {
 //     below rather than being logged as an ICMP error.
 //   - Anything else is the first genuine reply: the connection is established.
 //
-// The clear rules deliberately do not carry the LOG rate limit, so a rate-limited LOG
-// still consumes the state transition.
+// These rules are not rate limited: the connmark bit that brings a packet here is only
+// set when the policy Log rule's own LOG was emitted (see
+// CombineMatchAndActionsForProtoRule), so the volume of these logs is already bounded
+// by LogActionRateLimit, and each of these logs pairs with a log that the user has
+// already seen.
 func (r *DefaultRuleRenderer) connStateLogChain(ipVersion uint8) *generictables.Chain {
 	icmpProtocol := "icmp"
 	if ipVersion == 6 {
 		icmpProtocol = "ipv6-icmp"
 	}
 	var rules []generictables.Rule
-	appendBranch := func(match func() generictables.MatchCriteria, logSuffix string) {
-		logMatch := match()
-		if len(r.LogActionRateLimit) != 0 {
-			logMatch = logMatch.Limit(r.LogActionRateLimit, uint16(r.LogActionRateLimitBurst))
-		}
+	appendBranch := func(match generictables.MatchCriteria, logSuffix string) {
 		rules = append(rules,
 			generictables.Rule{
-				Match:  logMatch,
+				Match:  match,
 				Action: r.Log(r.connStateLogPrefix(logSuffix)),
 			},
 			generictables.Rule{
-				Match:  match(),
+				Match:  match,
 				Action: r.SetConnmark(0, r.MarkConnStateLog),
 			},
 			generictables.Rule{
-				Match:  match(),
+				Match:  match,
 				Action: r.Return(),
 			},
 		)
 	}
-	appendBranch(func() generictables.MatchCriteria {
-		return r.NewMatch().TCPFlagsSet("RST")
-	}, "-rst")
-	appendBranch(func() generictables.MatchCriteria {
-		return r.NewMatch().Protocol(icmpProtocol).ConntrackState("RELATED")
-	}, "-icmp-err")
-	appendBranch(func() generictables.MatchCriteria {
-		return r.NewMatch()
-	}, "-est")
+	appendBranch(r.NewMatch().TCPFlagsSet("RST"), "-rst")
+	appendBranch(r.NewMatch().Protocol(icmpProtocol).ConntrackState("RELATED"), "-icmp-err")
+	appendBranch(r.NewMatch(), "-est")
 	return &generictables.Chain{
 		Name:  ChainConnStateLog,
 		Rules: rules,

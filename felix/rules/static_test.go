@@ -2246,28 +2246,6 @@ var _ = Describe("Static with connection transition logging", func() {
 		}
 	})
 
-	Describe("with a log action rate limit", func() {
-		BeforeEach(func() {
-			conf.LogActionRateLimit = "50/minute"
-			conf.LogActionRateLimitBurst = 10
-		})
-
-		It("should rate-limit the LOG rules but not the connmark-clear rules", func() {
-			chain := findChain(rr.StaticFilterTableChains(4), "cali-log-conn")
-			Expect(chain).NotTo(BeNil())
-			Expect(chain.Rules).To(HaveLen(9))
-			for i, rule := range chain.Rules {
-				if _, ok := rule.Action.(iptables.LogAction); ok {
-					Expect(rule.Match.Render()).To(ContainSubstring("-m limit --limit 50/minute --limit-burst 10"),
-						"expected LOG rule %d to be rate limited", i)
-				} else {
-					Expect(rule.Match.Render()).NotTo(ContainSubstring("-m limit"),
-						"expected non-LOG rule %d not to be rate limited", i)
-				}
-			}
-		})
-	})
-
 	Describe("with a custom prefix containing specifiers", func() {
 		BeforeEach(func() {
 			conf.LogPrefix = "unrelated"

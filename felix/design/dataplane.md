@@ -611,16 +611,24 @@ Mechanism and invariants:
   `MarkBitsManager` *conditionally* (only when the feature is
   enabled, so the endpoint-mark block isn't shrunk otherwise) and
   *before* the endpoint-mark block grab. Reserved from packet-mark
-  space so user `CONNMARK --save-mark` rules can't set it
-  spuriously. `Config.validate()`'s reflection scan has an explicit
+  space because the Log rules below also use it as a scratch packet
+  mark, and so user `CONNMARK --save-mark` rules can't corrupt it.
+  `Config.validate()`'s reflection scan has an explicit
   exception allowing this one `Mark*` field to be zero when the
   feature is disabled.
-- **Setting the bit**: each rendered `Log` rule is followed by a
-  `CONNMARK` rule with the same match (`rules/policy.go`). The
-  connmark rule must NOT carry the `LogActionRateLimit` limit
-  match — the bit has to be set even when the LOG itself is
-  rate-limit-suppressed. Untracked (raw-table) policies skip it;
-  CONNMARK has no effect on NOTRACKed packets.
+- **Setting the bit** (`rules/policy.go`): a rendered `Log` rule is
+  followed by a `CONNMARK` rule with the same match. When
+  `LogActionRateLimit` is set, both must instead hang off a single
+  rate-limit decision, so that a connection gets a response log iff
+  its initial log was emitted: clear the bit in the packet mark;
+  re-evaluate the match under the limit and set it; then LOG and
+  CONNMARK, each matching that bit. The leading clear is
+  load-bearing — an earlier `Log` rule (or a user restore-mark rule)
+  may have left the bit set, which would log a packet the limiter
+  rejected. The scratch marks can't be used for this: the rule's own
+  match may depend on them (`matchBlockBuilder`). Untracked
+  (raw-table) policies skip the whole thing; CONNMARK has no effect
+  on NOTRACKed packets.
 - **Checking the bit**: `appendConntrackRules`
   (`rules/endpoints.go`) prepends, ahead of the
   RELATED,ESTABLISHED accept rules, a jump to the shared
@@ -648,9 +656,11 @@ Mechanism and invariants:
   so only real ICMP errors get the `-icmp-err` log (conntrack
   associates ICMP errors with the *original* connection's entry,
   which is why they carry its connmark; other RELATED flows, e.g.
-  helper children, fall through to the established branch). The
-  clear rules must NOT be rate-limited: a rate-suppressed LOG still
-  has to consume the transition exactly once.
+  helper children, fall through to the established branch). Nothing
+  in the chain is rate-limited: the bit that brings a packet here is
+  only set when the policy LOG fired, so these logs are already
+  bounded by `LogActionRateLimit` and each one pairs with a log the
+  user has seen.
 - **Log prefixes** come from the dedicated
   `LogConnectionTransitionsPrefix` param (default
   `calico-response`), used verbatim — the chain is static and
