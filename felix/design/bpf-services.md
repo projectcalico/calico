@@ -428,18 +428,14 @@ sending.
 These entries live in the same affinity map as the `sessionAffinity`
 ones. When both apply — a UDP service that also sets
 `sessionAffinity: ClientIP` — `calico_nat_lookup` uses whichever timeout
-is **longer**. Using the shorter one would break the promise the other
-made; in particular, honouring the CTLB's timeout over a service's
-3-hour `sessionAffinity` would re-pick a backend after a few idle
-seconds, which is not the stickiness the user asked for.
+is **longer**, so neither promise is cut short by the other.
 
-A caveat on granularity: the CTLB looks the entry up with `client_ip` set
-to `VOID_IP`, because the source IP is not known at connect/sendmsg time.
-So there is one CTLB affinity entry per (service, port), shared by every
-workload on the node, rather than one per client IP. That is a known
-limitation (see the `XXX` comment in `connect.h`), independent of the
-timeout: within a burst of traffic the entry is refreshed on each use, so
-node-local clients coalesce onto one backend at any timeout value.
+The CTLB looks entries up with `client_ip` set to `VOID_IP`, since the
+source IP is not known at connect/sendmsg time. So there is one CTLB
+affinity entry per (service, port), shared by every workload on the
+node, rather than one per client IP: node-local clients coalesce onto
+one backend at any timeout value (known limitation, `XXX` in
+`connect.h`).
 
 ### Applicability
 
@@ -468,18 +464,15 @@ node-local clients coalesce onto one backend at any timeout value.
   must be treated as a miss, not as a drop. A change that tightens
   the "is backend still valid" check must preserve that.
 - The BPF programs never delete affinity entries; the syncer's
-  `cleanupSticky()` is the only reclaim path, and it runs on every
-  sync. Its notion of which frontends may hold entries, and for how
-  long, must therefore cover **every** writer — including the CTLB's
-  enforced UDP affinity, which has no `sessionAffinity` on the service
-  to key off. An entry the syncer does not recognise is deleted on the
-  next sync, which silently un-pins a live client. There are two
-  frontend writers — `writeSvc()` and, for a `LoadBalancer` or
-  `ExternalIP` frontend with `loadBalancerSourceRanges`,
-  `writeLBSrcRangeSvcNATKeys()` — and both must register the frontend
-  with `registerStickyFrontend()`. The BPF programs key affinity
-  entries on the destination alone, so all of a service's source-range
-  frontends share the affinity key of its zero-source-range frontend.
+  `cleanupSticky()` is the only reclaim path, and it deletes any entry
+  whose frontend it does not recognise — silently un-pinning a live
+  client. So every frontend writer must register with
+  `registerStickyFrontend()` (today `writeSvc()` and
+  `writeLBSrcRangeSvcNATKeys()`), and its notion of which frontends may
+  hold entries must cover every writer of them, including the CTLB's
+  enforced UDP affinity, which has no `sessionAffinity` to key off.
+  Affinity keys are built from the destination alone, so a service's
+  source-range frontends share the key of its zero-source-range one.
 
 
 

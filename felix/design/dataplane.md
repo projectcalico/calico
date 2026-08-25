@@ -492,12 +492,12 @@ entire table.
 A node can switch backends across a Felix restart, so Felix sweeps
 every dataplane it isn't currently programming. There are three, and
 `iptablesBackend: Auto` can move a node between the last two on its
-own — detection keys off kube-proxy's chains, so boot ordering
-changes the answer:
+own, since detection keys off kube-proxy's chains and so depends on
+boot ordering.
 
 The shared tables (`filter`/`nat`/`mangle`/`raw`) exist twice in the
-kernel, once per iptables backend, so this doc calls them the
-**legacy copies** and the **nftables copies**.
+kernel, once per iptables backend; this doc calls them the **legacy
+copies** and the **nftables copies**.
 
 | Dataplane | Swept by | Needed when |
 |---|---|---|
@@ -505,35 +505,30 @@ kernel, once per iptables backend, so this doc calls them the
 | the nftables copies of the shared tables, where `iptables-nft` writes | `nftables.IPTablesNFTCleanup` | nftables mode, or iptables mode on iptables-legacy |
 | the legacy copies of the shared tables, where `iptables-legacy` writes | `iptables.Table` pinned to iptables-legacy, `CleanupOnly` | nftables mode, or iptables mode on iptables-nft |
 
-Two details that are easy to get wrong:
+Four constraints on the sweep:
 
 - The nftables copies are read over **netlink**, not with
-  `iptables-nft-save`, which refuses to read a table holding anything
-  iptables can't express - a neighbouring tool's native nft rules used
-  to crash-loop Felix that way. Only **base chains** are read for
-  rules, the only chains Felix ever inserted into, which is what keeps
-  the rule dumps off kube-proxy's thousands of chains. The chain list
-  itself is one dump of the whole family, since netlink has no
-  per-table filter for it, so the sweep is paced by the refresh
-  interval rather than run on every apply.
+  `iptables-nft-save`, which refuses a table holding anything iptables
+  can't express — a neighbouring tool's native nft rules are enough.
+  Only **base chains** are read for rules, the only chains Felix ever
+  inserted into, which keeps the dumps off kube-proxy's thousands of
+  chains. The chain list is one dump of the whole family (netlink has
+  no per-table filter), so the sweep is paced by the refresh interval
+  rather than run every apply.
 - A `CleanupOnly` table never panics: the backend it names may have no
-  kernel support on this host, in which case there is nothing of ours
-  in it anyway. It also retries on a latch rather than on every apply,
-  so a backend Felix can't read doesn't burn a retry budget each time
-  round the loop.
-- Felix declines to build the legacy tables at all unless **both**
-  sets of binaries are present. Without the legacy ones,
-  `FindBestBinary` falls back to the default `iptables` and the sweep
-  lands on the backend Felix is programming; without the nft ones, the
-  tables Felix programs take that same fallback and *are* the legacy
-  ones. The first check also gates the nft view in iptables mode.
-- Nor does Felix build them unless the legacy modules are already
-  loaded, since `iptables-legacy-save` would autoload them onto a node
-  running pure nftables. `environment.DetectBackend` shares that check
-  for the same reason, so backend detection no longer probes a backend
-  the kernel hasn't got - which used to load the modules before the
-  cleanup path got a chance to decline, and to count nft's rules as
-  legacy ones when `FindBestBinary` fell back.
+  kernel support here, in which case nothing of ours is in it. It
+  retries on a latch rather than every apply, so an unreadable backend
+  doesn't burn a retry budget each time round the loop.
+- The legacy tables are built only when **both** sets of binaries are
+  present. Otherwise `FindBestBinary` falls back to the default
+  `iptables`: with the legacy binaries missing the sweep would land on
+  the backend Felix is programming, and with the nft ones missing the
+  tables Felix programs are themselves the legacy copies. The same
+  check gates the nft view in iptables mode.
+- They are also built only when the legacy modules are already loaded,
+  since `iptables-legacy-save` would autoload them onto a node running
+  pure nftables. `environment.DetectBackend` shares that check, so
+  backend detection never probes a backend the kernel hasn't got.
 
 Cleanup **never terminates**. A shared table can be written again at
 any point (kube-proxy restarting, say), so one clean read proves
@@ -609,9 +604,6 @@ Mechanism and invariants:
   *before* the endpoint-mark block grab. Reserved from packet-mark
   space because the Log rules below also use it as a scratch packet
   mark, and so user `CONNMARK --save-mark` rules can't corrupt it.
-  `Config.validate()`'s reflection scan has an explicit
-  exception allowing this one `Mark*` field to be zero when the
-  feature is disabled.
 - **Setting the bit** (`rules/policy.go`): a rendered `Log` rule is
   followed by a `CONNMARK` rule with the same match. When
   `LogActionRateLimit` is set, both must instead hang off a single
@@ -652,19 +644,16 @@ Mechanism and invariants:
   so only real ICMP errors get the `-icmp-err` log (conntrack
   associates ICMP errors with the *original* connection's entry,
   which is why they carry its connmark; other RELATED flows, e.g.
-  helper children, fall through to the established branch). Nothing
-  in the chain is rate-limited: the bit that brings a packet here is
-  only set when the policy LOG fired, so these logs are already
-  bounded by `LogActionRateLimit` and each one pairs with a log the
-  user has seen.
+  helper children, fall through to the established branch). The
+  chain needs no rate limiting of its own: a packet only gets here
+  if the policy LOG fired, so these logs are already bounded by
+  `LogActionRateLimit`.
 - **Log prefixes** come from the dedicated
   `LogConnectionTransitionsPrefix` param (default
-  `calico-response`), used verbatim — the chain is static and
-  shared by all policies, so `LogPrefix`-style `%`-specifiers
-  cannot be resolved and are rendered literally (the API doc says
-  so) — with the base truncated so suffix plus the `": "` appended
-  by the Log action fit the backend limit (29 chars iptables, 127
-  nftables).
+  `calico-response`) and are used verbatim: the chain is static and
+  shared by all policies, so `LogPrefix`-style `%`-specifiers cannot
+  be resolved and render literally. The base is truncated to leave
+  room for the suffix within the backend's prefix limit.
 - **RST visibility**: netfilter hooks run before the TCP stack sees
   a packet (forwarded traffic never touches the host TCP stack at
   all), and conntrack only *classifies* an RST (valid → ESTABLISHED
