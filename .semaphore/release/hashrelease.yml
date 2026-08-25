@@ -29,6 +29,7 @@ global_job_config:
 
   prologue:
     commands:
+      - sudo rm -rf ~/.phpbrew ~/.kerl ~/.sbt ~/.nvm ~/.npm ~/.kiex /usr/local/golang/ /usr/lib/jvm /opt/* /opt/az
       - chmod 0600 ~/.keys/*
       - ssh-add ~/.keys/*
       # Checkout the code and unshallow it.
@@ -53,6 +54,8 @@ global_job_config:
       - gcloud config set project --quiet "${OIDC_GCP_PROJECT_NAME}"
       # Configure docker to use the gcloud credential helper
       - gcloud auth configure-docker --quiet
+      # We need to prune the pre-loaded images to ensure we have enough /var/lib/docker disk space.
+      - docker system prune -af
 
 blocks:
   - name: Publish hashrelease
