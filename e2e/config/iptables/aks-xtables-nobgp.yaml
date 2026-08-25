@@ -16,8 +16,6 @@ exclude:
       reason: "not a BPF dataplane; maglev needs BPF and only self-skips on a missing external node, so it would fail rather than skip"
     - label: ExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
-    - label: Feature:AutoHEPs
-      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
     - label: Feature:Istio
       reason: "Istio ambient policy enforcement is not configured on this lane"
     - label: NoEncap
@@ -26,6 +24,8 @@ exclude:
       reason: "not an AWS lane; these specs need AWS VPC routing"
     - label: RequiresBGP
       reason: "Calico runs policy-only behind the Azure CNI, so BIRD is not running"
+    - label: RequiresCalicoCNI
+      reason: "this cluster runs the Azure CNI, so Calico does not own the pod network"
 
   namePatterns:
     - group: "requires Calico IPAM, but this cluster uses Azure IPAM"

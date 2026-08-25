@@ -62,6 +62,9 @@ func load(path string, seen []string) (*Config, error) {
 	}
 
 	if len(cfg.Extends) == 0 {
+		if len(cfg.Enable) > 0 {
+			return nil, fmt.Errorf("%s: enable[0] (%q) has no effect: this config extends nothing", absPath, cfg.Enable[0].Label)
+		}
 		return &cfg, nil
 	}
 
@@ -77,11 +80,28 @@ func load(path string, seen []string) (*Config, error) {
 		inherited = merge(inherited, parent)
 	}
 
+	for i, e := range cfg.Enable {
+		if !excludesLabel(inherited, e.Label) {
+			return nil, fmt.Errorf("%s: enable[%d] (%q) is not excluded by any config it extends", absPath, i, e.Label)
+		}
+	}
+
 	return merge(inherited, &cfg), nil
 }
 
-// merge combines a parent and child config. The child's includes and excludes
-// are appended to the parent's, dropping repeats: with composition a shared
+func excludesLabel(cfg *Config, label string) bool {
+	for _, e := range cfg.Exclude.Labels {
+		if e.Label == label {
+			return true
+		}
+	}
+	return false
+}
+
+// merge combines a parent and child config. The child's `enable` entries drop
+// matching labels from the inherited exclusions, which is the only way a lane
+// re-selects something a parent excluded. Its includes and excludes are appended
+// to the parent's, dropping repeats: with composition a shared
 // exclusion easily arrives by two routes, and `!Slow && !Slow` in the generated
 // label filter is the string an engineer reads when a lane selects the wrong
 // specs. First occurrence wins, so the earliest reason is the one kept.
@@ -120,10 +140,15 @@ func merge(parent, child *Config) *Config {
 		}
 	}
 
+	enabled := map[string]bool{}
+	for _, e := range child.Enable {
+		enabled[e.Label] = true
+	}
+
 	seenLabel := map[string]bool{}
 	for _, src := range [][]ExcludeLabel{parent.Exclude.Labels, child.Exclude.Labels} {
 		for _, e := range src {
-			if seenLabel[e.Label] {
+			if seenLabel[e.Label] || enabled[e.Label] {
 				continue
 			}
 			seenLabel[e.Label] = true
@@ -155,6 +180,15 @@ func validate(cfg *Config, path string) error {
 	for i, entry := range cfg.Include.Labels {
 		if entry.Label == "" {
 			return fmt.Errorf("%s: include.labels[%d] must have a non-empty label expression", path, i)
+		}
+	}
+
+	for i, entry := range cfg.Enable {
+		if entry.Label == "" {
+			return fmt.Errorf("%s: enable[%d] must have a 'label' field", path, i)
+		}
+		if entry.Reason == "" {
+			return fmt.Errorf("%s: enable[%d] (%q) must have a 'reason'", path, i, entry.Label)
 		}
 	}
 

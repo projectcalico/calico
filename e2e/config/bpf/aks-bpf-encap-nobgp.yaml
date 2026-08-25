@@ -11,8 +11,6 @@ exclude:
   labels:
     - label: ExternalNode
       reason: "no external node on this lane (needs EXT_IP/EXT_KEY/EXT_USER)"
-    - label: Feature:AutoHEPs
-      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
     - label: NoEncap
       reason: "cluster uses encapsulation; these specs require unencapsulated routing"
     - label: RequiresAWS
@@ -21,5 +19,9 @@ exclude:
       reason: "Calico is not doing BGP here (Felix routing, or the provider's own CNI with Calico policy-only), so BIRD is not running"
     - label: RequiresBGPMesh
       reason: "cluster routes over an overlay, so disabling the BGP mesh does not sever connectivity as these specs expect"
+    - label: RequiresCalicoCNI
+      reason: "this cluster runs the Azure CNI, so Calico does not own the pod network"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses Azure IPAM"
     - label: RequiresXtables
       reason: "BPF/VPP dataplane; these specs exercise iptables/nftables behaviour that does not exist here"

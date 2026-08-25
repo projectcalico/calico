@@ -38,6 +38,11 @@ type Config struct {
 	// Exclude defines labels and name patterns to exclude from the selected
 	// tests. When a parent config is extended, exclude entries are appended.
 	Exclude Exclude `yaml:"exclude,omitempty"`
+
+	// Enable cancels a label exclusion this config inherits, for a lane whose
+	// cluster does provide what the label needs. Each entry must match a label
+	// an ancestor excludes.
+	Enable []EnableLabel `yaml:"enable,omitempty"`
 }
 
 // ExtendsList is the parent list for a config. It accepts a bare string for the
@@ -139,6 +144,15 @@ func (e *IncludeEntry) UnmarshalYAML(value *yaml.Node) error {
 	}
 	*e = IncludeEntry(r)
 	return nil
+}
+
+// EnableLabel is an inherited label exclusion to cancel.
+type EnableLabel struct {
+	// Label is the Ginkgo label to re-include (e.g., "Feature:Wireguard").
+	Label string `yaml:"label"`
+
+	// Reason documents what this lane provides that the label needs. Required.
+	Reason string `yaml:"reason"`
 }
 
 // Exclude defines what to exclude from the test selection.

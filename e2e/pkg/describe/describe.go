@@ -76,6 +76,7 @@ var features = map[string]bool{
 	"Datapath":        true,
 	"Istio":           true,
 	"KubeVirt":        true,
+	"Wireguard":       true,
 }
 
 // RequiresRealKubeVirt marks tests that need a real KubeVirt installation with
@@ -147,6 +148,19 @@ func RequiresBGP() any {
 // wait times out rather than skipping.
 func RequiresOperator() any {
 	return framework.WithLabel("RequiresOperator")
+}
+
+// RequiresCalicoIPAM marks tests that need Calico to be the IPAM plugin. Clusters
+// running a provider's CNI and IPAM (AWS VPC, Azure, GKE host-local) keep no
+// Calico IPAM state for these specs to read.
+func RequiresCalicoIPAM() any {
+	return framework.WithLabel("RequiresCalicoIPAM")
+}
+
+// RequiresCalicoCNI marks tests that need Calico as the CNI plugin, not a provider's
+// (AWS VPC, Azure, GKE).
+func RequiresCalicoCNI() any {
+	return framework.WithLabel("RequiresCalicoCNI")
 }
 
 // WithFeature marks tests as verifying a specific feature.

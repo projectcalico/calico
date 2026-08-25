@@ -86,6 +86,8 @@ var _ = describe.CalicoDescribe(
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
+		// It must not fall back to calicoctl, which would run as its own service account and
+		// make every RBAC assertion here meaningless.
 		newImpersonatedClient := func(username string) ctrlclient.Client {
 			cfg := rest.CopyConfig(f.ClientConfig())
 			cfg.Impersonate = rest.ImpersonationConfig{
