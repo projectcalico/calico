@@ -5,7 +5,7 @@ agent:
     type: f1-standard-2
     os_image: ubuntu2204
 execution_time_limit:
-  minutes: 60
+  minutes: 90
 global_job_config:
   env_vars:
     - name: DEV_REGISTRIES
@@ -37,12 +37,16 @@ blocks:
         # ppc64le and s390x build under QEMU emulation, which is slow. Give each its
         # own job so they run concurrently rather than serially in a single job that
         # exceeds the pipeline time limit. They have no native runner, so they emulate
-        # on the default machine.
+        # on the default machine. Pull the nftables RPMs already built by the "Build:
+        # nftables RPMs" block so `make image` skips rebuilding them under emulation
+        # (make -C hack/rpms/nftables image no-ops when the image is present locally).
         - name: Linux ppc64le
           commands:
+            - docker pull "calico/nftables-rpms:$(make --no-print-directory -C hack/rpms/nftables print-tag)-ppc64le" || true
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=ppc64le VALIDARCHES=ppc64le CONFIRM=true; fi
         - name: Linux s390x
           commands:
+            - docker pull "calico/nftables-rpms:$(make --no-print-directory -C hack/rpms/nftables print-tag)-s390x" || true
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=s390x VALIDARCHES=s390x CONFIRM=true; fi
         - name: Windows
           commands:
