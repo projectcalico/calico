@@ -81,13 +81,14 @@ func DetectCalicoDataplane(cli ctrlclient.Client) CalicoDataplane {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Prefer the Installation CR (operator-managed clusters).
+	// Prefer the Installation CR (operator-managed clusters), where defaults land on the status.
 	installation := &operatorv1.Installation{}
 	if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation); err == nil &&
-		installation.Spec.CalicoNetwork != nil &&
-		installation.Spec.CalicoNetwork.LinuxDataplane != nil {
+		installation.Status.Computed != nil &&
+		installation.Status.Computed.CalicoNetwork != nil &&
+		installation.Status.Computed.CalicoNetwork.LinuxDataplane != nil {
 		var dp CalicoDataplane
-		switch *installation.Spec.CalicoNetwork.LinuxDataplane {
+		switch *installation.Status.Computed.CalicoNetwork.LinuxDataplane {
 		case operatorv1.LinuxDataplaneBPF:
 			dp = DataplaneBPF
 		case operatorv1.LinuxDataplaneVPP:

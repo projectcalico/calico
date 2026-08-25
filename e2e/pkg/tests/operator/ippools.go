@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@ package calico
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -66,7 +67,8 @@ var _ = describe.CalicoDescribe(
 			// Don't run this test if there is no Installation as it means this cluster isn't operator managed.
 			// Additionally, skip if this cluster is operator managed but doesn't use the Calico CNI plugin, as validation
 			// for non-Calico CNI clusters requires that IP pools use the 'all()' node selector which is incompatible with this test.
-			if errors.IsNotFound(err) || installation.Spec.CNI == nil || installation.Spec.CNI.Type != operatorv1.PluginCalico {
+			config := installation.Status.Computed
+			if errors.IsNotFound(err) || config == nil || config.CalicoNetwork == nil || config.CNI == nil || config.CNI.Type != operatorv1.PluginCalico {
 				ginkgo.Skip("Skipping IP pool management test.")
 			}
 			Expect(err).NotTo(HaveOccurred())
@@ -117,12 +119,18 @@ var _ = describe.CalicoDescribe(
 				NodeSelector: "!all()",
 			}
 
+			// The operator's defaulted pools live on the status, so declare them too or updating the spec deletes them.
+			desiredPools := append(slices.Clone(installation.Status.Computed.CalicoNetwork.IPPools), newPool)
+
 			Eventually(func() error {
 				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
 				if err != nil {
 					return err
 				}
-				installation.Spec.CalicoNetwork.IPPools = append(installation.Spec.CalicoNetwork.IPPools, newPool)
+				if installation.Spec.CalicoNetwork == nil {
+					installation.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}
+				}
+				installation.Spec.CalicoNetwork.IPPools = desiredPools
 				return cli.Update(ctx, installation)
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
