@@ -17,7 +17,6 @@ package cilanes
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -32,42 +31,25 @@ func TestSetName(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(name).To(Equal("vpp/eks"))
 
-	name, err = SetName(Lane{Area: "iptables.yml", Flags: "-x", PipelineDefault: true})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(name).To(Equal("legacy/iptables"))
-
-	name, err = SetName(Lane{Area: "iptables.yml", Flags: "-x", Name: "AKS / w calico CNI"})
-	Expect(err).NotTo(HaveOccurred())
-	Expect(name).To(Equal("legacy/iptables/aks-w-calico-cni"))
-
 	// A set file must not land outside sets/.
 	_, err = SetName(Lane{Config: "../shared/foo.yaml"})
 	Expect(err).To(HaveOccurred())
-
-	_, err = SetName(Lane{Flags: "-x"})
-	Expect(err).To(MatchError(ContainSubstring("FUNCTIONAL_AREA")))
 }
 
 func TestResolveSets(t *testing.T) {
 	RegisterTestingT(t)
 
 	// Counterpart lanes in the two CI systems share one set.
-	argo := Lane{Source: "a.yaml", Name: "one", Area: "bpf.yml", Flags: "-x", TestType: "k8s-e2e", PipelineDefault: true}
+	argo := Lane{Source: "a.yaml", Name: "one", Area: "bpf.yml", Config: "e2e/config/bpf/bpf.yaml", TestType: "k8s-e2e"}
 	sem := argo
 	sem.Source, sem.Name = "b.yml", "Block / job"
 	sets, err := ResolveSets([]Lane{argo, sem})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(sets).To(HaveLen(1))
-	Expect(sets).To(HaveKey("legacy/bpf"))
-
-	// The two systems drifting apart is the error the check exists to raise.
-	sem.Flags = "-y"
-	_, err = ResolveSets([]Lane{argo, sem})
-	Expect(err).To(MatchError(ContainSubstring("legacy/bpf")))
-	Expect(err).To(MatchError(ContainSubstring("flags:-y")))
+	Expect(sets).To(HaveKey("bpf/bpf"))
 
 	// Lanes that never run the binary have no set.
-	sets, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "os", Area: "openstack", TestType: "openstack-e2e", Flags: "-x"}})
+	sets, err = ResolveSets([]Lane{{Source: "a.yaml", Name: "os", Area: "openstack", TestType: "openstack-e2e", Config: "e2e/config/vpp/eks.yaml"}})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(sets).To(BeEmpty())
 
@@ -80,15 +62,14 @@ func TestResolveSets(t *testing.T) {
 	Expect(err).To(MatchError(ContainSubstring("selects nothing")))
 }
 
-// The pre-migration selection is a copy of a literal in the script, so a change
+// The pre-migration config is a copy of a literal in the script, so a change
 // there has to fail here rather than silently freeze the recorded specs.
-func TestFlannelMigrationPreFlags(t *testing.T) {
+func TestFlannelMigrationPreConfig(t *testing.T) {
 	RegisterTestingT(t)
 
 	path := filepath.Join(repoRoot, ".semaphore/end-to-end/scripts", flannelMigrationScript)
 	script, err := os.ReadFile(path)
 	Expect(err).NotTo(HaveOccurred())
 
-	focus := strings.TrimPrefix(flannelMigrationPreFlags, "--ginkgo.focus=")
-	Expect(string(script)).To(ContainSubstring(focus))
+	Expect(string(script)).To(ContainSubstring(flannelMigrationPreConfig))
 }

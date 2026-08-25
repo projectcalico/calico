@@ -45,8 +45,8 @@ func TestExtendsAcceptsBareString(t *testing.T) {
 	if len(cfg.Exclude.Labels) != 1 || cfg.Exclude.Labels[0].Label != "Slow" {
 		t.Errorf("excludes = %+v, want inherited Slow", cfg.Exclude.Labels)
 	}
-	if len(cfg.Include) != 1 || cfg.Include[0].Label != "sig-calico" {
-		t.Errorf("includes = %+v", cfg.Include)
+	if len(cfg.Include.Labels) != 1 || cfg.Include.Labels[0].Label != "sig-calico" {
+		t.Errorf("includes = %+v", cfg.Include.Labels)
 	}
 }
 
@@ -109,8 +109,8 @@ exclude:
 	if r := cfg.Exclude.Labels[0].Reason; r != "from base" {
 		t.Errorf("reason = %q, want the first occurrence (%q)", r, "from base")
 	}
-	if got := len(cfg.Include); got != 1 {
-		t.Errorf("got %d includes, want 1: %+v", got, cfg.Include)
+	if got := len(cfg.Include.Labels); got != 1 {
+		t.Errorf("got %d includes, want 1: %+v", got, cfg.Include.Labels)
 	}
 	flags, err := ToFlags(cfg)
 	if err != nil {
@@ -134,8 +134,8 @@ func TestExtendsDiamondIsNotCircular(t *testing.T) {
 	if err != nil {
 		t.Fatalf("diamond should load, got: %v", err)
 	}
-	if len(cfg.Include) != 2 {
-		t.Errorf("includes = %+v, want both parents' scopes", cfg.Include)
+	if len(cfg.Include.Labels) != 2 {
+		t.Errorf("includes = %+v, want both parents' scopes", cfg.Include.Labels)
 	}
 }
 

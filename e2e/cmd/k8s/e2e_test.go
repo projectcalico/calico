@@ -98,6 +98,12 @@ func applyTestConfig(path string) error {
 			return fmt.Errorf("set ginkgo.label-filter: %w", err)
 		}
 	}
+	if focus := flags.FocusString(); focus != "" {
+		logrus.Infof("Test config: ginkgo.focus = %s", focus)
+		if err := flag.Set("ginkgo.focus", focus); err != nil {
+			return fmt.Errorf("set ginkgo.focus: %w", err)
+		}
+	}
 	if skip := flags.SkipString(); skip != "" {
 		logrus.Infof("Test config: ginkgo.skip = %s", skip)
 		if err := flag.Set("ginkgo.skip", skip); err != nil {
