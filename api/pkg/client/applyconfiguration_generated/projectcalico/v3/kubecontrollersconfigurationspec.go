@@ -30,6 +30,12 @@ type KubeControllersConfigurationSpecApplyConfiguration struct {
 	// is disabled.
 	// Valid values are: 0-65535.
 	DebugProfilePort *int32 `json:"debugProfilePort,omitempty"`
+	// DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "" for
+	// all interfaces to make profiles reachable from off-host. The profiling endpoints are
+	// unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
+	// default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
+	// [Default: localhost]
+	DebugProfileHost *string `json:"debugProfileHost,omitempty"`
 }
 
 // KubeControllersConfigurationSpecApplyConfiguration constructs a declarative configuration of the KubeControllersConfigurationSpec type for use with
@@ -83,5 +89,13 @@ func (b *KubeControllersConfigurationSpecApplyConfiguration) WithControllers(val
 // If called multiple times, the DebugProfilePort field is set to the value of the last call.
 func (b *KubeControllersConfigurationSpecApplyConfiguration) WithDebugProfilePort(value int32) *KubeControllersConfigurationSpecApplyConfiguration {
 	b.DebugProfilePort = &value
+	return b
+}
+
+// WithDebugProfileHost sets the DebugProfileHost field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the DebugProfileHost field is set to the value of the last call.
+func (b *KubeControllersConfigurationSpecApplyConfiguration) WithDebugProfileHost(value string) *KubeControllersConfigurationSpecApplyConfiguration {
+	b.DebugProfileHost = &value
 	return b
 }
