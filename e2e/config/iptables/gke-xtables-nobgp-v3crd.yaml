@@ -26,13 +26,10 @@ exclude:
       reason: "Calico runs policy-only behind the GKE CNI plugin, so BIRD is not running"
     - label: RequiresCalicoAPIServer
       reason: "v3 CRD mode (USE_API_SERVER=false): no aggregated Calico API server, so read-path tier RBAC is not enforced"
+    - label: RequiresCalicoIPAM
+      reason: "these specs read Calico IPAM state, but this cluster uses host-local IPAM"
 
   namePatterns:
-    - group: "requires Calico IPAM, but this cluster uses host-local IPAM"
-      patterns:
-        - 'IPAM.StrictAffinity'
-        - 'IPAM.GC'
-
     - group: "GKE enables the DenyServiceExternalIPs admission plugin, so the suite cannot create a Service with an external IP"
       patterns:
         - 'scenario-0EL0:'

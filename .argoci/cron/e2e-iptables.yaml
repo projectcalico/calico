@@ -10,7 +10,6 @@ globalPrologue: |
   export DATAPLANE="${DATAPLANE:-CalicoIptables}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-iptables.yml}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Proxy.version.v1.should.proxy.through.a.service.and.a.pod|Feature:Wireguard|Feature:KubeVirt)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   source .argoci/scripts/global_prologue.sh
@@ -25,6 +24,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/openshift-xtables-encap-aws.yaml
       - name: INSTALLER
         value: operator
       - name: PROVISIONER
@@ -60,6 +61,8 @@ steps:
     matrix:
       - name: stable-1-azure-
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/aks-xtables-nobgp.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -68,6 +71,8 @@ steps:
             value: ""
       - name: stable-1-none-
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/iptables/aks-xtables-encap.yaml
           - name: K8S_VERSION
             value: stable-1
           - name: AZ_NETWORK_PLUGIN
@@ -89,8 +94,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 172.16.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|both.pod.and.service.Proxy\b|proxy.through.a.service.and.a.pod|replica.with.a.public.image|DNS.for.ExternalName.services|DNS.for.pods.for.Hostname|DNS.for.pods.for.Subdomain|DNS.for.services|DNS.for.the.cluster|DNS.qualified.names.for.services|Feature:Wireguard|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/eks-xtables-encap-aws.yaml
       - name: PROVISIONER
         value: aws-eks
       - name: STERN_CHECK
@@ -115,8 +120,8 @@ steps:
         value: VXLAN
       - name: INSTALLER
         value: helmerator
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:Wireguard|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-encap.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -143,8 +148,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|IPAM.StrictAffinity|Feature:Wireguard|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -166,8 +171,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:Wireguard|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: NETWORK_PLUGIN_MODE
@@ -189,8 +194,8 @@ steps:
         value: Calico
       - name: INSTALLER
         value: operator
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|Feature:Wireguard|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-encap.yaml
       - name: K8S_VERSION
         value: stable-1
       - name: PROVISIONER
@@ -552,8 +557,8 @@ steps:
         value: "true"
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-aws.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_HASH_RELEASE
@@ -578,8 +583,8 @@ steps:
         value: "true"
       - name: IPAM_TEST_POOL_SUBNET
         value: 10.0.0.0/29
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|EndpointSlice|Services\sshould|Ingress.API|IngressClass.API|Proxy.version.v1.*pod.and.service.Proxy.\[|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/xtables-v3crd-aws.yaml
       - name: PROVISIONER
         value: aws-kubeadm
       - name: USE_API_SERVER
@@ -612,8 +617,8 @@ steps:
         value: operator
       - name: IPV4_POD_CIDR
         value: 10.244.0.0/16
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]|Feature:NetworkPolicy) --ginkgo.skip=(Slow|Disruptive|calient|allow.ingress.access.from.updated.pod|Dataplane:LB|outside.the.cluster|MTU|ExternalNode|external.to.nodeport|StrictAffinity|Feature:SCTP|Feature:KubeVirt)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/iptables/aks-xtables-nobgp-wireguard.yaml
       - name: NETWORK_PLUGIN_MODE
         value: overlay
       - name: PROVISIONER
