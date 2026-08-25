@@ -58,7 +58,7 @@
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 220
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 211
-.argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
+.argoci/cron/e2e-iptables.yaml | migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 192
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 185
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | iptables/openshift-xtables-encap-aws | 216
@@ -86,9 +86,9 @@
 .argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | patch-verification/xtables-encap-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal | patch-verification/xtables-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | patch-verification/xtables-manifest | 80
-.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
+.argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration | patch-verification/xtables-encap-manifest | 80
-.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
+.argoci/cron/e2e-patch-verification.yaml | manifests-flannel-migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-patch-verification.yaml | manifests-operator-migration | patch-verification/xtables-encap-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | openshift | patch-verification/bpf-aws | 83
 .argoci/cron/e2e-patch-verification.yaml | operator-helmerator-aks-w-aks-cni-overlay | patch-verification/aks-xtables-nobgp | 83
@@ -170,7 +170,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 216
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 211
-.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | legacy/iptables/migration-flannel-migration-pre-migration | 1
+.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | pre-migration-smoke | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | iptables/openshift-xtables-encap-aws | 216
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | iptables/xtables | 220
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | iptables/xtables | 220
@@ -201,9 +201,9 @@
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | patch-verification/xtables-encap-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal | patch-verification/xtables-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | patch-verification/xtables-manifest | 80
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration [pre-migration] | legacy/patch-verification/manifests-canal-migration-pre-migration | 1
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration [pre-migration] | pre-migration-smoke | 1
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration | patch-verification/xtables-encap-manifest | 80
-.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration [pre-migration] | legacy/patch-verification/manifests-flannel-migration-pre-migration | 1
+.semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Flannel migration [pre-migration] | pre-migration-smoke | 1
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / operator migration | patch-verification/xtables-encap-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Openshift / Openshift OCP | patch-verification/bpf-aws | 83
 .semaphore/end-to-end/pipelines/patch-verification.yml | Operator/Helmerator / AKS w AKS CNI + Overlay | patch-verification/aks-xtables-nobgp | 83

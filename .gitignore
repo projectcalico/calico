@@ -53,3 +53,10 @@ ut-tmp-dir
 
 # Build-time copy of metadata.mk for the release CLI's embedded defaults.
 release/internal/defaults/metadata.mk
+
+# Root-level tool downloads. The Makefile targets use bin/, which is already
+# ignored; these are what a manual download leaves behind.
+/yq
+/shellcheck
+/shellcheck.tar.xz
+/shellcheck-v*/

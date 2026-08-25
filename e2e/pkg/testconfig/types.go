@@ -30,10 +30,10 @@ type Config struct {
 	// can compose a pipeline's scope with a shared platform exclusion list.
 	Extends ExtendsList `yaml:"extends,omitempty"`
 
-	// Include is a list of label expressions. Tests matching ANY of these
-	// expressions are selected to run. When a parent config is extended,
-	// include entries are appended (OR'd together).
-	Include []IncludeEntry `yaml:"include,omitempty"`
+	// Include selects which tests run, by label expression and, where a lane
+	// needs a spec the labels cannot reach, by test name pattern. When a parent
+	// config is extended, include entries are appended (OR'd together).
+	Include IncludeList `yaml:"include,omitempty"`
 
 	// Exclude defines labels and name patterns to exclude from the selected
 	// tests. When a parent config is extended, exclude entries are appended.
@@ -70,6 +70,47 @@ func (e *ExtendsList) UnmarshalYAML(value *yaml.Node) error {
 		}
 	}
 	*e = parents
+	return nil
+}
+
+// IncludeList is the include section of a config. It accepts a bare sequence
+// of label expressions for the common case, and a mapping when a config also
+// needs name patterns:
+//
+//	include:
+//	  - Conformance && sig-network
+//
+//	include:
+//	  labels:
+//	    - Conformance && sig-network
+//	  namePatterns:
+//	    - pattern: "should serve a basic endpoint from pods"
+//	      reason: "smoke check before the dataplane exists"
+type IncludeList struct {
+	// Labels is a list of label expressions. Tests matching ANY of these
+	// expressions are selected to run.
+	Labels []IncludeEntry `yaml:"labels,omitempty"`
+
+	// NamePatterns is a list of test name regex patterns to select via
+	// --ginkgo.focus, for specs no label expression can reach. Mutually
+	// exclusive with Labels: ginkgo ANDs the focus regex with the label
+	// filter, so a config setting both is rejected at load.
+	NamePatterns []NamePatternEntry `yaml:"namePatterns,omitempty"`
+}
+
+// UnmarshalYAML implements custom unmarshaling for IncludeList to support both
+// the bare sequence and mapping forms.
+func (l *IncludeList) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.SequenceNode {
+		return value.Decode(&l.Labels)
+	}
+
+	type raw IncludeList
+	var r raw
+	if err := value.Decode(&r); err != nil {
+		return fmt.Errorf("invalid include (want a list of labels or a mapping): %w", err)
+	}
+	*l = IncludeList(r)
 	return nil
 }
 
