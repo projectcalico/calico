@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/projectcalico/calico/app-policy/policystore"
+	bpfconntrack "github.com/projectcalico/calico/felix/bpf/conntrack/timeouts"
 	"github.com/projectcalico/calico/felix/calc"
 	clttypes "github.com/projectcalico/calico/felix/collector/types"
 	"github.com/projectcalico/calico/felix/collector/types/counter"
@@ -51,10 +52,11 @@ import (
 )
 
 const (
-	ipv4       = 0x800
-	proto_icmp = 1
-	proto_tcp  = 6
-	proto_udp  = 17
+	ipv4         = 0x800
+	proto_icmp   = 1
+	proto_tcp    = 6
+	proto_udp    = 17
+	proto_icmpv6 = 58
 )
 
 var (
@@ -4152,4 +4154,83 @@ func TestEqualFunction(t *testing.T) {
 			t.Errorf("Expected false, got true")
 		}
 	})
+}
+
+func TestBPFAgeTimeout(t *testing.T) {
+	timeouts := bpfconntrack.DefaultTimeouts()
+	floor := 2 * bpfconntrack.ScanPeriod
+
+	// The floor only bites for timeouts shorter than two scan periods, which is true of the default
+	// ICMP timeout. Guard the premise so this test fails loudly rather than silently passing if the
+	// defaults change.
+	if timeouts.ICMPTimeout >= floor {
+		t.Fatalf("default ICMPTimeout (%v) is no longer below the floor (%v); pick another protocol",
+			timeouts.ICMPTimeout, floor)
+	}
+
+	shortTimeouts := timeouts
+	shortTimeouts.TCPResetSeen = time.Second
+
+	for _, tc := range []struct {
+		name     string
+		timeouts bpfconntrack.Timeouts
+		proto    int
+		want     time.Duration
+	}{
+		{"TCP uses the reset timeout", timeouts, proto_tcp, timeouts.TCPResetSeen},
+		{"UDP uses the UDP timeout", timeouts, proto_udp, timeouts.UDPTimeout},
+		{"unknown protocols use the generic timeout", timeouts, 47 /* GRE */, timeouts.GenericTimeout},
+		{"ICMP is floored", timeouts, proto_icmp, floor},
+		{"ICMPv6 is floored", timeouts, proto_icmpv6, floor},
+		{"a configured sub-floor timeout is floored", shortTimeouts, proto_tcp, floor},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := bpfAgeTimeout(tc.timeouts, tc.proto); got != tc.want {
+				t.Errorf("bpfAgeTimeout(proto=%d) = %v, want %v", tc.proto, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBPFAgeOutFloorKeepsLiveFlows checks the end of the floor's job: an entry whose dataplane
+// conntrack timeout is shorter than the scan period must survive the gap between scans. The
+// collector only touches an entry when the BPF conntrack scanner reports it, so expiring sooner
+// churns live flows and re-credits their absolute counters as a fresh delta on re-creation.
+func TestBPFAgeOutFloorKeepsLiveFlows(t *testing.T) {
+	floor := 2 * bpfconntrack.ScanPeriod
+
+	for _, tc := range []struct {
+		name            string
+		sinceLastUpdate time.Duration
+		wantPresent     bool
+	}{
+		{"past the ICMP timeout but inside the floor", floor - 5*time.Second, true},
+		{"past the floor", floor + 5*time.Second, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newCollector(newMockLookupsCache(map[[16]byte]calc.EndpointData{
+				localIp1:  localEd1,
+				remoteIp1: remoteEd1,
+			}, nil, nil, nil), &Config{
+				AgeTimeout:            10 * time.Second,
+				InitialReportingDelay: 5 * time.Second,
+				ExportingInterval:     time.Second,
+				FlowLogsFlushInterval: 100 * time.Second,
+				IsBPFDataplane:        true,
+				BPFConntrackTimeouts:  bpfconntrack.DefaultTimeouts(),
+			}).(*collector)
+
+			tpl := *tuple.New(remoteIp1, localIp1, proto_icmp, 0, 0)
+			data := NewData(tpl, remoteEd1, localEd1)
+			c.updateEpStatsCache(tpl, data)
+			data.updatedAt = monotime.Now() - tc.sinceLastUpdate
+
+			c.checkEpStats()
+
+			if _, present := c.epStats[tpl]; present != tc.wantPresent {
+				t.Errorf("entry last updated %v ago: present=%v, want %v",
+					tc.sinceLastUpdate, present, tc.wantPresent)
+			}
+		})
+	}
 }

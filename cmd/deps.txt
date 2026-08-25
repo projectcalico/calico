@@ -539,7 +539,6 @@ local:libcalico-go/lib/selector
 local:libcalico-go/lib/selector/parser
 local:libcalico-go/lib/selector/tokenizer
 local:libcalico-go/lib/set
-local:libcalico-go/lib/validator/v1
 local:libcalico-go/lib/validator/v3
 local:libcalico-go/lib/watch
 local:libcalico-go/lib/winutils
@@ -584,6 +583,7 @@ local:typha/pkg/syncclientutils
 local:typha/pkg/syncproto
 local:typha/pkg/syncserver
 local:typha/pkg/tlsutils
+local:typha/pkg/validator/v1
 local:webhooks/pkg/clusterinfo
 local:webhooks/pkg/rbac
 local:webhooks/pkg/utils

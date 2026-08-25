@@ -26,12 +26,12 @@
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC read-only access should allow reading but deny writing for a read-only user [Conformance]
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC resource-name exact match [RequiresCalicoAPIServer] should allow access to the named policy but deny access to others
 [sig-calico] [Team:CORE] [Category:Policy] [Feature:Tiered-RBAC] [NoTierPrefix] Tiered RBAC tier isolation should restrict a user to only their permitted tier [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
-[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedGlobalNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedKubernetesNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy Test presence in flow logs StagedNetworkPolicy Validate name, tier, action [Conformance]
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedGlobalNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedKubernetesNetworkPolicy should enforce a deny policy
+[sig-calico] [Team:CORE] [Category:Policy] [RequiresGoldmane] [NoTierPrefix] staged network policy enforcing staged-policies StagedNetworkPolicy should enforce a deny policy
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes external client [ExternalNode] using UDP and TCP external to nodeport
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to nodeport, different nodes
 [sig-calico] [Team:CORE] [Feature:Datapath] [Category:Networking] Packet Size Verification with different packet sizes using UDP and TCP host to pod, different nodes
@@ -101,8 +101,8 @@
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-2N1 ApplyOnForward=true, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=false, ingress [Serial]
 [sig-calico] [Team:CORE] [Feature:Host-Protection] [Category:Networking] Host Endpoint Datapath ingress-3-0 ApplyOnForward=true, ingress [Serial]
-[sig-calico] [Team:CORE] [Feature:IPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
-[sig-calico] [Team:CORE] [Feature:IPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
+[sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
+[sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
@@ -118,6 +118,7 @@
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by service [Conformance]
 [sig-calico] [Team:CORE] [Feature:OwnerReferences] [Category:Configuration] OwnerReference tests should delete a NetworkSet if its owner has been deleted
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit bandwidth with QoS annotations
+[sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit concurrent connections with QoS annotations
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit packet rate with QoS annotations
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]
