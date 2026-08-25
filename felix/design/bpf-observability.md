@@ -342,31 +342,19 @@ on connection close.
   carrying any FIN or RST bit so it doesn't double-count a close
   those paths have already accounted for.
 
-  It deliberately does **not** skip entries carrying
-  `CONNLIMIT_DEC`. That flag is cleared only on the spurious-RST
-  path below, and never at all for an entry that no longer sees
-  traffic, so skipping on it excluded a connection from future
-  recounts — and since the recount is the only mechanism that can
-  return a slot, the exclusion was effectively permanent. Because
-  the fast path decrements on any
-  RST, including a spurious one that is out of window and ignored by
-  both peers, and because the per-leg RST bits clear as soon as
-  traffic resumes, that produced live, established entries the
-  scanner would never count again: N spurious RSTs against N live
-  connections parked `current_count` at 0 with all N still up. An
-  established entry with no FIN and no RST is live and is counted,
-  whatever `CONNLIMIT_DEC` says; the FIN/RST skips are what prevent
-  double-counting, since a genuinely closed entry keeps those bits
-  until it is purged.
+  It deliberately does **not** skip on `CONNLIMIT_DEC`: that flag can
+  be claimed for a live connection (the fast path decrements on any
+  RST, validated or not) and does not clear while an entry sees no
+  traffic, so skipping on it would exclude a live connection from
+  every future recount. An established entry with no FIN and no RST
+  is live and is counted, whatever `CONNLIMIT_DEC` says.
 
-This is why the RST decrement stays on the fast path even though an
-RST is weak evidence of a close. Prompt release is a requirement —
-`felix/fv` asserts a genuine RST close frees a slot within 5s, and
-deferring RST closes to the cleanup path makes them wait for
-`TCPResetSeen` (40s). The recount makes the resulting under-count
-self-correcting instead of permanent, which is the property that
-matters: a spurious RST costs one scan cycle, not the connection's
-lifetime.
+The RST decrement stays on the fast path even though an RST is weak
+evidence of a close, because prompt release is a requirement:
+`felix/fv` asserts a genuine RST close frees a slot within 5s, while
+the cleanup path would wait for `TCPResetSeen` (40s). The recount is
+what makes the resulting under-count self-correcting — a spurious RST
+costs one scan cycle, not the connection's lifetime.
 
 Host-originated traffic — including from host-networked pods — is
 exempt from the ingress limit: it takes the `skip_policy` path in
@@ -425,33 +413,24 @@ global, `ISTIO_DSCP`; see
   scanner) set it before decrementing. It is what stops the same
   close being counted twice when both paths see one entry.
 - `CONNLIMIT_DEC` is an idempotence latch, **not** a statement that
-  the connection is gone. Do not gate the userspace recount on it,
-  and do not add any other long-lived "already handled" marker that
-  the recount honours. The recount is the only path that can return
-  a slot, so anything it skips unconditionally is leaked for the
-  life of the entry — and the fast path claims the latch on signals
-  a live connection can survive (any RST, unvalidated). Keep the
-  skip conditions to state that clears itself or dies with the
-  entry: the per-leg FIN/RST bits.
-- The latch describes a decrement that is only meaningful while the
-  counter still reflects it, and the recount rebases the counter
-  every ~30s. That is why `calico_ct_lookup` releases the latch at
-  the same point it concludes an RST was spurious — two minutes of
-  continued traffic, where it also clears `v->rst_seen`. Without
-  that release, a connection that survived a spurious RST would find
-  the latch already taken when it genuinely closed, and free its
-  slot at recount speed rather than immediately. Release it with an
-  atomic AND on `type_flags_word`, mirroring the claim: a byte-wide
-  `ct_value_clear_flags()` would race with a concurrent claim on
-  another CPU. Note this re-arms the latch for that entry, so a
-  connection can be decremented once per spurious RST rather than
-  once ever; the recount bounds the resulting under-count either
-  way.
-- When choosing between holding a slot too long and releasing one
-  too early, hold. Over-counting fails closed — a pod is briefly
-  refused a connection it could have had. Under-counting fails open:
-  the limit stops being a limit, and if the under-count is permanent
-  an unauthenticated packet defeats it outright.
+  the connection is gone. The recount is the only path that returns a
+  slot, so anything it skips unconditionally leaks for the life of the
+  entry: do not gate it on the latch, or on any other long-lived
+  "already handled" marker. Keep its skip conditions to state that
+  clears itself or dies with the entry — the per-leg FIN/RST bits.
+- The latch is released where `calico_ct_lookup` concludes an RST was
+  spurious (two minutes of continued traffic, where it also clears
+  `v->rst_seen`), so a connection that survives one still frees its
+  slot immediately when it genuinely closes. Release it with an atomic
+  AND on `type_flags_word`, mirroring the claim — a byte-wide
+  `ct_value_clear_flags()` races with a concurrent claim on another
+  CPU. Releasing re-arms the latch, so a connection can be decremented
+  once per spurious RST rather than once ever; the recount bounds the
+  under-count either way.
+- When choosing between holding a slot too long and releasing one too
+  early, hold. Over-counting fails closed — a pod is briefly refused a
+  connection it could have had. Under-counting fails open: the limit
+  stops being a limit.
 - ep_mgr writes to `cali_qos` / `cali_qos_conn` must skip the
   UpdateWithFlags when the configured fields match the existing
   entry. The dataplane owns the dynamic fields between configuration
