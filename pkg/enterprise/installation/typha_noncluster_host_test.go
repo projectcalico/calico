@@ -99,11 +99,11 @@ var _ = Describe("non-cluster host typha", func() {
 	// exactly as the installation controller does.
 	renderTypha := func(ci controller.Inputs) []client.Object {
 		cfg := &render.TyphaConfiguration{
-			K8sServiceEp:    k8sapi.Endpoint,
-			Installation:    ci.RenderInputs.Installation,
-			TLS:             typhaNodeTLSFor(ci),
-			ClusterDomain:   dns.DefaultClusterDomain,
-			FelixHealthPort: 9099,
+			K8sServiceEp:       k8sapi.Endpoint,
+			Installation:       ci.RenderInputs.Installation,
+			TLS:                typhaNodeTLSFor(ci),
+			ClusterDomain:      dns.DefaultClusterDomain,
+			FelixConfiguration: ci.RenderInputs.FelixConfiguration,
 		}
 		component := render.Typha(cfg)
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())

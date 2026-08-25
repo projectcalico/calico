@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
@@ -50,6 +52,10 @@ const (
 	BPFOperatorAnnotation      = "operator.tigera.io/bpfEnabled"
 
 	DisableKubeProxyKey = "operator.tigera.io/disable-kube-proxy"
+
+	// DefaultFelixHealthPort is the port Felix binds its health endpoints to when
+	// FelixConfiguration does not say.
+	DefaultFelixHealthPort = 9099
 
 	nodeCniConfigAnnotation   = "hash.operator.tigera.io/cni-config"
 	bgpLayoutHashAnnotation   = "hash.operator.tigera.io/bgp-layout"
@@ -130,12 +136,9 @@ type NodeConfiguration struct {
 	// configmap, rather than this "copy" semantic.
 	BGPLayouts *corev1.ConfigMap
 
-	// The health port that Felix should bind to. The controller reads FelixConfiguration
-	// and sets this.
-	FelixHealthPort int
-
-	// Node's CgroupV2Path override. The controller reads FelixConfiguration and sets this.
-	NodeCgroupV2Path string
+	// FelixConfiguration is the cluster's default FelixConfiguration, which the render
+	// reads Felix's health port and cgroup path from.
+	FelixConfiguration *v3.FelixConfiguration
 
 	// The bindMode read from the default BGPConfiguration. Used to trigger rolling updates
 	// should this value change.
@@ -156,6 +159,23 @@ func Node(cfg *NodeConfiguration) Component {
 		cfg.DefaultDNSPolicy = corev1.DNSClusterFirstWithHostNet
 	}
 	return &nodeComponent{cfg: cfg}
+}
+
+// felixHealthPort returns the port Felix binds its health endpoints to. The installation
+// controller defaults it, so an unset FelixConfiguration only happens in tests.
+func felixHealthPort(fc *v3.FelixConfiguration) int {
+	if fc == nil || fc.Spec.HealthPort == nil {
+		return DefaultFelixHealthPort
+	}
+	return *fc.Spec.HealthPort
+}
+
+// felixCgroupV2Path returns the cgroup v2 mount path override, or the empty string.
+func felixCgroupV2Path(fc *v3.FelixConfiguration) string {
+	if fc == nil {
+		return ""
+	}
+	return fc.Spec.CgroupV2Path
 }
 
 type nodeComponent struct {
@@ -1288,8 +1308,8 @@ func (c *nodeComponent) bpffsEnvvars() []corev1.EnvVar {
 		envVars = append(envVars, corev1.EnvVar{Name: "KUBERNETES_APISERVER_ENDPOINTS", Value: env})
 	}
 
-	if c.cfg.NodeCgroupV2Path != "" {
-		envVars = append(envVars, corev1.EnvVar{Name: "CALICO_CGROUP_PATH", Value: c.cfg.NodeCgroupV2Path})
+	if path := felixCgroupV2Path(c.cfg.FelixConfiguration); path != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: "CALICO_CGROUP_PATH", Value: path})
 	}
 
 	return envVars
@@ -1454,7 +1474,7 @@ func (c *nodeComponent) nodeEnvVars() []corev1.EnvVar {
 		{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 		{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 		{Name: "FELIX_HEALTHENABLED", Value: "true"},
-		{Name: "FELIX_HEALTHPORT", Value: fmt.Sprintf("%d", c.cfg.FelixHealthPort)},
+		{Name: "FELIX_HEALTHPORT", Value: fmt.Sprintf("%d", felixHealthPort(c.cfg.FelixConfiguration))},
 		{
 			Name: "NODENAME",
 			ValueFrom: &corev1.EnvVarSource{
@@ -1695,7 +1715,7 @@ func (c *nodeComponent) nodeLifecycle() *corev1.Lifecycle {
 // nodeProbes creates calico/node health probes. It returns in order: startupProbe, livenessProbe, readinessProbe
 func (c *nodeComponent) nodeProbes() (*corev1.Probe, *corev1.Probe, *corev1.Probe) {
 	// Determine liveness and readiness configuration for node.
-	livenessPort := intstr.FromInt(c.cfg.FelixHealthPort)
+	livenessPort := intstr.FromInt(felixHealthPort(c.cfg.FelixConfiguration))
 	var readinessCmd []string
 
 	readinessCmd = []string{components.CalicoBinaryPath, "component", "node", "health", "--bird-ready", "--felix-ready"}

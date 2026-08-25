@@ -1223,12 +1223,12 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 
 	// Build a configuration for rendering calico/typha.
 	typhaCfg := render.TyphaConfiguration{
-		K8sServiceEp:      k8sapi.Endpoint,
-		Installation:      &defaulted.Spec,
-		TLS:               typhaNodeTLS,
-		MigrateNamespaces: needsNamespaceMigration,
-		ClusterDomain:     r.opts.ClusterDomain,
-		FelixHealthPort:   *felixConfiguration.Spec.HealthPort,
+		K8sServiceEp:       k8sapi.Endpoint,
+		Installation:       &defaulted.Spec,
+		TLS:                typhaNodeTLS,
+		MigrateNamespaces:  needsNamespaceMigration,
+		ClusterDomain:      r.opts.ClusterDomain,
+		FelixConfiguration: felixConfiguration,
 	}
 	components = append(components, render.Typha(&typhaCfg))
 
@@ -1353,8 +1353,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		NodeAppArmorProfile:   nodeAppArmorProfile,
 		MigrateNamespaces:     needsNamespaceMigration,
 		CanRemoveCNIFinalizer: canRemoveCNI,
-		FelixHealthPort:       *felixConfiguration.Spec.HealthPort,
-		NodeCgroupV2Path:      felixConfiguration.Spec.CgroupV2Path,
+		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
 		ImageOverrides:        r.ext.Images(),
 	}
@@ -1743,7 +1742,7 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 
 	// Determine the felix health port to use. Prefer the configuration from FelixConfiguration,
 	// but default to 9099 (or 9199 on OpenShift). We will also write back whatever we select to FelixConfiguration.
-	felixHealthPort := 9099
+	felixHealthPort := render.DefaultFelixHealthPort
 	if install.Spec.KubernetesProvider.IsOpenShift() {
 		felixHealthPort = 9199
 	}

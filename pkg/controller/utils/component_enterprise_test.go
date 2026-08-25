@@ -17,6 +17,9 @@ package utils_test
 import (
 	"context"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"k8s.io/utils/ptr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -62,10 +65,10 @@ var _ = Describe("enterprise typha modifier integration", func() {
 				CNI:     &operatorv1.CNISpec{Type: operatorv1.PluginCalico},
 			}
 			typhaCfg := &render.TyphaConfiguration{
-				K8sServiceEp:    k8sapi.ServiceEndpoint{},
-				Installation:    instance,
-				ClusterDomain:   dns.DefaultClusterDomain,
-				FelixHealthPort: 9099,
+				K8sServiceEp:       k8sapi.ServiceEndpoint{},
+				Installation:       instance,
+				ClusterDomain:      dns.DefaultClusterDomain,
+				FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 				TLS: &render.TyphaNodeTLS{
 					TrustedBundle:   certManager.CreateTrustedBundle(),
 					TyphaSecret:     typhaKeyPair,

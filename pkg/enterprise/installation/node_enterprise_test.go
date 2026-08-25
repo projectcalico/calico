@@ -17,6 +17,9 @@ package installation_test
 import (
 	"context"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"k8s.io/utils/ptr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -136,12 +139,12 @@ var _ = Describe("node enterprise modifier integration", func() {
 	// modifier, exactly as the componentHandler does.
 	renderNodeObjects := func(ri render.Inputs) []client.Object {
 		cfg := &render.NodeConfiguration{
-			K8sServiceEp:    k8sapi.ServiceEndpoint{},
-			Installation:    instance,
-			TLS:             typhaNodeTLS,
-			ClusterDomain:   dns.DefaultClusterDomain,
-			FelixHealthPort: 9099,
-			IPPools:         instance.CalicoNetwork.IPPools,
+			K8sServiceEp:       k8sapi.ServiceEndpoint{},
+			Installation:       instance,
+			TLS:                typhaNodeTLS,
+			ClusterDomain:      dns.DefaultClusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
+			IPPools:            instance.CalicoNetwork.IPPools,
 		}
 		comp := render.Node(cfg)
 		Expect(comp.ResolveImages(nil)).NotTo(HaveOccurred())
@@ -237,11 +240,11 @@ var _ = Describe("node enterprise modifier integration", func() {
 
 	It("adds the enterprise rules to the real typha cluster role", func() {
 		comp := render.Typha(&render.TyphaConfiguration{
-			K8sServiceEp:    k8sapi.ServiceEndpoint{},
-			Installation:    instance,
-			TLS:             typhaNodeTLS,
-			ClusterDomain:   dns.DefaultClusterDomain,
-			FelixHealthPort: 9099,
+			K8sServiceEp:       k8sapi.ServiceEndpoint{},
+			Installation:       instance,
+			TLS:                typhaNodeTLS,
+			ClusterDomain:      dns.DefaultClusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 		})
 		Expect(comp.ResolveImages(nil)).NotTo(HaveOccurred())
 		objs, _ := comp.Objects()
