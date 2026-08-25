@@ -57,7 +57,14 @@ func RequireBGPEnabled(cli ctrlclient.Client) {
 	if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation); err != nil {
 		framework.Failf("Error querying Installation resource: %v", err)
 	}
-	network := installation.Spec.CalicoNetwork
+
+	// The operator records the fields it defaults on the status rather than writing them
+	// back into the spec, so the spec says nothing about BGP on a cluster that never set it.
+	config := installation.Status.Computed
+	if config == nil {
+		framework.Failf("No computed configuration on the Installation; is this cluster operator managed?")
+	}
+	network := config.CalicoNetwork
 	if network == nil || network.BGP == nil || *network.BGP != operatorv1.BGPEnabled {
 		framework.Failf("BGP is not enabled in this cluster, so the lane should exclude the RequiresBGP label")
 	}
