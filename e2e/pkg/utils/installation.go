@@ -34,21 +34,12 @@ func GetInstallation(cli ctrlclient.Client) *operatorv1.Installation {
 	return installation
 }
 
-// InstallationConfig returns the operator's effective installation config. Nil if the cluster
-// isn't operator managed.
+// InstallationConfig returns the defaulted installation config the operator publishes on the
+// status. Nil if the cluster isn't operator managed, or if the operator hasn't reconciled yet.
 func InstallationConfig(cli ctrlclient.Client) *operatorv1.InstallationSpec {
 	installation := GetInstallation(cli)
 	if installation == nil {
 		return nil
-	}
-	return EffectiveSpec(installation)
-}
-
-// EffectiveSpec returns the configuration the operator is running with. Older operators default
-// in place instead of publishing a computed spec.
-func EffectiveSpec(installation *operatorv1.Installation) *operatorv1.InstallationSpec {
-	if installation.Status.Computed == nil {
-		return &installation.Spec
 	}
 	return installation.Status.Computed
 }

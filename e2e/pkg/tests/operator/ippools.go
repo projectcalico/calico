@@ -71,7 +71,8 @@ var _ = describe.CalicoDescribe(
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
 			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
 
-			config := utils.EffectiveSpec(installation)
+			config := installation.Status.Computed
+			Expect(config).NotTo(BeNil(), "No computed configuration on the Installation")
 			Expect(config.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
 			Expect(config.CNI).NotTo(BeNil(), "No CNI configured in the Installation")
 			Expect(config.CNI.Type).To(Equal(operatorv1.PluginCalico), "Cluster is not using the Calico CNI plugin")
@@ -123,7 +124,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			// The operator's defaulted pools are absent from the spec, so declare them too or the update deletes them.
-			desiredPools := append(slices.Clone(utils.EffectiveSpec(installation).CalicoNetwork.IPPools), newPool)
+			desiredPools := append(slices.Clone(installation.Status.Computed.CalicoNetwork.IPPools), newPool)
 
 			Eventually(func() error {
 				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
