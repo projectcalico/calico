@@ -9,8 +9,6 @@ extends: pipeline.yaml
 
 exclude:
   labels:
-    - label: Feature:AutoHEPs
-      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
     - label: RequiresAWS
       reason: "not an AWS lane; these specs need AWS VPC routing"
     - label: RequiresCalicoAPIServer

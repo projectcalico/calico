@@ -17,7 +17,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-kubeadm-dual-stack [dual-calicoiptables] | bpf/xtables-encap-extnode-aws | 219
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-bpf | bpf/eks-bpf-encap-extnode-aws | 205
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables | bpf/eks-xtables-encap-extnode-aws | 209
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 557
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 554
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-talos-no-encap-dsr | bpf/bpf-aws | 215
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | bpf/aks-bpf-encap-nobgp | 207
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 216
@@ -130,7 +130,7 @@
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ Calico-CNI | bpf/aks-bpf | 212
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap, VXLAN | bpf/bpf-encap-v3crd-extnode-aws | 211
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap, no VXLAN | bpf/bpf-v3crd-extnode-aws | 215
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS single subnet, dual IP-family | bpf-aws-single-subnet | 557
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS single subnet, dual IP-family | bpf-aws-single-subnet | 554
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS-Talos, no encap, DSR | bpf/bpf-aws | 215
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 207
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 216
