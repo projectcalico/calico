@@ -112,6 +112,7 @@
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by service [Conformance]
 [sig-calico] [Team:CORE] [Feature:OwnerReferences] [Category:Configuration] OwnerReference tests should delete a NetworkSet if its owner has been deleted
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit bandwidth with QoS annotations
+[sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit concurrent connections with QoS annotations
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit packet rate with QoS annotations
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]
