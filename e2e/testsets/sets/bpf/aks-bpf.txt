@@ -103,7 +103,7 @@
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] IP-in-IP tests should assign an IPIP address to the tunl0 interface [Serial]
 [sig-calico] [Team:CORE] [Feature:IPIP] [Category:Networking] [NoEncap] IP-in-IP tests should support toggling IPIP on and off [Serial]
-[sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] operator IPPool management tests should create and delete IP pools [Serial]
+[sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] [RequiresOperator] [RequiresCalicoCNI] operator IPPool management tests should create and delete IP pools [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
@@ -117,6 +117,7 @@
 [sig-calico] [Team:CORE] [Feature:NetworkPolicy] [Category:Policy] service network policy Calico service network policy test ServiceMatch policy client egress by service, server ingress by service [Conformance]
 [sig-calico] [Team:CORE] [Feature:OwnerReferences] [Category:Configuration] OwnerReference tests should delete a NetworkSet if its owner has been deleted
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit bandwidth with QoS annotations
+[sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit concurrent connections with QoS annotations
 [sig-calico] [Team:CORE] [Feature:QoS] [Category:Networking] QoS Controls should limit packet rate with QoS annotations
 [sig-network] API Server should have Endpoints and EndpointSlices pointing to API Server [Conformance]
 [sig-network] API Server should provide secure master service [Conformance]

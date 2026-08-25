@@ -35,6 +35,12 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPPool"),
 	describe.WithCategory(describe.Operator),
+	describe.RequiresOperator(),
+
+	// Validation on non-Calico CNI clusters forces IP pools to use the 'all()' node selector.
+	describe.RequiresCalicoCNI(),
+
+	// Mutates the default Installation, which every other spec shares.
 	describe.WithSerial(),
 	"operator IPPool management tests",
 	func() {
@@ -63,15 +69,13 @@ var _ = describe.CalicoDescribe(
 			// Query the installation.
 			installation = &operatorv1.Installation{}
 			err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
+			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
 
-			// Don't run this test if there is no Installation as it means this cluster isn't operator managed.
-			// Additionally, skip if this cluster is operator managed but doesn't use the Calico CNI plugin, as validation
-			// for non-Calico CNI clusters requires that IP pools use the 'all()' node selector which is incompatible with this test.
 			config := installation.Status.Computed
-			if errors.IsNotFound(err) || config == nil || config.CalicoNetwork == nil || config.CNI == nil || config.CNI.Type != operatorv1.PluginCalico {
-				ginkgo.Skip("Skipping IP pool management test.")
-			}
-			Expect(err).NotTo(HaveOccurred())
+			Expect(config).NotTo(BeNil(), "No computed configuration on the Installation")
+			Expect(config.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
+			Expect(config.CNI).NotTo(BeNil(), "No CNI configured in the Installation")
+			Expect(config.CNI.Type).To(Equal(operatorv1.PluginCalico), "Cluster is not using the Calico CNI plugin")
 
 			// Save the original so we can revert the cluster after the test.
 			originalInstallation = installation.DeepCopy()
