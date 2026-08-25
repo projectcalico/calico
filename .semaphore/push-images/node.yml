@@ -30,9 +30,20 @@ blocks:
       when: "branch !~ '.+'"
     task:
       jobs:
-        - name: Linux multi-arch
+        # amd64 uses `cd` so image-all also builds and pushes the FIPS amd64 image.
+        - name: Linux amd64
           commands:
-            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH=arm64 CONFIRM=true; fi
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node cd EXCLUDEARCH="arm64 ppc64le s390x" CONFIRM=true; fi
+        # ppc64le and s390x build under QEMU emulation, which is slow. Give each its
+        # own job so they run concurrently rather than serially in a single job that
+        # exceeds the pipeline time limit. They have no native runner, so they emulate
+        # on the default machine.
+        - name: Linux ppc64le
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=ppc64le VALIDARCHES=ppc64le CONFIRM=true; fi
+        - name: Linux s390x
+          commands:
+            - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=s390x VALIDARCHES=s390x CONFIRM=true; fi
         - name: Windows
           commands:
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node release-windows CONFIRM=true; fi
