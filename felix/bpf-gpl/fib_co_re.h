@@ -197,6 +197,25 @@ skip_redir_ifindex:
 			goto skip_fib;
 		}
 
+		if (state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
+				!(state->ct_result.fwd_flags & CT_FWD_FLAG_TUNNEL) &&
+				cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt)) {
+			/* The hint is the device through which the opposite direction
+			 * ingresses, which is only a valid egress for an encap
+			 * destination if it is the tunnel itself. Redirecting to a
+			 * physical device instead emits the raw inner frame there,
+			 * because the tunnel key means nothing to it. Conntrack
+			 * normally replaces such a hint on the flow's first reply, so
+			 * reaching here means it could not - no route at the time, a
+			 * failed lookup, or an entry predating the tunnel bit. Resolve
+			 * it the slow way for this packet.
+			 */
+			CALI_DEBUG("Tunneled dest " IP_FMT " but fwd hint dev %d is not a tunnel,"
+					" resolving by FIB",
+					debug_ip(state->ip_dst), state->ct_result.ifindex_fwd);
+			state->ct_result.ifindex_fwd = CT_INVALID_IFINDEX;
+		}
+
 		if (state->ct_result.ifindex_fwd == CT_INVALID_IFINDEX) {
 			CALI_DEBUG("ifindex_fwd is CT_INVALID_IFINDEX, doing FIB lookup");
 			__u32 __fib_ifindex = ctx->skb->ifindex;
