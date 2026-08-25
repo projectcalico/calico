@@ -449,6 +449,7 @@ type Config struct {
 	ServiceLoopPrevention          string
 
 	NFTablesMode             string
+	NFTablesEnabled          bool
 	NFTablesFlowTableOffload bool
 	FlowLogsEnabled          bool
 

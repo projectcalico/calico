@@ -6453,6 +6453,7 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/45-nft-bench.yml',
+        '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/lib/numorstring/*.go',
         '/felix/dataplane/ipsets/*.go',
         '/felix/dataplane/linux/dataplanedefs/*.go',

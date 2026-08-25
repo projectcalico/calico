@@ -9,7 +9,6 @@ globalPrologue: |
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export CALICOCTL_INSTALL_TYPE="${CALICOCTL_INSTALL_TYPE:-container}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-upgrade.yml}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|Feature:Wireguard|ExternalNode)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export PRODUCT="${PRODUCT:-calico}"
   export RELEASE_STREAM="${RELEASE_STREAM:-v3.29}"
@@ -34,6 +33,8 @@ steps:
         value: none
       - name: CLUSTER_IMAGE
         value: AzureLinux
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/aks-xtables.yaml
       - name: PROVISIONER
         value: azr-aks
     matrix:
@@ -52,8 +53,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
-      - name: K8S_E2E_FLAGS
-        value: --ginkgo.focus=(\[Conformance\]|Observe|RBAC) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|\[DataPath\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|DNS.should.provide.DNS|DNS.should.resolve.DNS|DNS.should.provide./etc|IP.address.is.not.reallocated|Proxy.version.v1|Feature:Wireguard|ExternalNode)
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/eks-bpf-aws-manifest.yaml
       - name: PROVISIONER
         value: aws-eks
     matrix:
@@ -73,6 +74,9 @@ steps:
     services:
       - docker
       - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/xtables-aws.yaml
     matrix:
       - name: aws-kubeadm-stable-3-operator-calicoiptables
         env:
@@ -90,6 +94,9 @@ steps:
     services:
       - docker
       - http-cache-proxy
+    env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/bpf.yaml
     matrix:
       - name: gcp-kubeadm-stable-operator-calicobpf
         env:
@@ -108,6 +115,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/xtables.yaml
       - name: PROVISIONER
         value: gcp-rke2
     matrix:
@@ -128,6 +137,8 @@ steps:
       - docker
       - http-cache-proxy
     env:
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/upgrade/xtables-aws.yaml
       - name: PROVISIONER
         value: aws-openshift
     matrix:

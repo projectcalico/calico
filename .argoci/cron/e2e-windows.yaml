@@ -11,7 +11,6 @@ globalPrologue: |
   export E2E_PROCS="${E2E_PROCS:-1}"
   export FUNCTIONAL_AREA="${FUNCTIONAL_AREA:-windows.yml}"
   export INSTALLER="${INSTALLER:-operator}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\].*\[RunsOnWindows\]) --ginkgo.skip=(\[LinuxOnly\]|Feature:Wireguard|ExternalNode)}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export RUN_LOCAL_TESTS="${RUN_LOCAL_TESTS:-true}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
@@ -29,6 +28,8 @@ steps:
     env:
       - name: DATAPLANE
         value: CalicoNftables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/windows/xtables-encap.yaml
       - name: ENCAPSULATION_TYPE
         value: VXLAN
       - name: K8S_VERSION
@@ -46,6 +47,8 @@ steps:
     env:
       - name: DATAPLANE
         value: CalicoIptables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/windows/aks-xtables-nobgp.yaml
       - name: ENCAPSULATION_TYPE
         value: None
       - name: K8S_VERSION

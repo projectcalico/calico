@@ -18,7 +18,6 @@ globalPrologue: |
   export INSTALLER="${INSTALLER:-operator}"
   export IPV4_POD_CIDR="${IPV4_POD_CIDR:-192.168.0.0/16}"
   export K8S_E2E_DOCKER_EXTRA_FLAGS="${K8S_E2E_DOCKER_EXTRA_FLAGS:--e CLIENT_TYPE=k8s}"
-  export K8S_E2E_FLAGS="${K8S_E2E_FLAGS:---ginkgo.focus=(\[sig-calico\]|Dataplane:BPF) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|calient|doNotTrack|performanceHints|Tiered-Policy|Feature:Maglev|Feature:Wireguard)}"
   export K8S_VERSION="${K8S_VERSION:-stable-1}"
   export PRIVATE_REGISTRY="${PRIVATE_REGISTRY:-quay.io/}"
   export RELEASE_STREAM="${RELEASE_STREAM:-master}"
@@ -39,6 +38,8 @@ steps:
     matrix:
       - name: gcp-kubeadm-calico-vpp-nohuge-yaml-v3-28-v3-28-0
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -56,12 +57,16 @@ steps:
     matrix:
       - name: gcp-kubeadm-calico-vpp-nohuge-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
             value: calico-vpp-nohuge.yaml
       - name: aws-kubeadm-calico-vpp-nohuge-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -78,12 +83,16 @@ steps:
     matrix:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
             value: calico-vpp-dpdk.yaml
       - name: aws-kubeadm-calico-vpp-dpdk-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -104,6 +113,8 @@ steps:
     matrix:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -122,6 +133,8 @@ steps:
     matrix:
       - name: gcp-kubeadm-calico-vpp-dpdk-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode.yaml
           - name: PROVISIONER
             value: gcp-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -186,6 +199,8 @@ steps:
     matrix:
       - name: aws-kubeadm-calico-vpp-dpdk-yaml
         env:
+          - name: E2E_TEST_CONFIG
+            value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
           - name: PROVISIONER
             value: aws-kubeadm
           - name: VPP_MANIFEST_FILE
@@ -199,6 +214,8 @@ steps:
     env:
       - name: AWS_INSTANCE_TYPE
         value: m5.xlarge
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/vpp/vpp-encap-extnode-aws.yaml
     matrix:
       - name: aws-openshift
         env:
@@ -215,6 +232,8 @@ steps:
         value: m5.xlarge
       - name: DATAPLANE
         value: CalicoIptables
+      - name: E2E_TEST_CONFIG
+        value: e2e/config/vpp/xtables-encap-extnode-aws.yaml
     matrix:
       - name: aws-openshift
         env:
