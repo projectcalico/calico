@@ -154,7 +154,12 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod.
 podLabels: {}
 
-# Custom DNS configuration for the tigera/operator pod.
+# DNS policy for the tigera/operator pod. Set "None" with a dnsConfig listing cluster and node
+# resolvers where cluster DNS is not reachable at install time, such as EKS with kube-proxy disabled.
+dnsPolicy: ""
+
+# Custom DNS configuration for the tigera/operator pod. calico-node inherits this and dnsPolicy
+# when set.
 dnsConfig: {}
 
 # Image and registry configuration for the tigera/operator pod.
