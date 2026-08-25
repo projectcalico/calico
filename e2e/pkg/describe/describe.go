@@ -158,6 +158,12 @@ func RequiresCalicoIPAM() any {
 	return framework.WithLabel("RequiresCalicoIPAM")
 }
 
+// RequiresCalicoCNI marks tests that need Calico as the CNI plugin, not a provider's
+// (AWS VPC, Azure, GKE).
+func RequiresCalicoCNI() any {
+	return framework.WithLabel("RequiresCalicoCNI")
+}
+
 // WithFeature marks tests as verifying a specific feature.
 func WithFeature(feature string) any {
 	if !features[feature] {

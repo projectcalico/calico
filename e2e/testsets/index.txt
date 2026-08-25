@@ -4,11 +4,11 @@
 .argoci/cron/e2e-benchmarking.yaml | tiger-bench | (tiger-bench) | -
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-bpf-9k-mtu | bpf/bpf-extnode-aws | 220
 .argoci/cron/e2e-bpf.yaml | 9k-mtu-runs-aws-iptables-9k-mtu | bpf/xtables-extnode-aws | 224
-.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | bpf/aks-bpf-nobgp | 210
+.argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | bpf/aks-bpf-nobgp | 208
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | bpf/aks-bpf | 213
 .argoci/cron/e2e-bpf.yaml | arm64-smoke-tests-kubeadm-arm64 | bpf/bpf | 217
 .argoci/cron/e2e-bpf.yaml | bpf-mini-scale-runs | (scale-test) | -
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 210
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-aks-cni | bpf/aks-bpf-nobgp | 208
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aks-w-calico-cni | bpf/aks-bpf | 213
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-encap [false] | bpf/bpf-v3crd-extnode-aws | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-encap [true] | bpf/bpf-encap-v3crd-extnode-aws | 212
@@ -19,8 +19,8 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-lb-iptables | bpf/eks-xtables-encap-extnode-aws | 210
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-single-subnet-dual-ip-family | bpf-aws-single-subnet | 555
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-aws-talos-no-encap-dsr | bpf/bpf-aws | 216
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | bpf/aks-bpf-encap-nobgp | 208
-.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 217
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-bpf-aks-w-aks-cni-overlay | bpf/aks-bpf-encap-nobgp | 206
+.argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-aws-cni | bpf/bpf-nobgp-extnode-aws | 214
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-eks-w-calico-cni | bpf/eks-bpf-encap-extnode-aws | 206
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-dsr | bpf/bpf-v3crd-extnode | 216
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-gcp-bpf-dp-encap-w-nodelocal-dnscache [false-netkit] | bpf/bpf-extnode | 220
@@ -31,48 +31,48 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | bpf/kops-xtables-encap-nobgp-extnode-aws | 208
 .argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf | (usage-reporting) | -
-.argoci/cron/e2e-bpf.yaml | wireguard | bpf/aks-bpf-encap-nobgp | 208
+.argoci/cron/e2e-bpf.yaml | wireguard | bpf/aks-bpf-encap-nobgp | 206
 .argoci/cron/e2e-certification.yaml | hcp-hosted-setup-and-tests | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | hcp-setup-hosting | (ocp-cert) | -
 .argoci/cron/e2e-certification.yaml | standalone-cluster-tests | (ocp-cert) | -
 .argoci/cron/e2e-iptables.yaml | aks-aks-migrate-from-vendored-calico-cni-to-calico-cni | iptables/aks-xtables-encap | 213
-.argoci/cron/e2e-iptables.yaml | aks-aks-private-w-aks-cni-overlay | iptables/aks-xtables-nobgp | 197
-.argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | iptables/aks-xtables-nobgp | 197
+.argoci/cron/e2e-iptables.yaml | aks-aks-private-w-aks-cni-overlay | iptables/aks-xtables-nobgp | 196
+.argoci/cron/e2e-iptables.yaml | aks-aks-w-aks-cni | iptables/aks-xtables-nobgp | 196
 .argoci/cron/e2e-iptables.yaml | aks-aks-w-calico-cni | iptables/aks-xtables-encap | 213
-.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | iptables/aks-xtables-nobgp | 197
+.argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-azure-] | iptables/aks-xtables-nobgp | 196
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-aks-arm64 [stable-1-none-] | iptables/aks-xtables-encap | 213
 .argoci/cron/e2e-iptables.yaml | arm64-smoke-tests-eks-arm64-calico-cni | iptables/eks-xtables-encap-aws | 206
 .argoci/cron/e2e-iptables.yaml | autohep-test | iptables/xtables-autohep | 223
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 208
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 212
-.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 207
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-new | iptables/xtables-manifest | 211
+.argoci/cron/e2e-iptables.yaml | datastore-k8s-e2e-kdd-old | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | distro-support | iptables/xtables-encap-nobgp | 215
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 208
-.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-etcd | iptables/xtables-manifest-v3crd | 207
+.argoci/cron/e2e-iptables.yaml | dual-stack-k8s-e2e-kdd | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-w-azure-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-with-calico-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-aws-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 216
-.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 220
 .argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
-.argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 212
+.argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | legacy/iptables/migration-pre-migration | 1
-.argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 193
-.argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 186
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 192
+.argoci/cron/e2e-iptables.yaml | native-v3-crds-eks | iptables/eks-xtables-nobgp-v3crd | 185
 .argoci/cron/e2e-iptables.yaml | openshift-ocp | iptables/openshift-xtables-encap-aws | 216
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-dual-stack | iptables/xtables | 220
 .argoci/cron/e2e-iptables.yaml | operator-migration-kind-ipv6 | iptables/xtables | 220
 .argoci/cron/e2e-iptables.yaml | usage-reporting | (usage-reporting) | -
 .argoci/cron/e2e-iptables.yaml | wireguard-k8s-e2e | iptables/xtables-wireguard | 217
-.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | iptables/aks-xtables-nobgp-wireguard | 198
+.argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-aks-w-aks-cni-overlay | iptables/aks-xtables-nobgp-wireguard | 197
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | iptables/xtables-aws | 221
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 217
 .argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 217
 .argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | nftables/xtables-autohep | 223
-.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 210
+.argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 208
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 213
 .argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-ipv6-only | nftables/xtables-autohep | 223
 .argoci/cron/e2e-nftables.yaml | nftables-mode-kind-nftables-mode-vxlan-dual-stack | nftables/xtables-encap-autohep | 219
@@ -122,18 +122,18 @@
 .semaphore/end-to-end/pipelines/benchmarking.yml | Tiger-bench / Tiger-bench tests Calico | (tiger-bench) | -
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-bpf - 9k MTU | bpf/bpf-extnode-aws | 220
 .semaphore/end-to-end/pipelines/bpf.yml | 9K MTU runs / aws-iptables - 9k MTU | bpf/xtables-extnode-aws | 224
-.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 w/ AKS-CNI | bpf/aks-bpf-nobgp | 210
+.semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 w/ AKS-CNI | bpf/aks-bpf-nobgp | 208
 .semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / AKS - ARM64 w/ Calico-CNI | bpf/aks-bpf | 213
 .semaphore/end-to-end/pipelines/bpf.yml | ARM64 - smoke tests / Kubeadm - ARM64 | bpf/bpf | 217
 .semaphore/end-to-end/pipelines/bpf.yml | BPF mini-scale runs / gcp-bpf - mini-scale | (scale-test) | -
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 210
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ AKS-CNI | bpf/aks-bpf-nobgp | 208
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AKS w/ Calico-CNI | bpf/aks-bpf | 213
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap, VXLAN | bpf/bpf-encap-v3crd-extnode-aws | 212
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS encap, no VXLAN | bpf/bpf-v3crd-extnode-aws | 216
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS single subnet, dual IP-family | bpf-aws-single-subnet | 555
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / AWS-Talos, no encap, DSR | bpf/bpf-aws | 216
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 208
-.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 217
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 206
+.semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ aws CNI | bpf/bpf-nobgp-extnode-aws | 214
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / EKS w/ calico CNI | bpf/eks-bpf-encap-extnode-aws | 206
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP encap w/ NodeLocal DNSCache, VXLAN | bpf/bpf-encap-extnode | 216
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / GCP BPF DP encap w/ NodeLocal DNSCache, no VXLAN | bpf/bpf-extnode | 220
@@ -148,17 +148,17 @@
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-bpf | bpf/eks-bpf-encap-extnode-aws | 206
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-iptables | bpf/eks-xtables-encap-extnode-aws | 210
 .semaphore/end-to-end/pipelines/bpf.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/bpf.yml | Wireguard / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 208
+.semaphore/end-to-end/pipelines/bpf.yml | Wireguard / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 206
 .semaphore/end-to-end/pipelines/bpf.yml | usage reporting with bpf / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/certification.yml | HCP hosted setup and tests / HCP tests - hosted (cert) | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/certification.yml | HCP setup hosting / HCP setup hosting | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/certification.yml | Standalone cluster tests / Standalone cluster tests (cert) | (ocp-cert) | -
 .semaphore/end-to-end/pipelines/cleanup.yml | Cleanup jobs / cleanup job VMs | (no tests) | -
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS Private w AKS CNI + Overlay | iptables/aks-xtables-nobgp | 197
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS Private w AKS CNI + Overlay | iptables/aks-xtables-nobgp | 196
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS migrate from vendored Calico CNI to Calico CNI | iptables/aks-xtables-encap | 213
-.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w AKS CNI | iptables/aks-xtables-nobgp | 197
+.semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w AKS CNI | iptables/aks-xtables-nobgp | 196
 .semaphore/end-to-end/pipelines/iptables.yml | AKS / AKS w Calico CNI | iptables/aks-xtables-encap | 213
-.semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 w/ AKS-CNI | iptables/aks-xtables-nobgp | 197
+.semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 w/ AKS-CNI | iptables/aks-xtables-nobgp | 196
 .semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / AKS - ARM64 w/ Calico-CNI | iptables/aks-xtables-encap | 213
 .semaphore/end-to-end/pipelines/iptables.yml | ARM64 - smoke tests / EKS - ARM64 - Calico CNI | iptables/eks-xtables-encap-aws | 206
 .semaphore/end-to-end/pipelines/iptables.yml | AutoHEP test / Test with AutoHEP enabled | iptables/xtables-autohep | 223
@@ -169,27 +169,27 @@
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 216
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
-.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 212
+.semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | legacy/iptables/migration-flannel-migration-pre-migration | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | iptables/openshift-xtables-encap-aws | 216
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind IPv6 | iptables/xtables | 220
 .semaphore/end-to-end/pipelines/iptables.yml | Operator Migration / kind dual-stack | iptables/xtables | 220
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard VXLAN k8s-e2e / wireguard-vxlan-aws-kubeadm | iptables/xtables-wireguard | 217
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard k8s-e2e / aws-kubeadm-calico-cni with/without IP-in-IP | iptables/xtables-wireguard | 217
-.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / AKS w AKS CNI + Overlay | iptables/aks-xtables-nobgp-wireguard | 198
+.semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / AKS w AKS CNI + Overlay | iptables/aks-xtables-nobgp-wireguard | 197
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - new | iptables/xtables-aws | 221
 .semaphore/end-to-end/pipelines/iptables.yml | WireGuard regression k8s-e2e / kdd - old | iptables/xtables-v3crd-aws | 217
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 208
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - new | iptables/xtables-manifest | 212
-.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - old | iptables/xtables-manifest | 212
-.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 208
-.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / kdd | iptables/xtables-manifest | 212
-.semaphore/end-to-end/pipelines/iptables.yml | k8s beta runs / k8s beta | iptables/xtables-manifest | 212
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 207
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - new | iptables/xtables-manifest | 211
+.semaphore/end-to-end/pipelines/iptables.yml | datastore k8s-e2e / kdd - old | iptables/xtables-manifest | 211
+.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / etcd | iptables/xtables-manifest-v3crd | 207
+.semaphore/end-to-end/pipelines/iptables.yml | dual-stack k8s-e2e / kdd | iptables/xtables-manifest | 211
+.semaphore/end-to-end/pipelines/iptables.yml | k8s beta runs / k8s beta | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | k8s distros / install required | iptables/xtables | 220
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 213
-.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | nftables/eks-xtables-nobgp-aws-autohep | 210
+.semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | nftables/eks-xtables-nobgp-aws-autohep | 208
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | nftables/xtables-autohep | 223
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, vxlan, dual-stack | nftables/xtables-encap-autohep | 219
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, arm64, WG / Nftables mode, arm64, WG | nftables/xtables-autohep | 223
