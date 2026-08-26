@@ -27,7 +27,6 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -155,11 +154,11 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		calicoClient     client.Interface
 		kconfigfile      string
 		removeKubeconfig func()
-		profileHost      *string
+		profileHost      string
 	)
 
 	BeforeEach(func() {
-		profileHost = nil
+		profileHost = ""
 
 		// Run etcd.
 		etcd = testutils.RunEtcd()
@@ -260,7 +259,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 	Context("with the profiling host set to 0.0.0.0", func() {
 		BeforeEach(func() {
-			profileHost = ptr.To("0.0.0.0")
+			profileHost = "0.0.0.0"
 		})
 
 		It("should expose pprof endpoints outside the container", func() {
@@ -272,19 +271,6 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 			// The prometheus port must still not serve pprof endpoints.
 			metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
 			Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
-		})
-	})
-
-	Context("with the profiling host set to the empty string", func() {
-		BeforeEach(func() {
-			profileHost = ptr.To("")
-		})
-
-		It("should expose pprof endpoints outside the container", func() {
-			pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
-			Eventually(func() error {
-				return get(pprofEndpoint, "/debug/pprof/profile?seconds=1")
-			}, 30*time.Second, 1*time.Second).Should(Succeed())
 		})
 	})
 })

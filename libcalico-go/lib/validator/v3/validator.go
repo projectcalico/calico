@@ -80,7 +80,7 @@ var (
 	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + "\\.)?" + nameLabelFmt + "$")
 
 	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
-	hostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 
 	interfaceRegex                = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	bgpFilterInterfaceRegex       = regexp.MustCompile("^[a-zA-Z0-9_.*-]{1,15}$")
@@ -202,7 +202,6 @@ func init() {
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("keyValueList", validateKeyValueList)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
-	registerFieldValidator("hostAddress", validateHostAddress)
 	registerFieldValidator("regexp", validateRegexp)
 	registerFieldValidator("wireguardPublicKey", validateWireguardPublicKey)
 	registerFieldValidator("IP:port", validateIPPort)
@@ -387,15 +386,7 @@ func validateContainerID(fl validator.FieldLevel) bool {
 func validatePrometheusHost(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate prometheusHost: %s", s)
-	return hostRegexp.MatchString(s)
-}
-
-// validateHostAddress validates a hostname or IP address to bind a server to.
-// Unlike prometheusHost, an empty value is accepted: it means "all interfaces".
-func validateHostAddress(fl validator.FieldLevel) bool {
-	s := fl.Field().String()
-	log.Debugf("Validate hostAddress: %s", s)
-	return s == "" || hostRegexp.MatchString(s)
+	return prometheusHostRegexp.MatchString(s)
 }
 
 func validatePortName(fl validator.FieldLevel) bool {

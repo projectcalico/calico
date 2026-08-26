@@ -30,8 +30,8 @@ type KubeControllersConfigurationSpecApplyConfiguration struct {
 	// is disabled.
 	// Valid values are: 0-65535.
 	DebugProfilePort *int32 `json:"debugProfilePort,omitempty"`
-	// DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "" for
-	// all interfaces to make profiles reachable from off-host. The profiling endpoints are
+	// DebugProfileHost is the host IP or hostname to bind the profiling port to. Set to "0.0.0.0"
+	// for all interfaces to make profiles reachable from off-host. The profiling endpoints are
 	// unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
 	// default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
 	// [Default: localhost]

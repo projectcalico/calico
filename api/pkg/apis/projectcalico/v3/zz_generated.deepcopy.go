@@ -3055,11 +3055,6 @@ func (in *KubeControllersConfigurationSpec) DeepCopyInto(out *KubeControllersCon
 		*out = new(int32)
 		**out = **in
 	}
-	if in.DebugProfileHost != nil {
-		in, out := &in.DebugProfileHost, &out.DebugProfileHost
-		*out = new(string)
-		**out = **in
-	}
 	return
 }
 

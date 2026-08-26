@@ -376,8 +376,8 @@ func mergeConfig(envVars map[string]string, envCfg Config, apiCfg v3.KubeControl
 	}
 
 	rCfg.DebugProfileHost = defaultDebugProfileHost
-	if apiCfg.DebugProfileHost != nil {
-		rCfg.DebugProfileHost = *apiCfg.DebugProfileHost
+	if apiCfg.DebugProfileHost != "" {
+		rCfg.DebugProfileHost = apiCfg.DebugProfileHost
 	}
 
 	// Don't bother looking at this unless the node controller is enabled.
