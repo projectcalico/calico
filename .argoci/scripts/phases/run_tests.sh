@@ -74,6 +74,18 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
     fi
   fi
 
+  # The go-build entrypoint creates a "user" account with
+  # `useradd -u ${LOCAL_USER_ID}` and then re-execs the command through
+  # `su-exec user`. ArgoCI runners execute as root, so LOCAL_USER_ID=0 makes
+  # useradd fail ("UID 0 is not unique" -- root already owns it), su-exec cannot
+  # resolve the account, and the container exits before ginkgo starts. The image
+  # supports RUN_AS_ROOT to skip that path, so set it when we are already root.
+  # Non-root runners (Semaphore agents) keep the existing behaviour.
+  run_as_root_env=()
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run_as_root_env=(-e RUN_AS_ROOT=true)
+  fi
+
   echo "[INFO] starting e2e tests (ginkgo, K8S_E2E_FLAGS=${K8S_E2E_FLAGS:-<none>})..."
   # --junit-report writes report/junit.xml for the epilogue to publish. (v3.32's
   # Semaphore relied on bz for JUnit; the local-binary path emits it directly.)
@@ -90,6 +102,7 @@ if [[ -n "${E2E_BINARY:-}" ]]; then
   # shellcheck disable=SC2086
   docker run --rm --init --net=host \
     -e LOCAL_USER_ID="$(id -u)" \
+    "${run_as_root_env[@]}" \
     -e GOCACHE=/go-cache \
     -e GOPATH=/go \
     -e KUBECONFIG=/kubeconfig \
