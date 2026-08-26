@@ -18,10 +18,10 @@
 package components
 
 var (
-	EnterpriseRelease string = "v3.23.1"
+	EnterpriseRelease string = "v3.23.2"
 
 	ComponentAPIServer = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "apiserver",
 		Registry:  "",
 		imagePath: "",
@@ -29,7 +29,7 @@ var (
 	}
 
 	ComponentComplianceBenchmarker = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "compliance-benchmarker",
 		Registry:  "",
 		imagePath: "",
@@ -37,7 +37,7 @@ var (
 	}
 
 	ComponentComplianceController = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "compliance-controller",
 		Registry:  "",
 		imagePath: "",
@@ -45,7 +45,7 @@ var (
 	}
 
 	ComponentComplianceReporter = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "compliance-reporter",
 		Registry:  "",
 		imagePath: "",
@@ -53,7 +53,7 @@ var (
 	}
 
 	ComponentComplianceServer = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "compliance-server",
 		Registry:  "",
 		imagePath: "",
@@ -61,7 +61,7 @@ var (
 	}
 
 	ComponentComplianceSnapshotter = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "compliance-snapshotter",
 		Registry:  "",
 		imagePath: "",
@@ -69,7 +69,7 @@ var (
 	}
 
 	ComponentTigeraCSRInitContainer = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "key-cert-provisioner",
 		Registry:  "",
 		imagePath: "",
@@ -77,7 +77,7 @@ var (
 	}
 
 	ComponentDeepPacketInspection = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "deep-packet-inspection",
 		Registry:  "",
 		imagePath: "",
@@ -95,7 +95,7 @@ var (
 	}
 
 	ComponentElasticTseeInstaller = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "intrusion-detection-job-installer",
 		Registry:  "",
 		imagePath: "",
@@ -103,7 +103,7 @@ var (
 	}
 
 	ComponentElasticsearch = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "elasticsearch",
 		Registry:  "",
 		imagePath: "",
@@ -116,7 +116,7 @@ var (
 	}
 
 	ComponentElasticsearchOperator = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "eck-operator",
 		Registry:  "",
 		imagePath: "",
@@ -124,7 +124,7 @@ var (
 	}
 
 	ComponentUIAPIs = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "ui-apis",
 		Registry:  "",
 		imagePath: "",
@@ -132,7 +132,7 @@ var (
 	}
 
 	ComponentESGateway = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "es-gateway",
 		Registry:  "",
 		imagePath: "",
@@ -140,7 +140,7 @@ var (
 	}
 
 	ComponentLinseed = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "linseed",
 		Registry:  "",
 		imagePath: "",
@@ -148,7 +148,7 @@ var (
 	}
 
 	ComponentFluentd = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "fluentd",
 		Registry:  "",
 		imagePath: "",
@@ -156,7 +156,7 @@ var (
 	}
 
 	ComponentFluentdWindows = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "fluentd-windows",
 		Registry:  "",
 		imagePath: "",
@@ -164,7 +164,7 @@ var (
 	}
 
 	ComponentGuardian = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "guardian",
 		Registry:  "",
 		imagePath: "",
@@ -172,7 +172,7 @@ var (
 	}
 
 	ComponentIntrusionDetectionController = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "intrusion-detection-controller",
 		Registry:  "",
 		imagePath: "",
@@ -180,7 +180,7 @@ var (
 	}
 
 	ComponentWAFHTTPFilter = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "waf-http-filter",
 		Registry:  "",
 		imagePath: "",
@@ -188,7 +188,7 @@ var (
 	}
 
 	ComponentSecurityEventWebhooksProcessor = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "webhooks-processor",
 		Registry:  "",
 		imagePath: "",
@@ -196,7 +196,7 @@ var (
 	}
 
 	ComponentKibana = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "kibana",
 		Registry:  "",
 		imagePath: "",
@@ -204,7 +204,7 @@ var (
 	}
 
 	ComponentManager = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "manager",
 		Registry:  "",
 		imagePath: "",
@@ -212,7 +212,7 @@ var (
 	}
 
 	ComponentDex = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "dex",
 		Registry:  "",
 		imagePath: "",
@@ -220,7 +220,7 @@ var (
 	}
 
 	ComponentManagerProxy = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "voltron",
 		Registry:  "",
 		imagePath: "",
@@ -228,7 +228,7 @@ var (
 	}
 
 	ComponentPacketCapture = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "packetcapture",
 		Registry:  "",
 		imagePath: "",
@@ -236,7 +236,7 @@ var (
 	}
 
 	ComponentPolicyRecommendation = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "policy-recommendation",
 		Registry:  "",
 		imagePath: "",
@@ -244,7 +244,7 @@ var (
 	}
 
 	ComponentEgressGateway = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "egress-gateway",
 		Registry:  "",
 		imagePath: "",
@@ -252,7 +252,7 @@ var (
 	}
 
 	ComponentL7Collector = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "l7-collector",
 		Registry:  "",
 		imagePath: "",
@@ -260,14 +260,14 @@ var (
 	}
 
 	ComponentGatewayL7Collector = Component{
-		Version:  "v3.23.1",
+		Version:  "v3.23.2",
 		Image:    "gateway-l7-collector",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentEnvoyProxy = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "envoy",
 		Registry:  "",
 		imagePath: "",
@@ -275,7 +275,7 @@ var (
 	}
 
 	ComponentDikastes = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "dikastes",
 		Registry:  "",
 		imagePath: "",
@@ -283,7 +283,7 @@ var (
 	}
 
 	ComponentL7AdmissionController = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "l7-admission-controller",
 		Registry:  "",
 		imagePath: "",
@@ -296,7 +296,7 @@ var (
 	}
 
 	ComponentPrometheus = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "prometheus",
 		Registry:  "",
 		imagePath: "",
@@ -304,7 +304,7 @@ var (
 	}
 
 	ComponentTigeraPrometheusService = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "prometheus-service",
 		Registry:  "",
 		imagePath: "",
@@ -317,7 +317,7 @@ var (
 	}
 
 	ComponentPrometheusAlertmanager = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "alertmanager",
 		Registry:  "",
 		imagePath: "",
@@ -325,7 +325,7 @@ var (
 	}
 
 	ComponentQueryServer = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "queryserver",
 		Registry:  "",
 		imagePath: "",
@@ -333,7 +333,7 @@ var (
 	}
 
 	ComponentTigeraKubeControllers = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "kube-controllers",
 		Registry:  "",
 		imagePath: "",
@@ -341,7 +341,7 @@ var (
 	}
 
 	ComponentTigeraNode = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "node",
 		Registry:  "",
 		imagePath: "",
@@ -349,7 +349,7 @@ var (
 	}
 
 	ComponentTigeraNodeWindows = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "node-windows",
 		Registry:  "",
 		imagePath: "",
@@ -357,7 +357,7 @@ var (
 	}
 
 	ComponentTigeraTypha = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "typha",
 		Registry:  "",
 		imagePath: "",
@@ -365,7 +365,7 @@ var (
 	}
 
 	ComponentTigeraCNI = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "cni",
 		Registry:  "",
 		imagePath: "",
@@ -373,7 +373,7 @@ var (
 	}
 
 	ComponentTigeraCNIWindows = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "cni-windows",
 		Registry:  "",
 		imagePath: "",
@@ -381,7 +381,7 @@ var (
 	}
 
 	ComponentElasticsearchMetrics = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "elasticsearch-metrics",
 		Registry:  "",
 		imagePath: "",
@@ -389,7 +389,7 @@ var (
 	}
 
 	ComponentTigeraFlexVolume = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "pod2daemon-flexvol",
 		Registry:  "",
 		imagePath: "",
@@ -397,7 +397,7 @@ var (
 	}
 
 	ComponentTigeraCSI = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "csi",
 		Registry:  "",
 		imagePath: "",
@@ -405,7 +405,7 @@ var (
 	}
 
 	ComponentTigeraCSINodeDriverRegistrar = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "node-driver-registrar",
 		Registry:  "",
 		imagePath: "",
@@ -413,7 +413,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyGateway = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "envoy-gateway",
 		Registry:  "",
 		imagePath: "",
@@ -421,7 +421,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyProxy = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "envoy-proxy",
 		Registry:  "",
 		imagePath: "",
@@ -429,7 +429,7 @@ var (
 	}
 
 	ComponentGatewayAPIEnvoyRatelimit = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "envoy-ratelimit",
 		Registry:  "",
 		imagePath: "",
@@ -437,35 +437,35 @@ var (
 	}
 
 	ComponentIstioPilot = Component{
-		Version:  "v3.23.1",
+		Version:  "v3.23.2",
 		Image:    "istio-pilot",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioInstallCNI = Component{
-		Version:  "v3.23.1",
+		Version:  "v3.23.2",
 		Image:    "istio-install-cni",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioZTunnel = Component{
-		Version:  "v3.23.1",
+		Version:  "v3.23.2",
 		Image:    "istio-ztunnel",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentIstioProxyv2 = Component{
-		Version:  "v3.23.1",
+		Version:  "v3.23.2",
 		Image:    "istio-proxyv2",
 		Registry: "",
 		variant:  enterpriseVariant,
 	}
 
 	ComponentTigeraWebhooks = Component{
-		Version:   "v3.23.1",
+		Version:   "v3.23.2",
 		Image:     "webhooks",
 		Registry:  "",
 		imagePath: "",

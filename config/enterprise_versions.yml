@@ -1,187 +1,187 @@
 # Components defined here are required to be kept in sync with hack/gen-versions/enterprise.go.tpl
-title: v3.23.1
+title: v3.23.2
 components:
   libcalico-go:
-    version: release-calient-v3.23
+    version: v3.23.2
   manager:
     image: manager
-    version: v3.23.1
+    version: v3.23.2
   voltron:
     image: voltron
-    version: v3.23.1
+    version: v3.23.2
   apiserver:
     image: apiserver
-    version: v3.23.1
+    version: v3.23.2
   queryserver:
     image: queryserver
-    version: v3.23.1
+    version: v3.23.2
   kube-controllers:
     image: kube-controllers
-    version: v3.23.1
+    version: v3.23.2
   typha:
     image: typha
-    version: v3.23.1
+    version: v3.23.2
   node:
     image: node
-    version: v3.23.1
+    version: v3.23.2
   node-windows:
     image: node-windows
-    version: v3.23.1
+    version: v3.23.2
   fluentd:
     image: fluentd
-    version: v3.23.1
+    version: v3.23.2
   fluentd-windows:
     image: fluentd-windows
-    version: v3.23.1
+    version: v3.23.2
   ui-apis:
     image: ui-apis
-    version: v3.23.1
+    version: v3.23.2
   linseed:
     image: linseed
-    version: v3.23.1
+    version: v3.23.2
   es-gateway:
     image: es-gateway
-    version: v3.23.1
+    version: v3.23.2
   dex:
     image: dex
-    version: v3.23.1
+    version: v3.23.2
   # eck-kibana holds the version of Kibana built for tigera/kibana
   eck-kibana:
     version: 8.19.20
   kibana:
     image: kibana
-    version: v3.23.1
+    version: v3.23.2
   # eck-elasticsearch holds the version of Elasticsearch built for tigera/elasticsearch
   eck-elasticsearch:
     version: 8.19.20
   elasticsearch:
     image: elasticsearch
-    version: v3.23.1
+    version: v3.23.2
   elastic-tsee-installer:
     image: intrusion-detection-job-installer
-    version: v3.23.1
+    version: v3.23.2
   es-curator:
     image: es-curator
-    version: v3.23.1
+    version: v3.23.2
   intrusion-detection-controller:
     image: intrusion-detection-controller
-    version: v3.23.1
+    version: v3.23.2
   waf-http-filter:
     image: waf-http-filter
-    version: v3.23.1
+    version: v3.23.2
   webhooks-processor:
     image: webhooks-processor
-    version: v3.23.1
+    version: v3.23.2
   compliance-controller:
     image: compliance-controller
-    version: v3.23.1
+    version: v3.23.2
   compliance-reporter:
     image: compliance-reporter
-    version: v3.23.1
+    version: v3.23.2
   compliance-snapshotter:
     image: compliance-snapshotter
-    version: v3.23.1
+    version: v3.23.2
   compliance-server:
     image: compliance-server
-    version: v3.23.1
+    version: v3.23.2
   compliance-benchmarker:
     image: compliance-benchmarker
-    version: v3.23.1
+    version: v3.23.2
   guardian:
     image: guardian
-    version: v3.23.1
+    version: v3.23.2
   tigera-cni:
     image: cni
-    version: v3.23.1
+    version: v3.23.2
   tigera-cni-windows:
     image: cni-windows
-    version: v3.23.1
+    version: v3.23.2
   elasticsearch-metrics:
     image: elasticsearch-metrics
-    version: v3.23.1
+    version: v3.23.2
   packetcapture:
     image: packetcapture
-    version: v3.23.1
+    version: v3.23.2
   policy-recommendation:
     image: policy-recommendation
-    version: v3.23.1
+    version: v3.23.2
   # coreos-prometheus holds the version of prometheus built for tigera/prometheus,
   # which prometheus operator uses to validate.
   coreos-prometheus:
     version: v3.13.2
   prometheus:
     image: prometheus
-    version: v3.23.1
+    version: v3.23.2
   # coreos-alertmanager holds the version of alertmanager built for tigera/alertmanager,
   # which prometheus operator uses to validate.
   coreos-alertmanager:
     version: v0.33.1
   alertmanager:
     image: alertmanager
-    version: v3.23.1
+    version: v3.23.2
   tigera-prometheus-service:
     image: prometheus-service
-    version: v3.23.1
+    version: v3.23.2
   deep-packet-inspection:
     image: deep-packet-inspection
-    version: v3.23.1
+    version: v3.23.2
   flexvol:
     image: pod2daemon-flexvol
-    version: v3.23.1
+    version: v3.23.2
   csi:
     image: csi
-    version: v3.23.1
+    version: v3.23.2
   csi-node-driver-registrar:
     image: node-driver-registrar
-    version: v3.23.1
+    version: v3.23.2
   elasticsearch-operator:
     image: eck-operator
-    version: v3.23.1
+    version: v3.23.2
   # eck-elasticsearch-operator holds the version of the ECK operator used to manage
   # Elasticsearch
   eck-elasticsearch-operator:
     version: 3.4.1
   l7-collector:
     image: l7-collector
-    version: v3.23.1
+    version: v3.23.2
   gateway-l7-collector:
     image: gateway-l7-collector
-    version: v3.23.1
+    version: v3.23.2
   envoy:
     image: envoy
-    version: v3.23.1
+    version: v3.23.2
   dikastes:
     image: dikastes
-    version: v3.23.1
+    version: v3.23.2
   l7-admission-controller:
     image: l7-admission-controller
-    version: v3.23.1
+    version: v3.23.2
   egress-gateway:
     image: egress-gateway
-    version: v3.23.1
+    version: v3.23.2
   key-cert-provisioner:
     image: key-cert-provisioner
-    version: v3.23.1
+    version: v3.23.2
   gateway-api-envoy-gateway:
     image: envoy-gateway
-    version: v3.23.1
+    version: v3.23.2
   gateway-api-envoy-proxy:
     image: envoy-proxy
-    version: v3.23.1
+    version: v3.23.2
   gateway-api-envoy-ratelimit:
     image: envoy-ratelimit
-    version: v3.23.1
+    version: v3.23.2
   istio-pilot:
     image: istio-pilot
-    version: v3.23.1
+    version: v3.23.2
   istio-install-cni:
     image: istio-install-cni
-    version: v3.23.1
+    version: v3.23.2
   istio-ztunnel:
     image: istio-ztunnel
-    version: v3.23.1
+    version: v3.23.2
   istio-proxyv2:
     image: istio-proxyv2
-    version: v3.23.1
+    version: v3.23.2
   webhooks:
-    version: v3.23.1
+    version: v3.23.2
