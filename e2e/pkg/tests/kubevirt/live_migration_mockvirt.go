@@ -163,12 +163,21 @@ var _ = describe.CalicoDescribe(
 		// mock virt-launcher pods answer ping but run no guest TCP server.
 		// The stale-/32 contest observation is opportunistic here because
 		// MockVirt does not model the source pod's ~9s teardown delay.
-		It("should prefer the local workload route on the migration target node", func() {
+		//
+		// This is also the variant that carries the recursive-next-hop check, since it is the one
+		// with a BIRD container available to play the nested cluster's upstream. Serial because
+		// it reconfigures that shared container.
+		It("should prefer the local workload route on the migration target node", Serial, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), targetRouteMigrationTimeout)
 			defer cancel()
 
+			bird := bgp.NewContainerBIRDPeer()
+
 			runTargetRouteMigrationTest(ctx, f, cli, targetRouteTestParams{
 				vmName: "e2e-mockvirt-target-route",
+				setupRecursiveRoute: func(_ context.Context, vmIP string) string {
+					return setupRecursiveRoutePeering(f, bird, vmIP)
+				},
 				startProbe: func(ctx context.Context, client conncheck.Client, vmIP string) continuityProbe {
 					name := "ping-stream-" + client.Name()
 					cp := conncheck.StartStream(ctx, name,
