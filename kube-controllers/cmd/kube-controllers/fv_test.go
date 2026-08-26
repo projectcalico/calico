@@ -27,6 +27,7 @@ import (
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 
 	"github.com/projectcalico/calico/felix/fv/containers"
 	"github.com/projectcalico/calico/kube-controllers/tests/testutils"
@@ -154,11 +155,11 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		calicoClient     client.Interface
 		kconfigfile      string
 		removeKubeconfig func()
-		profileHost      string
+		profileHost      *string
 	)
 
 	BeforeEach(func() {
-		profileHost = ""
+		profileHost = nil
 
 		// Run etcd.
 		etcd = testutils.RunEtcd()
@@ -259,7 +260,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 
 	Context("with the profiling host set to 0.0.0.0", func() {
 		BeforeEach(func() {
-			profileHost = "0.0.0.0"
+			profileHost = ptr.To("0.0.0.0")
 		})
 
 		It("should expose pprof endpoints outside the container", func() {

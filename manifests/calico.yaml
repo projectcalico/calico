@@ -5920,6 +5920,7 @@ spec:
                     default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
                     [Default: localhost]
                   maxLength: 64
+                  minLength: 1
                   pattern: ^[a-zA-Z0-9:._+-]+$
                   type: string
                 debugProfilePort:
@@ -6170,6 +6171,7 @@ spec:
                         default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
                         [Default: localhost]
                       maxLength: 64
+                      minLength: 1
                       pattern: ^[a-zA-Z0-9:._+-]+$
                       type: string
                     debugProfilePort:

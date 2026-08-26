@@ -714,7 +714,7 @@ var _ = Describe("Config", func() {
 			unsetEnv()
 		})
 
-		runConfigWithProfileHost := func(host string) config.RunConfig {
+		runConfigWithProfileHost := func(host *string) config.RunConfig {
 			kcc := config.NewDefaultKubeControllersConfig().DeepCopy()
 			kcc.Spec.DebugProfilePort = ptr.To(int32(9095))
 			kcc.Spec.DebugProfileHost = host
@@ -726,13 +726,13 @@ var _ = Describe("Config", func() {
 		}
 
 		It("should default the profiling host to localhost when it is not set", func() {
-			runCfg := runConfigWithProfileHost("")
+			runCfg := runConfigWithProfileHost(nil)
 			Expect(runCfg.DebugProfilePort).To(Equal(int32(9095)))
 			Expect(runCfg.DebugProfileHost).To(Equal("localhost"))
 		})
 
 		It("should use the profiling host from the API", func() {
-			Expect(runConfigWithProfileHost("0.0.0.0").DebugProfileHost).To(Equal("0.0.0.0"))
+			Expect(runConfigWithProfileHost(ptr.To("0.0.0.0")).DebugProfileHost).To(Equal("0.0.0.0"))
 		})
 	})
 })

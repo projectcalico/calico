@@ -98,10 +98,11 @@ type KubeControllersConfigurationSpec struct {
 	// unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
 	// default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
 	// [Default: localhost]
+	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=64
 	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9:._+-]+$`
 	// +optional
-	DebugProfileHost string `json:"debugProfileHost,omitempty"`
+	DebugProfileHost *string `json:"debugProfileHost,omitempty"`
 }
 
 // ControllersConfig enables and configures individual Kubernetes controllers
