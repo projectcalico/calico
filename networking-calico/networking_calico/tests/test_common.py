@@ -24,6 +24,7 @@ from oslo_config import cfg
 
 import networking_calico.common as common
 from networking_calico.common import config
+from networking_calico.plugins.ml2.drivers.calico.mech_calico import calico_opts
 
 
 class _WarningCollector(logging.Handler):
@@ -51,10 +52,11 @@ class TestConfig(unittest.TestCase):
         cfg.CONF -- which is then populated from a neutron.conf whose [calico]
         section is CONF_FILE_BODY.
 
-        Note that each test must use option names that no other test uses:
+        Note that no two tests may provoke a warning about the same option:
         oslo.log remembers the deprecation reports it has already made, for the
         lifetime of the process, and silently drops a repeat of one it has
-        already logged.
+        already logged.  Hence one test below covers every deprecated option
+        there is, rather than one test per option.
         """
         conf = cfg.ConfigOpts()
         conf.register_opts(opts, "calico")
@@ -77,88 +79,39 @@ class TestConfig(unittest.TestCase):
         config.read_deprecated_options(conf, opts)
         return collector.messages
 
-    def test_deprecation_warning_when_option_set(self):
-        opts = [
-            cfg.IntOpt(
-                "resync_interval_secs",
-                default=0,
-                deprecated_for_removal=True,
-                deprecated_reason="This option has no effect.",
-            ),
-        ]
-        warnings = self._deprecation_warnings(opts, "resync_interval_secs = 60\n")
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("resync_interval_secs", warnings[0])
-        self.assertIn("deprecated for removal", warnings[0])
-
-        # The reason is what tells the operator what to do instead, so it
-        # needs to reach the log too.
-        self.assertIn("This option has no effect.", warnings[0])
-
-    def test_deprecation_warning_when_option_set_to_its_default(self):
-        # oslo.config keys the warning off the option being present in the
-        # operator's config, not off its value differing from the default, so
-        # pinning it to the default still gets a warning.  That is what we
-        # want: the option is still there to be cleaned up.
-        opts = [
-            cfg.IntOpt(
-                "resync_max_interval_secs",
-                default=0,
-                deprecated_for_removal=True,
-                deprecated_reason="This option has no effect.",
-            ),
-        ]
-        warnings = self._deprecation_warnings(opts, "resync_max_interval_secs = 0\n")
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("resync_max_interval_secs", warnings[0])
-
-    def test_no_deprecation_warning_when_option_not_set(self):
-        # The operator has already cleaned up their config, or never had the
-        # option set in the first place; they must not be nagged.
-        opts = [
-            cfg.IntOpt(
-                "unset_deprecated_option",
-                default=0,
-                deprecated_for_removal=True,
-                deprecated_reason="This option has no effect.",
-            ),
-            cfg.IntOpt(
-                "still_used_option",
-                default=0,
-            ),
-        ]
-        warnings = self._deprecation_warnings(opts, "still_used_option = 7\n")
-        self.assertEqual(warnings, [])
-
-    def test_deprecation_warning_for_every_option_set(self):
-        # oslo.log's de-duplication of deprecation reports keys on the whole
-        # message, and every option's message starts out identical, so check
-        # that a second stale option doesn't get swallowed by the first.
-        opts = [
-            cfg.IntOpt(
-                "stale_option_one",
-                default=0,
-                deprecated_for_removal=True,
-                deprecated_reason="This option has no effect.",
-            ),
-            cfg.IntOpt(
-                "live_option",
-                default=0,
-            ),
-            cfg.IntOpt(
-                "stale_option_two",
-                default=0,
-                deprecated_for_removal=True,
-                deprecated_reason="This option has no effect.",
-            ),
-        ]
+    def test_deprecation_warning_for_each_option_the_operator_set(self):
+        # Both of the driver's deprecated options, one set to a non-default
+        # value and the other pinned to its own default.  oslo.config keys the
+        # warning off the option being present in the operator's config, not
+        # off its value differing from the default, so both must warn -- the
+        # 0 is still a setting the operator has to remove.
         warnings = self._deprecation_warnings(
-            opts,
-            "stale_option_one = 60\nlive_option = 7\nstale_option_two = 900\n",
+            calico_opts,
+            "resync_interval_secs = 60\nresync_max_interval_secs = 0\n",
         )
+
+        # One warning each, in particular the second not swallowed by the
+        # first: oslo.log de-duplicates deprecation reports on the message,
+        # which starts out identical for every option.
         self.assertEqual(len(warnings), 2)
-        self.assertIn("stale_option_one", warnings[0])
-        self.assertIn("stale_option_two", warnings[1])
+        logged = "\n".join(warnings)
+        self.assertIn('"resync_interval_secs"', logged)
+        self.assertIn('"resync_max_interval_secs"', logged)
+        self.assertIn("deprecated for removal", logged)
+
+        # Each option's own deprecated_reason is what tells the operator what
+        # to do instead, so it needs to reach the log too.
+        self.assertIn("calico-resync CLI", logged)
+
+    def test_no_deprecation_warning_when_no_such_option_set(self):
+        # The operator has already cleaned up their config, or never had these
+        # options set in the first place; they must not be nagged.  The live
+        # options they do set are read without complaint.
+        warnings = self._deprecation_warnings(
+            calico_opts,
+            "startup_resync = never\nnum_port_status_threads = 8\n",
+        )
+        self.assertEqual(warnings, [])
 
 
 Config = namedtuple("Config", ["IFACE_PREFIX", "HOSTNAME"])
