@@ -121,15 +121,29 @@ require (
 )
 
 require (
+	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
+	github.com/MakeNowJust/heredoc v1.0.0 // indirect
+	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker v28.5.1+incompatible // indirect
+	github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
+	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
+	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
+	github.com/moby/term v0.5.2 // indirect
+	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/tigera/api v0.0.0-20260310182635-546021df243c // indirect
+	github.com/xlab/treeprint v1.2.0 // indirect
+	k8s.io/cli-runtime v0.35.8 // indirect
 	kubevirt.io/containerized-data-importer-api v1.63.1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
+	sigs.k8s.io/kustomize/api v0.20.1 // indirect
+	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 )
 
 require (
@@ -367,7 +381,7 @@ require (
 	k8s.io/dynamic-resource-allocation v0.35.8 // indirect
 	k8s.io/kms v0.35.8 // indirect
 	k8s.io/kube-scheduler v0.35.8 // indirect
-	k8s.io/kubectl v0.35.8 // indirect
+	k8s.io/kubectl v0.35.8
 	k8s.io/kubelet v0.35.8 // indirect
 	k8s.io/mount-utils v0.35.8 // indirect
 	k8s.io/pod-security-admission v0.35.8
