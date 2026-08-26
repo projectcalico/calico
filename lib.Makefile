@@ -582,47 +582,6 @@ define update_replace_pin
 		fi'
 endef
 
-# Get the latest release tag from projectcalico/go-build.
-GO_BUILD_REPO=https://github.com/projectcalico/go-build.git
-define get_go_build_version
-	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
-endef
-
-# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
-# for annotated git tags, we need to remove the trailing `^{}`.
-# for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
-define update_go_build_pin
-	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
-
-	@echo "current GO_BUILD_VER=$(old_ver)"
-	@echo "latest GO_BUILD_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^GO_BUILD_VER[[:space:]]*=.*/GO_BUILD_VER=$(new_ver)/" $(1); \
-			echo "GO_BUILD_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update GO_BUILD_VER"; \
-		fi'
-endef
-
-# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
-define update_calico_base_pin
-	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi9-[0-9]+$$" | sort -r | head -n 1))
-	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
-
-	@echo "current CALICO_BASE_VER=$(old_ver)"
-	@echo "latest CALICO_BASE_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
-			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update CALICO_BASE_VER"; \
-		fi'
-endef
 
 API_BRANCH?=$(PIN_BRANCH)
 API_REPO?=github.com/projectcalico/calico/api
@@ -679,11 +638,6 @@ update-cni-plugin-pin:
 replace-cni-pin:
 	$(call update_replace_pin,github.com/projectcalico/calico/cni-plugin,$(CNI_REPO),$(CNI_BRANCH))
 
-update-go-build-pin:
-	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
-
-update-calico-base-pin:
-	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
 git-status:
 	git status --porcelain
@@ -758,7 +712,6 @@ GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
-GIT_GO_BUILD_UPDATE_COMMIT_FILE?=metadata.mk
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
 
