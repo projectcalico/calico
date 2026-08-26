@@ -36,13 +36,20 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// nftrender spells out the chain-name limit rather than importing knftables,
+// so that it stays buildable off Linux. Fail the build if the two ever drift.
+var (
+	_ [knftables.NameLengthMax - nftrender.MaxChainNameLength]struct{}
+	_ [nftrender.MaxChainNameLength - knftables.NameLengthMax]struct{}
+)
+
 const (
-	MaxChainNameLength = knftables.NameLengthMax
-	defaultTimeout     = 30 * time.Second
+	defaultTimeout = 30 * time.Second
 
 	// Object type names as returned by knftables' ListAll, used to index its
 	// result map.
@@ -800,7 +807,7 @@ func (t *NftablesTable) maybeIncrefReferredChains(chainName string, rules []gene
 		return
 	}
 	for _, r := range rules {
-		if ref, ok := r.Action.(Referrer); ok {
+		if ref, ok := r.Action.(nftrender.Referrer); ok {
 			t.increfChain(ref.ReferencedChain())
 		}
 	}
@@ -814,7 +821,7 @@ func (t *NftablesTable) maybeDecrefReferredChains(chainName string, rules []gene
 		return
 	}
 	for _, r := range rules {
-		if ref, ok := r.Action.(Referrer); ok {
+		if ref, ok := r.Action.(nftrender.Referrer); ok {
 			t.decrefChain(ref.ReferencedChain())
 		}
 	}

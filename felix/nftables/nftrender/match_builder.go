@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nftables
+package nftrender
 
 import (
 	"fmt"
@@ -157,8 +157,9 @@ func (m nftMatch) IPVersion(ipVersion uint8) generictables.MatchCriteria {
 	return m
 }
 
-// insertIPVersion replaces instances of IPV with the correct IP version.
-func insertIPVersion(s string, ipVersion uint8) string {
+// InsertIPVersion replaces the <IPV> placeholder with the nftables family
+// keyword for the given IP version.
+func InsertIPVersion(s string, ipVersion uint8) string {
 	if ipVersion == 6 {
 		return strings.ReplaceAll(s, "<IPV>", "ip6")
 	}
@@ -179,7 +180,7 @@ func (m nftMatch) SetLayer(s string) generictables.MatchCriteria {
 
 func (m nftMatch) Render() string {
 	joined := strings.Join(m.clauses, " ")
-	joined = insertIPVersion(joined, m.ipVersion)
+	joined = InsertIPVersion(joined, m.ipVersion)
 	joined = replaceLayer(joined, m.layerName)
 	return joined
 }
