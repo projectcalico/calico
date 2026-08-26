@@ -21,9 +21,6 @@ global_job_config:
     - name: marvin-github-ssh-private-key
     - name: banzai-secrets
   env_vars:
-    # The skips for sig-* are tests that are not relevant to OSS Calico
-    - name: K8S_E2E_FLAGS
-      value: --ginkgo.focus=(\[sig-calico\]|\[Conformance\]) --ginkgo.skip=(\[Slow\]|\[Disruptive\]|sig-node|sig-apps|sig-storage|sig-scheduling|sig-calico-enterprise|\[DataPath\]|WireGuard)
     - name: K8S_VERSION
       value: "stable-3"
     - name: FUNCTIONAL_AREA
@@ -71,6 +68,8 @@ blocks:
               value: t2a-standard-2
             - name: ENABLE_WIREGUARD
               value: "true"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-autohep.yaml"
 
   - name: Nftables, Talos
     dependencies: []
@@ -89,6 +88,8 @@ blocks:
               value: aws-talos
             - name: ENCAPSULATION_TYPE
               value: "VXLAN"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-encap-aws-autohep.yaml"
 
         - name: Native v3 CRDs (GCP)
           execution_time_limit:
@@ -104,6 +105,8 @@ blocks:
               value: "false"
             - name: CLUSTER_ROUTING_MODE
               value: Felix
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-encap-nobgp-v3crd-autohep.yaml"
 
         - name: Native v3 CRDs (AWS)
           execution_time_limit:
@@ -117,6 +120,8 @@ blocks:
               value: "stable-3"
             - name: USE_API_SERVER
               value: "false"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-v3crd-aws-autohep.yaml"
 
   - name: Nftables mode, EKS
     dependencies: []
@@ -135,6 +140,8 @@ blocks:
               value: "aws-eks"
             - name: K8S_VERSION
               value: "stable-1"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/eks-xtables-nobgp-aws-autohep.yaml"
 
         - name: EKS w/ Calico CNI
           execution_time_limit:
@@ -189,6 +196,8 @@ blocks:
               value: "VXLAN"
             - name: IPV4_POD_CIDR
               value: "192.168.0.0/16"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-encap-autohep.yaml"
 
         - name: Nftables mode, ipv6-only
           execution_time_limit:
@@ -200,6 +209,8 @@ blocks:
               value: ipv6
             - name: ENCAPSULATION_TYPE_V6
               value: "None"
+            - name: E2E_TEST_CONFIG
+              value: "e2e/config/nftables/xtables-autohep.yaml"
 
   - name: KubeVirt e2e tests
     dependencies: []

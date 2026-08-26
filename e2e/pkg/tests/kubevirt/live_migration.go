@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
-	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
 	"k8s.io/kubernetes/test/e2e/framework"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -181,31 +180,26 @@ var _ = describe.CalicoDescribe(
 				if isMockVirtDeployed(f) {
 					Fail("This test requires real KubeVirt with QEMU-backed VMs for TCP connectivity; MockVirt does not run a guest OS")
 				}
-				tor := externalnode.NewClient()
-				if tor == nil {
-					// The RequiresExternalNode label gates whether this test runs at
-					// all; once selected, missing credentials are a real failure
-					// rather than a self-skip.
-					Fail("External node not configured (set EXT_IP, EXT_KEY, EXT_USER)")
-				}
+				tor := externalnode.MustNewClient()
 
 				ctx, cancel := context.WithTimeout(context.Background(), eBGPDoubleMigrationTimeout)
 				defer cancel()
 				ns := f.Namespace.Name
 
-				// Precondition: natOutgoing must be false on the IPPool backing VM
+				// Precondition: natOutgoing must be false on the IPv4 pools backing VM
 				// workloads. If true, natOutgoing rewrites the VM's source IP to the
 				// node's IP at egress NAT and breaks the TOR's reverse-path matching
 				// after migration. The pipeline that runs this test is expected to
-				// configure the IPPool with natOutgoing=false at provisioning time;
-				// we only verify here so the failure mode is obvious.
-				const vmIPPoolName = "default-ipv4-ippool"
-				By(fmt.Sprintf("Verifying natOutgoing=false on IPPool %s", vmIPPoolName))
-				pool := &v3.IPPool{}
-				Expect(cli.Get(ctx, ctrlclient.ObjectKey{Name: vmIPPoolName}, pool)).
-					To(Succeed(), "IPPool %q must exist", vmIPPoolName)
-				Expect(pool.Spec.NATOutgoing).To(BeFalse(),
-					"IPPool %q must have natOutgoing=false (set by cluster provisioning)", vmIPPoolName)
+				// configure the pool with natOutgoing=false at provisioning time; we
+				// only verify here so the failure mode is obvious.
+				By("Verifying natOutgoing=false on the cluster's IPv4 IP pools")
+				pools, err := utils.IPPoolsForFamily(ctx, cli, false)
+				Expect(err).NotTo(HaveOccurred(), "list IP pools")
+				Expect(pools).NotTo(BeEmpty(), "cluster has no IPv4 IP pool for VM workloads")
+				for _, pool := range pools {
+					Expect(pool.Spec.NATOutgoing).To(BeFalse(),
+						"IPPool %q must have natOutgoing=false (set by cluster provisioning)", pool.Name)
+				}
 
 				By("Setting up eBGP peering between TOR and cluster nodes")
 				torPeer := setupKubeVirtEBGPPeering(f, tor)

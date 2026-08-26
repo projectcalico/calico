@@ -41,7 +41,9 @@ import (
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithCategory(describe.Policy),
+	describe.WithFeature("Flow-Logs"),
 	describe.RequiresGoldmane(),
+	describe.WithNoTierPrefix(),
 	"staged network policy",
 	func() {
 		var (
@@ -64,10 +66,11 @@ var _ = describe.CalicoDescribe(
 			Expect(err).NotTo(HaveOccurred())
 			checker = conncheck.NewConnectionTester(f)
 
-			// These tests rely on Whisker - if Whisker is not installed, short-circuit the tests.
 			installed, err := utils.WhiskerInstalled(cli)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(installed).To(BeTrue(), "Whisker is not installed in the cluster")
+			if !installed {
+				framework.Failf("Whisker is not installed in this cluster, so the lane should exclude the RequiresGoldmane label")
+			}
 
 			whiskerHTTPSClient, err = buildWhiskerHTTPSClient(context.TODO(), cli)
 			Expect(err).NotTo(HaveOccurred())

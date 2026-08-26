@@ -1,4 +1,4 @@
-/* Copyright (c) 2020-2021 Tigera, Inc. All rights reserved. */
+/* Copyright (c) 2020-2026 Tigera, Inc. All rights reserved. */
 
 package externalnode
 
@@ -13,6 +13,7 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
+	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/config"
 	"github.com/projectcalico/calico/e2e/pkg/utils/images"
@@ -42,12 +43,28 @@ func NewClient() *Client {
 	return client
 }
 
+// MustNewClient returns a client for the external node, failing the test if the
+// cluster has none.
+func MustNewClient() *Client {
+	client := NewClient()
+	if client == nil {
+		framework.Failf("No external node is configured, so the lane should exclude the ExternalNode label")
+	}
+	return client
+}
+
 func NewClientManualConfig(ip, key, user string) *Client {
 	return &Client{extIP: ip, extKey: key, extUser: user}
 }
 
+// IP returns the external node's first internal address. The ssh probe that
+// discovers them can come back empty, which is a broken external node rather
+// than a test failure, so say which node had none.
 func (e *Client) IP() string {
-	return e.IPs()[0]
+	ips := e.IPs()
+	Expect(ips).NotTo(BeEmpty(), fmt.Sprintf(
+		"no internal IPs discovered on external node %s", e.extIP))
+	return ips[0]
 }
 
 // SSHIP returns the address used to ssh to the external node.
