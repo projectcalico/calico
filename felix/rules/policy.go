@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/model"
@@ -1025,7 +1025,7 @@ func (r *DefaultRuleRenderer) CalculateRuleMatch(pRule *proto.Rule, ipVersion ui
 func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
 	if nft {
-		maxLen = nftables.MaxChainNameLength
+		maxLen = nftrender.MaxChainNameLength
 	}
 	return hash.GetLengthLimitedID(
 		string(prefix),
@@ -1037,7 +1037,7 @@ func PolicyChainName(prefix PolicyChainNamePrefix, polID *types.PolicyID, nft bo
 func ProfileChainName(prefix ProfileChainNamePrefix, profID *types.ProfileID, nft bool) string {
 	maxLen := iptables.MaxChainNameLength
 	if nft {
-		maxLen = nftables.MaxChainNameLength
+		maxLen = nftrender.MaxChainNameLength
 	}
 	return hash.GetLengthLimitedID(
 		string(prefix),
