@@ -454,8 +454,8 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         Also validate the configured MySQL driver up front so a bad
         ``[database] connection`` fails the worker at startup rather than
-        on the first port operation, and surface any deprecated options that
-        the operator still has set.
+        on the first port operation, and surface any deprecated-for-removal
+        options that the operator still has set.
         """
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()

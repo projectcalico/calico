@@ -168,17 +168,23 @@ def register_options(conf, additional_options=None):
 
 
 def read_deprecated_options(conf, opts, group="calico"):
-    """Read each deprecated option in OPTS, purely for the warning side effect.
+    """Read the deprecated-for-removal options in OPTS, for the warning side effect.
 
-    oslo.config emits its "deprecated for removal" warning when a deprecated
+    oslo.config emits its "deprecated for removal" warning when such an
     option's value is *read*, and only when the operator actually set that
     option in a config file or on the command line.  Parsing alone emits
     nothing, and an option that nobody has set stays silent however often it is
     read.  Arranging that read, at start of day, for every option we have
-    deprecated, is what this function is for.
+    marked ``deprecated_for_removal``, is what this function is for.
 
-    We deprecate an option in two rather different situations, and the read is
-    worth doing in both:
+    Options carrying only a ``deprecated_name`` or ``deprecated_group`` are
+    skipped.  Those have a deprecated *name*, rather than being deprecated
+    themselves; they are live options that the driver reads in the normal
+    course of its work, so oslo.config warns about the old name without our
+    help.
+
+    We mark an option deprecated for removal in two rather different
+    situations, and the read is worth doing in both:
 
     - The option still works exactly as it always has, and we intend to remove
       it in some future release.  The driver goes on reading it as part of its
@@ -205,7 +211,7 @@ def read_deprecated_options(conf, opts, group="calico"):
 
     One consequence to be aware of: under [DEFAULT] fatal_deprecations = true,
     oslo.log turns the warning into a DeprecatedConfig exception rather than a
-    log line, so a deployment that sets both that and a deprecated option will
+    log line, so a deployment that sets both that and one of these options will
     now fail to start.  That is the semantics the operator asked for -- they
     are indeed still configuring a deprecated option -- and fatal_deprecations
     defaults to false.
