@@ -219,7 +219,7 @@ func nonClusterHostPolicy(ri render.Inputs) (add, del []client.Object) {
 		Protocol:    &networkpolicy.TCPProtocol,
 		Destination: networkpolicy.KubeAPIServerEntityRule,
 	})
-	if r, err := k8sapi.Endpoint.DestinationEntityRule(); r != nil && err == nil {
+	if r, err := k8sapi.Endpoint.DestinationEntityRule(ri.ClusterDomain); r != nil && err == nil {
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,

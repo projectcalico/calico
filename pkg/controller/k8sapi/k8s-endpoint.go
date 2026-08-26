@@ -64,7 +64,7 @@ func (k8s ServiceEndpoint) EnvVars() []v1.EnvVar {
 
 // DestinationEntityRule returns an EntityRule to match the Host and Port
 // if the ServiceEndpoint was set. It returns nil if either was empty.
-func (k8s ServiceEndpoint) DestinationEntityRule() (*calicov3.EntityRule, error) {
+func (k8s ServiceEndpoint) DestinationEntityRule(clusterDomain string) (*calicov3.EntityRule, error) {
 	if k8s.Host == "" || k8s.Port == "" {
 		return nil, nil
 	}
@@ -74,7 +74,7 @@ func (k8s ServiceEndpoint) DestinationEntityRule() (*calicov3.EntityRule, error)
 		return nil, err
 	}
 
-	rule := networkpolicy.EntityRuleForHostPort(k8s.Host, "", p)
+	rule := networkpolicy.EntityRuleForHostPort(k8s.Host, clusterDomain, p)
 
 	return &rule, nil
 }

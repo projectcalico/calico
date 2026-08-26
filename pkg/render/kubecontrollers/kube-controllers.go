@@ -704,7 +704,7 @@ func kubeControllersCalicoSystemPolicy(cfg *KubeControllersConfiguration) *v3.Ne
 		})
 	}
 
-	if r, err := cfg.K8sServiceEp.DestinationEntityRule(); r != nil && err == nil {
+	if r, err := cfg.K8sServiceEp.DestinationEntityRule(cfg.ClusterDomain); r != nil && err == nil {
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
