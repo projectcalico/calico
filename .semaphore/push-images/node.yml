@@ -38,15 +38,24 @@ blocks:
         # own job so they run concurrently rather than serially in a single job that
         # exceeds the pipeline time limit. They have no native runner, so they emulate
         # on the default machine. Pull the nftables RPMs already built by the "Build:
-        # nftables RPMs" block so `make image` skips rebuilding them under emulation
-        # (make -C hack/rpms/nftables image no-ops when the image is present locally).
+        # nftables RPMs" block and tag them to the DEV_REGISTRIES-prefixed name the
+        # node build inspects, so `make image` skips rebuilding them under emulation
+        # (make -C hack/rpms/nftables image no-ops when that image is present locally).
+        # The RPMs are pushed to Docker Hub as calico/nftables-rpms, but node.yml sets
+        # DEV_REGISTRIES with quay.io/calico first, so the local tag must be retagged.
         - name: Linux ppc64le
           commands:
-            - docker pull "calico/nftables-rpms:$(make --no-print-directory -C hack/rpms/nftables print-tag)-ppc64le" || true
+            - |-
+              TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
+              docker pull "calico/nftables-rpms:${TAG}-ppc64le" || true
+              docker tag "calico/nftables-rpms:${TAG}-ppc64le" "$(make --no-print-directory -C hack/rpms/nftables print-image ARCH=ppc64le)" || true
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=ppc64le VALIDARCHES=ppc64le CONFIRM=true; fi
         - name: Linux s390x
           commands:
-            - docker pull "calico/nftables-rpms:$(make --no-print-directory -C hack/rpms/nftables print-tag)-s390x" || true
+            - |-
+              TAG=$(make --no-print-directory -C hack/rpms/nftables print-tag)
+              docker pull "calico/nftables-rpms:${TAG}-s390x" || true
+              docker tag "calico/nftables-rpms:${TAG}-s390x" "$(make --no-print-directory -C hack/rpms/nftables print-image ARCH=s390x)" || true
             - if [ -z "${SEMAPHORE_GIT_PR_NUMBER}" ]; then make -C node image cd-common ARCH=s390x VALIDARCHES=s390x CONFIRM=true; fi
         - name: Windows
           commands:
