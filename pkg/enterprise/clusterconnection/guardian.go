@@ -129,7 +129,7 @@ func enterpriseGuardianPolicySpec(gpc *render.GuardianConfiguration) (v3.Network
 			continue
 		}
 
-		dest, err := networkpolicy.EntityRuleForDestination(tunnelDestinationHostPort, "")
+		dest, err := networkpolicy.EntityRuleForDestination(tunnelDestinationHostPort, gpc.ClusterDomain)
 		if err != nil {
 			return v3.NetworkPolicySpec{}, err
 		}

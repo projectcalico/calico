@@ -865,7 +865,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 	Context("NetworkPolicy", func() {
 		It("should allow ingress on the OTLP HTTP port", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
 				},
@@ -884,7 +885,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should parse the port from bare host:port exporter endpoints", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
 				},
@@ -907,7 +909,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should parse the port from URL-style exporter endpoints", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{
 						{Name: "https-backend", Endpoint: "https://otlp.example.com:9443", Protocol: operatorv1.OpenTelemetryProtocolHTTP},
@@ -932,7 +935,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should default to 443 for https endpoints without explicit port", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{
 						{Name: "https-no-port", Endpoint: "https://otlp.example.com", Protocol: operatorv1.OpenTelemetryProtocolHTTP},
@@ -957,7 +961,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should add kube API server and prometheus egress rules when metrics are enabled", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Metrics:   &operatorv1.OpenTelemetryMetrics{State: ptr.To(operatorv1.OpenTelemetryMetricsEnabled)},
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
@@ -974,7 +979,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should restrict ingress by source", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Logs:      &operatorv1.OpenTelemetryLogs{Types: []operatorv1.OpenTelemetryLogType{operatorv1.OpenTelemetryFlowLog}},
 					Metrics:   &operatorv1.OpenTelemetryMetrics{State: ptr.To(operatorv1.OpenTelemetryMetricsEnabled)},
@@ -1001,7 +1007,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should pin the egress destination to the exporter host", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{
 						{Name: "byname", Endpoint: "https://otlp.example.com:4317"},
@@ -1025,9 +1032,36 @@ var _ = Describe("OpenTelemetry rendering", func() {
 			})))
 		})
 
-		It("should never emit a rule that allows any host", func() {
+		It("should drop a domain exporter rule without the egress-access-control feature", func() {
 			cfg := &otelcollector.Configuration{
 				Installation: defaultInstallation,
+				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
+					Exporters: []operatorv1.OpenTelemetryExporter{
+						{Name: "byname", Endpoint: "https://otlp.example.com:4317"},
+						{Name: "byip", Endpoint: "https://10.1.2.3:4318"},
+					},
+				},
+			}
+			comp, err := otelcollector.OpenTelemetryCollector(cfg)
+			Expect(err).NotTo(HaveOccurred())
+			objs, _ := comp.Objects()
+
+			np, err := rtest.GetResourceOfType[*v3.NetworkPolicy](objs, otelcollector.OpenTelemetryCollectorPolicyName, otelcollector.OpenTelemetryCollectorNamespace)
+			Expect(err).ShouldNot(HaveOccurred())
+
+			for _, r := range np.Spec.Egress {
+				Expect(r.Destination.Domains).To(BeEmpty())
+			}
+			// An IP needs no licence, so that rule survives.
+			Expect(np.Spec.Egress).To(ContainElement(HaveField("Destination", v3.EntityRule{
+				Nets: []string{"10.1.2.3/32"}, Ports: networkpolicy.Ports(4318),
+			})))
+		})
+
+		It("should never emit a rule that allows any host", func() {
+			cfg := &otelcollector.Configuration{
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "byname", Endpoint: "https://otlp.example.com:4317"}},
 				},
@@ -1049,7 +1083,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 
 		It("should default the port from the scheme when the endpoint carries none", func() {
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "noport", Endpoint: "https://otlp.example.com"}},
 				},
@@ -1097,7 +1132,8 @@ var _ = Describe("OpenTelemetry rendering", func() {
 			priorityClassName := "system-cluster-critical"
 
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
 					OpenTelemetryCollectorStatefulSet: &operatorv1.OpenTelemetryCollectorStatefulSet{
@@ -1151,8 +1187,9 @@ var _ = Describe("OpenTelemetry rendering", func() {
 				{ObjectMeta: metav1.ObjectMeta{Name: "my-pull-secret", Namespace: "tigera-operator"}},
 			}
 			cfg := &otelcollector.Configuration{
-				Installation: defaultInstallation,
-				PullSecrets:  pullSecrets,
+				Installation:        defaultInstallation,
+				DomainEgressAllowed: true,
+				PullSecrets:         pullSecrets,
 				OpenTelemetry: &operatorv1.OpenTelemetrySpec{
 					Exporters: []operatorv1.OpenTelemetryExporter{{Name: "backend", Endpoint: "https://otlp.example.com:4317"}},
 				},

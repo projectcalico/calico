@@ -49,6 +49,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -113,12 +114,18 @@ const (
 	DefaultTLSReloadInterval = "1h"
 )
 
+var log = logf.Log.WithName("render_otelcollector")
+
 type Configuration struct {
 	PullSecrets   []*corev1.Secret
 	OpenShift     bool
 	Installation  *operatorv1.InstallationSpec
 	OpenTelemetry *operatorv1.OpenTelemetrySpec
 	ClusterDomain string
+	// DomainEgressAllowed reports whether the license carries the
+	// egress-access-control feature, without which a Domains rule cannot be
+	// created.
+	DomainEgressAllowed bool
 	// ReceiverTLSSecret is the server keypair for the OTLP receiver (mTLS termination).
 	ReceiverTLSSecret certificatemanagement.KeyPairInterface
 	TrustedCertBundle certificatemanagement.TrustedBundleRO
@@ -845,7 +852,14 @@ func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain str
 	}
 	portStr := u.Port()
 	if portStr == "" {
-		portStr = "443"
+		switch u.Scheme {
+		case "https":
+			portStr = "443"
+		case "http":
+			portStr = "80"
+		default:
+			return v3.EntityRule{}, fmt.Errorf("exporter endpoint %q has an unsupported scheme %q", exp.Endpoint, u.Scheme)
+		}
 	}
 	port, err := numorstring.PortFromString(portStr)
 	if err != nil {
@@ -864,6 +878,11 @@ func (c *component) networkPolicy() *v3.NetworkPolicy {
 	for _, exp := range c.cfg.OpenTelemetry.Exporters {
 		dest, err := exporterDestination(exp, c.cfg.ClusterDomain)
 		if err != nil {
+			log.Error(err, "no egress rule rendered for exporter", "exporter", exp.Name)
+			continue
+		}
+		if len(dest.Domains) > 0 && !c.cfg.DomainEgressAllowed {
+			log.Error(nil, "skipping exporter egress rule: domain rules require the egress-access-control license feature", "exporter", exp.Name)
 			continue
 		}
 		egressRules = append(egressRules, v3.Rule{

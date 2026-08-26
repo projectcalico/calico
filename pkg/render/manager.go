@@ -1374,7 +1374,7 @@ func (c *managerComponent) managerCalicoSystemNetworkPolicy() *v3.NetworkPolicy 
 		// valid config), so only the host is narrowed.
 		dest := v3.EntityRule{Ports: networkpolicy.Ports(389, 636)}
 		if host := ldapEgressHost(c.cfg.Authentication.Spec.LDAP.Host); host != "" {
-			dest = networkpolicy.EntityRuleForHostPort(host, "", networkpolicy.Ports(389, 636)...)
+			dest = networkpolicy.EntityRuleForHostPort(host, c.cfg.ClusterDomain, networkpolicy.Ports(389, 636)...)
 		}
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,

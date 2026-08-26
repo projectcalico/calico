@@ -345,6 +345,9 @@ func ParseHostPort(destination string) (string, numorstring.Port, error) {
 	if err != nil {
 		return "", numorstring.Port{}, err
 	}
+	if host == "" {
+		return "", numorstring.Port{}, fmt.Errorf("destination %q has no host", destination)
+	}
 	port, err := numorstring.PortFromString(portStr)
 	if err != nil {
 		return "", numorstring.Port{}, err

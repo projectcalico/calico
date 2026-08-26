@@ -17,6 +17,7 @@ package render
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -41,7 +42,6 @@ import (
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
 	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
-	operatorurl "github.com/tigera/operator/pkg/url"
 )
 
 const (
@@ -523,7 +523,7 @@ func (c *dexComponent) resolveEgressRulesByDestination() map[string]v3.Rule {
 	processedPodProxies := ProcessPodProxies(c.cfg.PodProxies)
 	for i, podProxy := range processedPodProxies {
 		for _, egressDestination := range resolveEgressDestinationsForPod(podProxy) {
-			egressRule, err := resolveEgressRuleForDestination(egressDestination)
+			egressRule, err := resolveEgressRuleForDestination(egressDestination, c.cfg.ClusterDomain)
 			if err != nil {
 				log.Error(err, fmt.Sprintf("failed to resolve egress rule for pod %d, skipping for policy rendering", i))
 				continue
@@ -556,12 +556,12 @@ func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) []string {
 		}
 		proxyURL, err := url.Parse(proxy)
 		if err != nil {
-			log.Error(err, fmt.Sprintf("ignoring unparseable proxy %q when rendering Dex egress", proxy))
+			log.Error(err, "ignoring unparseable proxy when rendering Dex egress")
 			continue
 		}
-		destination, err := operatorurl.ParseHostPortFromHTTPProxyURL(proxyURL)
+		destination, err := parseHostPortFromURL(proxyURL)
 		if err != nil {
-			log.Error(err, fmt.Sprintf("ignoring proxy %q when rendering Dex egress", proxy))
+			log.Error(err, fmt.Sprintf("ignoring proxy %s when rendering Dex egress", proxyURL.Redacted()))
 			continue
 		}
 		egressDestinations = append(egressDestinations, destination)
@@ -573,7 +573,7 @@ func resolveEgressDestinationsForPod(podProxy *httpproxy.Config) []string {
 	return egressDestinations
 }
 
-func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
+func resolveEgressRuleForDestination(destination, clusterDomain string) (v3.Rule, error) {
 	// Support "any" destinations that signify any potential IdP destination IP.
 	// idp-resolution: These cases can be removed if we are able to resolve specific IdP destinations based on the Authentication config.
 	if destination == "0.0.0.0/0" {
@@ -597,7 +597,7 @@ func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
 		}, nil
 	}
 
-	dest, err := networkpolicy.EntityRuleForDestination(destination, "")
+	dest, err := networkpolicy.EntityRuleForDestination(destination, clusterDomain)
 	if err != nil {
 		return v3.Rule{}, err
 	}
@@ -606,4 +606,22 @@ func resolveEgressRuleForDestination(destination string) (v3.Rule, error) {
 		Protocol:    &networkpolicy.TCPProtocol,
 		Destination: dest,
 	}, nil
+}
+
+// parseHostPortFromURL is kept local to Dex rather than using the shared
+// HTTP-proxy helper: Dex may be configured with a socks proxy, which the shared
+// helper rejects outright but which works here when the URL carries a port.
+func parseHostPortFromURL(url *url.URL) (string, error) {
+	if url.Port() != "" {
+		return url.Host, nil
+	}
+
+	switch url.Scheme {
+	case "http":
+		return net.JoinHostPort(url.Host, "80"), nil
+	case "https":
+		return net.JoinHostPort(url.Host, "443"), nil
+	default:
+		return "", fmt.Errorf("unexpected scheme for URL: %s", url.Scheme)
+	}
 }

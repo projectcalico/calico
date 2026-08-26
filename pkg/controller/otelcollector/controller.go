@@ -352,6 +352,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		Installation:        installationSpec,
 		OpenTelemetry:       logCollector.Spec.OpenTelemetry,
 		ClusterDomain:       r.opts.ClusterDomain,
+		DomainEgressAllowed: utils.IsFeatureActive(license, common.EgressAccessControlFeature),
 		ReceiverTLSSecret:   receiverTLSSecret,
 		TrustedCertBundle:   trustedBundle,
 		ExporterCAs:         exporterCAs,
