@@ -6,3 +6,4 @@
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [Category:Networking] KubeVirt IP persistence should release IPAM handle when VM is deleted
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration eBGP external client [ExternalNode] should maintain TCP connection from eBGP external client across two consecutive migrations
 [sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should maintain TCP connection over iBGP across two consecutive live migrations
+[sig-calico] [Team:CORE] [Feature:KubeVirt] [RequiresRealKubeVirt] [Category:Networking] KubeVirt live migration should prefer the local workload route on the migration target node

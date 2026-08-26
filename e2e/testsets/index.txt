@@ -29,7 +29,7 @@
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv4 [calicoiptables-ipv4] | bpf/kops-xtables-encap-nobgp-extnode-aws | 208
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicobpf-ipv6] | bpf/kops-bpf-encap-nobgp-extnode-aws | 204
 .argoci/cron/e2e-bpf.yaml | bpf-run-matrix-kops-w-calico-cni-ipv6 [calicoiptables-ipv6] | bpf/kops-xtables-encap-nobgp-extnode-aws | 208
-.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
+.argoci/cron/e2e-bpf.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
 .argoci/cron/e2e-bpf.yaml | usage-reporting-with-bpf | (usage-reporting) | -
 .argoci/cron/e2e-bpf.yaml | wireguard | bpf/aks-bpf-encap-nobgp | 206
 .argoci/cron/e2e-certification.yaml | hcp-hosted-setup-and-tests | (ocp-cert) | -
@@ -56,7 +56,7 @@
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 216
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 220
-.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
+.argoci/cron/e2e-iptables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
 .argoci/cron/e2e-iptables.yaml | migration | iptables/xtables-manifest | 211
 .argoci/cron/e2e-iptables.yaml | migration [pre-migration] | pre-migration-smoke | 1
 .argoci/cron/e2e-iptables.yaml | native-v3-crds-aks | iptables/aks-xtables-nobgp-v3crd | 192
@@ -70,7 +70,7 @@
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-new | iptables/xtables-aws | 221
 .argoci/cron/e2e-iptables.yaml | wireguard-regression-k8s-e2e-kdd-old | iptables/xtables-v3crd-aws | 217
 .argoci/cron/e2e-iptables.yaml | wireguard-vxlan-k8s-e2e | iptables/xtables-wireguard | 217
-.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
+.argoci/cron/e2e-nftables.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
 .argoci/cron/e2e-nftables.yaml | nftables-mode-arm64-wg | nftables/xtables-autohep | 223
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-aws-cni | nftables/eks-xtables-nobgp-aws-autohep | 206
 .argoci/cron/e2e-nftables.yaml | nftables-mode-eks-eks-w-calico-cni | nftables/eks-xtables-aws-autohep | 213
@@ -82,7 +82,7 @@
 .argoci/cron/e2e-openstack.yaml | full-fv | (openstack-e2e) | -
 .argoci/cron/e2e-openstack.yaml | multi-region | (openstack-e2e) | -
 .argoci/cron/e2e-patch-verification.yaml | kind-tests | patch-verification/xtables | 83
-.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 8
+.argoci/cron/e2e-patch-verification.yaml | kubevirt-e2e-tests | gcp/kubevirt | 9
 .argoci/cron/e2e-patch-verification.yaml | manifests-calico-etcd | patch-verification/xtables-encap-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal | patch-verification/xtables-manifest | 80
 .argoci/cron/e2e-patch-verification.yaml | manifests-canal-migration | patch-verification/xtables-manifest | 80
@@ -147,7 +147,7 @@
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-kubeadm dual stack, iptables | bpf/xtables-encap-extnode-aws | 220
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-bpf | bpf/eks-bpf-encap-extnode-aws | 206
 .semaphore/end-to-end/pipelines/bpf.yml | BPF run matrix / aws-lb-iptables | bpf/eks-xtables-encap-extnode-aws | 210
-.semaphore/end-to-end/pipelines/bpf.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
+.semaphore/end-to-end/pipelines/bpf.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/bpf.yml | Wireguard / BPF + AKS w AKS CNI + Overlay | bpf/aks-bpf-encap-nobgp | 206
 .semaphore/end-to-end/pipelines/bpf.yml | usage reporting with bpf / mainline | (usage-reporting) | -
 .semaphore/end-to-end/pipelines/certification.yml | HCP hosted setup and tests / HCP tests - hosted (cert) | (ocp-cert) | -
@@ -168,7 +168,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (AWS CNI) | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 216
-.semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
+.semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration [pre-migration] | pre-migration-smoke | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Openshift OCP / hashrelease | iptables/openshift-xtables-encap-aws | 216
@@ -187,7 +187,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | k8s beta runs / k8s beta | iptables/xtables-manifest | 211
 .semaphore/end-to-end/pipelines/iptables.yml | k8s distros / install required | iptables/xtables | 220
 .semaphore/end-to-end/pipelines/iptables.yml | usage reporting / mainline | (usage-reporting) | -
-.semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
+.semaphore/end-to-end/pipelines/nftables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ Calico CNI | nftables/eks-xtables-aws-autohep | 213
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, EKS / EKS w/ aws CNI | nftables/eks-xtables-nobgp-aws-autohep | 206
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables mode, KinD / Nftables mode, ipv6-only | nftables/xtables-autohep | 223
@@ -197,7 +197,7 @@
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Native v3 CRDs (GCP) | nftables/xtables-encap-nobgp-v3crd-autohep | 214
 .semaphore/end-to-end/pipelines/nftables.yml | Nftables, Talos / Nftables, Talos | nftables/xtables-encap-aws-autohep | 219
 .semaphore/end-to-end/pipelines/patch-verification.yml | KinD tests / IPv6 | patch-verification/xtables | 83
-.semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 8
+.semaphore/end-to-end/pipelines/patch-verification.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Calico etcd | patch-verification/xtables-encap-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal | patch-verification/xtables-manifest | 80
 .semaphore/end-to-end/pipelines/patch-verification.yml | Manifests / Canal migration | patch-verification/xtables-manifest | 80
