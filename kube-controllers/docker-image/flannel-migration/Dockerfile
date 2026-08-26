@@ -30,7 +30,6 @@ COPY --from=builder /status /status/
 
 COPY ${BIN_DIR}/LICENSE /licenses/LICENSE
 
-COPY ${BIN_DIR}/kubectl-${TARGETARCH} /usr/bin/kubectl
 COPY ${BIN_DIR}/kube-controllers-linux-${TARGETARCH} /usr/bin/kube-controllers
 COPY ${BIN_DIR}/check-status-linux-${TARGETARCH} /usr/bin/check-status
 
