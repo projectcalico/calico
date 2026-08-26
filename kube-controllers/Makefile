@@ -69,10 +69,6 @@ endif
 $(BINDIR)/check-status-linux-$(ARCH): $(SRC_FILES)
 	$(call build_binary, ./cmd/check-status, $@)
 
-$(BINDIR)/kubectl-$(ARCH):
-	curl -sSf -L --retry 5 -o $@ https://dl.k8s.io/release/$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
-	chmod +x $@
-
 ###############################################################################
 # Building the image
 ###############################################################################
@@ -87,14 +83,14 @@ image: $(KUBE_CONTROLLER_CONTAINER_MARKER)
 
 IMAGE_DEPS = Dockerfile docker-image/flannel-migration/Dockerfile
 # register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
-$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
+$(KUBE_CONTROLLER_CONTAINER_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-$(ARCH) -f Dockerfile .
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
 	$(MAKE) retag-build-images-with-registries VALIDARCHES=$(ARCH) IMAGETAG=latest
 	touch $@
 
-$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) $(BINDIR)/kubectl-$(ARCH) | register
+$(KUBE_CONTROLLER_CONTAINER_FIPS_CREATED): $(IMAGE_DEPS) $(BINDIR)/kube-controllers-linux-$(ARCH) $(BINDIR)/check-status-linux-$(ARCH) $(BINDIR)/wrapper-$(ARCH) | register
 	cp ../LICENSE.md $(BINDIR)/LICENSE
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(KUBE_CONTROLLERS_IMAGE):latest-fips-$(ARCH) -f Dockerfile .
 	$(DOCKER_BUILD) --build-arg BIN_DIR=$(BINDIR) -t $(FLANNEL_MIGRATION_IMAGE):latest-fips-$(ARCH) -f docker-image/flannel-migration/Dockerfile .
