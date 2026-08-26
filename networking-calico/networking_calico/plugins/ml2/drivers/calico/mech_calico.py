@@ -454,10 +454,17 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
 
         Also validate the configured MySQL driver up front so a bad
         ``[database] connection`` fails the worker at startup rather than
-        on the first port operation.
+        on the first port operation, and surface any deprecated-for-removal
+        options that the operator still has set.
         """
         super(CalicoMechanismDriver, self).initialize()
         _check_mysql_driver()
+
+        # We are in the parent process, after config parsing and before any
+        # forks, so this logs each warning exactly once, near the top of the
+        # neutron-server startup log.
+        calico_config.read_deprecated_options(cfg.CONF, calico_opts)
+
         if cfg.CONF.calico.fairy_gc_diagnostics:
             # Install once in the parent process before workers are forked.
             # The listeners attach to the SQLAlchemy Pool class; each forked

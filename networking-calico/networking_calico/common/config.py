@@ -167,6 +167,60 @@ def register_options(conf, additional_options=None):
     conf.register_opts(options_to_register, "calico")
 
 
+def read_deprecated_options(conf, opts, group="calico"):
+    """Read the deprecated-for-removal options in OPTS, for the warning side effect.
+
+    oslo.config emits its "deprecated for removal" warning when such an
+    option's value is *read*, and only when the operator actually set that
+    option in a config file or on the command line.  Parsing alone emits
+    nothing, and an option that nobody has set stays silent however often it is
+    read.  Arranging that read, at start of day, for every option we have
+    marked ``deprecated_for_removal``, is what this function is for.
+
+    Options carrying only a ``deprecated_name`` or ``deprecated_group`` are
+    skipped.  Those have a deprecated *name*, rather than being deprecated
+    themselves; they are live options that the driver reads in the normal
+    course of its work, so oslo.config warns about the old name without our
+    help.
+
+    We mark an option deprecated for removal in two rather different
+    situations, and the read is worth doing in both:
+
+    - The option still works exactly as it always has, and we intend to remove
+      it in some future release.  The driver goes on reading it as part of its
+      normal work, so the warning does come out by itself -- but only when the
+      reading code path first runs, which may be a long way into the log, or
+      not at all if that path is conditional.  Reading here brings the warning
+      forward to a predictable place, and makes it unconditional.
+
+    - The option has already been made moot by a change elsewhere, and now
+      survives only so that an existing neutron.conf continues to parse.
+      Nothing reads it any more, so without this call there is no warning at
+      all, and an operator who still sets it gets no signal that it is being
+      ignored.  This is the case that prompted the function; ``[calico]
+      resync_interval_secs`` in mech_calico.py is a worked example.
+
+    Either way the operator wants to know, and what they are told is defined by
+    the option rather than by us: the warning quotes that option's
+    ``deprecated_reason``, so that is the place to explain what has changed and
+    what, if anything, to do instead.
+
+    The reads below look pointless, and are not: the value is discarded and the
+    read performed solely to provoke oslo.config into warning.  Please don't
+    tidy them away.
+
+    One consequence to be aware of: under [DEFAULT] fatal_deprecations = true,
+    oslo.log turns the warning into a DeprecatedConfig exception rather than a
+    log line, so a deployment that sets both that and one of these options will
+    now fail to start.  That is the semantics the operator asked for -- they
+    are indeed still configuring a deprecated option -- and fatal_deprecations
+    defaults to false.
+    """
+    for opt in opts:
+        if opt.deprecated_for_removal:
+            conf[group][opt.name]
+
+
 _cached_region_string = None
 MAX_DNS_LABEL_LEN = 63
 MAX_REGION_LEN = MAX_DNS_LABEL_LEN - len(
