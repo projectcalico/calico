@@ -151,11 +151,15 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		etcd             *containers.Container
 		kubectrls        *containers.Container
 		apiserver        *containers.Container
+		calicoClient     client.Interface
 		kconfigfile      string
 		removeKubeconfig func()
+		profileHost      string
 	)
 
 	BeforeEach(func() {
+		profileHost = ""
+
 		// Run etcd.
 		etcd = testutils.RunEtcd()
 
@@ -166,7 +170,7 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		kconfigfile, removeKubeconfig = testutils.BuildKubeconfig(apiserver.IP)
 
 		// Create some clients.
-		client := testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
+		calicoClient = testutils.GetCalicoClient(apiconfig.Kubernetes, "", kconfigfile)
 		k8sClient, err := testutils.GetK8sClient(kconfigfile)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -179,7 +183,9 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		// Apply the necessary CRDs. There can sometimes be a delay between starting
 		// the API server and when CRDs are apply-able, so retry here.
 		testutils.ApplyCRDs(apiserver)
+	})
 
+	JustBeforeEach(func() {
 		// Enable metrics and pprof ports for these tests.
 		Eventually(func() error {
 			kcfg := v3.NewKubeControllersConfiguration()
@@ -188,7 +194,8 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 			kcfg.Spec.PrometheusMetricsPort = &metricsPort
 			profilePort := int32(9095)
 			kcfg.Spec.DebugProfilePort = &profilePort
-			_, err = client.KubeControllersConfiguration().Create(context.Background(), kcfg, options.SetOptions{})
+			kcfg.Spec.DebugProfileHost = profileHost
+			_, err := calicoClient.KubeControllersConfiguration().Create(context.Background(), kcfg, options.SetOptions{})
 			return err
 		}, 10*time.Second).Should(Succeed())
 
@@ -248,6 +255,23 @@ var _ = Describe("kube-controllers metrics and pprof FV tests", func() {
 		// container (i.e. not bound to 0.0.0.0).
 		pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
 		Expect(get(pprofEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
+	})
+
+	Context("with the profiling host set to 0.0.0.0", func() {
+		BeforeEach(func() {
+			profileHost = "0.0.0.0"
+		})
+
+		It("should expose pprof endpoints outside the container", func() {
+			pprofEndpoint := fmt.Sprintf("http://%s:9095", kubectrls.IP)
+			Eventually(func() error {
+				return get(pprofEndpoint, "/debug/pprof/profile?seconds=1")
+			}, 30*time.Second, 1*time.Second).Should(Succeed())
+
+			// The prometheus port must still not serve pprof endpoints.
+			metricsEndpoint := fmt.Sprintf("http://%s:9094", kubectrls.IP)
+			Expect(get(metricsEndpoint, "/debug/pprof/profile?seconds=1")).NotTo(Succeed())
+		})
 	})
 })
 
