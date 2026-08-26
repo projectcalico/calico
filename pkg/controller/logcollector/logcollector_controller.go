@@ -676,6 +676,7 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 		FluentBitKeyPair:              fluentBitKeyPair,
 		TrustedBundle:                 trustedBundle,
 		ManagedCluster:                managedCluster,
+		ManagementCluster:             managementCluster != nil,
 		UseSyslogCertificate:          useSyslogCertificate,
 		Tenant:                        tenant,
 		ExternalElastic:               r.opts.ElasticExternal,
