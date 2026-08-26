@@ -5924,6 +5924,7 @@ spec:
                     unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
                     default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
                     [Default: localhost]
+                  maxLength: 64
                   pattern: ^[a-zA-Z0-9:._+-]+$
                   type: string
                 debugProfilePort:
@@ -6173,6 +6174,7 @@ spec:
                         unauthenticated and expose heap dumps, goroutine stacks and CPU profiles, so prefer the
                         default and use kubectl port-forward for remote access. Only used if DebugProfilePort is set.
                         [Default: localhost]
+                      maxLength: 64
                       pattern: ^[a-zA-Z0-9:._+-]+$
                       type: string
                     debugProfilePort:
