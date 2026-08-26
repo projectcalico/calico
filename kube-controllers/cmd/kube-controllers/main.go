@@ -186,7 +186,7 @@ func main() {
 		}
 		log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
 
-		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, libcalicoClient, flannelConfig)
+		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, k8sconfig, libcalicoClient, flannelConfig)
 		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
 
 		// Set some global defaults for flannelmigration
