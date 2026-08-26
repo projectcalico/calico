@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nftables
+package nftrender
 
 import (
 	"fmt"
@@ -28,7 +28,10 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 )
 
-type namespaceable interface {
+// Namespaceable is implemented by actions whose target name can be moved into
+// a table layer's namespace. The felix/nftables table layer uses it to rewrite
+// chain targets.
+type Namespaceable interface {
 	Namespace(string) generictables.Action
 }
 
@@ -183,7 +186,7 @@ func (g GotoAction) Namespace(ns string) generictables.Action {
 
 var (
 	_ Referrer      = GotoAction{}
-	_ namespaceable = GotoAction{}
+	_ Namespaceable = GotoAction{}
 )
 
 type JumpAction struct {
@@ -214,7 +217,7 @@ func (g JumpAction) Namespace(ns string) generictables.Action {
 
 var (
 	_ Referrer      = JumpAction{}
-	_ namespaceable = JumpAction{}
+	_ Namespaceable = JumpAction{}
 
 	_ generictables.ReturnActionMarker = ReturnAction{}
 )

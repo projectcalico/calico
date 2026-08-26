@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/types"
 )
@@ -508,22 +508,22 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 	var ret generictables.Action = iptables.ReturnAction{}
 
 	if nft {
-		actions = nftables.Actions()
-		reject = nftables.RejectAction{}
-		accept = nftables.AcceptAction{}
-		drop = nftables.DropAction{}
-		ret = nftables.ReturnAction{}
+		actions = nftrender.Actions()
+		reject = nftrender.RejectAction{}
+		accept = nftrender.AcceptAction{}
+		drop = nftrender.DropAction{}
+		ret = nftrender.ReturnAction{}
 	}
 
 	newMatchFn := func() generictables.MatchCriteria {
 		if nft {
-			return nftables.Match()
+			return nftrender.Match()
 		}
 		return iptables.Match()
 	}
 	combineMatches := iptables.Combine
 	if nft {
-		combineMatches = nftables.Combine
+		combineMatches = nftrender.Combine
 	}
 
 	// First, what should we do when packets are not accepted.
@@ -590,8 +590,8 @@ func NewRenderer(config Config, nft bool) RuleRenderer {
 	maxNameLength := iptables.MaxChainNameLength
 	wildcard := iptables.Wildcard
 	if nft {
-		wildcard = nftables.Wildcard
-		maxNameLength = nftables.MaxChainNameLength
+		wildcard = nftrender.Wildcard
+		maxNameLength = nftrender.MaxChainNameLength
 	}
 
 	return &DefaultRuleRenderer{
