@@ -87,6 +87,35 @@ var _ = Describe("egress destination rules", func() {
 		})
 	})
 
+	Describe("EntityRuleForURL", func() {
+		It("takes the port from the URL when it carries one", func() {
+			r, err := networkpolicy.EntityRuleForURL("https://otlp.example.com:4317", "cluster.local")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(r.Domains).To(Equal([]string{"otlp.example.com"}))
+			Expect(r.Ports).To(Equal([]numorstring.Port{port(4317)}))
+		})
+
+		It("defaults the port from the scheme when the URL omits one", func() {
+			r, err := networkpolicy.EntityRuleForURL("https://otlp.example.com", "cluster.local")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(r.Ports).To(Equal([]numorstring.Port{port(443)}))
+
+			r, err = networkpolicy.EntityRuleForURL("http://otlp.example.com", "cluster.local")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(r.Ports).To(Equal([]numorstring.Port{port(80)}))
+		})
+
+		It("errors on a scheme it cannot default a port for", func() {
+			_, err := networkpolicy.EntityRuleForURL("ftp://otlp.example.com", "cluster.local")
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("errors when the URL has no host", func() {
+			_, err := networkpolicy.EntityRuleForURL("https://", "cluster.local")
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Describe("ParseHostPort", func() {
 		It("splits a host:port destination", func() {
 			host, p, err := networkpolicy.ParseHostPort("mgmt.example.com:9449")

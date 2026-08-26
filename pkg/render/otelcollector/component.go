@@ -21,13 +21,11 @@ import (
 	_ "embed"
 	"fmt"
 	"maps"
-	"net/url"
 	"slices"
 	"strings"
 	"text/template"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
@@ -838,34 +836,9 @@ func (c *component) statefulSet() *appsv1.StatefulSet {
 	}
 }
 
-// exporterDestination resolves the egress destination for an exporter. The
-// endpoint is a URL, so the host and port come from it, defaulting the port
-// from the scheme.
+// exporterDestination resolves the egress destination for an exporter.
 func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain string) (v3.EntityRule, error) {
-	u, err := url.Parse(exp.Endpoint)
-	if err != nil {
-		return v3.EntityRule{}, err
-	}
-	host := u.Hostname()
-	if host == "" {
-		return v3.EntityRule{}, fmt.Errorf("exporter endpoint %q has no host", exp.Endpoint)
-	}
-	portStr := u.Port()
-	if portStr == "" {
-		switch u.Scheme {
-		case "https":
-			portStr = "443"
-		case "http":
-			portStr = "80"
-		default:
-			return v3.EntityRule{}, fmt.Errorf("exporter endpoint %q has an unsupported scheme %q", exp.Endpoint, u.Scheme)
-		}
-	}
-	port, err := numorstring.PortFromString(portStr)
-	if err != nil {
-		return v3.EntityRule{}, err
-	}
-	return networkpolicy.EntityRuleForHostPort(host, clusterDomain, port), nil
+	return networkpolicy.EntityRuleForURL(exp.Endpoint, clusterDomain)
 }
 
 func (c *component) networkPolicy() *v3.NetworkPolicy {

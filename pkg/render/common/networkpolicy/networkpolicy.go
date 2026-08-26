@@ -381,6 +381,36 @@ func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port
 	return rule
 }
 
+// EntityRuleForURL is EntityRuleForDestination for a caller whose destination is
+// a URL rather than a host:port. The port comes from the URL, or from the
+// scheme when the URL omits it.
+func EntityRuleForURL(rawURL, clusterDomain string) (v3.EntityRule, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	host := u.Hostname()
+	if host == "" {
+		return v3.EntityRule{}, fmt.Errorf("url %q has no host", rawURL)
+	}
+	portStr := u.Port()
+	if portStr == "" {
+		switch u.Scheme {
+		case "https":
+			portStr = "443"
+		case "http":
+			portStr = "80"
+		default:
+			return v3.EntityRule{}, fmt.Errorf("url %q has an unsupported scheme %q", rawURL, u.Scheme)
+		}
+	}
+	port, err := numorstring.PortFromString(portStr)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	return EntityRuleForHostPort(host, clusterDomain, port), nil
+}
+
 // EntityRuleForDestination is ParseHostPort followed by EntityRuleForHostPort,
 // for the common case where a component holds a "host:port" string.
 func EntityRuleForDestination(destination, clusterDomain string) (v3.EntityRule, error) {
