@@ -34,9 +34,9 @@ golang.org/x/text v0.41.0
 golang.org/x/time v0.15.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/yaml.v3 v3.0.1
-k8s.io/api v0.37.0-rc.1
-k8s.io/apimachinery v0.37.0-rc.1
-k8s.io/client-go v0.37.0-rc.1
+k8s.io/api v0.37.0
+k8s.io/apimachinery v0.37.0
+k8s.io/client-go v0.37.0
 k8s.io/klog v0.2.0
 k8s.io/klog/v2 v2.140.0
 k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
