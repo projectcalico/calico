@@ -308,21 +308,11 @@ e2e-test-bpf:
 		KUBECONFIG=$(KIND_KUBECONFIG) \
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
-## Build the rapidclient helper image from PR source and load it into the kind
-## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
-## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
-## is loaded via containerd-import to match the PullNever model that
-## images.RapidClientImage()/packet_size.go already use for gcp.
-##
-## Not `kind load docker-image`: that target calls parseSnapshotter on the
-## node's containerd config.toml, and kind <= v0.32 only knows config
-## versions 2 and 3. kindest/node v1.35.5 (see metadata.mk) ships containerd
-## 2.1 which dumps config version 4, so `kind load` errors:
-##   ERROR: unknown containerd config version: 4 (supported versions: 2 and 3)
-## Do the equivalent by hand: docker save the image on the host and pipe
-## into `ctr images import` inside each kind node. Snapshotter is pinned
-## to "overlayfs" — the kind default and what parseSnapshotter would have
-## returned for either config version.
+## Build rapidclient and import it into every kind node (PullNever, matching
+## the gcp path in packet_size.go). Not `kind load docker-image`: kind <=
+## v0.32 rejects containerd config version 4 shipped by kindest/node v1.35.5.
+## `docker save | ctr images import` is the equivalent; snapshotter pinned
+## to overlayfs — kind's default.
 .PHONY: kind-load-rapidclient
 kind-load-rapidclient:
 	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)

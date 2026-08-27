@@ -44,19 +44,10 @@ func (f *Registry) ConfigureNodes(ctx context.Context, kindNodes []nodes.Node, u
 	if err != nil {
 		return err
 	}
-	// response_header_timeout / request_timeout / dial_timeout are the
-	// per-host HTTP timeouts containerd applies to the fetcher talking
-	// to this mirror. Defaults are aggressive (seconds). ensureManifest
-	// / ensureBlob keep any single facade request bounded (manifests
-	// are KB, blobs are one layer), so on the fast path these limits
-	// never come near firing. They're a safety net for the streaming
-	// blob case on slow upstreams — a large single layer over a slow
-	// link can still take longer than containerd's default response
-	// header timeout, so we bump it here rather than have containerd
-	// give up mid-transfer. Warm-cache pulls stay ms-fast — the facade
-	// responds immediately once the manifest / blob is in the internal
-	// store. Supported by containerd 2.x, which is what kindest/node
-	// images from kind v0.27+ ship.
+	// Safety net for the streaming-blob case on slow upstreams: a
+	// single large layer can outrun containerd's default response
+	// header timeout. On the fast path (KB manifest, warm cache)
+	// these never fire. containerd 2.x only.
 	hostsTOML := fmt.Sprintf(`[host.%q]
   capabilities = ["pull", "resolve"]
   dial_timeout = "30s"
