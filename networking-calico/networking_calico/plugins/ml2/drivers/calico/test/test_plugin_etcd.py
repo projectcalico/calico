@@ -1684,6 +1684,13 @@ class TestPluginEtcd(TestPluginEtcdBase):
             neutron_protocol_spec,
             calico_protocol_spec,
         ) in lib.m_neutron_lib.constants.IP_PROTOCOL_MAP.items():
+            if neutron_protocol_spec in ("icmp", "ipv6-icmp"):
+                # _neutron_rule_to_etcd_rule maps these to Calico's ICMP and
+                # ICMPv6 names before it consults IP_PROTOCOL_MAP, so they do
+                # not follow the name-to-number rule the rest of the map does.
+                # Covered by the ICMP tests above.
+                continue
+
             self.assertNeutronToEtcd(
                 _neutron_rule_from_dict(
                     {
@@ -1711,6 +1718,13 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 },
             )
 
+    # Note on the protocol numbers expected below.  Calico's protocol field
+    # takes either a name or an IANA number, and neutron's IP_PROTOCOL_MAP has
+    # an entry for "tcp", so _neutron_rule_to_etcd_rule maps it to 6 rather
+    # than falling through to its upper-casing default.  These tests used to
+    # expect "TCP", which only looked right because the test lib faked
+    # IP_PROTOCOL_MAP with three entries that did not include "tcp".
+
     def test_sg_rule_ingress_no_remote_ip_prefix(self):
         # SG ingress rule with ports but no remote IP prefix
         self.assertNeutronToEtcd(
@@ -1725,7 +1739,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -1744,7 +1758,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -1763,7 +1777,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
                 "source": {"nets": ["1.2.3.0/24"]},
             },
         )
@@ -1784,7 +1798,7 @@ class TestPluginEtcd(TestPluginEtcdBase):
                 "action": "Allow",
                 "destination": {"nets": ["1.2.3.0/24"], "ports": ["25:34"]},
                 "ipVersion": 4,
-                "protocol": "TCP",
+                "protocol": 6,
             },
         )
 
@@ -2991,6 +3005,31 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
             ],
             mock_calls,
         )
+        self.assertEqual(
+            [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
+            m_spawn.mock_calls,
+        )
+
+    @mock.patch("eventlet.spawn")
+    def test_try_to_update_port_status_fail_sqlalchemy(self, _m_spawn):
+        # As above, but for the non-DBError arm of the handler.  Worth its own
+        # test because that "except sa_exc.SQLAlchemyError" is only evaluated
+        # when something other than a DBError reaches it: while sqlalchemy was
+        # mocked out, the name resolved to a MagicMock attribute rather than a
+        # class, and reaching this line raised TypeError -- "catching classes
+        # that do not inherit from BaseException is not allowed" -- instead of
+        # scheduling the retry.
+        self.driver._get_db()
+        self.driver._init_start_endpoint_status_watcher()
+
+        def m_update_port_status(context, port_id, status, host=None):
+            raise lib.SQLAlchemyError()
+
+        self.db.update_port_status = m_update_port_status
+        self.driver._port_status_cache[("host", "p1")] = "up"
+        context = mock.Mock()
+        with mock.patch("eventlet.spawn_after", autospec=True) as m_spawn:
+            self.driver._try_to_update_port_status(context, ("host", "p1"))
         self.assertEqual(
             [mock.call(5, self.driver._retry_port_status_update, ("host", "p1"))],
             m_spawn.mock_calls,
