@@ -82,13 +82,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac")
 
 		var (
-			adminCli        ctrlclient.Client
-			ctx             context.Context
-			cancel          context.CancelFunc
-			testTier        string
-			otherTier       string
-			suffix          string
-			operatorManaged bool
+			adminCli          ctrlclient.Client
+			ctx               context.Context
+			cancel            context.CancelFunc
+			testTier          string
+			otherTier         string
+			suffix            string
+			expectPassthrough bool
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
@@ -116,7 +116,7 @@ var _ = describe.CalicoDescribe(
 			testTier = "e2e-rbac-test-" + suffix
 			otherTier = "e2e-rbac-other-" + suffix
 
-			operatorManaged = hasOperator(ctx, f.ClientSet)
+			expectPassthrough = hasOperator(ctx, f.ClientSet) || hasTieredPolicyWebhook(ctx, f.ClientSet)
 
 			By("Creating test tiers")
 			for _, t := range []struct {
@@ -147,7 +147,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -931,7 +931,7 @@ type tieredRBACSetup struct {
 // (e.g. the calico-apiserver briefly went unavailable) and left resources
 // behind cannot 409 the next spec's creates, and parallel specs don't
 // collide on cluster-scoped resources.
-func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, operatorManaged bool) tieredRBACSetup {
+func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, expectPassthrough bool) tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
 	addRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
@@ -980,9 +980,8 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, ope
 		})
 	}
 
-	// baseRules returns the non-tiered policy RBAC that all test users need. On an operator
-	// install the writes are left out, so the write path depends on the operator-rendered
-	// passthrough; a manifest install has no passthrough, so the users grant themselves.
+	// baseRules returns the non-tiered policy RBAC that all test users need. Writes are
+	// left out where a passthrough is expected, so the write path depends on it instead.
 	baseRules := func() []rbacv1.PolicyRule {
 		resources := []string{
 			"networkpolicies",
@@ -997,7 +996,7 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, ope
 				Verbs:     []string{"get", "list", "watch"},
 			},
 		}
-		if !operatorManaged {
+		if !expectPassthrough {
 			rules = append(rules, rbacv1.PolicyRule{
 				APIGroups: []string{"projectcalico.org"},
 				Resources: resources,
@@ -1210,7 +1209,7 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, ope
 			Verbs:     []string{"get", "list", "watch"},
 		},
 	}
-	if !operatorManaged {
+	if !expectPassthrough {
 		namespacedRules = append(namespacedRules, rbacv1.PolicyRule{
 			APIGroups: []string{"projectcalico.org"},
 			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
@@ -1222,6 +1221,17 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, ope
 	return setup
 }
 
+// hasTieredPolicyWebhook reports whether the tiered policy admission webhook is installed. A
+// manifest install in v3 CRD mode ships it alongside the passthrough ClusterRole.
+func hasTieredPolicyWebhook(ctx context.Context, cs kubernetes.Interface) bool {
+	_, err := cs.AdmissionregistrationV1().ValidatingWebhookConfigurations().Get(ctx, "api.projectcalico.org", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false
+	}
+	Expect(err).NotTo(HaveOccurred(), "failed to look up the api.projectcalico.org webhook configuration")
+	return true
+}
+
 // hasOperator reports whether Calico is operator-managed, as opposed to a manifest install.
 func hasOperator(ctx context.Context, cs kubernetes.Interface) bool {
 	deployments, err := cs.AppsV1().Deployments("").List(ctx, metav1.ListOptions{
@@ -1231,8 +1241,8 @@ func hasOperator(ctx context.Context, cs kubernetes.Interface) bool {
 	return len(deployments.Items) > 0
 }
 
-// tieredPolicyPassthrough returns the operator-rendered passthrough ClusterRole, and whether
-// it exists at all: a manifest install has no operator and so grants no passthrough.
+// tieredPolicyPassthrough returns the tiered policy passthrough ClusterRole, and whether it
+// exists at all.
 func tieredPolicyPassthrough(ctx context.Context, cs kubernetes.Interface) (*rbacv1.ClusterRole, bool) {
 	cr, err := cs.RbacV1().ClusterRoles().Get(ctx, tieredPolicyPassthroughRole, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -1256,13 +1266,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac-prefixed")
 
 		var (
-			adminCli        ctrlclient.Client
-			ctx             context.Context
-			cancel          context.CancelFunc
-			testTier        string
-			otherTier       string
-			suffix          string
-			operatorManaged bool
+			adminCli          ctrlclient.Client
+			ctx               context.Context
+			cancel            context.CancelFunc
+			testTier          string
+			otherTier         string
+			suffix            string
+			expectPassthrough bool
 		)
 
 		BeforeEach(func() {
@@ -1272,7 +1282,7 @@ var _ = describe.CalicoDescribe(
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
 
-			operatorManaged = hasOperator(ctx, f.ClientSet)
+			expectPassthrough = hasOperator(ctx, f.ClientSet) || hasTieredPolicyWebhook(ctx, f.ClientSet)
 
 			suffix = utils.GenerateRandomName("rbac")
 			testTier = "e2e-rbac-test-" + suffix
@@ -1286,7 +1296,7 @@ var _ = describe.CalicoDescribe(
 			Expect(adminCli.Create(ctx, tier)).To(Succeed())
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1302,7 +1312,7 @@ var _ = describe.CalicoDescribe(
 			var errOccurred bool
 
 			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, expectPassthrough)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
 					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
