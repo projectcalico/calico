@@ -55,6 +55,10 @@ const (
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
+
+	// Passthrough ClusterRole rendered by the operator, which grants every authenticated
+	// user the bare policy verbs that the tiered admission webhook then authorizes.
+	tieredPolicyPassthroughRole = "calico-tiered-policy-passthrough"
 )
 
 // DESCRIPTION: Verify tiered RBAC correctly enforces tier-based access control
@@ -78,12 +82,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac")
 
 		var (
-			adminCli  ctrlclient.Client
-			ctx       context.Context
-			cancel    context.CancelFunc
-			testTier  string
-			otherTier string
-			suffix    string
+			adminCli        ctrlclient.Client
+			ctx             context.Context
+			cancel          context.CancelFunc
+			testTier        string
+			otherTier       string
+			suffix          string
+			operatorManaged bool
 		)
 
 		// newImpersonatedClient creates a controller-runtime client that impersonates the given user.
@@ -110,6 +115,8 @@ var _ = describe.CalicoDescribe(
 			suffix = utils.GenerateRandomName("rbac")
 			testTier = "e2e-rbac-test-" + suffix
 			otherTier = "e2e-rbac-other-" + suffix
+
+			operatorManaged = hasOperator(ctx, f.ClientSet)
 
 			By("Creating test tiers")
 			for _, t := range []struct {
@@ -140,7 +147,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -860,6 +867,41 @@ var _ = describe.CalicoDescribe(
 			})
 		})
 
+		// The passthrough is what grants tiered policy verbs to every authenticated user, so its
+		// verb list is the boundary between what the webhook gates and what plain RBAC gates.
+		framework.Context("operator-rendered passthrough", describe.RequiresOperator(), func() {
+			It("should grant the tiered policy write verbs and no read verbs in v3 CRD mode", func() {
+				cr, ok := tieredPolicyPassthrough(ctx, f.ClientSet)
+				Expect(ok).To(BeTrue(), "expected the operator to render the %s ClusterRole", tieredPolicyPassthroughRole)
+
+				var resources, verbs []string
+				for _, rule := range cr.Rules {
+					resources = append(resources, rule.Resources...)
+					verbs = append(verbs, rule.Verbs...)
+				}
+
+				By("Checking the tiered policy resources are covered")
+				Expect(resources).To(ConsistOf("networkpolicies", "globalnetworkpolicies", "stagednetworkpolicies", "stagedglobalnetworkpolicies"),
+					"the passthrough should cover exactly the tiered policy types")
+
+				By("Checking every verb the admission webhook intercepts is granted")
+				Expect(verbs).To(ContainElements("create", "update", "delete", "deletecollection"),
+					"the passthrough must grant the write verbs the webhook authorizes")
+
+				if hasCalicoAPIServer(ctx, f.ClientSet) {
+					By("Checking reads pass through, since the aggregated API server authorizes them")
+					Expect(verbs).To(ContainElements("get", "list", "watch"))
+					return
+				}
+
+				// No webhook covers reads, so a passthrough that granted them would hand every
+				// authenticated user read access to all policy in every tier.
+				By("Checking reads are left to ordinary RBAC in v3 CRD mode")
+				Expect(verbs).NotTo(ContainElement("get"))
+				Expect(verbs).NotTo(ContainElement("list"))
+				Expect(verbs).NotTo(ContainElement("watch"))
+			})
+		})
 	},
 )
 
@@ -889,7 +931,7 @@ type tieredRBACSetup struct {
 // (e.g. the calico-apiserver briefly went unavailable) and left resources
 // behind cannot 409 the next spec's creates, and parallel specs don't
 // collide on cluster-scoped resources.
-func buildTieredRBACResources(testTier, otherTier, suffix, namespace string) tieredRBACSetup {
+func buildTieredRBACResources(testTier, otherTier, suffix, namespace string, operatorManaged bool) tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
 	addRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
@@ -938,20 +980,31 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string) tie
 		})
 	}
 
-	// baseRules returns the non-tiered policy RBAC that all test users need.
+	// baseRules returns the non-tiered policy RBAC that all test users need. On an operator
+	// install the writes are left out, so the write path depends on the operator-rendered
+	// passthrough; a manifest install has no passthrough, so the users grant themselves.
 	baseRules := func() []rbacv1.PolicyRule {
-		return []rbacv1.PolicyRule{
+		resources := []string{
+			"networkpolicies",
+			"globalnetworkpolicies",
+			"stagednetworkpolicies",
+			"stagedglobalnetworkpolicies",
+		}
+		rules := []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{
-					"networkpolicies",
-					"globalnetworkpolicies",
-					"stagednetworkpolicies",
-					"stagedglobalnetworkpolicies",
-				},
-				Verbs: []string{"create", "update", "delete", "deletecollection", "get", "list", "watch"},
+				Resources: resources,
+				Verbs:     []string{"get", "list", "watch"},
 			},
 		}
+		if !operatorManaged {
+			rules = append(rules, rbacv1.PolicyRule{
+				APIGroups: []string{"projectcalico.org"},
+				Resources: resources,
+				Verbs:     []string{"create", "update", "delete", "deletecollection"},
+			})
+		}
+		return rules
 	}
 
 	// Tier admin: has GET on the test tier + wildcard policy access for the test tier.
@@ -1156,15 +1209,37 @@ func buildTieredRBACResources(testTier, otherTier, suffix, namespace string) tie
 			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
 			Verbs:     []string{"get", "list", "watch"},
 		},
-		{
+	}
+	if !operatorManaged {
+		namespacedRules = append(namespacedRules, rbacv1.PolicyRule{
 			APIGroups: []string{"projectcalico.org"},
 			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
 			Verbs:     []string{"create", "update", "delete"},
-		},
+		})
 	}
 	addNamespacedRoleAndBinding("namespaced", rbacNamespacedUser, namespacedRules)
 
 	return setup
+}
+
+// hasOperator reports whether Calico is operator-managed, as opposed to a manifest install.
+func hasOperator(ctx context.Context, cs kubernetes.Interface) bool {
+	deployments, err := cs.AppsV1().Deployments("").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=tigera-operator",
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to list tigera-operator deployments")
+	return len(deployments.Items) > 0
+}
+
+// tieredPolicyPassthrough returns the operator-rendered passthrough ClusterRole, and whether
+// it exists at all: a manifest install has no operator and so grants no passthrough.
+func tieredPolicyPassthrough(ctx context.Context, cs kubernetes.Interface) (*rbacv1.ClusterRole, bool) {
+	cr, err := cs.RbacV1().ClusterRoles().Get(ctx, tieredPolicyPassthroughRole, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, false
+	}
+	Expect(err).NotTo(HaveOccurred(), "failed to look up the %s ClusterRole", tieredPolicyPassthroughRole)
+	return cr, true
 }
 
 // DESCRIPTION: Verify tiered RBAC using tier-prefixed policy names (e.g., "tier.policyname"),
@@ -1181,12 +1256,13 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("tiered-rbac-prefixed")
 
 		var (
-			adminCli  ctrlclient.Client
-			ctx       context.Context
-			cancel    context.CancelFunc
-			testTier  string
-			otherTier string
-			suffix    string
+			adminCli        ctrlclient.Client
+			ctx             context.Context
+			cancel          context.CancelFunc
+			testTier        string
+			otherTier       string
+			suffix          string
+			operatorManaged bool
 		)
 
 		BeforeEach(func() {
@@ -1195,6 +1271,8 @@ var _ = describe.CalicoDescribe(
 
 			adminCli, err = client.New(f.ClientConfig())
 			Expect(err).NotTo(HaveOccurred())
+
+			operatorManaged = hasOperator(ctx, f.ClientSet)
 
 			suffix = utils.GenerateRandomName("rbac")
 			testTier = "e2e-rbac-test-" + suffix
@@ -1208,7 +1286,7 @@ var _ = describe.CalicoDescribe(
 			Expect(adminCli.Create(ctx, tier)).To(Succeed())
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -1224,7 +1302,7 @@ var _ = describe.CalicoDescribe(
 			var errOccurred bool
 
 			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name, operatorManaged)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
 					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
@@ -1295,17 +1373,23 @@ var _ = describe.CalicoDescribe(
 // mutating operations. Tests that verify read-path tier RBAC enforcement
 // must call this in a BeforeEach so they fail immediately with a clear
 // message when the API server is absent.
+// hasCalicoAPIServer reports whether the aggregated Calico API server is serving the v3 API,
+// as opposed to the API being served through CRDs.
+func hasCalicoAPIServer(ctx context.Context, cs kubernetes.Interface) bool {
+	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		LabelSelector: "k8s-app=calico-apiserver",
+	})
+	Expect(err).NotTo(HaveOccurred(), "failed to list calico-apiserver pods")
+	return len(pods.Items) > 0
+}
+
 func requireCalicoAPIServer(cfg *rest.Config) {
 	cs, err := kubernetes.NewForConfig(cfg)
 	Expect(err).NotTo(HaveOccurred())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	pods, err := cs.CoreV1().Pods("").List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=calico-apiserver",
-	})
-	Expect(err).NotTo(HaveOccurred())
-	if len(pods.Items) == 0 {
+	if !hasCalicoAPIServer(ctx, cs) {
 		Fail(fmt.Sprintf(
 			"This test requires the aggregated Calico API server (calico-apiserver), " +
 				"but no calico-apiserver pods were found. In v3 CRD mode, GET/LIST/WATCH " +
