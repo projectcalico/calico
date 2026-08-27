@@ -30,10 +30,13 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 )
 
+// protocolMapL4 maps an L4 protocol number to the name Felix uses in IP+port IP set
+// members. A named port can be declared on tcp, udp or sctp.
 var protocolMapL4 = map[int32]string{
-	1:  "icmp",
-	6:  "tcp",
-	17: "udp",
+	1:   "icmp",
+	6:   "tcp",
+	17:  "udp",
+	132: "sctp",
 }
 
 type namespaceMatch struct {
@@ -548,20 +551,24 @@ func matchIPSetsNotAny(ids []string, ipsSetFunc func(string) policystore.IPSet, 
 // matchDstPort checks if the destination port is within the port ranges and named port sets. It
 // also checks if the destination port is not within the not port ranges and named port sets.
 func matchDstPort(r *proto.Rule, req *requestCache) bool {
-	return matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort()) &&
-		matchNotPort("dst", r.GetNotDstPorts(), r.GetNotDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort())
+	return matchPort("dst", r.GetDstPorts(), r.GetDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort(), req.getDstIPProtoPortStr) &&
+		matchNotPort("dst", r.GetNotDstPorts(), r.GetNotDstNamedPortIpSetIds(), req.getIPSet, req.GetDestPort(), req.getDstIPProtoPortStr)
 }
 
 // matchSrcPort checks if the source port is within the port ranges and named port sets. It also
 // checks if the source port is not within the not port ranges and named port sets.
 func matchSrcPort(r *proto.Rule, req *requestCache) bool {
-	return matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort()) &&
-		matchNotPort("src", r.GetNotSrcPorts(), r.GetNotSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort())
+	return matchPort("src", r.GetSrcPorts(), r.GetSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort(), req.getSrcIPProtoPortStr) &&
+		matchNotPort("src", r.GetNotSrcPorts(), r.GetNotSrcNamedPortIpSetIds(), req.getIPSet, req.GetSourcePort(), req.getSrcIPProtoPortStr)
 }
 
 // matchPort checks if the port is within the port ranges and named port sets. It returns true if
 // the port matches, false otherwise.
-func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int) bool {
+//
+// A named port set holds "<IP>,<protocol>:<port>" members, not bare port numbers: it names a
+// port on a specific set of endpoints. namedPortKey supplies that key for the leg being tested,
+// which is what the other dataplanes match such a set on.
+func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int, namedPortKey func() string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"ranges":        ranges,
@@ -579,9 +586,12 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ip
 			return true
 		}
 	}
+	if len(namedPortSets) == 0 {
+		return false
+	}
+	key := namedPortKey()
 	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
-		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
+		if s := ipsSetFunc(id); s != nil && s.Contains(key) {
 			return true
 		}
 	}
@@ -589,8 +599,8 @@ func matchPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ip
 }
 
 // matchNotPort checks if the port is not within the port ranges and named port sets. It returns
-// true if the port matches, false otherwise.
-func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int) bool {
+// true if the port matches, false otherwise. See matchPort for how named port sets are keyed.
+func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string, ipsSetFunc func(string) policystore.IPSet, port int, namedPortKey func() string) bool {
 	if log.IsLevelEnabled(log.DebugLevel) {
 		log.WithFields(log.Fields{
 			"ranges":        ranges,
@@ -608,9 +618,12 @@ func matchNotPort(dir string, ranges []*proto.PortRange, namedPortSets []string,
 			return false
 		}
 	}
+	if len(namedPortSets) == 0 {
+		return true
+	}
+	key := namedPortKey()
 	for _, id := range namedPortSets {
-		portStr := fmt.Sprintf("%d", port)
-		if s := ipsSetFunc(id); s != nil && s.Contains(portStr) {
+		if s := ipsSetFunc(id); s != nil && s.Contains(key) {
 			return false
 		}
 	}
