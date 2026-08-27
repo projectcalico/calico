@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"slices"
 	"strings"
 
 	admregv1 "k8s.io/api/admissionregistration/v1"
@@ -395,16 +394,6 @@ func modifyAPIServer(ri render.Inputs, cfg *render.APIServerConfiguration, creat
 
 	c.layerDeployment(extensions.MustFindObject[*appsv1.Deployment](create, render.APIServerName))
 	c.addServicePorts(extensions.MustFindObject[*corev1.Service](create, render.APIServerServiceName))
-	// Enterprise serves staged policies through the tiered-policy passthrough role, which
-	// the base only creates when running an aggregation API server.
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](create, render.TieredPolicyPassthruClusterRoleName); ok {
-		for i := range role.Rules {
-			if slices.Contains(role.Rules[i].Resources, "networkpolicies") {
-				role.Rules[i].Resources = append(role.Rules[i].Resources, "stagednetworkpolicies", "stagedglobalnetworkpolicies")
-			}
-		}
-	}
-
 	// The L7 sidecar mutating webhook is driven by ApplicationLayer. The base always
 	// queues it for deletion; when sidecar injection is on, render it and pull it back
 	// out of the delete list.

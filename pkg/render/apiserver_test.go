@@ -220,8 +220,14 @@ var _ = Describe("API server rendering tests (Calico)", func() {
 		for _, rule := range cr.Rules {
 			tieredPolicyRules = append(tieredPolicyRules, rule.Resources...)
 		}
-		Expect(tieredPolicyRules).To(ContainElements("networkpolicies", "globalnetworkpolicies"))
-		Expect(tieredPolicyRules).ToNot(ContainElements("stagednetworkpolicies", "stagedglobalnetworkpolicies"))
+		// Staged policies are tiered in both variants, so they get the same passthrough.
+		Expect(tieredPolicyRules).To(ContainElements("networkpolicies", "globalnetworkpolicies",
+			"stagednetworkpolicies", "stagedglobalnetworkpolicies"))
+		// StagedKubernetesNetworkPolicy has no tier and is handled by ordinary RBAC.
+		Expect(tieredPolicyRules).ToNot(ContainElement("stagedkubernetesnetworkpolicies"))
+
+		// The aggregation API server authorizes reads itself, so the passthrough covers them too.
+		Expect(cr.Rules[0].Verbs).To(ContainElements("get", "list", "watch"))
 	},
 		Entry("default cluster domain", dns.DefaultClusterDomain),
 		Entry("custom cluster domain", "custom-domain.internal"),
@@ -250,6 +256,27 @@ var _ = Describe("API server rendering tests (Calico)", func() {
 		rtest.ExpectResourceInList(deleteResources, "calico-apiserver", "calico-system", "apps", "v1", "Deployment")
 		rtest.ExpectResourceInList(deleteResources, "calico-api", "calico-system", "", "v1", "Service")
 		rtest.ExpectResourceInList(deleteResources, "calico-apiserver", "calico-system", "policy", "v1", "PodDisruptionBudget")
+	})
+
+	It("should render a write-only tiered policy passthrough in v3 CRD mode", func() {
+		cfg.RequiresAggregationServer = false
+
+		component, err := render.APIServer(cfg)
+		Expect(err).To(BeNil(), "Expected APIServer to create successfully %s", err)
+		Expect(component.ResolveImages(nil)).To(BeNil())
+		resources, _ := apiServerObjects(component)
+
+		cr := rtest.GetResource(resources, "calico-tiered-policy-passthrough", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+		Expect(cr.Rules).To(HaveLen(1))
+		Expect(cr.Rules[0].Resources).To(ConsistOf("networkpolicies", "globalnetworkpolicies",
+			"stagednetworkpolicies", "stagedglobalnetworkpolicies"))
+
+		// Writes pass through to the admission webhook, which enforces the tier. Reads have no
+		// such hook, so they stay subject to ordinary RBAC.
+		Expect(cr.Rules[0].Verbs).To(ConsistOf("create", "update", "patch", "delete", "deletecollection"))
+		Expect(cr.Rules[0].Verbs).NotTo(ContainElements("get", "list", "watch"))
+
+		rtest.ExpectResourceInList(resources, "calico-tiered-policy-passthrough", "", "rbac.authorization.k8s.io", "v1", "ClusterRoleBinding")
 	})
 
 	It("should not register the aggregation APIService when not requiring the aggregation server", func() {

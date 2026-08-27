@@ -106,6 +106,16 @@ var (
 		"delete",
 		"deletecollection",
 	}
+
+	// writeVerbs is the subset of allVerbs that the tiered policy admission webhook
+	// intercepts, used for tiered policy passthrough in v3-CRD mode.
+	writeVerbs = []string{
+		"create",
+		"update",
+		"patch",
+		"delete",
+		"deletecollection",
+	}
 )
 
 func APIServer(cfg *APIServerConfiguration) (Component, error) {
@@ -203,6 +213,8 @@ func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
 		c.delegateAuthClusterRoleBinding(),
 		c.webhookReaderClusterRole(),
 		c.webhookReaderClusterRoleBinding(),
+		c.calicoPolicyPassthruClusterRole(),
+		c.calicoPolicyPassthruClusterRolebinding(),
 	}
 
 	objsToDelete := []client.Object{}
@@ -225,8 +237,6 @@ func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
 	// These are objects that only need to exist when we are running an aggregation API server to
 	// serve projectcalico.org/v3 APIs. If using CRDs for this API group, we can remove these objects.
 	aggregationAPIServerObjects := []client.Object{
-		c.calicoPolicyPassthruClusterRole(),
-		c.calicoPolicyPassthruClusterRolebinding(),
 		c.authClusterRole(),
 		c.authClusterRoleBinding(),
 		c.authReaderRoleBinding(),
@@ -1114,7 +1124,15 @@ func (c *apiServerComponent) kubeControllerMgrTierGetterClusterRoleBinding() *rb
 // calicoPolicyPassthruClusterRole creates a clusterrole that is used to control the RBAC
 // mechanism for Calico tiered policy.
 func (c *apiServerComponent) calicoPolicyPassthruClusterRole() *rbacv1.ClusterRole {
-	resources := []string{"networkpolicies", "globalnetworkpolicies"}
+	resources := []string{"networkpolicies", "globalnetworkpolicies", "stagednetworkpolicies", "stagedglobalnetworkpolicies"}
+
+	// The aggregation API server authorizes reads against the tier.xxx resource type, so it can
+	// pass every verb through. In v3-CRD mode only writes reach the admission webhook, so reads
+	// stay subject to ordinary RBAC and roles must grant them explicitly.
+	verbs := allVerbs
+	if !c.cfg.RequiresAggregationServer {
+		verbs = writeVerbs
+	}
 
 	return &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},
@@ -1128,7 +1146,7 @@ func (c *apiServerComponent) calicoPolicyPassthruClusterRole() *rbacv1.ClusterRo
 			{
 				APIGroups: []string{"projectcalico.org"},
 				Resources: resources,
-				Verbs:     allVerbs,
+				Verbs:     verbs,
 			},
 		},
 	}
