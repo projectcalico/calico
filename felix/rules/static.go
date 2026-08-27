@@ -22,7 +22,7 @@ import (
 	tcdefs "github.com/projectcalico/calico/felix/bpf/tc/defs"
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/generictables"
-	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
 )
@@ -864,7 +864,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *generictables.
 
 	// Matching on conntrack status varies by table type.
 	notDNATMatch := r.NewMatch()
-	if m, ok := notDNATMatch.(nftables.NFTMatchCriteria); ok {
+	if m, ok := notDNATMatch.(nftrender.NFTMatchCriteria); ok {
 		notDNATMatch = m.NotConntrackStatus("DNAT")
 	} else {
 		notDNATMatch = notDNATMatch.NotConntrackState("DNAT")
@@ -1313,7 +1313,7 @@ func (r *DefaultRuleRenderer) StaticManglePostroutingChain(ipVersion uint8) *gen
 
 	// Matching on conntrack status varies by table type.
 	dnatMatch := r.NewMatch()
-	if m, ok := dnatMatch.(nftables.NFTMatchCriteria); ok {
+	if m, ok := dnatMatch.(nftrender.NFTMatchCriteria); ok {
 		dnatMatch = m.ConntrackStatus("DNAT")
 	} else {
 		dnatMatch = dnatMatch.ConntrackState("DNAT")

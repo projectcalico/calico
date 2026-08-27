@@ -33,6 +33,7 @@ import (
 	"github.com/projectcalico/calico/felix/iptables"
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/rules"
@@ -315,8 +316,8 @@ func newEndpointManagerWithShims(
 	newMatchFn := iptables.Match
 	actions := iptables.Actions()
 	if cfg.nft {
-		newMatchFn = nftables.Match
-		actions = nftables.Actions()
+		newMatchFn = nftrender.Match
+		actions = nftrender.Actions()
 	}
 
 	epManager := &endpointManager{
@@ -893,7 +894,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			if len(wl.Ipv4Nets) == 0 {
 				continue
 			}
-			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftables.MaxChainNameLength)
+			chainName := rules.EndpointChainName(rules.WorkloadARPPfx, wl.Name, nftrender.MaxChainNameLength)
 			arpMappings[wl.Name] = []string{fmt.Sprintf("goto %s", chainName)}
 		}
 		m.arpMaps.AddOrReplaceMap(nftables.MapMetadata{Name: rules.NftablesARPDispatchMap, Type: nftables.MapTypeInterfaceMatch}, arpMappings)
@@ -903,7 +904,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			Name: rules.ChainARPDispatch,
 			Rules: []generictables.Rule{
 				{
-					Match: nftables.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
+					Match: nftrender.Match().OutInterfaceVMAP(rules.NftablesARPDispatchMap),
 				},
 			},
 		}
@@ -1077,7 +1078,7 @@ func (m *endpointManager) updateWorkloadARPChains(
 		return
 	}
 
-	maxLen := nftables.MaxChainNameLength
+	maxLen := nftrender.MaxChainNameLength
 	chainName := rules.EndpointChainName(rules.WorkloadARPPfx, workload.Name, maxLen)
 
 	var arpRules []generictables.Rule
@@ -1088,8 +1089,8 @@ func (m *endpointManager) updateWorkloadARPChains(
 			continue
 		}
 		arpRules = append(arpRules, generictables.Rule{
-			Match:  nftables.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
-			Action: nftables.DropAction{},
+			Match:  nftrender.Match().OutInterface(workload.Name).ARPOperation("reply").ARPSrcIP(ipAddr),
+			Action: nftrender.DropAction{},
 		})
 	}
 
