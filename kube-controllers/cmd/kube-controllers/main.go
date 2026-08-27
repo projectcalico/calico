@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -186,7 +186,7 @@ func main() {
 		}
 		log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
 
-		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, libcalicoClient, flannelConfig)
+		flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, k8sconfig, libcalicoClient, flannelConfig)
 		controllerCtrl.controllers["FlannelMigration"] = flannelMigrationController
 
 		// Set some global defaults for flannelmigration
