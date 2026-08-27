@@ -12003,9 +12003,8 @@ spec:
                       type: string
                     ipPools:
                       description: |-
-                        IPPools contains a list of IP pools to manage. If nil, the operator chooses: on a cluster with no
-                        operator-managed pools it creates a single IPv4 pool, and on a cluster that already has them it keeps
-                        the pools in use. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
+                        IPPools contains a list of IP pools to manage. If unset, the operator fills it in with defaults based
+                        on cluster state. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
                         pools it owns and creates none.
                         IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
                       items:
@@ -12034,7 +12033,13 @@ spec:
                             description:
                               CIDR contains the address range for the IP
                               Pool in classless inter-domain routing format.
+                            maxLength: 43
                             type: string
+                            x-kubernetes-validations:
+                              - message:
+                                  cidr must be in canonical form, for example 192.168.0.0/16
+                                  or fd00:10:244::/64
+                                rule: isCIDR(self) && string(cidr(self).masked()) == self
                           disableBGPExport:
                             default: false
                             description: |-
@@ -12082,6 +12087,9 @@ spec:
                         type: object
                       maxItems: 25
                       type: array
+                      x-kubernetes-list-map-keys:
+                        - cidr
+                      x-kubernetes-list-type: map
                     kubeProxyManagement:
                       description: |-
                         KubeProxyManagement controls whether the operator manages the kube-proxy DaemonSet.
