@@ -521,6 +521,7 @@ local:libcalico-go/lib/epstatusfile
 local:libcalico-go/lib/errors
 local:libcalico-go/lib/hash
 local:libcalico-go/lib/health
+local:libcalico-go/lib/informerutil
 local:libcalico-go/lib/ipam/vmipam
 local:libcalico-go/lib/kubevirt
 local:libcalico-go/lib/metricsserver
