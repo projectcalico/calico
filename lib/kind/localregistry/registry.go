@@ -39,6 +39,7 @@
 package localregistry
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -54,7 +55,9 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 
 	"github.com/projectcalico/calico/lib/std/log"
 )
@@ -207,10 +210,14 @@ func (f *Registry) Cached() []string {
 	return keys
 }
 
-// ServeHTTP implements the facade. It rewrites the ns-scoped request path to
-// a namespaced repo in the internal store, lazily populates that repo from
-// the upstream on a manifest miss, then reverse-proxies to the internal
-// store which does the real OCI protocol work.
+// ServeHTTP is the facade. It rewrites ns-scoped paths to namespaced repos
+// in the internal store, populates them on first miss, then reverse-proxies
+// the request. Pull-through is split per request kind — manifest bytes on
+// a manifest miss, one blob on a blob miss — so no single request holds
+// the connection open for the whole image transfer (the old flow pulled
+// every layer inside the manifest HEAD, tripping containerd's mirror
+// response_header_timeout on Kibana / Elasticsearch). Overrides remain
+// whole-image pushes (override.go) — local builds, no time cost.
 func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ns := r.URL.Query().Get("ns")
 	repo, kind, ref, ok := parseRepoRequest(r.URL.Path)
@@ -222,18 +229,24 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// On a manifest read, make sure the (namespaced) repo is populated —
-	// either from a prior Override or by pulling from the upstream now.
-	if kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		if err := f.ensure(r.Context(), ns, repo, ref); err != nil {
-			f.log.Warn("pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
+	switch {
+	case kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead):
+		// Populate on HEAD too — the manifest is a few KB either way.
+		if err := f.ensureManifest(r.Context(), ns, repo, ref); err != nil {
+			f.log.Warn("manifest pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+	case kind == "blobs" && r.Method == http.MethodGet:
+		// GET only — a HEAD on a missing blob stays cheap (404 from
+		// the internal store); the follow-up GET triggers the pull.
+		if err := f.ensureBlob(r.Context(), ns, repo, ref); err != nil {
+			f.log.Warn("blob pull-through failed", "ns", ns, "repo", repo, "digest", ref, "error", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
 	}
 
-	// Blobs pulled for that manifest are already present under the same
-	// namespaced repo, so blob requests just proxy through.
 	f.serveInternal(w, r, fmt.Sprintf("/v2/%s/%s/%s/%s", safeNS(ns), repo, kind, ref))
 }
 
@@ -250,13 +263,12 @@ func (f *Registry) serveInternal(w http.ResponseWriter, r *http.Request, path st
 	f.proxy.ServeHTTP(w, r)
 }
 
-// ensure guarantees the (ns, repo, ref) manifest and its blobs are present
-// in the internal store. Overridden refs are already present and marked, so
-// this is a no-op for them — that is what makes an override beat upstream.
-// Otherwise it pulls from the real upstream (named by ns) with the host's
-// live keychain and pushes into the internal store; disk-cached blobs are
-// not re-fetched.
-func (f *Registry) ensure(ctx context.Context, ns, repo, ref string) error {
+// ensureManifest puts the (ns, repo, ref) manifest into the internal store
+// if it isn't there yet. Overridden refs are already present, so this
+// no-ops for them (that's how an override beats upstream). Otherwise it
+// pulls just the manifest bytes from ns with the host's keychain — blobs
+// come later via ensureBlob when containerd asks for them.
+func (f *Registry) ensureManifest(ctx context.Context, ns, repo, ref string) error {
 	k := key(ns, repo, ref)
 	f.mu.Lock()
 	present := f.cached[k]
@@ -271,7 +283,7 @@ func (f *Registry) ensure(ctx context.Context, ns, repo, ref string) error {
 	// or content from a previous process. If it's there, serve it and do NOT
 	// pull through, so an override is never clobbered by the upstream (this is
 	// what makes a pushed override stick, even under imagePullPolicy: Always).
-	if f.existsInternal(ctx, ns, repo, ref) {
+	if f.manifestExistsInternal(ctx, ns, repo, ref) {
 		f.mu.Lock()
 		f.cached[k] = true
 		f.mu.Unlock()
@@ -279,15 +291,34 @@ func (f *Registry) ensure(ctx context.Context, ns, repo, ref string) error {
 	}
 
 	upstream := joinRef("", ns, repo, ref)
-	internal := joinRef(f.internalHost, safeNS(ns), repo, ref)
-	f.log.Info("pull-through", "upstream", upstream, "internal", internal)
+	f.log.Info("manifest pull-through", "upstream", upstream)
 
-	img, err := crane.Pull(upstream, f.pullOpts(ctx)...)
+	upstreamRef, err := name.ParseReference(upstream, f.upstreamNameOpts()...)
 	if err != nil {
-		return fmt.Errorf("pull %s: %w", upstream, err)
+		return fmt.Errorf("parse upstream %s: %w", upstream, err)
 	}
-	if err := crane.Push(img, internal, f.pushOpts(ctx)...); err != nil {
-		return fmt.Errorf("cache %s: %w", internal, err)
+	desc, err := remote.Get(upstreamRef, f.remoteOpts(ctx)...)
+	if err != nil {
+		return fmt.Errorf("fetch manifest %s: %w", upstream, err)
+	}
+
+	// PUT the manifest under the safeNS'd repo. The store accepts a
+	// manifest whose referenced blobs aren't there yet; per-blob GETs
+	// follow and land in ensureBlob.
+	putURL := fmt.Sprintf("%s/v2/%s/%s/manifests/%s", f.internalURL.String(), safeNS(ns), repo, ref)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, putURL, bytes.NewReader(desc.Manifest))
+	if err != nil {
+		return fmt.Errorf("build manifest PUT: %w", err)
+	}
+	req.Header.Set("Content-Type", string(desc.MediaType))
+	req.ContentLength = int64(len(desc.Manifest))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("push manifest to internal: %w", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("push manifest to internal: status %d", resp.StatusCode)
 	}
 
 	f.mu.Lock()
@@ -296,18 +327,58 @@ func (f *Registry) ensure(ctx context.Context, ns, repo, ref string) error {
 	return nil
 }
 
-// existsInternal reports whether a manifest is already present in the internal
-// store, via a HEAD to its loopback endpoint. A non-200 (typically 404) or any
-// error means "not present" — the caller then pulls through.
-func (f *Registry) existsInternal(ctx context.Context, ns, repo, ref string) bool {
-	manifestURL := fmt.Sprintf("%s/v2/%s/%s/manifests/%s", f.internalURL.String(), safeNS(ns), repo, ref)
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
+// ensureBlob puts the blob at (ns, repo, digest) into the internal store
+// if it isn't there yet. Fast path if an Override's crane.Push (or a prior
+// ensureBlob) already put it there. Otherwise: one blob, one HTTP transfer —
+// containerd's per-request timeout never blocks on unrelated layers.
+func (f *Registry) ensureBlob(ctx context.Context, ns, repo, digest string) error {
+	if f.blobExistsInternal(ctx, ns, repo, digest) {
+		return nil
+	}
+
+	upstream := joinRef("", ns, repo, digest)
+	digestRef, err := name.NewDigest(upstream, f.upstreamNameOpts()...)
+	if err != nil {
+		return fmt.Errorf("parse blob digest %s: %w", upstream, err)
+	}
+
+	// remote.Layer + WriteLayer stream the body — no local buffering.
+	layer, err := remote.Layer(digestRef, f.remoteOpts(ctx)...)
+	if err != nil {
+		return fmt.Errorf("fetch blob %s: %w", upstream, err)
+	}
+	internalRepoRef := fmt.Sprintf("%s/%s/%s", f.internalHost, safeNS(ns), repo)
+	internalRepo, err := name.NewRepository(internalRepoRef, f.internalNameOpts()...)
+	if err != nil {
+		return fmt.Errorf("parse internal repo %s: %w", internalRepoRef, err)
+	}
+	if err := remote.WriteLayer(internalRepo, layer, f.pushRemoteOpts(ctx)...); err != nil {
+		return fmt.Errorf("push blob %s to internal: %w", digest, err)
+	}
+	return nil
+}
+
+// manifestExistsInternal HEADs the loopback manifest endpoint. Any non-200
+// (typically 404) means "not present" — the caller pulls through.
+func (f *Registry) manifestExistsInternal(ctx context.Context, ns, repo, ref string) bool {
+	u := fmt.Sprintf("%s/v2/%s/%s/manifests/%s", f.internalURL.String(), safeNS(ns), repo, ref)
+	return f.internalHEAD(ctx, u, "*/*")
+}
+
+// blobExistsInternal is the /blobs/<digest> counterpart.
+func (f *Registry) blobExistsInternal(ctx context.Context, ns, repo, digest string) bool {
+	u := fmt.Sprintf("%s/v2/%s/%s/blobs/%s", f.internalURL.String(), safeNS(ns), repo, digest)
+	return f.internalHEAD(ctx, u, "*/*")
+}
+
+// internalHEAD returns whether the loopback endpoint answered 200; any
+// error is treated as "not present".
+func (f *Registry) internalHEAD(ctx context.Context, url, accept string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
 	if err != nil {
 		return false
 	}
-	// Accept every manifest type so content negotiation never 406s a present
-	// manifest into looking absent.
-	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept", accept)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false
@@ -405,17 +476,40 @@ func (s staticKeychain) Resolve(res authn.Resource) (authn.Authenticator, error)
 	return authn.Anonymous, nil
 }
 
-func (f *Registry) pullOpts(ctx context.Context) []crane.Option {
-	opts := []crane.Option{crane.WithContext(ctx), crane.WithAuthFromKeychain(f.keychain)}
-	if f.cfg.InsecureUpstream {
-		opts = append(opts, crane.Insecure)
-	}
-	return opts
-}
-
 func (f *Registry) pushOpts(ctx context.Context) []crane.Option {
 	// The internal store is plaintext http on loopback, so push is insecure.
 	return []crane.Option{crane.WithContext(ctx), crane.Insecure}
+}
+
+// remoteOpts is the remote-package counterpart of the old crane pullOpts —
+// ensureManifest / ensureBlob use remote directly so they can pull a single
+// manifest or blob without walking the whole image graph.
+func (f *Registry) remoteOpts(ctx context.Context) []remote.Option {
+	return []remote.Option{
+		remote.WithContext(ctx),
+		remote.WithAuthFromKeychain(f.keychain),
+	}
+}
+
+// pushRemoteOpts is the remote counterpart of pushOpts. name.Insecure lives
+// on internalNameOpts, not here — WriteLayer picks it up from the Repository.
+func (f *Registry) pushRemoteOpts(ctx context.Context) []remote.Option {
+	return []remote.Option{remote.WithContext(ctx)}
+}
+
+// upstreamNameOpts parses real upstreams (gcr.io/…, docker.io/…) as https;
+// name.Insecure only for the test-only InsecureUpstream toggle.
+func (f *Registry) upstreamNameOpts() []name.Option {
+	if f.cfg.InsecureUpstream {
+		return []name.Option{name.Insecure}
+	}
+	return nil
+}
+
+// internalNameOpts forces plaintext HTTP — the loopback store binds
+// http-only.
+func (f *Registry) internalNameOpts() []name.Option {
+	return []name.Option{name.Insecure}
 }
 
 // logWriter adapts an io.Writer onto lib/std/log so the go-containerregistry
