@@ -1724,6 +1724,11 @@ class TestPluginEtcd(TestPluginEtcdBase):
     # than falling through to its upper-casing default.  These tests used to
     # expect "TCP", which only looked right because the test lib faked
     # IP_PROTOCOL_MAP with three entries that did not include "tcp".
+    #
+    # "TCP" would read better in the resulting policy, but emitting the number
+    # is long-standing behaviour that no one has ever complained about, and
+    # changing it would change what we write to etcd.  So we deliberately
+    # leave it alone: this is a deliberate expectation, not an oversight.
 
     def test_sg_rule_ingress_no_remote_ip_prefix(self):
         # SG ingress rule with ports but no remote IP prefix
