@@ -51,6 +51,7 @@ const (
 	rbacWatchNoTierUser  = "e2e-rbac-watch-no-tier"
 	rbacBareNameUser     = "e2e-rbac-bare-name"
 	rbacPrefixedNameUser = "e2e-rbac-prefixed-name"
+	rbacNamespacedUser   = "e2e-rbac-namespaced"
 
 	// Common prefix for RBAC resources created by these tests.
 	rbacResourcePrefix = "e2e-tiered-rbac-"
@@ -139,7 +140,7 @@ var _ = describe.CalicoDescribe(
 			}
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -163,6 +164,17 @@ var _ = describe.CalicoDescribe(
 						logrus.WithError(err).WithField("name", bindingName).Error("Failed to delete ClusterRoleBinding")
 					}
 				})
+			}
+
+			// The namespaced grants live in the framework namespace, which is torn down
+			// with the spec, so they need no cleanup of their own.
+			for i := range setup.nsRoles {
+				_, err := f.ClientSet.RbacV1().Roles(f.Namespace.Name).Create(ctx, &setup.nsRoles[i], metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to create Role %s", setup.nsRoles[i].Name)
+			}
+			for i := range setup.nsBindings {
+				_, err := f.ClientSet.RbacV1().RoleBindings(f.Namespace.Name).Create(ctx, &setup.nsBindings[i], metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred(), "failed to create RoleBinding %s", setup.nsBindings[i].Name)
 			}
 		})
 
@@ -677,6 +689,177 @@ var _ = describe.CalicoDescribe(
 				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden, got: %v", err)
 			})
 		})
+
+		// Staged policies are tiered in the same way their enforced counterparts are, and the
+		// admission webhook covers them, so they must authorize identically.
+		Context("staged policies", func() {
+			framework.ConformanceIt("should allow staged policy writes by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				By("Creating a StagedNetworkPolicy in the permitted tier")
+				snp := v3.NewStagedNetworkPolicy()
+				snp.Name = "rbac-test-staged-allow"
+				snp.Namespace = f.Namespace.Name
+				snp.Spec.Tier = testTier
+				snp.Spec.StagedAction = v3.StagedActionSet
+				snp.Spec.Order = ptr.To(100.0)
+				snp.Spec.Selector = "all()"
+				snp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(cli.Create(ctx, snp)).To(Succeed(), "tier admin should be able to create a staged policy in its tier")
+
+				By("Updating the StagedNetworkPolicy")
+				snp.Spec.Order = ptr.To(200.0)
+				Expect(cli.Update(ctx, snp)).To(Succeed(), "tier admin should be able to update a staged policy in its tier")
+
+				By("Deleting the StagedNetworkPolicy")
+				Expect(cli.Delete(ctx, snp)).To(Succeed(), "tier admin should be able to delete a staged policy in its tier")
+			})
+
+			framework.ConformanceIt("should deny staged policy creation by a user without tier GET access", func() {
+				cli := newImpersonatedClient(rbacNoTierGetUser)
+
+				snp := v3.NewStagedNetworkPolicy()
+				snp.Name = "rbac-test-staged-deny"
+				snp.Namespace = f.Namespace.Name
+				snp.Spec.Tier = testTier
+				snp.Spec.StagedAction = v3.StagedActionSet
+				snp.Spec.Order = ptr.To(100.0)
+				snp.Spec.Selector = "all()"
+				snp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err := cli.Create(ctx, snp)
+				Expect(err).To(HaveOccurred(), "staged policy creation should be denied without tier GET")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+				Expect(err.Error()).To(ContainSubstring("tier"))
+			})
+
+			It("should allow staged global policy writes by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				sgnp := v3.NewStagedGlobalNetworkPolicy()
+				sgnp.Name = testTier + ".rbac-test-staged-global-" + suffix
+				sgnp.Spec.Tier = testTier
+				sgnp.Spec.StagedAction = v3.StagedActionSet
+				sgnp.Spec.Order = ptr.To(100.0)
+				sgnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
+				sgnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				Expect(cli.Create(ctx, sgnp)).To(Succeed(), "tier admin should be able to create a staged global policy in its tier")
+				DeferCleanup(func(ctx context.Context) {
+					Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, sgnp))).To(Succeed())
+				})
+
+				Expect(cli.Delete(ctx, sgnp)).To(Succeed(), "tier admin should be able to delete a staged global policy in its tier")
+			})
+
+			It("should deny staged global policy creation by a user without tier GET access", func() {
+				cli := newImpersonatedClient(rbacNoTierGetUser)
+
+				sgnp := v3.NewStagedGlobalNetworkPolicy()
+				sgnp.Name = testTier + ".rbac-test-staged-global-deny-" + suffix
+				sgnp.Spec.Tier = testTier
+				sgnp.Spec.StagedAction = v3.StagedActionSet
+				sgnp.Spec.Order = ptr.To(100.0)
+				sgnp.Spec.NamespaceSelector = "kubernetes.io/metadata.name == '" + f.Namespace.Name + "'"
+				sgnp.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err := cli.Create(ctx, sgnp)
+				Expect(err).To(HaveOccurred(), "staged global policy creation should be denied without tier GET")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
+		})
+
+		// A tier grant made through a Role rather than a ClusterRole should confine the user to
+		// that Role's namespace, since the webhook authorizes with the request's namespace.
+		Context("namespace-scoped tier access", func() {
+			framework.ConformanceIt("should confine a namespaced tier grant to its own namespace", func() {
+				cli := newImpersonatedClient(rbacNamespacedUser)
+
+				By("Creating a policy in the granted namespace")
+				np := v3.NewNetworkPolicy()
+				np.Name = "rbac-test-namespaced"
+				np.Namespace = f.Namespace.Name
+				np.Spec.Tier = testTier
+				np.Spec.Order = ptr.To(100.0)
+				np.Spec.Selector = "all()"
+				np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+				Expect(cli.Create(ctx, np)).To(Succeed(), "namespaced user should be able to write in its own namespace")
+				DeferCleanup(func(ctx context.Context) {
+					Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, np))).To(Succeed())
+				})
+
+				By("Creating a second namespace the user holds no grant in")
+				otherNS, err := f.CreateNamespace(ctx, f.BaseName+"-other", nil)
+				Expect(err).NotTo(HaveOccurred(), "failed to create the second namespace")
+
+				By("Creating the same policy in the second namespace")
+				outsideNP := v3.NewNetworkPolicy()
+				outsideNP.Name = "rbac-test-namespaced-outside"
+				outsideNP.Namespace = otherNS.Name
+				outsideNP.Spec.Tier = testTier
+				outsideNP.Spec.Order = ptr.To(100.0)
+				outsideNP.Spec.Selector = "all()"
+				outsideNP.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+
+				err = cli.Create(ctx, outsideNP)
+				Expect(err).To(HaveOccurred(), "namespaced user should not be able to write outside its namespace")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+			})
+		})
+
+		// A collection delete carries no policy name of its own, so the tier check depends on
+		// the API server fanning it out into a per-object admission review.
+		Context("collection delete", func() {
+			var policies []*v3.NetworkPolicy
+
+			BeforeEach(func() {
+				By("Creating two policies in the test tier as admin")
+				policies = nil
+				for _, name := range []string{"rbac-test-collection-a", "rbac-test-collection-b"} {
+					np := v3.NewNetworkPolicy()
+					np.Name = name
+					np.Namespace = f.Namespace.Name
+					np.Spec.Tier = testTier
+					np.Spec.Order = ptr.To(100.0)
+					np.Spec.Selector = "all()"
+					np.Spec.Ingress = []v3.Rule{{Action: v3.Allow}}
+					Expect(adminCli.Create(ctx, np)).To(Succeed(), "failed to create policy %s", name)
+					policies = append(policies, np)
+
+					DeferCleanup(func(ctx context.Context) {
+						Expect(ctrlclient.IgnoreNotFound(adminCli.Delete(ctx, np))).To(Succeed())
+					})
+				}
+			})
+
+			framework.ConformanceIt("should deny a collection delete by a user without tier policy access", func() {
+				cli := newImpersonatedClient(rbacNoPolicyUser)
+
+				err := cli.DeleteAllOf(ctx, v3.NewNetworkPolicy(), ctrlclient.InNamespace(f.Namespace.Name))
+				Expect(err).To(HaveOccurred(), "collection delete should be denied without tier policy access")
+				Expect(apierrors.IsForbidden(err)).To(BeTrue(), "expected forbidden error, got: %v", err)
+
+				By("Confirming both policies survived")
+				for _, np := range policies {
+					Expect(adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), v3.NewNetworkPolicy())).To(Succeed(),
+						"policy %s should not have been deleted", np.Name)
+				}
+			})
+
+			It("should allow a collection delete by a user with full tier RBAC", func() {
+				cli := newImpersonatedClient(rbacTierAdminUser)
+
+				Expect(cli.DeleteAllOf(ctx, v3.NewNetworkPolicy(), ctrlclient.InNamespace(f.Namespace.Name))).To(Succeed(),
+					"tier admin should be able to delete the collection in its own tier")
+
+				By("Confirming both policies are gone")
+				for _, np := range policies {
+					err := adminCli.Get(ctx, ctrlclient.ObjectKeyFromObject(np), v3.NewNetworkPolicy())
+					Expect(apierrors.IsNotFound(err)).To(BeTrue(), "expected policy %s to be deleted, got: %v", np.Name, err)
+				}
+			})
+		})
+
 	},
 )
 
@@ -684,6 +867,10 @@ var _ = describe.CalicoDescribe(
 type tieredRBACSetup struct {
 	roles    []rbacv1.ClusterRole
 	bindings []rbacv1.ClusterRoleBinding
+
+	// Namespaced grants, for the user whose tier access is confined to one namespace.
+	nsRoles    []rbacv1.Role
+	nsBindings []rbacv1.RoleBinding
 }
 
 // buildTieredRBACResources constructs the ClusterRoles and ClusterRoleBindings needed for the
@@ -695,13 +882,14 @@ type tieredRBACSetup struct {
 //   - rbacNoPolicyUser: has tier GET but NO tier policy access
 //   - rbacOtherTierUser: full access but only for a different tier
 //   - rbacReadOnlyUser: read-only access (get/list/watch) on tier policies
+//   - rbacNamespacedUser: tier access granted through a Role in a single namespace
 //
 // testTier, otherTier, and suffix are passed in so each spec can use
 // per-run random names. That way a previous spec that crashed mid-flight
 // (e.g. the calico-apiserver briefly went unavailable) and left resources
 // behind cannot 409 the next spec's creates, and parallel specs don't
 // collide on cluster-scoped resources.
-func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetup {
+func buildTieredRBACResources(testTier, otherTier, suffix, namespace string) tieredRBACSetup {
 	setup := tieredRBACSetup{}
 
 	addRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
@@ -727,13 +915,41 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 		})
 	}
 
-	// baseRules returns the standard API server RBAC rules that all test users need.
+	addNamespacedRoleAndBinding := func(name, user string, rules []rbacv1.PolicyRule) {
+		fullName := rbacResourcePrefix + name + "-" + suffix
+		setup.nsRoles = append(setup.nsRoles, rbacv1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: fullName, Namespace: namespace},
+			Rules:      rules,
+		})
+		setup.nsBindings = append(setup.nsBindings, rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: fullName, Namespace: namespace},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role",
+				Name:     fullName,
+			},
+			Subjects: []rbacv1.Subject{
+				{
+					APIGroup: "rbac.authorization.k8s.io",
+					Kind:     "User",
+					Name:     user,
+				},
+			},
+		})
+	}
+
+	// baseRules returns the non-tiered policy RBAC that all test users need.
 	baseRules := func() []rbacv1.PolicyRule {
 		return []rbacv1.PolicyRule{
 			{
 				APIGroups: []string{"projectcalico.org"},
-				Resources: []string{"networkpolicies", "globalnetworkpolicies"},
-				Verbs:     []string{"create", "update", "delete", "get", "list", "watch"},
+				Resources: []string{
+					"networkpolicies",
+					"globalnetworkpolicies",
+					"stagednetworkpolicies",
+					"stagedglobalnetworkpolicies",
+				},
+				Verbs: []string{"create", "update", "delete", "deletecollection", "get", "list", "watch"},
 			},
 		}
 	}
@@ -747,9 +963,14 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 			ResourceNames: []string{testTier},
 		},
 		rbacv1.PolicyRule{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
-			Verbs:         []string{"create", "update", "delete", "get"},
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{
+				"tier.networkpolicies",
+				"tier.globalnetworkpolicies",
+				"tier.stagednetworkpolicies",
+				"tier.stagedglobalnetworkpolicies",
+			},
+			Verbs:         []string{"create", "update", "delete", "deletecollection", "get"},
 			ResourceNames: []string{testTier + ".*"},
 		},
 	))
@@ -758,8 +979,13 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 	// RBAC should deny because tier GET is required alongside policy access.
 	addRoleAndBinding("no-tier-get", rbacNoTierGetUser, append(baseRules(),
 		rbacv1.PolicyRule{
-			APIGroups:     []string{"projectcalico.org"},
-			Resources:     []string{"tier.networkpolicies", "tier.globalnetworkpolicies"},
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{
+				"tier.networkpolicies",
+				"tier.globalnetworkpolicies",
+				"tier.stagednetworkpolicies",
+				"tier.stagedglobalnetworkpolicies",
+			},
 			Verbs:         []string{"create", "update", "delete", "get"},
 			ResourceNames: []string{testTier + ".*"},
 		},
@@ -907,6 +1133,37 @@ func buildTieredRBACResources(testTier, otherTier, suffix string) tieredRBACSetu
 		},
 	})
 
+	// Namespaced user: tier GET has to be cluster-scoped because tiers are, but the
+	// tier-scoped policy grant is a Role, which should confine writes to one namespace.
+	addRoleAndBinding("namespaced-tier-get", rbacNamespacedUser, []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tiers"},
+			Verbs:         []string{"get"},
+			ResourceNames: []string{testTier},
+		},
+	})
+
+	namespacedRules := []rbacv1.PolicyRule{
+		{
+			APIGroups:     []string{"projectcalico.org"},
+			Resources:     []string{"tier.networkpolicies", "tier.stagednetworkpolicies"},
+			Verbs:         []string{"create", "update", "delete", "get"},
+			ResourceNames: []string{testTier + ".*"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
+			Verbs:     []string{"get", "list", "watch"},
+		},
+		{
+			APIGroups: []string{"projectcalico.org"},
+			Resources: []string{"networkpolicies", "stagednetworkpolicies"},
+			Verbs:     []string{"create", "update", "delete"},
+		},
+	}
+	addNamespacedRoleAndBinding("namespaced", rbacNamespacedUser, namespacedRules)
+
 	return setup
 }
 
@@ -951,7 +1208,7 @@ var _ = describe.CalicoDescribe(
 			Expect(adminCli.Create(ctx, tier)).To(Succeed())
 
 			By("Creating RBAC resources for test users")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
 			for i := range setup.roles {
 				_, err := f.ClientSet.RbacV1().ClusterRoles().Create(ctx, &setup.roles[i], metav1.CreateOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -967,7 +1224,7 @@ var _ = describe.CalicoDescribe(
 			var errOccurred bool
 
 			By("Cleaning up RBAC resources")
-			setup := buildTieredRBACResources(testTier, otherTier, suffix)
+			setup := buildTieredRBACResources(testTier, otherTier, suffix, f.Namespace.Name)
 			for _, binding := range setup.bindings {
 				if err := f.ClientSet.RbacV1().ClusterRoleBindings().Delete(ctx, binding.Name, metav1.DeleteOptions{}); err != nil {
 					logrus.WithError(err).WithField("name", binding.Name).Error("Failed to delete ClusterRoleBinding")
