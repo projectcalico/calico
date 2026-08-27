@@ -142,4 +142,48 @@ var _ = Describe("Installation CRD CEL validation", Serial, func() {
 			Expect(err.Error()).To(ContainSubstring("no more than one autodetection method"))
 		})
 	})
+	Describe("IP pool CIDR", func() {
+		newPoolInstallation := func(cidr string) *operator.Installation {
+			return &operator.Installation{
+				ObjectMeta: metav1.ObjectMeta{Name: "default"},
+				Spec: operator.InstallationSpec{
+					CalicoNetwork: &operator.CalicoNetworkSpec{
+						IPPools: []operator.IPPool{{CIDR: cidr}},
+					},
+				},
+			}
+		}
+
+		AfterEach(func() {
+			inst := &operator.Installation{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
+			err := c.Delete(ctx, inst)
+			if err != nil {
+				GinkgoLogr.Error(err, "Failed to delete Installation in AfterEach")
+			}
+		})
+
+		DescribeTable("should allow a canonical CIDR",
+			func(cidr string) {
+				Expect(c.Create(ctx, newPoolInstallation(cidr))).To(Succeed())
+			},
+			Entry("IPv4", "192.168.0.0/16"),
+			Entry("IPv4 single address", "10.65.0.1/32"),
+			Entry("IPv6", "fd00:10:244::/64"),
+			Entry("IPv6 with a compressed run", "fd20:5213:94f6:1e9:1f::/96"),
+		)
+
+		DescribeTable("should reject a CIDR that isn't canonical",
+			func(cidr string) {
+				err := c.Create(ctx, newPoolInstallation(cidr))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("cidr must be in canonical form"))
+			},
+			// Two spellings of one pool would otherwise claim separate entries in the list, which
+			// is keyed on the CIDR.
+			Entry("host bits set", "192.168.0.1/16"),
+			Entry("IPv6 with leading zeros", "fd20:5213:94f6:01e9:001f::/96"),
+			Entry("not a CIDR at all", "192.168.0.0"),
+			Entry("empty", ""),
+		)
+	})
 })
