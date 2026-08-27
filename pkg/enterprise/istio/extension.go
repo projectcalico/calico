@@ -35,24 +35,21 @@ import (
 // Extension is the Calico Enterprise behavior for the istio controller.
 type Extension struct {
 	variant operatorv1.ProductVariant
-	images  *imageoverride.Overrides
 }
 
 var _ extensions.IstioExtension = &Extension{}
 
 // New returns the istio extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, ristio.ComponentNamePilot, components.ComponentIstioPilot)
-	images.Register(variant, ristio.ComponentNameInstallCNI, components.ComponentIstioInstallCNI)
-	images.Register(variant, ristio.ComponentNameZTunnel, components.ComponentIstioZTunnel)
-	images.Register(variant, ristio.ComponentNameProxyv2, components.ComponentIstioProxyv2)
-
-	return &Extension{variant: variant, images: images}
+	return &Extension{variant: variant}
 }
 
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
+// RegisterImages adds the images the istio components resolve.
+func RegisterImages(o *imageoverride.Overrides, variant operatorv1.ProductVariant) {
+	o.Register(variant, ristio.ComponentNamePilot, components.ComponentIstioPilot)
+	o.Register(variant, ristio.ComponentNameInstallCNI, components.ComponentIstioInstallCNI)
+	o.Register(variant, ristio.ComponentNameZTunnel, components.ComponentIstioZTunnel)
+	o.Register(variant, ristio.ComponentNameProxyv2, components.ComponentIstioProxyv2)
 }
 
 // PolicySyncRequired reports whether the ApplicationLayer flow needs the policy-sync
@@ -91,7 +88,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	// The l7-collector runs as a subcommand of the combined calico binary, so waypoint
 	// pods resolve it from the node cache that calico-node already populated and need no
 	// pull secret in their namespace.
-	image, err := components.GetReference(components.CombinedCalicoImage(in), in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
+	image, err := components.GetReference(components.ComponentTigeraCalico, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 	if err != nil {
 		return ci, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 	}

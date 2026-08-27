@@ -45,6 +45,7 @@ import (
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	eistio "github.com/tigera/operator/pkg/enterprise/istio"
 	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render/istio"
 	"github.com/tigera/operator/test"
 )
@@ -933,13 +934,15 @@ var _ = Describe("Istio controller tests", func() {
 				},
 			}
 			Expect(cli.Create(ctx, imageSet)).NotTo(HaveOccurred())
+			istioImages := imageoverride.New()
+			eistio.RegisterImages(istioImages, operatorv1.CalicoEnterprise)
 
 			r := &ReconcileIstio{
 				Client:   cli,
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
-				ext:      extensions.New(extensions.Set{Istio: eistio.New(operatorv1.CalicoEnterprise)}),
+				ext:      extensions.New(extensions.Set{Istio: eistio.New(operatorv1.CalicoEnterprise), Images: istioImages}),
 			}
 
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})

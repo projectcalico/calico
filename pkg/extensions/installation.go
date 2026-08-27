@@ -23,7 +23,6 @@ import (
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -46,7 +45,6 @@ type InstallationExtension interface {
 	ProductVersion() string
 
 	// Images overrides the images the rendered components resolve to.
-	Images() *imageoverride.Overrides
 
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
@@ -69,10 +67,6 @@ func (noopInstallation) DefaultFelixConfiguration(*operatorv1.InstallationSpec, 
 
 func (noopInstallation) ProductVersion() string {
 	return components.CalicoRelease
-}
-
-func (noopInstallation) Images() *imageoverride.Overrides {
-	return nil
 }
 
 func (noopInstallation) Modify(c render.Component, _ render.Inputs) render.Component {

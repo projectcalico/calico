@@ -17,6 +17,9 @@ package kubecontrollers_test
 import (
 	"fmt"
 
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -298,6 +301,7 @@ var _ = Describe("kube-controllers rendering tests", func() {
 		// Override configuration to match expected Enterprise config.
 		instance.Variant = operatorv1.CalicoEnterprise
 		cfg.MetricsPort = 9094
+		cfg.ImageOverrides = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}).Images()
 
 		component := kubecontrollers.NewCalicoKubeControllers(&cfg)
 		Expect(component.ResolveImages(nil)).To(BeNil())

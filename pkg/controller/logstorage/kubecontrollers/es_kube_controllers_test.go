@@ -46,7 +46,9 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise"
 	entkubecontrollers "github.com/tigera/operator/pkg/enterprise/kubecontrollers"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
@@ -74,6 +76,7 @@ func NewControllerWithShims(
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
 		Variant:          operatorv1.CalicoEnterprise,
+		Extensions:       enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}),
 	}
 
 	r := &ESKubeControllersController{
@@ -84,6 +87,7 @@ func NewControllerWithShims(
 		variant:        opts.Variant,
 		tierWatchReady: tierWatchReady,
 		multiTenant:    multiTenant,
+		images:         opts.Extensions.Images(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	return r, nil

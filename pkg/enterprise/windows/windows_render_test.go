@@ -190,7 +190,7 @@ var _ = Describe("Windows enterprise rendering tests", func() {
 			ClusterDomain:  defaultClusterDomain,
 			TLS:            typhaNodeTLS,
 			VXLANVNI:       4096,
-			ImageOverrides: ext.Windows().Images(),
+			ImageOverrides: ext.Images(),
 		}
 	})
 

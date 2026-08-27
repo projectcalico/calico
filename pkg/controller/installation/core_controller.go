@@ -70,6 +70,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/imports/admission"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
@@ -281,6 +282,7 @@ func newReconciler(mgr manager.Manager, opts options.ControllerOptions) (*Reconc
 		newComponentHandler: utils.NewComponentHandler,
 		opts:                opts,
 		ext:                 opts.Extensions.Installation(),
+		images:              opts.Extensions.Images(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	r.typhaAutoscaler.Start(opts.ShutdownContext)
@@ -332,6 +334,7 @@ type ReconcileInstallation struct {
 	migrationWatchReady *utils.ReadyFlag
 	opts                options.ControllerOptions
 	ext                 extensions.InstallationExtension
+	images              *imageoverride.Overrides
 
 	// newComponentHandler returns a new component handler. Useful stub for unit testing.
 	newComponentHandler func(log logr.Logger, client client.Client, scheme *runtime.Scheme, cr metav1.Object, opts ...utils.ComponentHandlerOption) utils.ComponentHandler
@@ -1229,6 +1232,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		MigrateNamespaces:  needsNamespaceMigration,
 		ClusterDomain:      r.opts.ClusterDomain,
 		FelixConfiguration: felixConfiguration,
+		ImageOverrides:     r.images,
 	}
 	components = append(components, render.Typha(&typhaCfg))
 
@@ -1355,7 +1359,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		CanRemoveCNIFinalizer: canRemoveCNI,
 		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
-		ImageOverrides:        r.ext.Images(),
+		ImageOverrides:        r.images,
 	}
 
 	if bgpConfiguration.Spec.BindMode != nil {
@@ -1393,9 +1397,10 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	components = append(components, render.Node(&nodeCfg))
 
 	csiCfg := render.CSIConfiguration{
-		Installation: &defaulted.Spec,
-		Terminating:  installationMarkedForDeletion,
-		OpenShift:    defaulted.Spec.KubernetesProvider.IsOpenShift(),
+		Installation:   &defaulted.Spec,
+		Terminating:    installationMarkedForDeletion,
+		OpenShift:      defaulted.Spec.KubernetesProvider.IsOpenShift(),
+		ImageOverrides: r.images,
 	}
 	components = append(components, render.CSI(&csiCfg))
 
@@ -1409,7 +1414,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		TrustedBundle:          typhaNodeTLS.TrustedBundle,
 		Namespace:              common.CalicoNamespace,
 		BindingNamespaces:      []string{common.CalicoNamespace},
-		ImageOverrides:         r.ext.Images(),
+		ImageOverrides:         r.images,
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 

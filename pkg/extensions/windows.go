@@ -19,7 +19,6 @@ import (
 
 	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -31,7 +30,6 @@ type WindowsExtension interface {
 
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
-	Images() *imageoverride.Overrides
 }
 
 // noopWindows runs the core operator's behavior unchanged.
@@ -42,10 +40,6 @@ func (noopWindows) ExtendInputs(_ context.Context, ci controller.Inputs) (contro
 }
 
 func (noopWindows) Watches(ctrlruntime.Controller) error {
-	return nil
-}
-
-func (noopWindows) Images() *imageoverride.Overrides {
 	return nil
 }
 

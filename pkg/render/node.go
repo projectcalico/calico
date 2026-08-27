@@ -146,9 +146,6 @@ type NodeConfiguration struct {
 
 	V3CRDs bool
 
-	// ImageOverrides lets a variant swap the node and cni-plugins images. The
-	// controller wires in the operator's image overrides; nil resolves to the
-	// core images.
 	ImageOverrides *imageoverride.Overrides
 }
 
@@ -200,7 +197,7 @@ func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	c.calicoImage = appendIfErr(components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is))
+	c.calicoImage = appendIfErr(components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is))
 	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameNode, components.ComponentCalicoNode, c.cfg.Installation)
 	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
 	if c.installUpstreamPlugins() {

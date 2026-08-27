@@ -50,6 +50,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 )
 
@@ -170,6 +171,7 @@ type ReconcileWindows struct {
 	ipamConfigWatchReady *utils.ReadyFlag
 	opts                 options.ControllerOptions
 	ext                  extensions.WindowsExtension
+	images               *imageoverride.Overrides
 }
 
 // newWindowsReconciler returns a new reconcile.Reconciler
@@ -185,6 +187,7 @@ func newWindowsReconciler(mgr manager.Manager, opts options.ControllerOptions) (
 		ipamConfigWatchReady: &utils.ReadyFlag{},
 		opts:                 opts,
 		ext:                  opts.Extensions.Windows(),
+		images:               opts.Extensions.Images(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	return r, nil
@@ -351,7 +354,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		ClusterDomain:  r.opts.ClusterDomain,
 		TLS:            typhaNodeTLS,
 		VXLANVNI:       *felixConfiguration.Spec.VXLANVNI,
-		ImageOverrides: r.ext.Images(),
+		ImageOverrides: r.images,
 	}
 	component = render.Windows(&windowsCfg)
 

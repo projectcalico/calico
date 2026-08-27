@@ -36,6 +36,7 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	ristio "github.com/tigera/operator/pkg/render/istio"
@@ -92,7 +93,7 @@ var _ = Describe("Istio extension", func() {
 			},
 			IstioNamespace: ristio.IstioNamespace,
 			Scheme:         testScheme(),
-			ImageOverrides: ext.Images(),
+			ImageOverrides: istioImages(),
 		}
 		ri = render.Inputs{Installation: install}
 	})
@@ -224,4 +225,11 @@ func expectedImage(c components.Component, in *operatorv1.InstallationSpec, is *
 	image, err := components.GetReference(c, in.Registry, in.ImagePath, in.ImagePrefix, is)
 	Expect(err).ShouldNot(HaveOccurred())
 	return image
+}
+
+// istioImages is the override set the operator builds for an Enterprise install.
+func istioImages() *imageoverride.Overrides {
+	o := imageoverride.New()
+	RegisterImages(o, operatorv1.CalicoEnterprise)
+	return o
 }

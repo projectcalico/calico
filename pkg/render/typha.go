@@ -32,6 +32,7 @@ import (
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
 	"github.com/tigera/operator/pkg/controller/migration"
+	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
@@ -81,6 +82,8 @@ type TyphaConfiguration struct {
 	// FelixConfiguration is the cluster's default FelixConfiguration. Typha binds to the
 	// port one below Felix's health port.
 	FelixConfiguration *v3.FelixConfiguration
+
+	ImageOverrides *imageoverride.Overrides
 }
 
 // Typha creates the typha daemonset and other resources for the daemonset to operate normally.
@@ -101,7 +104,7 @@ func (c *typhaComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	path := c.cfg.Installation.ImagePath
 	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
 	return err
 }
 

@@ -32,7 +32,6 @@ import (
 type Extension struct {
 	variant operatorv1.ProductVariant
 	opts    eoptions.Options
-	images  *imageoverride.Overrides
 
 	// typhaAutoscaler scales the non-cluster-host Typha deployment. Nil until the
 	// first reconcile that sees a NonClusterHost resource.
@@ -43,24 +42,22 @@ var _ extensions.InstallationExtension = &Extension{}
 
 // New returns the installation extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant, opts eoptions.Options) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, render.ComponentNameNode, components.ComponentTigeraNode)
+	return &Extension{variant: variant, opts: opts}
+}
+
+// RegisterImages adds the images the installation controller's components resolve.
+func RegisterImages(o *imageoverride.Overrides, variant operatorv1.ProductVariant, opts eoptions.Options) {
+	o.Register(variant, render.ComponentNameNode, components.ComponentTigeraNode)
 
 	// The node component renders the cni-plugins init container; its image resolves
 	// through its own override key.
-	images.Register(variant, render.ComponentNameCNIPlugins, components.ComponentTigeraCNIPlugins)
+	o.Register(variant, render.ComponentNameCNIPlugins, components.ComponentTigeraCNIPlugins)
 
 	if opts.Cloud {
 		// Calico Cloud runs kube-controllers from the combined image, which carries the
 		// Cloud behavior the mono image lacks.
-		images.Register(variant, render.ComponentNameKubeControllers, components.CalicoCloudImage())
+		o.Register(variant, render.ComponentNameKubeControllers, components.CalicoCloudImage())
 	}
-
-	return &Extension{variant: variant, opts: opts, images: images}
-}
-
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
 }
 
 // Modify dispatches over the components the installation controller renders.

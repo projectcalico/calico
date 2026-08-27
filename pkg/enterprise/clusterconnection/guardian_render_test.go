@@ -17,6 +17,8 @@ package clusterconnection_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -105,6 +107,7 @@ var _ = Describe("Guardian enterprise rendering tests", func() {
 			OpenShift:                   openshift,
 			ManagementClusterConnection: &operatorv1.ManagementClusterConnection{},
 			IncludeEgressNetworkPolicy:  true,
+			ImageOverrides:              enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}).Images(),
 		}
 	}
 

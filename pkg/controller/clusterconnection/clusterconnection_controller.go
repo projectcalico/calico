@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/tigera/operator/pkg/imageoverride"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 
 	"golang.org/x/net/http/httpproxy"
@@ -151,6 +152,7 @@ func newReconciler(
 		clusterInfoWatchReady: clusterInfoWatchReady,
 		opts:                  opts,
 		ext:                   opts.Extensions.ClusterConnection(),
+		images:                opts.Extensions.Images(),
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -171,6 +173,7 @@ type ReconcileConnection struct {
 	lastAvailabilityTransition metav1.Time
 	opts                       options.ControllerOptions
 	ext                        extensions.ClusterConnectionExtension
+	images                     *imageoverride.Overrides
 }
 
 // Reconcile reads that state of the cluster for a ManagementClusterConnection object and makes changes based on the
@@ -437,6 +440,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		GuardianClientKeyPair:       guardianKeyPair,
 		Version:                     managedClusterVersion,
 		IncludeEgressNetworkPolicy:  includeEgressNetworkPolicy,
+		ImageOverrides:              r.images,
 	}
 
 	certComponent := rcertificatemanagement.CertificateManagement(&rcertificatemanagement.Config{

@@ -17,6 +17,9 @@ package webhooks_test
 import (
 	"fmt"
 
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -135,6 +138,7 @@ var _ = Describe("Webhooks rendering tests", func() {
 
 	It("should render all resources for Enterprise with the correct image", func() {
 		installation.Variant = operatorv1.CalicoEnterprise
+		cfg.ImageOverrides = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}).Images()
 		component := webhooks.Component(cfg)
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
 		resources, _ := component.Objects()
