@@ -284,6 +284,18 @@ e2e-test:
 	$(MAKE) kind-up
 	$(MAKE) e2e-run KUBECONFIG=$(KIND_KUBECONFIG)
 
+## Install Calico on kind, upgrade the release with the Helm 4 pin, and check that the
+## Installation and the cluster's IP pools come through the upgrade unchanged.
+.PHONY: helm-upgrade-test
+helm-upgrade-test: bin/helm-$(HELM4_VERSION)
+	$(MAKE) kind-up
+	REPO_ROOT=$(REPO_ROOT) \
+	KUBECONFIG=$(KIND_KUBECONFIG) \
+	GIT_VERSION=$(GIT_VERSION) \
+	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
+	HELM_UPGRADE=$(REPO_ROOT)/bin/helm-$(HELM4_VERSION) \
+	$(REPO_ROOT)/hack/test/kind/helm_upgrade_test.sh
+
 ## Create a kind cluster with the BPF dataplane plus an external node, and run
 ## the sig-calico BPF e2e tests (including the ExternalNode specs).
 ## Uses kind-bpf.config (kube-proxy in iptables mode - eBPF does not support

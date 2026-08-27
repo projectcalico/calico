@@ -1666,12 +1666,12 @@ kubectl: $(KUBECTL)
 	@echo "kubectl: $(KUBECTL)"
 $(KUBECTL): $(KIND_DIR)/.kubectl-updated-$(K8S_VERSION)
 
-bin/helm-$(HELM_VERSION):
+bin/helm-%:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	curl -sSf -L --retry 5 -o $(TMP)/helm3.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-linux-$(ARCH).tar.gz
-	tar -zxvf $(TMP)/helm3.tar.gz -C $(TMP)
-	mv $(TMP)/linux-$(ARCH)/helm bin/helm-$(HELM_VERSION)
+	curl -sSf -L --retry 5 -o $(TMP)/helm.tar.gz https://get.helm.sh/helm-$*-linux-$(ARCH).tar.gz
+	tar -zxvf $(TMP)/helm.tar.gz -C $(TMP)
+	mv $(TMP)/linux-$(ARCH)/helm bin/helm-$*
 
 bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
 	# Remove old marker files so that bin/helm will be stale if we switch
@@ -1684,6 +1684,10 @@ bin/.helm-updated-$(HELM_VERSION): bin/helm-$(HELM_VERSION)
 helm: bin/helm
 	@echo "helm: $^"
 bin/helm: bin/.helm-updated-$(HELM_VERSION)
+
+.PHONY: helm4
+helm4: bin/helm-$(HELM4_VERSION)
+	@echo "helm4: $^"
 
 ###############################################################################
 # Common functions for setting up a kind cluster with Calico for testing.
@@ -1806,11 +1810,20 @@ kind-build-images: kind-registry-up
 # Default to v3 CRDs for kind clusters. Override with KIND_CALICO_API_GROUP=crd.projectcalico.org/v1 if needed.
 KIND_CALICO_API_GROUP ?= projectcalico.org/v3
 
+# Helm major version used to install and upgrade the chart on kind clusters. Set
+# HELM_MAJOR=4 to run a lane under the Helm 4 pin.
+HELM_MAJOR ?= 3
+ifeq ($(HELM_MAJOR),4)
+HELM ?= $(REPO_ROOT)/bin/helm-$(HELM4_VERSION)
+else
+HELM ?= $(REPO_ROOT)/bin/helm
+endif
+
 # Install Calico via Helm and wait for readiness on an existing kind cluster.
 # Images are pulled from the local kind-registry on demand, so no image
 # loading happens here. Use kind-up for end-to-end bringup.
 .PHONY: kind-deploy
-kind-deploy:
+kind-deploy: $(HELM)
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
 	REPO_ROOT=$(REPO_ROOT) \
 	KUBECONFIG=$(KIND_KUBECONFIG) \
@@ -1818,6 +1831,7 @@ kind-deploy:
 	KIND_NAME=$(KIND_NAME) \
 	ARCH=$(ARCH) \
 	GIT_VERSION=$(GIT_VERSION) \
+	HELM=$(HELM) \
 	CALICO_API_GROUP=$(KIND_CALICO_API_GROUP) \
 	$(REPO_ROOT)/hack/test/kind/deploy_resources.sh
 
@@ -1828,7 +1842,7 @@ kind-deploy:
 kind-reload:
 	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
 	$(MAKE) -C $(REPO_ROOT) chart CALICO_API_GROUP=$(KIND_CALICO_API_GROUP)
-	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
+	KUBECONFIG=$(KIND_KUBECONFIG) $(HELM) upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 		--reuse-values \
 		-n tigera-operator

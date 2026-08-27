@@ -21,6 +21,9 @@ GHR_VERSION=v0.18.3
 GITHUB_CLI_VERSION=2.94.0
 GOTESTSUM_VERSION=v1.13.0
 HELM_VERSION=v3.21.1
+# HELM4_VERSION is the Helm 4 pin CI installs the chart with, so that both major versions
+# stay covered while HELM_VERSION remains the default everywhere else.
+HELM4_VERSION=v4.2.4
 # KINDEST_NODE_VERSION is the Kubernetes version of the KIND cluster used in
 # tests, and is deliberately held one minor behind K8S_VERSION: the KubeVirt
 # live-migration tests deploy KubeVirt (tigera/kubevirt mockvirt-v1.8.1, i.e.
