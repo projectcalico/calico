@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -261,6 +262,42 @@ var _ = describe.CalicoDescribe(
 					}
 					return nil
 				}, 3*time.Minute, 5*time.Second).Should(Succeed(), "the Whisker UI should be served through the Gateway")
+
+				// The UI shell above is served by nginx alone. A flow query
+				// crosses the one hop nothing else tests end to end: nginx
+				// proxying over TLS to whisker-backend inside the pod.
+				ginkgo.By("Querying flows through the Gateway")
+				Eventually(func() error {
+					req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/whisker-backend/flows", nil)
+					if err != nil {
+						return err
+					}
+					req.Host = whiskerGatewayHostname
+
+					resp, err := gwClient.Do(req)
+					if err != nil {
+						return err
+					}
+					defer resp.Body.Close()
+
+					body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+					if err != nil {
+						return err
+					}
+					if resp.StatusCode != http.StatusOK {
+						return fmt.Errorf("got status %d, want 200: %.200s", resp.StatusCode, body)
+					}
+					// nginx rewrites errors to HTML pages, so require the
+					// backend's JSON list shape, not just a 200.
+					var flows map[string]json.RawMessage
+					if err := json.Unmarshal(body, &flows); err != nil {
+						return fmt.Errorf("response is not JSON; reached nginx but not whisker-backend: %.200s", body)
+					}
+					if _, ok := flows["items"]; !ok {
+						return fmt.Errorf("JSON response has no items key; not a flows list: %.200s", body)
+					}
+					return nil
+				}, 3*time.Minute, 5*time.Second).Should(Succeed(), "flows should be served through the Gateway via nginx and whisker-backend")
 			})
 
 			ginkgo.It("should clean up gateway resources when spec.ingressGateway is removed", func() {
