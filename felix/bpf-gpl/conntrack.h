@@ -899,7 +899,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 	result.flags = ct_value_get_flags(v);
 
-	// Return the if_index where the CT state was created.
+	/* Return the if_index where the CT state was created. Note that a leg's
+	 * ifindex is not always an ingress record: while CALI_CT_LEG_PINNED is set
+	 * it is a resolved egress for the opposite direction. Consumers that need
+	 * the interface a packet actually arrived on cannot use this field alone.
+	 */
 	if (v->a_to_b.opener) {
 		result.ifindex_created = v->a_to_b.ifindex;
 	} else if (v->b_to_a.opener) {
