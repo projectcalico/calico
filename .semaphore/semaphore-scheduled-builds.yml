@@ -1961,9 +1961,12 @@ blocks:
             - ../.semaphore/run-and-monitor tox.log bash -c 'make tox-caracal && make tox-fv-caracal'
         - name: "OpenStack: Mainline ST (DevStack + Tempest) on Caracal"
           commands:
-            # Env vars needed for saving performance results.
+            # Env vars needed for saving performance results.  Take the user name
+            # from the secret alongside the token, rather than hardcoding it, so
+            # that rotating the Lens credential to a different account does not
+            # silently break publishing.
             - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
             - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             # For some reason python3-wrapt is pre-installed on a Semaphore ubuntu2004 node, but with
             # a version (1.11.2) that is different from the version that OpenStack needs (1.13.3), and
@@ -2017,8 +2020,11 @@ blocks:
             # not a per-PR gate.
             - sudo env NFT_BENCH_PERF_ARTIFACTS_DIR="$(pwd)/artifacts/perf" felix/bin/nft.test -test.run='^$' -test.bench=. -test.benchmem -test.benchtime=6x
             # Publish to Lens. send-perf-results no-ops if the creds are unset.
+            # Take the user name from the secret alongside the token, rather than
+            # hardcoding it, so that rotating the Lens credential to a different
+            # account does not silently break publishing.
             - export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
-            - export ELASTICSEARCH_USER=elastic
+            - export ELASTICSEARCH_USER=${LENS_ELASTICSEARCH_USER}
             - export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
             - ./bin/send-perf-results --dir artifacts/perf
       epilogue:
