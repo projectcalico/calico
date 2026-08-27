@@ -21,6 +21,7 @@ from collections import namedtuple
 import mock
 
 from oslo_config import cfg
+from oslo_log import versionutils
 
 import networking_calico.common as common
 from networking_calico.common import config
@@ -52,12 +53,20 @@ class TestConfig(unittest.TestCase):
         cfg.CONF -- which is then populated from a neutron.conf whose [calico]
         section is CONF_FILE_BODY.
 
-        Note that no two tests may provoke a warning about the same option:
-        oslo.log remembers the deprecation reports it has already made, for the
-        lifetime of the process, and silently drops a repeat of one it has
-        already logged.  Hence one test below covers every deprecated option
-        there is, rather than one test per option.
+        oslo suppresses a repeated deprecation report in two separate places,
+        and both outlive an individual test: oslo.log remembers the (message,
+        args) pairs it has already logged, for the lifetime of the process, and
+        each Opt latches its own ``_logged_deprecation``.  Because OPTS are the
+        driver's real Opt objects, shared by every test here, that latch is
+        still set from whichever test ran first -- which is enough to stop a
+        later test observing any warning at all, and made the negative test
+        below incapable of failing.  So reset both, and let each test start from
+        a clean slate.
         """
+        versionutils._deprecated_messages_sent.clear()
+        for opt in opts:
+            opt._logged_deprecation = False
+
         conf = cfg.ConfigOpts()
         conf.register_opts(opts, "calico")
 

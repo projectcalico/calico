@@ -218,7 +218,11 @@ def read_deprecated_options(conf, opts, group="calico"):
     """
     for opt in opts:
         if opt.deprecated_for_removal:
-            conf[group][opt.name]
+            # dest, not name: the two differ for a dashed name or an explicit
+            # dest=, and looking an option up by name then raises
+            # NoSuchOptError -- which, from here, would stop neutron-server
+            # starting at all.
+            conf[group][opt.dest]
 
 
 _cached_region_string = None
