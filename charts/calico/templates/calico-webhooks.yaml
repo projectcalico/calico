@@ -44,6 +44,40 @@ subjects:
     name: calico-webhooks
     namespace: kube-system
 ---
+# Tiered policy writes are authorized per tier by the webhook below, so the verbs are
+# granted to everyone here. Reads have no webhook and stay subject to ordinary RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: calico-tiered-policy-passthrough
+rules:
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - networkpolicies
+      - globalnetworkpolicies
+      - stagednetworkpolicies
+      - stagedglobalnetworkpolicies
+    verbs:
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: calico-tiered-policy-passthrough
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-tiered-policy-passthrough
+subjects:
+  - kind: Group
+    name: system:authenticated
+    apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
