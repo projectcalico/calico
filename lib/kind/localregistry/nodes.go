@@ -44,8 +44,15 @@ func (f *Registry) ConfigureNodes(ctx context.Context, kindNodes []nodes.Node, u
 	if err != nil {
 		return err
 	}
+	// Safety net for the streaming-blob case on slow upstreams: a
+	// single large layer can outrun containerd's default response
+	// header timeout. On the fast path (KB manifest, warm cache)
+	// these never fire. containerd 2.x only.
 	hostsTOML := fmt.Sprintf(`[host.%q]
   capabilities = ["pull", "resolve"]
+  dial_timeout = "30s"
+  response_header_timeout = "15m"
+  request_timeout = "30m"
 `, endpoint)
 
 	for _, n := range kindNodes {

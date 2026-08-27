@@ -308,15 +308,21 @@ e2e-test-bpf:
 		KUBECONFIG=$(KIND_KUBECONFIG) \
 		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
-## Build the rapidclient helper image from PR source and load it into the kind
-## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
-## unlike the rest of the kind image flow (local registry + PullAlways), rapidclient
-## is loaded directly with `kind load` to match the containerd-import + PullNever
-## model that images.RapidClientImage()/packet_size.go already use for gcp.
+## Build rapidclient and import it into every kind node (PullNever, matching
+## the gcp path in packet_size.go). Not `kind load docker-image`: kind <=
+## v0.32 rejects containerd config version 4 shipped by kindest/node v1.35.5.
+## `docker save | ctr images import` is the equivalent; snapshotter pinned
+## to overlayfs — kind's default.
 .PHONY: kind-load-rapidclient
 kind-load-rapidclient:
 	$(MAKE) -C e2e/images/rapidclient image TAG_NAME=$(RAPIDCLIENT_TAG)
-	$(KIND) load docker-image $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) --name $(KIND_NAME)
+	@nodes=$$(docker ps --filter "label=io.x-k8s.kind.cluster=$(KIND_NAME)" --format '{{.Names}}'); \
+	  test -n "$$nodes" || (echo "no kind nodes found for cluster $(KIND_NAME)"; exit 1); \
+	  for n in $$nodes; do \
+	    echo "  loading $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) into $$n"; \
+	    docker save $(RAPIDCLIENT_IMAGE):$(RAPIDCLIENT_TAG) | \
+	      docker exec -i $$n ctr --namespace=k8s.io images import --all-platforms --digests --snapshotter=overlayfs - || exit 1; \
+	  done
 
 ## Load the (already-built) rapidclient image into the external node's inner docker
 ## daemon, for the ExternalNode packet-size spec and maglev's `docker run`. The node
