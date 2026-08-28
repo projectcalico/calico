@@ -40,6 +40,11 @@ const (
 	// on older Pods.
 	AnnotationContainerID = "cni.projectcalico.org/containerID"
 
+	// AnnotationPodNetns stores the path to the pod's network namespace
+	// (typically /run/netns/cni-<uuid>). Written by the Calico CNI plugin
+	// at cmdAdd from args.Netns.
+	AnnotationPodNetns = "cni.projectcalico.org/podNetns"
+
 	// NameLabel is a label that can be used to match a serviceaccount or namespace
 	// name exactly.
 	NameLabel = "projectcalico.org/name"

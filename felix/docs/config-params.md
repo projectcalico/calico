@@ -714,6 +714,21 @@ from workloads.
 | `FelixConfiguration` schema | Boolean. |
 | Default value (YAML) | `false` |
 
+### `CRISocketPath` (config file) / `criSocketPath` (YAML)
+
+The path to the local container-runtime CRI socket
+(e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+small set of well-known paths at startup.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_CRISocketPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | none |
+| `FelixConfiguration` field | `criSocketPath` (YAML) `CRISocketPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | none |
+
 ### `CgroupV2Path` (config file) / `cgroupV2Path` (YAML)
 
 Overrides the default location where to find the cgroup hierarchy.
@@ -1278,6 +1293,22 @@ like Application layer policy.
 | `FelixConfiguration` field | `policySyncPathPrefix` (YAML) `PolicySyncPathPrefix` (Go API) |
 | `FelixConfiguration` schema | String. |
 | Default value (YAML) | none |
+
+### `ProcRootPath` (config file) / `procRootPath` (YAML)
+
+The path at which Felix reads the procfs of the host
+the pods run on, when resolving a local pod's network namespace. When
+Felix does not share the host PID namespace, the operator bind-mounts
+the host procfs (typically at /host/proc) and points Felix at it here.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_ProcRootPath` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `/proc` |
+| `FelixConfiguration` field | `procRootPath` (YAML) `ProcRootPath` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `/proc` |
 
 ### `ProgramClusterRoutes` (config file) / `programClusterRoutes` (YAML)
 

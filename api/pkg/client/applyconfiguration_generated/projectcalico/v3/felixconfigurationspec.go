@@ -552,6 +552,16 @@ type FelixConfigurationSpecApplyConfiguration struct {
 	// a problem if this range overlaps with the operating systems. Both ends of the range are
 	// inclusive. [Default: 20000:29999]
 	BPFPSNATPorts *numorstring.Port `json:"bpfPSNATPorts,omitempty"`
+	// CRISocketPath is the path to the local container-runtime CRI socket
+	// (e.g. /run/containerd/containerd.sock). When empty, Felix probes a
+	// small set of well-known paths at startup.
+	CRISocketPath *string `json:"criSocketPath,omitempty"`
+	// ProcRootPath is the path at which Felix reads the procfs of the host
+	// the pods run on, when resolving a local pod's network namespace. When
+	// Felix does not share the host PID namespace, the operator bind-mounts
+	// the host procfs (typically at /host/proc) and points Felix at it here.
+	// [Default: /proc]
+	ProcRootPath *string `json:"procRootPath,omitempty"`
 	// BPFMapSizeNATFrontend sets the size for NAT front end map.
 	// FrontendMap should be large enough to hold an entry for each nodeport,
 	// external IP and each port in each service.
@@ -1849,6 +1859,22 @@ func (b *FelixConfigurationSpecApplyConfiguration) WithBPFKubeProxyHealthzPort(v
 // If called multiple times, the BPFPSNATPorts field is set to the value of the last call.
 func (b *FelixConfigurationSpecApplyConfiguration) WithBPFPSNATPorts(value numorstring.Port) *FelixConfigurationSpecApplyConfiguration {
 	b.BPFPSNATPorts = &value
+	return b
+}
+
+// WithCRISocketPath sets the CRISocketPath field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the CRISocketPath field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithCRISocketPath(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.CRISocketPath = &value
+	return b
+}
+
+// WithProcRootPath sets the ProcRootPath field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ProcRootPath field is set to the value of the last call.
+func (b *FelixConfigurationSpecApplyConfiguration) WithProcRootPath(value string) *FelixConfigurationSpecApplyConfiguration {
+	b.ProcRootPath = &value
 	return b
 }
 

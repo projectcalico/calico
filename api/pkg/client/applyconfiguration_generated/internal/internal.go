@@ -984,6 +984,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: chainInsertMode
       type:
         scalar: string
+    - name: criSocketPath
+      type:
+        scalar: string
     - name: dataplaneDriver
       type:
         scalar: string
@@ -1273,6 +1276,9 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         scalar: string
     - name: policySyncPathPrefix
+      type:
+        scalar: string
+    - name: procRootPath
       type:
         scalar: string
     - name: programClusterRoutes
