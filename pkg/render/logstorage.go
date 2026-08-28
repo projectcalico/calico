@@ -193,7 +193,7 @@ func (es *elasticsearchComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	}
 
 	if es.cfg.Installation.CertificateManagement != nil {
-		es.csrImage, err = certificatemanagement.ResolveCSRInitImage(es.cfg.Installation, is)
+		es.csrImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 		if err != nil {
 			errMsgs = append(errMsgs, err.Error())
 		}

@@ -116,7 +116,7 @@ func (k *kibana) ResolveImages(is *operatorv1.ImageSet) error {
 	}
 
 	if k.cfg.Installation.CertificateManagement != nil {
-		k.csrImage, err = certificatemanagement.ResolveCSRInitImage(k.cfg.Installation, is)
+		k.csrImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 		if err != nil {
 			errMsgs = append(errMsgs, err.Error())
 		}

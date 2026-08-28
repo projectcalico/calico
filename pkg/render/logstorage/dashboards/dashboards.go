@@ -111,7 +111,7 @@ func (d *dashboards) ResolveImages(is *operatorv1.ImageSet) error {
 	}
 
 	if d.cfg.Installation.CertificateManagement != nil {
-		d.csrImage, err = certificatemanagement.ResolveCSRInitImage(d.cfg.Installation, is)
+		d.csrImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 		if err != nil {
 			errMsgs = append(errMsgs, err.Error())
 		}
