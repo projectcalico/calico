@@ -30,7 +30,7 @@ steps:
       diskSize: 200GB
       runAsNonRoot: true
     secretBundles:
-      - { name: banzai-secrets, keys: [{ name: LENS_ELASTICSEARCH_TOKEN }] }
+      - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
     commands: |
       set -o pipefail
 
