@@ -104,7 +104,7 @@ func (r *LogStorageManagedClusterController) Reconcile(ctx context.Context, requ
 
 	reqLogger.Info("Reconciling ManagedCluster resources for log storage")
 
-	installationSpec, err := utils.GetInstallationSpec(context.Background(), r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(context.Background(), r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return reconcile.Result{}, err

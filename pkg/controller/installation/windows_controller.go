@@ -17,7 +17,6 @@ package installation
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,6 +50,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 )
 
@@ -171,6 +171,7 @@ type ReconcileWindows struct {
 	ipamConfigWatchReady *utils.ReadyFlag
 	opts                 options.ControllerOptions
 	ext                  extensions.WindowsExtension
+	images               *imageoverride.Overrides
 }
 
 // newWindowsReconciler returns a new reconcile.Reconciler
@@ -186,6 +187,7 @@ func newWindowsReconciler(mgr manager.Manager, opts options.ControllerOptions) (
 		ipamConfigWatchReady: &utils.ReadyFlag{},
 		opts:                 opts,
 		ext:                  opts.Extensions.Windows(),
+		images:               opts.Extensions.Images(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	return r, nil
@@ -211,8 +213,17 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
+	// The core controller publishes the effective config, with defaults and the overlay
+	// applied, on the status. Nothing here can be decided before that lands.
+	if instance.Status.Computed == nil {
+		reqLogger.V(1).Info("Waiting for the Installation computed config")
+		return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
+	}
+	defaulted := instance.DeepCopy()
+	defaulted.Spec = *instance.Status.Computed.DeepCopy()
+
 	// Don't render calico-node-windows if it's disabled in the installation
-	if !common.WindowsEnabled(instance.Spec) {
+	if !common.WindowsEnabled(defaulted.Spec) {
 		reqLogger.V(1).Info("Calico Windows daemonset is disabled in the operator installation")
 		return reconcile.Result{}, nil
 	}
@@ -224,9 +235,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	// FIXME: add logic to update Installation status conditions that doesn't conflict with
 	// core_controller
 
-	instanceStatus := instance.Status
-
-	reqLogger.V(2).Info("Loaded config", "config", instance)
+	reqLogger.V(2).Info("Loaded config", "config", defaulted)
 
 	// The k8s service endpoint configmap must populate k8sapi.Endpoint data before validating the configuration.
 	if _, err := utils.GetK8sServiceEndPoint(r.client); err != nil {
@@ -239,45 +248,19 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	// We rely on the core controller for defaulting, so wait until it has done so before continuing
-	if reflect.DeepEqual(instanceStatus, operatorv1.InstallationStatus{}) {
-		err := fmt.Errorf("InstallationStatus is empty")
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "InstallationStatus is empty", err, reqLogger)
-		return reconcile.Result{}, err
-	}
-
 	// Validate the configuration.
-	if err := validateCustomResource(instance); err != nil {
+	if err := validateCustomResource(defaulted); err != nil {
 		r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Invalid Installation provided", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
-	// update Installation with 'overlay'
-	overlay := operatorv1.Installation{}
-	if err := r.client.Get(ctx, utils.OverlayInstanceKey, &overlay); err != nil {
-		if !apierrors.IsNotFound(err) {
-			reqLogger.Error(err, "An error occurred when querying the 'overlay' Installation resource")
-			return reconcile.Result{}, err
-		}
-		reqLogger.V(5).Info("no 'overlay' installation found")
-	} else {
-		instance.Spec = utils.OverrideInstallationSpec(instance.Spec, overlay.Spec)
-		reqLogger.V(2).Info("loaded final computed config", "config", instance)
-
-		// Validate the configuration.
-		if err := validateCustomResource(instance); err != nil {
-			r.status.SetDegraded(operatorv1.InvalidConfigurationError, "Invalid computed config", err, reqLogger)
-			return reconcile.Result{}, err
-		}
-	}
-
-	if instance.Spec.WindowsNodes == nil {
-		err := fmt.Errorf("Installation.Spec.WindowsNodes is nil")
-		r.status.SetDegraded(operatorv1.ResourceNotReady, "Installation.Spec.WindowsNodes is nil", err, reqLogger)
+	if defaulted.Spec.WindowsNodes == nil {
+		err := fmt.Errorf("Installation.Status.Computed.WindowsNodes is nil")
+		r.status.SetDegraded(operatorv1.ResourceNotReady, "Installation.Status.Computed.WindowsNodes is nil", err, reqLogger)
 		return reconcile.Result{}, err
 	}
 
-	certificateManager, err := certificatemanager.Create(r.client, &instance.Spec, r.opts.ClusterDomain, common.OperatorNamespace())
+	certificateManager, err := certificatemanager.Create(r.client, &defaulted.Spec, r.opts.ClusterDomain, common.OperatorNamespace())
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceCreateError, "Unable to create the Tigera CA", err, reqLogger)
 		return reconcile.Result{}, err
@@ -299,7 +282,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	// Fetch and validate default IPAMConfiguration for StrictAffinity when using Calico IPAM
-	if instance.Spec.CNI.Type == operatorv1.PluginCalico && instance.Spec.CNI.IPAM.Type == operatorv1.IPAMPluginCalico {
+	if defaulted.Spec.CNI.Type == operatorv1.PluginCalico && defaulted.Spec.CNI.IPAM.Type == operatorv1.IPAMPluginCalico {
 		if !r.ipamConfigWatchReady.IsReady() {
 			r.status.SetDegraded(operatorv1.ResourceNotReady, "Waiting for IPAMConfiguration watch to be established", nil, logw)
 			return reconcile.Result{RequeueAfter: utils.StandardRetry}, nil
@@ -343,7 +326,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	// (creating no enterprise artifacts in core).
 	ci := controller.Inputs{
 		RenderInputs: render.Inputs{
-			Installation:       &instance.Spec,
+			Installation:       &defaulted.Spec,
 			FelixConfiguration: felixConfiguration,
 			ClusterDomain:      r.opts.ClusterDomain,
 			TrustedBundle:      typhaNodeTLS.TrustedBundle,
@@ -367,15 +350,15 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	windowsCfg := render.WindowsConfiguration{
 		K8sServiceEp:   k8sapi.Endpoint,
 		K8sDNSServers:  kubeDNSIPs,
-		Installation:   &instance.Spec,
+		Installation:   &defaulted.Spec,
 		ClusterDomain:  r.opts.ClusterDomain,
 		TLS:            typhaNodeTLS,
 		VXLANVNI:       *felixConfiguration.Spec.VXLANVNI,
-		ImageOverrides: r.ext.Images(),
+		ImageOverrides: r.images,
 	}
 	component = render.Windows(&windowsCfg)
 
-	imageSet, err := imageset.GetImageSet(ctx, r.client, instance.Spec.Variant)
+	imageSet, err := imageset.GetImageSet(ctx, r.client, defaulted.Spec.Variant)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error getting ImageSet", err, reqLogger)
 		return reconcile.Result{}, err
@@ -397,9 +380,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		r.client,
 		r.scheme,
 		instance,
-		utils.WithModifier(func(c render.Component) render.Component {
-			return r.ext.Modify(c, ci.RenderInputs)
-		}),
+		utils.WithExtension(r.ext, ci.RenderInputs),
 	)
 	if err := handler.CreateOrUpdateOrDelete(ctx, component, nil); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error creating / updating resource", err, reqLogger)

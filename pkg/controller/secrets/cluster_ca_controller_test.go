@@ -82,13 +82,13 @@ var _ = Describe("ClusterCA controller", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",
 			},
-			Status: operatorv1.InstallationStatus{
-				Computed: &operatorv1.InstallationSpec{},
-			},
+			Status: operatorv1.InstallationStatus{},
 			Spec: operatorv1.InstallationSpec{
 				Variant: operatorv1.Calico,
 			},
 		}
+		install.Status.Computed = install.Spec.DeepCopy()
+		install.Spec.Variant = ""
 		Expect(cli.Create(ctx, &install)).ShouldNot(HaveOccurred())
 
 		var err error
@@ -134,21 +134,14 @@ var _ = Describe("ClusterCA controller", func() {
 		Expect(caSecret.Data).Should(HaveKey("tls.crt"))
 	})
 
-	// This test is to verify that an Overlay will be read and merged with the default
-	// Installation resource. We use the overlay to switch to enterprise mode and the
-	// fact that if we have a wrong calico ImageSet that loading the ImageSet would
-	// fail if the Installation was interpreted as Calico.
-	It("should Reconcile with Overlay", func() {
-		// Create an overlay Installation.
-		install := operatorv1.Installation{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "overlay",
-			},
-			Spec: operatorv1.InstallationSpec{
-				Variant: operatorv1.CalicoEnterprise,
-			},
-		}
-		Expect(cli.Create(ctx, &install)).ShouldNot(HaveOccurred())
+	// The broken Calico ImageSet fails to load if the reconciler reads the spec
+	// instead of the status.
+	It("should Reconcile from the computed spec", func() {
+		install := operatorv1.Installation{}
+		Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, &install)).ShouldNot(HaveOccurred())
+		install.Status.Computed = install.Spec.DeepCopy()
+		install.Status.Computed.Variant = operatorv1.CalicoEnterprise
+		Expect(cli.Status().Update(ctx, &install)).ShouldNot(HaveOccurred())
 		Expect(cli.Create(ctx, &operatorv1.ImageSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "calico-brokenver",

@@ -17,10 +17,12 @@ package installation_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
@@ -69,11 +71,11 @@ var _ = Describe("typha enterprise modifier", func() {
 	// exactly as the installation controller does.
 	renderTypha := func(r extensions.Extensions, install *operatorv1.InstallationSpec, ri render.Inputs) []client.Object {
 		component := render.Typha(&render.TyphaConfiguration{
-			K8sServiceEp:    k8sapi.ServiceEndpoint{},
-			Installation:    install,
-			TLS:             typhaNodeTLS,
-			ClusterDomain:   dns.DefaultClusterDomain,
-			FelixHealthPort: 9099,
+			K8sServiceEp:       k8sapi.ServiceEndpoint{},
+			Installation:       install,
+			TLS:                typhaNodeTLS,
+			ClusterDomain:      dns.DefaultClusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 		})
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())
 		objs, del := component.Objects()

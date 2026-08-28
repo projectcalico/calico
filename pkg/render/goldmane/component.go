@@ -22,6 +22,7 @@ import (
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
@@ -78,6 +79,8 @@ type Configuration struct {
 	ManagementClusterConnection *operatorv1.ManagementClusterConnection
 	ClusterDomain               string
 	Goldmane                    *operatorv1.Goldmane
+
+	ImageOverrides *imageoverride.Overrides
 }
 
 type Component struct {
@@ -92,7 +95,7 @@ func (c *Component) ResolveImages(is *operatorv1.ImageSet) error {
 	prefix := c.cfg.Installation.ImagePrefix
 
 	var err error
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(render.ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
 	return err
 }
 
@@ -123,15 +126,9 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 
 	objs = append(objs, secret.ToRuntimeObjects(secret.CopyToNamespace(GoldmaneNamespace, c.cfg.PullSecrets...)...)...)
 
-	// Goldmane needs to be removed if the installation is not Calico, since it's not supported (yet!) for any other variant.
 	var objsToDelete []client.Object
-	if c.cfg.Installation.Variant == operatorv1.Calico {
-		if c.metricsPort() == 0 {
-			objsToDelete = append(objsToDelete, c.metricsService())
-		}
-	} else {
-		objsToDelete = objs
-		objs = nil
+	if c.metricsPort() == 0 {
+		objsToDelete = append(objsToDelete, c.metricsService())
 	}
 
 	objsToDelete = append(objsToDelete, c.deprecatedObjects()...)

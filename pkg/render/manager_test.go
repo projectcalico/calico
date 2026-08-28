@@ -127,9 +127,9 @@ var _ = Describe("Tigera Secure Manager rendering tests", func() {
 		manager := deployment.Spec.Template.Spec.Containers[3]
 
 		Expect(manager.Image).Should(Equal(components.TigeraRegistry + "tigera/manager:" + components.ComponentManager.Version))
-		Expect(uiAPIs.Image).Should(Equal(components.CalicoRegistry + "calico/calico:" + components.ComponentCalico.Version))
-		Expect(dashboard.Image).Should(Equal(components.CalicoRegistry + "calico/calico:" + components.ComponentCalico.Version))
-		Expect(voltron.Image).Should(Equal(components.CalicoRegistry + "calico/calico:" + components.ComponentCalico.Version))
+		Expect(uiAPIs.Image).Should(Equal(fmt.Sprintf("%s%s%s:%s", components.TigeraRegistry, components.TigeraImagePath, components.ComponentTigeraCalico.Image, components.ComponentTigeraCalico.Version)))
+		Expect(dashboard.Image).Should(Equal(fmt.Sprintf("%s%s%s:%s", components.TigeraRegistry, components.TigeraImagePath, components.ComponentTigeraCalico.Image, components.ComponentTigeraCalico.Version)))
+		Expect(voltron.Image).Should(Equal(fmt.Sprintf("%s%s%s:%s", components.TigeraRegistry, components.TigeraImagePath, components.ComponentTigeraCalico.Image, components.ComponentTigeraCalico.Version)))
 
 		// manager container
 		Expect(*manager.SecurityContext.AllowPrivilegeEscalation).To(BeFalse())

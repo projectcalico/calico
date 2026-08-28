@@ -112,14 +112,14 @@ var _ = Describe("External ES controller (Cloud))", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				Variant:  operatorv1.CalicoEnterprise,
 				Registry: "some.registry.org/",
 			},
 		}
+		install.Status.Computed = &install.Spec
 		Expect(cli.Create(ctx, install)).ShouldNot(HaveOccurred())
 
 		Expect(cli.Create(ctx, &corev1.Namespace{

@@ -82,7 +82,9 @@ var _ = Describe("Egress Gateway controller tests", func() {
 				Status: operatorv1.InstallationStatus{
 					Variant: operatorv1.CalicoEnterprise,
 					Computed: &operatorv1.InstallationSpec{
-						Registry: "my-reg",
+						Variant:            operatorv1.CalicoEnterprise,
+						KubernetesProvider: operatorv1.ProviderNone,
+						Registry:           "some.registry.org/",
 					},
 					CalicoVersion: components.EnterpriseRelease,
 				},

@@ -307,7 +307,7 @@ func (r *ReconcilePolicyRecommendation) Reconcile(ctx context.Context, request r
 	}
 
 	// Query for the installation object.
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, logc)

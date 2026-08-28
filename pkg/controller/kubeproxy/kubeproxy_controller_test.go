@@ -106,7 +106,7 @@ var _ = Describe("kube-proxy controller tests", func() {
 		if !bpfEnabled {
 			linuxDataplaneBPF = operatorv1.LinuxDataplaneIptables
 		}
-		createResource(&operatorv1.Installation{
+		install := &operatorv1.Installation{
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Spec: operatorv1.InstallationSpec{
 				CalicoNetwork: &operatorv1.CalicoNetworkSpec{
@@ -114,7 +114,9 @@ var _ = Describe("kube-proxy controller tests", func() {
 					LinuxDataplane:      &linuxDataplaneBPF,
 				},
 			},
-		})
+		}
+		install.Status.Computed = &install.Spec
+		createResource(install)
 	}
 	createKubeProxyDS := func(addNodeSelector bool) {
 		nodeSelector := map[string]string{}

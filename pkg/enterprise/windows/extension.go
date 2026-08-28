@@ -43,22 +43,19 @@ import (
 // Extension is the Calico Enterprise behavior for the windows controller.
 type Extension struct {
 	variant operatorv1.ProductVariant
-	images  *imageoverride.Overrides
 }
 
 var _ extensions.WindowsExtension = &Extension{}
 
 // New returns the windows extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, render.ComponentNameWindowsNodeImg, components.ComponentTigeraNodeWindows)
-	images.Register(variant, render.ComponentNameWindowsCNIImg, components.ComponentTigeraCNIWindows)
-
-	return &Extension{variant: variant, images: images}
+	return &Extension{variant: variant}
 }
 
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
+// RegisterImages adds the images the windows components resolve.
+func RegisterImages(o *imageoverride.Overrides, variant operatorv1.ProductVariant) {
+	o.Register(variant, render.ComponentNameWindowsNodeImg, components.ComponentTigeraNodeWindows)
+	o.Register(variant, render.ComponentNameWindowsCNIImg, components.ComponentTigeraCNIWindows)
 }
 
 // Modify dispatches over the components the windows controller renders.

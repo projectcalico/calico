@@ -36,6 +36,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	"github.com/tigera/operator/pkg/controller/status"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	"github.com/tigera/operator/pkg/render/goldmane"
@@ -94,7 +95,7 @@ var _ = Describe("Goldmane controller tests", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Status: operatorv1.InstallationStatus{
 				Variant:  operatorv1.Calico,
-				Computed: &operatorv1.InstallationSpec{},
+				Computed: &operatorv1.InstallationSpec{Variant: operatorv1.Calico},
 			},
 			Spec: operatorv1.InstallationSpec{Variant: operatorv1.Calico},
 		})).ToNot(HaveOccurred())
@@ -127,6 +128,7 @@ var _ = Describe("Goldmane controller tests", func() {
 			provider:      operatorv1.ProviderNone,
 			status:        mockStatus,
 			clusterDomain: "cluster.local",
+			ext:           extensions.Extensions{}.Goldmane(),
 		}
 	})
 

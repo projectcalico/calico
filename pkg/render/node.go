@@ -30,6 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
@@ -50,6 +52,10 @@ const (
 	BPFOperatorAnnotation      = "operator.tigera.io/bpfEnabled"
 
 	DisableKubeProxyKey = "operator.tigera.io/disable-kube-proxy"
+
+	// DefaultFelixHealthPort is the port Felix binds its health endpoints to when
+	// FelixConfiguration does not say.
+	DefaultFelixHealthPort = 9099
 
 	nodeCniConfigAnnotation   = "hash.operator.tigera.io/cni-config"
 	bgpLayoutHashAnnotation   = "hash.operator.tigera.io/bgp-layout"
@@ -130,12 +136,9 @@ type NodeConfiguration struct {
 	// configmap, rather than this "copy" semantic.
 	BGPLayouts *corev1.ConfigMap
 
-	// The health port that Felix should bind to. The controller reads FelixConfiguration
-	// and sets this.
-	FelixHealthPort int
-
-	// Node's CgroupV2Path override. The controller reads FelixConfiguration and sets this.
-	NodeCgroupV2Path string
+	// FelixConfiguration is the cluster's default FelixConfiguration, which the render
+	// reads Felix's health port and cgroup path from.
+	FelixConfiguration *v3.FelixConfiguration
 
 	// The bindMode read from the default BGPConfiguration. Used to trigger rolling updates
 	// should this value change.
@@ -143,9 +146,6 @@ type NodeConfiguration struct {
 
 	V3CRDs bool
 
-	// ImageOverrides lets a variant swap the node and cni-plugins images. The
-	// controller wires in the operator's image overrides; nil resolves to the
-	// core images.
 	ImageOverrides *imageoverride.Overrides
 }
 
@@ -156,6 +156,23 @@ func Node(cfg *NodeConfiguration) Component {
 		cfg.DefaultDNSPolicy = corev1.DNSClusterFirstWithHostNet
 	}
 	return &nodeComponent{cfg: cfg}
+}
+
+// felixHealthPort returns the port Felix binds its health endpoints to. The installation
+// controller defaults it, so an unset FelixConfiguration only happens in tests.
+func felixHealthPort(fc *v3.FelixConfiguration) int {
+	if fc == nil || fc.Spec.HealthPort == nil {
+		return DefaultFelixHealthPort
+	}
+	return *fc.Spec.HealthPort
+}
+
+// felixCgroupV2Path returns the cgroup v2 mount path override, or the empty string.
+func felixCgroupV2Path(fc *v3.FelixConfiguration) string {
+	if fc == nil {
+		return ""
+	}
+	return fc.Spec.CgroupV2Path
 }
 
 type nodeComponent struct {
@@ -180,7 +197,7 @@ func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	c.calicoImage = appendIfErr(components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is))
+	c.calicoImage = appendIfErr(components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is))
 	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameNode, components.ComponentCalicoNode, c.cfg.Installation)
 	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
 	if c.installUpstreamPlugins() {
@@ -803,12 +820,12 @@ func (c *nodeComponent) getCalicoIPAM() map[string]any {
 	// Determine what address families to enable.
 	var assign_ipv4 string
 	var assign_ipv6 string
-	if v4pool := GetIPv4Pool(c.cfg.IPPools); v4pool != nil {
+	if HasIPv4Pool(c.cfg.IPPools) {
 		assign_ipv4 = "true"
 	} else {
 		assign_ipv4 = "false"
 	}
-	if v6pool := GetIPv6Pool(c.cfg.IPPools); v6pool != nil {
+	if HasIPv6Pool(c.cfg.IPPools) {
 		assign_ipv6 = "true"
 	} else {
 		assign_ipv6 = "false"
@@ -821,8 +838,8 @@ func (c *nodeComponent) getCalicoIPAM() map[string]any {
 }
 
 func buildHostLocalIPAM(pools []operatorv1.IPPool) map[string]any {
-	v6 := GetIPv6Pool(pools) != nil
-	v4 := GetIPv4Pool(pools) != nil
+	v6 := HasIPv6Pool(pools)
+	v4 := HasIPv4Pool(pools)
 
 	if v4 && v6 {
 		// Dual-stack
@@ -1288,8 +1305,8 @@ func (c *nodeComponent) bpffsEnvvars() []corev1.EnvVar {
 		envVars = append(envVars, corev1.EnvVar{Name: "KUBERNETES_APISERVER_ENDPOINTS", Value: env})
 	}
 
-	if c.cfg.NodeCgroupV2Path != "" {
-		envVars = append(envVars, corev1.EnvVar{Name: "CALICO_CGROUP_PATH", Value: c.cfg.NodeCgroupV2Path})
+	if path := felixCgroupV2Path(c.cfg.FelixConfiguration); path != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: "CALICO_CGROUP_PATH", Value: path})
 	}
 
 	return envVars
@@ -1454,7 +1471,7 @@ func (c *nodeComponent) nodeEnvVars() []corev1.EnvVar {
 		{Name: "CALICO_DISABLE_FILE_LOGGING", Value: "false"},
 		{Name: "FELIX_DEFAULTENDPOINTTOHOSTACTION", Value: "ACCEPT"},
 		{Name: "FELIX_HEALTHENABLED", Value: "true"},
-		{Name: "FELIX_HEALTHPORT", Value: fmt.Sprintf("%d", c.cfg.FelixHealthPort)},
+		{Name: "FELIX_HEALTHPORT", Value: fmt.Sprintf("%d", felixHealthPort(c.cfg.FelixConfiguration))},
 		{
 			Name: "NODENAME",
 			ValueFrom: &corev1.EnvVarSource{
@@ -1695,7 +1712,7 @@ func (c *nodeComponent) nodeLifecycle() *corev1.Lifecycle {
 // nodeProbes creates calico/node health probes. It returns in order: startupProbe, livenessProbe, readinessProbe
 func (c *nodeComponent) nodeProbes() (*corev1.Probe, *corev1.Probe, *corev1.Probe) {
 	// Determine liveness and readiness configuration for node.
-	livenessPort := intstr.FromInt(c.cfg.FelixHealthPort)
+	livenessPort := intstr.FromInt(felixHealthPort(c.cfg.FelixConfiguration))
 	var readinessCmd []string
 
 	readinessCmd = []string{components.CalicoBinaryPath, "component", "node", "health", "--bird-ready", "--felix-ready"}
@@ -1762,32 +1779,36 @@ func getAutodetectionMethod(ad *operatorv1.NodeAddressAutodetection) string {
 	return ""
 }
 
-// GetIPv4Pool returns the IPv4 IPPool in an installation, or nil if one can't be found.
-func GetIPv4Pool(pools []operatorv1.IPPool) *operatorv1.IPPool {
-	for ii, pool := range pools {
-		addr, _, err := net.ParseCIDR(pool.CIDR)
-		if err == nil {
-			if addr.To4() != nil {
-				return &pools[ii]
-			}
-		}
-	}
-
-	return nil
+// IsIPv4Pool reports whether the pool is IPv4. A CIDR that doesn't parse belongs to neither family.
+func IsIPv4Pool(pool operatorv1.IPPool) bool {
+	addr, _, err := net.ParseCIDR(pool.CIDR)
+	return err == nil && addr.To4() != nil
 }
 
-// GetIPv6Pool returns the IPv6 IPPool in an installation, or nil if one can't be found.
-func GetIPv6Pool(pools []operatorv1.IPPool) *operatorv1.IPPool {
-	for ii, pool := range pools {
-		addr, _, err := net.ParseCIDR(pool.CIDR)
-		if err == nil {
-			if addr.To4() == nil {
-				return &pools[ii]
-			}
+// IsIPv6Pool reports whether the pool is IPv6. A CIDR that doesn't parse belongs to neither family.
+func IsIPv6Pool(pool operatorv1.IPPool) bool {
+	addr, _, err := net.ParseCIDR(pool.CIDR)
+	return err == nil && addr.To4() == nil
+}
+
+// HasIPv4Pool reports whether any of the pools is IPv4.
+func HasIPv4Pool(pools []operatorv1.IPPool) bool {
+	for _, pool := range pools {
+		if IsIPv4Pool(pool) {
+			return true
 		}
 	}
+	return false
+}
 
-	return nil
+// HasIPv6Pool reports whether any of the pools is IPv6.
+func HasIPv6Pool(pools []operatorv1.IPPool) bool {
+	for _, pool := range pools {
+		if IsIPv6Pool(pool) {
+			return true
+		}
+	}
+	return false
 }
 
 // bgpEnabled returns true if the given Installation enables BGP, false otherwise.

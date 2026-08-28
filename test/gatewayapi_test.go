@@ -42,6 +42,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 )
@@ -64,6 +66,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		}).SetupWithManager(mgr, options.ControllerOptions{
 			DetectedProvider: operator.ProviderNone,
 			Variant:          operator.CalicoEnterprise,
+			Extensions:       enterprise.New(operator.CalicoEnterprise, eoptions.Options{}),
 			ManageCRDs:       ManageCRDsDisable,
 			ShutdownContext:  shutdownContext,
 			K8sClientset:     clientset,
@@ -185,6 +188,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -230,6 +234,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -333,6 +338,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -385,6 +391,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -443,6 +450,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating the default GatewayAPI")
@@ -502,6 +510,7 @@ var _ = Describe("GatewayAPI tests", func() {
 		Expect(c.Create(shutdownContext, instance)).NotTo(HaveOccurred())
 		Expect(c.Get(shutdownContext, utils.DefaultInstanceKey, instance)).NotTo(HaveOccurred())
 		instance.Status.Variant = operator.CalicoEnterprise
+		instance.Status.Computed = instance.Spec.DeepCopy()
 		Expect(c.Status().Update(shutdownContext, instance)).NotTo(HaveOccurred())
 
 		By("Creating GatewayAPI with an EnvoyGatewayConfigRef that doesn't exist yet")

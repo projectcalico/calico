@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"slices"
 	"strings"
 
 	admregv1 "k8s.io/api/admissionregistration/v1"
@@ -303,7 +302,7 @@ func (e *Extension) ExtendInputs(ctx context.Context, ci controller.Inputs) (con
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceReadError, "error getting ImageSet: %w", err)
 	}
-	calicoImage, err := components.GetReference(components.CombinedCalicoImage(in), in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
+	calicoImage, err := components.GetReference(components.ComponentTigeraCalico, in.Registry, in.ImagePath, in.ImagePrefix, imageSet)
 	if err != nil {
 		return ci, nil, extensions.Degradedf(operatorv1.ResourceUpdateError, "error with images from ImageSet: %w", err)
 	}
@@ -395,16 +394,6 @@ func modifyAPIServer(ri render.Inputs, cfg *render.APIServerConfiguration, creat
 
 	c.layerDeployment(extensions.MustFindObject[*appsv1.Deployment](create, render.APIServerName))
 	c.addServicePorts(extensions.MustFindObject[*corev1.Service](create, render.APIServerServiceName))
-	// Enterprise serves staged policies through the tiered-policy passthrough role, which
-	// the base only creates when running an aggregation API server.
-	if role, ok := extensions.FindObject[*rbacv1.ClusterRole](create, render.TieredPolicyPassthruClusterRoleName); ok {
-		for i := range role.Rules {
-			if slices.Contains(role.Rules[i].Resources, "networkpolicies") {
-				role.Rules[i].Resources = append(role.Rules[i].Resources, "stagednetworkpolicies", "stagedglobalnetworkpolicies")
-			}
-		}
-	}
-
 	// The L7 sidecar mutating webhook is driven by ApplicationLayer. The base always
 	// queues it for deletion; when sidecar injection is on, render it and pull it back
 	// out of the delete list.
@@ -735,9 +724,9 @@ func (c *apiServer) sidecarMutatingWebhookConfig() *admregv1.MutatingWebhookConf
 }
 
 // modifyAPIServerPolicy adds the enterprise additions to the API server network policy:
-// the OIDC egress rule (when an OIDC key validator is configured) and the L7 admission
-// controller ingress port (when sidecar injection is enabled). The base policy carries
-// neither.
+// the OIDC egress rule (when an OIDC key validator is configured), the query server's
+// egress to Linseed via Guardian (on a managed cluster) and the L7 admission controller
+// ingress port (when sidecar injection is enabled). The base policy carries none of these.
 func modifyAPIServerPolicy(ri render.Inputs, cfg *render.APIServerConfiguration, create, del []client.Object) ([]client.Object, []client.Object) {
 	c := &apiServer{cfg: cfg, data: apiServerData(ri)}
 
@@ -746,17 +735,20 @@ func modifyAPIServerPolicy(ri render.Inputs, cfg *render.APIServerConfiguration,
 		return create, del
 	}
 
-	// Insert the OIDC egress rule before the trailing Pass rule so it is evaluated.
 	if c.data.keyValidatorConfig != nil {
 		if parsedURL, err := url.Parse(c.data.keyValidatorConfig.Issuer()); err == nil {
-			oidc := networkpolicy.GetOIDCEgressRule(parsedURL)
-			egress := policy.Spec.Egress
-			if n := len(egress); n > 0 && egress[n-1].Action == v3.Pass {
-				policy.Spec.Egress = append(egress[:n-1:n-1], oidc, egress[n-1])
-			} else {
-				policy.Spec.Egress = append(egress, oidc)
-			}
+			insertEgressBeforePass(policy, networkpolicy.GetOIDCEgressRule(parsedURL))
 		}
+	}
+
+	// A managed cluster has no local Linseed; the query server reaches it through Guardian,
+	// matching the LINSEED_URL that LinseedEndpoint returns.
+	if c.data.managementClusterConnection != nil {
+		insertEgressBeforePass(policy, v3.Rule{
+			Action:      v3.Allow,
+			Protocol:    &networkpolicy.TCPProtocol,
+			Destination: render.GuardianEntityRule,
+		})
 	}
 
 	// Allow the kube-apiserver to reach the L7 admission controller.
@@ -769,6 +761,17 @@ func modifyAPIServerPolicy(ri render.Inputs, cfg *render.APIServerConfiguration,
 	}
 
 	return create, del
+}
+
+// insertEgressBeforePass inserts rule ahead of the policy's trailing Pass rule, so that it is
+// evaluated before the tier hands the traffic to subsequent tiers.
+func insertEgressBeforePass(policy *v3.NetworkPolicy, rule v3.Rule) {
+	egress := policy.Spec.Egress
+	if n := len(egress); n > 0 && egress[n-1].Action == v3.Pass {
+		policy.Spec.Egress = append(egress[:n-1:n-1], rule, egress[n-1])
+		return
+	}
+	policy.Spec.Egress = append(egress, rule)
 }
 
 // auditVolumes are the host-path audit log and audit policy volumes used by the

@@ -27,6 +27,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	"github.com/tigera/operator/pkg/extensions"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/tls"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -79,8 +80,7 @@ var _ = Describe("whisker controller tests", func() {
 				Generation: 2,
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
@@ -88,6 +88,8 @@ var _ = Describe("whisker controller tests", func() {
 				Registry:             "some.registry.org/",
 			},
 		}
+		installation.Status.Computed = installation.Spec.DeepCopy()
+		installation.Spec.Variant = ""
 
 		// Apply prerequisites for the basic reconcile to succeed.
 		certificateManager, err := certificatemanager.Create(cli, nil, "cluster.local", common.OperatorNamespace(), certificatemanager.AllowCACreation())
@@ -126,13 +128,14 @@ var _ = Describe("whisker controller tests", func() {
 
 	Context("verify reconciliation", func() {
 		It("should use builtin images", func() {
-			installation.Spec.CertificateManagement = certificateManagement
+			installation.Status.Computed.CertificateManagement = certificateManagement
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 			reconciler := Reconciler{
 				cli:      cli,
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
+				ext:      extensions.Extensions{}.Whisker(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())
@@ -147,6 +150,7 @@ var _ = Describe("whisker controller tests", func() {
 				scheme:   scheme,
 				provider: operatorv1.ProviderNone,
 				status:   mockStatus,
+				ext:      extensions.Extensions{}.Whisker(),
 			}
 			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: "default", Namespace: "calico-system"}})
 			Expect(err).ShouldNot(HaveOccurred())

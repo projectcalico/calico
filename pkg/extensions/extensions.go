@@ -14,6 +14,10 @@
 
 package extensions
 
+import (
+	"github.com/tigera/operator/pkg/imageoverride"
+)
+
 // Set is the extensions a variant supplies, one per extended controller. What it
 // leaves unset runs the core behavior.
 type Set struct {
@@ -24,6 +28,13 @@ type Set struct {
 	Tiers             TiersExtension
 	CSR               CSRExtension
 	Istio             IstioExtension
+	Goldmane          GoldmaneExtension
+	Whisker           WhiskerExtension
+	GatewayAPI        GatewayAPIExtension
+
+	// Images maps a component name to the image the variant runs for it. One set for
+	// the whole operator, since the variant is fixed for the process lifetime.
+	Images *imageoverride.Overrides
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -85,4 +96,31 @@ func (e Extensions) Istio() IstioExtension {
 		return noopIstio{}
 	}
 	return e.set.Istio
+}
+
+func (e Extensions) Goldmane() GoldmaneExtension {
+	if e.set.Goldmane == nil {
+		return noopGoldmane{}
+	}
+	return e.set.Goldmane
+}
+
+func (e Extensions) Whisker() WhiskerExtension {
+	if e.set.Whisker == nil {
+		return noopWhisker{}
+	}
+	return e.set.Whisker
+}
+
+func (e Extensions) GatewayAPI() GatewayAPIExtension {
+	if e.set.GatewayAPI == nil {
+		return noopGatewayAPI{}
+	}
+	return e.set.GatewayAPI
+}
+
+// Images returns the variant's image overrides. A nil set resolves every component to
+// the default the caller passes.
+func (e Extensions) Images() *imageoverride.Overrides {
+	return e.set.Images
 }

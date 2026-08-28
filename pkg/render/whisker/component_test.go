@@ -58,7 +58,7 @@ var _ = Describe("ComponentRendering", func() {
 		Expect(objsToCreate).To(HaveLen(createObjs))
 		Expect(objsToDelete).To(HaveLen(delObjs))
 	},
-		Entry("Should return objects to create when variant is Calico",
+		Entry("Should return the whisker objects to create",
 			&whisker.Configuration{
 				Installation: &operatorv1.InstallationSpec{
 					KubernetesProvider: operatorv1.ProviderGKE,
@@ -70,19 +70,6 @@ var _ = Describe("ComponentRendering", func() {
 				Whisker:               &operatorv1.Whisker{Spec: operatorv1.WhiskerSpec{Notifications: ptr.To(operatorv1.Enabled)}},
 			},
 			numExpectedObjects, numDeprecatedObjects,
-		),
-		Entry("Should return objects to delete when variant is not Calico",
-			&whisker.Configuration{
-				Installation: &operatorv1.InstallationSpec{
-					KubernetesProvider: operatorv1.ProviderGKE,
-					Variant:            operatorv1.CalicoEnterprise,
-				},
-				TrustedCertBundle:     defaultTrustedCertBundle,
-				WhiskerKeyPair:        defaultWhiskerKeyPair,
-				WhiskerBackendKeyPair: defaultTLSKeyPair,
-				Whisker:               &operatorv1.Whisker{Spec: operatorv1.WhiskerSpec{Notifications: ptr.To(operatorv1.Enabled)}},
-			},
-			0, numExpectedObjects+numDeprecatedObjects,
 		),
 	)
 

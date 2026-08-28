@@ -117,7 +117,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.V(2).Info("Reconciling KubeProxy")
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if installationSpec == nil {

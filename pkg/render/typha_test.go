@@ -17,6 +17,8 @@ package render_test
 import (
 	"fmt"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gstruct"
@@ -70,11 +72,11 @@ var _ = Describe("Typha rendering tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		typhaNodeTLS = getTyphaNodeTLS(cli, certificateManager)
 		cfg = render.TyphaConfiguration{
-			K8sServiceEp:    k8sServiceEp,
-			TLS:             typhaNodeTLS,
-			Installation:    installation,
-			ClusterDomain:   defaultClusterDomain,
-			FelixHealthPort: 9099,
+			K8sServiceEp:       k8sServiceEp,
+			TLS:                typhaNodeTLS,
+			Installation:       installation,
+			ClusterDomain:      defaultClusterDomain,
+			FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 		}
 	})
 
@@ -232,7 +234,7 @@ var _ = Describe("Typha rendering tests", func() {
 
 	It("should properly configure a non-default typha health port", func() {
 		// Set a non-default health port.
-		cfg.FelixHealthPort = 7878
+		cfg.FelixConfiguration = &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(7878)}}
 
 		component := render.Typha(&cfg)
 		resources, _ := component.Objects()

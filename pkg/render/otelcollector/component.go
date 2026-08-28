@@ -175,7 +175,7 @@ func (c *component) ResolveImages(is *operatorv1.ImageSet) error {
 	prefix := c.cfg.Installation.ImagePrefix
 
 	var err error
-	c.image, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.image, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 	return err
 }
 

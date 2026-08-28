@@ -163,8 +163,7 @@ var _ = Describe("LogStorage Secrets controller", func() {
 				Name: "default",
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant:  operatorv1.CalicoEnterprise,
-				Computed: &operatorv1.InstallationSpec{},
+				Variant: operatorv1.CalicoEnterprise,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
@@ -172,6 +171,7 @@ var _ = Describe("LogStorage Secrets controller", func() {
 				Registry:             "some.registry.org/",
 			},
 		}
+		install.Status.Computed = &install.Spec
 		Expect(cli.Create(ctx, install)).ShouldNot(HaveOccurred())
 
 		mockStatus = &status.MockStatus{}

@@ -16,7 +16,6 @@ package istio
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -30,6 +29,7 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -43,6 +43,9 @@ type Configuration struct {
 	Istio          *operatorv1.Istio
 	IstioNamespace string
 	Scheme         *runtime.Scheme
+
+	// ImageOverrides swaps in a variant's images for the components below.
+	ImageOverrides *imageoverride.Overrides
 }
 
 var _ render.Component = &IstioComponent{}
@@ -53,7 +56,6 @@ type IstioComponent struct {
 	IstioInstallCNIImage string
 	IstioZTunnelImage    string
 	IstioProxyv2Image    string
-	L7CollectorImage     string
 
 	resources *IstioResources
 }
@@ -79,6 +81,21 @@ const (
 
 	istioFakeImageProxyv2 = "fake.io/fakeimg/proxyv2:faketag"
 )
+
+// Component names, which key the image overrides a variant resolves through.
+const (
+	ComponentNamePilot      = "istio-pilot"
+	ComponentNameInstallCNI = "istio-install-cni"
+	ComponentNameZTunnel    = "istio-ztunnel"
+	ComponentNameProxyv2    = "istio-proxyv2"
+)
+
+// ConfiguredComponent is the istio component, exposed so a variant extension can
+// reach the config it rendered from.
+type ConfiguredComponent interface {
+	render.Component
+	GetConfig() *Configuration
+}
 
 func Istio(cfg *Configuration) (*IstioComponentCRDs, *IstioComponent, error) {
 	// Produce Helm templates for Istio
@@ -197,56 +214,27 @@ func (c *IstioComponent) patchImages() (err error) {
 func (c *IstioComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	var err error
 
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
+	in := c.cfg.Installation
+	reg := in.Registry
+	path := in.ImagePath
+	prefix := in.ImagePrefix
+	overrides := c.cfg.ImageOverrides
 
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		c.IstioPilotImage, err = components.GetReference(components.ComponentIstioPilot, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioInstallCNIImage, err = components.GetReference(components.ComponentIstioInstallCNI, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioZTunnelImage, err = components.GetReference(components.ComponentIstioZTunnel, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioProxyv2Image, err = components.GetReference(components.ComponentIstioProxyv2, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		if c.waypointLoggingEnabled() {
-			// The waypoint l7-collector runs as the "l7-collector" subcommand of
-			// the combined calico binary, so it reuses the calico/calico image
-			// that calico-node already pulls onto every node. Paired with
-			// imagePullPolicy: IfNotPresent on the sidecar, waypoint pods in user
-			// namespaces resolve the image from the node cache and never need an
-			// image-pull secret copied into their namespace.
-			c.L7CollectorImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		c.IstioPilotImage, err = components.GetReference(components.ComponentCalicoIstioPilot, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioInstallCNIImage, err = components.GetReference(components.ComponentCalicoIstioInstallCNI, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioZTunnelImage, err = components.GetReference(components.ComponentCalicoIstioZTunnel, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
-		c.IstioProxyv2Image, err = components.GetReference(components.ComponentCalicoIstioProxyv2, reg, path, prefix, is)
-		if err != nil {
-			return err
-		}
+	c.IstioPilotImage, err = components.GetReference(overrides.Resolve(ComponentNamePilot, components.ComponentCalicoIstioPilot, in), reg, path, prefix, is)
+	if err != nil {
+		return err
+	}
+	c.IstioInstallCNIImage, err = components.GetReference(overrides.Resolve(ComponentNameInstallCNI, components.ComponentCalicoIstioInstallCNI, in), reg, path, prefix, is)
+	if err != nil {
+		return err
+	}
+	c.IstioZTunnelImage, err = components.GetReference(overrides.Resolve(ComponentNameZTunnel, components.ComponentCalicoIstioZTunnel, in), reg, path, prefix, is)
+	if err != nil {
+		return err
+	}
+	c.IstioProxyv2Image, err = components.GetReference(overrides.Resolve(ComponentNameProxyv2, components.ComponentCalicoIstioProxyv2, in), reg, path, prefix, is)
+	if err != nil {
+		return err
 	}
 
 	if err = c.patchImages(); err != nil {
@@ -327,30 +315,12 @@ func (c *IstioComponent) Objects() ([]client.Object, []client.Object) {
 	objs = append(objs, res.CNI...)
 	objs = append(objs, res.ZTunnel...)
 
-	// Waypoint L7 logging is Enterprise-only. The five resources (the
-	// l7-collector defaults ConfigMap, the EnvoyFilter-writer Role and
-	// RoleBinding, and the two EnvoyFilters) live in the Istio system namespace
-	// so Istio's deployment controller applies them as class defaults to every
-	// Gateway using the istio-waypoint GatewayClass.
-	if c.cfg.Installation.Variant.IsEnterprise() {
-		if c.waypointLoggingEnabled() {
-			objs = append(objs, L7WaypointObjects(c.cfg.IstioNamespace, c.L7CollectorImage)...)
-		} else {
-			// Delete in the reverse of the create order so the EnvoyFilters can be deleted.
-			del := L7WaypointObjects(c.cfg.IstioNamespace, "")
-			slices.Reverse(del)
-			toDelete = append(toDelete, del...)
-		}
-	}
-
 	return objs, toDelete
 }
 
-// waypointLoggingEnabled reports whether L7 logging should be rendered for
-// waypoint proxies. Defaults to true when the field is unset. Delegates to the
-// shared api helper so the renderer and the policy-sync predicate stay aligned.
-func (c *IstioComponent) waypointLoggingEnabled() bool {
-	return c.cfg.Istio.WaypointLoggingEnabled()
+// GetConfig implements ConfiguredComponent.
+func (c *IstioComponent) GetConfig() *Configuration {
+	return c.cfg
 }
 
 func (c *IstioComponent) Ready() bool {

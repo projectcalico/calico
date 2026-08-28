@@ -21,6 +21,9 @@ import (
 	glog "log"
 	"reflect"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"k8s.io/utils/ptr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -85,15 +88,15 @@ func allCalicoComponents(
 		BGPLayouts:          bgpLayout,
 		BirdTemplates:       bt,
 		MigrateNamespaces:   up,
-		FelixHealthPort:     9099,
+		FelixConfiguration:  &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 	}
 	typhaCfg := &render.TyphaConfiguration{
-		K8sServiceEp:      k8sServiceEp,
-		Installation:      cr,
-		TLS:               typhaNodeTLS,
-		ClusterDomain:     clusterDomain,
-		MigrateNamespaces: up,
-		FelixHealthPort:   9099,
+		K8sServiceEp:       k8sServiceEp,
+		Installation:       cr,
+		TLS:                typhaNodeTLS,
+		ClusterDomain:      clusterDomain,
+		MigrateNamespaces:  up,
+		FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 	}
 	kcCfg := &kubecontrollers.KubeControllersConfiguration{
 		K8sServiceEp:      k8sServiceEp,

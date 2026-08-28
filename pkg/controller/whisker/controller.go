@@ -39,6 +39,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/extensions"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	"github.com/tigera/operator/pkg/render/goldmane"
@@ -131,6 +133,8 @@ func newReconciler(
 		status:        statusMgr,
 		clusterDomain: opts.ClusterDomain,
 		variant:       opts.Variant,
+		ext:           opts.Extensions.Whisker(),
+		images:        opts.Extensions.Images(),
 	}
 	c.status.Run(opts.ShutdownContext)
 	return c
@@ -146,6 +150,8 @@ type Reconciler struct {
 	status        status.StatusManager
 	clusterDomain string
 	variant       operatorv1.ProductVariant
+	ext           extensions.WhiskerExtension
+	images        *imageoverride.Overrides
 }
 
 // Reconcile reads that state of the cluster for a Whisker object and makes changes based on the
@@ -174,7 +180,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	// SetMetaData in the TigeraStatus such as observedGenerations.
 	defer r.status.SetMetaData(&whiskerCR.ObjectMeta)
 
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.cli)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.cli)
 	if err != nil {
 		return reconcile.Result{}, err
 	} else if installationSpec == nil {
@@ -245,7 +251,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		return reconcile.Result{}, err
 	}
 
-	ch := utils.NewComponentHandler(log, r.cli, r.scheme, whiskerCR)
+	ri := render.Inputs{
+		Installation:  installationSpec,
+		ClusterDomain: r.clusterDomain,
+		TrustedBundle: trustedBundle,
+	}
+	ch := utils.NewComponentHandler(log, r.cli, r.scheme, whiskerCR, utils.WithExtension(r.ext, ri))
 	cfg := &whisker.Configuration{
 		PullSecrets:           pullSecrets,
 		OpenShift:             r.provider.IsOpenShift(),
@@ -255,6 +266,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		WhiskerBackendKeyPair: backendKeyPair,
 		Whisker:               whiskerCR,
 		ClusterDomain:         r.clusterDomain,
+		ImageOverrides:        r.images,
 	}
 
 	clusterInfo := &v3.ClusterInformation{}

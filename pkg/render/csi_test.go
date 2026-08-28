@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -298,6 +301,7 @@ var _ = Describe("CSI rendering tests", func() {
 
 	It("should use private images when Variant = enterprise", func() {
 		cfg.Installation.Variant = operatorv1.CalicoEnterprise
+		cfg.ImageOverrides = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}).Images()
 		comp := render.CSI(&cfg)
 		Expect(comp.ResolveImages(nil)).To(BeNil())
 		createObjs, _ := comp.Objects()

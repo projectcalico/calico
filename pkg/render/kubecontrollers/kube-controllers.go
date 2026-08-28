@@ -222,7 +222,8 @@ func (c *kubeControllersComponent) ResolveImages(is *operatorv1.ImageSet) error 
 	path := c.cfg.Installation.ImagePath
 	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	image := c.cfg.ImageOverrides.Resolve(render.ComponentNameKubeControllers, components.CombinedCalicoImage(c.cfg.Installation), c.cfg.Installation)
+	calico := c.cfg.ImageOverrides.Resolve(render.ComponentNameCalico, components.ComponentCalico, c.cfg.Installation)
+	image := c.cfg.ImageOverrides.Resolve(render.ComponentNameKubeControllers, calico, c.cfg.Installation)
 	c.calicoImage, err = components.GetReference(image, reg, path, prefix, is)
 	if err != nil {
 		return err

@@ -374,7 +374,7 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 	// Fetch the Installation instance. We need this for a few reasons.
 	// - We need to make sure it has successfully completed installation.
 	// - We need to get the registry information from its spec.
-	installationSpec, err := utils.GetInstallationSpec(ctx, r.client)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r.client)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Installation not found", err, reqLogger)
@@ -676,6 +676,7 @@ func (r *ReconcileLogCollector) Reconcile(ctx context.Context, request reconcile
 		FluentBitKeyPair:              fluentBitKeyPair,
 		TrustedBundle:                 trustedBundle,
 		ManagedCluster:                managedCluster,
+		ManagementCluster:             managementCluster != nil,
 		UseSyslogCertificate:          useSyslogCertificate,
 		Tenant:                        tenant,
 		ExternalElastic:               r.opts.ElasticExternal,

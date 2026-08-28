@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gstruct"
@@ -135,13 +137,13 @@ var _ = Describe("Node rendering tests", func() {
 
 				// Create a default configuration.
 				cfg = render.NodeConfiguration{
-					K8sServiceEp:    k8sServiceEp,
-					Installation:    defaultInstance,
-					TLS:             typhaNodeTLS,
-					ClusterDomain:   defaultClusterDomain,
-					FelixHealthPort: 9099,
-					IPPools:         defaultInstance.CalicoNetwork.IPPools,
-					ImageOverrides:  imageoverride.New(),
+					K8sServiceEp:       k8sServiceEp,
+					Installation:       defaultInstance,
+					TLS:                typhaNodeTLS,
+					ClusterDomain:      defaultClusterDomain,
+					FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
+					IPPools:            defaultInstance.CalicoNetwork.IPPools,
+					ImageOverrides:     imageoverride.New(),
 				}
 			})
 
@@ -1429,7 +1431,7 @@ var _ = Describe("Node rendering tests", func() {
 				defaultInstance.KubernetesProvider = operatorv1.ProviderOpenShift
 				defaultCNIConfDir, defaultCNIBinDir := render.DefaultCNIDirectories(defaultInstance.KubernetesProvider)
 				defaultInstance.CNI.ConfDir, defaultInstance.CNI.BinDir = &defaultCNIConfDir, &defaultCNIBinDir
-				cfg.FelixHealthPort = 9199
+				cfg.FelixConfiguration = &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9199)}}
 				component := render.Node(&cfg)
 				Expect(component.ResolveImages(nil)).To(BeNil())
 				resources, _ := component.Objects()
@@ -1839,6 +1841,31 @@ var _ = Describe("Node rendering tests", func() {
 				// Assert we set annotations properly.
 				Expect(ds.Spec.Template.Annotations["prometheus.io/scrape"]).To(Equal("true"))
 				Expect(ds.Spec.Template.Annotations["prometheus.io/port"]).To(Equal("1234"))
+			})
+
+			It("should set CALICO_CGROUP_PATH from FelixConfiguration", func() {
+				cfg.FelixConfiguration.Spec.CgroupV2Path = "/run/calico/cgroup"
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+
+				ds := rtest.GetResource(resources, "calico-node", "calico-system", "apps", "v1", "DaemonSet").(*appsv1.DaemonSet)
+				bootstrap := rtest.GetContainer(ds.Spec.Template.Spec.InitContainers, "ebpf-bootstrap")
+				Expect(bootstrap).NotTo(BeNil())
+				rtest.ExpectEnv(bootstrap.Env, "CALICO_CGROUP_PATH", "/run/calico/cgroup")
+			})
+
+			It("should not set CALICO_CGROUP_PATH when FelixConfiguration has no override", func() {
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+
+				ds := rtest.GetResource(resources, "calico-node", "calico-system", "apps", "v1", "DaemonSet").(*appsv1.DaemonSet)
+				bootstrap := rtest.GetContainer(ds.Spec.Template.Spec.InitContainers, "ebpf-bootstrap")
+				Expect(bootstrap).NotTo(BeNil())
+				for _, e := range bootstrap.Env {
+					Expect(e.Name).NotTo(Equal("CALICO_CGROUP_PATH"))
+				}
 			})
 
 			It("should not render a FlexVolume container if FlexVolumePath is set to None", func() {
@@ -2658,7 +2685,7 @@ var _ = Describe("Node rendering tests", func() {
 						defaultInstance.KubernetesProvider = operatorv1.ProviderOpenShift
 						defaultCNIConfDir, defaultCNIBinDir := render.DefaultCNIDirectories(defaultInstance.KubernetesProvider)
 						defaultInstance.CNI.ConfDir, defaultInstance.CNI.BinDir = &defaultCNIConfDir, &defaultCNIBinDir
-						cfg.FelixHealthPort = 9199
+						cfg.FelixConfiguration = &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9199)}}
 					}
 
 					if isEnterprise {

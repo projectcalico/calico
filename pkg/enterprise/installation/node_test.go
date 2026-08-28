@@ -37,12 +37,12 @@ import (
 var _ = Describe("node enterprise image override", func() {
 	It("selects the enterprise node image for the enterprise variant", func() {
 		ent := &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise}
-		Expect(ext.Installation().Images().Resolve("node", components.ComponentCalicoNode, ent)).To(Equal(components.ComponentTigeraNode))
+		Expect(ext.Images().Resolve("node", components.ComponentCalicoNode, ent)).To(Equal(components.ComponentTigeraNode))
 	})
 
 	It("leaves the default in place for the Calico variant", func() {
 		calico := &operatorv1.InstallationSpec{Variant: operatorv1.Calico}
-		Expect(ext.Installation().Images().Resolve("node", components.ComponentCalicoNode, calico)).To(Equal(components.ComponentCalicoNode))
+		Expect(ext.Images().Resolve("node", components.ComponentCalicoNode, calico)).To(Equal(components.ComponentCalicoNode))
 	})
 })
 

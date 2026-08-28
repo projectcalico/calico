@@ -106,7 +106,7 @@ func (pc *packetCaptureApiComponent) ResolveImages(is *operatorv1.ImageSet) erro
 	prefix := pc.cfg.Installation.ImagePrefix
 
 	var err error
-	pc.calicoImage, err = components.GetReference(components.CombinedCalicoImage(pc.cfg.Installation), reg, path, prefix, is)
+	pc.calicoImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 	if err != nil {
 		return err
 	}

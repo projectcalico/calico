@@ -228,7 +228,7 @@ func (r *ReconcileWaypoint) Reconcile(ctx context.Context, request reconcile.Req
 // garbage collected by owner reference. Objects stranded while the CR still exists and
 // is the only owner (a removed Gateway, a renamed pull secret) are not yet cleaned up.
 func (r *ReconcileWaypoint) pullSecretResources(ctx context.Context, reqLogger logr.Logger) ([]client.Object, error) {
-	installationSpec, err := utils.GetInstallationSpec(ctx, r)
+	installationSpec, err := utils.GetComputedInstallationSpec(ctx, r)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.V(1).Info("Installation not found")

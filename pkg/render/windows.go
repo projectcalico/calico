@@ -67,9 +67,6 @@ type WindowsConfiguration struct {
 	TLS           *TyphaNodeTLS
 	VXLANVNI      int
 
-	// ImageOverrides lets a variant swap the windows node and CNI images. The
-	// controller wires in the operator's image overrides; nil resolves to the
-	// core images.
 	ImageOverrides *imageoverride.Overrides
 }
 

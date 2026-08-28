@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
@@ -242,10 +243,21 @@ var _ = Describe("IPPool FV tests", func() {
 		// Query the Installation and verify the IP pool name has been defaulted.
 		instance := &operator.Installation{}
 		Eventually(func() error {
-			return c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance)
-		}, 5*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-		Expect(instance.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
-		Expect(instance.Spec.CalicoNetwork.IPPools[0].Name).To(Equal("default-ipv4-ippool"))
+			if err := c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance); err != nil {
+				return err
+			}
+			if instance.Status.Computed == nil || instance.Status.Computed.CalicoNetwork == nil {
+				return fmt.Errorf("Installation defaults have not been recorded yet")
+			}
+			pools := instance.Status.Computed.CalicoNetwork.IPPools
+			if len(pools) != 1 || pools[0].Name == "" {
+				return fmt.Errorf("IP pool defaults have not been recorded yet: %+v", pools)
+			}
+			return nil
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+		Expect(instance.Spec.CalicoNetwork.IPPools[0].Name).To(BeEmpty())
+		Expect(instance.Status.Computed.CalicoNetwork.IPPools).To(HaveLen(1))
+		Expect(instance.Status.Computed.CalicoNetwork.IPPools[0].Name).To(Equal("default-ipv4-ippool"))
 
 		// In order to modify IP pools, the operator needs the API server. We can assert the IP pool has not yet
 		// been controlled by the operator at this point.
@@ -339,11 +351,22 @@ var _ = Describe("IPPool FV tests", func() {
 		// Query the Installation and verify the IP pool name has been defaulted.
 		instance := &operator.Installation{}
 		Eventually(func() error {
-			return c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance)
-		}, 5*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
-		Expect(instance.Spec.CalicoNetwork.IPPools).To(HaveLen(1))
-		Expect(instance.Spec.CalicoNetwork.IPPools[0].Name).To(Equal("default-ipv4-ippool"))
-		Expect(instance.Spec.CalicoNetwork.IPPools[0].NodeSelector).To(Equal("all()"))
+			if err := c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance); err != nil {
+				return err
+			}
+			if instance.Status.Computed == nil || instance.Status.Computed.CalicoNetwork == nil {
+				return fmt.Errorf("Installation defaults have not been recorded yet")
+			}
+			pools := instance.Status.Computed.CalicoNetwork.IPPools
+			if len(pools) != 1 || pools[0].Name == "" {
+				return fmt.Errorf("IP pool defaults have not been recorded yet: %+v", pools)
+			}
+			return nil
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+		Expect(instance.Spec.CalicoNetwork.IPPools[0].Name).To(BeEmpty())
+		Expect(instance.Status.Computed.CalicoNetwork.IPPools).To(HaveLen(1))
+		Expect(instance.Status.Computed.CalicoNetwork.IPPools[0].Name).To(Equal("default-ipv4-ippool"))
+		Expect(instance.Status.Computed.CalicoNetwork.IPPools[0].NodeSelector).To(Equal("all()"))
 
 		// In order to modify IP pools, the operator needs the API server. We can assert the IP pool has not yet
 		// been controlled by the operator at this point.
@@ -392,4 +415,117 @@ var _ = Describe("IPPool FV tests", func() {
 		Expect(v3Pools.Items[0].Spec.IPIPMode).To(Equal(v3.IPIPMode(v3.IPIPModeAlways)))
 		Expect(v3Pools.Items[0].Spec.VXLANMode).To(Equal(v3.VXLANMode(v3.VXLANModeNever)))
 	})
+
+	// The operator applies its IP pool list under its own field manager, so these tests cover what
+	// happens when a second manager writes to the same field against a real API server.
+	It("should share the IP pool list with another field manager", func() {
+		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		verifyCalicoHasDeployed(c)
+
+		instance := &operator.Installation{}
+		Eventually(func() error {
+			return installationHasPools(c, instance, 2)
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+		Expect(managerOwningPools(instance)).To(Equal(poolFieldManager))
+
+		By("Applying an extra IP pool as a different field manager")
+		extra := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "operator.tigera.io/v1",
+			"kind":       "Installation",
+			"metadata":   map[string]any{"name": "default"},
+			"spec": map[string]any{
+				"calicoNetwork": map[string]any{
+					"ipPools": []any{
+						map[string]any{"cidr": "172.31.0.0/16", "encapsulation": "VXLAN"},
+					},
+				},
+			},
+		}}
+		Expect(c.Apply(context.Background(), client.ApplyConfigurationFromUnstructured(extra), client.FieldOwner("fv-writer"))).To(Succeed())
+
+		By("Verifying the two managers' pools are merged rather than replacing each other")
+		Eventually(func() error {
+			return installationHasPools(c, instance, 3)
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+		cidrs := []string{}
+		for _, pool := range instance.Spec.CalicoNetwork.IPPools {
+			cidrs = append(cidrs, pool.CIDR)
+		}
+		Expect(cidrs).To(ConsistOf("192.168.0.0/16", "fd00:10:244::/64", "172.31.0.0/16"))
+
+		// The pool the other manager declared stays uncreated here. Past bootstrap this controller
+		// only writes pools through the Calico API server, which this suite doesn't run.
+	})
+
+	It("should restore the pools it owns when the list is removed from the spec", func() {
+		operatorDone = createInstallation(c, mgr, shutdownContext, nil)
+		verifyCalicoHasDeployed(c)
+
+		instance := &operator.Installation{}
+		Eventually(func() error {
+			return installationHasPools(c, instance, 2)
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+		By("Clearing the pool list the way a kubectl edit would")
+		Eventually(func() error {
+			if err := c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance); err != nil {
+				return err
+			}
+
+			instance.Spec.CalicoNetwork.IPPools = nil
+			return c.Update(context.Background(), instance)
+		}, 30*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+
+		By("Verifying the operator puts its pools back rather than reading the clear as a deletion")
+		Eventually(func() error {
+			return installationHasPools(c, instance, 2)
+		}, 60*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+		Expect(managerOwningPools(instance)).To(Equal(poolFieldManager))
+
+		ipPools := &v3.IPPoolList{}
+		Consistently(func() error {
+			if err := c.List(context.Background(), ipPools); err != nil {
+				return err
+			}
+			if len(ipPools.Items) != 2 {
+				return fmt.Errorf("Expected 2 IP pools, but got: %+v", ipPools.Items)
+			}
+			return nil
+		}, 10*time.Second, 1*time.Second).ShouldNot(HaveOccurred())
+	})
 })
+
+// poolFieldManager matches the unexported field manager the IP pool controller applies under.
+const poolFieldManager = "tigera-operator-ippools"
+
+// installationHasPools reads the Installation into instance and reports whether its spec declares
+// the expected number of IP pools.
+func installationHasPools(c client.Client, instance *operator.Installation, expected int) error {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "default"}, instance); err != nil {
+		return err
+	}
+	if instance.Spec.CalicoNetwork == nil {
+		return fmt.Errorf("Installation has no calicoNetwork yet")
+	}
+
+	pools := instance.Spec.CalicoNetwork.IPPools
+	if len(pools) != expected {
+		return fmt.Errorf("Expected %d IP pools on the spec, but got: %+v", expected, pools)
+	}
+	return nil
+}
+
+// managerOwningPools returns the name of the applying field manager that owns the IP pool list.
+func managerOwningPools(instance *operator.Installation) string {
+	for _, entry := range instance.ManagedFields {
+		if entry.Operation != metav1.ManagedFieldsOperationApply || entry.FieldsV1 == nil {
+			continue
+		}
+
+		if strings.Contains(entry.FieldsV1.GetRawString(), "ipPools") {
+			return entry.Manager
+		}
+	}
+	return ""
+}

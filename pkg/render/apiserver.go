@@ -35,6 +35,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
+	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
@@ -106,6 +107,16 @@ var (
 		"delete",
 		"deletecollection",
 	}
+
+	// writeVerbs is the subset of allVerbs that the tiered policy admission webhook
+	// intercepts, used for tiered policy passthrough in v3-CRD mode.
+	writeVerbs = []string{
+		"create",
+		"update",
+		"patch",
+		"delete",
+		"deletecollection",
+	}
 )
 
 func APIServer(cfg *APIServerConfiguration) (Component, error) {
@@ -161,6 +172,8 @@ type APIServerConfiguration struct {
 	// HoldAPIServiceCutover leaves the previous API server in service, so its
 	// APIService and the resources it needs are left alone.
 	HoldAPIServiceCutover bool
+
+	ImageOverrides *imageoverride.Overrides
 }
 
 type apiServerComponent struct {
@@ -181,7 +194,7 @@ func (c *apiServerComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	// API server container, and a variant modifier needs it for the query server
 	// container and the deployment skeleton it may render itself.
 	var err error
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
 	if err != nil {
 		return err
 	}
@@ -203,6 +216,8 @@ func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
 		c.delegateAuthClusterRoleBinding(),
 		c.webhookReaderClusterRole(),
 		c.webhookReaderClusterRoleBinding(),
+		c.calicoPolicyPassthruClusterRole(),
+		c.calicoPolicyPassthruClusterRolebinding(),
 	}
 
 	objsToDelete := []client.Object{}
@@ -225,8 +240,6 @@ func (c *apiServerComponent) Objects() ([]client.Object, []client.Object) {
 	// These are objects that only need to exist when we are running an aggregation API server to
 	// serve projectcalico.org/v3 APIs. If using CRDs for this API group, we can remove these objects.
 	aggregationAPIServerObjects := []client.Object{
-		c.calicoPolicyPassthruClusterRole(),
-		c.calicoPolicyPassthruClusterRolebinding(),
 		c.authClusterRole(),
 		c.authClusterRoleBinding(),
 		c.authReaderRoleBinding(),
@@ -1114,7 +1127,15 @@ func (c *apiServerComponent) kubeControllerMgrTierGetterClusterRoleBinding() *rb
 // calicoPolicyPassthruClusterRole creates a clusterrole that is used to control the RBAC
 // mechanism for Calico tiered policy.
 func (c *apiServerComponent) calicoPolicyPassthruClusterRole() *rbacv1.ClusterRole {
-	resources := []string{"networkpolicies", "globalnetworkpolicies"}
+	resources := []string{"networkpolicies", "globalnetworkpolicies", "stagednetworkpolicies", "stagedglobalnetworkpolicies"}
+
+	// The aggregation API server authorizes reads against the tier.xxx resource type, so it can
+	// pass every verb through. In v3-CRD mode only writes reach the admission webhook, so reads
+	// stay subject to ordinary RBAC and roles must grant them explicitly.
+	verbs := allVerbs
+	if !c.cfg.RequiresAggregationServer {
+		verbs = writeVerbs
+	}
 
 	return &rbacv1.ClusterRole{
 		TypeMeta: metav1.TypeMeta{Kind: "ClusterRole", APIVersion: "rbac.authorization.k8s.io/v1"},
@@ -1128,7 +1149,7 @@ func (c *apiServerComponent) calicoPolicyPassthruClusterRole() *rbacv1.ClusterRo
 			{
 				APIGroups: []string{"projectcalico.org"},
 				Resources: resources,
-				Verbs:     allVerbs,
+				Verbs:     verbs,
 			},
 		},
 	}

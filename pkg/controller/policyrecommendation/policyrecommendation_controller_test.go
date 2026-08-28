@@ -126,7 +126,11 @@ var _ = Describe("PolicyRecommendation controller tests", func() {
 				Status: operatorv1.InstallationStatus{
 					Variant: operatorv1.CalicoEnterprise,
 					Computed: &operatorv1.InstallationSpec{
-						Registry: "my-reg",
+						Variant:  operatorv1.CalicoEnterprise,
+						Registry: "some.registry.org/",
+						ImagePullSecrets: []corev1.LocalObjectReference{{
+							Name: "tigera-pull-secret",
+						}},
 						// The test is provider agnostic.
 						KubernetesProvider: operatorv1.ProviderNone,
 					},

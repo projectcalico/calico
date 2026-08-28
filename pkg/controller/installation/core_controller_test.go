@@ -160,7 +160,8 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext:    testExtensions.Installation(),
+				images: testExtensions.Images(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -203,7 +204,7 @@ var _ = Describe("Testing core-controller installation", func() {
 					Status: operator.InstallationStatus{
 						Variant: operator.CalicoEnterprise,
 						Computed: &operator.InstallationSpec{
-							Registry: "my-reg",
+							Registry: "some.registry.org/",
 							// The test is provider agnostic.
 							KubernetesProvider: operator.ProviderNone,
 						},
@@ -775,7 +776,8 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext:    testExtensions.Installation(),
+				images: testExtensions.Images(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -804,7 +806,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				Status: operator.InstallationStatus{
 					Variant: operator.CalicoEnterprise,
 					Computed: &operator.InstallationSpec{
-						Registry: "my-reg",
+						Registry: "some.registry.org/",
 						// The test is provider agnostic.
 						KubernetesProvider: operator.ProviderNone,
 					},
@@ -956,7 +958,8 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext:    testExtensions.Installation(),
+				images: testExtensions.Images(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2195,7 +2198,7 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(policies.Items).To(HaveLen(0))
 		})
 
-		It("should set default spec.Azure if provider is AKS", func() {
+		It("should record a default Azure config if provider is AKS", func() {
 			cr.Spec.KubernetesProvider = operator.ProviderAKS
 
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
@@ -2211,11 +2214,13 @@ var _ = Describe("Testing core-controller installation", func() {
 			err = c.Get(ctx, types.NamespacedName{Name: "default"}, instance)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			Expect(instance.Spec.Azure).NotTo(BeNil())
-			Expect(instance.Spec.Azure).To(Equal(azure))
+			Expect(instance.Spec.Azure).To(BeNil())
+			Expect(instance.Status.Defaults).NotTo(BeNil())
+			Expect(instance.Status.Defaults.Azure).To(Equal(azure))
+			Expect(instance.Status.Computed.Azure).To(Equal(azure))
 		})
 
-		It("should not set default spec.Azure if provider is not AKS", func() {
+		It("should not record a default Azure config if provider is not AKS", func() {
 			cr.Spec.KubernetesProvider = operator.ProviderEKS
 
 			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
@@ -2228,6 +2233,26 @@ var _ = Describe("Testing core-controller installation", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			Expect(instance.Spec.Azure).To(BeNil())
+			Expect(instance.Status.Defaults.Azure).To(BeNil())
+		})
+
+		It("should merge the overlay Installation into the computed spec", func() {
+			Expect(c.Create(ctx, cr)).NotTo(HaveOccurred())
+			Expect(c.Create(ctx, &operator.Installation{
+				ObjectMeta: metav1.ObjectMeta{Name: "overlay"},
+				Spec: operator.InstallationSpec{
+					ControlPlaneReplicas: ptr.To[int32](3),
+				},
+			})).NotTo(HaveOccurred())
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).ShouldNot(HaveOccurred())
+
+			instance := &operator.Installation{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, instance)).ShouldNot(HaveOccurred())
+
+			Expect(instance.Spec.ControlPlaneReplicas).To(BeNil())
+			Expect(instance.Status.Computed.ControlPlaneReplicas).To(Equal(ptr.To[int32](3)))
 		})
 	})
 
@@ -2266,7 +2291,8 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext:    testExtensions.Installation(),
+				images: testExtensions.Images(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2302,7 +2328,7 @@ var _ = Describe("Testing core-controller installation", func() {
 				Status: operator.InstallationStatus{
 					Variant: operator.CalicoEnterprise,
 					Computed: &operator.InstallationSpec{
-						Registry: "my-reg",
+						Registry: "some.registry.org/",
 						// The test is provider agnostic.
 						KubernetesProvider: operator.ProviderNone,
 					},
@@ -2380,7 +2406,8 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			componentHandler = newFakeComponentHandler()
 			r = ReconcileInstallation{
-				ext: testExtensions.Installation(),
+				ext:    testExtensions.Installation(),
+				images: testExtensions.Images(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2425,7 +2452,7 @@ var _ = Describe("Testing core-controller installation", func() {
 					Status: operator.InstallationStatus{
 						Variant: operator.CalicoEnterprise,
 						Computed: &operator.InstallationSpec{
-							Registry: "my-reg",
+							Registry: "some.registry.org/",
 							// The test is provider agnostic.
 							KubernetesProvider: operator.ProviderNone,
 						},
@@ -2548,7 +2575,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1 MAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2583,7 +2611,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2616,7 +2645,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2649,7 +2679,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2671,7 +2702,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2692,7 +2724,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when manageCRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   false,
@@ -2726,7 +2759,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2772,7 +2806,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2794,7 +2829,8 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2869,7 +2905,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1 VAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2904,7 +2941,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 VAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2937,7 +2975,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 VAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2958,7 +2997,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should skip without degrading when no served version exists", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2980,7 +3020,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should not create VAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -3014,7 +3055,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -3042,7 +3084,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			ext: testExtensions.Installation(),
+			ext:    testExtensions.Installation(),
+			images: testExtensions.Images(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,

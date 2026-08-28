@@ -20,8 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// envoyFilterGV is the GroupVersion for Istio EnvoyFilter resources.
-var envoyFilterGV = schema.GroupVersion{Group: "networking.istio.io", Version: "v1alpha3"}
+// EnvoyFilterGV is the GroupVersion for Istio EnvoyFilter resources.
+var EnvoyFilterGV = schema.GroupVersion{Group: "networking.istio.io", Version: "v1alpha3"}
 
 // EnvoyFilter is a typed wrapper around Istio's networking.istio.io/v1alpha3
 // EnvoyFilter, used to avoid the full istio.io/client-go dependency while
@@ -92,8 +92,8 @@ func (e *EnvoyFilter) DeepCopyInto(out *EnvoyFilter) {
 // types, so the manager scheme learns the type centrally; it returns error to
 // satisfy runtime.SchemeBuilder.
 func AddEnvoyFilterToScheme(s *runtime.Scheme) error {
-	s.AddKnownTypeWithName(envoyFilterGV.WithKind("EnvoyFilter"), &EnvoyFilter{})
-	s.AddKnownTypeWithName(envoyFilterGV.WithKind("EnvoyFilterList"), &EnvoyFilterList{})
-	metav1.AddToGroupVersion(s, envoyFilterGV)
+	s.AddKnownTypeWithName(EnvoyFilterGV.WithKind("EnvoyFilter"), &EnvoyFilter{})
+	s.AddKnownTypeWithName(EnvoyFilterGV.WithKind("EnvoyFilterList"), &EnvoyFilterList{})
+	metav1.AddToGroupVersion(s, EnvoyFilterGV)
 	return nil
 }

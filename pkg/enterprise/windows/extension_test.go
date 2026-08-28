@@ -48,13 +48,13 @@ var _ = Describe("windows enterprise image override", func() {
 	calico := &operatorv1.InstallationSpec{Variant: operatorv1.Calico}
 
 	It("selects the enterprise windows images for the enterprise variant", func() {
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, ent)).To(Equal(components.ComponentTigeraNodeWindows))
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, ent)).To(Equal(components.ComponentTigeraCNIWindows))
+		Expect(ext.Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, ent)).To(Equal(components.ComponentTigeraNodeWindows))
+		Expect(ext.Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, ent)).To(Equal(components.ComponentTigeraCNIWindows))
 	})
 
 	It("leaves the defaults in place for the Calico variant", func() {
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, calico)).To(Equal(components.ComponentCalicoNodeWindows))
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, calico)).To(Equal(components.ComponentCalicoCNIWindows))
+		Expect(ext.Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, calico)).To(Equal(components.ComponentCalicoNodeWindows))
+		Expect(ext.Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, calico)).To(Equal(components.ComponentCalicoCNIWindows))
 	})
 })
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package istio_test
+package istio
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -23,7 +23,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/render/istio"
+	ristio "github.com/tigera/operator/pkg/render/istio"
 )
 
 var _ = Describe("L7 Waypoint render", func() {
@@ -34,7 +34,7 @@ var _ = Describe("L7 Waypoint render", func() {
 
 	Context("L7WaypointObjects", func() {
 		It("returns exactly five resources in the requested namespace", func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			Expect(objs).To(HaveLen(5))
 			for _, o := range objs {
 				Expect(o.GetNamespace()).To(Equal(ns), "object %s/%s in wrong namespace", o.GetObjectKind().GroupVersionKind().Kind, o.GetName())
@@ -42,19 +42,19 @@ var _ = Describe("L7 Waypoint render", func() {
 		})
 
 		It("returns the expected resource names", func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			names := map[string]bool{}
 			for _, o := range objs {
 				names[o.GetName()] = true
 			}
-			Expect(names).To(HaveKey(istio.L7WaypointDefaultsConfigMapName))
-			Expect(names).To(HaveKey(istio.L7WaypointEnvoyFilterRoleName))
-			Expect(names).To(HaveKey(istio.L7WaypointALSFilterName))
-			Expect(names).To(HaveKey(istio.L7WaypointSrcPortFilterName))
+			Expect(names).To(HaveKey(L7WaypointDefaultsConfigMapName))
+			Expect(names).To(HaveKey(L7WaypointEnvoyFilterRoleName))
+			Expect(names).To(HaveKey(L7WaypointALSFilterName))
+			Expect(names).To(HaveKey(L7WaypointSrcPortFilterName))
 		})
 
 		It("grants the operator namespace-scoped EnvoyFilter writes", func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			role, ok := objs[1].(*rbacv1.Role)
 			Expect(ok).To(BeTrue(), "second object should be the EnvoyFilter writer Role")
 			Expect(role.Rules).To(HaveLen(1))
@@ -64,7 +64,7 @@ var _ = Describe("L7 Waypoint render", func() {
 
 			rb, ok := objs[2].(*rbacv1.RoleBinding)
 			Expect(ok).To(BeTrue(), "third object should be the EnvoyFilter writer RoleBinding")
-			Expect(rb.RoleRef.Name).To(Equal(istio.L7WaypointEnvoyFilterRoleName))
+			Expect(rb.RoleRef.Name).To(Equal(L7WaypointEnvoyFilterRoleName))
 			Expect(rb.Subjects).To(HaveLen(1))
 			Expect(rb.Subjects[0].Kind).To(Equal("ServiceAccount"))
 		})
@@ -73,7 +73,7 @@ var _ = Describe("L7 Waypoint render", func() {
 	Context("defaults ConfigMap", func() {
 		var cm *corev1.ConfigMap
 		BeforeEach(func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			var ok bool
 			cm, ok = objs[0].(*corev1.ConfigMap)
 			Expect(ok).To(BeTrue(), "first object should be the defaults ConfigMap")
@@ -81,7 +81,7 @@ var _ = Describe("L7 Waypoint render", func() {
 
 		It("is labelled for the istio-waypoint GatewayClass", func() {
 			Expect(cm.Labels).To(HaveKeyWithValue(
-				"gateway.istio.io/defaults-for-class", istio.IstioWaypointGatewayClass))
+				"gateway.istio.io/defaults-for-class", IstioWaypointGatewayClass))
 		})
 
 		It("runs the combined calico binary in waypoint mode with IfNotPresent pull policy", func() {
@@ -156,14 +156,14 @@ var _ = Describe("L7 Waypoint render", func() {
 	})
 
 	Context("ALS EnvoyFilter", func() {
-		var ef *istio.EnvoyFilter
+		var ef *ristio.EnvoyFilter
 		BeforeEach(func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			var ok bool
-			ef, ok = objs[3].(*istio.EnvoyFilter)
+			ef, ok = objs[3].(*ristio.EnvoyFilter)
 			Expect(ok).To(BeTrue())
 			Expect(ef.Kind).To(Equal("EnvoyFilter"))
-			Expect(ef.Name).To(Equal(istio.L7WaypointALSFilterName))
+			Expect(ef.Name).To(Equal(L7WaypointALSFilterName))
 		})
 
 		It("attaches to the istio-waypoint GatewayClass", func() {
@@ -172,7 +172,7 @@ var _ = Describe("L7 Waypoint render", func() {
 			ref := refs[0].(map[string]interface{})
 			Expect(ref).To(HaveKeyWithValue("kind", "GatewayClass"))
 			Expect(ref).To(HaveKeyWithValue("group", "gateway.networking.k8s.io"))
-			Expect(ref).To(HaveKeyWithValue("name", istio.IstioWaypointGatewayClass))
+			Expect(ref).To(HaveKeyWithValue("name", IstioWaypointGatewayClass))
 		})
 
 		It("patches the main_internal listener", func() {
@@ -193,14 +193,14 @@ var _ = Describe("L7 Waypoint render", func() {
 	})
 
 	Context("SrcPort EnvoyFilter", func() {
-		var ef *istio.EnvoyFilter
+		var ef *ristio.EnvoyFilter
 		BeforeEach(func() {
-			objs := istio.L7WaypointObjects(ns, image)
+			objs := L7WaypointObjects(ns, image)
 			var ok bool
-			ef, ok = objs[4].(*istio.EnvoyFilter)
+			ef, ok = objs[4].(*ristio.EnvoyFilter)
 			Expect(ok).To(BeTrue())
 			Expect(ef.Kind).To(Equal("EnvoyFilter"))
-			Expect(ef.Name).To(Equal(istio.L7WaypointSrcPortFilterName))
+			Expect(ef.Name).To(Equal(L7WaypointSrcPortFilterName))
 		})
 
 		It("attaches to the istio-waypoint GatewayClass", func() {
@@ -209,7 +209,7 @@ var _ = Describe("L7 Waypoint render", func() {
 			ref := refs[0].(map[string]interface{})
 			Expect(ref).To(HaveKeyWithValue("kind", "GatewayClass"))
 			Expect(ref).To(HaveKeyWithValue("group", "gateway.networking.k8s.io"))
-			Expect(ref).To(HaveKeyWithValue("name", istio.IstioWaypointGatewayClass))
+			Expect(ref).To(HaveKeyWithValue("name", IstioWaypointGatewayClass))
 		})
 
 		It("inserts after connect_authority on the connect_terminate listener", func() {
@@ -245,7 +245,7 @@ func diveVolumes(overlay map[string]interface{}) []interface{} {
 
 // firstConfigPatch returns the first entry in spec.configPatches of an
 // EnvoyFilter.
-func firstConfigPatch(ef *istio.EnvoyFilter) map[string]interface{} {
+func firstConfigPatch(ef *ristio.EnvoyFilter) map[string]interface{} {
 	patches := ef.Spec["configPatches"].([]interface{})
 	Expect(patches).NotTo(BeEmpty())
 	return patches[0].(map[string]interface{})

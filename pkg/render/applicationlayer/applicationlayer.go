@@ -132,7 +132,7 @@ func (c *component) ResolveImages(is *operatorv1.ImageSet) error {
 		errMsgs = append(errMsgs, err.Error())
 	}
 
-	c.config.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.config.Installation), reg, path, prefix, is)
+	c.config.calicoImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 	if err != nil {
 		errMsgs = append(errMsgs, err.Error())
 	}

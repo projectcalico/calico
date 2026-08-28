@@ -330,7 +330,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Gate on Installation: if Calico hasn't been installed yet, the
 	// operator-managed pods we'd act on don't exist. Bail out silently.
-	if _, err := utils.GetInstallationSpec(ctx, r.client); err != nil {
+	if _, err := utils.GetComputedInstallationSpec(ctx, r.client); err != nil {
+		if utils.IsComputedInstallationNotReady(err) {
+			// There is an Installation, it just has no computed config yet. This controller
+			// watches Nodes, not the Installation, so come back for this one rather than
+			// waiting for another Node event.
+			return ctrl.Result{RequeueAfter: utils.StandardRetry}, nil
+		}
 		if apierrors.IsNotFound(err) {
 			return ctrl.Result{}, nil
 		}

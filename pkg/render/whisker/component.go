@@ -31,6 +31,7 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
+	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -91,6 +92,8 @@ type Configuration struct {
 	CalicoVersion         string
 	ClusterType           string
 	ClusterDomain         string
+
+	ImageOverrides *imageoverride.Overrides
 }
 
 type Component struct {
@@ -111,7 +114,7 @@ func (c *Component) ResolveImages(is *operatorv1.ImageSet) error {
 	if err != nil {
 		return err
 	}
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(render.ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
 	return err
 }
 
@@ -135,14 +138,7 @@ func (c *Component) Objects() ([]client.Object, []client.Object) {
 
 	toCreate = append(toCreate, secret.ToRuntimeObjects(secret.CopyToNamespace(WhiskerNamespace, c.cfg.PullSecrets...)...)...)
 
-	// Whisker needs to be removed if the installation is not Calico, since it's not supported (yet!) for any other variant.
-	var toDelete []client.Object
-	if c.cfg.Installation.Variant != operatorv1.Calico {
-		toDelete = toCreate
-		toCreate = nil
-	}
-
-	toDelete = append(toDelete, c.deprecatedObjects()...)
+	toDelete := c.deprecatedObjects()
 
 	return toCreate, toDelete
 }
