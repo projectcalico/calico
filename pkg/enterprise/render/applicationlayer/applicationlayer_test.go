@@ -26,8 +26,8 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
-	"github.com/tigera/operator/pkg/render/applicationlayer/ruleset"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer/ruleset"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	"github.com/tigera/operator/test"

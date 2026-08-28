@@ -63,10 +63,6 @@ const (
 var log = logf.Log.WithName(controllerName)
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		return nil
-	}
-
 	licenseAPIReady := &utils.ReadyFlag{}
 	tierWatchReady := &utils.ReadyFlag{}
 

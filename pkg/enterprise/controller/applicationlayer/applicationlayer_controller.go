@@ -29,9 +29,9 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/enterprise/policysync"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer/ruleset"
 	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
-	"github.com/tigera/operator/pkg/render/applicationlayer/ruleset"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 
 	admregv1 "k8s.io/api/admissionregistration/v1"
@@ -55,10 +55,6 @@ var log = logf.Log.WithName("controller_applicationlayer")
 // Add creates a new ApplicationLayer Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		// No need to start this controller.
-		return nil
-	}
 	licenseAPIReady := &utils.ReadyFlag{}
 
 	reconciler := newReconciler(mgr, opts, licenseAPIReady)

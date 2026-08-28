@@ -44,9 +44,9 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/tigera/operator/pkg/enterprise/render/egressgateway"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/egressgateway"
 )
 
 const (
@@ -58,10 +58,6 @@ var log = logf.Log.WithName("controller_egressgateway")
 // Add creates a new EgressGateway Controller and adds it to the Manager.
 // The Manager will set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		// No need to start this controller.
-		return nil
-	}
 	licenseAPIReady := &utils.ReadyFlag{}
 
 	reconciler := newReconciler(mgr, opts, licenseAPIReady)

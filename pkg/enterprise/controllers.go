@@ -17,7 +17,11 @@ package enterprise
 import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/controller/options"
+	"github.com/tigera/operator/pkg/enterprise/controller/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/controller/egressgateway"
 	"github.com/tigera/operator/pkg/enterprise/controller/monitor"
+	"github.com/tigera/operator/pkg/enterprise/controller/otelcollector"
+	"github.com/tigera/operator/pkg/enterprise/controller/packetcapture"
 )
 
 // Controllers returns the reconcilers only Calico Enterprise runs, for the caller to
@@ -29,5 +33,9 @@ func Controllers(variant operatorv1.ProductVariant) []options.Controller {
 	}
 	return []options.Controller{
 		{Name: "Monitor", Add: monitor.Add},
+		{Name: "ApplicationLayer", Add: applicationlayer.Add},
+		{Name: "EgressGateway", Add: egressgateway.Add},
+		{Name: "PacketCapture", Add: packetcapture.Add},
+		{Name: "OpenTelemetryCollector", Add: otelcollector.Add},
 	}
 }

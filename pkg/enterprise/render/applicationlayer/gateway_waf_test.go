@@ -21,7 +21,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/tigera/operator/pkg/render/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer"
 )
 
 var fakeCABundle = []byte("fake-ca-bundle")

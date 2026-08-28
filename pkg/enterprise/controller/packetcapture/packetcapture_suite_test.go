@@ -30,5 +30,5 @@ func TestStatus(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reporterConfig.JUnitReport = "../../../report/ut/packetcapture_controller_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/controller/packetcapture Controller Suite", suiteConfig, reporterConfig)
+	ginkgo.RunSpecs(t, "pkg/enterprise/controller/packetcapture Controller Suite", suiteConfig, reporterConfig)
 }

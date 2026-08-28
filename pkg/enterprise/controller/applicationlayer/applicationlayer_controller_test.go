@@ -40,7 +40,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer"
 	"github.com/tigera/operator/test"
 )
 

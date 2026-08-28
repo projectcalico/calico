@@ -25,9 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"github.com/tigera/operator/pkg/enterprise/render/egressgateway"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/egressgateway"
 )
 
 var _ = Describe("Egress Gateway rendering tests", func() {

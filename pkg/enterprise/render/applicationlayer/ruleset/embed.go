@@ -21,7 +21,7 @@ import (
 
 	coreruleset "github.com/corazawaf/coraza-coreruleset/v4"
 	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/render/applicationlayer"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
