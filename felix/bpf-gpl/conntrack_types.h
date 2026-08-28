@@ -62,11 +62,21 @@ enum cali_ct_type {
 #define CALI_CT_LEG_APPROVED	(1U << 4)
 #define CALI_CT_LEG_OPENER	(1U << 5)
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
-#define CALI_CT_LEG_TUNNEL	(1U << 7) /* the device in ifindex is a tunnel device */
+#define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
+					   * flow's encap-flagged destinations: a tunnel
+					   * device, or whatever the FIB resolved for such
+					   * a destination (under wireguard, remote routes
+					   * are encap-flagged even where the egress for a
+					   * keyless peer is a plain NIC). Invariant: never
+					   * observable next to an ifindex it does not
+					   * describe - transitions clear it before the
+					   * ifindex store and re-set it only after.
+					   */
 #define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
 					   * opposite direction, not this direction's
-					   * ingress record; ingress-consistency
-					   * maintenance must leave it alone
+					   * ingress record. Bookkeeping for userspace
+					   * cleanup; the dataplane still reconciles the
+					   * leg against routing like any other mismatch.
 					   */
 #define CALI_CT_LEG_CHECKED	(1U << 9) /* ifindex has been validated against the
 					   * route to this leg's source, no need to
