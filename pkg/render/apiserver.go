@@ -565,6 +565,16 @@ func calicoSystemAPIServerPolicy(cfg *APIServerConfiguration) *v3.NetworkPolicy 
 		},
 	}...)
 
+	// A managed cluster has no local Linseed; the query server reaches it through Guardian,
+	// matching the LINSEED_URL that LinseedEndpoint returns.
+	if cfg.ManagementClusterConnection != nil {
+		egressRules = append(egressRules, v3.Rule{
+			Action:      v3.Allow,
+			Protocol:    &networkpolicy.TCPProtocol,
+			Destination: GuardianEntityRule,
+		})
+	}
+
 	if cfg.KeyValidatorConfig != nil {
 		if parsedURL, err := url.Parse(cfg.KeyValidatorConfig.Issuer()); err == nil {
 			oidcEgressRule := networkpolicy.GetOIDCEgressRule(parsedURL)

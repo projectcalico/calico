@@ -66,20 +66,23 @@ spec:
                 allowedUses:
                   description: |-
                     AllowedUses controls what the IP pool will be used for. If not specified or empty, defaults to
-                    ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer".
+                    ["Tunnel", "Workload"] for back-compatibility. Valid values: "Tunnel", "Workload", "LoadBalancer",
+                    "HostSecondaryInterface", "L2Workload".
                   items:
                     description: |-
                       IPPoolAllowedUse defines the allowed uses for an IP pool.
-                      It can be one of "Workload", "Tunnel", "LoadBalancer" or "HostSecondaryInterface".
+                      It can be one of "Workload", "Tunnel", "LoadBalancer", "HostSecondaryInterface" or "L2Workload".
                       - "Workload" means the pool is used for workload IP addresses.
                       - "Tunnel" means the pool is used for tunnel IP addresses.
                       - "LoadBalancer" means the pool is used for load balancer IP addresses.
                       - "HostSecondaryInterface" means the pool is used for host secondary interface IP addresses.
+                      - "L2Workload" means the pool is used for workloads attached to an L2 bridge Network.
                     enum:
                       - Workload
                       - Tunnel
                       - LoadBalancer
                       - HostSecondaryInterface
+                      - L2Workload
                     type: string
                   maxItems: 10
                   type: array
@@ -218,6 +221,24 @@ spec:
                     "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'Tunnel')
                     || !has(self.namespaceSelector) || size(self.namespaceSelector) ==
                     0"
+                - message: L2Workload cannot be combined with other allowed uses
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'L2Workload')
+                    || !self.allowedUses.exists(u, u == 'Workload' || u == 'Tunnel'
+                    || u == 'LoadBalancer' || u == 'HostSecondaryInterface')"
+                - message: L2Workload IP pool cannot have IPIP or VXLAN enabled
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'L2Workload')
+                    || (!has(self.ipipMode) || size(self.ipipMode) == 0 || self.ipipMode
+                    == 'Never') && (!has(self.vxlanMode) || size(self.vxlanMode) ==
+                    0 || self.vxlanMode == 'Never')"
+                - message: L2Workload IP pools must disable BGP export
+                  reason: FieldValueForbidden
+                  rule:
+                    "!has(self.allowedUses) || !self.allowedUses.exists(u, u == 'L2Workload')
+                    || (has(self.disableBGPExport) && self.disableBGPExport)"
                 - message: global() selector is not valid for IPPool nodeSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.nodeSelector) || !self.nodeSelector.contains('global(')"

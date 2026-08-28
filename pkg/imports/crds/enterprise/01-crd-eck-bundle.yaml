@@ -4,12 +4,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: agents.agent.k8s.elastic.co
 spec:
   group: agent.k8s.elastic.co
@@ -114,6 +114,8 @@ spec:
                 elasticsearchRefs:
                   items:
                     properties:
+                      clientCertificateSecretName:
+                        type: string
                       name:
                         type: string
                       namespace:
@@ -130,6 +132,8 @@ spec:
                   type: boolean
                 fleetServerRef:
                   properties:
+                    clientCertificateSecretName:
+                      type: string
                     name:
                       type: string
                     namespace:
@@ -263,6 +267,11 @@ spec:
                             secretName:
                               type: string
                           type: object
+                        client:
+                          properties:
+                            authentication:
+                              type: boolean
+                          type: object
                         selfSignedCertificate:
                           properties:
                             disabled:
@@ -299,6 +308,39 @@ spec:
                   type: string
                 policyID:
                   type: string
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -323,6 +365,9 @@ spec:
                     type: object
                   type: array
                 serviceAccountName:
+                  type: string
+                spaceID:
+                  pattern: ^[a-z0-9_-]+$
                   type: string
                 statefulSet:
                   properties:
@@ -467,6 +512,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 elasticsearchAssociationsStatus:
                   additionalProperties:
                     type: string
@@ -497,12 +559,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: apmservers.apm.k8s.elastic.co
 spec:
   group: apm.k8s.elastic.co
@@ -550,6 +612,8 @@ spec:
                   type: integer
                 elasticsearchRef:
                   properties:
+                    clientCertificateSecretName:
+                      type: string
                     name:
                       type: string
                     namespace:
@@ -715,6 +779,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -750,6 +847,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -1019,12 +1133,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: autoopsagentpolicies.autoops.k8s.elastic.co
 spec:
   group: autoops.k8s.elastic.co
@@ -1062,6 +1176,14 @@ spec:
             spec:
               properties:
                 autoOpsRef:
+                  properties:
+                    secretName:
+                      type: string
+                  type: object
+                config:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                configRef:
                   properties:
                     secretName:
                       type: string
@@ -1123,6 +1245,39 @@ spec:
                       type: object
                   type: object
                   x-kubernetes-map-type: atomic
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -1135,6 +1290,23 @@ spec:
               type: object
             status:
               properties:
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 details:
                   additionalProperties:
                     properties:
@@ -1179,12 +1351,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: beats.beat.k8s.elastic.co
 spec:
   group: beat.k8s.elastic.co
@@ -1291,6 +1463,8 @@ spec:
                   type: object
                 elasticsearchRef:
                   properties:
+                    clientCertificateSecretName:
+                      type: string
                     name:
                       type: string
                     namespace:
@@ -1348,6 +1522,39 @@ spec:
                           type: array
                       type: object
                   type: object
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -1388,6 +1595,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 elasticsearchAssociationStatus:
                   type: string
                 expectedNodes:
@@ -1418,12 +1642,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: elasticmapsservers.maps.k8s.elastic.co
 spec:
   group: maps.k8s.elastic.co
@@ -1476,6 +1700,8 @@ spec:
                   type: integer
                 elasticsearchRef:
                   properties:
+                    clientCertificateSecretName:
+                      type: string
                     name:
                       type: string
                     namespace:
@@ -1630,6 +1856,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -1647,6 +1906,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -1675,12 +1951,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: elasticsearchautoscalers.autoscaling.k8s.elastic.co
 spec:
   group: autoscaling.k8s.elastic.co
@@ -1932,12 +2208,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: elasticsearches.elasticsearch.k8s.elastic.co
 spec:
   group: elasticsearch.k8s.elastic.co
@@ -2197,6 +2473,39 @@ spec:
                       podTemplate:
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
+                      resources:
+                        properties:
+                          limits:
+                            properties:
+                              cpu:
+                                anyOf:
+                                  - type: integer
+                                  - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              memory:
+                                anyOf:
+                                  - type: integer
+                                  - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                            type: object
+                          requests:
+                            properties:
+                              cpu:
+                                anyOf:
+                                  - type: integer
+                                  - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              memory:
+                                anyOf:
+                                  - type: integer
+                                  - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
                       volumeClaimTemplates:
                         items:
                           properties:
@@ -3317,12 +3626,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: enterprisesearches.enterprisesearch.k8s.elastic.co
 spec:
   group: enterprisesearch.k8s.elastic.co
@@ -3375,6 +3684,8 @@ spec:
                   type: integer
                 elasticsearchRef:
                   properties:
+                    clientCertificateSecretName:
+                      type: string
                     name:
                       type: string
                     namespace:
@@ -3529,6 +3840,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -3544,6 +3888,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -3772,6 +4133,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -3795,12 +4173,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: kibanas.kibana.k8s.elastic.co
 spec:
   group: kibana.k8s.elastic.co
@@ -4059,6 +4437,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -4096,6 +4507,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -4363,12 +4791,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: logstashes.logstash.k8s.elastic.co
 spec:
   group: logstash.k8s.elastic.co
@@ -4425,6 +4853,8 @@ spec:
                 elasticsearchRefs:
                   items:
                     properties:
+                      clientCertificateSecretName:
+                        type: string
                       clusterName:
                         minLength: 1
                         type: string
@@ -4490,6 +4920,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -4868,6 +5331,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 elasticsearchAssociationsStatus:
                   additionalProperties:
                     type: string
@@ -4906,12 +5386,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: packageregistries.packageregistry.k8s.elastic.co
 spec:
   group: packageregistry.k8s.elastic.co
@@ -5107,6 +5587,39 @@ spec:
                 podTemplate:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                resources:
+                  properties:
+                    limits:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    requests:
+                      properties:
+                        cpu:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        memory:
+                          anyOf:
+                            - type: integer
+                            - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                      type: object
+                  type: object
                 revisionHistoryLimit:
                   format: int32
                   type: integer
@@ -5120,6 +5633,23 @@ spec:
                 availableNodes:
                   format: int32
                   type: integer
+                conditions:
+                  items:
+                    properties:
+                      lastTransitionTime:
+                        format: date-time
+                        type: string
+                      message:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                    required:
+                      - status
+                      - type
+                    type: object
+                  type: array
                 count:
                   format: int32
                   type: integer
@@ -5148,12 +5678,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.20.1
+    controller-gen.kubebuilder.io/version: v0.21.0
     helm.sh/resource-policy: keep
   labels:
     app.kubernetes.io/instance: 'elastic-operator'
     app.kubernetes.io/name: 'eck-operator-crds'
-    app.kubernetes.io/version: '3.4.1'
+    app.kubernetes.io/version: '3.5.0'
   name: stackconfigpolicies.stackconfigpolicy.k8s.elastic.co
 spec:
   group: stackconfigpolicy.k8s.elastic.co
@@ -5251,6 +5781,9 @@ spec:
                     securityRoleMappings:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
+                    securityRoles:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
                     snapshotLifecyclePolicies:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
@@ -5329,6 +5862,26 @@ spec:
                         type: string
                     required:
                       - secretName
+                    type: object
+                  type: array
+                variablesFrom:
+                  items:
+                    properties:
+                      kind:
+                        enum:
+                          - ConfigMap
+                          - Secret
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                      namespace:
+                        type: string
+                      optional:
+                        type: boolean
+                    required:
+                      - kind
+                      - name
                     type: object
                   type: array
                 weight:
