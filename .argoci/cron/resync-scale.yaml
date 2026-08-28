@@ -42,7 +42,19 @@ steps:
       git clone --depth 1 --branch "${CI_GIT_BRANCH:-master}" \
         https://github.com/projectcalico/calico.git "${CALICO_REPO_DIR}"
       cd "${CALICO_REPO_DIR}/networking-calico"
-      git config --global --add safe.directory "${CALICO_REPO_DIR}/.git"
+      # DevStack's Calico plugin clones from NC_PLUGIN_REPO as the `stack`
+      # user, so git sees a repo owned by someone else and refuses unless the
+      # path is marked safe.  Two details matter here:
+      #
+      #  - --system, not --global: the clone runs as `stack`, which does not
+      #    read this user's ~/.gitconfig.  (The Semaphore job uses --system
+      #    for the same reason.)
+      #  - Both paths: git reports the *gitdir* when serving a clone, and the
+      #    *worktree* for ordinary in-repo commands, and only an exact match
+      #    is accepted.  The clone is what would otherwise fail here; the
+      #    worktree entry covers any plain git command run against the tree.
+      sudo git config --system --add safe.directory "${CALICO_REPO_DIR}/.git"
+      sudo git config --system --add safe.directory "${CALICO_REPO_DIR}"
       export NC_PLUGIN_REPO="${CALICO_REPO_DIR}"
       export NC_PLUGIN_REF="${CI_GIT_BRANCH:-master}"
 
