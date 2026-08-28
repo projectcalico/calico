@@ -122,7 +122,7 @@ See [`dev_guidelines.md`](dev_guidelines.md) for detail. In short:
    client sets. Never hand-edit generated files.
 2. Verify cluster-scoped resources weren't flipped to `Namespaced`.
 3. If the new config is settable during a manifest-based Calico OSS → operator
-   migration, update [`pkg/controller/migration/convert`](https://github.com/tigera/operator/tree/master/pkg/controller/migration/convert).
+   migration, update [`pkg/controller/migration/convert`](../pkg/controller/migration/convert).
 4. Add cross-field/code-level checks to `pkg/common/validation/` if needed.
 5. `make ut UT_DIR=./api/...` (and relevant render/controller packages), then
    `make dirty-check` to confirm generated output is committed.

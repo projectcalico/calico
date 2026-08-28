@@ -418,7 +418,7 @@ By default, the GitHub release is not created in draft mode. To create a draft r
 ### release from
 
 This command creates a new operator version based on a previous operator version.
-The base operator version must reference either a tag or commit hash in `tigera/operator`.
+The base operator version must reference either a tag or commit hash in this repository.
 The new operator version will be built from the current codebase
 with updates made to the image list based on the changes passed in.
 

@@ -1,6 +1,6 @@
 # Developer Guidelines
 
-Workflow, tooling, and day-to-day development procedures for tigera/operator. For code architecture and design principles, see [principles.md](principles.md).
+Workflow, tooling, and day-to-day development procedures for the operator. For code architecture and design principles, see [principles.md](principles.md).
 
 ## Code structure
 
@@ -41,4 +41,4 @@ When picking changes to a release branch, you must cherry-pick the change to all
 
 See [common tasks](common_tasks.md) for detailed information on common dev procedures like running the code, tests, and debugging.
 
-[convert]: https://github.com/tigera/operator/tree/master/pkg/controller/migration/convert
+[convert]: ../pkg/controller/migration/convert

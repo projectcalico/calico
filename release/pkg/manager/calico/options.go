@@ -75,14 +75,6 @@ func WithOperator(registry, image, version string) Option {
 	}
 }
 
-func WithOperatorGit(org, repo string) Option {
-	return func(r *CalicoManager) error {
-		r.operatorGithubOrg = org
-		r.operatorRepo = repo
-		return nil
-	}
-}
-
 func WithOperatorVersion(version string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorVersion = version

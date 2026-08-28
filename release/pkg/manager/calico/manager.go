@@ -148,11 +148,9 @@ type CalicoManager struct {
 	calicoVersion string
 
 	// operator variables
-	operatorImage     string
-	operatorRegistry  string
-	operatorVersion   string
-	operatorGithubOrg string
-	operatorRepo      string
+	operatorImage    string
+	operatorRegistry string
+	operatorVersion  string
 
 	// outputDir is the directory to which we should write release artifacts, and from
 	// which we should read them for publishing.
@@ -450,11 +448,7 @@ func (r *CalicoManager) PreHashreleaseValidate() error {
 }
 
 func (r *CalicoManager) checkCodeGeneration() error {
-	env := append(os.Environ(),
-		fmt.Sprintf("OPERATOR_ORGANIZATION=%s", r.operatorGithubOrg),
-		fmt.Sprintf("OPERATOR_GIT_REPO=%s", r.operatorRepo),
-	)
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate check-dirty", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate check-dirty"); err != nil {
 		logrus.WithError(err).Error("Failed to check code generation")
 		return fmt.Errorf("code generation error, try 'make generate' to fix")
 	}
@@ -1955,11 +1949,7 @@ func (r *CalicoManager) updateAndCommitPrep() error {
 	if err := r.modifyHelmChartsValues(); err != nil {
 		return fmt.Errorf("failed to update chart versions: %w", err)
 	}
-	env := append(os.Environ(),
-		fmt.Sprintf("OPERATOR_ORGANIZATION=%s", r.operatorGithubOrg),
-		fmt.Sprintf("OPERATOR_GIT_REPO=%s", r.operatorRepo),
-	)
-	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate", env...); err != nil {
+	if err := r.makeInDirectoryIgnoreOutput(r.repoRoot, "generate"); err != nil {
 		return fmt.Errorf("failed to run make generate: %w", err)
 	}
 
