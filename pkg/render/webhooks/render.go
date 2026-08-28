@@ -23,7 +23,6 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -60,8 +59,6 @@ type Configuration struct {
 	Installation *operatorv1.InstallationSpec
 	APIServer    *operatorv1.APIServerSpec
 	OpenShift    bool
-
-	ImageOverrides *imageoverride.Overrides
 }
 
 // WebhooksComponent is the webhooks component paired with the configuration it rendered
@@ -88,12 +85,9 @@ func (c *component) WebhooksConfig() *Configuration {
 }
 
 func (c *component) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 
 	var err error
-	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(render.ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
 	return err
 }
 

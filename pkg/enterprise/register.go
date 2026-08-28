@@ -29,8 +29,6 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/whisker"
 	"github.com/tigera/operator/pkg/enterprise/windows"
 	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/imageoverride"
-	"github.com/tigera/operator/pkg/render"
 )
 
 // New builds the Calico Enterprise extensions. After the monorepo split this is what
@@ -40,6 +38,10 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 	// an Installation asking for the deprecated TigeraSecureEnterprise still gets the
 	// Enterprise extensions.
 	if variant.IsEnterprise() {
+		// Registered here so the images arrive with the extensions. A test that wants
+		// this build's own images instead calls components.UseImages.
+		components.RegisterVariantImages(components.EnterpriseImages)
+
 		return extensions.New(extensions.Set{
 			Installation:      installation.New(variant, o),
 			Windows:           windows.New(variant),
@@ -51,7 +53,6 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 			Goldmane:          goldmane.New(variant),
 			Whisker:           whisker.New(variant),
 			GatewayAPI:        gatewayapi.New(variant),
-			Images:            images(variant, o),
 		})
 	}
 
@@ -63,13 +64,11 @@ func New(variant operatorv1.ProductVariant, o eoptions.Options) extensions.Exten
 	return extensions.Extensions{}
 }
 
-// images is every component whose image differs for Enterprise.
-func images(variant operatorv1.ProductVariant, o eoptions.Options) *imageoverride.Overrides {
-	set := imageoverride.New()
-	set.Register(variant, render.ComponentNameCalico, components.ComponentTigeraCalico)
-	installation.RegisterImages(set, variant, o)
-	windows.RegisterImages(set, variant)
-	gatewayapi.RegisterImages(set, variant)
-	istio.RegisterImages(set, variant)
-	return set
+// Images is the image set Enterprise runs, for the caller to register. New leaves it
+// alone so that building the extensions has no effect outside the value it returns.
+func Images(variant operatorv1.ProductVariant) []components.Component {
+	if !variant.IsEnterprise() {
+		return nil
+	}
+	return components.EnterpriseImages
 }

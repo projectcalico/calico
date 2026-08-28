@@ -160,8 +160,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext:    testExtensions.Installation(),
-				images: testExtensions.Images(),
+				ext: testExtensions.Installation(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -776,8 +775,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext:    testExtensions.Installation(),
-				images: testExtensions.Images(),
+				ext: testExtensions.Installation(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -958,8 +956,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext:    testExtensions.Installation(),
-				images: testExtensions.Images(),
+				ext: testExtensions.Installation(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2291,8 +2288,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			// As the parameters in the client changes, we expect the outcomes of the reconcile loops to change.
 			r = ReconcileInstallation{
-				ext:    testExtensions.Installation(),
-				images: testExtensions.Images(),
+				ext: testExtensions.Installation(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2406,8 +2402,7 @@ var _ = Describe("Testing core-controller installation", func() {
 
 			componentHandler = newFakeComponentHandler()
 			r = ReconcileInstallation{
-				ext:    testExtensions.Installation(),
-				images: testExtensions.Images(),
+				ext: testExtensions.Installation(),
 				opts: options.ControllerOptions{
 					Extensions:       testExtensions,
 					DetectedProvider: operator.ProviderNone,
@@ -2575,8 +2570,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1 MAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2611,8 +2605,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 MAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2645,8 +2638,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 MAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2679,8 +2671,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when no served version exists and should set degraded", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2702,8 +2693,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2724,8 +2714,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should not create MAPs when manageCRDs=false", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   false,
@@ -2759,8 +2748,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2806,8 +2794,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2829,8 +2816,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2905,8 +2891,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1 VAPs when v1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2941,8 +2926,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1beta1 VAPs when only v1beta1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2975,8 +2959,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should create v1alpha1 VAPs when only v1alpha1 is served", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -2997,8 +2980,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should skip without degrading when no served version exists", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -3020,8 +3002,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should not create VAPs when v3CRDs=false", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -3055,8 +3036,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		}
 
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,
@@ -3084,8 +3064,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 
 	It("should work with Enterprise variant", func() {
 		r = ReconcileInstallation{
-			ext:    testExtensions.Installation(),
-			images: testExtensions.Images(),
+			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
 				Extensions:   testExtensions,
 				ManageCRDs:   true,

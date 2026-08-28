@@ -44,7 +44,9 @@ type InstallationExtension interface {
 	// ProductVersion is the version the operator writes to the Installation status.
 	ProductVersion() string
 
-	// Images overrides the images the rendered components resolve to.
+	// KubeControllersImage overrides the image kube-controllers runs, or nil to run
+	// the variant's combined calico image. Calico Cloud is the only caller.
+	KubeControllersImage() *components.Component
 
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
@@ -52,6 +54,8 @@ type InstallationExtension interface {
 
 // noopInstallation runs the core operator's behavior unchanged.
 type noopInstallation struct{}
+
+func (noopInstallation) KubeControllersImage() *components.Component { return nil }
 
 func (noopInstallation) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
 	return ci, nil, nil

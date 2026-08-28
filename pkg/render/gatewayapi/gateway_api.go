@@ -29,7 +29,6 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -365,7 +364,6 @@ type GatewayAPIImplementationConfig struct {
 	CustomEnvoyProxies     map[string]*envoyapi.EnvoyProxy
 	CurrentGatewayClasses  set.Set[string]
 	IncludeV3NetworkPolicy bool
-	ImageOverrides         *imageoverride.Overrides
 
 	// GatewayNamespaces is the list of namespaces containing a Gateway managed by
 	// this operator.
@@ -405,21 +403,17 @@ func GatewayAPIImplementationComponent(cfg *GatewayAPIImplementationConfig) (ren
 
 func (pr *gatewayAPIImplementationComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	in := pr.cfg.Installation
-	reg, path, prefix := in.Registry, in.ImagePath, in.ImagePrefix
 
 	var err error
-	pr.envoyGatewayImage, err = components.GetReference(
-		pr.cfg.ImageOverrides.Resolve(ComponentNameEnvoyGateway, components.ComponentCalicoEnvoyGateway, in), reg, path, prefix, is)
+	pr.envoyGatewayImage, err = components.ReferenceFor(components.ImageKeyEnvoyGateway, in, is)
 	if err != nil {
 		return err
 	}
-	pr.envoyProxyImage, err = components.GetReference(
-		pr.cfg.ImageOverrides.Resolve(ComponentNameEnvoyProxy, components.ComponentCalicoEnvoyProxy, in), reg, path, prefix, is)
+	pr.envoyProxyImage, err = components.ReferenceFor(components.ImageKeyEnvoyProxy, in, is)
 	if err != nil {
 		return err
 	}
-	pr.envoyRatelimitImage, err = components.GetReference(
-		pr.cfg.ImageOverrides.Resolve(ComponentNameEnvoyRatelimit, components.ComponentCalicoEnvoyRatelimit, in), reg, path, prefix, is)
+	pr.envoyRatelimitImage, err = components.ReferenceFor(components.ImageKeyEnvoyRatelimit, in, is)
 	if err != nil {
 		return err
 	}

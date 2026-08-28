@@ -30,7 +30,6 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
-	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
@@ -66,8 +65,6 @@ type WindowsConfiguration struct {
 	ClusterDomain string
 	TLS           *TyphaNodeTLS
 	VXLANVNI      int
-
-	ImageOverrides *imageoverride.Overrides
 }
 
 type windowsComponent struct {
@@ -77,9 +74,6 @@ type windowsComponent struct {
 }
 
 func (c *windowsComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var errMsgs []string
 	appendIfErr := func(imageName string, err error) string {
 		if err != nil {
@@ -88,10 +82,8 @@ func (c *windowsComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	cniImage := c.cfg.ImageOverrides.Resolve(ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, c.cfg.Installation)
-	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, c.cfg.Installation)
-	c.cniImage = appendIfErr(components.GetReference(cniImage, reg, path, prefix, is))
-	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
+	c.cniImage = appendIfErr(components.ReferenceFor(components.ImageKeyCNIWindows, c.cfg.Installation, is))
+	c.nodeImage = appendIfErr(components.ReferenceFor(components.ImageKeyNodeWindows, c.cfg.Installation, is))
 
 	if len(errMsgs) != 0 {
 		return fmt.Errorf("%s", strings.Join(errMsgs, ","))

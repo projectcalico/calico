@@ -166,7 +166,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -228,7 +227,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -284,7 +282,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -312,7 +309,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -347,7 +343,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -369,7 +364,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -396,7 +390,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -421,7 +414,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -449,7 +441,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -479,7 +470,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -507,7 +497,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -536,7 +525,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -581,7 +569,6 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -616,7 +603,6 @@ var _ = Describe("apiserver controller tests", func() {
 			}
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -671,7 +657,6 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -743,7 +728,6 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -850,7 +834,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 				r := ReconcileAPIServer{
 					ext:                 testExtensions.APIServer(),
-					images:              testExtensions.Images(),
 					client:              cli,
 					scheme:              scheme,
 					status:              mockStatus,
@@ -882,7 +865,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 				r := ReconcileAPIServer{
 					ext:                 testExtensions.APIServer(),
-					images:              testExtensions.Images(),
 					client:              cli,
 					scheme:              scheme,
 					status:              mockStatus,
@@ -1005,7 +987,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -1052,7 +1033,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -1083,7 +1063,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r := ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
@@ -1143,7 +1122,6 @@ var _ = Describe("apiserver controller tests", func() {
 
 			r = ReconcileAPIServer{
 				ext:                 testExtensions.APIServer(),
-				images:              testExtensions.Images(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,

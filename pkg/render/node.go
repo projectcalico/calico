@@ -37,7 +37,6 @@ import (
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller/k8sapi"
 	"github.com/tigera/operator/pkg/controller/migration"
-	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	"github.com/tigera/operator/pkg/render/common/configmap"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
@@ -145,8 +144,6 @@ type NodeConfiguration struct {
 	BindMode string
 
 	V3CRDs bool
-
-	ImageOverrides *imageoverride.Overrides
 }
 
 // Node creates the node daemonset and other resources for the daemonset to operate normally.
@@ -186,9 +183,6 @@ type nodeComponent struct {
 }
 
 func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var errMsgs []string
 	appendIfErr := func(imageName string, err error) string {
 		if err != nil {
@@ -197,12 +191,10 @@ func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	c.calicoImage = appendIfErr(components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is))
-	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameNode, components.ComponentCalicoNode, c.cfg.Installation)
-	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
+	c.calicoImage = appendIfErr(components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is))
+	c.nodeImage = appendIfErr(components.ReferenceFor(components.ImageKeyNode, c.cfg.Installation, is))
 	if c.installUpstreamPlugins() {
-		cniPluginsImage := c.cfg.ImageOverrides.Resolve(ComponentNameCNIPlugins, components.ComponentCalicoCNIPlugins, c.cfg.Installation)
-		c.cniPluginsImage = appendIfErr(components.GetReference(cniPluginsImage, reg, path, prefix, is))
+		c.cniPluginsImage = appendIfErr(components.ReferenceFor(components.ImageKeyCNIPlugins, c.cfg.Installation, is))
 	}
 
 	if len(errMsgs) != 0 {

@@ -26,14 +26,12 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/enterprise/installation"
 	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/monitor"
@@ -50,12 +48,6 @@ var _ extensions.WindowsExtension = &Extension{}
 // New returns the windows extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
 	return &Extension{variant: variant}
-}
-
-// RegisterImages adds the images the windows components resolve.
-func RegisterImages(o *imageoverride.Overrides, variant operatorv1.ProductVariant) {
-	o.Register(variant, render.ComponentNameWindowsNodeImg, components.ComponentTigeraNodeWindows)
-	o.Register(variant, render.ComponentNameWindowsCNIImg, components.ComponentTigeraCNIWindows)
 }
 
 // Modify dispatches over the components the windows controller renders.

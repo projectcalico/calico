@@ -35,7 +35,6 @@ import (
 	"github.com/tigera/operator/pkg/controller/k8sapi"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	rkc "github.com/tigera/operator/pkg/render/kubecontrollers"
@@ -105,8 +104,6 @@ var _ = Describe("es-kube-controllers rendering tests", func() {
 		certificateManager, err := certificatemanager.Create(cli, nil, dns.DefaultClusterDomain, common.OperatorNamespace(), certificatemanager.AllowCACreation())
 		Expect(err).NotTo(HaveOccurred())
 
-		images := imageoverride.New()
-		images.Register(operatorv1.CalicoEnterprise, render.ComponentNameCalico, components.ComponentTigeraCalico)
 		cfg = Configuration{
 			KubeControllersConfiguration: &rkc.KubeControllersConfiguration{
 				K8sServiceEp:      k8sServiceEp,
@@ -116,7 +113,6 @@ var _ = Describe("es-kube-controllers rendering tests", func() {
 				TrustedBundle:     certificateManager.CreateTrustedBundle(),
 				Namespace:         common.CalicoNamespace,
 				BindingNamespaces: []string{common.CalicoNamespace},
-				ImageOverrides:    images,
 			},
 		}
 	})

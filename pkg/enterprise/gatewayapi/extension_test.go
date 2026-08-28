@@ -40,7 +40,6 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
 	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
@@ -59,12 +58,10 @@ func testScheme() *runtime.Scheme {
 }
 
 // enterpriseComponent renders the gateway API implementation the way the controller
-// does, with the extension's image overrides and modifier applied.
+// does, with the extension's modifier applied.
 func enterpriseComponent(cfg *gatewayapi.GatewayAPIImplementationConfig) render.Component {
 	ext := New(operatorv1.CalicoEnterprise)
 	cfg.Scheme = testScheme()
-	cfg.ImageOverrides = imageoverride.New()
-	RegisterImages(cfg.ImageOverrides, operatorv1.CalicoEnterprise)
 
 	comp, err := gatewayapi.GatewayAPIImplementationComponent(cfg)
 	Expect(err).NotTo(HaveOccurred())

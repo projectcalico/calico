@@ -31,7 +31,6 @@ import (
 	"github.com/tigera/operator/pkg/controller"
 	"github.com/tigera/operator/pkg/controller/utils/imageset"
 	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/imageoverride"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/secret"
 	"github.com/tigera/operator/pkg/render/gatewayapi"
@@ -50,13 +49,6 @@ var _ extensions.GatewayAPIExtension = &Extension{}
 // New returns the gateway API extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
 	return &Extension{variant: variant}
-}
-
-// RegisterImages adds the images the gateway API components resolve.
-func RegisterImages(o *imageoverride.Overrides, variant operatorv1.ProductVariant) {
-	o.Register(variant, gatewayapi.ComponentNameEnvoyGateway, components.ComponentGatewayAPIEnvoyGateway)
-	o.Register(variant, gatewayapi.ComponentNameEnvoyProxy, components.ComponentGatewayAPIEnvoyProxy)
-	o.Register(variant, gatewayapi.ComponentNameEnvoyRatelimit, components.ComponentGatewayAPIEnvoyRatelimit)
 }
 
 // gatewayAPIRenderData is the controller-produced data the gateway API extension hands

@@ -233,7 +233,6 @@ func (r *ReconcileIstio) Reconcile(ctx context.Context, request reconcile.Reques
 		Istio:          instance,
 		IstioNamespace: istio.IstioNamespace,
 		Scheme:         r.scheme,
-		ImageOverrides: r.ext.Images(),
 	}
 	istioComponentCRDs, istioComponent, err := istio.Istio(istioCfg)
 	if err != nil {

@@ -85,7 +85,7 @@ var _ = Describe("the zero value Extensions", func() {
 		var e extensions.Extensions
 
 		Expect(e.Installation().ProductVersion()).NotTo(BeEmpty())
-		Expect(e.Images()).To(BeNil())
+		Expect(e.Installation().KubeControllersImage()).To(BeNil())
 		Expect(e.Windows().Watches(nil)).NotTo(HaveOccurred())
 
 		ci, keyPairs, err := e.ClusterConnection().ExtendInputs(context.Background(), controller.Inputs{})

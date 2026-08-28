@@ -87,7 +87,6 @@ func NewControllerWithShims(
 		variant:        opts.Variant,
 		tierWatchReady: tierWatchReady,
 		multiTenant:    multiTenant,
-		images:         opts.Extensions.Images(),
 	}
 	r.status.Run(opts.ShutdownContext)
 	return r, nil

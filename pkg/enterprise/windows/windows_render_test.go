@@ -184,13 +184,12 @@ var _ = Describe("Windows enterprise rendering tests", func() {
 
 		// Create a default configuration.
 		cfg = render.WindowsConfiguration{
-			K8sServiceEp:   k8sServiceEp,
-			K8sDNSServers:  []string{"10.96.0.10"},
-			Installation:   defaultInstance,
-			ClusterDomain:  defaultClusterDomain,
-			TLS:            typhaNodeTLS,
-			VXLANVNI:       4096,
-			ImageOverrides: ext.Images(),
+			K8sServiceEp:  k8sServiceEp,
+			K8sDNSServers: []string{"10.96.0.10"},
+			Installation:  defaultInstance,
+			ClusterDomain: defaultClusterDomain,
+			TLS:           typhaNodeTLS,
+			VXLANVNI:      4096,
 		}
 	})
 

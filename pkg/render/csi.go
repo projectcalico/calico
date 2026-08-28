@@ -28,7 +28,6 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/imageoverride"
 	rcomp "github.com/tigera/operator/pkg/render/common/components"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	"github.com/tigera/operator/pkg/render/common/securitycontext"
@@ -47,8 +46,6 @@ type CSIConfiguration struct {
 	Installation *operatorv1.InstallationSpec
 	Terminating  bool
 	OpenShift    bool
-
-	ImageOverrides *imageoverride.Overrides
 }
 
 type csiComponent struct {
@@ -375,11 +372,8 @@ func (c *csiComponent) roleBinding() *rbacv1.RoleBinding {
 }
 
 func (c *csiComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	c.calicoImage, err = components.GetReference(c.cfg.ImageOverrides.Resolve(ComponentNameCalico, components.ComponentCalico, c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
 	if err != nil {
 		return err
 	}
