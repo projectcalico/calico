@@ -1,0 +1,29 @@
+version: v1.0
+name: Run Fossa Scan
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  minutes: 30
+
+blocks:
+  - name: "Trigger Fossa Scan"
+    skip:
+      # Only run on master or release branches, not PRs.
+      when: "(branch =~ 'master|release-.*') and (branch !~ '.+')"
+    dependencies: []
+    task:
+      prologue:
+        commands:
+          - "curl -fsSLH 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash"
+          - checkout
+          - retry git fetch --unshallow
+      jobs:
+        - name: "FOSSA scan"
+          commands:
+            - fossa analyze
+      secrets:
+        - name: foss-api-key

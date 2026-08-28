@@ -1,0 +1,226 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: wafvalidationpolicies.applicationlayer.projectcalico.org
+spec:
+  group: applicationlayer.projectcalico.org
+  names:
+    kind: WAFValidationPolicy
+    listKind: WAFValidationPolicyList
+    plural: wafvalidationpolicies
+    shortNames:
+      - wafvp
+    singular: wafvalidationpolicy
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .status.securityPosture
+          name: Posture
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
+      schema:
+        openAPIV3Schema:
+          description: |-
+            WAFValidationPolicy defines namespace-scoped validation rules for Application
+            Operators to self-validate their WAF configuration. Useful for catching
+            mistakes like accidentally removing required plugins.
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: |-
+                WAFValidationPolicySpec defines namespace validation rules.
+
+                Namespace WAFValidationPolicies are ADVISORY ONLY: they self-validate an App
+                Operator's namespace config and surface failures via status + SecurityPosture
+                but never block EnvoyExtensionPolicy generation. The enforcement role belongs
+                to the Cluster Operator's GlobalWAFValidationPolicy (which has an
+                EnforcementMode); this type intentionally has no EnforcementMode. See the
+                approved design (per-route/namespaced WAF, designs#25 §01/§02). A future
+                CO-delegated self-enforcement model would be added separately (RFE). EV-6386.
+              properties:
+                rules:
+                  description: Rules defines the validation rules to apply
+                  items:
+                    description:
+                      ValidationRule defines a single Rego-based validation
+                      rule
+                    properties:
+                      message:
+                        description: Message is displayed when validation fails
+                        maxLength: 1024
+                        type: string
+                      name:
+                        description: Name is a unique identifier for this rule
+                        maxLength: 63
+                        minLength: 1
+                        type: string
+                      rego:
+                        description: |-
+                          Rego is a Rego module that decides violations against the merged WAF
+                          configuration. The module must declare `package waf` and produce a
+                          `violations` set; an empty set means the rule passed. Each violation
+                          may be a plain string message, or an object carrying a `msg` string.
+                          The `input` document available to the module:
+                            - input.directives: []string - the final merged directive list
+                            - input.config.action: string - effective action ("Detect" or "Block")
+                            - input.config.crsState: string - CRS state ("Enabled" or "Disabled")
+                            - input.config.paranoiaLevel: int - effective paranoia level (1-4)
+                            - input.source.globalPolicy: string - name of GlobalWAFPolicy
+                            - input.source.namespacePolicy: string - name of WAFPolicy (if any)
+                            - input.source.globalPlugins: []string - names of global plugins applied
+                            - input.source.namespacePlugins: []string - names of namespace plugins applied
+                        maxLength: 16384
+                        minLength: 1
+                        type: string
+                      severity:
+                        default: warning
+                        description: Severity determines the impact of this rule failing
+                        enum:
+                          - info
+                          - warning
+                          - critical
+                        type: string
+                    required:
+                      - name
+                      - rego
+                    type: object
+                  minItems: 1
+                  type: array
+              required:
+                - rules
+              type: object
+            status:
+              description: |-
+                WAFValidationPolicyStatus defines the observed state.
+                No conditions are emitted by the controller for this type today; the Conditions
+                field is reserved for future use.
+              properties:
+                conditions:
+                  description: Conditions represent the latest available observations
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                lastEvaluated:
+                  description: LastEvaluated is the timestamp of the last evaluation
+                  format: date-time
+                  type: string
+                securityPosture:
+                  description:
+                    SecurityPosture is the overall posture based on validation
+                    results
+                  enum:
+                    - Compliant
+                    - Warning
+                    - Degraded
+                    - Critical
+                  type: string
+                validationResults:
+                  description: ValidationResults contains results for each rule
+                  items:
+                    description:
+                      ValidationResult represents the result of a single
+                      validation rule
+                    properties:
+                      message:
+                        description: Message is the failure message (if failed)
+                        maxLength: 1024
+                        type: string
+                      passed:
+                        description: Passed indicates whether the rule passed
+                        type: boolean
+                      rule:
+                        description: Rule is the name of the validation rule
+                        maxLength: 63
+                        type: string
+                      severity:
+                        description: Severity is the severity level of this rule
+                        enum:
+                          - info
+                          - warning
+                          - critical
+                        type: string
+                    required:
+                      - passed
+                      - rule
+                    type: object
+                  type: array
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

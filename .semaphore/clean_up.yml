@@ -1,0 +1,29 @@
+version: v1.0
+name: Operator Clean Up
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+blocks:
+  - name: Clear Commit Caches
+    task:
+      jobs:
+        - name: Clear Commit Caches
+          commands:
+            - 'cache delete bin-amd64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-pkg-cache-amd64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-mod-cache-amd64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete bin-arm64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-pkg-cache-arm64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-mod-cache-arm64-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete bin-ppc64le-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-pkg-cache-ppc64le-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-mod-cache-ppc64le-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete bin-s390x-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-pkg-cache-s390x-${SEMAPHORE_GIT_SHA}'
+            - 'cache delete go-mod-cache-s390x-${SEMAPHORE_GIT_SHA}'

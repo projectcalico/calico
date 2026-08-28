@@ -1,0 +1,120 @@
+# Sync Calico and Calico Enterprise versions and CRDs into this repo.
+# Creates or updates a PR if anything changed.
+---
+name: Sync versions
+on:
+  schedule:
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  discover-branches:
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.branches.outputs.branches }}
+    steps:
+      - name: Discover branches
+        id: branches
+        run: |
+          # Get master + the two most recent release branches (by semver).
+          branches=$(gh api repos/${{ github.repository }}/branches --paginate --jq '
+            [.[] | select(.name | test("^release-v[0-9]+\\.[0-9]+$")) | .name]
+            | sort_by(ltrimstr("release-v") | split(".") | map(tonumber))
+            | .[-2:]
+            | ["master"] + .
+          ')
+          echo "branches=${branches}" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  sync:
+    needs: discover-branches
+    runs-on: ubuntu-latest
+    concurrency:
+      group: sync-versions-${{ matrix.branch }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.discover-branches.outputs.branches) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: ${{ matrix.branch }}
+          persist-credentials: false
+
+      - name: Configure git auth
+        run: |
+          git config --global credential.helper store
+          echo "https://marvin-tigera:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+        env:
+          GITHUB_TOKEN: ${{ secrets.MARVIN_PAT }}
+
+      - name: Gen versions
+        run: make gen-versions GIT_CLONE_URL_BASE=https://github.com/
+
+      - uses: peter-evans/create-pull-request@c0f553fe549906ede9cf27b5156039d195d2ece0  # v8.1.0
+        id: cpr
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Sync versions from Calico and Calico Enterprise"
+          branch: auto-sync-versions-${{ matrix.branch }}
+          base: ${{ matrix.branch }}
+          title: "Auto: sync versions [${{ matrix.branch }}]"
+          body: |
+            Automated sync of versions and CRDs from Calico and Calico Enterprise into
+            `${{ matrix.branch }}` via `make gen-versions`.
+
+            Triggered by scheduled workflow.
+          labels: auto-sync,docs-not-required,release-note-not-required,merge-when-ready
+          delete-branch: true
+
+      # The PR author is github-actions[bot] (the GITHUB_TOKEN identity above), so
+      # it can't approve its own PR, and the Actions token can't approve PRs anyway.
+      # Approve as marvin-tigera (MARVIN_PAT) so Marvin merges it once CI is green.
+      # CODEOWNERS scopes pkg/imports/ to marvin so this approval satisfies the
+      # code-owner requirement; a sync PR touching files outside pkg/imports/ still
+      # needs a maintainer. dismiss_stale_reviews is off, so a single approval
+      # persists across the hourly updates -- the reviewDecision guard keeps reruns quiet.
+      - name: Auto-approve so Marvin merges once CI passes
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
+        env:
+          GH_TOKEN: ${{ secrets.MARVIN_PAT }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh pr view "$PR" -R "$REPO" --json reviewDecision -q .reviewDecision)" = "APPROVED" ]; then
+            echo "PR #$PR already approved; nothing to do."
+            exit 0
+          fi
+          gh pr review "$PR" -R "$REPO" --approve
+
+      # GitHub holds Actions runs on a PR pushed by github-actions[bot] in the
+      # action_required state, which leaves the PR permanently unmergeable.
+      # Release them as marvin-tigera.
+      - name: Approve held workflow runs
+        if: steps.cpr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.MARVIN_PAT }}
+          PR: ${{ steps.cpr.outputs.pull-request-number }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=$(gh pr view "$PR" -R "$REPO" --json headRefOid -q .headRefOid)
+          for _ in $(seq 1 6); do
+            runs=$(gh api "repos/$REPO/actions/runs?head_sha=$sha" \
+              --jq '.workflow_runs[] | select(.conclusion == "action_required") | .id')
+            if [ -n "$runs" ]; then
+              for id in $runs; do
+                echo "Approving held run $id"
+                gh api -X POST "repos/$REPO/actions/runs/$id/approve"
+              done
+              break
+            fi
+            echo "No held runs for $sha yet; waiting."
+            sleep 10
+          done

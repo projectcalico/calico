@@ -1,0 +1,27 @@
+{{ .Date }}
+
+#### Included Calico versions
+{{ range $product, $version := .Versions }}
+{{ $product }} version: {{ $version }}
+{{- end }}
+{{- if .Enhancements }}
+
+#### Enhancements
+{{range .Enhancements }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .BugFixes }}
+
+#### Bug fixes
+{{range .BugFixes }}
+- {{ . }}
+{{- end }}
+{{- end }}
+{{- if .OtherChanges }}
+
+#### Other changes
+{{range .OtherChanges }}
+- {{ . }}
+{{- end }}
+{{- end }}

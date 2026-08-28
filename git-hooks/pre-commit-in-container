@@ -1,0 +1,182 @@
+#!/bin/bash
+# Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+set -e
+
+# Make sure we get some output if an unexpected command happens to fail.
+trap "echo; echo git pre-commit hook failed." EXIT
+
+# Redirect output to stderr.
+exec 1>&2
+
+changed_go_files=$( { git diff --cached --name-only | grep -E '\.go$' ; } || true)
+
+copyright_owner="Tigera, Inc"
+
+
+stale_file_in_skip_files=false
+skip_file="git-hooks/files-to-skip"
+
+echo "Checking ${skip_file} file..."
+declare -A skipped_files
+if [[ -f "${skip_file}" ]]; then
+  mapfile -t skipped_files_array <"${skip_file}"
+  for f in "${skipped_files_array[@]}"; do
+    if [[ ! -e "${f}" ]]; then
+      echo "'${f}' entry in '${skip_file}' refers to a nonexistent file"
+      stale_file_in_skip_files=true
+    fi
+    skipped_files["${f}"]=1
+  done
+fi
+
+if $stale_file_in_skip_files; then
+  echo
+  echo "${skip_file} should not contain stale entries"
+fi
+
+
+# Run go fmt over the changed files.
+echo "Checking changed Go files for formatting, license etc..."
+go_copyright_check_failed=false
+gofmt_failed=false
+go_apache_check_failed=false
+logrus_hook_check_failed=false
+focussing_check_failed=false
+junit_hook_check_failed=false
+
+for filename in $changed_go_files; do
+  if [ ! -e  "${filename}" ]; then
+    continue
+  fi
+  if [[ -z "${skipped_files[${filename}]+isset}" ]]; then
+    if goimports -d "${filename}" | grep '.'; then
+      echo "  goimports would make changes to file:" ${filename}
+      gofmt_failed=true
+    fi
+    if ! grep -q -E "Licensed under the Apache License, Version 2.0" "${filename}"; then
+      echo "  Changed file is missing Apache license:" ${filename}
+      go_apache_check_failed=true
+    fi
+  fi
+  if echo $filename | grep -q '_suite_test.go'; then
+    if ! grep -q 'RunSpecs' "$filename"; then
+      echo "  Test suite doesn't call RunSpecs(): $filename"
+      junit_hook_check_failed=true
+    fi
+  fi
+  if echo $filename | grep -q '_test.go'; then
+    if grep -q 'FDescribe\|FIt' "$filename"; then
+      echo "  Test file still includes focussing: $filename"
+      focussing_check_failed=true
+    fi
+  fi
+done
+if $gofmt_failed; then
+  echo
+  echo "Some files failed gofmt check.  Run "
+  echo "  make fix"
+  echo "to format all files."
+  echo
+  echo "If a file should not be checked for valid formatting, it should"
+  echo "be added to the ${skip_file} file"
+  exit 1
+fi
+
+# Check copyright statement has been updated.
+echo "Checking changed Go files for copyright statements..."
+year=$(date +'%Y')
+copyright_re="Copyright \(c\) .*${year}.* ${copyright_owner}\. All rights reserved\."
+
+for filename in $changed_go_files; do
+  if [ ! -e "${filename}" ]; then
+      continue
+  fi
+  if [[ -z "${skipped_files[${filename}]+isset}" ]]; then
+    if ! grep -q -E "$copyright_re" "${filename}"; then
+      echo "Changed file is missing Tigera copyright:" ${filename}
+      go_copyright_check_failed=true
+    fi
+  fi
+done
+
+if $focussing_check_failed; then
+  echo
+  echo "One or more test files still includes test focussing, i.e. 'FIt' or"
+  echo "'FDescribe' instead of 'It' or 'Describe'."
+fi
+
+if $junit_hook_check_failed; then
+  echo
+  echo "One or more test suites don't call RunSpecs()."
+  echo "If a suite doesn't call RunSpecs() then it won't generate "
+  echo "a junit report during UT runs.  Example:"
+  echo
+  echo 'import ('
+  echo '	"github.com/onsi/ginkgo/v2"'
+  echo '	"github.com/onsi/gomega"'
+  echo ')'
+  echo 'func TestFoo(t *testing.T) {'
+  echo '	gomega.RegisterFailHandler(ginkgo.Fail)'
+  echo '	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()'
+  echo '	reporterConfig.JUnitReport = "/path/to/foo_suite.xml"'
+  echo '	ginkgo.RunSpecs(t, "Foo Suite", suiteConfig, reporterConfig)'
+  echo '}'
+fi
+if $go_copyright_check_failed; then
+  echo
+  echo "Copyright statement should match"
+  echo "  // ${copyright_re}"
+  echo "Example for new files:"
+  echo "  // Copyright (c) ${year} ${copyright_owner}. All rights reserved."
+  echo "Example for updated files (use commas and year ranges):"
+  echo "  // Copyright (c) 2012,2015-${year} ${copyright_owner}. All rights reserved."
+  echo "Change expected copyright owner by creating git-hooks/settings.sh."
+  echo
+  echo "If the file should not be checked for valid copyright statement, it should"
+  echo "be added to the ${skip_file} file"
+fi
+
+if $go_apache_check_failed; then
+  echo
+  echo "Apache license header should be as follows (with blank line before"
+  echo "package):"
+  echo
+  echo '// Licensed under the Apache License, Version 2.0 (the "License");'
+  echo '// you may not use this file except in compliance with the License.'
+  echo '// You may obtain a copy of the License at'
+  echo '//'
+  echo '//     http://www.apache.org/licenses/LICENSE-2.0'
+  echo '//'
+  echo '// Unless required by applicable law or agreed to in writing, software'
+  echo '// distributed under the License is distributed on an "AS IS" BASIS,'
+  echo '// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.'
+  echo '// See the License for the specific language governing permissions and'
+  echo '// limitations under the License.'
+  echo
+  echo 'package ...'
+  echo
+  echo "If the file should not be checked for valid license header, it should"
+  echo "be added to the ${skip_file} file"
+fi
+
+
+if $go_apache_check_failed || $go_copyright_check_failed || \
+   $focussing_check_failed || $junit_hook_check_failed || \
+   $stale_file_in_skip_files; then
+  exit 1
+fi
+# Remove the trap handler.
+trap "" EXIT

@@ -1,0 +1,252 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: globalwafpolicies.applicationlayer.projectcalico.org
+spec:
+  group: applicationlayer.projectcalico.org
+  names:
+    kind: GlobalWAFPolicy
+    listKind: GlobalWAFPolicyList
+    plural: globalwafpolicies
+    shortNames:
+      - gwafp
+    singular: globalwafpolicy
+  scope: Cluster
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .spec.defaultAction
+          name: Action
+          type: string
+        - jsonPath: .spec.coreRuleSet.state
+          name: CRS
+          type: string
+        - jsonPath: .spec.coreRuleSet.paranoiaLevel
+          name: Paranoia
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
+      schema:
+        openAPIV3Schema:
+          description: GlobalWAFPolicy is the Schema for cluster-wide WAF configuration
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: GlobalWAFPolicySpec defines the desired state
+              properties:
+                coreRuleSet:
+                  description: CoreRuleSet configures the OWASP Core Rule Set
+                  properties:
+                    enabled:
+                      description: |-
+                        Enabled is the deprecated boolean form. Read for backward compatibility
+                        with v0.2.x CRs; new CRs should set State. If both fields are set,
+                        State wins.
+
+                        Deprecated: use State.
+                      type: boolean
+                    paranoiaLevel:
+                      default: 1
+                      description: ParanoiaLevel sets the CRS paranoia level (1-4)
+                      maximum: 4
+                      minimum: 1
+                      type: integer
+                    state:
+                      default: Enabled
+                      description: State enables or disables the OWASP CRS baseline.
+                      enum:
+                        - Enabled
+                        - Disabled
+                      type: string
+                  type: object
+                defaultAction:
+                  default: Detect
+                  description: DefaultAction specifies what happens when a rule matches
+                  enum:
+                    - Detect
+                    - Block
+                  type: string
+                plugins:
+                  description: |-
+                    Plugins references GlobalWAFPlugins
+                    These plugins are applied to all namespaces
+                  items:
+                    description: |-
+                      PluginRef references a plugin by kind + name. Kind makes the
+                      reference target explicit; without it, "is this naming a Global or a
+                      namespace plugin?" had to be inferred from which policy's spec.plugins[]
+                      the reference appeared in. The default is WAFPlugin (namespace-scoped) for
+                      backward-compat with v0.2.x CRs that omit Kind.
+
+                      Note: in this release the resolved scope still follows the parent policy
+                      (GlobalWAFPolicy.spec.plugins[] resolves as Global; WAFPolicy.spec.plugins[]
+                      resolves as namespace-scoped). Cross-scope lookup (e.g. WAFPolicy
+                      referencing a GlobalWAFPlugin) is a future addition; the Kind field
+                      here is type-level disclosure of intent that the reconciler can validate
+                      against in a later release.
+                    properties:
+                      kind:
+                        default: WAFPlugin
+                        description: |-
+                          Kind selects between namespace-scoped (WAFPlugin) and cluster-scoped
+                          (GlobalWAFPlugin) plugin types.
+                        enum:
+                          - WAFPlugin
+                          - GlobalWAFPlugin
+                        type: string
+                      name:
+                        description: Name is the name of the plugin resource.
+                        maxLength: 253
+                        type: string
+                    required:
+                      - name
+                    type: object
+                  maxItems: 64
+                  type: array
+              type: object
+            status:
+              description: |-
+                GlobalWAFPolicyStatus defines the observed state.
+
+                Conditions emitted by the controller:
+                  - Licensed   (LicenseValid / LicenseBlocked)
+                  - Accepted   (Accepted / Invalid / PluginNotFound)
+                  - Ready      (Ready / NotReady / ConflictingGlobalPolicy)
+              properties:
+                conditions:
+                  description: Conditions represent the latest available observations
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                inheritedFromGlobal:
+                  description: |-
+                    InheritedFromGlobal is always nil for GlobalWAFPolicy. The field is
+                    declared for symmetry with WAFPolicyStatus so generated clients (Go,
+                    TS) can share a single attribution shape across scopes.
+                  type: string
+                lastApplied:
+                  description: LastApplied is the timestamp of the last successful application
+                  format: date-time
+                  type: string
+                namespaceCount:
+                  description: |-
+                    NamespaceCount is the number of namespaces in which a WAFPolicy targets
+                    resources covered by this Global policy. Different denominator from
+                    GlobalWAFPluginStatus.NamespaceCount (which counts namespaces where a
+                    policy references the plugin).
+                  type: integer
+                renderedConfigMapRefs:
+                  description: |-
+                    RenderedConfigMapRefs enumerates ConfigMaps the controller has emitted
+                    from this GlobalWAFPolicy, one per namespace that consumed it. Capped
+                    at 50 entries; see RenderedConfigMapRefsTruncated. When the cap is
+                    exceeded, the surfaced entries are the lexically-first 50 namespace
+                    names (sorted ascending by namespace), so the truncation is
+                    deterministic across reconciles; use NamespaceCount to recover the
+                    untruncated total.
+                  items:
+                    description: |-
+                      RenderedConfigMapRef identifies the ConfigMap into which the controller
+                      materialised the merged WAF rule set for a policy. CLI tools and status
+                      consumers resolve this reference instead of reconstructing the name.
+                    properties:
+                      name:
+                        maxLength: 253
+                        type: string
+                      namespace:
+                        maxLength: 253
+                        type: string
+                      resourceVersion:
+                        maxLength: 253
+                        type: string
+                    required:
+                      - name
+                      - namespace
+                    type: object
+                  type: array
+                renderedConfigMapRefsTruncated:
+                  description: |-
+                    RenderedConfigMapRefsTruncated is true when the full set exceeded the
+                    50-entry status cap. Consumers should use NamespaceCount for totals.
+                  type: boolean
+              type: object
+          type: object
+          x-kubernetes-validations:
+            - message: GlobalWAFPolicy is a singleton; the only permitted name is 'default'
+              rule: self.metadata.name == 'default'
+      served: true
+      storage: true
+      subresources:
+        status: {}
