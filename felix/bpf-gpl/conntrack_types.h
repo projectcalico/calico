@@ -47,13 +47,22 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
 
-/* Flags kept in calico_ct_leg's bits_word, above the bitfield members. They are
- * addressed by mask rather than as bitfields so that both directions of a flow
- * can update them with an atomic on the whole word; a bitfield assignment is a
- * read-modify-write of bits_word and would drop the other side's update. Bit
- * positions continue the bitfield members below (which occupy 0-6), the same
- * little-endian layout felix/bpf/conntrack/v4/map.go already encodes.
+/* Flags kept in calico_ct_leg's bits_word. Live map entries are shared between
+ * the two directions of a flow, which can run on different CPUs, so every
+ * write to the word on a live entry must go through the atomic helpers below:
+ * a bitfield assignment is a read-modify-write of the whole word and would
+ * resurrect or drop a concurrent update from the other side. Plain bitfield
+ * writes are for entries still on the stack (the create path) only. The masks
+ * mirror the bitfield members' little-endian layout, the same one
+ * felix/bpf/conntrack/v4/map.go encodes.
  */
+#define CALI_CT_LEG_SYN_SEEN	(1U << 0)
+#define CALI_CT_LEG_ACK_SEEN	(1U << 1)
+#define CALI_CT_LEG_FIN_SEEN	(1U << 2)
+#define CALI_CT_LEG_RST_SEEN	(1U << 3)
+#define CALI_CT_LEG_APPROVED	(1U << 4)
+#define CALI_CT_LEG_OPENER	(1U << 5)
+#define CALI_CT_LEG_WORKLOAD	(1U << 6)
 #define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
 					   * flow's encap-flagged destinations: a tunnel
 					   * device, or whatever the FIB resolved for such

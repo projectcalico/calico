@@ -124,28 +124,32 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			}
 			goto create;
 		}
+		struct calico_ct_leg *pkt_leg, *appr_leg;
+
 		if (srcLTDest) {
 			CALI_DEBUG("CT-ALL update src_to_dst A->B");
-			ct_value->a_to_b.seqno = seq;
-			ct_value->a_to_b.syn_seen = syn;
-			if (CALI_F_TO_HOST) {
-				ct_value->a_to_b.approved = 1;
-				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
-			} else {
-				ct_value->b_to_a.approved = 1;
-				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
-			}
+			pkt_leg = &ct_value->a_to_b;
+			appr_leg = CALI_F_TO_HOST ? &ct_value->a_to_b : &ct_value->b_to_a;
 		} else  {
 			CALI_DEBUG("CT-ALL update src_to_dst B->A");
-			ct_value->b_to_a.seqno = seq;
-			ct_value->b_to_a.syn_seen = syn;
-			if (CALI_F_TO_HOST) {
-				ct_value->b_to_a.approved = 1;
-				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
-			} else {
-				ct_value->a_to_b.approved = 1;
-				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
-			}
+			pkt_leg = &ct_value->b_to_a;
+			appr_leg = CALI_F_TO_HOST ? &ct_value->b_to_a : &ct_value->a_to_b;
+		}
+
+		/* This is a live map entry, shared with the program handling the
+		 * opposite direction - flag writes must go through the atomic
+		 * helpers (see the bits_word comment).
+		 */
+		pkt_leg->seqno = seq;
+		if (syn) {
+			ct_leg_set_flags(pkt_leg, CALI_CT_LEG_SYN_SEEN);
+		} else {
+			ct_leg_clear_flags(pkt_leg, CALI_CT_LEG_SYN_SEEN);
+		}
+		ct_leg_set_flags(appr_leg, CALI_CT_LEG_APPROVED |
+				(CALI_F_WEP ? CALI_CT_LEG_WORKLOAD : 0));
+		if (!CALI_F_WEP) {
+			ct_leg_clear_flags(appr_leg, CALI_CT_LEG_WORKLOAD);
 		}
 
 		return 0;
@@ -539,14 +543,14 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 {
 	if (tcp_header->fin) {
 		CALI_CT_VERB("FIN seen, marking CT entry.");
-		src_to_dst->fin_seen = 1;
+		ct_leg_set_flags(src_to_dst, CALI_CT_LEG_FIN_SEEN);
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
 			CALI_CT_VERB("SYN+ACK seen, marking CT entry.");
-			src_to_dst->syn_seen = 1;
-			src_to_dst->ack_seen = 1;
+			ct_leg_set_flags(src_to_dst,
+					CALI_CT_LEG_SYN_SEEN | CALI_CT_LEG_ACK_SEEN);
 			src_to_dst->seqno = tcp_header->seq;
 		} else {
 			CALI_CT_VERB("SYN+ACK seen but packet's ACK (%u) "
@@ -558,7 +562,7 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
 			CALI_CT_VERB("ACK seen, marking CT entry.");
-			src_to_dst->ack_seen = 1;
+			ct_leg_set_flags(src_to_dst, CALI_CT_LEG_ACK_SEEN);
 		} else {
 			CALI_CT_VERB("ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).",
@@ -576,7 +580,8 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 			 * have the RST timestamp in case this is some residual
 			 * traffic and the connection becomes silent.
 			 */
-			src_to_dst->rst_seen = dst_to_src->rst_seen = 0;
+			ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_RST_SEEN);
+			ct_leg_clear_flags(dst_to_src, CALI_CT_LEG_RST_SEEN);
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.");
 		}
@@ -1215,7 +1220,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		if (tcp_header->rst) {
 			CALI_CT_DEBUG("RST seen, marking CT entry.");
-			src_to_dst->rst_seen = 1;
+			ct_leg_set_flags(src_to_dst, CALI_CT_LEG_RST_SEEN);
 			tracking_v->rst_seen = now;
 		} else if (tracking_v->rst_seen) {
 			if (now - tracking_v->rst_seen > 2 * 60 * 1000000000ull || now - tracking_v->rst_seen > (1ull << 63)) {
