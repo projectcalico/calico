@@ -74,6 +74,22 @@ sudo pip list || true
 #     networks created, ready for a Tempest run after the stack setup has
 #     completed.
 #
+# SCALE_ONLY
+#
+#     By default this script runs the QoS responsiveness tests and the resync
+#     concurrency test as well as the resync scale benchmark.  Set SCALE_ONLY
+#     to 'true' to run only the scale benchmark.  This exists for the weekly
+#     scheduled scale run, which uses a much larger port count and has a time
+#     budget to meet; the tests it skips are covered by per-PR CI, which runs
+#     the default ladder.  (Tempest is already off unless TEMPEST is set.)
+#
+# CALICO_REPO_DIR
+#
+#     Path to the calico repo checkout on this machine.  Used as the working
+#     directory for publishing perf results, and as the parent of the
+#     artifacts/ directory the perf tests write into.  Defaults to the
+#     Semaphore agent's checkout path; set it when running anywhere else.
+#
 # NC_PLUGIN_REPO
 #
 #     Repository for the Calico devstack plugin.  By default this is
@@ -84,6 +100,8 @@ sudo pip list || true
 #     Git ref for the Calico devstack plugin.  By default this is master.
 #
 # ------------------------------------------------------------------------------
+
+export CALICO_REPO_DIR="${CALICO_REPO_DIR:-/home/semaphore/calico}"
 
 if [ -z "${DEVSTACK_BRANCH}" ]; then
     DEVSTACK_BRANCH=$(./infer-openstack-branch.sh ${OPENSTACK_RELEASE} devstack)
@@ -192,22 +210,25 @@ sudo chmod +x /opt/stack
 sudo chown -R stack:stack /opt/stack
 ls -ld /home/
 ls -la /home/
-ls -la /home/semaphore/
-ls -la /home/semaphore/calico
+ls -la ${CALICO_REPO_DIR}
 
-# Allow the stack user to read /home/semaphore.  In the ubuntu2204 image on Semaphore,
-# /home/semaphore permissions are "drwxr-x---", which it means it can't be read by users outside the
-# "semaphore" group.
-sudo adduser stack semaphore
+# Allow the stack user to read the checkout's parent directory.  In the ubuntu2204 image on
+# Semaphore, /home/semaphore permissions are "drwxr-x---", which means it can't be read by users
+# outside the "semaphore" group.  Guarded because that user and group only exist on a Semaphore
+# agent, and this script runs with `set -e`: elsewhere (for example the GCE VM used by the
+# scheduled scale run) adduser would fail and abort the bootstrap.
+if getent group semaphore >/dev/null 2>&1; then
+    sudo adduser stack semaphore
+fi
 
-# Guarantee that the stack user will be able to make a Git clone of /home/semaphore/calico.  Since
-# we started using partial cloning, *.promisor files under /home/semaphore/calico/.git/objects/pack
-# naturally have permissions -rw-------, which means that stack won't be able to read them.
-sudo chmod -R g+r /home/semaphore/calico
+# Guarantee that the stack user will be able to make a Git clone of the checkout.  Since we started
+# using partial cloning, *.promisor files under .git/objects/pack naturally have permissions
+# -rw-------, which means that stack won't be able to read them.
+sudo chmod -R g+r ${CALICO_REPO_DIR}
 
 # Stack!
 sudo -u stack -H -E bash -x <<'EOF'
-ls -la /home/semaphore/calico
+ls -la ${CALICO_REPO_DIR}
 ls -ld /opt/stack
 ls -la /opt/stack
 cd /opt/stack/devstack
@@ -219,7 +240,15 @@ EOF
 # it appears there is something in the stack.sh setup that closes stdin, and that means that bash
 # doesn't read any further commands from stdin after the exit of the ./stack.sh line.
 
+# Install the Python packages that the tests below need.  Hoisted out of the
+# QoS block because resync_scale_test.py imports etcd3, openstack and pymysql
+# as well, and the QoS block does not run when SCALE_ONLY is set.
+sudo -u stack -H -E bash -x <<'EOF'
+sudo pip install openstacksdk etcd3 pymysql
+EOF
+
 # Run QoS responsiveness tests
+if ! ${SCALE_ONLY:-false}; then
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 
@@ -227,17 +256,16 @@ echo "Running QoS responsiveness tests..."
 cd /opt/stack/devstack
 . openrc admin admin
 
-# Install required Python packages for QoS tests.
-sudo pip install openstacksdk etcd3 pymysql
-
 export ETCD_HOST=${SERVICE_HOST}
 python3 ../calico/networking-calico/devstack/qos_responsiveness_tests.py -v
 EOF
+fi
 
 # Run resync concurrency test.  Prints one RESYNC_CONCURRENCY_RESULT
 # line per scenario.  Non-zero exit (any scenario over the 2x ratio
 # gate) propagates out of the heredoc and fails the bootstrap, so
 # regressions block CI.
+if ! ${SCALE_ONLY:-false}; then
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 . openrc admin admin
@@ -246,6 +274,7 @@ export ETCD_HOST=${SERVICE_HOST}
 export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
 python3 ../calico/networking-calico/devstack/resync_concurrency_test.py
 EOF
+fi
 
 # Run resync scale benchmark.  Prints one RESYNC_SCALE_RESULT line per
 # scale; grep for that to extract the numbers.
@@ -264,15 +293,15 @@ export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
 # default 100,1000,3000 ladder.  The test drops per-iteration JSON
 # files under artifacts/perf/benchmark_data_neutron_resync/; the
 # send-perf-results call below picks them up.
-mkdir -p /home/semaphore/calico/artifacts/perf
-export RESYNC_PERF_ARTIFACTS_DIR=/home/semaphore/calico/artifacts/perf
+mkdir -p ${CALICO_REPO_DIR}/artifacts/perf
+export RESYNC_PERF_ARTIFACTS_DIR=${CALICO_REPO_DIR}/artifacts/perf
 python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
 EOF
 
 # Publish perf measurements to Lens.  No-op unless ELASTICSEARCH_URL +
 # credentials are wired in via Semaphore secrets; see hack/perf/README.md.
 (
-  cd /home/semaphore/calico && \
+  cd ${CALICO_REPO_DIR} && \
   go run ./hack/perf/cmd/send-perf-results \
      --dir artifacts/perf \
      --templates hack/perf/index-templates
