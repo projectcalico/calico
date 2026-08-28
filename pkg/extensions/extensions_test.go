@@ -96,6 +96,21 @@ var _ = Describe("the zero value Extensions", func() {
 		create, _ := e.APIServer().Modify(baseComponent(), render.Inputs{}).Objects()
 		Expect(create).To(HaveLen(1))
 	})
+
+	It("passes the operator's startup checks", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().VerifyAPIsExist(nil)).To(Succeed())
+		Expect(e.Startup().VerifyClusterState(context.Background(), nil, false, false)).To(Succeed())
+		Expect(e.Startup().ProtectedNamespaces()).To(BeEmpty())
+	})
+
+	It("reports a single-tenant, non-cloud install", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().MultiTenant()).To(BeFalse())
+		Expect(e.Startup().Cloud()).To(BeFalse())
+	})
 })
 
 var _ = Describe("the base ManagementClusterConnection validation", func() {

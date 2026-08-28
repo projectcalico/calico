@@ -24,9 +24,16 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/enterprise"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+	"github.com/tigera/operator/pkg/extensions"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/logstorage"
 )
+
+// startupFor returns the startup extension the operator gets for a variant.
+func startupFor(variant operatorv1.ProductVariant) extensions.StartupExtension {
+	return enterprise.New(variant, eoptions.Options{}).Startup()
+}
 
 var _ = Describe("VerifyAPIsExist", func() {
 	enterpriseAPIs := &metav1.APIResourceList{
@@ -46,14 +53,14 @@ var _ = Describe("VerifyAPIsExist", func() {
 		cs := fake.NewSimpleClientset()
 		cs.Resources = []*metav1.APIResourceList{enterpriseAPIs}
 
-		Expect(enterprise.VerifyAPIsExist(operatorv1.CalicoEnterprise, cs)).To(Succeed())
+		Expect(startupFor(operatorv1.CalicoEnterprise).VerifyAPIsExist(cs)).To(Succeed())
 	})
 
 	It("rejects an Enterprise install whose CRDs are absent", func() {
 		cs := fake.NewSimpleClientset()
 		cs.Resources = []*metav1.APIResourceList{calicoAPIs}
 
-		Expect(enterprise.VerifyAPIsExist(operatorv1.CalicoEnterprise, cs)).To(MatchError(ContainSubstring("CRDs are not installed")))
+		Expect(startupFor(operatorv1.CalicoEnterprise).VerifyAPIsExist(cs)).To(MatchError(ContainSubstring("CRDs are not installed")))
 	})
 
 	It("accepts the deprecated Enterprise variant", func() {
@@ -61,18 +68,18 @@ var _ = Describe("VerifyAPIsExist", func() {
 		cs.Resources = []*metav1.APIResourceList{enterpriseAPIs}
 
 		//nolint:staticcheck // SA1019: the deprecated spelling is what this covers
-		Expect(enterprise.VerifyAPIsExist(operatorv1.TigeraSecureEnterprise, cs)).To(Succeed())
+		Expect(startupFor(operatorv1.TigeraSecureEnterprise).VerifyAPIsExist(cs)).To(Succeed())
 	})
 
 	It("leaves Calico alone when the Enterprise CRDs are absent", func() {
 		cs := fake.NewSimpleClientset()
 		cs.Resources = []*metav1.APIResourceList{calicoAPIs}
 
-		Expect(enterprise.VerifyAPIsExist(operatorv1.Calico, cs)).To(Succeed())
+		Expect(startupFor(operatorv1.Calico).VerifyAPIsExist(cs)).To(Succeed())
 	})
 })
 
-var _ = Describe("VerifyElasticsearch", func() {
+var _ = Describe("VerifyClusterState", func() {
 	internalCert := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      render.TigeraElasticsearchInternalCertSecret,
@@ -89,52 +96,71 @@ var _ = Describe("VerifyElasticsearch", func() {
 	It("rejects an external configuration that still has the internal certificate", func() {
 		cs := fake.NewSimpleClientset(internalCert)
 
-		err := enterprise.VerifyElasticsearch(ctx, cs, operatorv1.CalicoEnterprise, false, true)
+		err := startupFor(operatorv1.CalicoEnterprise).VerifyClusterState(ctx, cs, false, true)
 		Expect(err).To(MatchError(ContainSubstring("configured as external ES")))
 	})
 
 	It("rejects an internal configuration that still has the external certificate", func() {
 		cs := fake.NewSimpleClientset(externalCert)
 
-		err := enterprise.VerifyElasticsearch(ctx, cs, operatorv1.CalicoEnterprise, false, false)
+		err := startupFor(operatorv1.CalicoEnterprise).VerifyClusterState(ctx, cs, false, false)
 		Expect(err).To(MatchError(ContainSubstring("configured as internal ES")))
 	})
 
 	It("accepts an external configuration with only the external certificate", func() {
 		cs := fake.NewSimpleClientset(externalCert)
 
-		Expect(enterprise.VerifyElasticsearch(ctx, cs, operatorv1.CalicoEnterprise, false, true)).To(Succeed())
+		Expect(startupFor(operatorv1.CalicoEnterprise).VerifyClusterState(ctx, cs, false, true)).To(Succeed())
 	})
 
 	It("accepts an internal configuration with only the internal certificate", func() {
 		cs := fake.NewSimpleClientset(internalCert)
 
-		Expect(enterprise.VerifyElasticsearch(ctx, cs, operatorv1.CalicoEnterprise, false, false)).To(Succeed())
+		Expect(startupFor(operatorv1.CalicoEnterprise).VerifyClusterState(ctx, cs, false, false)).To(Succeed())
 	})
 
 	It("accepts both certificates while a migration is in flight", func() {
 		cs := fake.NewSimpleClientset(internalCert, externalCert)
 
-		Expect(enterprise.VerifyElasticsearch(ctx, cs, operatorv1.CalicoEnterprise, true, true)).To(Succeed())
+		Expect(startupFor(operatorv1.CalicoEnterprise).VerifyClusterState(ctx, cs, true, true)).To(Succeed())
 	})
 
 	It("leaves Calico alone when a contradictory certificate exists", func() {
 		cs := fake.NewSimpleClientset(externalCert)
 
-		Expect(enterprise.VerifyElasticsearch(ctx, cs, operatorv1.Calico, false, false)).To(Succeed())
+		Expect(startupFor(operatorv1.Calico).VerifyClusterState(ctx, cs, false, false)).To(Succeed())
 	})
 })
 
 var _ = Describe("ProtectedNamespaces", func() {
 	It("covers the Enterprise namespaces the operator manages", func() {
-		Expect(enterprise.ProtectedNamespaces()).To(ContainElements(
+		Expect(startupFor(operatorv1.CalicoEnterprise).ProtectedNamespaces()).To(ContainElements(
 			render.ElasticsearchNamespace,
 			render.ManagerNamespace,
 			render.LogCollectorNamespace,
 		))
 	})
 
+	It("protects them on a Calico install too", func() {
+		Expect(startupFor(operatorv1.Calico).ProtectedNamespaces()).To(ContainElement(render.ElasticsearchNamespace))
+	})
+
+	It("reports back the options it was built with", func() {
+		s := enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{MultiTenant: true, Cloud: true}).Startup()
+
+		Expect(s.MultiTenant()).To(BeTrue())
+		Expect(s.Cloud()).To(BeTrue())
+	})
+
+	It("leaves tenancy alone for a Calico install", func() {
+		// A nil clientset is safe precisely because Calico never probes for tenancy.
+		e, err := enterprise.Build(ctx, operatorv1.Calico, nil, false, false)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(e.Startup().MultiTenant()).To(BeFalse())
+	})
+
 	It("claims no namespace the operator does not manage", func() {
-		Expect(enterprise.ProtectedNamespaces()).NotTo(ContainElements("kube-system", "default"))
+		Expect(startupFor(operatorv1.CalicoEnterprise).ProtectedNamespaces()).NotTo(ContainElements("kube-system", "default"))
 	})
 })

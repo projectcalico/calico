@@ -24,6 +24,7 @@ import (
 
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common/discovery"
+	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/intrusiondetection/dpi"
 	"github.com/tigera/operator/pkg/render/istio"
@@ -31,9 +32,17 @@ import (
 	"github.com/tigera/operator/pkg/render/logstorage/eck"
 )
 
+// startup is the Enterprise hook into operator startup. It registers for every variant,
+// since the namespaces Enterprise manages are off limits to a Calico install too, and
+// no-ops the checks that only apply to Enterprise.
+type startup struct {
+	variant operatorv1.ProductVariant
+	opts    eoptions.Options
+}
+
 // VerifyAPIsExist reports whether the Enterprise CRDs the extension controllers need are installed.
-func VerifyAPIsExist(variant operatorv1.ProductVariant, cs kubernetes.Interface) error {
-	if !variant.IsEnterprise() {
+func (s startup) VerifyAPIsExist(cs kubernetes.Interface) error {
+	if !s.variant.IsEnterprise() {
 		return nil
 	}
 
@@ -47,10 +56,10 @@ func VerifyAPIsExist(variant operatorv1.ProductVariant, cs kubernetes.Interface)
 	return nil
 }
 
-// VerifyElasticsearch rejects a cluster whose Elasticsearch certificates contradict the
+// VerifyClusterState rejects a cluster whose Elasticsearch certificates contradict the
 // internal or external mode the operator is configured for.
-func VerifyElasticsearch(ctx context.Context, cs kubernetes.Interface, variant operatorv1.ProductVariant, migrating, external bool) error {
-	if !variant.IsEnterprise() {
+func (s startup) VerifyClusterState(ctx context.Context, cs kubernetes.Interface, migrating, external bool) error {
+	if !s.variant.IsEnterprise() {
 		return nil
 	}
 
@@ -80,7 +89,7 @@ func VerifyElasticsearch(ctx context.Context, cs kubernetes.Interface, variant o
 
 // ProtectedNamespaces returns the Enterprise namespaces the operator manages and so
 // must not run in itself.
-func ProtectedNamespaces() []string {
+func (s startup) ProtectedNamespaces() []string {
 	return []string{
 		render.ElasticsearchNamespace,
 		render.IntrusionDetectionNamespace,
@@ -90,4 +99,14 @@ func ProtectedNamespaces() []string {
 		render.ManagerNamespace,
 		istio.IstioNamespace,
 	}
+}
+
+// MultiTenant reports the tenancy mode resolved at startup.
+func (s startup) MultiTenant() bool {
+	return s.opts.MultiTenant
+}
+
+// Cloud reports whether this binary was built for Calico Cloud.
+func (s startup) Cloud() bool {
+	return s.opts.Cloud
 }

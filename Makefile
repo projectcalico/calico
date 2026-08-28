@@ -169,10 +169,8 @@ EXCLUDE_MANIFEST_REGISTRIES?=gcr.io/
 # amd64 only. Constrain ARCHES (not just VALIDARCHES) so push-all, which iterates ARCHES, does not
 # try to push arches that were never built.
 ARCHES:=amd64
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime (see isCloudBuild in
-# cmd/cloud.go). buildVariant lives in package main, which the linker addresses as "main" (not by its
-# import path), so this -X target is "main.buildVariant" rather than a $(PACKAGE_NAME)-prefixed path.
-CLOUD_LDFLAGS=-X main.buildVariant=cloud
+# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
+CLOUD_LDFLAGS=-X $(PACKAGE_NAME)/version.BuildVariant=cloud
 endif
 
 BUILD_IMAGE?=tigera/operator
