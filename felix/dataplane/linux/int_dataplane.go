@@ -73,6 +73,7 @@ import (
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
@@ -616,8 +617,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	actionSet := iptables.Actions()
 	newMatchFn := iptables.Match
 	if nftablesEnabled {
-		actionSet = nftables.Actions()
-		newMatchFn = nftables.Match
+		actionSet = nftrender.Actions()
+		newMatchFn = nftrender.Match
 	}
 
 	dp := &InternalDataplane{
@@ -2110,7 +2111,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	// Wildcard matching varies based on iptables vs nftables.
 	wildcard := iptables.Wildcard
 	if d.nftablesEnabled {
-		wildcard = nftables.Wildcard
+		wildcard = nftrender.Wildcard
 	}
 
 	rulesConfig := d.config.RulesConfig
@@ -2288,8 +2289,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 	for _, t := range d.arpTables {
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  nftables.Match(),
-			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+			Match:  nftrender.Match(),
+			Action: nftrender.Actions().Jump(rules.ChainARPDispatch),
 		}})
 	}
 }
@@ -2406,8 +2407,8 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 	}
 	for _, t := range d.arpTables {
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  nftables.Match(),
-			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+			Match:  nftrender.Match(),
+			Action: nftrender.Actions().Jump(rules.ChainARPDispatch),
 		}})
 	}
 	if d.xdpState != nil {
