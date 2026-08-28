@@ -27,9 +27,9 @@ import (
 	kscheme "k8s.io/client-go/kubernetes/scheme"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 )
 
 func getK8sNodes(x int) *corev1.NodeList {

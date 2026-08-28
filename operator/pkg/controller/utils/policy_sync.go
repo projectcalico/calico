@@ -15,7 +15,7 @@
 package utils
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // DefaultPolicySyncPrefix is the operator-managed value for

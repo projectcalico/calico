@@ -19,11 +19,11 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // ClusterConnectionExtension is the variant's hook into the clusterconnection

@@ -21,9 +21,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/enterprise"
-	eoptions "github.com/tigera/operator/pkg/enterprise/options"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/enterprise"
+	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 )
 
 var ext = enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{})

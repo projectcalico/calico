@@ -22,7 +22,7 @@ import (
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
@@ -40,19 +40,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	csiv1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
-	oprv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/options"
-	"github.com/tigera/operator/pkg/controller/status"
-	"github.com/tigera/operator/pkg/controller/utils"
-	"github.com/tigera/operator/pkg/controller/utils/imageset"
-	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/dns"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
-	"github.com/tigera/operator/pkg/render"
-	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	oprv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var log = logf.Log.WithName("controller_authentication")

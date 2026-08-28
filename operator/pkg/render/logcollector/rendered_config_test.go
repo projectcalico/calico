@@ -25,17 +25,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	"github.com/tigera/operator/pkg/dns"
-	"github.com/tigera/operator/pkg/render"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/logcollector"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/render/logcollector"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // TestRenderedConfigGoldens pins the full fluent-bit configuration the

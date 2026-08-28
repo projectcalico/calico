@@ -30,7 +30,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("TLS secret metadata", func() {

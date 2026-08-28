@@ -19,7 +19,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 )
 
 // TiersExtension is the variant's hook into the tiers controller.

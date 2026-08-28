@@ -25,12 +25,12 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	"github.com/tigera/operator/pkg/render"
-	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	rkc "github.com/tigera/operator/pkg/render/kubecontrollers"
-	"github.com/tigera/operator/pkg/url"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	rkc "github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
+	"github.com/projectcalico/calico/operator/pkg/url"
 )
 
 const (

@@ -20,8 +20,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/cloudconfig"
 )
 
 // TenantOption customizes the Tenant that TenantFromCloudConfig returns.

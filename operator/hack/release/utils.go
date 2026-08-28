@@ -22,8 +22,8 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 
-	"github.com/tigera/operator/hack/release/internal/setup"
-	"github.com/tigera/operator/hack/release/internal/versions"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
+	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 // defaultRegistry and defaultImage are the publish defaults for the active build variant. They are

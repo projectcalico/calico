@@ -20,9 +20,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 func modifyTypha(ri render.Inputs, cfg *render.TyphaConfiguration, objs, del []client.Object) ([]client.Object, []client.Object) {

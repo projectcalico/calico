@@ -17,7 +17,7 @@ package ippool
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operator "github.com/tigera/operator/api/v1"
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var (

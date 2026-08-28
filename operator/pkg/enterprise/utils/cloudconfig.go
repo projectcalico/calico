@@ -18,12 +18,12 @@ import (
 	"context"
 	"fmt"
 
-	v1 "github.com/tigera/operator/api/v1"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/enterprise/cloudconfig"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/cloudconfig"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )

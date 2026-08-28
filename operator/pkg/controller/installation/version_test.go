@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	gv "github.com/hashicorp/go-version"
-	"github.com/tigera/operator/version"
+	"github.com/projectcalico/calico/operator/version"
 )
 
 var _ = Describe("Version validation logic tests", func() {

@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

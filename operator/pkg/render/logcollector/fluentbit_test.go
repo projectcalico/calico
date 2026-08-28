@@ -23,8 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/common/resourcequota"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/render/common/resourcequota"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,20 +37,20 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	"github.com/tigera/operator/pkg/dns"
-	"github.com/tigera/operator/pkg/render"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/logcollector"
-	"github.com/tigera/operator/pkg/render/testutils"
-	"github.com/tigera/operator/pkg/tls"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
-	"github.com/tigera/operator/test"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/render/logcollector"
+	"github.com/projectcalico/calico/operator/pkg/render/testutils"
+	"github.com/projectcalico/calico/operator/pkg/tls"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/test"
 )
 
 var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {

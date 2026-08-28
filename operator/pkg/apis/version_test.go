@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
 
-	"github.com/tigera/operator/pkg/controller/migration/datastoremigration"
+	"github.com/projectcalico/calico/operator/pkg/controller/migration/datastoremigration"
 )
 
 func mapResourceList() *metav1.APIResourceList {

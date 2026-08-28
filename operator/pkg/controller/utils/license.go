@@ -29,7 +29,7 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	"github.com/tigera/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 )
 
 // LicenseStatus represents the current state of the license with respect to expiry and grace period.

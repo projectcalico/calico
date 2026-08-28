@@ -20,17 +20,17 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	lscommon "github.com/tigera/operator/pkg/controller/logstorage/common"
-	"github.com/tigera/operator/pkg/controller/utils"
-	"github.com/tigera/operator/pkg/controller/utils/imageset"
-	"github.com/tigera/operator/pkg/dns"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
-	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	lscommon "github.com/projectcalico/calico/operator/pkg/controller/logstorage/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render/logstorage/esgateway"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 func (r *ESKubeControllersController) createESGateway(

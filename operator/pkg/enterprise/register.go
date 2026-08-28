@@ -15,19 +15,19 @@
 package enterprise
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/enterprise/apiserver"
-	"github.com/tigera/operator/pkg/enterprise/clusterconnection"
-	"github.com/tigera/operator/pkg/enterprise/csr"
-	"github.com/tigera/operator/pkg/enterprise/gatewayapi"
-	"github.com/tigera/operator/pkg/enterprise/goldmane"
-	"github.com/tigera/operator/pkg/enterprise/installation"
-	"github.com/tigera/operator/pkg/enterprise/istio"
-	eoptions "github.com/tigera/operator/pkg/enterprise/options"
-	"github.com/tigera/operator/pkg/enterprise/tiers"
-	"github.com/tigera/operator/pkg/enterprise/whisker"
-	"github.com/tigera/operator/pkg/enterprise/windows"
-	"github.com/tigera/operator/pkg/extensions"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/apiserver"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/clusterconnection"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/csr"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/gatewayapi"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/goldmane"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/installation"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/istio"
+	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/tiers"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/whisker"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/windows"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 )
 
 // New builds the Calico Enterprise extensions. After the monorepo split this is what

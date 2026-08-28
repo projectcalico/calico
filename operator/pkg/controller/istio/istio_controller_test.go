@@ -36,17 +36,17 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/api/pkg/lib/numorstring"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/status"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	eistio "github.com/tigera/operator/pkg/enterprise/istio"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/render/istio"
-	"github.com/tigera/operator/test"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	eistio "github.com/projectcalico/calico/operator/pkg/enterprise/istio"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/test"
 )
 
 var _ = Describe("Istio controller tests", func() {

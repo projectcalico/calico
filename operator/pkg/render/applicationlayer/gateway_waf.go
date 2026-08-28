@@ -22,7 +22,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (

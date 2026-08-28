@@ -15,7 +15,7 @@
 package components
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // CalicoBinaryPath is the absolute path to the combined "calico" binary inside the calico/calico image.

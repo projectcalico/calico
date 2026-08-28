@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 )
 
 // sedReplacer escapes a string for use as the replacement in `sed s|...|REPL|` (with `|` as delimiter).

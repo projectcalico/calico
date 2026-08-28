@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"strings"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // DefaultsScope names which parts of status.Defaults a caller may rewrite, so two controllers

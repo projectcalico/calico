@@ -18,8 +18,8 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

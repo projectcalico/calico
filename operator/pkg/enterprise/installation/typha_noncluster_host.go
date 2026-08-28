@@ -26,18 +26,18 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/controller/k8sapi"
-	"github.com/tigera/operator/pkg/controller/typhaautoscaler"
-	"github.com/tigera/operator/pkg/controller/utils"
-	eutils "github.com/tigera/operator/pkg/enterprise/utils"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/render"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
+	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // nonClusterHostRenderData is the non-cluster-host state the typha modifiers read.

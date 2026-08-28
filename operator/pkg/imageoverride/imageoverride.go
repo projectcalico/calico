@@ -18,8 +18,8 @@
 package imageoverride
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/components"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
 )
 
 type overrideKey struct {

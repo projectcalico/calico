@@ -20,16 +20,16 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/controller/utils/imageset"
-	"github.com/tigera/operator/pkg/enterprise/policysync"
-	"github.com/tigera/operator/pkg/enterprise/utils"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/imageoverride"
-	"github.com/tigera/operator/pkg/render"
-	ristio "github.com/tigera/operator/pkg/render/istio"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/policysync"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/utils"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/imageoverride"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	ristio "github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
 // Extension is the Calico Enterprise behavior for the istio controller.

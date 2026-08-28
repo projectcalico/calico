@@ -24,13 +24,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/applicationlayer"
-	"github.com/tigera/operator/pkg/render/applicationlayer/ruleset"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/test"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer"
+	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer/ruleset"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/test"
 )
 
 var _ = Describe("Tigera Secure Application Layer rendering tests", func() {

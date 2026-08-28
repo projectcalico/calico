@@ -22,8 +22,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
 var _ = Describe("Waypoint pull secret render", func() {

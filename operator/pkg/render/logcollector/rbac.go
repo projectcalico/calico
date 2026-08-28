@@ -19,7 +19,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
 )
 
 func (c *fluentBitComponent) fluentBitServiceAccount() *corev1.ServiceAccount {

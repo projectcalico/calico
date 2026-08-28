@@ -21,9 +21,9 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/common"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
 )
 
 var _ = Describe("MigrationRBACComponent", func() {

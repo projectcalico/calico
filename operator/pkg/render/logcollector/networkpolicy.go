@@ -24,9 +24,9 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/common/resourcequota"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/render/common/resourcequota"
 )
 
 func (c *fluentBitComponent) nonClusterHostInputService() *corev1.Service {

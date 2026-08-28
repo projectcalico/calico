@@ -15,7 +15,7 @@
 package utils
 
 import (
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 func NewSingleTenantNamespaceHelper(ns string) NamespaceHelper {

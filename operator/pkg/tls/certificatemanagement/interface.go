@@ -17,7 +17,7 @@ package certificatemanagement
 import (
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/tigera/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/meta"
 )
 
 const (

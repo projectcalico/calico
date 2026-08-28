@@ -14,7 +14,7 @@
 
 package components
 
-import "github.com/tigera/operator/version"
+import "github.com/projectcalico/calico/operator/version"
 
 var ComponentOperatorInit = Component{
 	Version: version.VERSION,

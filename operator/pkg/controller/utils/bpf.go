@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operator "github.com/tigera/operator/api/v1"
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 type BPFBootstrap struct {

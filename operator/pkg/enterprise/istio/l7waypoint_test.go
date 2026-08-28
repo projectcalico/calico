@@ -22,8 +22,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/yaml"
 
-	"github.com/tigera/operator/pkg/components"
-	ristio "github.com/tigera/operator/pkg/render/istio"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	ristio "github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
 var _ = Describe("L7 Waypoint render", func() {

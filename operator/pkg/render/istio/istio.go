@@ -26,15 +26,15 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/api/pkg/lib/numorstring"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/imageoverride"
-	"github.com/tigera/operator/pkg/render"
-	rcomp "github.com/tigera/operator/pkg/render/common/components"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/common/secret"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/imageoverride"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 )
 
 type Configuration struct {

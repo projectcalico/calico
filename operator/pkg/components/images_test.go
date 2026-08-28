@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	op "github.com/tigera/operator/api/v1"
+	op "github.com/projectcalico/calico/operator/api/v1"
 )
 
 func calicoImageEntries() []TableEntry {

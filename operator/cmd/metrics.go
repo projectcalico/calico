@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (

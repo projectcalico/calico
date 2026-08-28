@@ -16,8 +16,8 @@ package elasticsearch
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/tigera/operator/pkg/dns"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 
 	. "github.com/onsi/gomega"
 

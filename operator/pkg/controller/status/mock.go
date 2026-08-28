@@ -18,7 +18,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	operator "github.com/tigera/operator/api/v1"
+	operator "github.com/projectcalico/calico/operator/api/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

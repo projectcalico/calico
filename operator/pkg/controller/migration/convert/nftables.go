@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 

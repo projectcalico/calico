@@ -17,8 +17,8 @@ package render
 import (
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // Inputs is the raw cluster state a controller gathered, carried into render

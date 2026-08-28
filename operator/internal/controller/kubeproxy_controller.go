@@ -17,12 +17,12 @@ limitations under the License.
 package controller
 
 import (
-	"github.com/tigera/operator/pkg/controller/kubeproxy"
+	"github.com/projectcalico/calico/operator/pkg/controller/kubeproxy"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 )
 
 // KubeProxyReconciler reconciles a ManagementClusterConnection object

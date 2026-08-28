@@ -28,11 +28,11 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/render"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/logstorage/eck"
-	"github.com/tigera/operator/pkg/render/testutils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
+	"github.com/projectcalico/calico/operator/pkg/render/testutils"
 )
 
 var _ = Describe("ECK rendering tests", func() {

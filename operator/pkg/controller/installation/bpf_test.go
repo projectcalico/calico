@@ -18,9 +18,9 @@ import (
 	"strconv"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

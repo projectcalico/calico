@@ -22,11 +22,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/tigera/operator/pkg/render"
-	rcomponents "github.com/tigera/operator/pkg/render/common/components"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/secret"
-	"github.com/tigera/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rcomponents "github.com/projectcalico/calico/operator/pkg/render/common/components"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 )
 
 // uptimeProbeHandler asserts only that the fluent-bit process is alive:

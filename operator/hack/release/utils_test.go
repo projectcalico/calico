@@ -17,7 +17,7 @@ package main
 import (
 	"testing"
 
-	"github.com/tigera/operator/hack/release/internal/setup"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 )
 
 func TestIsReleaseVersionFormat(t *testing.T) {

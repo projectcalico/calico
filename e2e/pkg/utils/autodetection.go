@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/onsi/gomega"
-	v1 "github.com/tigera/operator/api/v1"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

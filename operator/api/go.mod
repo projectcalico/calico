@@ -1,4 +1,4 @@
-module github.com/tigera/operator/api
+module github.com/projectcalico/calico/operator/api
 
 go 1.26.5
 

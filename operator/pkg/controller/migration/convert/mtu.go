@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // handleMTU is a migration handler which ensures MTU configuration is carried forward.

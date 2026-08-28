@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/tigera/operator/pkg/active"
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/active"
+	"github.com/projectcalico/calico/operator/pkg/common"
 	"k8s.io/client-go/kubernetes"
 )
 

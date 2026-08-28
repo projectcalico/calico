@@ -18,8 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	ctrlrclient "github.com/tigera/operator/pkg/ctrlruntime/client"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	ctrlrclient "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client"
 )
 
 func DefaultFakeClientBuilder(scheme *runtime.Scheme) *fake.ClientBuilder {

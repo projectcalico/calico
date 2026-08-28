@@ -20,11 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render"
-	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 )
 
 // ExternalElasticsearch is used when Elasticsearch doesn't exist in this cluster, but we still need to set up resources

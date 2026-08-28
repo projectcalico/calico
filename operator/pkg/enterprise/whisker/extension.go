@@ -17,10 +17,10 @@ package whisker
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/render"
-	rwhisker "github.com/tigera/operator/pkg/render/whisker"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rwhisker "github.com/projectcalico/calico/operator/pkg/render/whisker"
 )
 
 // Extension is the Calico Enterprise behavior for the whisker controller.

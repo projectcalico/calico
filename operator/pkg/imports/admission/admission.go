@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	opv1 "github.com/tigera/operator/api/v1"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (

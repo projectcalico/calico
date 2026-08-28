@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )

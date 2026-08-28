@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 func GetSecret(ctx context.Context, client client.Client, name string, ns string) (*corev1.Secret, error) {

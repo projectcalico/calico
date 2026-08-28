@@ -21,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 
-	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 )
 
 func main() {

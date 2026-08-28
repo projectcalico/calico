@@ -26,10 +26,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/gateway"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
+	"github.com/projectcalico/calico/operator/pkg/render/gateway"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("Gateway component render", func() {

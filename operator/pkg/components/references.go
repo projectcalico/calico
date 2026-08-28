@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"path"
 
-	operator "github.com/tigera/operator/api/v1"
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // variant is used to differentiate between components across product variants.

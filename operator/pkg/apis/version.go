@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/tigera/operator/pkg/controller/migration/datastoremigration"
+	"github.com/projectcalico/calico/operator/pkg/controller/migration/datastoremigration"
 )
 
 const (

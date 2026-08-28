@@ -33,12 +33,12 @@ import (
 	"github.com/tigera/api/pkg/lib/numorstring"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/render"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	ristio "github.com/tigera/operator/pkg/render/istio"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	ristio "github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
 var _ = Describe("Istio extension", func() {

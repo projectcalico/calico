@@ -24,10 +24,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/render"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 )
 
 var _ = Describe("Tigera Secure Cloud Manager rendering tests", func() {

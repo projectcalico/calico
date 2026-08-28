@@ -15,8 +15,8 @@
 package kubecontrollers
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
-	rkc "github.com/tigera/operator/pkg/render/kubecontrollers"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	rkc "github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
 )
 
 // Configuration is the es-calico-kube-controllers input. The embedded generic

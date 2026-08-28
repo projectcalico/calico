@@ -1,4 +1,4 @@
-module github.com/tigera/operator
+module github.com/projectcalico/calico/operator
 
 go 1.26.5
 
@@ -35,7 +35,7 @@ require (
 	github.com/snowzach/rotatefilehook v0.0.0-20220211133110-53752135082d
 	github.com/stretchr/testify v1.11.1
 	github.com/tigera/api v0.0.0-20260604222052-a4ab1787c00b
-	github.com/tigera/operator/api v0.0.0-20260615132847-f444e3b593ce
+	github.com/projectcalico/calico/operator/api v0.0.0-20260615132847-f444e3b593ce
 	github.com/urfave/cli/v3 v3.10.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.4
@@ -209,5 +209,5 @@ require (
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v14.2.0+incompatible // Required by OLM
 	github.com/operator-framework/operator-sdk => github.com/operator-framework/operator-sdk v1.0.1
-	github.com/tigera/operator/api => ./api
+	github.com/projectcalico/calico/operator/api => ./api
 )

@@ -34,8 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	operator "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
+	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
 )
 
 var _ = Describe("CRD management tests", func() {

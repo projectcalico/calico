@@ -15,10 +15,10 @@
 package elasticsearch
 
 import (
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/secret"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
-	"github.com/tigera/operator/pkg/url"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/url"
 
 	corev1 "k8s.io/api/core/v1"
 )

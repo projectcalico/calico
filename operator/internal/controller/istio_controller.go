@@ -20,8 +20,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/controller/istio"
-	"github.com/tigera/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/istio"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 )
 
 // IstioReconciler reconciles a Istio object

@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tigera/operator/pkg/common"
-	tigerakvc "github.com/tigera/operator/pkg/render/common/authentication/tigera/key_validator_config"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	tigerakvc "github.com/projectcalico/calico/operator/pkg/render/common/authentication/tigera/key_validator_config"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"

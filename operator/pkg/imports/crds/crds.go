@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
 	"github.com/go-logr/logr"
-	opv1 "github.com/tigera/operator/api/v1"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var (

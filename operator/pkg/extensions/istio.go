@@ -19,9 +19,9 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/imageoverride"
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/imageoverride"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // IstioExtension is the variant's hook into the istio controller.

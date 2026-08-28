@@ -15,7 +15,7 @@
 package policysync
 
 import (
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // ApplicationLayerRequires reports whether any enabled ApplicationLayer feature needs

@@ -23,8 +23,8 @@ import (
 
 	"github.com/blang/semver/v4"
 
-	"github.com/tigera/operator/hack/release/internal/command"
-	"github.com/tigera/operator/hack/release/internal/versions"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 const defaultBaseBranch = "master"

@@ -28,8 +28,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	opv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/test"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/test"
 )
 
 func intPtr(i int32) *int32 { return &i }

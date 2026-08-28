@@ -17,14 +17,14 @@ package installation
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/controller/typhaautoscaler"
-	eoptions "github.com/tigera/operator/pkg/enterprise/options"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/imageoverride"
-	"github.com/tigera/operator/pkg/render"
-	"github.com/tigera/operator/pkg/render/kubecontrollers"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
+	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/imageoverride"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
 )
 
 // Extension is the Calico Enterprise behavior for the installation controller and

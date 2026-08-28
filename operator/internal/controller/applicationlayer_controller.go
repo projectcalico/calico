@@ -19,8 +19,8 @@ package controller
 import (
 	"github.com/go-logr/logr"
 
-	"github.com/tigera/operator/pkg/controller/applicationlayer"
-	"github.com/tigera/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/applicationlayer"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"

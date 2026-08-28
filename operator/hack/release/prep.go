@@ -20,10 +20,10 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
-	"github.com/tigera/operator/hack/release/internal/middleware"
-	"github.com/tigera/operator/hack/release/internal/setup"
-	"github.com/tigera/operator/hack/release/internal/versions"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
+	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 	"github.com/urfave/cli/v3"
 )
 

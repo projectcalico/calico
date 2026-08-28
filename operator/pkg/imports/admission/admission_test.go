@@ -22,7 +22,7 @@ import (
 	admissionregistrationv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 
-	opv1 "github.com/tigera/operator/api/v1"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var _ = Describe("MutatingAdmissionPolicies", func() {

@@ -26,9 +26,9 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
-	"github.com/tigera/operator/hack/release/internal/middleware"
-	"github.com/tigera/operator/hack/release/internal/setup"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 

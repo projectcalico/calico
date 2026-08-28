@@ -17,9 +17,9 @@ package extensions
 import (
 	"context"
 
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // CSRExtension is the variant's hook into the CSR controller.

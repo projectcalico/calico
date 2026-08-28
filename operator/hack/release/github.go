@@ -30,8 +30,8 @@ import (
 	"github.com/blang/semver/v4"
 	"github.com/google/go-github/v53/github"
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
-	"github.com/tigera/operator/hack/release/internal/versions"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 //go:embed templates/release-notes.md.gotmpl

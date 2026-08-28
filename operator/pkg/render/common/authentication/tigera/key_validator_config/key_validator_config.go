@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"strconv"
 
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 
-	"github.com/tigera/operator/pkg/render/common/authentication"
+	"github.com/projectcalico/calico/operator/pkg/render/common/authentication"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

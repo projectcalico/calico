@@ -32,18 +32,18 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/components"
-	"github.com/tigera/operator/pkg/controller/k8sapi"
-	"github.com/tigera/operator/pkg/controller/migration"
-	"github.com/tigera/operator/pkg/imageoverride"
-	rcomp "github.com/tigera/operator/pkg/render/common/components"
-	"github.com/tigera/operator/pkg/render/common/configmap"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/securitycontext"
-	"github.com/tigera/operator/pkg/render/common/securitycontextconstraints"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
+	"github.com/projectcalico/calico/operator/pkg/controller/migration"
+	"github.com/projectcalico/calico/operator/pkg/imageoverride"
+	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
+	"github.com/projectcalico/calico/operator/pkg/render/common/configmap"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 const (

@@ -23,7 +23,7 @@ import (
 
 	"github.com/onsi/gomega"
 
-	rtest "github.com/tigera/operator/pkg/render/common/test"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 

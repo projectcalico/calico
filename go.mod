@@ -69,6 +69,7 @@ require (
 	github.com/projectcalico/calico/lib/httpmachinery v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/logrusr v0.0.0-00010101000000-000000000000
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
+	github.com/projectcalico/calico/operator/api v0.0.0-20260615132847-f444e3b593ce
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.68.1
@@ -85,7 +86,6 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/tchap/go-patricia/v2 v2.3.3
 	github.com/termie/go-shutil v0.0.0-20140729215957-bcacb06fecae
-	github.com/tigera/operator/api v0.0.0-20260615132847-f444e3b593ce
 	github.com/urfave/cli/v3 v3.10.0
 	github.com/vishvananda/netlink v1.3.1
 	go.etcd.io/etcd/api/v3 v3.7.0
@@ -448,3 +448,5 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.37.0-beta.0
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.37.0-beta.0
 )
+
+replace github.com/projectcalico/calico/operator/api => ./operator/api

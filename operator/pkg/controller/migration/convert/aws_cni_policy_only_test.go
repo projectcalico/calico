@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	"github.com/tigera/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 )
 
 func awsCNIPolicyOnlyConfig() []runtime.Object {

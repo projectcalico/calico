@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/tigera/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"go.yaml.in/yaml/v3"
 )
 

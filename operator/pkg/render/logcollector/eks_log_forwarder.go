@@ -23,11 +23,11 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/tigera/operator/pkg/render"
-	rcomponents "github.com/tigera/operator/pkg/render/common/components"
-	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rcomponents "github.com/projectcalico/calico/operator/pkg/render/common/components"
+	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 )
 
 func (c *fluentBitComponent) eksLogForwarderServiceAccount() *corev1.ServiceAccount {

@@ -25,9 +25,9 @@ import (
 
 	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 
-	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/status"
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // Name identifies the controller a ControllerExtension extends, so a variant can

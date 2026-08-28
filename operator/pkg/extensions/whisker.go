@@ -15,7 +15,7 @@
 package extensions
 
 import (
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // WhiskerExtension is the variant's hook into the components the whisker controller

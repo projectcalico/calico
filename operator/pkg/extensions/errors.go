@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // degraded carries the status reason a controller reports for an error the

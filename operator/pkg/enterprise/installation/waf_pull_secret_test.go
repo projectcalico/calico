@@ -21,8 +21,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/enterprise/installation"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/installation"
 )
 
 func dockerConfigJSONSecret(name string, auths map[string]any) *corev1.Secret {

@@ -19,7 +19,7 @@ import (
 	"regexp"
 
 	gv "github.com/hashicorp/go-version"
-	"github.com/tigera/operator/version"
+	"github.com/projectcalico/calico/operator/version"
 )
 
 var (

@@ -22,11 +22,11 @@ import (
 
 	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
-	oprv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/render/common/authentication"
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
-	"github.com/tigera/operator/pkg/render/common/secret"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	oprv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/render/common/authentication"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 
 	corev1 "k8s.io/api/core/v1"
 )

@@ -33,15 +33,15 @@ import (
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/controller/monitor"
-	"github.com/tigera/operator/pkg/ctrlruntime"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	"github.com/tigera/operator/pkg/dns"
-	"github.com/tigera/operator/pkg/render"
-	rmonitor "github.com/tigera/operator/pkg/render/monitor"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/controller/monitor"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rmonitor "github.com/projectcalico/calico/operator/pkg/render/monitor"
 )
 
 var _ = Describe("CSR extension", func() {

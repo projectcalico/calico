@@ -42,13 +42,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	operator "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/internal/controller"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/controller/options"
-	"github.com/tigera/operator/pkg/imports/crds"
-	"github.com/tigera/operator/pkg/render"
+	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/internal/controller"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/imports/crds"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 const (

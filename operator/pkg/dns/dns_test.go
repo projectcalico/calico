@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/tigera/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/dns"
 )
 
 var _ = Describe("Common Tests", func() {

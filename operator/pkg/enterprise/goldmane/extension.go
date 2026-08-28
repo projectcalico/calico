@@ -17,10 +17,10 @@ package goldmane
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/extensions"
-	"github.com/tigera/operator/pkg/render"
-	rgoldmane "github.com/tigera/operator/pkg/render/goldmane"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rgoldmane "github.com/projectcalico/calico/operator/pkg/render/goldmane"
 )
 
 // Extension is the Calico Enterprise behavior for the goldmane controller.

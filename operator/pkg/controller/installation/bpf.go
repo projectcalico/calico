@@ -20,10 +20,10 @@ import (
 	"strconv"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/render"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"

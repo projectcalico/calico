@@ -31,8 +31,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v53/github"
-	"github.com/tigera/operator/hack/release/internal/command"
-	"github.com/tigera/operator/hack/release/internal/versions"
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )
 
 func fakeOperatorRepo(t testing.TB, calicoVer, enterpriseVer string) string {
@@ -109,7 +109,7 @@ func TestGenerateReleaseNotes(t *testing.T) {
 				"number":   4261,
 				"title":    "[v1.38] fix: allow deletion of CSRs for non-cluster hosts",
 				"body":     "```release-note\nAllow non-cluster hosts to remove failed CSRs before generating new requests.\n```",
-				"html_url": "https://github.com/tigera/operator/pull/4261",
+				"html_url": "https://github.com/projectcalico/calico/operator/pull/4261",
 				"user":     map[string]interface{}{"login": "hjiawei"},
 				"labels": []map[string]interface{}{
 					{"name": "release-note-required"},
@@ -144,7 +144,7 @@ Calico Enterprise version: v3.21.4
 
 #### Other changes
 
-- Allow non-cluster hosts to remove failed CSRs before generating new requests. [#4261](https://github.com/tigera/operator/pull/4261) (@hjiawei)
+- Allow non-cluster hosts to remove failed CSRs before generating new requests. [#4261](https://github.com/projectcalico/calico/operator/pull/4261) (@hjiawei)
 `
 
 	t.Run("output to file", func(t *testing.T) {

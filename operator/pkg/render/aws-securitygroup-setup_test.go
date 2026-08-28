@@ -21,8 +21,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 )
 
 var _ = Describe("AWS SecurityGroup Setup rendering tests", func() {

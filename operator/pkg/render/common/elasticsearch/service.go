@@ -17,7 +17,7 @@ package elasticsearch
 import (
 	"fmt"
 
-	rmeta "github.com/tigera/operator/pkg/render/common/meta"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 )
 
 const (

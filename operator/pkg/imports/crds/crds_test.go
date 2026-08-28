@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	opv1 "github.com/tigera/operator/api/v1"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // The real test here is simply calling these functions will result in a panic if any of the CRDs cannot be parsed

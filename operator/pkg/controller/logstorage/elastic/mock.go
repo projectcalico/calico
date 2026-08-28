@@ -19,8 +19,8 @@ import (
 	"fmt"
 
 	"github.com/stretchr/testify/mock"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/esutils"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

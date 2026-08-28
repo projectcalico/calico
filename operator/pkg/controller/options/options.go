@@ -17,10 +17,10 @@ package options
 import (
 	"context"
 
-	v1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/common/discovery"
-	"github.com/tigera/operator/pkg/extensions"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common/discovery"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"k8s.io/client-go/kubernetes"
 )
 

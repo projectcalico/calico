@@ -22,7 +22,7 @@ import (
 	apiregv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/tigera/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // holdAPIServiceCutover reports whether the projectcalico.org/v3 APIService is still served from a

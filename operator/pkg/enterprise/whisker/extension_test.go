@@ -22,10 +22,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/render"
-	rwhisker "github.com/tigera/operator/pkg/render/whisker"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	rwhisker "github.com/projectcalico/calico/operator/pkg/render/whisker"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var _ = Describe("whisker enterprise render extension", func() {

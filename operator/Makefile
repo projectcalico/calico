@@ -99,7 +99,7 @@ endif
 
 ###############################################################################
 REPO?=tigera/operator
-PACKAGE_NAME?=github.com/tigera/operator
+PACKAGE_NAME?=github.com/projectcalico/calico/operator
 LOCAL_USER_ID?=$(shell id -u $$USER)
 # The project Go version.
 GO_VERSION?=1.26.5

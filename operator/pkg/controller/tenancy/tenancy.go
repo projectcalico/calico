@@ -15,7 +15,7 @@
 package tenancy
 
 import (
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 func GetWatchNamespaces(multiTenant bool, defaultNS string) (installNS, truthNS string, watchNamespaces []string) {

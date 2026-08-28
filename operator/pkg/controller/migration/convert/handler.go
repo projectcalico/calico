@@ -14,7 +14,7 @@
 
 package convert
 
-import operatorv1 "github.com/tigera/operator/api/v1"
+import operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 
 // handlers are grouped by feature or product and check various
 // fields on Calico components to construct a Installation resource that

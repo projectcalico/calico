@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	"github.com/tigera/operator/pkg/render/common/selector"
+	"github.com/projectcalico/calico/operator/pkg/render/common/selector"
 )
 
 func K8sDNSEgressRules(openShift bool) []netv1.NetworkPolicyEgressRule {

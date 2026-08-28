@@ -19,7 +19,7 @@ package controller
 import (
 	"fmt"
 
-	"github.com/tigera/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 

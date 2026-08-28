@@ -19,7 +19,7 @@ import (
 	"net"
 	"strings"
 
-	operator "github.com/tigera/operator/api/v1"
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // ValidatePools validates the IP pools specified in the Installation object.

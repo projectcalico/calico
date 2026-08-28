@@ -93,7 +93,7 @@ github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
 github.com/tigera/api v0.0.0-20260417005328-22f813a9c2dc
-github.com/tigera/operator/api v0.0.0-20260615132847-f444e3b593ce
+github.com/projectcalico/calico/operator/api v0.0.0-20260615132847-f444e3b593ce
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4

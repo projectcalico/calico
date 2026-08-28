@@ -14,7 +14,7 @@
 
 package convert
 
-import operatorv1 "github.com/tigera/operator/api/v1"
+import operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 
 func handleAddonManager(c *components, install *operatorv1.Installation) error {
 	if _, ok := c.node.Labels["addonmanager.kubernetes.io/mode"]; ok {

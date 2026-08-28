@@ -20,7 +20,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/tigera/operator/pkg/render/common/rbacmanagement"
+	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 )
 
 // The gate is hand-edited by an admin, so the parser has to be forgiving about

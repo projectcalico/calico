@@ -22,7 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	tigerakvc "github.com/tigera/operator/pkg/render/common/authentication/tigera/key_validator_config"
+	tigerakvc "github.com/projectcalico/calico/operator/pkg/render/common/authentication/tigera/key_validator_config"
 )
 
 // ManagerCloudResources contains all the resources needed for the cloud manager.

@@ -23,8 +23,8 @@ import (
 
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 
-	"github.com/tigera/operator/pkg/render/common/securitycontext"
-	"github.com/tigera/operator/pkg/render/gatewayapi"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 )
 
 const (

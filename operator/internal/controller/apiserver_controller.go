@@ -22,8 +22,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	apiserver "github.com/tigera/operator/pkg/controller/apiserver"
-	"github.com/tigera/operator/pkg/controller/options"
+	apiserver "github.com/projectcalico/calico/operator/pkg/controller/apiserver"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 )
 
 // APIServerReconciler reconciles a APIServer object

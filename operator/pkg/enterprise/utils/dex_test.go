@@ -18,8 +18,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	opv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/enterprise/utils"
+	opv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 )
 
 var _ = Describe("DexEnabled", func() {

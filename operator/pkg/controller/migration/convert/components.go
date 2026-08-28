@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tigera/operator/pkg/controller/migration/cni"
+	"github.com/projectcalico/calico/operator/pkg/controller/migration/cni"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

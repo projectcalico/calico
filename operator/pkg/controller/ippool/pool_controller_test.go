@@ -27,12 +27,12 @@ import (
 	configv1 "github.com/openshift/api/config/v1"
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	operator "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/apis"
-	"github.com/tigera/operator/pkg/controller/status"
-	"github.com/tigera/operator/pkg/controller/utils"
-	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
-	"github.com/tigera/operator/pkg/render"
+	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/render"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -360,7 +360,7 @@ var _ = Describe("IP Pool controller tests", func() {
 	})
 
 	It("should not delete and recreate a pool when the Installation uses a non-canonical IPv6 CIDR", func() {
-		// Regression test for https://github.com/tigera/operator/issues/4783.
+		// Regression test for https://github.com/projectcalico/calico/operator/issues/4783.
 		// The Calico API server stores IP pool CIDRs in canonical form, so a pool created from a
 		// non-canonical CIDR in the Installation is persisted with a different textual representation
 		// (e.g. with leading zeros stripped). The operator must treat the two as the same pool;

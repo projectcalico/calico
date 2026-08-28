@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tigera/operator/hack/release/internal/setup"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
 )
 

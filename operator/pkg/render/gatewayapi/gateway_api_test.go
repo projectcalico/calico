@@ -22,11 +22,11 @@ import (
 
 	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
-	"github.com/tigera/operator/pkg/common"
-	"github.com/tigera/operator/pkg/components"
-	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/tls/certificatemanagement"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -771,7 +771,7 @@ value:
 		Expect(ep.Spec.Provider.Kubernetes.EnvoyService.Patch).To(Equal(patch))
 	})
 
-	// https://github.com/tigera/operator/issues/4717
+	// https://github.com/projectcalico/calico/operator/issues/4717
 	It("supports setting ipFamilyPolicy on the gateway Service via GatewayService.Spec.Patch", func() {
 		patchYAML := `
 type: StrategicMerge
@@ -811,7 +811,7 @@ value:
 		Expect(ep.Spec.Provider.Kubernetes.EnvoyService.Patch).To(Equal(patch))
 	})
 
-	// https://github.com/tigera/operator/issues/4718
+	// https://github.com/projectcalico/calico/operator/issues/4718
 	It("supports setting healthCheckNodePort on the gateway Service via GatewayService.Spec.Patch", func() {
 		patchYAML := `
 type: StrategicMerge

@@ -31,9 +31,9 @@ import (
 	// Replace imports with our copy of the packages
 	//
 	// "k8s.io/kubernetes/pkg/apis/core/helper"
-	"github.com/tigera/operator/pkg/common/k8svalidation/helper"
+	"github.com/projectcalico/calico/operator/pkg/common/k8svalidation/helper"
 	// v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
-	"github.com/tigera/operator/pkg/common/k8svalidation/v1helper"
+	"github.com/projectcalico/calico/operator/pkg/common/k8svalidation/v1helper"
 )
 
 const isNegativeErrorMsg string = `must be greater than or equal to 0`

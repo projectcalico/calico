@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatortigeraiov1 "github.com/tigera/operator/api/v1"
+	operatortigeraiov1 "github.com/projectcalico/calico/operator/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 

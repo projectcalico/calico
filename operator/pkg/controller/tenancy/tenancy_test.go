@@ -17,7 +17,7 @@ package tenancy
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/tigera/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 var _ = Describe("Tenancy utility function tests", func() {
