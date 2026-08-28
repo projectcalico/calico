@@ -5,6 +5,7 @@ go 1.26.5
 require (
 	github.com/google/go-containerregistry v0.21.6
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
+	golang.org/x/sync v0.22.0
 	k8s.io/client-go v0.37.0-beta.0
 	sigs.k8s.io/kind v0.31.0
 )
@@ -56,7 +57,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
