@@ -351,12 +351,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 		OpenShift:           r.opts.DetectedProvider.IsOpenShift(),
 		Installation:        installationSpec,
 		OpenTelemetry:       logCollector.Spec.OpenTelemetry,
+		ClusterDomain:       r.opts.ClusterDomain,
+		DomainEgressAllowed: utils.IsFeatureActive(license, common.EgressAccessControlFeature),
 		ReceiverTLSSecret:   receiverTLSSecret,
 		TrustedCertBundle:   trustedBundle,
 		ExporterCAs:         exporterCAs,
 		ExporterClientCerts: exporterClientCerts,
 		ExporterAuthSecrets: exporterAuthSecrets,
-		DomainEgressAllowed: utils.IsFeatureActive(license, common.EgressAccessControlFeature),
 	}
 
 	var keyPairOptions []rcertificatemanagement.KeyPairOption

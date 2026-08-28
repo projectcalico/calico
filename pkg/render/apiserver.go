@@ -470,7 +470,7 @@ func calicoSystemAPIServerPolicy(cfg *APIServerConfiguration) *v3.NetworkPolicy 
 		},
 	}...)
 
-	if r, err := cfg.K8SServiceEndpoint.DestinationEntityRule(); r != nil && err == nil {
+	if r, err := cfg.K8SServiceEndpoint.DestinationEntityRule(cfg.ClusterDomain); r != nil && err == nil {
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,

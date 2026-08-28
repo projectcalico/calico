@@ -107,6 +107,7 @@ func (c *guardianPolicyComponent) Objects() ([]client.Object, []client.Object) {
 // GuardianConfiguration contains all the config information needed to render the component.
 type GuardianConfiguration struct {
 	URL                         string
+	ClusterDomain               string
 	PullSecrets                 []*corev1.Secret
 	OpenShift                   bool
 	Installation                *operatorv1.InstallationSpec

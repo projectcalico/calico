@@ -440,6 +440,7 @@ func (r *ReconcileConnection) Reconcile(ctx context.Context, request reconcile.R
 		GuardianClientKeyPair:       guardianKeyPair,
 		Version:                     managedClusterVersion,
 		IncludeEgressNetworkPolicy:  includeEgressNetworkPolicy,
+		ClusterDomain:               r.opts.ClusterDomain,
 		ImageOverrides:              r.images,
 	}
 
