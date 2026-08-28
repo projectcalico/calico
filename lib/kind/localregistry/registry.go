@@ -58,6 +58,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/types"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/projectcalico/calico/lib/std/log"
 )
@@ -116,7 +118,25 @@ type Registry struct {
 
 	mu     sync.Mutex
 	cached map[string]bool // key(ns, repo, ref) -> present in the internal store
+
+	// sf coalesces concurrent ensureManifest / ensureBlob calls for the
+	// same (ns, repo, ref) — containerd fires many parallel GETs across
+	// nodes and pods, and without dedup each one would spawn its own
+	// full pull-through.
+	sf singleflight.Group
 }
+
+// detachContext returns a context whose values are inherited from parent
+// but whose cancellation is not — so an in-flight pull-through survives
+// containerd's client timeout closing the incoming HTTP request. The
+// pull instead runs under its own pullTimeout, and the caller MUST
+// defer the returned cancel to release the timer as soon as the pull
+// completes (otherwise every request leaks a live timer for pullTimeout).
+func detachContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), pullTimeout)
+}
+
+const pullTimeout = 10 * time.Minute
 
 // Start brings up the facade: an internal store on loopback and the public
 // node-facing listener. The caller owns shutdown via Stop (typically
@@ -232,7 +252,10 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead):
 		// Populate on HEAD too — the manifest is a few KB either way.
-		if err := f.ensureManifest(r.Context(), ns, repo, ref); err != nil {
+		pullCtx, cancel := detachContext(r.Context())
+		err := f.ensureManifest(pullCtx, ns, repo, ref)
+		cancel()
+		if err != nil {
 			f.log.Warn("manifest pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -240,7 +263,10 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case kind == "blobs" && r.Method == http.MethodGet:
 		// GET only — a HEAD on a missing blob stays cheap (404 from
 		// the internal store); the follow-up GET triggers the pull.
-		if err := f.ensureBlob(r.Context(), ns, repo, ref); err != nil {
+		pullCtx, cancel := detachContext(r.Context())
+		err := f.ensureBlob(pullCtx, ns, repo, ref)
+		cancel()
+		if err != nil {
 			f.log.Warn("blob pull-through failed", "ns", ns, "repo", repo, "digest", ref, "error", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -276,6 +302,23 @@ func (f *Registry) ensureManifest(ctx context.Context, ns, repo, ref string) err
 	if present {
 		return nil
 	}
+	// Coalesce concurrent callers on the same manifest — containerd fires
+	// parallel HEADs from every node and pod.
+	_, err, _ := f.sf.Do("m:"+k, func() (any, error) {
+		return nil, f.pullManifest(ctx, ns, repo, ref, k)
+	})
+	return err
+}
+
+func (f *Registry) pullManifest(ctx context.Context, ns, repo, ref, k string) error {
+	// Re-check under singleflight: the previous holder may have populated
+	// it while we waited.
+	f.mu.Lock()
+	if f.cached[k] {
+		f.mu.Unlock()
+		return nil
+	}
+	f.mu.Unlock()
 
 	// The in-memory map is only a fast path. The authoritative "do I already
 	// have this?" is the internal store itself — which also covers manifests
@@ -302,9 +345,19 @@ func (f *Registry) ensureManifest(ctx context.Context, ns, repo, ref string) err
 		return fmt.Errorf("fetch manifest %s: %w", upstream, err)
 	}
 
-	// PUT the manifest under the safeNS'd repo. The store accepts a
-	// manifest whose referenced blobs aren't there yet; per-blob GETs
-	// follow and land in ensureBlob.
+	// If this is a manifest list / OCI image index, recursively pull
+	// its child manifests BEFORE PUTing the index — ggcr's internal
+	// registry rejects an index whose referenced manifests aren't
+	// present with 404. Child blobs still pull lazily via ensureBlob
+	// on the containerd GETs that follow.
+	if isIndex(desc.MediaType) {
+		if err := f.ensureIndexChildren(ctx, ns, repo, desc.Manifest); err != nil {
+			return fmt.Errorf("populate index children for %s: %w", upstream, err)
+		}
+	}
+
+	// PUT the manifest under the safeNS'd repo. Referenced blobs come
+	// later on containerd's per-blob GETs, which ensureBlob handles.
 	putURL := fmt.Sprintf("%s/v2/%s/%s/manifests/%s", f.internalURL.String(), safeNS(ns), repo, ref)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, putURL, bytes.NewReader(desc.Manifest))
 	if err != nil {
@@ -332,6 +385,18 @@ func (f *Registry) ensureManifest(ctx context.Context, ns, repo, ref string) err
 // ensureBlob) already put it there. Otherwise: one blob, one HTTP transfer —
 // containerd's per-request timeout never blocks on unrelated layers.
 func (f *Registry) ensureBlob(ctx context.Context, ns, repo, digest string) error {
+	if f.blobExistsInternal(ctx, ns, repo, digest) {
+		return nil
+	}
+	_, err, _ := f.sf.Do("b:"+ns+"|"+repo+"|"+digest, func() (any, error) {
+		return nil, f.pullBlob(ctx, ns, repo, digest)
+	})
+	return err
+}
+
+func (f *Registry) pullBlob(ctx context.Context, ns, repo, digest string) error {
+	// Re-check under singleflight in case the previous holder populated
+	// this blob while we waited.
 	if f.blobExistsInternal(ctx, ns, repo, digest) {
 		return nil
 	}
@@ -385,6 +450,40 @@ func (f *Registry) internalHEAD(ctx context.Context, url, accept string) bool {
 	}
 	_ = resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// isIndex reports whether mt names a manifest list / OCI image index —
+// the multi-arch "one manifest referencing per-arch manifests" case.
+func isIndex(mt types.MediaType) bool {
+	switch mt {
+	case types.OCIImageIndex, types.DockerManifestList:
+		return true
+	}
+	return false
+}
+
+// ensureIndexChildren parses raw index bytes and recursively populates
+// each referenced child manifest so the subsequent index PUT succeeds
+// against ggcr's registry (which rejects an index whose referenced
+// manifests aren't present with 404).
+func (f *Registry) ensureIndexChildren(ctx context.Context, ns, repo string, indexBytes []byte) error {
+	var idx struct {
+		Manifests []struct {
+			Digest string `json:"digest"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(indexBytes, &idx); err != nil {
+		return fmt.Errorf("parse index: %w", err)
+	}
+	for _, m := range idx.Manifests {
+		if m.Digest == "" {
+			continue
+		}
+		if err := f.ensureManifest(ctx, ns, repo, m.Digest); err != nil {
+			return fmt.Errorf("child manifest %s: %w", m.Digest, err)
+		}
+	}
+	return nil
 }
 
 // Stop shuts the facade down. Idempotent.
