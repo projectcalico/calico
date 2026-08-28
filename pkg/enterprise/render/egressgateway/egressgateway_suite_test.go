@@ -28,6 +28,6 @@ func TestRender(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/egressgateway_suite.xml"
+	reporterConfig.JUnitReport = "../../../../report/ut/egressgateway_suite.xml"
 	ginkgo.RunSpecs(t, "pkg/egressgateway/egressgateway Suite", suiteConfig, reporterConfig)
 }

@@ -28,6 +28,6 @@ func TestController(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/otelcollector_controller_suite.xml"
+	reporterConfig.JUnitReport = "../../../../report/ut/otelcollector_controller_suite.xml"
 	ginkgo.RunSpecs(t, "pkg/enterprise/controller/otelcollector Controller Suite", suiteConfig, reporterConfig)
 }

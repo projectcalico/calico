@@ -24,6 +24,6 @@ import (
 func TestStatus(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/applicationlayer_controller_suite.xml"
+	reporterConfig.JUnitReport = "../../../../report/ut/applicationlayer_controller_suite.xml"
 	ginkgo.RunSpecs(t, "pkg/enterprise/controller/applicationlayer Controller Suite", suiteConfig, reporterConfig)
 }
