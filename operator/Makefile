@@ -739,13 +739,8 @@ endef
 .PHONY: prepare-for-calico-crds prepare-for-enterprise-crds
 
 CALICO?=projectcalico/calico
-CALICO_CRDS_DIR?=.crds/calico
+CALICO_CRDS_DIR?=..
 DEFAULT_OS_CRDS_DIR?=.crds/calico
-read-libcalico-calico-version:
-	$(eval CALICO_BRANCH := $(shell $(CONTAINERIZED) $(CALICO_BUILD) \
-	bash -c '$(GIT_CONFIG_SSH) \
-	yq -e ".components.libcalico-go.version" config/calico_versions.yml'))
-	if [ -z "$(CALICO_BRANCH)" ]; then echo "libcalico branch not defined"; exit 1; fi
 
 update-calico-crds: fetch-calico-crds
 	$(call copy_v1_crds, $(CALICO_CRDS_DIR),"calico")
@@ -756,7 +751,7 @@ update-calico-crds: fetch-calico-crds
 prepare-for-calico-crds:
 	$(call prep_local_crds,"calico")
 
-fetch-calico-crds: prepare-for-calico-crds read-libcalico-calico-version
+fetch-calico-crds: prepare-for-calico-crds
 	$(if $(filter $(DEFAULT_OS_CRDS_DIR),$(CALICO_CRDS_DIR)), $(call fetch_crds,$(CALICO),$(CALICO_BRANCH),"calico"))
 
 CALICO_ENTERPRISE?=tigera/calico-private
