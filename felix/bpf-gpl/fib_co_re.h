@@ -199,7 +199,7 @@ skip_redir_ifindex:
 
 		if (state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
 				!(state->ct_result.fwd_flags & CT_FWD_FLAG_TUNNEL) &&
-				cali_rt_is_tunneled(dest_rt) && !cali_rt_is_same_subnet(dest_rt)) {
+				cali_rt_needs_tunnel_egress(dest_rt)) {
 			/* The hint is the device through which the opposite direction
 			 * ingresses, which is only a valid egress for an encap
 			 * destination if it is the tunnel itself. Redirecting to a
