@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -247,12 +247,11 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	// operatorGitFlags resolve the operator's org/repo/branch. Required on any
-	// command that calls calico.WithOperatorGit or operator.Clone.
-	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag, operatorBranchFlag}
+	// operatorGitFlags resolve the operator's org/repo. Required on any
+	// command that calls calico.WithOperatorGit.
+	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag}
 
 	operatorBuildCommandFlags = append(slices.Clone(operatorGitFlags),
-		operatorReleaseBranchPrefixFlag,
 		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
 	)
@@ -268,7 +267,7 @@ var (
 		Category: operatorCategory,
 		Usage:    "The GitHub organization to use for Tigera operator release",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_ORGANIZATION"), defaults.MK(defaults.KeyOperatorOrganization)),
-		Value:    operator.DefaultOrg,
+		Value:    utils.TigeraOrg,
 	}
 	operatorRepoFlagName = "operator-repo"
 	operatorRepoFlag     = &cli.StringFlag{
@@ -276,23 +275,7 @@ var (
 		Category: operatorCategory,
 		Usage:    "The GitHub repository to use for Tigera operator release",
 		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_GIT_REPO"), defaults.MK(defaults.KeyOperatorGitRepo)),
-		Value:    operator.DefaultRepoName,
-	}
-	// Branch/Tag management flags
-	operatorBranchFlagName = "operator-branch"
-	operatorBranchFlag     = &cli.StringFlag{
-		Name:     operatorBranchFlagName,
-		Category: operatorCategory,
-		Usage:    "The branch to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_BRANCH"), defaults.MK(defaults.KeyOperatorBranch)),
-		Value:    operator.DefaultBranch,
-	}
-	operatorReleaseBranchPrefixFlag = &cli.StringFlag{
-		Name:     "operator-release-branch-prefix",
-		Category: operatorCategory,
-		Usage:    "The stardard prefix used to denote Tigera operator release branches",
-		Sources:  cli.EnvVars("OPERATOR_RELEASE_BRANCH_PREFIX"),
-		Value:    operator.DefaultReleaseBranchPrefix,
+		Value:    "operator",
 	}
 	// Container image flags
 	operatorRegistryFlag = &cli.StringFlag{

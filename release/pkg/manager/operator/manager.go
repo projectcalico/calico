@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,32 +18,21 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
+	"path/filepath"
 	"strings"
 
 	"github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/release/internal/command"
-	"github.com/projectcalico/calico/release/internal/defaults"
 	"github.com/projectcalico/calico/release/internal/registry"
 	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 const (
-	DefaultImage               = registry.TigeraOperatorImage
-	DefaultOrg                 = utils.TigeraOrg
-	DefaultRepoName            = "operator"
-	DefaultReleaseBranchPrefix = "release"
-	DefaultBranch              = "master"
-	DefaultDevTagSuffix        = "0.dev"
-	DefaultRegistry            = "quay.io"
+	DefaultImage        = registry.TigeraOperatorImage
+	DefaultDevTagSuffix = "0.dev"
+	DefaultRegistry     = "quay.io"
 )
-
-func Organization() string {
-	return utils.FirstNonEmpty(defaults.OperatorOrganization(), DefaultOrg)
-}
-func Repo() string   { return utils.FirstNonEmpty(defaults.OperatorRepo(), DefaultRepoName) }
-func Branch() string { return utils.FirstNonEmpty(defaults.OperatorBranch(), DefaultBranch) }
 
 var (
 	defaultProductEnvPrefix = "CALICO"
@@ -79,17 +68,11 @@ type OperatorManager struct {
 	// productRegistry is the registry to use for product images (e.g. quay.io/calico)
 	productRegistry string
 
-	// releaseBranchPrefix is the prefix for the release branch
-	releaseBranchPrefix string
-
 	// isHashRelease indicates if we are doing a hashrelease
 	isHashRelease bool
 
 	// validate indicates if we should run validation
 	validate bool
-
-	// validateBranch indicates if we should run branch validation
-	validateBranch bool
 
 	// publish indicates if we should push the branch changes to the remote repository
 	publish bool
@@ -114,6 +97,9 @@ func NewManager(opts ...Option) *OperatorManager {
 	}
 	if o.productRegistry == "" {
 		o.productRegistry = defaultProductRegistry
+	}
+	if o.dir == "" && o.calicoDir != "" {
+		o.dir = filepath.Join(o.calicoDir, "operator")
 	}
 	return o
 }
@@ -224,18 +210,6 @@ func (o *OperatorManager) PreBuildValidation() error {
 			errStack = errors.Join(errStack, errors.New("hashrelease requires the calico directory to be specified"))
 		}
 	}
-	if !o.validateBranch {
-		return errStack
-	}
-	branch, err := utils.GitBranch(o.dir)
-	if err != nil {
-		return fmt.Errorf("failed to determine branch: %w", err)
-	}
-	match := fmt.Sprintf(`^(%s|%s-v\d+\.\d+(?:-\d+)?)$`, utils.DefaultBranch, o.releaseBranchPrefix)
-	re := regexp.MustCompile(match)
-	if !re.MatchString(branch) {
-		errStack = errors.Join(errStack, fmt.Errorf("operator checkout is not on a release branch"))
-	}
 	return errStack
 }
 
@@ -314,8 +288,4 @@ func (o *OperatorManager) ReleasePublic() error {
 
 func (o *OperatorManager) make(target string, env []string) (string, error) {
 	return o.runner.Run("make", []string{"-C", o.dir, target}, env)
-}
-
-func Clone(org, repo, branch, dir string) error {
-	return utils.Clone(fmt.Sprintf("git@github.com:%s/%s.git", org, repo), branch, dir)
 }

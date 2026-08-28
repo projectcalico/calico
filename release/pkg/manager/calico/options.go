@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,11 +75,10 @@ func WithOperator(registry, image, version string) Option {
 	}
 }
 
-func WithOperatorGit(org, repo, branch string) Option {
+func WithOperatorGit(org, repo string) Option {
 	return func(r *CalicoManager) error {
 		r.operatorGithubOrg = org
 		r.operatorRepo = repo
-		r.operatorBranch = branch
 		return nil
 	}
 }

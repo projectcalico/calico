@@ -46,7 +46,6 @@ func TestParseMetadata(t *testing.T) {
 		KeyGitRemote:            "testremote",
 		KeyReleaseBranchPrefix:  "testprefix",
 		KeyDevTagSuffix:         "testsuffix",
-		KeyOperatorBranch:       "test-operator-branch",
 		KeyOperatorOrganization: "testopsorg",
 		KeyOperatorGitRepo:      "testopsrepo",
 	}
@@ -80,7 +79,6 @@ func TestAccessorsWithInjectedValues(t *testing.T) {
 		KeyGitRemote:            "rem",
 		KeyReleaseBranchPrefix:  "rp",
 		KeyDevTagSuffix:         "ds",
-		KeyOperatorBranch:       "ob",
 		KeyOperatorOrganization: "oo",
 		KeyOperatorGitRepo:      "orepo",
 	})
@@ -98,9 +96,6 @@ func TestAccessorsWithInjectedValues(t *testing.T) {
 	}
 	if got := DevTagSuffix(); got != "ds" {
 		t.Errorf("DevTagSuffix: got %q, want %q", got, "ds")
-	}
-	if got := OperatorBranch(); got != "ob" {
-		t.Errorf("OperatorBranch: got %q, want %q", got, "ob")
 	}
 	if got := OperatorOrganization(); got != "oo" {
 		t.Errorf("OperatorOrganization: got %q, want %q", got, "oo")

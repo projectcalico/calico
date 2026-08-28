@@ -53,7 +53,6 @@ const (
 	KeyGitRemote            = "GIT_REMOTE"
 	KeyReleaseBranchPrefix  = "RELEASE_BRANCH_PREFIX"
 	KeyDevTagSuffix         = "DEV_TAG_SUFFIX"
-	KeyOperatorBranch       = "OPERATOR_BRANCH"
 	KeyOperatorOrganization = "OPERATOR_ORGANIZATION"
 	KeyOperatorGitRepo      = "OPERATOR_GIT_REPO"
 )
@@ -131,6 +130,5 @@ func Repo() string                 { return get(KeyGitRepo) }
 func Remote() string               { return get(KeyGitRemote) }
 func ReleaseBranchPrefix() string  { return get(KeyReleaseBranchPrefix) }
 func DevTagSuffix() string         { return get(KeyDevTagSuffix) }
-func OperatorBranch() string       { return get(KeyOperatorBranch) }
 func OperatorOrganization() string { return get(KeyOperatorOrganization) }
 func OperatorRepo() string         { return get(KeyOperatorGitRepo) }

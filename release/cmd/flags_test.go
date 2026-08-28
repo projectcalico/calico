@@ -310,7 +310,7 @@ func TestHashreleasePublishFlagsRegisterOperatorGit(t *testing.T) {
 			have[n] = true
 		}
 	}
-	for _, n := range []string{operatorOrgFlagName, operatorRepoFlagName, operatorBranchFlagName} {
+	for _, n := range []string{operatorOrgFlagName, operatorRepoFlagName} {
 		if !have[n] {
 			t.Errorf("hashreleasePublishFlags is missing --%s", n)
 		}

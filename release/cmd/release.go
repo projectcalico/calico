@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
@@ -150,7 +150,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithVersion(ver.FormattedString()),
 					calico.WithOperatorVersion(operatorVer.FormattedString()),
-					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
+					calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name)),
 					calico.WithOutputDir(releaseOutputDir(cfg.RepoRootDir, ver.FormattedString())),
 					calico.WithTmpDir(cfg.TmpDir),
 					calico.WithLogsDir(filepath.Join(cfg.LogsDir, ver.FormattedString())),
@@ -212,7 +212,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 				calico.WithRepoRoot(cfg.RepoRootDir),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer.FormattedString()),
-				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
@@ -231,13 +231,8 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 	}
 }
 
-func determineOperatorReleaseVersion(c *cli.Command, tmpDir string) (string, error) {
-	// Clone the operator repository to determine the operator version.
-	operatorDir := filepath.Join(tmpDir, c.String(operatorRepoFlag.Name))
-	if err := operator.Clone(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name), operatorDir); err != nil {
-		return "", fmt.Errorf("clone operator repository: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(operatorDir) }()
+func determineOperatorReleaseVersion(c *cli.Command, repoRootDir string) (string, error) {
+	operatorDir := filepath.Join(repoRootDir, "operator")
 	operatorGitVer, err := command.GitVersion(operatorDir, true)
 	if err != nil {
 		return "", fmt.Errorf("determine operator git version: %w", err)
@@ -270,7 +265,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs := map[string]any{
 				"version": ver.FormattedString(),
 			}
-			operatorVer, err := determineOperatorReleaseVersion(c, cfg.TmpDir)
+			operatorVer, err := determineOperatorReleaseVersion(c, cfg.RepoRootDir)
 			if err != nil {
 				return "", outs, err
 			}
@@ -287,7 +282,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 				calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				calico.WithVersion(ver.FormattedString()),
 				calico.WithOperatorVersion(operatorVer),
-				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name), c.String(operatorBranchFlag.Name)),
+				calico.WithOperatorGit(c.String(operatorOrgFlag.Name), c.String(operatorRepoFlag.Name)),
 				calico.WithGithubOrg(c.String(orgFlag.Name)),
 				calico.WithRepoName(c.String(repoFlag.Name)),
 				calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
