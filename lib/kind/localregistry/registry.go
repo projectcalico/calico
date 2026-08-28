@@ -126,17 +126,14 @@ type Registry struct {
 	sf singleflight.Group
 }
 
-// detachContext returns a background context that inherits parent's
-// deadline (via Value only, not Done) so an in-flight pull-through
-// survives the incoming request being canceled — containerd's client
-// timeout mustn't abort a pull the next attempt will need anyway.
-// The pull instead runs under its own bounded timeout.
-func detachContext(_ context.Context) context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), pullTimeout)
-	// The cancel is intentionally leaked to timeout; the pull is
-	// short-lived (bounded by pullTimeout) and Go GCs the timer.
-	_ = cancel
-	return ctx
+// detachContext returns a context whose values are inherited from parent
+// but whose cancellation is not — so an in-flight pull-through survives
+// containerd's client timeout closing the incoming HTTP request. The
+// pull instead runs under its own pullTimeout, and the caller MUST
+// defer the returned cancel to release the timer as soon as the pull
+// completes (otherwise every request leaks a live timer for pullTimeout).
+func detachContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(parent), pullTimeout)
 }
 
 const pullTimeout = 10 * time.Minute
@@ -255,7 +252,10 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case kind == "manifests" && (r.Method == http.MethodGet || r.Method == http.MethodHead):
 		// Populate on HEAD too — the manifest is a few KB either way.
-		if err := f.ensureManifest(detachContext(r.Context()), ns, repo, ref); err != nil {
+		pullCtx, cancel := detachContext(r.Context())
+		err := f.ensureManifest(pullCtx, ns, repo, ref)
+		cancel()
+		if err != nil {
 			f.log.Warn("manifest pull-through failed", "ns", ns, "repo", repo, "ref", ref, "error", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -263,7 +263,10 @@ func (f *Registry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case kind == "blobs" && r.Method == http.MethodGet:
 		// GET only — a HEAD on a missing blob stays cheap (404 from
 		// the internal store); the follow-up GET triggers the pull.
-		if err := f.ensureBlob(detachContext(r.Context()), ns, repo, ref); err != nil {
+		pullCtx, cancel := detachContext(r.Context())
+		err := f.ensureBlob(pullCtx, ns, repo, ref)
+		cancel()
+		if err != nil {
 			f.log.Warn("blob pull-through failed", "ns", ns, "repo", repo, "digest", ref, "error", err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
