@@ -23,12 +23,21 @@ schedule: 0 17 * * 0
 steps:
   - name: resync-scale
     runOn: gcp-vm
-    # DevStack expects to own the box, and wants a non-root user that can sudo.
-    vm:
-      machineType: n2-standard-16
-      diskType: pd-ssd
-      diskSize: 200GB
-      runAsNonRoot: true
+    # The VM knobs are set as env vars rather than via the condensed `vm:`
+    # block, because the deployed ArgoCI pre-processor rejects that field
+    # ("unknown field \"vm\" in a step") even though cc-utils main carries it.
+    # `vm:` is only sugar for these anyway -- see vmEnv() in the handler, which
+    # maps each field to exactly one of these names for gcp-vm-runner to read.
+    # Worth switching back once the deployed handler understands `vm:`.
+    #
+    # RUN_AS_NONROOT because DevStack expects to own the box and wants a
+    # non-root user that can sudo.  Machine type is a starting point, not a
+    # measurement: the 2-hour budget wants checking against a real run.
+    env:
+      - {name: GOOGLE_VM_MACHINE_TYPE, value: n2-standard-16}
+      - {name: GOOGLE_VM_DISK_TYPE, value: pd-ssd}
+      - {name: GOOGLE_VM_DISK_SIZE, value: 200GB}
+      - {name: RUN_AS_NONROOT, value: "true"}
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
     commands: |
