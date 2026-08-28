@@ -159,7 +159,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: flannel-migration-controller
-          image: quay.io/calico/calico:master
+          image: quay.io/calico/calico:release-v3.33
           command:
             - /usr/bin/calico
             - component
