@@ -1,0 +1,544 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: networks.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: Network
+    listKind: NetworkList
+    plural: networks
+    singular: network
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          description: |-
+            Network defines a logical network within a Calico cluster.  Each Network has a type
+            (VRF, ...) that determines how pods on that network are isolated and how
+            their traffic is routed.
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: |-
+                NetworkSpec contains the specification for a Network resource.  Exactly one of the
+                network-type fields (vrf, l2Bridge, ...) must be set.  The network type is immutable
+                after creation: a Network cannot be switched between types (e.g. vrf to l2Bridge).
+              maxProperties: 1
+              minProperties: 1
+              properties:
+                l2Bridge:
+                  description: |-
+                    L2Bridge configures a Layer 2 bridged network.  A Linux bridge on each
+                    participating node connects workload interfaces to VLAN segments
+                    carried by physical trunk interfaces.  See L2BridgeSpec.
+                  properties:
+                    hostConfig:
+                      description: |-
+                        HostConfig defines per-node-group configuration for this network.
+                        When multiple entries are present, the first entry whose
+                        nodeSelector matches a given node is used; all other entries are
+                        ignored for that node.  Entries with no nodeSelector match all
+                        nodes.
+                      items:
+                        description: |-
+                          L2HostConfig provides node-specific L2 bridge settings.  Different nodes
+                          may have different bridge types or trunk interface names; each entry
+                          applies to the nodes matched by its NodeSelector (first-match wins).
+                        properties:
+                          bridge:
+                            description: |-
+                              Bridge selects the bridge device for these nodes: either a
+                              Calico-managed bridge or a pre-existing (BYO) bridge.
+                            maxProperties: 1
+                            minProperties: 1
+                            properties:
+                              existingBridge:
+                                description: |-
+                                  ExistingBridge instructs Calico to attach to a pre-existing bridge
+                                  created and managed externally (e.g. via netplan).  Calico does
+                                  not create, reconfigure, or delete the bridge; it does not add or
+                                  remove IP addresses on it; and it does not remove interfaces it
+                                  did not create.  Calico still attaches workload veths, configures
+                                  their VLAN membership, and connects trunk interfaces (if
+                                  hostConnections is specified) unless the trunk is already
+                                  connected.
+                                properties:
+                                  name:
+                                    description:
+                                      Name is the Linux bridge device name
+                                      (e.g. "br0").
+                                    maxLength: 15
+                                    minLength: 1
+                                    type: string
+                                required:
+                                  - name
+                                type: object
+                                x-kubernetes-validations:
+                                  - message:
+                                      "name must not start with calb- or calq-:
+                                      those prefixes are reserved for devices Calico creates
+                                      and deletes"
+                                    rule: "!self.name.startsWith('calb-') && !self.name.startsWith('calq-')"
+                              managedBridge:
+                                description: |-
+                                  ManagedBridge instructs Calico to create and fully manage the
+                                  bridge device.  The bridge name is derived automatically from the
+                                  Network name so it does not clash with other Networks or with
+                                  Calico workload veth names.
+                                properties:
+                                  stp:
+                                    default: Disabled
+                                    description: |-
+                                      STP controls whether Spanning Tree Protocol is active on the
+                                      bridge.  "Disabled" (default) is appropriate for datacenter
+                                      topologies where loop prevention is handled by the upstream
+                                      switch; "Enabled" causes the bridge to exchange BPDU frames on
+                                      trunk ports.  Workload veth ports always operate in edge/portfast
+                                      mode regardless of this setting — they never participate in STP.
+                                    enum:
+                                      - Enabled
+                                      - Disabled
+                                    type: string
+                                type: object
+                            type: object
+                          hostConnections:
+                            description: |-
+                              HostConnections defines how the bridge connects to the physical
+                              network on these nodes.  Each entry is a typed connection
+                              (currently only trunkPort).  If omitted, no trunk is attached by
+                              Calico — the user is responsible for providing external
+                              connectivity (e.g. on a BYO bridge with a pre-configured trunk).
+                            items:
+                              description: |-
+                                L2HostConnection defines a single host-side connection to the bridge.
+                                Exactly one connection type must be set.
+                              maxProperties: 1
+                              minProperties: 1
+                              properties:
+                                trunkPort:
+                                  description: |-
+                                    TrunkPort enslaves a host interface to the bridge as an 802.1Q
+                                    trunk.
+                                  properties:
+                                    interface:
+                                      description: |-
+                                        Interface identifies the trunk interface on this node group.
+                                        Heterogeneous clusters use separate HostConfig entries with
+                                        different NodeSelectors rather than per-rule selectors.
+                                      maxProperties: 1
+                                      minProperties: 1
+                                      properties:
+                                        name:
+                                          description: |-
+                                            Name matches a network interface by its exact device name
+                                            (e.g. "bond0", "eth1", "ens192").
+                                          maxLength: 15
+                                          minLength: 1
+                                          type: string
+                                      type: object
+                                    nativeVLAN:
+                                      description: |-
+                                        NativeVLAN, when set, designates one VLAN ID as the trunk's native
+                                        VLAN: frames in that VLAN are sent untagged on the wire and
+                                        untagged frames received on the trunk are tagged with this VLAN.
+                                        This should be one of the VLAN IDs the trunk carries (i.e. present
+                                        in spec.vlans); if it names a VLAN the trunk does not carry it is
+                                        ignored and the trunk stays strictly tagged for every VLAN.  When
+                                        unset (default) the trunk is strictly tagged: only 802.1Q-tagged
+                                        frames are accepted and transmitted.
+                                      maximum: 4094
+                                      minimum: 1
+                                      type: integer
+                                  required:
+                                    - interface
+                                  type: object
+                                  x-kubernetes-validations:
+                                    - message: nativeVLAN must be between 1 and 4094
+                                      rule:
+                                        "!has(self.nativeVLAN) || self.nativeVLAN
+                                        >= 1 && self.nativeVLAN <= 4094"
+                              type: object
+                            maxItems: 1
+                            type: array
+                            x-kubernetes-list-type: atomic
+                          nodeSelector:
+                            default: ""
+                            description: |-
+                              NodeSelector is a Calico selector expression that determines which
+                              nodes this configuration applies to.  If omitted, the entry
+                              applies to all nodes.  When multiple HostConfig entries are
+                              present, the first entry whose selector matches a given node wins;
+                              subsequent entries are ignored for that node.
+                            type: string
+                        required:
+                          - bridge
+                        type: object
+                      maxItems: 100
+                      minItems: 1
+                      type: array
+                      x-kubernetes-list-map-keys:
+                        - nodeSelector
+                      x-kubernetes-list-type: map
+                    vlans:
+                      description: |-
+                        VLANs is the authoritative list of 802.1Q VLAN segments carried by
+                        this network.  Each entry defines a single VLAN ID or a contiguous
+                        range of VLAN IDs, plus the subnets associated with that segment.
+
+                        The set of VLAN IDs the network may carry is the union of all IDs and
+                        ranges in this list.  Entries are not required to be disjoint: if the
+                        same VLAN ID appears in more than one entry the network still simply
+                        carries that VLAN, so overlap is permitted and not validated here.
+
+                        Workload attachments select a single entry via the CNI config
+                        "vlan" field; if spec.vlans has exactly one entry that resolves to
+                        a single VLAN ID, the CNI config "vlan" field may be omitted.
+                      items:
+                        description:
+                          L2VLANSpec defines a VLAN segment and its optional
+                          IP configuration.
+                        properties:
+                          subnets:
+                            description: |-
+                              Subnets are the IP subnets for this VLAN segment.  They filter which
+                              IPPools the IPAM plugin considers for this VLAN (only pools that fall
+                              within one of these subnets are eligible) and supply the prefix
+                              length programmed on the pod interface.  Multiple entries support
+                              dual-stack or multi-subnet VLANs.
+
+                              IPAM allocates the address from the eligible pools without preferring
+                              any particular subnet; the allocated address then falls within
+                              exactly one of these subnets, and that subnet's CIDR prefix length is
+                              the one programmed on the pod interface.  For a dual-stack VLAN this
+                              resolves independently per family (one IPv4 and one IPv6 subnet).
+                            items:
+                              description:
+                                L2Subnet defines an IP subnet associated
+                                with a VLAN segment.
+                              properties:
+                                cidr:
+                                  description: |-
+                                    CIDR is the subnet in CIDR notation (e.g. "10.100.0.0/24",
+                                    "fd00::/64").
+                                  type: string
+                                routes:
+                                  description: |-
+                                    Routes are programmed inside the pod's per-interface routing table
+                                    for workloads attached to this subnet, in addition to the connected
+                                    route for CIDR itself.  Each next hop must be an L2 neighbor on this
+                                    subnet, reachable via the bridge; routes are installed onlink.  The
+                                    common "default gateway" case is a single entry with destination
+                                    "0.0.0.0/0" (or "::/0") whose nextHop is the upstream router.
+                                  items:
+                                    description: |-
+                                      L2Route defines a route programmed in a pod's per-interface routing table
+                                      for an L2 bridge subnet.  Parallel to VRFStaticRoute, but with its own
+                                      action type so L2 and VRF route semantics can evolve independently.
+                                    properties:
+                                      action:
+                                        description: |-
+                                          Action determines how traffic matching this route is handled.
+                                          Exactly one action field must be set.
+                                        maxProperties: 1
+                                        minProperties: 1
+                                        properties:
+                                          nextHop:
+                                            description: |-
+                                              NextHop forwards matching traffic to the specified gateway IP.  The
+                                              address must be an L2 neighbor on this subnet, reachable via the
+                                              bridge; the route is installed onlink.
+                                            type: string
+                                        type: object
+                                      destination:
+                                        description: |-
+                                          Destination is the CIDR prefix for this route.  Use "0.0.0.0/0" or
+                                          "::/0" for a default route.
+                                        type: string
+                                    required:
+                                      - action
+                                      - destination
+                                    type: object
+                                  type: array
+                                  x-kubernetes-list-map-keys:
+                                    - destination
+                                  x-kubernetes-list-type: map
+                              required:
+                                - cidr
+                              type: object
+                            type: array
+                            x-kubernetes-list-type: atomic
+                          vlan:
+                            description: |-
+                              VLAN identifies this segment: a single VLAN ID or a contiguous
+                              range of VLAN IDs.
+                            maxProperties: 1
+                            minProperties: 1
+                            properties:
+                              id:
+                                description: ID selects a single 802.1Q VLAN (1-4094).
+                                maximum: 4094
+                                minimum: 1
+                                type: integer
+                              range:
+                                description:
+                                  Range selects a contiguous range of VLAN
+                                  IDs (inclusive).
+                                properties:
+                                  end:
+                                    description:
+                                      End is the last VLAN ID in the range
+                                      (1-4094, must be ≥ Start).
+                                    maximum: 4094
+                                    minimum: 1
+                                    type: integer
+                                  start:
+                                    description:
+                                      Start is the first VLAN ID in the range
+                                      (1-4094).
+                                    maximum: 4094
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                  - end
+                                  - start
+                                type: object
+                                x-kubernetes-validations:
+                                  - message: start must be <= end
+                                    rule: self.start <= self.end
+                            type: object
+                        required:
+                          - vlan
+                        type: object
+                      minItems: 1
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  required:
+                    - hostConfig
+                    - vlans
+                  type: object
+                vrf:
+                  description: |-
+                    VRF network configuration.
+                    Pods interfaces on a VRF network are isolated in a Linux VRF and can only access their own VRF.
+                  properties:
+                    hostConfig:
+                      description: |-
+                        HostConfig defines per-node configuration for this VRF network.  At least one entry
+                        must be specified.  When multiple entries are present (e.g. one per rack), they must
+                        have disjoint nodeSelectors although this is not enforced.  For a given node, the
+                        first matching entry is applied and all others are ignored.
+
+                        The list is stored and served as a JSON array; Kubernetes preserves the
+                        order in which entries were submitted (including across Server-Side
+                        Apply merges keyed on nodeSelector), so the result of `kubectl get -oyaml`
+                        is authoritative for "first match wins".  Single-actor edits keep the
+                        order users see in the YAML they edit.
+                      items:
+                        description: |-
+                          VRFHostConfig provides node-specific VRF settings which may vary across different hosts
+                          in the cluster.
+                        properties:
+                          hostInterfaces:
+                            description: |-
+                              Interfaces on the node to attach to the VRF.  The IP address, and local routes
+                              for that IP address will move into the VRF routing table.  At least one interface
+                              should be specified to allow pods in the VRF to communicate outside the node.
+                            items:
+                              description: |-
+                                InterfaceMatch identifies a network interface.  Exactly one match
+                                criterion must be set.
+                              maxProperties: 1
+                              minProperties: 1
+                              properties:
+                                name:
+                                  description: |-
+                                    Name matches a network interface by its exact device name
+                                    (e.g. "bond0", "eth1", "ens192").
+                                  maxLength: 15
+                                  minLength: 1
+                                  type: string
+                              type: object
+                            type: array
+                            x-kubernetes-list-type: atomic
+                          nodeSelector:
+                            default: ""
+                            description: |-
+                              NodeSelector is a Calico selector expression that determines which nodes this
+                              configuration applies to.  If omitted, the entry applies to all nodes.
+                              When multiple HostConfig entries are present, the first entry whose selector
+                              matches a given node wins.
+                            type: string
+                          routeTableIndex:
+                            description: |-
+                              RouteTableIndex is the Linux kernel routing table number to use for this VRF.
+                              Must be unique on these nodes, must not overlap with the RouteTableRanges in
+                              FelixConfiguration, and must not collide with tables used by other software on
+                              the node.  Tables 253 (default), 254 (main), and 255 (local) are reserved by
+                              the kernel.
+                            format: int32
+                            maximum: 2147483647
+                            minimum: 1
+                            type: integer
+                          staticRoutes:
+                            description: |-
+                              StaticRoutes are additional routes programmed into the VRF routing table, beyond
+                              the pod routes that Felix manages automatically and routes derived from VRF
+                              interface addresses.
+                            items:
+                              description:
+                                VRFStaticRoute defines a static route to
+                                program in a VRF routing table.
+                              properties:
+                                action:
+                                  description: |-
+                                    Action determines how traffic matching this route is handled.  Exactly one action
+                                    field must be set.
+                                  maxProperties: 1
+                                  minProperties: 1
+                                  properties:
+                                    nextHop:
+                                      description: |-
+                                        NextHop forwards matching traffic to the specified gateway IP.  The address must be
+                                        reachable on the subnet of one of the VRF interfaces on the node.
+                                      type: string
+                                  type: object
+                                destination:
+                                  description: |-
+                                    Destination is the CIDR prefix for this route.  Use "0.0.0.0/0" or "::/0" for a
+                                    default route.
+                                  type: string
+                              required:
+                                - action
+                                - destination
+                              type: object
+                            type: array
+                            x-kubernetes-list-type: atomic
+                        required:
+                          - routeTableIndex
+                        type: object
+                      maxItems: 100
+                      minItems: 1
+                      type: array
+                      x-kubernetes-list-map-keys:
+                        - nodeSelector
+                      x-kubernetes-list-type: map
+                    routing:
+                      description:
+                        Routing controls cluster-wide routing behaviour for
+                        this VRF network.
+                      properties:
+                        inClusterMode:
+                          default: Local
+                          description: |-
+                            InClusterMode controls how Felix programs routes to pods on remote nodes inside
+                            the VRF routing table.
+
+                            - Local: Felix programs routes to VRF pods local to this node;
+                              routing to pods on other nodes must be handled by BGP.
+                          enum:
+                            - Local
+                          type: string
+                      type: object
+                  required:
+                    - hostConfig
+                  type: object
+              type: object
+              x-kubernetes-validations:
+                - message: Cannot change the network type (vrf is immutable after creation)
+                  rule: has(self.vrf) == has(oldSelf.vrf)
+                - message:
+                    Cannot change the network type (l2Bridge is immutable after
+                    creation)
+                  rule: has(self.l2Bridge) == has(oldSelf.l2Bridge)
+            status:
+              description: NetworkStatus reports the observed state of the Network resource.
+              properties:
+                conditions:
+                  description:
+                    Conditions is a list of conditions that apply to this
+                    network.
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                  x-kubernetes-list-type: atomic
+              type: object
+          required:
+            - spec
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

@@ -1,0 +1,93 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: bfdconfigurations.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: BFDConfiguration
+    listKind: BFDConfigurationList
+    plural: bfdconfigurations
+    singular: bfdconfiguration
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: BFDConfiguration contains the configuration for BFD sessions.
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description:
+                BFDConfigurationSpec contains the specification for a BFDConfiguration
+                resource.
+              properties:
+                interfaces:
+                  items:
+                    description:
+                      BFDInterface contains per-interface parameters for
+                      BFD failure detection.
+                    properties:
+                      idleSendInterval:
+                        default: 1m
+                        description:
+                          IdleSendInterval is the interval between transmitted
+                          BFD packets when the BFD peer is idle. Must be a whole number
+                          of milliseconds greater than 0.
+                        type: string
+                      matchPattern:
+                        description: |-
+                          MatchPattern is a pattern to match one or more interfaces.
+                          Supports exact interface names, match on interface prefixes (e.g., “eth*”),
+                          or “*” to select all interfaces on the selected node(s).
+                        type: string
+                      minimumRecvInterval:
+                        default: 10ms
+                        description:
+                          MinimumRecvInterval is the minimum interval between
+                          received BFD packets. Must be a whole number of milliseconds
+                          greater than 0.
+                        type: string
+                      minimumSendInterval:
+                        default: 100ms
+                        description:
+                          MinimumSendInterval is the minimum interval between
+                          transmitted BFD packets. Must be a whole number of milliseconds
+                          greater than 0.
+                        type: string
+                      multiplier:
+                        default: 5
+                        description:
+                          Multiplier is the number of intervals that must
+                          pass without receiving a BFD packet before the peer is considered
+                          down.
+                        type: integer
+                    required:
+                      - matchPattern
+                    type: object
+                  type: array
+                  x-kubernetes-list-type: atomic
+                nodeSelector:
+                  type: string
+              type: object
+          type: object
+      served: true
+      storage: true

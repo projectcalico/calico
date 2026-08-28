@@ -1,0 +1,557 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: authentications.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: Authentication
+    listKind: AuthenticationList
+    plural: authentications
+    singular: authentication
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: Authentication is the Schema for the authentications API
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: AuthenticationSpec defines the desired state of Authentication
+              properties:
+                dexDeployment:
+                  description: DexDeployment configures the Dex Deployment.
+                  properties:
+                    spec:
+                      description: Spec is the specification of the Dex Deployment.
+                      properties:
+                        template:
+                          description:
+                            Template describes the Dex Deployment pod that
+                            will be created.
+                          properties:
+                            spec:
+                              description: Spec is the Dex Deployment's PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of Dex containers.
+                                    If specified, this overrides the specified Dex Deployment containers.
+                                    If omitted, the Dex Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      DexDeploymentContainer is a Dex Deployment
+                                      container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the Dex Deployment container by name.
+                                          Supported values are: tigera-dex
+                                        enum:
+                                          - tigera-dex
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named Dex Deployment container's resources.
+                                          If omitted, the Dex Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of Dex init containers.
+                                    If specified, this overrides the specified Dex Deployment init containers.
+                                    If omitted, the Dex Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      DexDeploymentInitContainer is a Dex
+                                      Deployment init container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the Dex Deployment init container by name.
+                                          Supported values are: tigera-dex-tls-key-cert-provisioner
+                                        enum:
+                                          - tigera-dex-tls-key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named Dex Deployment init container's resources.
+                                          If omitted, the Dex Deployment will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                groupsPrefix:
+                  description: |-
+                    If specified, GroupsPrefix is prepended to each group obtained from the identity provider. Note that
+                    Kibana does not support a groups prefix, so this prefix is removed from Kubernetes Groups when translating log access
+                    ClusterRoleBindings into Elastic.
+                  type: string
+                ldap:
+                  description:
+                    LDAP contains the configuration needed to setup LDAP
+                    authentication.
+                  properties:
+                    groupSearch:
+                      description:
+                        Group search configuration to find the groups that
+                        a user is in.
+                      properties:
+                        baseDN:
+                          description:
+                            BaseDN to start the search from. For example
+                            "cn=groups,dc=example,dc=com"
+                          type: string
+                        filter:
+                          description: |-
+                            Optional filter to apply when searching the directory.
+                            For example "(objectClass=posixGroup)"
+                          type: string
+                        nameAttribute:
+                          description:
+                            The attribute of the group that represents its
+                            name. This attribute can be used to apply RBAC to a user
+                            group.
+                          type: string
+                        userMatchers:
+                          description: |-
+                            Following list contains field pairs that are used to match a user to a group. It adds an additional
+                            requirement to the filter that an attribute in the group must match the user's
+                            attribute value.
+                          items:
+                            description:
+                              UserMatch when the value of a UserAttribute
+                              and a GroupAttribute match, a user belongs to the group.
+                            properties:
+                              groupAttribute:
+                                description:
+                                  The attribute of a group that links it
+                                  to a user.
+                                type: string
+                              userAttribute:
+                                description:
+                                  The attribute of a user that links it to
+                                  a group.
+                                type: string
+                            required:
+                              - groupAttribute
+                              - userAttribute
+                            type: object
+                          type: array
+                      required:
+                        - baseDN
+                        - nameAttribute
+                        - userMatchers
+                      type: object
+                    host:
+                      description: "The host and port of the LDAP server. Example: ad.example.com:636"
+                      type: string
+                    startTLS:
+                      description: |-
+                        StartTLS whether to enable the startTLS feature for establishing TLS on an existing LDAP session.
+                        If true, the ldap:// protocol is used and then issues a StartTLS command, otherwise, connections will use
+                        the ldaps:// protocol.
+                      type: boolean
+                    userSearch:
+                      description:
+                        User entry search configuration to match the credentials
+                        with a user.
+                      properties:
+                        baseDN:
+                          description:
+                            BaseDN to start the search from. For example
+                            "cn=users,dc=example,dc=com"
+                          type: string
+                        filter:
+                          description:
+                            Optional filter to apply when searching the directory.
+                            For example "(objectClass=person)"
+                          type: string
+                        nameAttribute:
+                          description: |-
+                            A mapping of the attribute that is used as the username. This attribute can be used to apply RBAC to a user.
+                            Default: uid
+                          type: string
+                      required:
+                        - baseDN
+                      type: object
+                  required:
+                    - host
+                    - userSearch
+                  type: object
+                managerDomain:
+                  description: ManagerDomain is the domain name of the Manager
+                  type: string
+                oidc:
+                  description:
+                    OIDC contains the configuration needed to setup OIDC
+                    authentication.
+                  properties:
+                    emailVerification:
+                      description: |-
+                        Some providers do not include the claim "email_verified" when there is no verification in the user enrollment
+                        process or if they are acting as a proxy for another identity provider. By default those tokens are deemed invalid.
+                        To skip this check, set the value to "InsecureSkip".
+                        Default: Verify
+                      enum:
+                        - Verify
+                        - InsecureSkip
+                      type: string
+                    groupsClaim:
+                      description:
+                        GroupsClaim specifies which claim to use from the
+                        OIDC provider as the group.
+                      type: string
+                    groupsPrefix:
+                      description:
+                        Deprecated. Please use Authentication.Spec.GroupsPrefix
+                        instead.
+                      type: string
+                    issuerURL:
+                      description: IssuerURL is the URL to the OIDC provider.
+                      type: string
+                    promptTypes:
+                      description: |-
+                        PromptTypes is an optional list of string values that specifies whether the identity provider prompts the end user
+                        for re-authentication and consent. See the RFC for more information on prompt types:
+                        https://openid.net/specs/openid-connect-core-1_0.html.
+                        Default: "Consent"
+                      items:
+                        description: |-
+                          PromptType is a value that specifies whether the identity provider prompts the end user for re-authentication and
+                          consent.
+                          One of: None, Login, Consent, SelectAccount.
+                        enum:
+                          - None
+                          - Login
+                          - Consent
+                          - SelectAccount
+                        type: string
+                      type: array
+                    requestedScopes:
+                      description: |-
+                        RequestedScopes is a list of scopes to request from the OIDC provider. If not provided, the following scopes are
+                        requested: ["openid", "email", "profile", "groups", "offline_access"].
+                      items:
+                        type: string
+                      type: array
+                    type:
+                      description: 'Default: "Dex"'
+                      enum:
+                        - Dex
+                        - Tigera
+                      type: string
+                    usernameClaim:
+                      description:
+                        UsernameClaim specifies which claim to use from the
+                        OIDC provider as the username.
+                      type: string
+                    usernamePrefix:
+                      description:
+                        Deprecated. Please use Authentication.Spec.UsernamePrefix
+                        instead.
+                      type: string
+                  required:
+                    - issuerURL
+                    - usernameClaim
+                  type: object
+                openshift:
+                  description:
+                    Openshift contains the configuration needed to setup
+                    Openshift OAuth authentication.
+                  properties:
+                    issuerURL:
+                      description:
+                        "IssuerURL is the URL to the Openshift OAuth provider.
+                        Ex.: https://api.my-ocp-domain.com:6443"
+                      type: string
+                  required:
+                    - issuerURL
+                  type: object
+                usernamePrefix:
+                  description: |-
+                    If specified, UsernamePrefix is prepended to each user obtained from the identity provider. Note that
+                    Kibana does not support a user prefix, so this prefix is removed from Kubernetes User when translating log access
+                    ClusterRoleBindings into Elastic.
+                  type: string
+              required:
+                - managerDomain
+              type: object
+            status:
+              description: AuthenticationStatus defines the observed state of Authentication
+              properties:
+                conditions:
+                  description: |-
+                    Conditions represents the latest observed set of conditions for the component. A component may be one or more of
+                    Ready, Progressing, Degraded or other customer types.
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                state:
+                  description: State provides user-readable status.
+                  type: string
+              type: object
+          type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'tigera-secure'
+              rule: self.metadata.name == 'tigera-secure'
+      served: true
+      storage: true
+      subresources:
+        status: {}

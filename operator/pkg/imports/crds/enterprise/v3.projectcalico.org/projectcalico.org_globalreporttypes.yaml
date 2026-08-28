@@ -1,0 +1,151 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: globalreporttypes.projectcalico.org
+spec:
+  group: projectcalico.org
+  names:
+    kind: GlobalReportType
+    listKind: GlobalReportTypeList
+    plural: globalreporttypes
+    singular: globalreporttype
+  scope: Cluster
+  versions:
+    - name: v3
+      schema:
+        openAPIV3Schema:
+          description:
+            GlobalReportType contains the configuration for a non-namespaced
+            report type.
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description:
+                ReportTypeSpec contains the various templates, and configuration
+                used to render a specific type of report.
+              properties:
+                auditEventsSelection:
+                  description: |-
+                    What audit log data should be included in the report. If not specified, the report will contain no audit log
+                    data. The selection may be further filtered by the Report.
+                  properties:
+                    resources:
+                      description: |-
+                        Resources lists the resources that will be included in the audit logs in the ReportData.  Blank fields in the
+                        listed ResourceID structs are treated as wildcards.
+                      items:
+                        description: |-
+                          AuditResource is used to filter Audit events in the Report configuration.
+
+                          An empty field value indicates a wildcard. For example, if Resource is set to "networkpolicies" and all other
+                          fields are blank then this filter would include all NetworkPolicy resources across all namespaces, and would include
+                          both Calico and Kubernetes resource types.
+                        properties:
+                          apiGroup:
+                            description:
+                              APIGroup is the name of the API group that
+                              contains the referred object (e.g. projectcalico.org).
+                            type: string
+                          apiVersion:
+                            description:
+                              APIVersion is the version of the API group
+                              that contains the referred object (e.g. v3).
+                            type: string
+                          name:
+                            description: The resource name.
+                            type: string
+                          namespace:
+                            description: The resource namespace.
+                            type: string
+                          resource:
+                            description:
+                              The resource type. The format is the lowercase
+                              plural as used in audit event selection and RBAC configuration.
+                            type: string
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  type: object
+                downloadTemplates:
+                  description: The set of templates used to render the report for downloads.
+                  items:
+                    description:
+                      ReportTemplate defines a template used to render a
+                      report into downloadable or UI compatible format.
+                    properties:
+                      description:
+                        description: A user-facing description of the template.
+                        type: string
+                      name:
+                        description: |-
+                          The name of this template. This should be unique across all template names within a ReportType. This will be used
+                          by the UI as the suffix of the downloadable file name.
+                        type: string
+                      template:
+                        description:
+                          The base-64 encoded go template used to render
+                          the report data.
+                        type: string
+                    type: object
+                  type: array
+                  x-kubernetes-list-type: atomic
+                includeCISBenchmarkData:
+                  description:
+                    Whether to include the full cis benchmark test results
+                    in the report.
+                  type: boolean
+                includeEndpointData:
+                  description: |-
+                    Whether to include endpoint data in the report. The actual endpoints included may be filtered by the Report,
+                    but will otherwise contain the full set of endpoints.
+                  type: boolean
+                includeEndpointFlowLogData:
+                  description:
+                    Whether to include endpoint-to-endpoint flow log data
+                    in the report.
+                  type: boolean
+                uiSummaryTemplate:
+                  description: |-
+                    The summary template, explicitly used by the UI to render a summary version of the report. This should render
+                    to json containing a sets of widgets that the UI can use to render the summary. The rendered data is returned
+                    on the list query of the reports.
+                  properties:
+                    description:
+                      description: A user-facing description of the template.
+                      type: string
+                    name:
+                      description: |-
+                        The name of this template. This should be unique across all template names within a ReportType. This will be used
+                        by the UI as the suffix of the downloadable file name.
+                      type: string
+                    template:
+                      description:
+                        The base-64 encoded go template used to render the
+                        report data.
+                      type: string
+                  type: object
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

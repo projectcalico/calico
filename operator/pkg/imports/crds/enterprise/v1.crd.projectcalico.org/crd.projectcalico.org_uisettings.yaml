@@ -1,0 +1,338 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: uisettings.crd.projectcalico.org
+spec:
+  group: crd.projectcalico.org
+  names:
+    kind: UISettings
+    listKind: UISettingsList
+    plural: uisettings
+    singular: uisettings
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description:
+                UISettingsSpec contains the specification for a UISettings
+                resource.
+              properties:
+                dashboard:
+                  description:
+                    Dashboard data. One of View, Layer or Dashboard should
+                    be specified.
+                  properties:
+                    dashboardData:
+                      description: Array of dashboard data
+                      items:
+                        properties:
+                          layout:
+                            description: Layout information of the dashboard card
+                            properties:
+                              height:
+                                description: Height of the dashboard card
+                                format: int32
+                                type: integer
+                              index:
+                                description: Index of the dashboard
+                                type: string
+                              isInNamespaceView:
+                                description:
+                                  Whether this dashboard is in namespace
+                                  view or not
+                                type: boolean
+                              isResizable:
+                                description:
+                                  Whether this dashboard card should be re-sizeable
+                                  or not
+                                type: boolean
+                              isVisible:
+                                description:
+                                  Whether this dashboard card should be visible
+                                  or not
+                                type: boolean
+                              maxHeight:
+                                description:
+                                  Maximum limit set for the size of the dashboard
+                                  card height
+                                format: int32
+                                type: integer
+                              maxWidth:
+                                description:
+                                  Maximum limit set for the size of the dashboard
+                                  card width
+                                format: int32
+                                type: integer
+                              minHeight:
+                                description:
+                                  Minimum limit set for the size of the dashboard
+                                  card height
+                                format: int32
+                                type: integer
+                              minWidth:
+                                description:
+                                  Minimum limit set for the size of the dashboard
+                                  card width
+                                format: int32
+                                type: integer
+                              width:
+                                description: Width of the dashboard card
+                                format: int32
+                                type: integer
+                              xPos:
+                                description:
+                                  X coordinate of the top-left corner of
+                                  the dashboard card
+                                format: int32
+                                type: integer
+                              yPos:
+                                description:
+                                  Y coordinate of the top-left corner of
+                                  the dashboard card
+                                format: int32
+                                type: integer
+                            required:
+                              - height
+                              - width
+                              - xPos
+                              - yPos
+                            type: object
+                          selectedNamespace:
+                            description: Namespace user selected for the dashboard
+                            type: string
+                          type:
+                            description: Type of the dashboard
+                            type: string
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  type: object
+                description:
+                  description: This description is displayed by the UI.
+                  type: string
+                group:
+                  description:
+                    The settings group. Once configured this cannot be modified.
+                    The group must exist.
+                  type: string
+                layer:
+                  description:
+                    Layer data. One of View, Layer or Dashboard should be
+                    specified.
+                  properties:
+                    color:
+                      description:
+                        The color used to represent the layer when an Icon
+                        has not been specified.
+                      type: string
+                    icon:
+                      description:
+                        A user-configurable icon. If not specified, the default
+                        layer icon is used for this layer node.
+                      type: string
+                    nodes:
+                      description: The nodes that are aggregated into a single layer.
+                      items:
+                        description:
+                          UIGraphNode contains details about a graph node
+                          so that the UI can render it correctly.
+                        properties:
+                          id:
+                            description: The node ID.
+                            type: string
+                          name:
+                            description: The node name.
+                            type: string
+                          namespace:
+                            description: The node namespace.
+                            type: string
+                          type:
+                            description: The node type.
+                            type: string
+                        required:
+                          - id
+                          - name
+                          - type
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  type: object
+                user:
+                  description: |-
+                    The user associated with these settings. This is filled in by the APIServer on a create request if the owning
+                    group is filtered by user. Cannot be modified.
+                  type: string
+                view:
+                  description:
+                    View data. One of View, Layer or Dashboard should be
+                    specified.
+                  properties:
+                    expandPorts:
+                      description:
+                        Whether ports are expanded. If false, port information
+                        is aggregated.
+                      type: boolean
+                    followConnectionDirection:
+                      description:
+                        Whether or not to automatically follow directly connected
+                        nodes.
+                      type: boolean
+                    hostAggregationSelectors:
+                      description: |-
+                        The set of selectors used to aggregate hosts (Kubernetes nodes). Nodes are aggregated based on the supplied set
+                        of selectors. In the case of overlapping selectors, the order specified in the slice is the order checked and so
+                        the first selector to match is used.  The nodes will be aggregated into a graph node with the name specified in
+                        the NamedSelector.
+                      items:
+                        description:
+                          A Calico format label selector with an associated
+                          name.
+                        properties:
+                          name:
+                            type: string
+                          selector:
+                            type: string
+                        required:
+                          - name
+                          - selector
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    layers:
+                      description: |-
+                        The set of layer names that are active in this view.  Note that layers may be defined, but it is not necessary
+                        to have each layer "active". Corresponds directly to the name of the UISettings resource that contains a layer
+                        definition.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    layoutType:
+                      description: |-
+                        Layout type. Semi-arbitrary value used to specify the layout-type/algorithm. For example could specify
+                        different layout algorithms, or click-to-grid.  Mostly here for future use.
+                      type: string
+                    nodes:
+                      description: |-
+                        Graph node specific view data. This provides information about what is in focus, expanded, hidden,
+                        deemphasized etc. at a per-node level.
+                      items:
+                        description:
+                          UIGraphNodeView contains the view configuration
+                          for a specific graph node.
+                        properties:
+                          deemphasize:
+                            description: |-
+                              Whether the UI should de-emphasize the node when visible. This is just a UI directive and does not correspond to
+                              a backend parameter.
+                            type: boolean
+                          expanded:
+                            description: |-
+                              This node is expanded to the next level.  This node can, for example, be a layer that is expanded into its
+                              constituent parts.
+                            type: boolean
+                          followEgress:
+                            type: boolean
+                          followIngress:
+                            description: |-
+                              Whether the ingress/egress connections to/from this node are included in the graph.  This effectively brings
+                              more nodes into focus.
+                            type: boolean
+                          hide:
+                            description:
+                              Whether the UI should hide the node. This is
+                              just a UI directive and does not correspond to a backend
+                              parameter.
+                            type: boolean
+                          hideUnrelated:
+                            description: |-
+                              Whether the UI should hide unrelated nodes. This is just a UI directive and does not correspond to a backend
+                              parameter.
+                            type: boolean
+                          id:
+                            description: The node ID.
+                            type: string
+                          inFocus:
+                            description:
+                              This node is a primary focus of the graph (i.e.
+                              the graph contains this node and connected nodes).
+                            type: boolean
+                          name:
+                            description: The node name.
+                            type: string
+                          namespace:
+                            description: The node namespace.
+                            type: string
+                          type:
+                            description: The node type.
+                            type: string
+                        required:
+                          - id
+                          - name
+                          - type
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    positions:
+                      description: Positions of graph nodes.
+                      items:
+                        description: UI screen position.
+                        properties:
+                          id:
+                            type: string
+                          xPos:
+                            type: integer
+                          yPos:
+                            type: integer
+                          zPos:
+                            type: integer
+                        required:
+                          - id
+                          - xPos
+                          - yPos
+                          - zPos
+                        type: object
+                      type: array
+                      x-kubernetes-list-type: atomic
+                    splitIngressEgress:
+                      description: |-
+                        Whether to split HostEndpoints, NetworkSets and Networks into separate ingress and egress nodes or to combine
+                        them. In a service-centric view, splitting these makes the graph clearer. This never splits pods which represent
+                        a true microservice which has ingress and egress connections.
+                      type: boolean
+                  type: object
+              required:
+                - description
+                - group
+              type: object
+              x-kubernetes-validations:
+                - message: exactly one of view, layer, or dashboard must be specified
+                  reason: FieldValueInvalid
+                  rule:
+                    "[has(self.view), has(self.layer), has(self.dashboard)].filter(x,
+                    x).size() == 1"
+          type: object
+      served: true
+      storage: true

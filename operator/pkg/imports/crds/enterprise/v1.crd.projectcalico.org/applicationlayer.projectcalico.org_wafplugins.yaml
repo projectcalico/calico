@@ -1,0 +1,235 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: wafplugins.applicationlayer.projectcalico.org
+spec:
+  group: applicationlayer.projectcalico.org
+  names:
+    kind: WAFPlugin
+    listKind: WAFPluginList
+    plural: wafplugins
+    shortNames:
+      - wafplugin
+    singular: wafplugin
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .spec.description
+          name: Description
+          type: string
+        - jsonPath: .status.ruleCount
+          name: Rules
+          type: integer
+        - jsonPath: .status.referencedByCount
+          name: Refs
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      name: v3
+      schema:
+        openAPIV3Schema:
+          description: WAFPlugin is the Schema for namespace-scoped custom WAF plugins
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description:
+                WAFPluginSpec defines a custom WAF plugin with CRS 4-style
+                structure
+              properties:
+                after:
+                  description: |-
+                    After contains raw SecAction/SecRule directives that run AFTER CRS rules.
+                    Use for post-processing, logging, or cleanup.
+                    Equivalent to CRS *-after.conf files.
+                  maxLength: 65536
+                  type: string
+                before:
+                  description: |-
+                    Before contains raw SecAction/SecRule directives that run BEFORE CRS rules.
+                    Use for pre-processing, initialization, or early blocking.
+                    Equivalent to CRS *-before.conf files.
+                  maxLength: 65536
+                  type: string
+                config:
+                  description: |-
+                    Config contains raw SecAction/SecRule directives for plugin configuration.
+                    These run first and typically set tx.* variables.
+                    Equivalent to CRS *-config.conf files.
+                  maxLength: 65536
+                  type: string
+                description:
+                  description:
+                    Description is a human-readable description of what this
+                    plugin does
+                  maxLength: 1024
+                  type: string
+                rules:
+                  description: |-
+                    Rules contains the main SecAction/SecRule directives for this plugin.
+                    These run alongside CRS rules. Ordering across plugins follows array
+                    position in the consuming policy's spec.plugins[].
+                  maxLength: 65536
+                  type: string
+              type: object
+              x-kubernetes-validations:
+                - message: plugin must define at least one of config, before, rules, after
+                  rule:
+                    (has(self.config) && size(self.config) > 0) || (has(self.before)
+                    && size(self.before) > 0) || (has(self.rules) && size(self.rules)
+                    > 0) || (has(self.after) && size(self.after) > 0)
+            status:
+              description: |-
+                WAFPluginStatus defines the observed state.
+
+                Conditions emitted by the controller:
+                  - Accepted   (DirectivesValid / InvalidDirectives)
+              properties:
+                conditions:
+                  description: Conditions represent the latest available observations
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                referencedBy:
+                  description: |-
+                    ReferencedBy enumerates the policies that name this plugin in their
+                    spec.plugins[]. Sorted: namespace asc, name asc, kind asc. Updated
+                    every reconcile so client-side filtering is unnecessary. Capped at
+                    50 entries (matching RenderedConfigMapRefs on GlobalWAFPolicy) so a
+                    runaway WAFPolicy population can't blow up the status payload; when
+                    the cap is hit ReferencedByTruncated is set and the scalar
+                    ReferencedByCount above remains authoritative for "how many
+                    actually reference me".
+                  items:
+                    description: |-
+                      PolicyRef identifies a policy that references a plugin. Used by plugin
+                      status.referencedBy to give kubectl-readable reverse-index entries
+                      without packing identifiers into a single string.
+
+                      Current scope-binding (this release): the plugin reconciler resolves
+                      references from the parent policy's scope — WAFPolicy.spec.plugins[]
+                      resolves namespace-scoped, GlobalWAFPolicy.spec.plugins[] resolves
+                      cluster-scoped. Cross-scope lookup is a future addition; the Kind field
+                      below is type-level disclosure of intent for a later release.
+                    properties:
+                      kind:
+                        description: Kind identifies the referencing policy kind.
+                        enum:
+                          - WAFPolicy
+                          - GlobalWAFPolicy
+                        type: string
+                      name:
+                        description: Name is the name of the referencing policy.
+                        maxLength: 253
+                        type: string
+                      namespace:
+                        description: |-
+                          Namespace is the namespace of the referencing policy. Unset for
+                          cluster-scoped GlobalWAFPolicy entries (pointer so unset is
+                          distinguishable from explicit empty, per the optional-fields-are-
+                          pointers convention).
+                        maxLength: 253
+                        type: string
+                    required:
+                      - kind
+                      - name
+                    type: object
+                  maxItems: 50
+                  type: array
+                referencedByCount:
+                  description: |-
+                    ReferencedByCount is the total number of policies referencing this
+                    plugin — always the true population size, never bounded by the
+                    50-entry list cap on ReferencedBy. Backs the `Refs` printcolumn so
+                    `kubectl get wafplugin` shows the real fan-in even when ReferencedBy
+                    is truncated.
+                  type: integer
+                referencedByTruncated:
+                  description: |-
+                    ReferencedByTruncated is true when the consuming-policy set exceeded
+                    the 50-entry cap on ReferencedBy. Consumers should fall back to a
+                    label-selector list query rather than relying on ReferencedBy alone;
+                    ReferencedByCount remains accurate regardless.
+                  type: boolean
+                ruleCount:
+                  description:
+                    RuleCount is the number of SecRule directives in this
+                    plugin
+                  type: integer
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}

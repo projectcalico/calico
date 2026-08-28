@@ -1,0 +1,55 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: licenseusagereports.usage.tigera.io
+spec:
+  group: usage.tigera.io
+  names:
+    kind: LicenseUsageReport
+    listKind: LicenseUsageReportList
+    plural: licenseusagereports
+    singular: licenseusagereport
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                hmac:
+                  type: string
+                reportData:
+                  description: |-
+                    The base64-encoded JSON data for this report. The data represents an interval of time when license usage was
+                    monitored in the cluster, along with data that binds the report to its cluster context.
+                  type: string
+              required:
+                - hmac
+                - reportData
+              type: object
+          required:
+            - metadata
+            - spec
+          type: object
+      served: true
+      storage: true

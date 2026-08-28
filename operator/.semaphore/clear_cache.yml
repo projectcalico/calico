@@ -1,0 +1,18 @@
+version: v1.0
+name: Operator Clean Up
+
+execution_time_limit:
+  hours: 4
+
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2404
+
+blocks:
+  - name: Clear Entire Cache
+    task:
+      jobs:
+        - name: Clear Entire Cache
+          commands:
+            - 'cache clear'

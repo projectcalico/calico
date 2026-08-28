@@ -1,0 +1,37 @@
+version: v1.0
+name: Renovate update dependencies
+agent:
+  machine:
+    type: f1-standard-2
+    os_image: ubuntu2204
+
+execution_time_limit:
+  hours: 2
+
+global_job_config:
+  secrets:
+    - name: private-repo
+  prologue:
+    commands:
+      - chmod 0600 ~/.keys/*
+      - ssh-add ~/.keys/*
+      - checkout
+
+blocks:
+  - name: Run Renovate
+    task:
+      secrets:
+        - name: marvin-renovate-token-enterprise
+      jobs:
+        - name: Renovate
+          env_vars:
+            - name: RENOVATE_REPOSITORIES
+              value: tigera/operator
+            - name: RENOVATE_GIT_AUTHOR
+              value: "marvin-tigera <marvin-tigera@users.noreply.github.com>"
+            - name: LOG_LEVEL
+              value: info
+          commands:
+            - nvm install 24 && nvm use 24
+            - npm install -g renovate@43
+            - renovate --platform=github --autodiscover=false

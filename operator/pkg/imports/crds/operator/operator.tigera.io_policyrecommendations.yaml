@@ -1,0 +1,315 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: policyrecommendations.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: PolicyRecommendation
+    listKind: PolicyRecommendationList
+    plural: policyrecommendations
+    singular: policyrecommendation
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: |-
+            PolicyRecommendation is the Schema for the policy recommendation API. At most one instance
+            of this resource is supported. It must be named "tigera-secure".
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: |-
+                PolicyRecommendationSpec defines configuration for the Calico Enterprise Policy Recommendation
+                service.
+              properties:
+                policyRecommendationDeployment:
+                  description:
+                    PolicyRecommendation configures the PolicyRecommendation
+                    Deployment.
+                  properties:
+                    spec:
+                      description:
+                        Spec is the specification of the PolicyRecommendation
+                        Deployment.
+                      properties:
+                        template:
+                          description:
+                            Template describes the PolicyRecommendation Deployment
+                            pod that will be created.
+                          properties:
+                            spec:
+                              description:
+                                Spec is the PolicyRecommendation Deployment's
+                                PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of PolicyRecommendation containers.
+                                    If specified, this overrides the specified PolicyRecommendation Deployment containers.
+                                    If omitted, the PolicyRecommendation Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      PolicyRecommendationDeploymentContainer
+                                      is a PolicyRecommendation Deployment container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the PolicyRecommendation Deployment container by name.
+                                          Supported values are: policy-recommendation-controller
+                                        enum:
+                                          - policy-recommendation-controller
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named PolicyRecommendation Deployment container's resources.
+                                          If omitted, the PolicyRecommendation Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of PolicyRecommendation init containers.
+                                    If specified, this overrides the specified PolicyRecommendation Deployment init containers.
+                                    If omitted, the PolicyRecommendation Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      PolicyRecommendationDeploymentInitContainer
+                                      is a PolicyRecommendation Deployment init container.
+                                    properties:
+                                      name:
+                                        description:
+                                          Name is an enum which identifies
+                                          the PolicyRecommendation Deployment init container
+                                          by name.
+                                        enum:
+                                          - policy-recommendation-tls-key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named PolicyRecommendation Deployment init container's resources.
+                                          If omitted, the PolicyRecommendation Deployment will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+              type: object
+            status:
+              description:
+                PolicyRecommendationStatus defines the observed state of
+                Tigera policy recommendation.
+              properties:
+                state:
+                  description: State provides user-readable status.
+                  type: string
+              type: object
+          type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'tigera-secure'
+              rule: self.metadata.name == 'tigera-secure'
+      served: true
+      storage: true
+      subresources:
+        status: {}

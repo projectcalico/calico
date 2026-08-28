@@ -1,0 +1,1639 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: logstorages.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: LogStorage
+    listKind: LogStorageList
+    plural: logstorages
+    singular: logstorage
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: |-
+            LogStorage installs the components required for Tigera flow and DNS log storage. At most one instance
+            of this resource is supported. It must be named "tigera-secure". When created, this installs an Elasticsearch cluster for use by
+            Calico Enterprise.
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: Specification of the desired state for Tigera log storage.
+              properties:
+                componentResources:
+                  description: |-
+                    ComponentResources can be used to customize the resource requirements for each component.
+                    Only ECKOperator is supported for this spec.
+                  items:
+                    description:
+                      The ComponentResource struct associates a ResourceRequirements
+                      with a component by name
+                    properties:
+                      componentName:
+                        description: |-
+                          Deprecated. Please use ECKOperatorStatefulSet.
+                          ComponentName is an enum which identifies the component
+                        enum:
+                          - ECKOperator
+                        type: string
+                      resourceRequirements:
+                        description:
+                          ResourceRequirements allows customization of limits
+                          and requests for compute resources such as cpu and memory.
+                        properties:
+                          claims:
+                            description: |-
+                              Claims lists the names of resources, defined in spec.resourceClaims,
+                              that are used by this container.
+                              This field depends on the
+                              DynamicResourceAllocation feature gate.
+                              This field is immutable. It can only be set for containers.
+                            items:
+                              description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                              properties:
+                                name:
+                                  description: |-
+                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                    the Pod where this field is used. It makes that resource available
+                                    inside a container.
+                                  type: string
+                                request:
+                                  description: |-
+                                    Request is the name chosen for a request in the referenced claim.
+                                    If empty, everything from the claim is made available, otherwise
+                                    only the result of this request.
+                                  type: string
+                              required:
+                                - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                              - name
+                            x-kubernetes-list-type: map
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: |-
+                              Limits describes the maximum amount of compute resources allowed.
+                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                                - type: integer
+                                - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: |-
+                              Requests describes the minimum amount of compute resources required.
+                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                            type: object
+                        type: object
+                    required:
+                      - componentName
+                      - resourceRequirements
+                    type: object
+                  type: array
+                dataNodeSelector:
+                  additionalProperties:
+                    type: string
+                  description: |-
+                    DataNodeSelector gives you more control over the node that Elasticsearch will run on. The contents of DataNodeSelector will
+                    be added to the PodSpec of the Elasticsearch nodes. For the pod to be eligible to run on a node, the node must have
+                    each of the indicated key-value pairs as labels as well as access to the specified StorageClassName.
+                  type: object
+                eckOperatorStatefulSet:
+                  description: |-
+                    ECKOperatorStatefulSet configures the ECKOperator StatefulSet. If used in conjunction with the deprecated
+                    ComponentResources, then these overrides take precedence.
+                  properties:
+                    spec:
+                      description: Spec is the specification of the ECKOperator StatefulSet.
+                      properties:
+                        template:
+                          description:
+                            Template describes the ECKOperator StatefulSet
+                            pod that will be created.
+                          properties:
+                            spec:
+                              description: Spec is the ECKOperator StatefulSet's PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of ECKOperator StatefulSet containers.
+                                    If specified, this overrides the specified ECKOperator StatefulSet containers.
+                                    If omitted, the ECKOperator StatefulSet will use its default values for its containers.
+                                  items:
+                                    description:
+                                      ECKOperatorStatefulSetContainer is
+                                      a ECKOperator StatefulSet container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the ECKOperator StatefulSet container by name.
+                                          Supported values are: manager
+                                        enum:
+                                          - manager
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named ECKOperator StatefulSet container's resources.
+                                          If omitted, the ECKOperator StatefulSet will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of ECKOperator StatefulSet init containers.
+                                    If specified, this overrides the specified ECKOperator StatefulSet init containers.
+                                    If omitted, the ECKOperator StatefulSet will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      ECKOperatorStatefulSetInitContainer
+                                      is a ECKOperator StatefulSet init container.
+                                    properties:
+                                      name:
+                                        description:
+                                          Name is an enum which identifies
+                                          the ECKOperator StatefulSet init container
+                                          by name.
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named ECKOperator StatefulSet init container's resources.
+                                          If omitted, the ECKOperator StatefulSet will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                elasticsearchMetricsDeployment:
+                  description:
+                    ElasticsearchMetricsDeployment configures the tigera-elasticsearch-metric
+                    Deployment.
+                  properties:
+                    spec:
+                      description:
+                        Spec is the specification of the ElasticsearchMetrics
+                        Deployment.
+                      properties:
+                        template:
+                          description:
+                            Template describes the ElasticsearchMetrics Deployment
+                            pod that will be created.
+                          properties:
+                            spec:
+                              description:
+                                Spec is the ElasticsearchMetrics Deployment's
+                                PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of ElasticsearchMetricsDeployment containers.
+                                    If specified, this overrides the specified ElasticsearchMetricsDeployment containers.
+                                    If omitted, the ElasticsearchMetrics Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      ElasticsearchMetricsDeploymentContainer
+                                      is a ElasticsearchMetricsDeployment container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the ElasticsearchMetricsDeployment container by name.
+                                          Supported values are: tigera-elasticsearch-metrics
+                                        enum:
+                                          - tigera-elasticsearch-metrics
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named ElasticsearchMetricsDeployment container's resources.
+                                          If omitted, the ElasticsearchMetrics Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of ElasticsearchMetricsDeployment init containers.
+                                    If specified, this overrides the specified ElasticsearchMetricsDeployment init containers.
+                                    If omitted, the ElasticsearchMetrics Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      ElasticsearchMetricsDeploymentInitContainer
+                                      is a ElasticsearchMetricsDeployment init container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the ElasticsearchMetricsDeployment init container by name.
+                                          Supported values are: tigera-ee-elasticsearch-metrics-tls-key-cert-provisioner
+                                        enum:
+                                          - tigera-ee-elasticsearch-metrics-tls-key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named ElasticsearchMetricsDeployment init container's resources.
+                                          If omitted, the ElasticsearchMetrics Deployment will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                esGatewayDeployment:
+                  description: ESGatewayDeployment configures the es-gateway Deployment.
+                  properties:
+                    spec:
+                      description: Spec is the specification of the es-gateway Deployment.
+                      properties:
+                        template:
+                          description:
+                            Template describes the es-gateway Deployment
+                            pod that will be created.
+                          properties:
+                            spec:
+                              description: Spec is the es-gateway Deployment's PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of es-gateway containers.
+                                    If specified, this overrides the specified es-gateway Deployment containers.
+                                    If omitted, the es-gateway Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      ESGatewayDeploymentContainer is a es-gateway
+                                      Deployment container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the es-gateway Deployment container by name.
+                                          Supported values are: tigera-secure-es-gateway
+                                        enum:
+                                          - tigera-secure-es-gateway
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named es-gateway Deployment container's resources.
+                                          If omitted, the es-gateway Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of es-gateway init containers.
+                                    If specified, this overrides the specified es-gateway Deployment init containers.
+                                    If omitted, the es-gateway Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      ESGatewayDeploymentInitContainer is
+                                      a es-gateway Deployment init container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the es-gateway Deployment init container by name.
+                                          Supported values are: tigera-secure-elasticsearch-cert-key-cert-provisioner
+                                        enum:
+                                          - tigera-secure-elasticsearch-cert-key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named es-gateway Deployment init container's resources.
+                                          If omitted, the es-gateway Deployment will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                indices:
+                  description:
+                    Index defines the configuration for the indices in the
+                    Elasticsearch cluster.
+                  properties:
+                    replicas:
+                      description:
+                        Replicas defines how many replicas each index will
+                        have. See https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html
+                      format: int32
+                      type: integer
+                  type: object
+                kibana:
+                  description: Kibana configures the Kibana Spec.
+                  properties:
+                    spec:
+                      description: Spec is the specification of the Kibana.
+                      properties:
+                        replicas:
+                          description: |-
+                            Replicas defines the number of Kibana replicas. When set to 0, Kibana is not rendered.
+                            Default: 1
+                          format: int32
+                          type: integer
+                        template:
+                          description:
+                            Template describes the Kibana pod that will be
+                            created.
+                          properties:
+                            spec:
+                              description: Spec is the Kibana's PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of Kibana containers.
+                                    If specified, this overrides the specified Kibana Deployment containers.
+                                    If omitted, the Kibana Deployment will use its default values for its containers.
+                                  items:
+                                    description: KibanaContainer is a Kibana container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the Kibana Deployment container by name.
+                                          Supported values are: kibana
+                                        enum:
+                                          - kibana
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named Kibana container's resources.
+                                          If omitted, the Kibana will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of Kibana init containers.
+                                    If specified, this overrides the specified Kibana Deployment init containers.
+                                    If omitted, the Kibana Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      KibanaInitContainer is a Kibana init
+                                      container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the Kibana init container by name.
+                                          Supported values are: key-cert-provisioner
+                                        enum:
+                                          - key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named Kibana Deployment init container's resources.
+                                          If omitted, the Kibana Deployment will use its default value for this init container's resources.
+                                          If used in conjunction with the deprecated ComponentResources, then this value takes precedence.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                linseedDeployment:
+                  description: LinseedDeployment configures the linseed Deployment.
+                  properties:
+                    spec:
+                      description: Spec is the specification of the linseed Deployment.
+                      properties:
+                        template:
+                          description:
+                            Template describes the linseed Deployment pod
+                            that will be created.
+                          properties:
+                            spec:
+                              description: Spec is the linseed Deployment's PodSpec.
+                              properties:
+                                containers:
+                                  description: |-
+                                    Containers is a list of linseed containers.
+                                    If specified, this overrides the specified linseed Deployment containers.
+                                    If omitted, the linseed Deployment will use its default values for its containers.
+                                  items:
+                                    description:
+                                      LinseedDeploymentContainer is a linseed
+                                      Deployment container.
+                                    properties:
+                                      livenessProbe:
+                                        description: |-
+                                          LivenessProbe allows customization of the liveness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the linseed Deployment container by name.
+                                          Supported values are: tigera-linseed
+                                        enum:
+                                          - tigera-linseed
+                                        type: string
+                                      readinessProbe:
+                                        description: |-
+                                          ReadinessProbe allows customization of the readiness probe timing parameters.
+                                          The probe handler is set by the operator and cannot be overridden.
+                                        properties:
+                                          failureThreshold:
+                                            description: |-
+                                              FailureThreshold is the minimum consecutive failures for the probe
+                                              to be considered failed after having succeeded.
+                                            format: int32
+                                            type: integer
+                                          initialDelaySeconds:
+                                            description: |-
+                                              InitialDelaySeconds is the number of seconds after the container
+                                              starts before the probe is initiated.
+                                            format: int32
+                                            type: integer
+                                          periodSeconds:
+                                            description:
+                                              PeriodSeconds is how often
+                                              (in seconds) to perform the probe.
+                                            format: int32
+                                            type: integer
+                                          timeoutSeconds:
+                                            description:
+                                              TimeoutSeconds is the number
+                                              of seconds after which the probe times
+                                              out.
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named linseed Deployment container's resources.
+                                          If omitted, the linseed Deployment will use its default value for this container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                                initContainers:
+                                  description: |-
+                                    InitContainers is a list of linseed init containers.
+                                    If specified, this overrides the specified linseed Deployment init containers.
+                                    If omitted, the linseed Deployment will use its default values for its init containers.
+                                  items:
+                                    description:
+                                      LinseedDeploymentInitContainer is a
+                                      linseed Deployment init container.
+                                    properties:
+                                      name:
+                                        description: |-
+                                          Name is an enum which identifies the linseed Deployment init container by name.
+                                          Supported values are: tigera-secure-linseed-token-tls-key-cert-provisioner,tigera-secure-linseed-cert-key-cert-provisioner
+                                        enum:
+                                          - tigera-secure-linseed-token-tls-key-cert-provisioner
+                                          - tigera-secure-linseed-cert-key-cert-provisioner
+                                        type: string
+                                      resources:
+                                        description: |-
+                                          Resources allows customization of limits and requests for compute resources such as cpu and memory.
+                                          If specified, this overrides the named linseed Deployment init container's resources.
+                                          If omitted, the linseed Deployment will use its default value for this init container's resources.
+                                        properties:
+                                          claims:
+                                            description: |-
+                                              Claims lists the names of resources, defined in spec.resourceClaims,
+                                              that are used by this container.
+                                              This field depends on the
+                                              DynamicResourceAllocation feature gate.
+                                              This field is immutable. It can only be set for containers.
+                                            items:
+                                              description:
+                                                ResourceClaim references
+                                                one entry in PodSpec.ResourceClaims.
+                                              properties:
+                                                name:
+                                                  description: |-
+                                                    Name must match the name of one entry in pod.spec.resourceClaims of
+                                                    the Pod where this field is used. It makes that resource available
+                                                    inside a container.
+                                                  type: string
+                                                request:
+                                                  description: |-
+                                                    Request is the name chosen for a request in the referenced claim.
+                                                    If empty, everything from the claim is made available, otherwise
+                                                    only the result of this request.
+                                                  type: string
+                                              required:
+                                                - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                              - name
+                                            x-kubernetes-list-type: map
+                                          limits:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Limits describes the maximum amount of compute resources allowed.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                          requests:
+                                            additionalProperties:
+                                              anyOf:
+                                                - type: integer
+                                                - type: string
+                                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                              x-kubernetes-int-or-string: true
+                                            description: |-
+                                              Requests describes the minimum amount of compute resources required.
+                                              If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                                              otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                                              More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                                            type: object
+                                        type: object
+                                    required:
+                                      - name
+                                    type: object
+                                  type: array
+                              type: object
+                          type: object
+                      type: object
+                  type: object
+                nodes:
+                  description:
+                    Nodes defines the configuration for a set of identical
+                    Elasticsearch cluster nodes, each of type master, data, and ingest.
+                  properties:
+                    count:
+                      description:
+                        Count defines the number of nodes in the Elasticsearch
+                        cluster.
+                      format: int64
+                      type: integer
+                    nodeSets:
+                      description:
+                        NodeSets defines configuration specific to each Elasticsearch
+                        Node Set
+                      items:
+                        description:
+                          NodeSets defines configuration specific to each
+                          Elasticsearch Node Set
+                        properties:
+                          selectionAttributes:
+                            description: |-
+                              SelectionAttributes defines K8s node attributes a NodeSet should use when setting the Node Affinity selectors and
+                              Elasticsearch cluster awareness attributes for the Elasticsearch nodes. The list of SelectionAttributes are used
+                              to define Node Affinities and set the node awareness configuration in the running Elasticsearch instance.
+                            items:
+                              description: |-
+                                NodeSetSelectionAttribute defines a K8s node "attribute" the Elasticsearch nodes should be aware of. The "Name" and "Value"
+                                are used together to set the "awareness" attributes in Elasticsearch, while the "NodeLabel" and "Value" are used together
+                                to define Node Affinity for the Pods created for the Elasticsearch nodes.
+                              properties:
+                                name:
+                                  type: string
+                                nodeLabel:
+                                  type: string
+                                value:
+                                  type: string
+                              required:
+                                - name
+                                - nodeLabel
+                                - value
+                              type: object
+                            type: array
+                        type: object
+                      type: array
+                    resourceRequirements:
+                      description:
+                        ResourceRequirements defines the resource limits
+                        and requirements for the Elasticsearch cluster.
+                      properties:
+                        claims:
+                          description: |-
+                            Claims lists the names of resources, defined in spec.resourceClaims,
+                            that are used by this container.
+                            This field depends on the
+                            DynamicResourceAllocation feature gate.
+                            This field is immutable. It can only be set for containers.
+                          items:
+                            description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                            properties:
+                              name:
+                                description: |-
+                                  Name must match the name of one entry in pod.spec.resourceClaims of
+                                  the Pod where this field is used. It makes that resource available
+                                  inside a container.
+                                type: string
+                              request:
+                                description: |-
+                                  Request is the name chosen for a request in the referenced claim.
+                                  If empty, everything from the claim is made available, otherwise
+                                  only the result of this request.
+                                type: string
+                            required:
+                              - name
+                            type: object
+                          type: array
+                          x-kubernetes-list-map-keys:
+                            - name
+                          x-kubernetes-list-type: map
+                        limits:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: |-
+                            Limits describes the maximum amount of compute resources allowed.
+                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                          type: object
+                        requests:
+                          additionalProperties:
+                            anyOf:
+                              - type: integer
+                              - type: string
+                            pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                            x-kubernetes-int-or-string: true
+                          description: |-
+                            Requests describes the minimum amount of compute resources required.
+                            If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                            otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                            More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                          type: object
+                      type: object
+                  type: object
+                retention:
+                  description:
+                    Retention defines how long data is retained in the Elasticsearch
+                    cluster before it is cleared.
+                  properties:
+                    auditReports:
+                      description: |-
+                        AuditReports configures the retention period for audit logs, in days.  Logs written on a day that started at least this long ago are
+                        removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 91
+                      format: int32
+                      type: integer
+                    bgpLogs:
+                      description: |-
+                        BGPLogs configures the retention period for BGP logs, in days.  Logs written on a day that started at least this long ago
+                        are removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 8
+                      format: int32
+                      type: integer
+                    complianceReports:
+                      description: |-
+                        ComplianceReports configures the retention period for compliance reports, in days. Reports are output
+                        from the analysis of the system state and audit events for compliance reporting.
+                        Consult the Compliance Reporting documentation for more details on reports.
+                        Logs written on a day that started at least this long ago are
+                        removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 91
+                      format: int32
+                      type: integer
+                    dnsLogs:
+                      description: |-
+                        DNSLogs configures the retention period for DNS logs, in days.  Logs written on a day that started at least this long ago
+                        are removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 8
+                      format: int32
+                      type: integer
+                    flows:
+                      description: |-
+                        Flows configures the retention period for flow logs, in days.  Logs written on a day that started at least this long ago
+                        are removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 8
+                      format: int32
+                      type: integer
+                    snapshots:
+                      description: |-
+                        Snapshots configures the retention period for snapshots, in days. Snapshots are periodic captures
+                        of resources which along with audit events are used to generate reports.
+                        Consult the Compliance Reporting documentation for more details on snapshots.
+                        Logs written on a day that started at least this long ago are
+                        removed.  To keep logs for at least x days, use a retention period of x+1.
+                        Default: 91
+                      format: int32
+                      type: integer
+                  type: object
+                storageClassName:
+                  description: |-
+                    StorageClassName will populate the PersistentVolumeClaim.StorageClassName that is used to provision disks to the
+                    Tigera Elasticsearch cluster. The StorageClassName should only be modified when no LogStorage is currently
+                    active. We recommend choosing a storage class dedicated to Tigera LogStorage only. Otherwise, data retention
+                    cannot be guaranteed during upgrades. See https://docs.tigera.io/maintenance/upgrading for up-to-date instructions.
+                    Default: tigera-elasticsearch
+                  type: string
+              type: object
+            status:
+              description: Most recently observed state for Tigera log storage.
+              properties:
+                conditions:
+                  description: |-
+                    Conditions represents the latest observed set of conditions for the component. A component may be one or more of
+                    Ready, Progressing, Degraded or other customer types.
+                  items:
+                    description:
+                      Condition contains details for one aspect of the current
+                      state of this API Resource.
+                    properties:
+                      lastTransitionTime:
+                        description: |-
+                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                        format: date-time
+                        type: string
+                      message:
+                        description: |-
+                          message is a human readable message indicating details about the transition.
+                          This may be an empty string.
+                        maxLength: 32768
+                        type: string
+                      observedGeneration:
+                        description: |-
+                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                          with respect to the current state of the instance.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      reason:
+                        description: |-
+                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                          Producers of specific condition types may define expected values and meanings for this field,
+                          and whether the values are considered a guaranteed API.
+                          The value should be a CamelCase string.
+                          This field may not be empty.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                        type: string
+                      status:
+                        description: status of the condition, one of True, False, Unknown.
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                        type: string
+                      type:
+                        description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                        type: string
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    type: object
+                  type: array
+                elasticsearchHash:
+                  description: |-
+                    ElasticsearchHash represents the current revision and configuration of the installed Elasticsearch cluster. This
+                    is an opaque string which can be monitored for changes to perform actions when Elasticsearch is modified.
+                  type: string
+                kibanaHash:
+                  description: |-
+                    KibanaHash represents the current revision and configuration of the installed Kibana dashboard. This
+                    is an opaque string which can be monitored for changes to perform actions when Kibana is modified.
+                  type: string
+                state:
+                  description: State provides user-readable status.
+                  type: string
+              type: object
+          type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'tigera-secure'
+              rule: self.metadata.name == 'tigera-secure'
+      served: true
+      storage: true
+      subresources:
+        status: {}
