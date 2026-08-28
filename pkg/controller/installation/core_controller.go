@@ -1100,7 +1100,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	calicoVersion := r.ext.ProductVersion()
+	calicoVersion := r.ext.ProductVersion(&instance.Spec)
 
 	ci := controller.Inputs{
 		RenderInputs: render.Inputs{

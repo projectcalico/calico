@@ -84,7 +84,7 @@ var _ = Describe("the zero value Extensions", func() {
 	It("runs the base behavior for every controller", func() {
 		var e extensions.Extensions
 
-		Expect(e.Installation().ProductVersion()).NotTo(BeEmpty())
+		Expect(e.Installation().ProductVersion(&operatorv1.InstallationSpec{})).NotTo(BeEmpty())
 		Expect(e.Installation().KubeControllersImage()).To(BeNil())
 		Expect(e.Windows().Watches(nil)).NotTo(HaveOccurred())
 
