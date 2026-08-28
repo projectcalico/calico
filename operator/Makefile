@@ -100,6 +100,9 @@ endif
 ###############################################################################
 REPO?=tigera/operator
 PACKAGE_NAME?=github.com/projectcalico/calico/operator
+# The operator is a subdirectory of the monorepo's root module, so the
+# container mount needs to expose the repo root, not just this directory.
+MODULE_ROOT?=github.com/projectcalico/calico
 LOCAL_USER_ID?=$(shell id -u $$USER)
 # The project Go version.
 GO_VERSION?=1.26.5
@@ -141,7 +144,7 @@ EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 CONTAINERIZED= mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/..:/go/src/$(MODULE_ROOT):rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOPATH=/go \
@@ -502,7 +505,7 @@ dirty-check:
 foss-checks:
 	@echo Running $@...
 	docker run --rm \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/..:/go/src/$(MODULE_ROOT):rw \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-w /go/src/$(PACKAGE_NAME)
 		-e FOSSA_API_KEY=$(FOSSA_API_KEY) \
