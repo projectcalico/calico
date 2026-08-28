@@ -63,6 +63,8 @@ import (
 var _ = Describe("API server rendering tests (Calico Enterprise)", func() {
 	apiServerPolicy := testutils.GetExpectedPolicyFromFile("./testutils/expected_policies/apiserver.json")
 	apiServerPolicyForOCP := testutils.GetExpectedPolicyFromFile("./testutils/expected_policies/apiserver_ocp.json")
+	apiServerPolicyForManaged := testutils.GetExpectedPolicyFromFile("./testutils/expected_policies/apiserver_managed.json")
+	apiServerPolicyForManagedOCP := testutils.GetExpectedPolicyFromFile("./testutils/expected_policies/apiserver_managed_ocp.json")
 	var (
 		instance           *operatorv1.InstallationSpec
 		apiserver          *operatorv1.APIServerSpec
@@ -852,6 +854,33 @@ var _ = Describe("API server rendering tests (Calico Enterprise)", func() {
 		}))
 	})
 
+	It("should allow egress to Guardian on a managed cluster", func() {
+		cfg.ManagementClusterConnection = &operatorv1.ManagementClusterConnection{}
+
+		component := render.APIServerPolicy(cfg)
+		resources, _ := component.Objects()
+		policyName := types.NamespacedName{Name: "calico-system.apiserver-access", Namespace: "calico-system"}
+		policy := testutils.GetCalicoSystemPolicyFromResources(policyName, resources)
+		Expect(policy).ToNot(BeNil())
+		Expect(policy.Spec.Egress).To(ContainElement(calicov3.Rule{
+			Action:      calicov3.Allow,
+			Protocol:    &networkpolicy.TCPProtocol,
+			Destination: render.GuardianEntityRule,
+		}))
+		// The rule is only reached if it precedes the trailing Pass.
+		n := len(policy.Spec.Egress)
+		Expect(policy.Spec.Egress[n-1].Action).To(Equal(calicov3.Pass))
+	})
+
+	It("should omit the Guardian egress rule when the cluster is not managed", func() {
+		component := render.APIServerPolicy(cfg)
+		resources, _ := component.Objects()
+		policyName := types.NamespacedName{Name: "calico-system.apiserver-access", Namespace: "calico-system"}
+		policy := testutils.GetCalicoSystemPolicyFromResources(policyName, resources)
+		Expect(policy).ToNot(BeNil())
+		Expect(policy.Spec.Egress).NotTo(ContainElement(HaveField("Destination", render.GuardianEntityRule)))
+	})
+
 	It("should add egress policy with Enterprise variant and K8SServiceEndpoint as IP defined", func() {
 		cfg.K8SServiceEndpoint.Host = "169.169.169.169"
 		cfg.K8SServiceEndpoint.Port = "4321"
@@ -1204,7 +1233,15 @@ var _ = Describe("API server rendering tests (Calico Enterprise)", func() {
 				resources, _ := component.Objects()
 
 				policy := testutils.GetCalicoSystemPolicyFromResources(policyName, resources)
-				expectedPolicy := testutils.SelectPolicyByProvider(scenario, apiServerPolicy, apiServerPolicyForOCP)
+				expectedPolicy := testutils.SelectPolicyByClusterTypeAndProvider(
+					scenario,
+					map[string]*calicov3.NetworkPolicy{
+						"unmanaged":           apiServerPolicy,
+						"unmanaged-openshift": apiServerPolicyForOCP,
+						"managed":             apiServerPolicyForManaged,
+						"managed-openshift":   apiServerPolicyForManagedOCP,
+					},
+				)
 				Expect(policy).To(Equal(expectedPolicy))
 			},
 			Entry("for management/standalone, kube-dns", testutils.CalicoSystemScenario{ManagedCluster: false, OpenShift: false}),
