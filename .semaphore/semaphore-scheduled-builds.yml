@@ -1752,6 +1752,53 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
+  - name: Operator
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: static checks and unit tests"
+          commands:
+            - export TEST_SUITE_PREFIX="operator"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator FV"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: FV on kind"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - export TEST_SUITE_PREFIX="operator-fv"
+            - ../.semaphore/run-and-monitor make-fv.log make fv
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator FV" || true'
   - name: pod2daemon
     run:
       when: "true"
