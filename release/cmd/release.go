@@ -230,6 +230,8 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 
 func determineOperatorReleaseVersion(c *cli.Command, repoRootDir string) (string, error) {
 	operatorDir := filepath.Join(repoRootDir, "operator")
+	// git describe resolves against the whole monorepo, not the operator
+	// subtree, so the operator version comes from the repository's own tags.
 	operatorGitVer, err := command.GitVersion(operatorDir, true)
 	if err != nil {
 		return "", fmt.Errorf("determine operator git version: %w", err)

@@ -72,8 +72,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					return err
 				}
 
-				operatorDir := filepath.Join(cfg.RepoRootDir, "operator")
-
 				// Create the pinned config.
 				pinned := pinnedversion.CalicoPinnedVersions{
 					Dir:                 cfg.TmpDir,
@@ -82,7 +80,6 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					OperatorCfg: pinnedversion.OperatorConfig{
 						Image:    c.String(operatorImageFlag.Name),
 						Registry: c.String(operatorRegistryFlag.Name),
-						Dir:      operatorDir,
 					},
 				}
 				data, err := pinned.GenerateFile()

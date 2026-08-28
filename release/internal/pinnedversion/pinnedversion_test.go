@@ -41,11 +41,10 @@ func TestImageComponents(t *testing.T) {
 		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
-			Branch:   "release-v1.40",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
-		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
 	}
 	if err := generatePinnedVersionFile(c); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
@@ -90,7 +89,7 @@ func TestImageComponents(t *testing.T) {
 	})
 	t.Run("with operator", func(t *testing.T) {
 		expectedComponents := map[string]registry.Component{
-			"tigera/operator": {Version: "v1.40.0-v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
+			"tigera/operator": {Version: "v3.31.0", Image: "tigera/operator", Registry: "docker.io"},
 		}
 		for k, v := range commonComponents {
 			expectedComponents[k] = v
@@ -115,11 +114,10 @@ func TestGeneratePinnedVersionFile(t *testing.T) {
 		OperatorCfg: OperatorConfig{
 			Image:    "tigera/operator",
 			Registry: "docker.io",
-			Branch:   "release-v1.40",
 		},
 		releaseName:   "test-release",
 		productBranch: "release-v3.31",
-		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0"), "v1.40.0"),
+		versionData:   version.NewHashreleaseVersions(version.New("v3.31.0")),
 	}
 	if err := generatePinnedVersionFile(p); err != nil {
 		t.Fatalf("failed to generate pinned version file: %v", err)
