@@ -108,3 +108,11 @@ func TestLegacyKeyUpgrade(t *testing.T) {
 	Expect(pk.Kind).To(Equal("NetworkPolicy"))
 	Expect(upd.Value.(*model.Policy).Tier).To(Equal("mytier"))
 }
+
+func TestCompressionAlgorithmMetricLabelValue(t *testing.T) {
+	RegisterTestingT(t)
+
+	Expect(CompressionAlgorithm("").MetricLabelValue()).To(Equal("none"))
+	Expect(CompressionSnappy.MetricLabelValue()).To(Equal("snappy"))
+	Expect(CompressionZstd.MetricLabelValue()).To(Equal("zstd"))
+}
