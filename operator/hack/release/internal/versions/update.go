@@ -22,8 +22,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/sirupsen/logrus"
 	"go.yaml.in/yaml/v3"
 )
 

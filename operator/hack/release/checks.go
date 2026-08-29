@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 

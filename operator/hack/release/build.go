@@ -24,11 +24,11 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 

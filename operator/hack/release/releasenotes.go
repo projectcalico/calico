@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
 

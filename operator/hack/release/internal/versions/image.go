@@ -19,8 +19,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/sirupsen/logrus"
 )
 
 // sedReplacer escapes a string for use as the replacement in `sed s|...|REPL|` (with `|` as delimiter).

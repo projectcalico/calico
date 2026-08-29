@@ -21,8 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
