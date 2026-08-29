@@ -42,10 +42,6 @@ const controllerName = "nonclusterhost-controller"
 var log = logf.Log.WithName("controller_nonclusterhost")
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		return nil
-	}
-
 	// create the reconciler
 	reconciler := newReconciler(mgr, opts)
 

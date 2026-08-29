@@ -68,11 +68,6 @@ const (
 // Add creates a new authentication Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		// No need to start this controller.
-		return nil
-	}
-
 	// Create the reconciler
 	tierWatchReady := &utils.ReadyFlag{}
 	reconciler := newReconciler(mgr, opts, tierWatchReady)

@@ -30,7 +30,8 @@ var _ = Describe("Controllers", func() {
 				Expect(c.Add).NotTo(BeNil())
 				names = append(names, c.Name)
 			}
-			Expect(names).To(ConsistOf("Monitor", "ApplicationLayer", "EgressGateway", "PacketCapture", "OpenTelemetryCollector", "IntrusionDetection", "LogCollector"))
+			Expect(names).To(ConsistOf("Monitor", "ApplicationLayer", "EgressGateway", "PacketCapture", "OpenTelemetryCollector", "IntrusionDetection", "LogCollector",
+				"Manager", "NonClusterHost", "Authentication", "PolicyRecommendation"))
 		},
 		Entry("CalicoEnterprise", operatorv1.CalicoEnterprise),
 		//nolint:staticcheck // SA1019: the deprecated spelling is what this covers

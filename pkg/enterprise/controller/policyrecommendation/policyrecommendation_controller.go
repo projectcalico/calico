@@ -61,10 +61,6 @@ var log = logf.Log.WithName("controller_policy_recommendation")
 // Add creates a new PolicyRecommendation Controller and adds it to the Manager. The Manager will
 // set fields on the Controller and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		// No need to start this controller
-		return nil
-	}
 	licenseAPIReady := &utils.ReadyFlag{}
 	tierWatchReady := &utils.ReadyFlag{}
 	policyRecScopeWatchReady := &utils.ReadyFlag{}

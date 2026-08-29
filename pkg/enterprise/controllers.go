@@ -18,12 +18,16 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/enterprise/controller/applicationlayer"
+	"github.com/tigera/operator/pkg/enterprise/controller/authentication"
 	"github.com/tigera/operator/pkg/enterprise/controller/egressgateway"
 	"github.com/tigera/operator/pkg/enterprise/controller/intrusiondetection"
 	"github.com/tigera/operator/pkg/enterprise/controller/logcollector"
+	"github.com/tigera/operator/pkg/enterprise/controller/manager"
 	"github.com/tigera/operator/pkg/enterprise/controller/monitor"
+	"github.com/tigera/operator/pkg/enterprise/controller/nonclusterhost"
 	"github.com/tigera/operator/pkg/enterprise/controller/otelcollector"
 	"github.com/tigera/operator/pkg/enterprise/controller/packetcapture"
+	"github.com/tigera/operator/pkg/enterprise/controller/policyrecommendation"
 )
 
 // Controllers returns the reconcilers only Calico Enterprise runs, for the caller to
@@ -41,5 +45,9 @@ func Controllers(variant operatorv1.ProductVariant) []options.Controller {
 		{Name: "OpenTelemetryCollector", Add: otelcollector.Add},
 		{Name: "IntrusionDetection", Add: intrusiondetection.Add},
 		{Name: "LogCollector", Add: logcollector.Add},
+		{Name: "Manager", Add: manager.Add},
+		{Name: "NonClusterHost", Add: nonclusterhost.Add},
+		{Name: "Authentication", Add: authentication.Add},
+		{Name: "PolicyRecommendation", Add: policyrecommendation.Add},
 	}
 }
