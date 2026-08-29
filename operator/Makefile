@@ -522,9 +522,12 @@ foss-checks:
 ## Run what CI runs
 ci: clean format-check validate-gen-versions static-checks image-all test gen-files fix dirty-check test-crds
 
+# This repository is public and the Enterprise CRDs come from one that is not,
+# so only the core half is checked here. The Enterprise generated files are
+# committed and revalidated where their source lives.
 validate-gen-versions:
-	make gen-versions
-	make dirty-check
+	$(MAKE) gen-versions-calico
+	$(MAKE) dirty-check
 
 ## Deploys images to registry
 cd: image-all
