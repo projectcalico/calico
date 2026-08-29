@@ -30,7 +30,6 @@ image.tar
 
 /* Image build stamp files for kind testing */
 .stamp.*
-hack/test/kind/infra/operator
 
 /* Created by local kind cluster */
 hack/test/kind/kind

@@ -33,8 +33,7 @@
 # Environment (--operator):
 #   STAMP_DIR          - Directory for stamp files
 #   KIND_INFRA_DIR     - Path to hack/test/kind/infra/
-#   OPERATOR_REPO      - Operator git repo (e.g., tigera/operator)
-#   OPERATOR_BRANCH    - Operator branch to build
+#   REPO_ROOT          - Path to the root of this repo
 #   DEV_IMAGE_TAG      - Tag for the operator image
 #   DEV_IMAGE_REGISTRY - Registry for the operator image
 #   DEV_IMAGE_PATH     - Path within the registry
@@ -57,12 +56,16 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
-# Build the operator image if its inputs (tag, registry, repo, branch, versions)
+# Build the operator image if its inputs (tag, registry, source, versions)
 # have changed since the last run.
 operator() {
     mkdir -p "$STAMP_DIR"
     versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
-    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${OPERATOR_REPO}:${OPERATOR_BRANCH}:${versions_hash}"
+    # Untracked files under operator/ are invisible here, so a brand-new source
+    # file wants an explicit rebuild.
+    operator_hash=$( { git -C "$REPO_ROOT" rev-parse HEAD:operator
+                       git -C "$REPO_ROOT" diff HEAD -- operator; } | md5sum | cut -d' ' -f1)
+    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${operator_hash}:${versions_hash}"
     stamp="${STAMP_DIR}/operator.inputs"
     prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
 
@@ -71,9 +74,7 @@ operator() {
     else
         echo "Building operator (inputs changed)..."
         cd "$KIND_INFRA_DIR"
-        REPO="$OPERATOR_REPO" \
-            BRANCH="$OPERATOR_BRANCH" \
-            DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
+        DEV_IMAGE_TAG="$DEV_IMAGE_TAG" \
             DEV_IMAGE_REGISTRY="$DEV_IMAGE_REGISTRY" \
             DEV_IMAGE_PATH="$DEV_IMAGE_PATH" \
             ./build-operator.sh

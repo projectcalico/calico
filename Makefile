@@ -187,10 +187,6 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 #   rm -rf .dev-stamps && make push ...
 ###############################################################################
 
-# The operator branch to clone for the kind test image (hack/dev-build.sh
-# --operator). Unrelated to the operator's own in-tree build.
-KIND_OPERATOR_BRANCH?=master
-
 .PHONY: image
 ## Build all component images and tag for dev registry.
 image:
@@ -203,8 +199,7 @@ image:
 	  $(REPO_ROOT)/hack/dev-build.sh --tag
 	@STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
-	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
-	  OPERATOR_BRANCH="$(KIND_OPERATOR_BRANCH)" \
+	  REPO_ROOT="$(REPO_ROOT)" \
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
 	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
 	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
