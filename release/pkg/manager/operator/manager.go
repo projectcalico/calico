@@ -29,9 +29,8 @@ import (
 )
 
 const (
-	DefaultImage        = registry.TigeraOperatorImage
-	DefaultDevTagSuffix = "0.dev"
-	DefaultRegistry     = "quay.io"
+	DefaultImage    = registry.TigeraOperatorImage
+	DefaultRegistry = "quay.io"
 )
 
 var (

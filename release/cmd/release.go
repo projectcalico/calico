@@ -27,7 +27,6 @@ import (
 	"github.com/sirupsen/logrus"
 	cli "github.com/urfave/cli/v3"
 
-	"github.com/projectcalico/calico/release/internal/command"
 	"github.com/projectcalico/calico/release/internal/outputs"
 	"github.com/projectcalico/calico/release/internal/pinnedversion"
 	"github.com/projectcalico/calico/release/internal/utils"
@@ -228,21 +227,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 	}
 }
 
-func determineOperatorReleaseVersion(c *cli.Command, repoRootDir string) (string, error) {
-	operatorDir := filepath.Join(repoRootDir, "operator")
-	// git describe resolves against the whole monorepo, not the operator
-	// subtree, so the operator version comes from the repository's own tags.
-	operatorGitVer, err := command.GitVersion(operatorDir, true)
-	if err != nil {
-		return "", fmt.Errorf("determine operator git version: %w", err)
-	}
-	operatorVer, err := version.DetermineReleaseVersion(version.New(operatorGitVer), operator.DefaultDevTagSuffix)
-	if err != nil {
-		return "", err
-	}
-	return operatorVer.FormattedString(), nil
-}
-
 func releasePrepCommand(cfg *Config) *cli.Command {
 	flags := append(slices.Clone(productFlags), operatorGitFlags...)
 	flags = append(flags,
@@ -264,10 +248,7 @@ func releasePrepCommand(cfg *Config) *cli.Command {
 			outs := map[string]any{
 				"version": ver.FormattedString(),
 			}
-			operatorVer, err := determineOperatorReleaseVersion(c, cfg.RepoRootDir)
-			if err != nil {
-				return "", outs, err
-			}
+			operatorVer := ver.FormattedString()
 			outs["operator"] = operatorVer
 
 			// Generate release notes
