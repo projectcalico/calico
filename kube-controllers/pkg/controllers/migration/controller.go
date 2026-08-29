@@ -61,6 +61,10 @@ const (
 	//   - Otherwise: abort migration and restore the APIService.
 	finalizerName = "migration.projectcalico.org/v1-crd-cleanup"
 
+	// nudgeAnnotation is written to a CRD that is stuck terminating, to re-queue the
+	// apiextensions cleanup finalizer. Only its presence matters, not its value.
+	nudgeAnnotation = "migration.projectcalico.org/cleanup-nudge"
+
 	// savedAPIServiceAnnotation holds the serialized APIService object so it
 	// can be restored on abort.
 	savedAPIServiceAnnotation = "migration.projectcalico.org/saved-apiservice"
@@ -979,10 +983,23 @@ func (m *migrationController) handleCompletedCleanup(logCtx *logrus.Entry, dm *m
 		return fmt.Errorf("listing CRDs: %w", err)
 	}
 
-	deleted := 0
+	// A CRD delete only marks the object. The apiextensions cleanup finalizer then removes the
+	// custom resources, which can fail and retry for minutes, so hold our finalizer until the
+	// CRDs are gone.
+	remaining := 0
 	for _, crd := range crdList.Items {
 		group, _, _ := unstructured.NestedString(crd.Object, "spec", "group")
 		if group != "crd.projectcalico.org" {
+			continue
+		}
+		remaining++
+		if crd.GetDeletionTimestamp() != nil {
+			// Deleting many CRDs at once can make the apiextensions cleanup finalizer fail, and it
+			// then backs off for several minutes. Any write to the CRD re-queues it immediately.
+			logCtx.WithField("crd", crd.GetName()).Debug("Nudging a terminating v1 CRD")
+			if err := m.nudgeTerminatingCRD(crdClient, crd.GetName()); err != nil {
+				logCtx.WithField("crd", crd.GetName()).WithError(err).Debug("Could not nudge terminating CRD")
+			}
 			continue
 		}
 		logCtx.WithField("crd", crd.GetName()).Info("Deleting v1 CRD")
@@ -990,12 +1007,29 @@ func (m *migrationController) handleCompletedCleanup(logCtx *logrus.Entry, dm *m
 			if !kerrors.IsNotFound(err) {
 				return fmt.Errorf("deleting CRD %s: %w", crd.GetName(), err)
 			}
+			remaining--
 		}
-		deleted++
 	}
-	logCtx.WithField("deleted", deleted).Info("Finished deleting v1 CRDs")
 
+	if remaining > 0 {
+		logCtx.WithField("remaining", remaining).Info("Waiting for v1 CRDs to be deleted")
+		return fmt.Errorf("waiting for %d v1 CRDs to finish deleting", remaining)
+	}
+
+	logCtx.Info("Finished deleting v1 CRDs")
 	return m.removeFinalizer(dm)
+}
+
+// nudgeTerminatingCRD writes an annotation to a CRD that is stuck terminating. The write
+// generates a watch event that re-queues the apiextensions cleanup finalizer straight away,
+// instead of waiting out its exponential backoff.
+func (m *migrationController) nudgeTerminatingCRD(crdClient dynamic.ResourceInterface, name string) error {
+	patch := []byte(fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}}}`, nudgeAnnotation, time.Now().UTC().Format(time.RFC3339Nano)))
+	_, err := crdClient.Patch(m.ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	if err != nil && !kerrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 // handleAbort restores the cluster to pre-migration state when the CR is deleted
