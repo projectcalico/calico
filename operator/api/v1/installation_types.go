@@ -695,13 +695,14 @@ type CalicoNetworkSpec struct {
 	// +optional
 	ClusterRoutingMode *ClusterRoutingMode `json:"clusterRoutingMode,omitempty"`
 
-	// IPPools contains a list of IP pools to manage. If nil, the operator chooses: on a cluster with no
-	// operator-managed pools it creates a single IPv4 pool, and on a cluster that already has them it keeps
-	// the pools in use. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
+	// IPPools contains a list of IP pools to manage. If unset, the operator fills it in with defaults based
+	// on cluster state. Provide an empty list to manage IP pools out-of-band; the operator then deletes the
 	// pools it owns and creates none.
 	// IP pools in this list will be reconciled by the operator and should not be modified out-of-band.
 	// +optional
 	// +kubebuilder:validation:MaxItems=25
+	// +listType=map
+	// +listMapKey=cidr
 	IPPools []IPPool `json:"ipPools"`
 
 	// MTU specifies the maximum transmission unit to use on the pod network.
@@ -886,6 +887,8 @@ type IPPool struct {
 	Name string `json:"name,omitempty"`
 
 	// CIDR contains the address range for the IP Pool in classless inter-domain routing format.
+	// +kubebuilder:validation:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="isCIDR(self) && string(cidr(self).masked()) == self",message="cidr must be in canonical form, for example 192.168.0.0/16 or fd00:10:244::/64"
 	CIDR string `json:"cidr"`
 
 	// Encapsulation specifies the encapsulation type that will be used with

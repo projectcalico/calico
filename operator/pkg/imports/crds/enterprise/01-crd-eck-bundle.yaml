@@ -5309,6 +5309,34 @@ spec:
                             x-kubernetes-list-type: map
                           currentVolumeAttributesClassName:
                             type: string
+                          healthStatus:
+                            properties:
+                              healthConditions:
+                                items:
+                                  properties:
+                                    message:
+                                      type: string
+                                    reason:
+                                      type: string
+                                    status:
+                                      enum:
+                                        - DataLoss
+                                        - Degraded
+                                        - Inaccessible
+                                      type: string
+                                  required:
+                                    - reason
+                                    - status
+                                  type: object
+                                type: array
+                                x-kubernetes-list-map-keys:
+                                  - status
+                                  - reason
+                                x-kubernetes-list-type: map
+                              lastTransitionTime:
+                                format: date-time
+                                type: string
+                            type: object
                           modifyVolumeStatus:
                             properties:
                               status:

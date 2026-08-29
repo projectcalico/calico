@@ -84,8 +84,8 @@ var _ = Describe("the zero value Extensions", func() {
 	It("runs the base behavior for every controller", func() {
 		var e extensions.Extensions
 
-		Expect(e.Installation().ProductVersion()).NotTo(BeEmpty())
-		Expect(e.Installation().Images()).To(BeNil())
+		Expect(e.Installation().ProductVersion(&operatorv1.InstallationSpec{})).NotTo(BeEmpty())
+		Expect(e.Installation().KubeControllersImage()).To(BeNil())
 		Expect(e.Windows().Watches(nil)).NotTo(HaveOccurred())
 
 		ci, keyPairs, err := e.ClusterConnection().ExtendInputs(context.Background(), controller.Inputs{})
@@ -95,6 +95,21 @@ var _ = Describe("the zero value Extensions", func() {
 
 		create, _ := e.APIServer().Modify(baseComponent(), render.Inputs{}).Objects()
 		Expect(create).To(HaveLen(1))
+	})
+
+	It("passes the operator's startup checks", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().VerifyAPIsExist(nil)).To(Succeed())
+		Expect(e.Startup().VerifyClusterState(context.Background(), nil, false, false)).To(Succeed())
+		Expect(e.Startup().ProtectedNamespaces()).To(BeEmpty())
+	})
+
+	It("reports a single-tenant, non-cloud install", func() {
+		var e extensions.Extensions
+
+		Expect(e.Startup().MultiTenant()).To(BeFalse())
+		Expect(e.Startup().Cloud()).To(BeFalse())
 	})
 })
 

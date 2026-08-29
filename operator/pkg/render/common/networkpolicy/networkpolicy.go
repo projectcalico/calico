@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"strconv"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -339,78 +338,35 @@ var PrometheusSourceEntityRule = v3.EntityRule{
 	Selector:          PrometheusSelector,
 }
 
-// ExternalDestination is a parsed egress target: the host as written plus the
-// resolved TCP port.
-type ExternalDestination struct {
-	Host string
-	Port uint16
-}
-
-// ParseExternalDestination extracts the host and port from an endpoint, which may
-// be a bare "host:port" or a URL. When a URL carries no explicit port the scheme's
-// default is used. It reports false when no port can be determined.
-func ParseExternalDestination(endpoint string) (ExternalDestination, bool) {
-	if host, portStr, err := net.SplitHostPort(endpoint); err == nil {
-		if p, err := strconv.Atoi(portStr); err == nil && p > 0 && p <= 65535 {
-			return ExternalDestination{Host: host, Port: uint16(p)}, true
-		}
-	}
-	u, err := url.Parse(endpoint)
+// ParseHostPort splits a "host:port" destination. A URL is rejected rather than
+// accepted with the scheme's default port.
+func ParseHostPort(destination string) (string, numorstring.Port, error) {
+	host, portStr, err := net.SplitHostPort(destination)
 	if err != nil {
-		return ExternalDestination{}, false
+		return "", numorstring.Port{}, err
 	}
-	if portStr := u.Port(); portStr != "" {
-		if p, err := strconv.Atoi(portStr); err == nil && p > 0 && p <= 65535 {
-			return ExternalDestination{Host: u.Hostname(), Port: uint16(p)}, true
-		}
+	if host == "" {
+		return "", numorstring.Port{}, fmt.Errorf("destination %q has no host", destination)
 	}
-	switch u.Scheme {
-	case "https":
-		return ExternalDestination{Host: u.Hostname(), Port: 443}, true
-	case "http":
-		return ExternalDestination{Host: u.Hostname(), Port: 80}, true
+	port, err := numorstring.PortFromString(portStr)
+	if err != nil {
+		return "", numorstring.Port{}, err
 	}
-	return ExternalDestination{}, false
+	return host, port, nil
 }
 
-// clusterService splits an in-cluster Service DNS name --
-// <service>.<namespace>.svc[.cluster.local] -- into its namespace and name.
-// Each element is checked with the upstream DNS-label validator rather than a
-// pattern of our own.
-func clusterService(host string) (namespace, name string, ok bool) {
-	parts := strings.Split(host, ".")
-	if len(parts) < 3 || parts[2] != "svc" {
-		return "", "", false
-	}
-	for _, p := range append([]string{parts[0], parts[1]}, parts[3:]...) {
-		if len(validation.IsDNS1123Label(p)) > 0 {
-			return "", "", false
-		}
-	}
-	return parts[1], parts[0], true
-}
-
-// ExternalDestinationEntityRule builds the tightest destination rule available for
-// an external endpoint:
-//
-//   - a literal IP becomes an exact /32 or /128 net;
-//   - a hostname becomes a Domains rule, but only when allowDomains is set —
-//     domain-based rules require the egress-access-control license feature;
-//   - otherwise the destination is left open and only the port is constrained.
-//
-// The last case is a deliberate fallback: without the license feature we cannot
-// name the host, and dropping the rule entirely would break egress.
-func ExternalDestinationEntityRule(dest ExternalDestination, allowDomains bool) v3.EntityRule {
-	rule := v3.EntityRule{Ports: Ports(dest.Port)}
-	// An in-cluster Service is matched by service, not by domain: Calico resolves
-	// Domains rules from observed DNS answers, which does not cover a ClusterIP
-	// reached through the cluster domain.
-	if ns, name, ok := clusterService(dest.Host); ok {
-		// A service match carries the Service's own ports; Calico rejects a rule
-		// that sets both ("cannot specify ports with a service selector").
+// EntityRuleForHostPort builds the tightest destination rule for a host: a
+// Services match for an in-cluster Service, an exact net for a literal IP,
+// otherwise the domain. It always constrains the destination, never returning a
+// ports-only rule. A Services match carries the Service's own ports, since
+// Calico rejects a rule that sets both.
+func EntityRuleForHostPort(host, clusterDomain string, ports ...numorstring.Port) v3.EntityRule {
+	if ns, name, ok := ClusterServiceWithDomain(host, clusterDomain); ok {
 		return CreateServiceSelectorEntityRule(ns, name)
 	}
-	if ip := net.ParseIP(dest.Host); ip != nil {
+
+	rule := v3.EntityRule{Ports: ports}
+	if ip := net.ParseIP(host); ip != nil {
 		suffix := "/128"
 		if ip.To4() != nil {
 			suffix = "/32"
@@ -418,8 +374,67 @@ func ExternalDestinationEntityRule(dest ExternalDestination, allowDomains bool) 
 		rule.Nets = []string{ip.String() + suffix}
 		return rule
 	}
-	if allowDomains && dest.Host != "" {
-		rule.Domains = []string{dest.Host}
-	}
+	rule.Domains = []string{host}
 	return rule
+}
+
+// EntityRuleForURL is EntityRuleForDestination for a caller whose destination is
+// a URL rather than a host:port. The port comes from the URL, or from the
+// scheme when the URL omits it.
+func EntityRuleForURL(rawURL, clusterDomain string) (v3.EntityRule, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	host := u.Hostname()
+	if host == "" {
+		return v3.EntityRule{}, fmt.Errorf("url %q has no host", rawURL)
+	}
+	portStr := u.Port()
+	if portStr == "" {
+		switch u.Scheme {
+		case "https":
+			portStr = "443"
+		case "http":
+			portStr = "80"
+		default:
+			return v3.EntityRule{}, fmt.Errorf("url %q has an unsupported scheme %q", rawURL, u.Scheme)
+		}
+	}
+	port, err := numorstring.PortFromString(portStr)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	return EntityRuleForHostPort(host, clusterDomain, port), nil
+}
+
+// EntityRuleForDestination is ParseHostPort followed by EntityRuleForHostPort,
+// for the common case where a component holds a "host:port" string.
+func EntityRuleForDestination(destination, clusterDomain string) (v3.EntityRule, error) {
+	host, port, err := ParseHostPort(destination)
+	if err != nil {
+		return v3.EntityRule{}, err
+	}
+	return EntityRuleForHostPort(host, clusterDomain, port), nil
+}
+
+// ClusterServiceWithDomain reports the namespace and name of an in-cluster
+// Service DNS name: <service>.<namespace>.svc, optionally followed by the
+// cluster domain and a trailing dot. Anything longer is an external host that
+// merely carries an "svc" label.
+func ClusterServiceWithDomain(host, clusterDomain string) (namespace, name string, ok bool) {
+	host = strings.TrimSuffix(host, ".")
+	if clusterDomain = strings.Trim(clusterDomain, "."); clusterDomain != "" {
+		host = strings.TrimSuffix(host, "."+clusterDomain)
+	}
+	parts := strings.Split(host, ".")
+	if len(parts) != 3 || parts[2] != "svc" {
+		return "", "", false
+	}
+	for _, p := range parts[:2] {
+		if len(validation.IsDNS1123Label(p)) > 0 {
+			return "", "", false
+		}
+	}
+	return parts[1], parts[0], true
 }

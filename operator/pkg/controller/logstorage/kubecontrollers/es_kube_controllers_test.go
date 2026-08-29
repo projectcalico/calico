@@ -46,7 +46,9 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	entkubecontrollers "github.com/projectcalico/calico/operator/pkg/enterprise/kubecontrollers"
+	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/esgateway"
@@ -74,6 +76,7 @@ func NewControllerWithShims(
 		ShutdownContext:  context.TODO(),
 		MultiTenant:      multiTenant,
 		Variant:          operatorv1.CalicoEnterprise,
+		Extensions:       enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}),
 	}
 
 	r := &ESKubeControllersController{

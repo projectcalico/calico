@@ -19,7 +19,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/operator/pkg/components"
 )
+
+// Every spec here renders Enterprise, which in the operator means the Enterprise
+// extensions have registered their images.
+var _ = BeforeEach(func() {
+	DeferCleanup(components.UseImages(components.EnterpriseImages))
+})
 
 func TestGatewayAPI(t *testing.T) {
 	RegisterFailHandler(Fail)

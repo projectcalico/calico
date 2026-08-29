@@ -22,7 +22,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/typhaautoscaler"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
 )
@@ -32,7 +31,6 @@ import (
 type Extension struct {
 	variant operatorv1.ProductVariant
 	opts    eoptions.Options
-	images  *imageoverride.Overrides
 
 	// typhaAutoscaler scales the non-cluster-host Typha deployment. Nil until the
 	// first reconcile that sees a NonClusterHost resource.
@@ -43,24 +41,17 @@ var _ extensions.InstallationExtension = &Extension{}
 
 // New returns the installation extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant, opts eoptions.Options) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, render.ComponentNameNode, components.ComponentTigeraNode)
-
-	// The node component renders the cni-plugins init container; its image resolves
-	// through its own override key.
-	images.Register(variant, render.ComponentNameCNIPlugins, components.ComponentTigeraCNIPlugins)
-
-	if opts.Cloud {
-		// Calico Cloud runs kube-controllers from the combined image, which carries the
-		// Cloud behavior the mono image lacks.
-		images.Register(variant, render.ComponentNameKubeControllers, components.CalicoCloudImage())
-	}
-
-	return &Extension{variant: variant, opts: opts, images: images}
+	return &Extension{variant: variant, opts: opts}
 }
 
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
+// KubeControllersImage returns the Cloud build of the combined image, which carries
+// behavior the mono image lacks. Every other install runs the plain Enterprise image.
+func (e *Extension) KubeControllersImage() *components.Component {
+	if !e.opts.Cloud {
+		return nil
+	}
+	img := components.CalicoCloudImage()
+	return &img
 }
 
 // Modify dispatches over the components the installation controller renders.

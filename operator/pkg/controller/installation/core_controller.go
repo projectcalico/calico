@@ -1100,7 +1100,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	calicoVersion := r.ext.ProductVersion()
+	calicoVersion := r.ext.ProductVersion(&instance.Spec)
 
 	ci := controller.Inputs{
 		RenderInputs: render.Inputs{
@@ -1355,7 +1355,6 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		CanRemoveCNIFinalizer: canRemoveCNI,
 		FelixConfiguration:    felixConfiguration,
 		V3CRDs:                r.opts.UseV3CRDs,
-		ImageOverrides:        r.ext.Images(),
 	}
 
 	if bgpConfiguration.Spec.BindMode != nil {
@@ -1409,7 +1408,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		TrustedBundle:          typhaNodeTLS.TrustedBundle,
 		Namespace:              common.CalicoNamespace,
 		BindingNamespaces:      []string{common.CalicoNamespace},
-		ImageOverrides:         r.ext.Images(),
+		Image:                  r.ext.KubeControllersImage(),
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 

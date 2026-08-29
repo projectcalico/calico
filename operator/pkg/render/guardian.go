@@ -106,6 +106,7 @@ func (c *guardianPolicyComponent) Objects() ([]client.Object, []client.Object) {
 // GuardianConfiguration contains all the config information needed to render the component.
 type GuardianConfiguration struct {
 	URL                         string
+	ClusterDomain               string
 	PullSecrets                 []*corev1.Secret
 	OpenShift                   bool
 	Installation                *operatorv1.InstallationSpec
@@ -158,11 +159,8 @@ type guardianComponent struct {
 }
 
 func (c *guardianComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
 	return err
 }
 

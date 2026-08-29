@@ -37,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
 	"github.com/projectcalico/calico/operator/pkg/controller/migration"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	"github.com/projectcalico/calico/operator/pkg/render/common/configmap"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
@@ -145,11 +144,6 @@ type NodeConfiguration struct {
 	BindMode string
 
 	V3CRDs bool
-
-	// ImageOverrides lets a variant swap the node and cni-plugins images. The
-	// controller wires in the operator's image overrides; nil resolves to the
-	// core images.
-	ImageOverrides *imageoverride.Overrides
 }
 
 // Node creates the node daemonset and other resources for the daemonset to operate normally.
@@ -189,9 +183,6 @@ type nodeComponent struct {
 }
 
 func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var errMsgs []string
 	appendIfErr := func(imageName string, err error) string {
 		if err != nil {
@@ -200,12 +191,10 @@ func (c *nodeComponent) ResolveImages(is *operatorv1.ImageSet) error {
 		return imageName
 	}
 
-	c.calicoImage = appendIfErr(components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is))
-	nodeImage := c.cfg.ImageOverrides.Resolve(ComponentNameNode, components.ComponentCalicoNode, c.cfg.Installation)
-	c.nodeImage = appendIfErr(components.GetReference(nodeImage, reg, path, prefix, is))
+	c.calicoImage = appendIfErr(components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is))
+	c.nodeImage = appendIfErr(components.ReferenceFor(components.ImageKeyNode, c.cfg.Installation, is))
 	if c.installUpstreamPlugins() {
-		cniPluginsImage := c.cfg.ImageOverrides.Resolve(ComponentNameCNIPlugins, components.ComponentCalicoCNIPlugins, c.cfg.Installation)
-		c.cniPluginsImage = appendIfErr(components.GetReference(cniPluginsImage, reg, path, prefix, is))
+		c.cniPluginsImage = appendIfErr(components.ReferenceFor(components.ImageKeyCNIPlugins, c.cfg.Installation, is))
 	}
 
 	if len(errMsgs) != 0 {
@@ -823,12 +812,12 @@ func (c *nodeComponent) getCalicoIPAM() map[string]any {
 	// Determine what address families to enable.
 	var assign_ipv4 string
 	var assign_ipv6 string
-	if v4pool := GetIPv4Pool(c.cfg.IPPools); v4pool != nil {
+	if HasIPv4Pool(c.cfg.IPPools) {
 		assign_ipv4 = "true"
 	} else {
 		assign_ipv4 = "false"
 	}
-	if v6pool := GetIPv6Pool(c.cfg.IPPools); v6pool != nil {
+	if HasIPv6Pool(c.cfg.IPPools) {
 		assign_ipv6 = "true"
 	} else {
 		assign_ipv6 = "false"
@@ -841,8 +830,8 @@ func (c *nodeComponent) getCalicoIPAM() map[string]any {
 }
 
 func buildHostLocalIPAM(pools []operatorv1.IPPool) map[string]any {
-	v6 := GetIPv6Pool(pools) != nil
-	v4 := GetIPv4Pool(pools) != nil
+	v6 := HasIPv6Pool(pools)
+	v4 := HasIPv4Pool(pools)
 
 	if v4 && v6 {
 		// Dual-stack
@@ -1782,32 +1771,36 @@ func getAutodetectionMethod(ad *operatorv1.NodeAddressAutodetection) string {
 	return ""
 }
 
-// GetIPv4Pool returns the IPv4 IPPool in an installation, or nil if one can't be found.
-func GetIPv4Pool(pools []operatorv1.IPPool) *operatorv1.IPPool {
-	for ii, pool := range pools {
-		addr, _, err := net.ParseCIDR(pool.CIDR)
-		if err == nil {
-			if addr.To4() != nil {
-				return &pools[ii]
-			}
-		}
-	}
-
-	return nil
+// IsIPv4Pool reports whether the pool is IPv4. A CIDR that doesn't parse belongs to neither family.
+func IsIPv4Pool(pool operatorv1.IPPool) bool {
+	addr, _, err := net.ParseCIDR(pool.CIDR)
+	return err == nil && addr.To4() != nil
 }
 
-// GetIPv6Pool returns the IPv6 IPPool in an installation, or nil if one can't be found.
-func GetIPv6Pool(pools []operatorv1.IPPool) *operatorv1.IPPool {
-	for ii, pool := range pools {
-		addr, _, err := net.ParseCIDR(pool.CIDR)
-		if err == nil {
-			if addr.To4() == nil {
-				return &pools[ii]
-			}
+// IsIPv6Pool reports whether the pool is IPv6. A CIDR that doesn't parse belongs to neither family.
+func IsIPv6Pool(pool operatorv1.IPPool) bool {
+	addr, _, err := net.ParseCIDR(pool.CIDR)
+	return err == nil && addr.To4() == nil
+}
+
+// HasIPv4Pool reports whether any of the pools is IPv4.
+func HasIPv4Pool(pools []operatorv1.IPPool) bool {
+	for _, pool := range pools {
+		if IsIPv4Pool(pool) {
+			return true
 		}
 	}
+	return false
+}
 
-	return nil
+// HasIPv6Pool reports whether any of the pools is IPv6.
+func HasIPv6Pool(pools []operatorv1.IPPool) bool {
+	for _, pool := range pools {
+		if IsIPv6Pool(pool) {
+			return true
+		}
+	}
+	return false
 }
 
 // bgpEnabled returns true if the given Installation enables BGP, false otherwise.

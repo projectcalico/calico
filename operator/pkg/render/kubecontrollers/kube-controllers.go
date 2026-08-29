@@ -34,7 +34,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
@@ -90,7 +89,8 @@ type KubeControllersConfiguration struct {
 
 	// ImageOverrides lets a variant swap the kube-controllers image. The controller
 	// wires in the operator's image overrides; nil resolves to the core image.
-	ImageOverrides *imageoverride.Overrides
+	// Image overrides what kube-controllers runs, or nil for the variant's calico image.
+	Image *components.Component
 
 	// Namespace to be installed into.
 	Namespace string
@@ -218,16 +218,14 @@ type kubeControllersComponent struct {
 }
 
 func (c *kubeControllersComponent) ResolveImages(is *operatorv1.ImageSet) error {
-	reg := c.cfg.Installation.Registry
-	path := c.cfg.Installation.ImagePath
-	prefix := c.cfg.Installation.ImagePrefix
 	var err error
-	image := c.cfg.ImageOverrides.Resolve(render.ComponentNameKubeControllers, components.CombinedCalicoImage(c.cfg.Installation), c.cfg.Installation)
-	c.calicoImage, err = components.GetReference(image, reg, path, prefix, is)
-	if err != nil {
+	if c.cfg.Image != nil {
+		in := c.cfg.Installation
+		c.calicoImage, err = components.GetReference(*c.cfg.Image, in.Registry, in.ImagePath, in.ImagePrefix, is)
 		return err
 	}
-	return nil
+	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
+	return err
 }
 
 func (c *kubeControllersComponent) SupportedOSType() rmeta.OSType {
@@ -704,7 +702,7 @@ func kubeControllersCalicoSystemPolicy(cfg *KubeControllersConfiguration) *v3.Ne
 		})
 	}
 
-	if r, err := cfg.K8sServiceEp.DestinationEntityRule(); r != nil && err == nil {
+	if r, err := cfg.K8sServiceEp.DestinationEntityRule(cfg.ClusterDomain); r != nil && err == nil {
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,

@@ -43,7 +43,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/imports/admission"
 	"github.com/projectcalico/calico/operator/pkg/imports/crds"
 	"github.com/projectcalico/calico/operator/pkg/render"
@@ -87,14 +86,6 @@ var (
 // configuration for the operator loaded at startup.
 const bootstrapConfigMapName = "operator-bootstrap-config"
 
-// buildVariant is set to "cloud" via -ldflags "-X main.buildVariant=cloud" when building the Calico
-// Cloud operator image (see CLOUD_LDFLAGS in the Makefile), and is empty otherwise.
-var buildVariant string
-
-func isCloudBuild() bool {
-	return buildVariant == "cloud"
-}
-
 func init() {
 	// +kubebuilder:scaffold:scheme
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
@@ -104,8 +95,8 @@ func init() {
 
 func printVersion() {
 	log.Info(fmt.Sprintf("Version: %v", version.VERSION))
-	if isCloudBuild() {
-		log.Info("Variant: Calico Cloud")
+	if version.BuildVariant != "" {
+		log.Info(fmt.Sprintf("Variant: %s", version.BuildVariant))
 	}
 	log.Info(fmt.Sprintf("Go Version: %s", goruntime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s/%s", goruntime.GOOS, goruntime.GOARCH))
@@ -191,8 +182,8 @@ admission policy installation; once an Installation exists it is the authority o
 		fmt.Println("Operator:", version.VERSION)
 		fmt.Println("Calico:", components.CalicoRelease)
 		fmt.Println("Enterprise:", components.EnterpriseRelease)
-		if isCloudBuild() {
-			fmt.Println("Variant: Calico Cloud")
+		if version.BuildVariant != "" {
+			fmt.Println("Variant:", version.BuildVariant)
 		}
 		os.Exit(0)
 	}
@@ -425,6 +416,32 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}
 
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		log.Error(err, "Failed to get Kubernetes clientset")
+		os.Exit(1)
+	}
+
+	// Attempt to auto discover the provider
+	provider, err := discovery.AutoDiscoverProvider(ctx, clientset)
+	if err != nil {
+		setupLog.Error(err, "Auto discovery of Provider failed")
+		os.Exit(1)
+	}
+	setupLog.WithValues("provider", provider).Info("Checking type of cluster")
+
+	clusterDomain, err := dns.GetClusterDomain(dns.DefaultResolveConfPath)
+	if err != nil {
+		clusterDomain = dns.DefaultClusterDomain
+		log.Error(err, fmt.Sprintf("Couldn't find the cluster domain from the resolv.conf, defaulting to %s", clusterDomain))
+	}
+
+	kubernetesVersion, err := common.GetKubernetesVersion(clientset)
+	if err != nil {
+		log.Error(err, "Unable to resolve Kubernetes version, defaulting to v1.18")
+		kubernetesVersion = &common.VersionInfo{Major: 1, Minor: 18}
+	}
+
 	// Resolve the variant now that the operator CRDs exist.
 	variant := waitForVariant(ctx, c, setupLog)
 	setupLog.WithValues("variant", variant).Info("Resolved product variant")
@@ -439,9 +456,16 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}
 
+	extensionRegistry, err := enterprise.Build(ctx, variant, clientset, manageCRDs, v3CRDs)
+	if err != nil {
+		setupLog.Error(err, "Failed to build the variant's extensions")
+		os.Exit(1)
+	}
+	setupLog.WithValues("tenancy", extensionRegistry.Startup().MultiTenant()).Info("Checking tenancy mode")
+
 	// The variant's controllers can't register without their APIs. Exiting lets the kubelet
 	// retry us once the CRDs are installed.
-	if err := enterprise.VerifyAPIsExist(variant, cs); err != nil {
+	if err := extensionRegistry.Startup().VerifyAPIsExist(cs); err != nil {
 		setupLog.Error(err, "Cannot run as the configured variant")
 		os.Exit(1)
 	}
@@ -508,45 +532,11 @@ admission policy installation; once an Installation exists it is the authority o
 		}
 	}()
 
-	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
-	if err != nil {
-		log.Error(err, "Failed to get Kubernetes clientset")
-		os.Exit(1)
-	}
-
-	// Attempt to auto discover the provider
-	provider, err := discovery.AutoDiscoverProvider(ctx, clientset)
-	if err != nil {
-		setupLog.Error(err, "Auto discovery of Provider failed")
-		os.Exit(1)
-	}
-	setupLog.WithValues("provider", provider).Info("Checking type of cluster")
-
-	// Determine if we're running in single or multi-tenant mode.
-	multiTenant, err := discovery.MultiTenant(ctx, clientset)
-	if err != nil {
-		log.Error(err, "Failed to discovery tenancy mode")
-		os.Exit(1)
-	}
-	setupLog.WithValues("tenancy", multiTenant).Info("Checking tenancy mode")
-
-	clusterDomain, err := dns.GetClusterDomain(dns.DefaultResolveConfPath)
-	if err != nil {
-		clusterDomain = dns.DefaultClusterDomain
-		log.Error(err, fmt.Sprintf("Couldn't find the cluster domain from the resolv.conf, defaulting to %s", clusterDomain))
-	}
-
-	kubernetesVersion, err := common.GetKubernetesVersion(clientset)
-	if err != nil {
-		log.Error(err, "Unable to resolve Kubernetes version, defaulting to v1.18")
-		kubernetesVersion = &common.VersionInfo{Major: 1, Minor: 18}
-	}
-
 	// The operator MUST not run within one of the Namespaces that it itself manages. Perform an early check here
 	// to make sure that we're not doing so, and exit if we are.
 	// Components share namespaces, so dedupe before the error lists them.
 	badNamespaces := sets.New(common.CalicoNamespace, render.CSIDaemonSetNamespace).
-		Insert(enterprise.ProtectedNamespaces()...).
+		Insert(extensionRegistry.Startup().ProtectedNamespaces()...).
 		UnsortedList()
 	for _, ns := range badNamespaces {
 		if common.OperatorNamespace() == ns {
@@ -569,11 +559,11 @@ admission policy installation; once an Installation exists it is the authority o
 	useSingleIndex := false
 	useExternalElastic := discovery.UseExternalElastic(bootConfig)
 
-	if isCloudBuild() {
+	if extensionRegistry.Startup().Cloud() {
 		elasticIsMigrating = discovery.ElasticIsMigrating(bootConfig)
 		useSingleIndex = discovery.UseSingleIndex(bootConfig)
-		if err := enterprise.VerifyElasticsearch(ctx, cs, variant, elasticIsMigrating, useExternalElastic); err != nil {
-			setupLog.Error(err, "Elasticsearch configuration verification failed")
+		if err := extensionRegistry.Startup().VerifyClusterState(ctx, cs, elasticIsMigrating, useExternalElastic); err != nil {
+			setupLog.Error(err, "Cluster state verification failed")
 			os.Exit(1)
 		}
 	}
@@ -590,14 +580,6 @@ admission policy installation; once an Installation exists it is the authority o
 		os.Exit(1)
 	}
 
-	// Build the extensions for the variant we resolved above.
-	extensionRegistry := enterprise.New(variant, eoptions.Options{
-		MultiTenant: multiTenant,
-		Cloud:       isCloudBuild(),
-		ManageCRDs:  manageCRDs,
-		UseV3CRDs:   v3CRDs,
-	})
-
 	options := options.ControllerOptions{
 		DetectedProvider:  provider,
 		Variant:           variant,
@@ -606,9 +588,9 @@ admission policy installation; once an Installation exists it is the authority o
 		ManageCRDs:        manageCRDs,
 		ShutdownContext:   ctx,
 		K8sClientset:      clientset,
-		MultiTenant:       multiTenant,
+		MultiTenant:       extensionRegistry.Startup().MultiTenant(),
 		ElasticExternal:   useExternalElastic,
-		Cloud:             isCloudBuild(),
+		Cloud:             extensionRegistry.Startup().Cloud(),
 		ESMigration:       elasticIsMigrating,
 		UseSingleIndex:    useSingleIndex,
 		UseV3CRDs:         v3CRDs,

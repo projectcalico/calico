@@ -19,11 +19,19 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+
+	"github.com/projectcalico/calico/operator/pkg/components"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	uzap "go.uber.org/zap"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+// A spec that builds the Enterprise extensions registers the Enterprise images for the
+// whole process, so every spec starts from the images this build ships.
+var _ = ginkgo.BeforeEach(func() {
+	ginkgo.DeferCleanup(components.UseImages(nil))
+})
 
 func TestFeatureVerification(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))

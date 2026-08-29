@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,3 +16,7 @@ package version
 
 // VERSION is filled out during the build process (using git describe output)
 var VERSION = "unknown"
+
+// BuildVariant names the product variant baked into this binary, empty for a stock
+// build. It is filled out during the build process; see CLOUD_LDFLAGS in the Makefile.
+var BuildVariant string

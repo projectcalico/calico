@@ -93,9 +93,12 @@ func collectProcessPathEnabled(lc *operatorv1.LogCollector) bool {
 		*lc.Spec.CollectProcessPath == operatorv1.CollectProcessPathEnable
 }
 
-// Validate rejects installation config Calico Enterprise does not support.
-// ProductVersion is the Calico Enterprise release the operator reports in status.
-func (e *Extension) ProductVersion() string {
+// ProductVersion is the release the operator reports in status. The Enterprise
+// operator also manages Calico variant installs, during migration.
+func (e *Extension) ProductVersion(install *operatorv1.InstallationSpec) string {
+	if !install.Variant.IsEnterprise() {
+		return components.CalicoRelease
+	}
 	return components.EnterpriseRelease
 }
 

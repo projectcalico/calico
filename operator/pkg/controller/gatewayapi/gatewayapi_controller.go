@@ -352,7 +352,6 @@ func (r *ReconcileGatewayAPI) Reconcile(ctx context.Context, request reconcile.R
 		CurrentGatewayClasses:  set.New[string](),
 		IncludeV3NetworkPolicy: includeV3NetworkPolicy,
 		TrustedBundle:          trustedBundle,
-		ImageOverrides:         r.ext.Images(),
 	}
 
 	if gatewayAPI.Spec.EnvoyGatewayConfigRef != nil {

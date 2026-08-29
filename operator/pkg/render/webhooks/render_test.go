@@ -134,6 +134,8 @@ var _ = Describe("Webhooks rendering tests", func() {
 	})
 
 	It("should render all resources for Enterprise with the correct image", func() {
+		DeferCleanup(components.UseImages(components.EnterpriseImages))
+
 		installation.Variant = operatorv1.CalicoEnterprise
 		component := webhooks.Component(cfg)
 		Expect(component.ResolveImages(nil)).NotTo(HaveOccurred())

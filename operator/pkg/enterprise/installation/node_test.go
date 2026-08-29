@@ -28,23 +28,10 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/extensions/extensionstest"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
-
-var _ = Describe("node enterprise image override", func() {
-	It("selects the enterprise node image for the enterprise variant", func() {
-		ent := &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise}
-		Expect(ext.Installation().Images().Resolve("node", components.ComponentCalicoNode, ent)).To(Equal(components.ComponentTigeraNode))
-	})
-
-	It("leaves the default in place for the Calico variant", func() {
-		calico := &operatorv1.InstallationSpec{Variant: operatorv1.Calico}
-		Expect(ext.Installation().Images().Resolve("node", components.ComponentCalicoNode, calico)).To(Equal(components.ComponentCalicoNode))
-	})
-})
 
 var _ = Describe("node enterprise modifier", func() {
 	// newObjs returns the subset of rendered node objects the modifier touches.

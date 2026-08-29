@@ -23,7 +23,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
@@ -42,11 +41,13 @@ type InstallationExtension interface {
 	// it changed fc. It runs before Felix defaulting persists.
 	DefaultFelixConfiguration(install *operatorv1.InstallationSpec, fc *v3.FelixConfiguration) (bool, error)
 
-	// ProductVersion is the version the operator writes to the Installation status.
-	ProductVersion() string
+	// ProductVersion is the version the operator writes to the Installation status
+	// for the variant the given spec installs.
+	ProductVersion(install *operatorv1.InstallationSpec) string
 
-	// Images overrides the images the rendered components resolve to.
-	Images() *imageoverride.Overrides
+	// KubeControllersImage overrides the image kube-controllers runs, or nil to run
+	// the variant's combined calico image. Calico Cloud is the only caller.
+	KubeControllersImage() *components.Component
 
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
@@ -54,6 +55,8 @@ type InstallationExtension interface {
 
 // noopInstallation runs the core operator's behavior unchanged.
 type noopInstallation struct{}
+
+func (noopInstallation) KubeControllersImage() *components.Component { return nil }
 
 func (noopInstallation) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, []certificatemanagement.KeyPairInterface, error) {
 	return ci, nil, nil
@@ -67,12 +70,8 @@ func (noopInstallation) DefaultFelixConfiguration(*operatorv1.InstallationSpec, 
 	return false, nil
 }
 
-func (noopInstallation) ProductVersion() string {
+func (noopInstallation) ProductVersion(*operatorv1.InstallationSpec) string {
 	return components.CalicoRelease
-}
-
-func (noopInstallation) Images() *imageoverride.Overrides {
-	return nil
 }
 
 func (noopInstallation) Modify(c render.Component, _ render.Inputs) render.Component {

@@ -16,12 +16,12 @@ package k8sapi
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"strings"
 
 	calicov3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/api/pkg/lib/numorstring"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -64,7 +64,7 @@ func (k8s ServiceEndpoint) EnvVars() []v1.EnvVar {
 
 // DestinationEntityRule returns an EntityRule to match the Host and Port
 // if the ServiceEndpoint was set. It returns nil if either was empty.
-func (k8s ServiceEndpoint) DestinationEntityRule() (*calicov3.EntityRule, error) {
+func (k8s ServiceEndpoint) DestinationEntityRule(clusterDomain string) (*calicov3.EntityRule, error) {
 	if k8s.Host == "" || k8s.Port == "" {
 		return nil, nil
 	}
@@ -74,22 +74,7 @@ func (k8s ServiceEndpoint) DestinationEntityRule() (*calicov3.EntityRule, error)
 		return nil, err
 	}
 
-	rule := calicov3.EntityRule{
-		Ports: []numorstring.Port{p},
-	}
-
-	ip := net.ParseIP(k8s.Host)
-	if ip == nil {
-		rule.Domains = []string{k8s.Host}
-	} else {
-		var netSuffix string
-		if ip.To4() != nil {
-			netSuffix = "/32"
-		} else {
-			netSuffix = "/128"
-		}
-		rule.Nets = []string{ip.String() + netSuffix}
-	}
+	rule := networkpolicy.EntityRuleForHostPort(k8s.Host, clusterDomain, p)
 
 	return &rule, nil
 }

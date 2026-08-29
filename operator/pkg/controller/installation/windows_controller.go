@@ -345,13 +345,12 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 	}
 
 	windowsCfg := render.WindowsConfiguration{
-		K8sServiceEp:   k8sapi.Endpoint,
-		K8sDNSServers:  kubeDNSIPs,
-		Installation:   &defaulted.Spec,
-		ClusterDomain:  r.opts.ClusterDomain,
-		TLS:            typhaNodeTLS,
-		VXLANVNI:       *felixConfiguration.Spec.VXLANVNI,
-		ImageOverrides: r.ext.Images(),
+		K8sServiceEp:  k8sapi.Endpoint,
+		K8sDNSServers: kubeDNSIPs,
+		Installation:  &defaulted.Spec,
+		ClusterDomain: r.opts.ClusterDomain,
+		TLS:           typhaNodeTLS,
+		VXLANVNI:      *felixConfiguration.Spec.VXLANVNI,
 	}
 	component = render.Windows(&windowsCfg)
 

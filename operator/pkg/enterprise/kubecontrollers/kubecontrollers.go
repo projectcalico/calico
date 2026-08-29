@@ -25,6 +25,7 @@ import (
 
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
+	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
@@ -100,6 +101,12 @@ func NewElasticsearchKubeControllers(cfg *Configuration) render.Component {
 	cfg.NetworkPolicy = esKubeControllersCalicoSystemPolicy(cfg)
 	cfg.DeprecatedNetworkPolicyName = "es-kube-controller-access"
 	cfg.ExtraEnv = esKubeControllersEnv(cfg)
+
+	if cfg.Cloud {
+		// The Cloud build of the combined image carries behavior the mono image lacks.
+		img := components.CalicoCloudImage()
+		cfg.Image = &img
+	}
 
 	return rkc.NewKubeControllers(cfg.KubeControllersConfiguration)
 }

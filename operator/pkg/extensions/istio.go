@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/controller"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
@@ -31,7 +30,6 @@ type IstioExtension interface {
 	PolicySyncRequired(ctx context.Context, c client.Client) (bool, error)
 
 	// Images overrides the images the istio render resolves.
-	Images() *imageoverride.Overrides
 
 	// ExtendInputs resolves what the modifier needs but cannot read for itself.
 	ExtendInputs(ctx context.Context, ci controller.Inputs) (controller.Inputs, error)
@@ -45,10 +43,6 @@ type noopIstio struct{}
 
 func (noopIstio) PolicySyncRequired(context.Context, client.Client) (bool, error) {
 	return false, nil
-}
-
-func (noopIstio) Images() *imageoverride.Overrides {
-	return nil
 }
 
 func (noopIstio) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {

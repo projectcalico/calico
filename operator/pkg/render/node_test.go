@@ -40,7 +40,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
@@ -143,7 +142,6 @@ var _ = Describe("Node rendering tests", func() {
 					ClusterDomain:      defaultClusterDomain,
 					FelixConfiguration: &v3.FelixConfiguration{Spec: v3.FelixConfigurationSpec{HealthPort: ptr.To(9099)}},
 					IPPools:            defaultInstance.CalicoNetwork.IPPools,
-					ImageOverrides:     imageoverride.New(),
 				}
 			})
 

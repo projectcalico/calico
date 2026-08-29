@@ -411,9 +411,13 @@ func validateCustomResource(instance *operatorv1.Installation) error {
 				return fmt.Errorf("installation spec.ServiceCIDRs must be provided when using Calico CNI on Windows")
 			}
 			if instance.Spec.CalicoNetwork != nil {
-				if v4pool := render.GetIPv4Pool(instance.Spec.CalicoNetwork.IPPools); v4pool != nil {
-					if v4pool.Encapsulation != operatorv1.EncapsulationVXLAN && v4pool.Encapsulation != operatorv1.EncapsulationNone {
-						return fmt.Errorf("IPv4 IPPool encapsulation %s is not supported by Calico for Windows", v4pool.Encapsulation)
+				for _, pool := range instance.Spec.CalicoNetwork.IPPools {
+					if !render.IsIPv4Pool(pool) {
+						continue
+					}
+
+					if pool.Encapsulation != operatorv1.EncapsulationVXLAN && pool.Encapsulation != operatorv1.EncapsulationNone {
+						return fmt.Errorf("IPv4 IPPool encapsulation %s is not supported by Calico for Windows", pool.Encapsulation)
 					}
 				}
 			}

@@ -29,7 +29,6 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
@@ -43,9 +42,6 @@ type Configuration struct {
 	Istio          *operatorv1.Istio
 	IstioNamespace string
 	Scheme         *runtime.Scheme
-
-	// ImageOverrides swaps in a variant's images for the components below.
-	ImageOverrides *imageoverride.Overrides
 }
 
 var _ render.Component = &IstioComponent{}
@@ -215,24 +211,20 @@ func (c *IstioComponent) ResolveImages(is *operatorv1.ImageSet) error {
 	var err error
 
 	in := c.cfg.Installation
-	reg := in.Registry
-	path := in.ImagePath
-	prefix := in.ImagePrefix
-	overrides := c.cfg.ImageOverrides
 
-	c.IstioPilotImage, err = components.GetReference(overrides.Resolve(ComponentNamePilot, components.ComponentCalicoIstioPilot, in), reg, path, prefix, is)
+	c.IstioPilotImage, err = components.ReferenceFor(components.ImageKeyIstioPilot, in, is)
 	if err != nil {
 		return err
 	}
-	c.IstioInstallCNIImage, err = components.GetReference(overrides.Resolve(ComponentNameInstallCNI, components.ComponentCalicoIstioInstallCNI, in), reg, path, prefix, is)
+	c.IstioInstallCNIImage, err = components.ReferenceFor(components.ImageKeyIstioInstallCNI, in, is)
 	if err != nil {
 		return err
 	}
-	c.IstioZTunnelImage, err = components.GetReference(overrides.Resolve(ComponentNameZTunnel, components.ComponentCalicoIstioZTunnel, in), reg, path, prefix, is)
+	c.IstioZTunnelImage, err = components.ReferenceFor(components.ImageKeyIstioZTunnel, in, is)
 	if err != nil {
 		return err
 	}
-	c.IstioProxyv2Image, err = components.GetReference(overrides.Resolve(ComponentNameProxyv2, components.ComponentCalicoIstioProxyv2, in), reg, path, prefix, is)
+	c.IstioProxyv2Image, err = components.ReferenceFor(components.ImageKeyIstioProxyv2, in, is)
 	if err != nil {
 		return err
 	}

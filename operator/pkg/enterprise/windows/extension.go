@@ -26,14 +26,12 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/enterprise/installation"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/monitor"
@@ -43,22 +41,13 @@ import (
 // Extension is the Calico Enterprise behavior for the windows controller.
 type Extension struct {
 	variant operatorv1.ProductVariant
-	images  *imageoverride.Overrides
 }
 
 var _ extensions.WindowsExtension = &Extension{}
 
 // New returns the windows extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, render.ComponentNameWindowsNodeImg, components.ComponentTigeraNodeWindows)
-	images.Register(variant, render.ComponentNameWindowsCNIImg, components.ComponentTigeraCNIWindows)
-
-	return &Extension{variant: variant, images: images}
-}
-
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
+	return &Extension{variant: variant}
 }
 
 // Modify dispatches over the components the windows controller renders.

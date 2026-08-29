@@ -35,7 +35,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
@@ -108,13 +107,12 @@ var _ = Describe("Windows rendering tests", func() {
 
 		// Create a default configuration.
 		cfg = render.WindowsConfiguration{
-			K8sServiceEp:   k8sServiceEp,
-			K8sDNSServers:  []string{"10.96.0.10"},
-			Installation:   defaultInstance,
-			ClusterDomain:  defaultClusterDomain,
-			TLS:            typhaNodeTLS,
-			VXLANVNI:       4096,
-			ImageOverrides: imageoverride.New(),
+			K8sServiceEp:  k8sServiceEp,
+			K8sDNSServers: []string{"10.96.0.10"},
+			Installation:  defaultInstance,
+			ClusterDomain: defaultClusterDomain,
+			TLS:           typhaNodeTLS,
+			VXLANVNI:      4096,
 		}
 	})
 

@@ -34,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
@@ -174,7 +175,8 @@ func Create(cli client.Client, installation *operatorv1.InstallationSpec, cluste
 			return nil, err
 		}
 		// We instantiate csrImage regardless of whether certificate management is enabled; it may still be used.
-		csrImage, err = certificatemanagement.ResolveCSRInitImage(installation, imageSet)
+		// The init container runs out of the combined image as a key-cert-provisioner subcommand.
+		csrImage, err = components.GetReference(components.CombinedCalicoImage(installation), installation.Registry, installation.ImagePath, installation.ImagePrefix, imageSet)
 		if err != nil {
 			return nil, err
 		}

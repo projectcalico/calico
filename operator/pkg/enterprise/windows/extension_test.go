@@ -33,7 +33,6 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
@@ -42,21 +41,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/extensions/extensionstest"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
-
-var _ = Describe("windows enterprise image override", func() {
-	ent := &operatorv1.InstallationSpec{Variant: operatorv1.CalicoEnterprise}
-	calico := &operatorv1.InstallationSpec{Variant: operatorv1.Calico}
-
-	It("selects the enterprise windows images for the enterprise variant", func() {
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, ent)).To(Equal(components.ComponentTigeraNodeWindows))
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, ent)).To(Equal(components.ComponentTigeraCNIWindows))
-	})
-
-	It("leaves the defaults in place for the Calico variant", func() {
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsNodeImg, components.ComponentCalicoNodeWindows, calico)).To(Equal(components.ComponentCalicoNodeWindows))
-		Expect(ext.Windows().Images().Resolve(render.ComponentNameWindowsCNIImg, components.ComponentCalicoCNIWindows, calico)).To(Equal(components.ComponentCalicoCNIWindows))
-	})
-})
 
 var _ = Describe("windows enterprise modifier", func() {
 	// newObjs returns a windows daemonset with the node containers and the OSS

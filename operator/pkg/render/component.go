@@ -94,4 +94,8 @@ const (
 	ComponentNameWindowsCNIImg  = "windows-cni-image"
 
 	ComponentNameKubeControllers = "kube-controllers"
+
+	// ComponentNameCalico keys the combined calico image; most components run one of
+	// its binaries.
+	ComponentNameCalico = "calico"
 )

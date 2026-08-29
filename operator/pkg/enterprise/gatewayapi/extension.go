@@ -31,7 +31,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
@@ -43,23 +42,13 @@ const legacyNamespace = "tigera-gateway"
 // Extension is the Calico Enterprise behavior for the gateway API controller.
 type Extension struct {
 	variant operatorv1.ProductVariant
-	images  *imageoverride.Overrides
 }
 
 var _ extensions.GatewayAPIExtension = &Extension{}
 
 // New returns the gateway API extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
-	images := imageoverride.New()
-	images.Register(variant, gatewayapi.ComponentNameEnvoyGateway, components.ComponentGatewayAPIEnvoyGateway)
-	images.Register(variant, gatewayapi.ComponentNameEnvoyProxy, components.ComponentGatewayAPIEnvoyProxy)
-	images.Register(variant, gatewayapi.ComponentNameEnvoyRatelimit, components.ComponentGatewayAPIEnvoyRatelimit)
-
-	return &Extension{variant: variant, images: images}
-}
-
-func (e *Extension) Images() *imageoverride.Overrides {
-	return e.images
+	return &Extension{variant: variant}
 }
 
 // gatewayAPIRenderData is the controller-produced data the gateway API extension hands

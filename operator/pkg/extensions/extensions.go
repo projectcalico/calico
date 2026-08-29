@@ -27,6 +27,9 @@ type Set struct {
 	Goldmane          GoldmaneExtension
 	Whisker           WhiskerExtension
 	GatewayAPI        GatewayAPIExtension
+
+	// Startup is the variant's hook into operator startup rather than into a controller.
+	Startup StartupExtension
 }
 
 // Extensions is the variant behavior the operator runs with. The zero value extends
@@ -109,4 +112,11 @@ func (e Extensions) GatewayAPI() GatewayAPIExtension {
 		return noopGatewayAPI{}
 	}
 	return e.set.GatewayAPI
+}
+
+func (e Extensions) Startup() StartupExtension {
+	if e.set.Startup == nil {
+		return noopStartup{}
+	}
+	return e.set.Startup
 }

@@ -685,6 +685,9 @@ var _ = Describe("windows-controller installation tests", func() {
 				})
 
 				It("should use builtin images", func() {
+					// This suite builds the Enterprise extensions, which register their images.
+					DeferCleanup(components.UseImages(components.CalicoImages))
+
 					_, err := r.Reconcile(ctx, reconcile.Request{})
 					Expect(err).ShouldNot(HaveOccurred())
 
@@ -739,6 +742,9 @@ var _ = Describe("windows-controller installation tests", func() {
 					}
 				})
 				It("should use images from imageset", func() {
+					// This suite builds the Enterprise extensions, which register their images.
+					DeferCleanup(components.UseImages(components.CalicoImages))
+
 					imageSet := &operator.ImageSet{
 						ObjectMeta: metav1.ObjectMeta{Name: "calico-" + components.CalicoRelease},
 						Spec: operator.ImageSetSpec{

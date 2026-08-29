@@ -111,7 +111,7 @@ func (c *Component) ResolveImages(is *operatorv1.ImageSet) error {
 	if err != nil {
 		return err
 	}
-	c.calicoImage, err = components.GetReference(components.CombinedCalicoImage(c.cfg.Installation), reg, path, prefix, is)
+	c.calicoImage, err = components.ReferenceFor(components.ImageKeyCalico, c.cfg.Installation, is)
 	return err
 }
 

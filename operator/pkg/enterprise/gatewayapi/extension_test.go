@@ -58,11 +58,10 @@ func testScheme() *runtime.Scheme {
 }
 
 // enterpriseComponent renders the gateway API implementation the way the controller
-// does, with the extension's image overrides and modifier applied.
+// does, with the extension's modifier applied.
 func enterpriseComponent(cfg *gatewayapi.GatewayAPIImplementationConfig) render.Component {
 	ext := New(operatorv1.CalicoEnterprise)
 	cfg.Scheme = testScheme()
-	cfg.ImageOverrides = ext.Images()
 
 	comp, err := gatewayapi.GatewayAPIImplementationComponent(cfg)
 	Expect(err).NotTo(HaveOccurred())

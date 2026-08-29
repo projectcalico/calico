@@ -60,7 +60,7 @@ func handleIPPools(c *components, install *operatorv1.Installation) error {
 		}
 
 		// Convert any found CRD pools into Operator pools and add them.
-		if render.GetIPv4Pool(install.Spec.CalicoNetwork.IPPools) == nil && v4pool != nil {
+		if !render.HasIPv4Pool(install.Spec.CalicoNetwork.IPPools) && v4pool != nil {
 			pool, err := convertPool(*v4pool)
 			if err != nil {
 				return ErrIncompatibleCluster{
@@ -71,7 +71,7 @@ func handleIPPools(c *components, install *operatorv1.Installation) error {
 			install.Spec.CalicoNetwork.IPPools = append(install.Spec.CalicoNetwork.IPPools, pool)
 		}
 
-		if render.GetIPv6Pool(install.Spec.CalicoNetwork.IPPools) == nil && v6pool != nil {
+		if !render.HasIPv6Pool(install.Spec.CalicoNetwork.IPPools) && v6pool != nil {
 			operatorV6Pool, err = convertPool(*v6pool)
 			if err != nil {
 				return ErrIncompatibleCluster{

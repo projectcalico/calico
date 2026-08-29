@@ -21,14 +21,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/controller"
-	"github.com/projectcalico/calico/operator/pkg/imageoverride"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // GatewayAPIExtension is the variant's hook into the gateway API controller.
 type GatewayAPIExtension interface {
 	// Images overrides the images the gateway API render resolves.
-	Images() *imageoverride.Overrides
 
 	// ExtendInputs resolves what the modifier needs but cannot read for itself.
 	ExtendInputs(ctx context.Context, ci controller.Inputs) (controller.Inputs, error)
@@ -43,10 +41,6 @@ type GatewayAPIExtension interface {
 
 // noopGatewayAPI runs the core operator's behavior unchanged.
 type noopGatewayAPI struct{}
-
-func (noopGatewayAPI) Images() *imageoverride.Overrides {
-	return nil
-}
 
 func (noopGatewayAPI) ExtendInputs(_ context.Context, ci controller.Inputs) (controller.Inputs, error) {
 	return ci, nil

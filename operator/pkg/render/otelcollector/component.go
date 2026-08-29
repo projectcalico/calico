@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -111,11 +112,18 @@ const (
 	DefaultTLSReloadInterval = "1h"
 )
 
+var log = logf.Log.WithName("render_otelcollector")
+
 type Configuration struct {
 	PullSecrets   []*corev1.Secret
 	OpenShift     bool
 	Installation  *operatorv1.InstallationSpec
 	OpenTelemetry *operatorv1.OpenTelemetrySpec
+	ClusterDomain string
+	// DomainEgressAllowed reports whether the license carries the
+	// egress-access-control feature, without which a Domains rule cannot be
+	// created.
+	DomainEgressAllowed bool
 	// ReceiverTLSSecret is the server keypair for the OTLP receiver (mTLS termination).
 	ReceiverTLSSecret certificatemanagement.KeyPairInterface
 	TrustedCertBundle certificatemanagement.TrustedBundleRO
@@ -131,10 +139,6 @@ type Configuration struct {
 	// headers, keyed by Secret name. Values reach the collector as environment
 	// variables so credentials never land in the rendered ConfigMap.
 	ExporterAuthSecrets map[string]*corev1.Secret
-	// DomainEgressAllowed reports whether the license carries the
-	// egress-access-control feature, without which NetworkPolicy cannot name a
-	// destination by domain and egress rules fall back to port-only.
-	DomainEgressAllowed bool
 	// Disabled renders the component for removal instead of creation, so turning
 	// the feature off cleans up after itself rather than leaving the collector
 	// and its RBAC behind.
@@ -832,25 +836,9 @@ func (c *component) statefulSet() *appsv1.StatefulSet {
 	}
 }
 
-// exporterDestination resolves the egress destination for an exporter. The OTLP
-// exporters accept a bare host and supply the port themselves, which
-// ParseExternalDestination cannot infer, so fall back to the protocol's default
-// port instead of returning nothing — an exporter with no rule is silently
-// dropped by the default-deny, with the operator still reporting Available.
-func exporterDestination(exp operatorv1.OpenTelemetryExporter) networkpolicy.ExternalDestination {
-	if dest, ok := networkpolicy.ParseExternalDestination(exp.Endpoint); ok {
-		return dest
-	}
-	port := uint16(OTLPGRPCPort)
-	if exp.Protocol == operatorv1.OpenTelemetryProtocolHTTP {
-		port = OTLPHTTPPort
-	}
-	// A bare host carries no scheme or path, so it is safe to name directly.
-	// Anything more exotic falls through to a port-only rule.
-	if !strings.ContainsAny(exp.Endpoint, "/:") {
-		return networkpolicy.ExternalDestination{Host: exp.Endpoint, Port: port}
-	}
-	return networkpolicy.ExternalDestination{Port: port}
+// exporterDestination resolves the egress destination for an exporter.
+func exporterDestination(exp operatorv1.OpenTelemetryExporter, clusterDomain string) (v3.EntityRule, error) {
+	return networkpolicy.EntityRuleForURL(exp.Endpoint, clusterDomain)
 }
 
 func (c *component) networkPolicy() *v3.NetworkPolicy {
@@ -861,10 +849,19 @@ func (c *component) networkPolicy() *v3.NetworkPolicy {
 	// ports: the exporters below are the only egress destinations we need, and a
 	// catch-all would let the collector reach any host on 4317/4318.
 	for _, exp := range c.cfg.OpenTelemetry.Exporters {
+		dest, err := exporterDestination(exp, c.cfg.ClusterDomain)
+		if err != nil {
+			log.Error(err, "no egress rule rendered for exporter", "exporter", exp.Name)
+			continue
+		}
+		if len(dest.Domains) > 0 && !c.cfg.DomainEgressAllowed {
+			log.Error(nil, "skipping exporter egress rule: domain rules require the egress-access-control license feature", "exporter", exp.Name)
+			continue
+		}
 		egressRules = append(egressRules, v3.Rule{
 			Action:      v3.Allow,
 			Protocol:    &networkpolicy.TCPProtocol,
-			Destination: networkpolicy.ExternalDestinationEntityRule(exporterDestination(exp), c.cfg.DomainEgressAllowed),
+			Destination: dest,
 		})
 	}
 

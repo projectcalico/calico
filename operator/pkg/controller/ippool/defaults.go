@@ -75,8 +75,8 @@ func fillDefaults(ctx context.Context, client client.Client, spec *operator.Inst
 		return fmt.Errorf("cannot perform IP pool defaulting until CNI configuration is available")
 	}
 
-	// Only add default CIDRs if there are no existing pools in the cluster. If there are existing pools in the cluster,
-	// then we assume that the user has configured them correctly out-of-band and we should not install any others.
+	// Only add default CIDRs if there are no existing pools in the cluster. On a cluster that already has
+	// pools, the caller has decided which ones to manage.
 	if currentPools == nil || len(currentPools.Items) == 0 {
 		if spec.KubernetesProvider.IsOpenShift() {
 			// If configured to run in openshift, then also fetch the openshift configuration API.
@@ -136,14 +136,6 @@ func fillDefaults(ctx context.Context, client client.Client, spec *operator.Inst
 				}
 			}
 		}
-	} else if spec.CalicoNetwork == nil || spec.CalicoNetwork.IPPools == nil {
-		// There are existing IP pools in the cluster, and the installation hasn't specified any. This means IP pools are
-		// being managed out-of-band of the operator API. So, default the installation field to an empty list,
-		// which means "Don't install any IP pools".
-		if spec.CalicoNetwork == nil {
-			spec.CalicoNetwork = &operator.CalicoNetworkSpec{}
-		}
-		spec.CalicoNetwork.IPPools = []operator.IPPool{}
 	}
 
 	// If there are no CalicoNetwork settings, return early. The code after this point

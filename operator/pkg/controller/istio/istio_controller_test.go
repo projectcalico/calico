@@ -910,6 +910,8 @@ var _ = Describe("Istio controller tests", func() {
 		})
 
 		It("should handle ImageSet application for Enterprise variant", func() {
+			DeferCleanup(components.UseImages(components.EnterpriseImages))
+
 			installation.Spec.Variant = operatorv1.CalicoEnterprise
 			installation.Status.Variant = operatorv1.CalicoEnterprise
 			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())

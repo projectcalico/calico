@@ -152,7 +152,7 @@ func (l *linseed) ResolveImages(is *operatorv1.ImageSet) error {
 	}
 
 	if l.cfg.Installation.CertificateManagement != nil {
-		l.csrImage, err = certificatemanagement.ResolveCSRInitImage(l.cfg.Installation, is)
+		l.csrImage, err = components.GetReference(components.ComponentTigeraCalico, reg, path, prefix, is)
 		if err != nil {
 			errMsgs = append(errMsgs, err.Error())
 		}

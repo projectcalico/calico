@@ -92,7 +92,6 @@ var _ = Describe("Istio extension", func() {
 			},
 			IstioNamespace: ristio.IstioNamespace,
 			Scheme:         testScheme(),
-			ImageOverrides: ext.Images(),
 		}
 		ri = render.Inputs{Installation: install}
 	})
