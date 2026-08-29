@@ -111,7 +111,13 @@ generate:
 gen-manifests: bin/helm bin/yq
 	cd ./manifests && ./generate.sh
 
-gen-semaphore-yaml:
+# The operator's go:embed directives need these on disk before any target can
+# load its packages.
+.PHONY: operator-charts
+operator-charts:
+	$(MAKE) -C operator embedded_charts
+
+gen-semaphore-yaml: operator-charts
 	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
 	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
@@ -120,7 +126,7 @@ gen-semaphore-yaml:
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
-gen-deps-files:
+gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
 $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*

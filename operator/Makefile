@@ -288,6 +288,11 @@ $(ENVOY_GATEWAY_CHART): $(HACK_BIN)/helm-$(BUILDARCH)
 		--destination pkg/render/gatewayapi/
 	@mv pkg/render/gatewayapi/gateway-helm-$(ENVOY_GATEWAY_VERSION).tgz $@
 
+# Loading the operator's Go packages needs the tarballs its go:embed
+# directives point at, so anything outside this directory asks for them here.
+.PHONY: embedded_charts
+embedded_charts: $(ISTIO_CHART_FILES) $(ENVOY_GATEWAY_CHART)
+
 $(HELM_BUILDARCH_BINARY): $(HELM_BUILDARCH_VERSIONED_BINARY)
 	$(info ░▒▓ symlink $(HELM_BUILDARCH_VERSIONED_BINARY) -> $(HELM_BUILDARCH_BINARY))
 	@ln -sf helm-$(BUILDARCH)-$(HELM3_VERSION) $(HACK_BIN)/helm-$(BUILDARCH)
