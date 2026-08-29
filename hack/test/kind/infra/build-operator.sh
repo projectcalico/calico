@@ -24,7 +24,7 @@ make build/_output/bin/gen-versions
 # The build needs a component list pointing at the dev images, which is the
 # same file the repo keeps generated from config/calico_versions.yml. Put the
 # committed one back once the image is built.
-COMPONENTS=pkg/components/calico.go
+COMPONENTS="${OPERATOR_DIR}/pkg/components/calico.go"
 SAVED=$(mktemp /tmp/calico_components_XXXXXX.go)
 cp "${COMPONENTS}" "${SAVED}"
 trap 'cp "${SAVED}" "${COMPONENTS}"; rm -f "${SAVED}"' EXIT

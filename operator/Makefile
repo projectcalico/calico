@@ -104,12 +104,13 @@ PACKAGE_NAME?=github.com/projectcalico/calico/operator
 # container mount needs to expose the repo root, not just this directory.
 MODULE_ROOT?=github.com/projectcalico/calico
 LOCAL_USER_ID?=$(shell id -u $$USER)
-# The project Go version.
-GO_VERSION?=1.26.5
-# Version of Kubernetes to use for dependencies, tests, and kubectl.
-K8S_VERSION?=v1.37.0-beta.0
-# The version of LLVM to use for the go-build image.
-LLVM_VERSION?=21.1.8
+# The operator compiles against the root module, so its toolchain has to be
+# whatever the monorepo pins rather than a version of its own.
+CALICO_METADATA?=../metadata.mk
+mk_var = $(shell sed -n 's/^$(1)[[:space:]]*[?:]\{0,1\}=[[:space:]]*//p' $(CALICO_METADATA))
+GO_VERSION?=$(call mk_var,GO_VERSION)
+K8S_VERSION?=$(call mk_var,K8S_VERSION)
+LLVM_VERSION?=$(call mk_var,LLVM_VERSION)
 # Calico toolchain versions and the calico/go-build image to use.
 GO_BUILD_VER?=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
 CALICO_BASE_VER ?= ubi9-1784675397
