@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
@@ -31,6 +30,7 @@ import (
 	entcertificatemanager "github.com/projectcalico/calico/operator/pkg/enterprise/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/dashboards"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

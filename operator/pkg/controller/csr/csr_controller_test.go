@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
@@ -53,6 +52,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 )
 
 // stubExtension contributes the signable assets, standing in for whatever a variant adds.

@@ -26,7 +26,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/tls/certkeyusage"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // The names of the components related to the PolicyRecommendation APIs related rendered objects.

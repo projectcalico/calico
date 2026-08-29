@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/gatewayapi"
@@ -33,6 +32,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer"
 	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer/ruleset"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"

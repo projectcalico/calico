@@ -28,7 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/render"
@@ -39,6 +38,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/goldmane"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var (

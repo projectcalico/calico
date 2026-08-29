@@ -27,7 +27,6 @@ import (
 
 	_ "embed"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
@@ -38,6 +37,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // The names of the components related to the Guardian related rendered objects.

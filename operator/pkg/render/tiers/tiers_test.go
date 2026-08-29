@@ -17,7 +17,6 @@ package tiers_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
@@ -25,6 +24,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/kibana"
 	"github.com/projectcalico/calico/operator/pkg/render/testutils"
 	"github.com/projectcalico/calico/operator/pkg/render/tiers"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
 )
 

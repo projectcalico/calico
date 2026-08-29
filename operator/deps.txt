@@ -296,7 +296,6 @@ local:operator/pkg/enterprise/utils
 local:operator/pkg/enterprise/whisker
 local:operator/pkg/enterprise/windows
 local:operator/pkg/extensions
-local:operator/pkg/imageoverride
 local:operator/pkg/imports/admission
 local:operator/pkg/imports/crds
 local:operator/pkg/render

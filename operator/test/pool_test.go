@@ -34,9 +34,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // This test suite covers the installation of IP pools. The vast majority should be covered in the pkg/controller/ippool UTs

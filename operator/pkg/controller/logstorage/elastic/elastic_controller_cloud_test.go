@@ -17,9 +17,9 @@ package elastic
 import (
 	"context"
 
+	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
 	"github.com/stretchr/testify/mock"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
 
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 

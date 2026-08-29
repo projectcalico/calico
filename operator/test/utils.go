@@ -40,9 +40,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // ExpectResourceCreated asserts that the given object is created,

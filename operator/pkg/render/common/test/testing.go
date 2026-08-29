@@ -25,10 +25,10 @@ import (
 	//nolint:staticcheck // Ignore ST1001 error strings should not be capitalized
 	. "github.com/onsi/gomega"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/tls"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
