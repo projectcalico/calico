@@ -53,6 +53,7 @@ import (
 	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	lscommon "github.com/tigera/operator/pkg/enterprise/controller/logstorage/common"
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/esutils"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
@@ -63,7 +64,6 @@ import (
 	rgateway "github.com/tigera/operator/pkg/render/gateway"
 	"github.com/tigera/operator/pkg/render/logstorage/eck"
 	rmanager "github.com/tigera/operator/pkg/render/manager"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 	"github.com/tigera/operator/pkg/url"
 )

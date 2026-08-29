@@ -41,10 +41,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/render/testutils"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -60,16 +60,16 @@ var _ = Describe("monitor rendering tests", func() {
 			"alertmanager.yaml": []byte("Alertmanager configuration secret"),
 		},
 	}
-	expectedAlertmanagerPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/alertmanager.json")
-	expectedAlertmanagerMeshPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/alertmanager-mesh.json")
-	expectedPrometheusPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus.json")
-	expectedPrometheusApiPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus-api.json")
-	expectedPrometheusOperatorPolicy := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus-operator.json")
-	expectedAlertmanagerPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/alertmanager_ocp.json")
-	expectedAlertmanagerMeshPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/alertmanager-mesh_ocp.json")
-	expectedPrometheusPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus_ocp.json")
-	expectedPrometheusApiPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus-api_ocp.json")
-	expectedPrometheusOperatorPolicyOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/prometheus-operator_ocp.json")
+	expectedAlertmanagerPolicy := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/alertmanager.json")
+	expectedAlertmanagerMeshPolicy := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/alertmanager-mesh.json")
+	expectedPrometheusPolicy := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus.json")
+	expectedPrometheusApiPolicy := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus-api.json")
+	expectedPrometheusOperatorPolicy := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus-operator.json")
+	expectedAlertmanagerPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/alertmanager_ocp.json")
+	expectedAlertmanagerMeshPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/alertmanager-mesh_ocp.json")
+	expectedPrometheusPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus_ocp.json")
+	expectedPrometheusApiPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus-api_ocp.json")
+	expectedPrometheusOperatorPolicyOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/prometheus-operator_ocp.json")
 
 	var cfg *monitor.Config
 	var prometheusKeyPair certificatemanagement.KeyPairInterface

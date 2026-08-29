@@ -31,10 +31,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/render/logcollector"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/logcollector"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -48,7 +48,7 @@ import (
 //
 // To regenerate after an intentional rendering change:
 //
-//	UPDATE_RENDERED_CONFIGS=1 go test ./pkg/render/logcollector/ -run TestRenderedConfigGoldens
+//	UPDATE_RENDERED_CONFIGS=1 go test ./pkg/enterprise/render/logcollector/ -run TestRenderedConfigGoldens
 func TestRenderedConfigGoldens(t *testing.T) {
 	nonClusterOnly := operatorv1.HostScopeNonClusterOnly
 
@@ -299,7 +299,7 @@ func TestRenderedConfigGoldens(t *testing.T) {
 				t.Fatalf("missing golden (run with UPDATE_RENDERED_CONFIGS=1 to generate): %v", err)
 			}
 			if rendered != string(want) {
-				t.Errorf("rendered config differs from %s (fluentd test.sh case: %s)\n%s\nTo accept an intentional change: UPDATE_RENDERED_CONFIGS=1 go test ./pkg/render/logcollector/ -run TestRenderedConfigGoldens",
+				t.Errorf("rendered config differs from %s (fluentd test.sh case: %s)\n%s\nTo accept an intentional change: UPDATE_RENDERED_CONFIGS=1 go test ./pkg/enterprise/render/logcollector/ -run TestRenderedConfigGoldens",
 					goldenPath, sc.fluentdCase, firstDiff(string(want), rendered))
 			}
 		})

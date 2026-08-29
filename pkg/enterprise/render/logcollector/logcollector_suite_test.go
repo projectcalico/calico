@@ -34,6 +34,6 @@ func TestLogCollector(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/logcollector_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/render/logcollector Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../../report/ut/logcollector_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/render/logcollector Suite", suiteConfig, reporterConfig)
 }

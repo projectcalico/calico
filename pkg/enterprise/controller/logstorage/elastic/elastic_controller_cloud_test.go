@@ -50,8 +50,8 @@ import (
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/status"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	"github.com/tigera/operator/pkg/render/logstorage/kibana"
-	"github.com/tigera/operator/pkg/render/monitor"
 )
 
 var _ = Describe("External ES controller (Cloud))", func() {

@@ -28,7 +28,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/ctrlruntime"
-	"github.com/tigera/operator/pkg/render/monitor"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 )
 
 func addAlertmanagerWatch(c ctrlruntime.Controller) error {

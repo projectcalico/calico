@@ -47,12 +47,12 @@ import (
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/initializer"
 	entkubecontrollers "github.com/tigera/operator/pkg/enterprise/kubecontrollers"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
 	"github.com/tigera/operator/pkg/render/kubecontrollers"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 

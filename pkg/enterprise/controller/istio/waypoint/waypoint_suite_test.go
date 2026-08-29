@@ -24,6 +24,6 @@ import (
 func TestWaypoint(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../../report/ut/istio_waypoint_suite.xml"
+	reporterConfig.JUnitReport = "../../../../../report/ut/istio_waypoint_suite.xml"
 	ginkgo.RunSpecs(t, "pkg/controller/istio/waypoint Suite", suiteConfig, reporterConfig)
 }

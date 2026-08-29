@@ -50,11 +50,11 @@ import (
 	"github.com/tigera/operator/pkg/controller/status"
 	"github.com/tigera/operator/pkg/controller/utils"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
+	rlogcollector "github.com/tigera/operator/pkg/enterprise/render/logcollector"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	"github.com/tigera/operator/pkg/enterprise/render/otelcollector"
 	"github.com/tigera/operator/pkg/render"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	rlogcollector "github.com/tigera/operator/pkg/render/logcollector"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/test"
 )
 

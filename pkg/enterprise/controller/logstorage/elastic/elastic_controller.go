@@ -53,6 +53,7 @@ import (
 	logstoragecommon "github.com/tigera/operator/pkg/enterprise/controller/logstorage/common"
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/initializer"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
@@ -62,7 +63,6 @@ import (
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
 	"github.com/tigera/operator/pkg/render/logstorage/esmetrics"
 	"github.com/tigera/operator/pkg/render/logstorage/kibana"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 

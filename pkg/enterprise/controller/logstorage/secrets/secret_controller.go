@@ -42,16 +42,16 @@ import (
 	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
 	logstoragecommon "github.com/tigera/operator/pkg/enterprise/controller/logstorage/common"
 	"github.com/tigera/operator/pkg/enterprise/controller/logstorage/initializer"
+	"github.com/tigera/operator/pkg/enterprise/render/logcollector"
+	"github.com/tigera/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
-	"github.com/tigera/operator/pkg/render/logcollector"
 	"github.com/tigera/operator/pkg/render/logstorage"
 	"github.com/tigera/operator/pkg/render/logstorage/esgateway"
 	"github.com/tigera/operator/pkg/render/logstorage/esmetrics"
 	"github.com/tigera/operator/pkg/render/logstorage/kibana"
 	"github.com/tigera/operator/pkg/render/logstorage/linseed"
-	"github.com/tigera/operator/pkg/render/monitor"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 

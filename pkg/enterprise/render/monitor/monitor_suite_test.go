@@ -24,6 +24,6 @@ import (
 func TestRender(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/monitor_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/render/monitor Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../../report/ut/monitor_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/render/monitor Suite", suiteConfig, reporterConfig)
 }

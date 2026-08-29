@@ -14,8 +14,8 @@
 
 package render
 
-// Identity of the OpenTelemetry Collector workload. They live here because
-// pkg/render/monitor builds the collector's ServiceMonitor and cannot import the
+// Identity of the OpenTelemetry Collector workload. They live here because the
+// monitoring render builds the collector's ServiceMonitor and cannot import the
 // package that renders the collector.
 const (
 	OpenTelemetryCollectorName      = "otel-collector"

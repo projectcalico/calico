@@ -15,7 +15,7 @@ golden here can be read side-by-side with its fluentd `.cfg` counterpart.
 
 To accept an intentional rendering change:
 
-    UPDATE_RENDERED_CONFIGS=1 go test ./pkg/render/logcollector/ -run TestRenderedConfigGoldens
+    UPDATE_RENDERED_CONFIGS=1 go test ./pkg/enterprise/render/logcollector/ -run TestRenderedConfigGoldens
 
 ## fluentd test.sh case → golden mapping
 

@@ -43,10 +43,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/render/logcollector"
 	"github.com/tigera/operator/pkg/render"
 	rmeta "github.com/tigera/operator/pkg/render/common/meta"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/logcollector"
 	"github.com/tigera/operator/pkg/render/testutils"
 	"github.com/tigera/operator/pkg/tls"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
@@ -57,9 +57,9 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 	var cfg *logcollector.FluentBitConfiguration
 	var cli client.Client
 
-	expectedFluentBitPolicyForUnmanaged := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/fluentbit_unmanaged.json")
-	expectedFluentBitPolicyForUnmanagedOpenshift := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/fluentbit_unmanaged_ocp.json")
-	expectedFluentBitPolicyForManaged := testutils.GetExpectedPolicyFromFile("../testutils/expected_policies/fluentbit_managed.json")
+	expectedFluentBitPolicyForUnmanaged := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/fluentbit_unmanaged.json")
+	expectedFluentBitPolicyForUnmanagedOpenshift := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/fluentbit_unmanaged_ocp.json")
+	expectedFluentBitPolicyForManaged := testutils.GetExpectedPolicyFromFile("../../../render/testutils/expected_policies/fluentbit_managed.json")
 
 	BeforeEach(func() {
 		// Initialize a default instance to use. Each test can override this to its

@@ -40,8 +40,8 @@ import (
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/enterprise/controller/monitor"
+	rmonitor "github.com/tigera/operator/pkg/enterprise/render/monitor"
 	"github.com/tigera/operator/pkg/render"
-	rmonitor "github.com/tigera/operator/pkg/render/monitor"
 )
 
 var _ = Describe("CSR extension", func() {
