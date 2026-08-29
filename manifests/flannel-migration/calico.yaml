@@ -12589,6 +12589,7 @@ spec:
               name: cni-bin-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -12631,6 +12632,7 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed

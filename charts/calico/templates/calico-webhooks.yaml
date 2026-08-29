@@ -114,6 +114,7 @@ spec:
           imagePullPolicy: {{.Values.imagePullPolicy}}
           args:
             - component
+            - webhooks
             - webhook
             - --tls-cert-file=/certs/tls.crt
             - --tls-private-key-file=/certs/tls.key
