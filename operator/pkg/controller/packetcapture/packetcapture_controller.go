@@ -283,9 +283,7 @@ func (r *ReconcilePacketCapture) Reconcile(ctx context.Context, request reconcil
 		}),
 	}
 
-	if pcPolicy := render.PacketCaptureAPIPolicy(packetCaptureApiCfg); pcPolicy != nil {
-		components = append(components, pcPolicy)
-	}
+	components = append(components, render.PacketCaptureAPIPolicy(packetCaptureApiCfg))
 
 	if err = imageset.ApplyImageSet(ctx, r.client, r.opts.Variant, components...); err != nil {
 		r.status.SetDegraded(operatorv1.ResourceUpdateError, "Error with images from ImageSet", err, reqLogger)
