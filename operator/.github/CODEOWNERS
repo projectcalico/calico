@@ -1,6 +1,0 @@
-# Require review for all changes by an operator-maintainer
-* @tigera/tigera-operator-maintainers
-
-# Auto-synced CRD imports: let the sync bot approve its own version-sync PRs
-# (still approvable by a maintainer too).
-/pkg/imports/ @tigera/tigera-operator-maintainers @marvin-tigera
