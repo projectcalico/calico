@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -41,7 +41,6 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer"
 	"github.com/projectcalico/calico/operator/test"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var _ = Describe("Application layer controller tests", func() {

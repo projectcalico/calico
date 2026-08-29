@@ -17,10 +17,11 @@ package tiers
 import (
 	"context"
 
-	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 )
 
 // cloudPatchTier removes the app.kubernetes.io/instance label from the calico-system tier to fix

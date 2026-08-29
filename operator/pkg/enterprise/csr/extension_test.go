@@ -19,7 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 	authv1 "k8s.io/api/authorization/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,9 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"

@@ -15,14 +15,13 @@
 package kibana_test
 
 import (
+	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -31,7 +30,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/kibana"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var _ = Describe("Kibana cloud rendering tests", func() {

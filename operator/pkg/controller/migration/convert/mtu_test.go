@@ -15,12 +15,12 @@
 package convert
 
 import (
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/controller/migration/cni"
-	v1 "k8s.io/api/core/v1"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller/migration/cni"
 )
 
 var _ = Describe("mtu handler", func() {

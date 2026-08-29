@@ -17,9 +17,10 @@ import (
 	"fmt"
 	"strings"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // handleNftables is a migration handler which ensures nftables configuration is carried forward.

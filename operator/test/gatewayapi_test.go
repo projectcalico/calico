@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -33,8 +33,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	gapi "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/internal/controller"
 	"github.com/projectcalico/calico/operator/pkg/common"
@@ -44,8 +45,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
-	gapi "sigs.k8s.io/gateway-api/apis/v1"
-	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 )
 
 var _ = Describe("GatewayAPI tests", func() {

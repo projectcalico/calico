@@ -17,13 +17,11 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/stretchr/testify/mock"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/stretchr/testify/mock"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // TODO use mockery to generate mock

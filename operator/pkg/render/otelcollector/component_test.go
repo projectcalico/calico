@@ -18,11 +18,9 @@ import (
 	"crypto/x509"
 	"strings"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/google/go-cmp/cmp"
-
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

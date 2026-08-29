@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 	ocsv1 "github.com/openshift/api/security/v1"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"

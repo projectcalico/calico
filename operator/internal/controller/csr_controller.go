@@ -18,11 +18,12 @@ package controller
 
 import (
 	"github.com/go-logr/logr"
-	"github.com/projectcalico/calico/operator/pkg/controller/csr"
-	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/operator/pkg/controller/csr"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 )
 
 // CSRReconciler reconciles CSRs.

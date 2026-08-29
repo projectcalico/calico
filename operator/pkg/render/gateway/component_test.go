@@ -15,10 +15,9 @@
 package gateway_test
 
 import (
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"

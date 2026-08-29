@@ -17,13 +17,12 @@ package cloudconfig
 import (
 	"strconv"
 
-	"github.com/projectcalico/calico/operator/pkg/common"
-
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 var _ = Describe("CloudConfig ConfigMap tests", func() {

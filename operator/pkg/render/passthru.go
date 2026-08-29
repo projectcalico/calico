@@ -18,9 +18,10 @@ import (
 	"reflect"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func NewPassthrough(objsToCreate, objsToDelete []client.Object) Component {

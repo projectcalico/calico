@@ -25,11 +25,12 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli/v3"
+
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v3"
 )
 
 // Command to publish release to remote.

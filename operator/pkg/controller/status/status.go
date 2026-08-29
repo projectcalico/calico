@@ -25,9 +25,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-
-	operator "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	certV1 "k8s.io/api/certificates/v1"
@@ -39,6 +36,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 var log = logf.Log.WithName("status_manager")

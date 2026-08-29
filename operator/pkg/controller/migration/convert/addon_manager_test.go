@@ -17,6 +17,7 @@ package convert
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	v1 "github.com/projectcalico/calico/operator/api/v1"
 )
 

@@ -17,15 +17,9 @@ package gatewayapi
 import (
 	"fmt"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/components"
-	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
-	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admissionregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -39,6 +33,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gapi "sigs.k8s.io/gateway-api/apis/v1"
 	"sigs.k8s.io/yaml"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 type matchObject struct {

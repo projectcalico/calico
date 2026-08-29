@@ -17,13 +17,12 @@ package common
 import (
 	"context"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"golang.org/x/crypto/bcrypt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"golang.org/x/crypto/bcrypt"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/crypto"
 	entkubecontrollers "github.com/projectcalico/calico/operator/pkg/enterprise/kubecontrollers"

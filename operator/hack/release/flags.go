@@ -25,8 +25,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 )
 
 var debugFlag = &cli.BoolFlag{

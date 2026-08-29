@@ -18,10 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
-	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
-	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,10 +27,13 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/enterprise/cloudconfig"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 var (

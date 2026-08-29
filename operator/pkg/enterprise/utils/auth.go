@@ -21,19 +21,18 @@ import (
 	"os"
 
 	"github.com/go-ldap/ldap"
-	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rauth "github.com/projectcalico/calico/operator/pkg/render/common/authentication"
 	tigerakvc "github.com/projectcalico/calico/operator/pkg/render/common/authentication/tigera/key_validator_config"
-	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // GetKeyValidatorConfig uses the operatorv1.Authentication CR given to create the KeyValidatorConfig. This may be

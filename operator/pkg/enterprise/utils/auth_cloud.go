@@ -18,11 +18,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calico/operator/pkg/common"
-	tigerakvc "github.com/projectcalico/calico/operator/pkg/render/common/authentication/tigera/key_validator_config"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/projectcalico/calico/operator/pkg/common"
+	tigerakvc "github.com/projectcalico/calico/operator/pkg/render/common/authentication/tigera/key_validator_config"
 )
 
 // getCloudKeyValidatorOption reads the cloud-auth-config ConfigMap (present only on Calico Cloud

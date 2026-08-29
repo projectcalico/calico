@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -49,7 +49,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/tls"
 	"github.com/projectcalico/calico/operator/test"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var _ = Describe("packet capture controller tests", func() {

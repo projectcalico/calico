@@ -26,17 +26,6 @@ import (
 	"strings"
 	"time"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/controller"
-	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
-	"github.com/projectcalico/calico/operator/pkg/controller/options"
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
-	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/tls"
-	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -52,6 +41,18 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/projectcalico/calico/operator/pkg/tls"
+	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
 // LabelName label that we set on our CSRs, this helps us exclude irrelevant CSRs.

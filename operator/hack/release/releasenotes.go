@@ -18,10 +18,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/projectcalico/calico/operator/hack/release/internal/command"
-	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/middleware"
 )
 
 // Command to generate release notes.

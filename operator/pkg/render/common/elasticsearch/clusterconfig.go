@@ -19,9 +19,10 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	"github.com/projectcalico/calico/operator/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (

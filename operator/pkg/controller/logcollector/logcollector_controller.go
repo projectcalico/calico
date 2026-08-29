@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/calico/operator/pkg/dns"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,8 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
@@ -42,6 +40,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/dns"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"

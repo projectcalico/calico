@@ -18,6 +18,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
@@ -25,9 +29,6 @@ import (
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/esgateway"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // esGatewayAddCloudModificationsToConfig modifies the provided *esgateway.Config to include Calico Cloud specific configuration.

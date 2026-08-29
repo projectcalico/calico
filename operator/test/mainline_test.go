@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	apps "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -50,7 +50,6 @@ import (
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 	"github.com/projectcalico/calico/operator/pkg/imports/crds"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 const (

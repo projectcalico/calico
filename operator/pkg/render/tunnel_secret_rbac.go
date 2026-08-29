@@ -15,11 +15,11 @@
 package render
 
 import (
+	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/operator/pkg/common"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // TunnelSecretRBAC returns RBAC objects granting get access to the tunnel CA secret.

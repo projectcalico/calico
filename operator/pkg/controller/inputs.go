@@ -20,10 +20,9 @@ package controller
 import (
 	"context"
 
+	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"

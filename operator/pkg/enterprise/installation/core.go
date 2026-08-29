@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/components"
 	"github.com/projectcalico/calico/operator/pkg/controller"
-
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/dns"

@@ -19,14 +19,14 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/render"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
+
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // bpfValidateAnnotations validate Felix Configuration annotations match BPF Enabled spec for all scenarios.

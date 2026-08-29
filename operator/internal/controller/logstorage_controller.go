@@ -18,13 +18,13 @@ package controller
 
 import (
 	"github.com/go-logr/logr"
-	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/dashboards"
-	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/esmetrics"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/dashboards"
 	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/elastic"
+	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/esmetrics"
 	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/initializer"
 	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/kubecontrollers"
 	"github.com/projectcalico/calico/operator/pkg/controller/logstorage/linseed"

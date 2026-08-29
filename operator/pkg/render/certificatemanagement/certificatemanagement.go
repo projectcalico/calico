@@ -15,12 +15,13 @@
 package certificatemanagement
 
 import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // CertificateManagement renders your KeyPairs and TrustedBundle, thereby simplifying other render components.

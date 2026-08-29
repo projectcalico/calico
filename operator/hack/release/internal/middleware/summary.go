@@ -21,10 +21,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
+
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 )
 
 // ReleaseDir is the path to the release directory base relative to the repo root.

@@ -19,7 +19,8 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	"github.com/stretchr/testify/mock"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -46,8 +47,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/kibana"
 	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls"
-	"github.com/stretchr/testify/mock"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var _ = Describe("External ES Controller", func() {

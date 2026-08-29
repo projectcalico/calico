@@ -17,11 +17,10 @@ package goldmane_test
 import (
 	"fmt"
 
+	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/google/go-cmp/cmp"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -38,7 +37,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/goldmane"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var (

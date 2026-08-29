@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"github.com/tigera/api/pkg/lib/numorstring"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,8 +34,6 @@ import (
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
 )
 
 type Configuration struct {

@@ -17,11 +17,12 @@ package options
 import (
 	"context"
 
+	"k8s.io/client-go/kubernetes"
+
 	v1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/common/discovery"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"k8s.io/client-go/kubernetes"
 )
 
 // ControllerOptions are passed to controllers when added to the controller manager. They

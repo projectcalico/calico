@@ -19,11 +19,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/components"
-	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
-	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,9 +30,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/components"
+	"github.com/projectcalico/calico/operator/pkg/render"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
+	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 

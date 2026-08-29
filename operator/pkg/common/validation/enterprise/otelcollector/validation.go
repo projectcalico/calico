@@ -16,9 +16,9 @@ package otelcollector
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/projectcalico/calico/operator/pkg/common/k8svalidation"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 func ValidateOpenTelemetryCollectorStatefulSetContainer(container corev1.Container) error {

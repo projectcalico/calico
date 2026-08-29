@@ -20,16 +20,16 @@ package clusterconnection
 import (
 	"context"
 
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func NewReconcilerWithShims(

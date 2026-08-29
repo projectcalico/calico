@@ -28,7 +28,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -52,7 +52,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-	fakecalicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset/fake"
 )
 
 // stubExtension contributes the signable assets, standing in for whatever a variant adds.

@@ -24,10 +24,8 @@ import (
 	"time"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
-	csiv1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
-
 	"github.com/go-logr/logr"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -42,15 +40,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	csiv1 "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"

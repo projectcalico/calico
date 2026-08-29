@@ -19,10 +19,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/projectcalico/calico/operator/hack/release/internal/command"
-	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
+
+	"github.com/projectcalico/calico/operator/hack/release/internal/command"
+	"github.com/projectcalico/calico/operator/hack/release/internal/setup"
 )
 
 // check that the git working tree is clean.

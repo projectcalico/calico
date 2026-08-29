@@ -18,11 +18,11 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/projectcalico/calico/operator/pkg/common"
-
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/projectcalico/calico/operator/pkg/common"
 )
 
 const (

@@ -20,7 +20,6 @@ import (
 	"time"
 
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	core "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

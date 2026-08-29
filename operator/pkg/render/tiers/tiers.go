@@ -17,13 +17,14 @@ package tiers
 import (
 	"strings"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (

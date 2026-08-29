@@ -17,11 +17,9 @@ package apiserver
 import (
 	"testing"
 
-	uzap "go.uber.org/zap"
-
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-
+	uzap "go.uber.org/zap"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 

@@ -20,11 +20,12 @@ import (
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/sirupsen/logrus"
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 // CalicoDataplane is the Calico dataplane mode running on the cluster.

@@ -17,6 +17,11 @@ package convert
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	kscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -24,12 +29,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/common"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	kscheme "k8s.io/client-go/kubernetes/scheme"
 )
 
 var (

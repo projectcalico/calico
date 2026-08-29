@@ -20,6 +20,8 @@ import (
 	"slices"
 	"time"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
+	"github.com/go-logr/logr"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,9 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"k8s.io/utils/set"
-	gapi "sigs.k8s.io/gateway-api/apis/v1"
-	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -40,9 +39,9 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gapi "sigs.k8s.io/gateway-api/apis/v1"
+	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
-	"github.com/go-logr/logr"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller"

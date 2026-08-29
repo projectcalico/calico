@@ -17,10 +17,10 @@ package installation
 import (
 	"fmt"
 
+	gv "github.com/hashicorp/go-version"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	gv "github.com/hashicorp/go-version"
 	"github.com/projectcalico/calico/operator/version"
 )
 

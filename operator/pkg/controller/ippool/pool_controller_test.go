@@ -19,21 +19,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
 	configv1 "github.com/openshift/api/config/v1"
-
-	operator "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/apis"
-	"github.com/projectcalico/calico/operator/pkg/controller/status"
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	"github.com/projectcalico/calico/operator/pkg/render"
+	"github.com/stretchr/testify/mock"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -42,6 +30,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 var twentySix int32 = 26

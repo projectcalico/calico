@@ -17,13 +17,13 @@ package gatewayapi
 import (
 	"context"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
 	"github.com/stretchr/testify/mock"
-
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admregv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -50,7 +50,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 var _ = Describe("Gateway API controller tests", func() {

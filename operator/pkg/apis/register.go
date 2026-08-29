@@ -15,17 +15,12 @@
 package apis
 
 import (
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	envoy "github.com/envoyproxy/gateway/api/v1alpha1"
 	netattachv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 	configv1 "github.com/openshift/api/config/v1"
 	ocsv1 "github.com/openshift/api/security/v1"
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/render/istio"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -41,9 +36,14 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	aggregator "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
 	gateway "sigs.k8s.io/gateway-api/apis/v1"
 	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/render/istio"
 )
 
 // AddToSchemes may be used to add all resources defined in the project to a Scheme

@@ -31,6 +31,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-github/v53/github"
+
 	"github.com/projectcalico/calico/operator/hack/release/internal/command"
 	"github.com/projectcalico/calico/operator/hack/release/internal/versions"
 )

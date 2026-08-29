@@ -17,12 +17,12 @@ package validation
 import (
 	"fmt"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common/k8svalidation"
 	rcc "github.com/projectcalico/calico/operator/pkg/render/common/components"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 // ValidateContainer is a function that validates the given container.

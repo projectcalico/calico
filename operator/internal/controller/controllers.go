@@ -19,8 +19,9 @@ package controller
 import (
 	"fmt"
 
-	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/projectcalico/calico/operator/pkg/controller/options"
 )
 
 func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {

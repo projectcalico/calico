@@ -19,12 +19,11 @@ import (
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/operator/pkg/components"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
 	uzap "go.uber.org/zap"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"github.com/projectcalico/calico/operator/pkg/components"
 )
 
 // A spec that builds the Enterprise extensions registers the Enterprise images for the

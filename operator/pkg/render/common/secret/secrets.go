@@ -19,17 +19,15 @@ import (
 	"fmt"
 	"time"
 
-	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
-
 	"github.com/openshift/library-go/pkg/crypto"
-
-	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
-	"github.com/projectcalico/calico/operator/pkg/tls"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
+
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/tls"
 )
 
 // CreateTLSSecret Creates a new TLS secret with the information passed

@@ -16,10 +16,10 @@ package utils
 
 import (
 	"github.com/onsi/gomega"
-	v1 "github.com/projectcalico/calico/operator/api/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 
 	"github.com/projectcalico/calico/e2e/pkg/utils/client"
+	v1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 func IsOpenShift(f *framework.Framework) bool {

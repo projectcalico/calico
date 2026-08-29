@@ -15,12 +15,12 @@
 package elasticsearch
 
 import (
+	corev1 "k8s.io/api/core/v1"
+
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/url"
-
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (

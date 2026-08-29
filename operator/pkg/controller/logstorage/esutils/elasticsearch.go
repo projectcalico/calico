@@ -20,30 +20,27 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/go-logr/logr"
-
-	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
-
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
+	"github.com/go-logr/logr"
 	"github.com/olivere/elastic/v7"
-
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
-	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/utils"
+	"github.com/projectcalico/calico/operator/pkg/render"
+	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
+	"github.com/projectcalico/calico/operator/pkg/render/logstorage"
+	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
 )
 
 var log = logf.Log.WithName("esutils")

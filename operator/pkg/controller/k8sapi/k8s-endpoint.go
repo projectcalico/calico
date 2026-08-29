@@ -19,10 +19,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	calicov3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"github.com/tigera/api/pkg/lib/numorstring"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 )
 
 // Endpoint is the default ServiceEndpoint for host-networked pods,

@@ -20,20 +20,19 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	kerror "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/projectcalico/calico/operator/pkg/active"
 	"github.com/projectcalico/calico/operator/pkg/common"
-	"k8s.io/client-go/kubernetes"
 )
 
 var _ = Describe("pkg/active with apiserver", func() {

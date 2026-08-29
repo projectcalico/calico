@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +25,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var elog = logf.Log.WithName("eventhandler").WithName("EnqueueAllTenants")

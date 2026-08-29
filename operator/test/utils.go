@@ -27,6 +27,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/openshift/library-go/pkg/crypto"
 	"github.com/stretchr/testify/mock"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +43,6 @@ import (
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // ExpectResourceCreated asserts that the given object is created,

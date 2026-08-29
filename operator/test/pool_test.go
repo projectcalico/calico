@@ -23,7 +23,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +36,6 @@ import (
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // This test suite covers the installation of IP pools. The vast majority should be covered in the pkg/controller/ippool UTs

@@ -17,18 +17,16 @@ package installation
 import (
 	"path/filepath"
 
-	"github.com/projectcalico/calico/operator/pkg/render"
-
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/utils/ptr"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller/k8sapi"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 var _ = Describe("Installation validation tests", func() {

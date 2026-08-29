@@ -17,11 +17,10 @@ package gatewayapi
 import (
 	"encoding/json"
 
+	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/utils/ptr"
-
-	envoyapi "github.com/envoyproxy/gateway/api/v1alpha1"
 
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"

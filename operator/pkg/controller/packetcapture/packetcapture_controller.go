@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -43,7 +43,6 @@ import (
 	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 const (

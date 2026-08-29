@@ -19,6 +19,10 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
+	"github.com/go-logr/logr"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	"github.com/tigera/api/pkg/lib/numorstring"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,8 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
-	"github.com/go-logr/logr"
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller"
 	"github.com/projectcalico/calico/operator/pkg/controller/istio/waypoint"
@@ -43,8 +45,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
-	"github.com/tigera/api/pkg/lib/numorstring"
 )
 
 const IstioName = "istio"

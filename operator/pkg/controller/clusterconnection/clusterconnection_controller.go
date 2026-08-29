@@ -18,26 +18,21 @@ import (
 	"context"
 	"fmt"
 
-	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"
-
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"golang.org/x/net/http/httpproxy"
 	v1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrl "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
@@ -51,6 +46,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
+	rcertificatemanagement "github.com/projectcalico/calico/operator/pkg/render/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/goldmane"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"

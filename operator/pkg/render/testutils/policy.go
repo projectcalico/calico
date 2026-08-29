@@ -22,12 +22,11 @@ import (
 	"strings"
 
 	"github.com/onsi/gomega"
-
-	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
+	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 )
 
 // CalicoSystemScenario represents valid render cases for calico-system policies. Render components should test that their

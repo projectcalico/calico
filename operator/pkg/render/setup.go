@@ -15,11 +15,12 @@
 package render
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
-	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type SetUpConfiguration struct {

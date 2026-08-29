@@ -20,14 +20,12 @@ import (
 	"fmt"
 	"time"
 
+	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
 	authv1 "k8s.io/api/authorization/v1"
 	certificatesv1 "k8s.io/api/certificates/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-
-	calicoclient "github.com/tigera/api/pkg/client/clientset_generated/clientset"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 

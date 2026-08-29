@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"fmt"
 
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -38,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/tls/certkeyusage"
-	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 )
 
 // The names of the components related to the PolicyRecommendation APIs related rendered objects.

@@ -17,32 +17,30 @@ package whisker
 import (
 	"context"
 
-	networkingv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/calico/operator/pkg/common"
-	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
-	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	"github.com/projectcalico/calico/operator/pkg/extensions"
-	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
-	"github.com/projectcalico/calico/operator/pkg/tls"
 	"github.com/stretchr/testify/mock"
+	admregv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
+	"github.com/projectcalico/calico/operator/pkg/common"
+	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
+	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
+	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
-	admregv1 "k8s.io/api/admissionregistration/v1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/projectcalico/calico/operator/pkg/tls"
 )
 
 var _ = Describe("whisker controller tests", func() {

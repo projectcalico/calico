@@ -19,17 +19,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	apiserver "github.com/projectcalico/calico/operator/pkg/common/validation/apiserver"
-	typha "github.com/projectcalico/calico/operator/pkg/common/validation/typha"
-	"github.com/projectcalico/calico/operator/pkg/render"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
+	apiserver "github.com/projectcalico/calico/operator/pkg/common/validation/apiserver"
 	node "github.com/projectcalico/calico/operator/pkg/common/validation/calico-node"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	typha "github.com/projectcalico/calico/operator/pkg/common/validation/typha"
+	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 var _ = Describe("Test overrides validation (NodeDaemonset)", func() {

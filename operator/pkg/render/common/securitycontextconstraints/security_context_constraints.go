@@ -15,11 +15,10 @@
 package securitycontextconstraints
 
 import (
+	ocsv1 "github.com/openshift/api/security/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-
-	ocsv1 "github.com/openshift/api/security/v1"
 )
 
 // Default OpenShift security context constraints (SCCs) defined in

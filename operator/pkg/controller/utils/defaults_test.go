@@ -17,10 +17,10 @@ package utils
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	operator "github.com/projectcalico/calico/operator/api/v1"
-
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
+
+	operator "github.com/projectcalico/calico/operator/api/v1"
 )
 
 var _ = Describe("Installation defaults recording", func() {

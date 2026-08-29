@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	"github.com/go-logr/logr"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
-
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	logstoragecommon "github.com/projectcalico/calico/operator/pkg/controller/logstorage/common"
