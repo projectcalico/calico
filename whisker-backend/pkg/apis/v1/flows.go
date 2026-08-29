@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -268,6 +268,22 @@ type FlowResponse struct {
 	PacketsOut      int64       `json:"packets_out"`
 	BytesIn         int64       `json:"bytes_in"`
 	BytesOut        int64       `json:"bytes_out"`
+
+	// Service is the destination service the flow targets, if any. Populated by
+	// both the Goldmane (OSS) and Linseed upstreams.
+	Service *ServiceRef `json:"service,omitempty"`
+
+	// Endpoint types for source and destination — used internally for RBAC
+	// filtering. Values match linseed EndpointType constants (wep, hep, ns, net).
+	SourceType string `json:"-"`
+	DestType   string `json:"-"`
+}
+
+type ServiceRef struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Port      int64  `json:"port"`
+	PortName  string `json:"port_name,omitempty"`
 }
 
 type PolicyTrace struct {
