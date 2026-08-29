@@ -39,8 +39,6 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
-	"github.com/tigera/operator/pkg/controller/installation"
-	"github.com/tigera/operator/pkg/controller/logcollector"
 	"github.com/tigera/operator/pkg/controller/logstorage/esutils"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/controller/status"
@@ -50,12 +48,13 @@ import (
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	"github.com/tigera/operator/pkg/dns"
 	entcertificatemanager "github.com/tigera/operator/pkg/enterprise/certificatemanager"
+	"github.com/tigera/operator/pkg/enterprise/controller/logcollector"
+	"github.com/tigera/operator/pkg/enterprise/render/intrusiondetection/dpi"
 	eutils "github.com/tigera/operator/pkg/enterprise/utils"
 	"github.com/tigera/operator/pkg/render"
 	rcertificatemanagement "github.com/tigera/operator/pkg/render/certificatemanagement"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	"github.com/tigera/operator/pkg/render/common/networkpolicy"
-	"github.com/tigera/operator/pkg/render/intrusiondetection/dpi"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
@@ -66,11 +65,6 @@ var log = logf.Log.WithName("controller_intrusiondetection")
 // Add creates a new IntrusionDetection Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		// No need to start this controller.
-		return nil
-	}
-
 	licenseAPIReady := &utils.ReadyFlag{}
 	dpiAPIReady := &utils.ReadyFlag{}
 	tierWatchReady := &utils.ReadyFlag{}
@@ -514,7 +508,7 @@ func (r *ReconcileIntrusionDetection) Reconcile(ctx context.Context, request rec
 		// FIXME: core controller creates TyphaNodeTLSConfig, this controller should only get it.
 		// But changing the call from GetOrCreateTyphaNodeTLSConfig() to GetTyphaNodeTLSConfig()
 		// makes tests fail, this needs to be looked at.
-		typhaNodeTLS, err := installation.GetOrCreateTyphaNodeTLSConfig(r.client, certificateManager)
+		typhaNodeTLS, err := utils.GetOrCreateTyphaNodeTLSConfig(r.client, certificateManager)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error with Typha/Felix secrets", err, reqLogger)
 			return reconcile.Result{}, err

@@ -35,10 +35,10 @@ import (
 	"github.com/tigera/operator/pkg/controller/certificatemanager"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/render/intrusiondetection/dpi"
 	"github.com/tigera/operator/pkg/render"
 	relasticsearch "github.com/tigera/operator/pkg/render/common/elasticsearch"
 	rtest "github.com/tigera/operator/pkg/render/common/test"
-	"github.com/tigera/operator/pkg/render/intrusiondetection/dpi"
 	"github.com/tigera/operator/pkg/render/testutils"
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
@@ -191,10 +191,10 @@ var _ = Describe("DPI rendering tests", func() {
 	)
 
 	// Fetch expectations from utilities that require Ginkgo context.
-	expectedUnmanagedPolicy := testutils.GetExpectedPolicyFromFile("../../testutils/expected_policies/dpi_unmanaged.json")
-	expectedUnmanagedPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../testutils/expected_policies/dpi_unmanaged_ocp.json")
-	expectedManagedPolicy := testutils.GetExpectedPolicyFromFile("../../testutils/expected_policies/dpi_managed.json")
-	expectedManagedPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../testutils/expected_policies/dpi_managed_ocp.json")
+	expectedUnmanagedPolicy := testutils.GetExpectedPolicyFromFile("../../../../render/testutils/expected_policies/dpi_unmanaged.json")
+	expectedUnmanagedPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../../render/testutils/expected_policies/dpi_unmanaged_ocp.json")
+	expectedManagedPolicy := testutils.GetExpectedPolicyFromFile("../../../../render/testutils/expected_policies/dpi_managed.json")
+	expectedManagedPolicyForOpenshift := testutils.GetExpectedPolicyFromFile("../../../../render/testutils/expected_policies/dpi_managed_ocp.json")
 
 	BeforeEach(func() {
 		scheme := runtime.NewScheme()

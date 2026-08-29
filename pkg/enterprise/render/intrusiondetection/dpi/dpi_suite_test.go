@@ -24,6 +24,6 @@ import (
 func TestRender(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../../report/ut/dpi_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/intusiondetection/dpi Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../../../report/ut/dpi_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/render/intrusiondetection/dpi Suite", suiteConfig, reporterConfig)
 }

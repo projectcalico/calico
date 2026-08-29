@@ -19,6 +19,8 @@ import (
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/enterprise/controller/applicationlayer"
 	"github.com/tigera/operator/pkg/enterprise/controller/egressgateway"
+	"github.com/tigera/operator/pkg/enterprise/controller/intrusiondetection"
+	"github.com/tigera/operator/pkg/enterprise/controller/logcollector"
 	"github.com/tigera/operator/pkg/enterprise/controller/monitor"
 	"github.com/tigera/operator/pkg/enterprise/controller/otelcollector"
 	"github.com/tigera/operator/pkg/enterprise/controller/packetcapture"
@@ -37,5 +39,7 @@ func Controllers(variant operatorv1.ProductVariant) []options.Controller {
 		{Name: "EgressGateway", Add: egressgateway.Add},
 		{Name: "PacketCapture", Add: packetcapture.Add},
 		{Name: "OpenTelemetryCollector", Add: otelcollector.Add},
+		{Name: "IntrusionDetection", Add: intrusiondetection.Add},
+		{Name: "LogCollector", Add: logcollector.Add},
 	}
 }

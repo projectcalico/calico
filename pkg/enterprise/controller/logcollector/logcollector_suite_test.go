@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intrusiondetection
+package logcollector
 
 import (
 	"testing"
@@ -24,6 +24,6 @@ import (
 func TestStatus(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/intrusiondetection_controller_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/controller/intrusiondetection Controller Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../../report/ut/logcollector_controller_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/controller/logcollector Controller Suite", suiteConfig, reporterConfig)
 }
