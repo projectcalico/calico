@@ -247,36 +247,15 @@ var (
 
 // Operator flags are flags used to interact with Tigera operator repository
 var (
-	// operatorGitFlags resolve the operator's org/repo. Required on any
-	// command that calls calico.WithOperatorGit.
-	operatorGitFlags = []cli.Flag{operatorOrgFlag, operatorRepoFlag}
-
-	operatorBuildCommandFlags = append(slices.Clone(operatorGitFlags),
+	operatorBuildCommandFlags = []cli.Flag{
 		operatorRegistryFlag, operatorImageFlag,
 		operatorFlag(envBuildOperator, envReleaseOperator),
-	)
+	}
 
-	operatorPublishCommandFlags = append(slices.Clone(operatorGitFlags),
+	operatorPublishCommandFlags = []cli.Flag{
 		operatorFlag(envPublishOperator, envReleaseOperator),
-	)
+	}
 
-	// Operator git flags
-	operatorOrgFlagName = "operator-org"
-	operatorOrgFlag     = &cli.StringFlag{
-		Name:     operatorOrgFlagName,
-		Category: operatorCategory,
-		Usage:    "The GitHub organization to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_ORGANIZATION"), defaults.MK(defaults.KeyOperatorOrganization)),
-		Value:    utils.TigeraOrg,
-	}
-	operatorRepoFlagName = "operator-repo"
-	operatorRepoFlag     = &cli.StringFlag{
-		Name:     operatorRepoFlagName,
-		Category: operatorCategory,
-		Usage:    "The GitHub repository to use for Tigera operator release",
-		Sources:  cli.NewValueSourceChain(cli.EnvVar("OPERATOR_GIT_REPO"), defaults.MK(defaults.KeyOperatorGitRepo)),
-		Value:    "operator",
-	}
 	// Container image flags
 	operatorRegistryFlag = &cli.StringFlag{
 		Name:     "operator-registry",

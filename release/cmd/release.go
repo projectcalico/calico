@@ -194,7 +194,6 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 		repoFlag,
 		repoRemoteFlag,
 	}
-	flags = append(flags, operatorGitFlags...)
 	return &cli.Command{
 		Name:  "public",
 		Usage: "Make a published release available to the public",
@@ -228,7 +227,7 @@ func releasePublicSubCommands(cfg *Config) *cli.Command {
 }
 
 func releasePrepCommand(cfg *Config) *cli.Command {
-	flags := append(slices.Clone(productFlags), operatorGitFlags...)
+	flags := slices.Clone(productFlags)
 	flags = append(flags,
 		githubTokenFlag,
 		branchCheckFlag,
@@ -287,7 +286,6 @@ func releaseBuildFlags() []cli.Flag {
 	f = append(f,
 		registryFlag,
 		archFlag)
-	f = append(f, operatorGitFlags...)
 	f = append(f,
 		branchCheckFlag,
 		validationFlag,
@@ -307,7 +305,6 @@ func releasePublishFlags() []cli.Flag {
 		branchCheckFlag,
 		validationFlag,
 	)
-	f = append(f, operatorGitFlags...)
 	return f
 }
 
