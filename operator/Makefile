@@ -466,7 +466,7 @@ cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
 ###############################################################################
 .PHONY: static-checks
 ## Perform static checks on the code.
-static-checks:
+static-checks: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(CONTAINERIZED) $(CALICO_BUILD) golangci-lint run --timeout 5m
 
 .PHONY: fix
@@ -855,7 +855,7 @@ fmt:
 	go fmt ./...'
 
 # Run go vet against code
-vet: $(ISTIO_CHART_FILES)
+vet: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(CONTAINERIZED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go vet ./...'
@@ -866,7 +866,7 @@ mod-tidy:
 # Generate code
 # We use the upstream latest release of controller-gen as this is compatible with golang 1.19+ and we have no need
 # for custom projectcalico.org types.
-generate:
+generate: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(DOCKER_RUN) sh -c 'controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./api/..." && \
 		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..." && \
 		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./internal/controller/..."'
