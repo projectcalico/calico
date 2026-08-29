@@ -1,8 +1,8 @@
 !!! GENERATED FILE, DO NOT EDIT !!!
 Run 'make gen-deps-files' to regenerate.
 
-go 1.26.5
-github.com/container-storage-interface/spec v1.12.0
+go 1.27.0
+github.com/container-storage-interface/spec v1.12.1-0.20260720052920-cd9e7ad1ae09
 github.com/projectcalico/calico
 github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cobra v1.10.2
