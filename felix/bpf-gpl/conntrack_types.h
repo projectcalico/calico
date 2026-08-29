@@ -47,28 +47,89 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
 
+/* Flags kept in calico_ct_leg's bits_word. Live map entries are shared between
+ * the two directions of a flow, which can run on different CPUs, so every
+ * write to the word on a live entry must go through the atomic helpers below:
+ * a bitfield assignment is a read-modify-write of the whole word and would
+ * resurrect or drop a concurrent update from the other side. Plain bitfield
+ * writes are for entries still on the stack (the create path) only. The masks
+ * mirror the bitfield members' little-endian layout, the same one
+ * felix/bpf/conntrack/v4/map.go encodes.
+ */
+#define CALI_CT_LEG_SYN_SEEN	(1U << 0)
+#define CALI_CT_LEG_ACK_SEEN	(1U << 1)
+#define CALI_CT_LEG_FIN_SEEN	(1U << 2)
+#define CALI_CT_LEG_RST_SEEN	(1U << 3)
+#define CALI_CT_LEG_APPROVED	(1U << 4)
+#define CALI_CT_LEG_OPENER	(1U << 5)
+#define CALI_CT_LEG_WORKLOAD	(1U << 6)
+#define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
+					   * flow's encap-flagged destinations: a tunnel
+					   * device, or whatever the FIB resolved for such
+					   * a destination (under wireguard, remote routes
+					   * are encap-flagged even where the egress for a
+					   * keyless peer is a plain NIC). Invariant: never
+					   * observable next to an ifindex it does not
+					   * describe - transitions clear it before the
+					   * ifindex store and re-set it only after.
+					   */
+#define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
+					   * opposite direction, not this direction's
+					   * ingress record. Bookkeeping for userspace
+					   * cleanup; the dataplane still reconciles the
+					   * leg against routing like any other mismatch.
+					   */
+#define CALI_CT_LEG_CHECKED	(1U << 9) /* ifindex has been validated against the
+					   * route to this leg's source, no need to
+					   * resolve it again
+					   */
+
 struct calico_ct_leg {
 	__u64 bytes;
 	__u32 packets;
 	__u32 seqno;
 
-	__u32 syn_seen:1;
-	__u32 ack_seen:1;
-	__u32 fin_seen:1;
-	__u32 rst_seen:1;
+	/* The bitfield members and the CALI_CT_LEG_* flags share this word; see
+	 * the flag definitions above for why the latter are not bitfields.
+	 */
+	union {
+		struct {
+			__u32 syn_seen:1;
+			__u32 ack_seen:1;
+			__u32 fin_seen:1;
+			__u32 rst_seen:1;
 
-	__u32 approved:1;
+			__u32 approved:1;
 
-	__u32 opener:1;
+			__u32 opener:1;
 
-	__u32 workload:1; /* This leg was created from workload */
+			__u32 workload:1; /* This leg was created from workload */
+		};
+		__u32 bits_word;
+	};
 
 	__u32 ifindex; /* For a CT leg where packets ingress through an interface towards
 			* the host, this is the ingress interface index.  For a CT leg
 			* where packets originate _from_ the host, it's CT_INVALID_IFINDEX
-			* (0).
+			* (0).  While CALI_CT_LEG_PINNED is set it is instead a resolved
+			* egress for the opposite direction.
 			*/
 };
+
+#define ct_leg_flag(leg, f)	(!!((leg)->bits_word & (f)))
+
+/* Set/clear CALI_CT_LEG_* flags atomically: the word is shared with the
+ * bitfield members and with the program handling the opposite direction.
+ */
+static CALI_BPF_INLINE void ct_leg_set_flags(struct calico_ct_leg *leg, __u32 f)
+{
+	__sync_fetch_and_or(&leg->bits_word, f);
+}
+
+static CALI_BPF_INLINE void ct_leg_clear_flags(struct calico_ct_leg *leg, __u32 f)
+{
+	__sync_fetch_and_and(&leg->bits_word, ~f);
+}
 
 #define CT_INVALID_IFINDEX	0
 struct calico_ct_value {
@@ -261,9 +322,11 @@ enum calico_ct_result_type {
 #define ct_result_is_confirmed(rc)	((rc) & CT_RES_CONFIRMED)
 #define ct_result_is_to_workload(rc)	((rc) & CT_RES_TO_WORKLOAD)
 
+#define CT_FWD_FLAG_TUNNEL	0x1 /* ifindex_fwd is a tunnel device */
+
 struct calico_ct_result {
 	__s16 rc;
-	__u16 pad;
+	__u16 fwd_flags; /* CT_FWD_FLAG_* properties of ifindex_fwd */
 	__u32 flags;
 	ipv46_addr_t nat_ip;
 	ipv46_addr_t nat_sip;
