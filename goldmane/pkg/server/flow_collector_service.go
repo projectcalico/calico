@@ -148,8 +148,9 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 		// the same flow twice.
 		if !p.deduplicator.Has(flow, scope) {
 
-			// The cache will automatically time out this flow in the background when it is no
-			// longer relevant.
+			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
+			// The cache will automatically time out this flow in the background when it is no longer
+			// relevant.
 			p.deduplicator.Add(flow, scope)
 
 			// Send the flow to the configured Sink.
