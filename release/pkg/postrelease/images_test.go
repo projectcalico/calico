@@ -39,6 +39,7 @@ var excludeImageArch = map[string][]string{
 }
 
 func TestImagesPublished(t *testing.T) {
+	t.Parallel()
 	t.Run("Calico", func(t *testing.T) {
 		t.Parallel()
 
@@ -47,7 +48,8 @@ func TestImagesPublished(t *testing.T) {
 
 		for _, reg := range registry.DefaultCalicoRegistries {
 			for image := range strings.SplitSeq(images, " ") {
-				t.Run(image, func(t *testing.T) {
+				t.Run(fmt.Sprintf("%s/%s", reg, image), func(t *testing.T) {
+					t.Parallel()
 					fqImage := fmt.Sprintf("%s/%s:%s", reg, image, releaseVersion)
 					if ok, err := registry.CheckImage(fqImage); err != nil {
 						t.Fatalf("failed to check image %s: %v", fqImage, err)
@@ -60,6 +62,7 @@ func TestImagesPublished(t *testing.T) {
 								continue
 							}
 							t.Run(fmt.Sprintf("linux %s", arch), func(t *testing.T) {
+								t.Parallel()
 								fqArchImage := fmt.Sprintf("%s-%s", fqImage, arch)
 								if ok, err := registry.CheckImage(fqArchImage); err != nil {
 									t.Fatalf("failed to check image %s: %v", fqArchImage, err)
@@ -88,6 +91,7 @@ func TestImagesPublished(t *testing.T) {
 
 		for _, arch := range linuxArches {
 			t.Run(fmt.Sprintf("linux %s", arch), func(t *testing.T) {
+				t.Parallel()
 				fqImage := fmt.Sprintf("%s-%s", fqOperatorImage, arch)
 				if ok, err := registry.CheckImage(fqImage); err != nil {
 					t.Fatalf("failed to check image %s: %v", fqImage, err)

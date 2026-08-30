@@ -127,6 +127,7 @@ func TestGitHubMilestone(t *testing.T) {
 		{milestone: fmt.Sprintf("%s %s", utils.ProductName, nextVer.FormattedString()), expectedStated: "open"},
 	} {
 		t.Run(tt.milestone, func(t *testing.T) {
+			t.Parallel()
 			milestones, resp, err := githubClient().Issues.ListMilestones(context.Background(), githubOrg, githubRepo, &github.MilestoneListOptions{
 				State:     tt.expectedStated,
 				Direction: "desc",
