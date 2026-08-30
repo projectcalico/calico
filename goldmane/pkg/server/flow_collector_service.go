@@ -17,6 +17,7 @@ package server
 import (
 	"context"
 	"io"
+	"net"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -92,6 +93,15 @@ func (p *flowCollectorService) RegisterWith(srv *grpc.Server) {
 	logrus.Info("Registered FlowCollector Server")
 }
 
+// nodeScope returns a scope that survives a reconnect. The peer's ephemeral port changes
+// on every reconnect, so including it would give each connection its own scope.
+func nodeScope(addr net.Addr) string {
+	if tcp, ok := addr.(*net.TCPAddr); ok {
+		return tcp.IP.String()
+	}
+	return addr.String()
+}
+
 func (p *flowCollectorService) Connect(srv proto.FlowCollector_ConnectServer) error {
 	return p.handleClient(srv)
 }
@@ -101,12 +111,13 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 	numClients.Inc()
 	defer numClients.Dec()
 
+	who := "unknown"
 	scope := "unknown"
-	pr, ok := peer.FromContext(srv.Context())
-	if ok {
-		scope = pr.Addr.String()
+	if pr, ok := peer.FromContext(srv.Context()); ok {
+		who = pr.Addr.String()
+		scope = nodeScope(pr.Addr)
 	}
-	logCtx := logrus.WithField("who", scope)
+	logCtx := logrus.WithField("who", who)
 	logCtx.Info("Connection from client")
 
 	num := 0
@@ -137,9 +148,8 @@ func (p *flowCollectorService) handleClient(srv proto.FlowCollector_ConnectServe
 		// the same flow twice.
 		if !p.deduplicator.Has(flow, scope) {
 
-			// Add it to the deduplicator, scoped to the client's address (i.e., per-node).
-			// The cache will automatically time out this flow in the background when it is no longer
-			// relevant.
+			// The cache will automatically time out this flow in the background when it is no
+			// longer relevant.
 			p.deduplicator.Add(flow, scope)
 
 			// Send the flow to the configured Sink.
