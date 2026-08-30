@@ -39,11 +39,11 @@ gcloud --quiet compute instances create "${vm_name}" \
   --image-family=${image_family} \
   --image-project=ubuntu-os-cloud \
   --machine-type=n4-highcpu-4 \
-  --boot-disk-size=20G \
+  --boot-disk-size=100GB \
   --boot-disk-type=hyperdisk-balanced
 ```
 
-The machine type and disk size above match CI defaults (see `felix/.semaphore/fv-prologue`).
+The machine type matches CI defaults (see `felix/.semaphore/fv-prologue`). The disk is deliberately larger than CI's 20GB default (`.semaphore/vms/run-tests-on-vms`): CI VMs receive prebuilt images and binaries from the Semaphore runner, but a repro VM runs `make fv` prereqs locally (go-build image, felix/calico image builds, Go build cache), which overflows a small disk with `no space left on device` partway through the build. The cost difference is negligible for a VM that lives a few hours.
 
 ## Step 3: Wait for SSH and Install Dependencies
 
