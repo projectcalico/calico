@@ -102,7 +102,12 @@ func (p *pollWatcher) poll(events chan<- workloadEvent, stop <-chan bool) {
 			isCred, uid := parseFilename(file.Name())
 			if isCred {
 				if !known[uid] {
-					events <- workloadEvent{op: Added, uid: uid}
+					select {
+					case events <- workloadEvent{op: Added, uid: uid}:
+					case <-stop:
+						close(events)
+						return
+					}
 					known[uid] = true
 				}
 				delete(removed, uid)
@@ -110,7 +115,12 @@ func (p *pollWatcher) poll(events chan<- workloadEvent, stop <-chan bool) {
 		}
 		// Send updates for UIDs we no longer know about.
 		for uid := range removed {
-			events <- workloadEvent{op: Removed, uid: uid}
+			select {
+			case events <- workloadEvent{op: Removed, uid: uid}:
+			case <-stop:
+				close(events)
+				return
+			}
 			delete(known, uid)
 		}
 		time.Sleep(PollSleepTime)
