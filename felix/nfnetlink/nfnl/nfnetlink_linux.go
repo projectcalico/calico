@@ -94,12 +94,31 @@ func nfaAlignOf(attrlen int) int {
 	return (attrlen + syscall.NLA_ALIGNTO - 1) & ^(syscall.NLA_ALIGNTO - 1)
 }
 
+var nativeBigEndian = func() bool {
+	var i uint16 = 0x0102
+	b := (*[2]byte)(unsafe.Pointer(&i))
+	return b[0] == 0x01
+}()
+
+func swap16(v uint16) uint16 {
+	return (v >> 8) | (v << 8)
+}
+
 type NfAttr struct {
 	syscall.NlAttr
 }
 
 func DeserializeNfAttr(b []byte) *NfAttr {
-	return (*NfAttr)(unsafe.Pointer(&b[0:SizeofNfAttr][0]))
+	a := (*NfAttr)(unsafe.Pointer(&b[0:SizeofNfAttr][0]))
+	if !nativeBigEndian {
+		return a
+	}
+	return &NfAttr{
+		NlAttr: syscall.NlAttr{
+			Len:  swap16(a.NlAttr.Len),
+			Type: swap16(a.NlAttr.Type),
+		},
+	}
 }
 
 func (msg *NfAttr) Serialize() []byte {
