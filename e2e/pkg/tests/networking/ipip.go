@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,6 +38,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
+	describe.RequiresBGP(),
 	"IP-in-IP tests",
 	func() {
 		// Define variables common across all tests.
@@ -71,14 +71,7 @@ var _ = describe.CalicoDescribe(
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
 
-			// Make sure the cluster is in BGP mode by querying the Installation resource. The tests in this file
-			// all require BGP, and all require Calico be installed by the operator.
-			installation := &v1.Installation{}
-			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
-			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
-			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
-			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
-			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
+			utils.RequireBGPEnabled(cli)
 
 			// Create an IP pool for the test.
 			poolName = conncheck.GenerateRandomName("ipip-pool")
