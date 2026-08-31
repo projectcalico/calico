@@ -79,6 +79,12 @@ func WithFeature(feature string) any {
 }
 
 // WithWindows marks tests that can run on clusters with Windows nodes.
+// RequiresBGP marks tests that need the cluster to run in BGP networking mode. Lanes on
+// clusters using another mode exclude them via --ginkgo.skip=RequiresBGP.
+func RequiresBGP() any {
+	return framework.WithLabel("RequiresBGP")
+}
+
 func WithWindows() any {
 	return framework.WithLabel("RunsOnWindows")
 }
