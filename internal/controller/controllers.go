@@ -80,13 +80,6 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "ApplicationLayer", err)
 	}
-	if err := (&MonitorReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Monitor"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "Monitor", err)
-	}
 	if err := (&ManagerReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Manager"),
@@ -202,5 +195,8 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 		return fmt.Errorf("failed to create controller %s: %v", "OpenTelemetry", err)
 	}
 	// +kubebuilder:scaffold:builder
-	return nil
+
+	// The controllers only the running variant supplies, added last so that a variant
+	// can watch resources the core controllers own.
+	return options.AddControllers(mgr)
 }

@@ -596,6 +596,7 @@ admission policy installation; once an Installation exists it is the authority o
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
 		Extensions:        extensionRegistry,
+		Controllers:       enterprise.Controllers(variant),
 	}
 
 	err = controller.AddToManager(mgr, options)

@@ -340,6 +340,7 @@ func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVar
 		DetectedProvider: operator.ProviderNone,
 		Variant:          variant,
 		Extensions:       enterprise.New(variant, eoptions.Options{}),
+		Controllers:      enterprise.Controllers(variant),
 		ManageCRDs:       manageCRDs,
 		ShutdownContext:  ctx,
 		K8sClientset:     clientset,

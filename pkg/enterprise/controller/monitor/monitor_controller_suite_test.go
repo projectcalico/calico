@@ -29,6 +29,6 @@ func TestStatus(t *testing.T) {
 	logf.SetLogger(zap.New(zap.WriteTo(ginkgo.GinkgoWriter), zap.UseDevMode(true), zap.Level(uzap.NewAtomicLevelAt(uzap.DebugLevel))))
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
-	reporterConfig.JUnitReport = "../../../report/ut/monitor_controller_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/controller/monitor Suite", suiteConfig, reporterConfig)
+	reporterConfig.JUnitReport = "../../../../report/ut/monitor_controller_suite.xml"
+	ginkgo.RunSpecs(t, "pkg/enterprise/controller/monitor Suite", suiteConfig, reporterConfig)
 }

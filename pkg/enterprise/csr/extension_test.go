@@ -36,10 +36,10 @@ import (
 	operatorv1 "github.com/tigera/operator/api/v1"
 	"github.com/tigera/operator/pkg/apis"
 	"github.com/tigera/operator/pkg/controller"
-	"github.com/tigera/operator/pkg/controller/monitor"
 	"github.com/tigera/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/tigera/operator/pkg/ctrlruntime/client/fake"
 	"github.com/tigera/operator/pkg/dns"
+	"github.com/tigera/operator/pkg/enterprise/controller/monitor"
 	"github.com/tigera/operator/pkg/render"
 	rmonitor "github.com/tigera/operator/pkg/render/monitor"
 )

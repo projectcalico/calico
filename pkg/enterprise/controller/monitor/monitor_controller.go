@@ -61,10 +61,6 @@ const ResourceName = "monitor"
 var log = logf.Log.WithName("controller_monitor")
 
 func Add(mgr manager.Manager, opts options.ControllerOptions) error {
-	if !opts.Variant.IsEnterprise() {
-		return nil
-	}
-
 	prometheusReady := &utils.ReadyFlag{}
 	tierWatchReady := &utils.ReadyFlag{}
 	licenseAPIReady := &utils.ReadyFlag{}
