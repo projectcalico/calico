@@ -26,12 +26,9 @@ import (
 // support. It is created and immediately deleted, so it never coexists with the real "calico" table.
 const flowOffloadProbeTable = "calico-flowtable-probe"
 
-// DetectFlowOffloadSupported reports whether the running kernel accepts an nftables flowtable.
-// Kernels without the nf_flow_table module reject flowtable programming with ENOENT, which would
-// otherwise take Felix down when it installs the real flowtable and offload rule. We find out up
-// front by adding a device-less flowtable in a throwaway table: the flowtable object needs the
-// module regardless of its device set, so this hits the same failure a real flowtable would.
-func DetectFlowOffloadSupported(newDataplane NewNftablesDataplaneFn) bool {
+// DetectFlowOffloadSupported reports whether the kernel accepts an nftables flowtable, and whether
+// it also accepts the flowtable counter flag.
+func DetectFlowOffloadSupported(newDataplane NewNftablesDataplaneFn) (supported bool, counter bool) {
 	if newDataplane == nil {
 		newDataplane = knftables.New
 	}
@@ -39,31 +36,46 @@ func DetectFlowOffloadSupported(newDataplane NewNftablesDataplaneFn) bool {
 	nft, err := newDataplane(knftables.IPv4Family, flowOffloadProbeTable)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to create nftables interface to probe flowtable offload support; assuming unsupported.")
-		return false
+		return false, false
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Counters arrived in 5.13, long after flowtables. Probing twice separates a kernel with no
+	// flowtables from one with no counters.
+	supported = probeFlowtable(ctx, nft, true)
+	counter = supported
+	if !supported {
+		supported = probeFlowtable(ctx, nft, false)
+	}
+
+	if supported {
+		// Deleting the probe table takes the flowtable with it. A leftover empty table is harmless.
+		cleanup := nft.NewTransaction()
+		cleanup.Delete(&knftables.Table{})
+		if err := nft.Run(ctx, cleanup); err != nil {
+			logrus.WithError(err).Warn("Failed to clean up nftables flowtable offload probe table.")
+		}
+	}
+
+	return supported, counter
+}
+
+// probeFlowtable adds a device-less flowtable, which kernels without nf_flow_table reject just as
+// they would the real one.
+func probeFlowtable(ctx context.Context, nft knftables.Interface, counter bool) bool {
 	prio := knftables.FilterIngressPriority
 	tx := nft.NewTransaction()
 	tx.Add(&knftables.Table{})
 	tx.Add(&knftables.Flowtable{
 		Name:     "probe",
 		Priority: &prio,
+		Counter:  knftables.PtrTo(counter),
 	})
 	if err := nft.Run(ctx, tx); err != nil {
-		logrus.WithError(err).Debug("Kernel rejected the flowtable probe; nftables flowtable offload is unsupported.")
+		logrus.WithError(err).WithField("counter", counter).Debug("Kernel rejected the flowtable probe.")
 		return false
 	}
-
-	// Deleting the probe table takes the flowtable with it. Best-effort: a leftover empty table is
-	// harmless and gets reused on the next probe.
-	cleanup := nft.NewTransaction()
-	cleanup.Delete(&knftables.Table{})
-	if err := nft.Run(ctx, cleanup); err != nil {
-		logrus.WithError(err).Warn("Failed to clean up nftables flowtable offload probe table.")
-	}
-
 	return true
 }
