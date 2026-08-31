@@ -85,6 +85,12 @@ func RequiresNoEncap() any {
 	return framework.WithLabel("NoEncap")
 }
 
+// RequiresBGP marks tests that need the cluster to run in BGP networking mode. Lanes on
+// clusters using another mode exclude them via --ginkgo.skip=RequiresBGP.
+func RequiresBGP() any {
+	return framework.WithLabel("RequiresBGP")
+}
+
 // RequiresBGPMesh marks tests that depend on the BGP node-to-node mesh being the sole
 // routing mechanism. These tests disable the mesh and expect connectivity to break, which
 // only works when there's no other routing path (e.g., VXLAN). Skip these on VXLAN clusters
