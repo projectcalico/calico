@@ -13,7 +13,7 @@
 # Required for local builds:
 #   E2E_TEST_CONFIG
 # Required for hashrelease downloads:
-#   RELEASE_STREAM
+#   RELEASE_STREAM (or UPLEVEL_RELEASE_STREAM, which takes precedence)
 #
 # Sourced from body_*.sh. Exits with the test exit code.
 
@@ -31,11 +31,30 @@ if [[ -n "${RUN_LOCAL_TESTS:-}" ]]; then
 elif [[ "${TEST_TYPE}" == "k8s-e2e" ]]; then
   # Scheduled CI: download the pre-built e2e binary from the hashrelease.
   echo "[INFO] downloading e2e binary from hashrelease..."
-  HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "https://latest-os.hashrelease.tools.tigera.net/${RELEASE_STREAM}.txt")
-  echo "[INFO] hashrelease URL: ${HASHREL_URL}"
+  # Upgrade runs set RELEASE_STREAM to the downlevel version they install first,
+  # but the tests run against the uplevel one.
+  E2E_STREAM=${UPLEVEL_RELEASE_STREAM:-${RELEASE_STREAM}}
+  if [[ -z "${E2E_STREAM}" ]]; then
+    echo "[ERROR] neither UPLEVEL_RELEASE_STREAM nor RELEASE_STREAM is set; cannot resolve an e2e binary"
+    exit 1
+  fi
+  E2E_STREAM_URL="https://latest-os.hashrelease.tools.tigera.net/${E2E_STREAM}.txt"
+  # Assign inside `if` so the diagnostic below runs: this script is sourced under
+  # `set -e`, where a bare command substitution would exit here instead.
+  if ! HASHREL_URL=$(curl --retry 9 --retry-all-errors -fsS "${E2E_STREAM_URL}"); then
+    echo "[ERROR] no hashrelease published for stream ${E2E_STREAM} at ${E2E_STREAM_URL}"
+    exit 1
+  fi
+  echo "[INFO] hashrelease URL (stream ${E2E_STREAM}): ${HASHREL_URL}"
   ARCH=$(uname -m); [[ "$ARCH" == "x86_64" ]] && ARCH=amd64; [[ "$ARCH" == "aarch64" ]] && ARCH=arm64
+  E2E_BINARY_URL="${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test"
   mkdir -p "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s"
-  curl --retry 9 --retry-all-errors -fsSL "${HASHREL_URL}/files/e2e/e2e-linux-${ARCH}.test" -o "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
+  # Fail loudly rather than falling back to a floating image, which would run a
+  # suite built from another branch (and, for k8s-e2e:stable, another repo).
+  if ! curl --retry 9 --retry-all-errors -fsSL "${E2E_BINARY_URL}" -o "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"; then
+    echo "[ERROR] no e2e binary published for stream ${E2E_STREAM} at ${E2E_BINARY_URL}"
+    exit 1
+  fi
   chmod +x "${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   echo "[INFO] downloaded e2e binary to ${CI_HOME}/${CI_GIT_DIR}/e2e/bin/k8s/e2e.test"
   E2E_BINARY=/go/src/github.com/projectcalico/calico/e2e/bin/k8s/e2e.test

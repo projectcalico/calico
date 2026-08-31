@@ -351,19 +351,19 @@ func (r *CalicoManager) Build() error {
 		} else {
 			logrus.Info("Skipping building windows archive")
 		}
-
-		// Build multi-arch e2e test binaries and copy them into the output directory.
-		if r.e2eBinaries {
-			if err = r.buildE2EBinaries(); err != nil {
-				return err
-			}
-		} else {
-			logrus.Info("Skipping building e2e test binaries")
-		}
 	} else {
 		if err = r.buildOCPBundle(); err != nil {
 			return err
 		}
+	}
+
+	// Build multi-arch e2e test binaries and copy them into the output directory.
+	if r.e2eBinaries {
+		if err = r.buildE2EBinaries(); err != nil {
+			return err
+		}
+	} else {
+		logrus.Info("Skipping building e2e test binaries")
 	}
 
 	// Build and add in the complete release tarball.
@@ -790,6 +790,11 @@ func (r *CalicoManager) PublishRelease() error {
 		// Update helm chart index
 		if err := r.updateHelmChartIndex(); err != nil {
 			return fmt.Errorf("update helm chart index: %s", err)
+		}
+
+		// Publish the e2e test binaries for individual download.
+		if err := r.publishE2EBinaries(); err != nil {
+			return fmt.Errorf("publish e2e binaries: %s", err)
 		}
 	}
 
@@ -1218,6 +1223,14 @@ func (r *CalicoManager) buildReleaseTar() error {
 			// Felix binaries.
 			"felix/bin/calico-bpf": binDir,
 		}
+		// Per-arch e2e test binaries, when the build produced them. Sourced from
+		// the staged copy rather than e2e/bin/k8s so the archive and the S3
+		// publish ship the same files.
+		if e2eStaged := filepath.Join(r.uploadDir(), "files", "e2e"); r.e2eBinaries {
+			if _, err := os.Stat(e2eStaged); err == nil {
+				binaries[e2eStaged+"/"] = filepath.Join(binDir, "e2e")
+			}
+		}
 		// -al (archive + hard-link) keeps staging disk usage flat and preserves symlinks
 		for src, dst := range binaries {
 			if _, err := r.runner.RunInDir(r.repoRoot, "cp", []string{"-al", src, dst}, nil); err != nil {
@@ -1252,26 +1265,40 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		return fmt.Errorf("failed to build e2e binaries: %w", err)
 	}
 
-	// Hard-link the built binaries into the hashrelease output directory
-	// to avoid duplicating ~1 GB of cross-compiled test binaries on disk.
+	// Hard-link the built binaries into the output directory to avoid
+	// duplicating ~1 GB of cross-compiled test binaries on disk. files/e2e/ is
+	// the layout the hashrelease server serves and that publishArtifactsToS3
+	// mirrors for a release.
 	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(e2eDir, "bin", "k8s"))
+	binDir := filepath.Join(e2eDir, "bin", "k8s")
+	entries, err := os.ReadDir(binDir)
 	if err != nil {
 		return fmt.Errorf("reading e2e bin directory: %w", err)
 	}
+	staged := 0
 	for _, entry := range entries {
 		if !strings.HasPrefix(entry.Name(), "e2e-linux-") {
 			continue
 		}
-		src := filepath.Join(e2eDir, "bin", "k8s", entry.Name())
 		dst := filepath.Join(e2eOutputDir, entry.Name())
-		if err := os.Link(src, dst); err != nil {
+		// Replace a leftover link from an earlier build of the same version;
+		// os.Link fails outright on an existing destination.
+		if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("replacing e2e binary %s: %w", entry.Name(), err)
+		}
+		if err := os.Link(filepath.Join(binDir, entry.Name()), dst); err != nil {
 			return fmt.Errorf("linking e2e binary %s: %w", entry.Name(), err)
 		}
 		logrus.Infof("Staged e2e binary: %s", entry.Name())
+		staged++
+	}
+	// Nothing staged means the build produced no binaries; a release must not
+	// ship with --e2e-binaries enabled and no e2e assets.
+	if staged == 0 {
+		return fmt.Errorf("no e2e test binaries were produced in %s", binDir)
 	}
 	return nil
 }
@@ -1444,8 +1471,7 @@ Additional links:
 		r.calicoVersion,
 		r.uploadDir(),
 	}
-	_, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil)
-	if err != nil {
+	if _, err := r.runner.RunInDir(r.repoRoot, "./bin/ghr", args, nil); err != nil {
 		return fmt.Errorf("failed to publish github release: %w", err)
 	}
 	return nil
@@ -1600,6 +1626,33 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 	}
 	if err := r.s3Cp(filepath.Join(filepath.Dir(r.uploadDir()), fmt.Sprintf("charts-%s", r.helmChartVersion()), helmIndexFileName), fmt.Sprintf("s3://%s/charts/", r.s3Bucket), s3ACLPublicRead...); err != nil {
 		return fmt.Errorf("update helm index: %w", err)
+	}
+	return nil
+}
+
+// publishE2EBinaries uploads the per-arch e2e test binaries so a consumer can
+// fetch one directly instead of unpacking the release archive. The layout
+// matches Enterprise (<version>/files/e2e/), so both products resolve a binary
+// the same way.
+//
+// Keyed off what the build staged rather than r.e2eBinaries: the e2e-binaries
+// flag belongs to the build step and is never passed to publish.
+func (r *CalicoManager) publishE2EBinaries() error {
+	e2eDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	staged, err := filepath.Glob(filepath.Join(e2eDir, "e2e-linux-*.test"))
+	if err != nil {
+		return fmt.Errorf("looking for staged e2e binaries: %w", err)
+	}
+	if len(staged) == 0 {
+		logrus.Info("Skipping publishing e2e test binaries (none staged)")
+		return nil
+	}
+	if r.s3Bucket == "" {
+		return fmt.Errorf("no S3 bucket specified for publishing e2e binaries")
+	}
+	dest := fmt.Sprintf("s3://%s/%s/files/e2e/", r.s3Bucket, r.calicoVersion)
+	if err := r.s3Cp(e2eDir+"/", dest, s3ACLPublicRead...); err != nil {
+		return fmt.Errorf("publish e2e binaries: %w", err)
 	}
 	return nil
 }
@@ -1865,6 +1918,11 @@ func derivedBranchEdits(derived, stream, operatorBranch string) []branch.Edit {
 		{File: "test-tools/mocknode/mock-node.yaml", Pattern: `([a-zA-Z .]+)([a-zA-Z.]+/mock-node:)[^[:space:]]+`, Replacement: fmt.Sprintf(`${1}${2}%s`, derived)},
 		{File: "process/testing/aso/export-env.sh", Pattern: `export RELEASE_STREAM="\$\{RELEASE_STREAM:=master\}"`, Replacement: fmt.Sprintf(`export RELEASE_STREAM="${RELEASE_STREAM:=%s}"`, stream)},
 		{File: "process/testing/aso/install-calico.sh", Pattern: `: \$\{RELEASE_STREAM:="master"\} # Default to master`, Replacement: fmt.Sprintf(`: ${RELEASE_STREAM:="%s"} # Default to %s`, stream, stream)},
+		// The upgrade lanes test the branch's own stream after upgrading, so the
+		// uplevel has to follow the cut. Required: left at master, a fresh branch
+		// would silently run master's e2e suite against its own build.
+		{File: ".argoci/cron/e2e-upgrade.yaml", Pattern: `export UPLEVEL_RELEASE_STREAM="\$\{UPLEVEL_RELEASE_STREAM:-master\}"`, Replacement: fmt.Sprintf(`export UPLEVEL_RELEASE_STREAM="${UPLEVEL_RELEASE_STREAM:-%s}"`, stream), Required: true},
+		{File: ".semaphore/end-to-end/pipelines/upgrade.yml", Pattern: `(- name: UPLEVEL_RELEASE_STREAM.*\n[[:space:]]+value: )master`, Replacement: fmt.Sprintf(`${1}%s`, stream), Required: true},
 	}
 }
 
