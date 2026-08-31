@@ -167,10 +167,13 @@ mode: an nftables-mode kube-proxy selects the nftables dataplane.
 That signal is about coexistence — Felix must use the same
 netfilter generation as kube-proxy — not host capability, so it
 must not be replaced by a capability probe on cluster hosts. See
-`useNftables()` in `dataplane/linux/int_dataplane.go`. The
-per-host escape hatch is `NFTablesMode=Disabled`/`Enabled` set
-locally (env var or config file), which overrides any
-datastore-inherited value.
+`nftables.Enabled()`, which the daemon calls at startup and
+records in `Config.NFTablesEnabled`; everything that varies by
+dataplane keys off that resolved bool rather than the
+`NFTablesMode` string, so `Auto` behaves like the mode it
+resolved to. The per-host escape hatch is
+`NFTablesMode=Disabled`/`Enabled` set locally (env var or config
+file), which overrides any datastore-inherited value.
 
 The `iptables` and `nftables` backends share a common rule-
 generation layer in `felix/rules/` and a common table-abstraction
@@ -180,6 +183,24 @@ generation: `dispatch.go` (per-endpoint dispatch chains),
 chain setup), `static.go` (boilerplate filter/NAT/mangle chains),
 `nat.go`. A PR adding policy semantics usually touches
 `felix/rules/` and needs matching changes on both backends.
+
+The nftables backend is two packages.
+`felix/nftables/nftrender/` holds the rule-rendering primitives —
+the match builder, the action types, the naming helpers.
+`felix/nftables/` holds the driver that programs tables, sets and
+maps through `sigs.k8s.io/knftables`.
+
+They are separate because Felix also builds for Windows.
+`felix/rules/` needs the nftables primitives to render rules, so it
+must build everywhere; the driver cannot, because knftables reaches
+Linux-only netlink code. Hence the invariant: **code that builds
+for Windows imports `nftrender`, never `felix/nftables`.** Nothing
+local flags a violation — `go build` and the unit tests are Linux —
+so it surfaces as a cross-compile failure in the "Felix: Build
+Windows binaries" and node Windows-image jobs, reported against
+`github.com/google/nftables` rather than the offending import. The
+iptables backend needs no equivalent split; it shells out to
+`iptables-restore` instead of linking a netlink library.
 
 ### Shared networking subsystems
 
@@ -201,6 +222,17 @@ covered in [`dataplane.md`](./design/dataplane.md); their deeper
 netlink-level design (resync grace periods, conntrack cleanup on
 IP moves) is reserved for a future `route-sync.md` sub-design.
 `flow-logs-collector.md` is likewise still to be written.
+
+### Cross-component designs Felix takes part in
+
+Some subsystems are split between Felix and another component, so
+their design lives at the repo level rather than under
+`felix/design/`:
+
+| Design | What it covers in Felix |
+|---|---|
+| [`design/cluster-route-programming/DESIGN.md`](../design/cluster-route-programming/DESIGN.md) | Whether Felix or confd/BIRD programs the routes to workloads on other nodes, per encapsulation type. Covers `ipipManager`, `noEncapManager`, `EncapsulationResolver.NoEncapNeeded`, and the `ProgramClusterRoutes` config parameter. |
+| [`design/ipam/DESIGN.md`](../design/ipam/DESIGN.md) | Felix is a read-only consumer of IPAM state (IPAM blocks feed the `L3RouteResolver`). |
 
 ## 2. Sub-design index
 

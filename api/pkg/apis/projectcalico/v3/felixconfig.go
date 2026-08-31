@@ -91,12 +91,13 @@ const (
 	AWSSrcDstCheckOptionDisable   AWSSrcDstCheckOption = "Disable"
 )
 
-// +kubebuilder:validation:Enum=TC;TCX
+// +kubebuilder:validation:Enum=TC;TCX;Netkit
 type BPFAttachOption string
 
 const (
-	BPFAttachOptionTC  BPFAttachOption = "TC"
-	BPFAttachOptionTCX BPFAttachOption = "TCX"
+	BPFAttachOptionTC     BPFAttachOption = "TC"
+	BPFAttachOptionTCX    BPFAttachOption = "TCX"
+	BPFAttachOptionNetkit BPFAttachOption = "Netkit"
 )
 
 // +kubebuilder:validation:Enum=Enabled;Disabled
@@ -179,6 +180,14 @@ type NATOutgoingExclusionsType string
 const (
 	NATOutgoingExclusionsIPPoolsOnly       NATOutgoingExclusionsType = "IPPoolsOnly"
 	NATOutgoingExclusionsIPPoolsAndHostIPs NATOutgoingExclusionsType = "IPPoolsAndHostIPs"
+)
+
+// +kubebuilder:validation:Enum=Disabled;FirstResponseAfterLog
+type LogConnectionTransitionsMode string
+
+const (
+	LogConnectionTransitionsDisabled              LogConnectionTransitionsMode = "Disabled"
+	LogConnectionTransitionsFirstResponseAfterLog LogConnectionTransitionsMode = "FirstResponseAfterLog"
 )
 
 // +kubebuilder:validation:Enum=RequireAndVerifyClientCert;RequireAnyClientCert;VerifyClientCertIfGiven;NoClientCert
@@ -389,6 +398,8 @@ type FelixConfigurationSpec struct {
 
 	// LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
 	// where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+	// When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+	// initial log was suppressed by this rate limit gets no follow-up log either.
 	// +optional
 	// +kubebuilder:validation:Pattern=`^[1-9]\d{0,3}/(?:second|minute|hour|day)$`
 	LogActionRateLimit *string `json:"logActionRateLimit,omitempty"`
@@ -398,6 +409,30 @@ type FelixConfigurationSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=9999
 	LogActionRateLimitBurst *int `json:"logActionRateLimitBurst,omitempty"`
+
+	// LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+	// first observed response for each connection that matched a policy rule with a Log action.
+	// When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+	// follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+	// transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+	// RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+	// port unreachable). The log body is the standard kernel packet log of the response packet,
+	// so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+	// line (with source and destination swapped). A logged connection with no follow-up log never
+	// received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+	// no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+	// consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+	// [Default: Disabled]
+	// +optional
+	LogConnectionTransitions *LogConnectionTransitionsMode `json:"logConnectionTransitions,omitempty" validate:"omitempty,oneof=Disabled FirstResponseAfterLog"`
+
+	// LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+	// LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+	// is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+	// rules that emit these logs are shared by all policies, so per-policy values cannot be
+	// substituted and any %-specifiers are rendered literally. [Default: calico-response]
+	// +optional
+	LogConnectionTransitionsPrefix string `json:"logConnectionTransitionsPrefix,omitempty"`
 
 	// LogFilePath is the full path to the Felix log. Set to none to disable file logging. [Default: /var/log/calico/felix.log]
 	LogFilePath string `json:"logFilePath,omitempty"`
@@ -624,11 +659,29 @@ type FelixConfigurationSpec struct {
 	// use a distinct protocol (in addition to setting this field to false).
 	RemoveExternalRoutes *bool `json:"removeExternalRoutes,omitempty"`
 
-	// ProgramClusterRoutes controls how a cluster node gets a route to a workload on another node,
-	// when that workload's IP comes from an IP Pool with vxlanMode: Never. When ProgramClusterRoutes is Disabled,
-	// it is expected that confd and BIRD will program that route. When ProgramClusterRoutes is Enabled, Felix program that route.
-	// Felix always programs such routes for IP Pools with vxlanMode: Always or vxlanMode: CrossSubnet. [Default: Disabled]
-	// +kubebuilder:validation:Enum=Enabled;Disabled
+	// ProgramClusterRoutes controls which "cluster routes" Felix programs, i.e. the routes that
+	// a node needs in order to reach workloads on other nodes.  It only applies to IP Pools
+	// with vxlanMode: Never; Felix always programs the cluster routes for IP Pools with
+	// vxlanMode: Always or vxlanMode: CrossSubnet.  The routes that Felix does not program here
+	// are expected to be programmed by Calico's BGP stack instead.  Below, an IPIP IP Pool is
+	// one with ipipMode: Always or CrossSubnet, and an unencapsulated one has ipipMode and
+	// vxlanMode both Never.
+	//
+	// - Disabled: Felix programs no cluster routes.
+	// - EnabledIPIPOnly: Felix programs them for IPIP IP Pools.
+	// - EnabledNoEncapOnly: Felix programs them for unencapsulated IP Pools.
+	// - Enabled: Felix programs them for both.
+	//
+	// This field must be kept consistent with BGPConfiguration.ProgramClusterRoutes, which
+	// makes the same choice from BIRD's side.  If both Felix and BIRD are enabled for the same
+	// kind of IP Pool they will fight over the routes; if neither is, there will be no cluster
+	// routes at all.
+	//
+	// Note: leaving the IPIP cluster routes to BGP, which the Disabled and EnabledNoEncapOnly
+	// values do, is deprecated as of v3.33 and will be removed in v3.35.
+	//
+	// [Default: EnabledIPIPOnly]
+	// +kubebuilder:validation:Enum=Enabled;Disabled;EnabledIPIPOnly;EnabledNoEncapOnly
 	ProgramClusterRoutes *string `json:"programClusterRoutes,omitempty"`
 
 	// IPForwarding controls whether Felix sets the host sysctls to enable IP forwarding.  IP forwarding is required
@@ -1019,10 +1072,15 @@ type FelixConfigurationSpec struct {
 	BPFRedirectToPeer string `json:"bpfRedirectToPeer,omitempty"`
 
 	// BPFAttachType controls how are the BPF programs at the network interfaces attached.
-	// By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-	// `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-	// [Default: TCX]
-	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX"`
+	// By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+	// netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+	// easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+	// qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+	// Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+	// instead of the netkit API, which is required before downgrading to a release without netkit
+	// support.
+	// [Default: Netkit]
+	BPFAttachType *BPFAttachOption `json:"bpfAttachType,omitempty" validate:"omitempty,oneof=TC TCX Netkit"`
 
 	// FlowLogsFlushInterval configures the interval at which Felix exports flow logs.
 	// +kubebuilder:validation:Type=string

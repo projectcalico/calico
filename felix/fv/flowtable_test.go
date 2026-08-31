@@ -22,13 +22,45 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 
 	"github.com/projectcalico/calico/felix/dataplane/linux/dataplanedefs"
 	"github.com/projectcalico/calico/felix/fv/connectivity"
 	"github.com/projectcalico/calico/felix/fv/infrastructure"
 	"github.com/projectcalico/calico/felix/fv/workload"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/calico/libcalico-go/lib/apis/internalapi"
 )
+
+// noOffloadMembers returns the IPs currently excluded from the flowtable fast path.
+func noOffloadMembers(felix *infrastructure.Felix) []string {
+	out, _ := felix.ExecOutput("nft", "list", "set", "ip", "calico", "cali40no-flow-offload")
+	match := regexp.MustCompile(`(?s)elements = \{([^}]*)\}`).FindStringSubmatch(out)
+	if match == nil {
+		return nil
+	}
+
+	var ips []string
+	for _, ip := range strings.Split(match[1], ",") {
+		if ip = strings.TrimSpace(ip); ip != "" {
+			ips = append(ips, ip)
+		}
+	}
+	return ips
+}
+
+// offloadedFlowsFor returns the conntrack entries involving the given IP that are offloaded.
+func offloadedFlowsFor(felix *infrastructure.Felix, ip string) []string {
+	out, _ := felix.ExecOutput("conntrack", "-L")
+
+	var flows []string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "[OFFLOAD]") && strings.Contains(line, ip) {
+			flows = append(flows, line)
+		}
+	}
+	return flows
+}
 
 var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconfig.DatastoreType{apiconfig.EtcdV3, apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 	var (
@@ -131,6 +163,58 @@ var _ = infrastructure.DatastoreDescribe("nftables flowtable offload", []apiconf
 		Eventually(func() int {
 			return offloadedPacketCount(tc.Felixes[0], w[0].IP, w[1].IP)
 		}, "30s", "1s").Should(BeNumerically(">", before))
+	})
+
+	It("keeps a connection-limited workload off the fast path", func() {
+		// The limit lives in the workload's filter chain, which an offloaded flow skips entirely.
+		w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{IngressMaxConnections: 10}
+		w[1].UpdateInInfra(infra)
+
+		Eventually(func() []string {
+			return noOffloadMembers(tc.Felixes[0])
+		}, "20s", "1s").Should(ConsistOf(w[1].IP))
+
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		Consistently(func() []string {
+			return offloadedFlowsFor(tc.Felixes[0], w[1].IP)
+		}, "15s", "1s").Should(BeEmpty())
+
+		// Clearing the limit lets the flow offload, which proves the assertion above wasn't vacuous.
+		w[1].WorkloadEndpoint.Spec.QoSControls = nil
+		w[1].UpdateInInfra(infra)
+
+		Eventually(func() []string {
+			return noOffloadMembers(tc.Felixes[0])
+		}, "20s", "1s").Should(BeEmpty())
+
+		Eventually(func() []string {
+			return offloadedFlowsFor(tc.Felixes[0], w[1].IP)
+		}, "30s", "1s").ShouldNot(BeEmpty())
+	})
+
+	It("keeps a DSCP-marked workload off the fast path", func() {
+		// DSCP marking happens in mangle POSTROUTING, which an offloaded flow skips. The marking
+		// itself is covered by dscp_test.go.
+		dscp := numorstring.DSCPFromInt(20)
+		w[1].WorkloadEndpoint.Spec.QoSControls = &internalapi.QoSControls{DSCP: &dscp}
+		w[1].UpdateInInfra(infra)
+
+		Eventually(func() []string {
+			return noOffloadMembers(tc.Felixes[0])
+		}, "20s", "1s").Should(ConsistOf(w[1].IP))
+
+		pc := w[0].StartPersistentConnection(w[1].IP, 8055, workload.PersistentConnectionOpts{
+			MonitorConnectivity: true,
+		})
+		defer pc.Stop()
+
+		Consistently(func() []string {
+			return offloadedFlowsFor(tc.Felixes[0], w[1].IP)
+		}, "15s", "1s").Should(BeEmpty())
 	})
 
 	It("adds a matching host interface to the flowtable device set", func() {

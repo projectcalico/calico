@@ -51,6 +51,7 @@ func benchmarkProxyUpdates(b *testing.B, svcN, epsN int) {
 			proxy.NewRTCache(),
 			nil,
 			maglevLUTSize,
+			0,
 		)
 		Expect(err).ShouldNot(HaveOccurred())
 

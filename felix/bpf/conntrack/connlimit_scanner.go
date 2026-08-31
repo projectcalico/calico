@@ -20,7 +20,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	ctv4 "github.com/projectcalico/calico/felix/bpf/conntrack/v4"
 	"github.com/projectcalico/calico/felix/bpf/maps"
 	"github.com/projectcalico/calico/felix/bpf/qos"
 )
@@ -134,15 +133,19 @@ func (s *ConnLimitScanner) Check(ctKey KeyInterface, ctVal ValueInterface, get E
 
 	data := ctVal.Data()
 
-	// Skip connections that are closing or closed (any FIN or RST),
-	// or already decremented by the BPF fast path. The CONNLIMIT_DEC
-	// flag is set when the BPF program decrements the counter on
-	// FIN/RST; if we counted these entries, the scanner's recount
-	// would overwrite the decremented value with a higher one.
+	// Skip connections that are closing or closed (any FIN or RST):
+	// the fast path decremented when it saw the close, or the cleanup
+	// path will when the entry expires, so counting them here would
+	// overwrite the decremented value with a higher one.
+	//
+	// Deliberately NOT skipped: entries carrying CONNLIMIT_DEC. The
+	// fast path claims that flag on any RST, including a spurious one
+	// both peers ignore, and rarely clears it again, so it sits on
+	// live connections. Since this recount is the only thing that can
+	// give a slot back, skipping on it made such an under-count
+	// effectively permanent. The FIN/RST skips above already prevent
+	// the double-count it was added for.
 	if data.FINsSeenDSR() || data.RSTSeen() {
-		return ScanVerdictOK, 0
-	}
-	if ctVal.Flags()&ctv4.FlagConnLimitDec != 0 {
 		return ScanVerdictOK, 0
 	}
 	// Only count fully established connections.

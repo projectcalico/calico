@@ -444,39 +444,6 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		})
 	}
 
-	if ipAddr.Version() == 4 {
-		if new.Spec.BlockSize > 32 || new.Spec.BlockSize < 20 {
-			errFields = append(errFields, cerrors.ErroredField{
-				Name:   "IPPool.Spec.BlockSize",
-				Reason: "IPv4 block size must be between 20 and 32",
-				Value:  new.Spec.BlockSize,
-			})
-
-		}
-	} else {
-		if new.Spec.BlockSize > 128 || new.Spec.BlockSize < 116 {
-			errFields = append(errFields, cerrors.ErroredField{
-				Name:   "IPPool.Spec.BlockSize",
-				Reason: "IPv6 block size must be between 116 and 128",
-				Value:  new.Spec.BlockSize,
-			})
-		}
-	}
-
-	// The Calico IPAM places restrictions on the minimum IP pool size.  If
-	// the ippool is enabled, check that the pool is at least the minimum size.
-	if !new.Spec.Disabled {
-		ones, _ := cidr.Mask.Size()
-		log.Debugf("Pool CIDR: %s, mask: %d, blockSize: %d", cidr.String(), ones, new.Spec.BlockSize)
-		if ones > new.Spec.BlockSize {
-			errFields = append(errFields, cerrors.ErroredField{
-				Name:   "IPPool.Spec.CIDR",
-				Reason: "IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.",
-				Value:  new.Spec.CIDR,
-			})
-		}
-	}
-
 	// If there was no previous pool then this must be a Create.  Check that the CIDR
 	// does not overlap with any other pool CIDRs.
 	if old == nil && !skipCIDROverlap {
@@ -516,58 +483,11 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		new.Spec.VXLANMode = apiv3.VXLANModeNever
 	}
 
-	// Make sure only one of VXLAN and IPIP is enabled.
-	if new.Spec.VXLANMode != apiv3.VXLANModeNever && new.Spec.IPIPMode != apiv3.IPIPModeNever {
-		errFields = append(errFields, cerrors.ErroredField{
-			Name:   "IPPool.Spec.VXLANMode",
-			Reason: "Cannot enable both VXLAN and IPIP on the same IPPool",
-			Value:  new.Spec.VXLANMode,
-		})
-	}
-
-	// IPIP cannot be enabled for IPv6.
-	if cidr.Version() == 6 && new.Spec.IPIPMode != apiv3.IPIPModeNever {
-		errFields = append(errFields, cerrors.ErroredField{
-			Name:   "IPPool.Spec.IPIPMode",
-			Reason: "IPIP is not supported on an IPv6 IP pool",
-			Value:  new.Spec.IPIPMode,
-		})
-	}
-
-	// The Calico CIDR should be strictly masked
-	log.Debugf("IPPool CIDR: %s, Masked IP: %d", new.Spec.CIDR, cidr.IP)
+	// Not left to CEL: spec.cidr is normalized above, before the CEL rules run.
 	if cidr.IP.String() != ipAddr.String() {
 		errFields = append(errFields, cerrors.ErroredField{
 			Name:   "IPPool.Spec.CIDR",
 			Reason: "IPPool CIDR is not strictly masked",
-			Value:  new.Spec.CIDR,
-		})
-	}
-
-	// IPv4 link local subnet.
-	ipv4LinkLocalNet := net.IPNet{
-		IP:   net.ParseIP("169.254.0.0"),
-		Mask: net.CIDRMask(16, 32),
-	}
-	// IPv6 link local subnet.
-	ipv6LinkLocalNet := net.IPNet{
-		IP:   net.ParseIP("fe80::"),
-		Mask: net.CIDRMask(10, 128),
-	}
-
-	// IP Pool CIDR cannot overlap with IPv4 or IPv6 link local address range.
-	if cidr.Version() == 4 && cidr.IsNetOverlap(ipv4LinkLocalNet) {
-		errFields = append(errFields, cerrors.ErroredField{
-			Name:   "IPPool.Spec.CIDR",
-			Reason: "IPPool CIDR overlaps with IPv4 Link Local range 169.254.0.0/16",
-			Value:  new.Spec.CIDR,
-		})
-	}
-
-	if cidr.Version() == 6 && cidr.IsNetOverlap(ipv6LinkLocalNet) {
-		errFields = append(errFields, cerrors.ErroredField{
-			Name:   "IPPool.Spec.CIDR",
-			Reason: "IPPool CIDR overlaps with IPv6 Link Local range fe80::/10",
 			Value:  new.Spec.CIDR,
 		})
 	}

@@ -14,9 +14,13 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 // startUpstream stands up a throwaway OCI registry and returns its host
@@ -56,7 +60,7 @@ func manifestDigestVia(t *testing.T, facadeAddr, ns, repo, ref string) string {
 	if err != nil {
 		t.Fatalf("GET %s: %v", url, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET %s: status %d: %s", url, resp.StatusCode, body)
@@ -180,5 +184,45 @@ func TestOverrideRejectsDigest(t *testing.T) {
 		"quay.io/team/app@sha256:"+strings.Repeat("a", 64), img)
 	if err == nil {
 		t.Fatal("expected error overriding a digest ref, got nil")
+	}
+}
+
+// TestPullThroughMultiArchIndex proves ensureManifest handles a real
+// multi-arch image: pushing an OCI image index whose referenced child
+// manifests aren't yet in the internal store used to 404 the index PUT
+// (ggcr's registry rejects an index whose children are missing). The
+// facade must recursively populate each child before PUTing the index.
+func TestPullThroughMultiArchIndex(t *testing.T) {
+	host, _ := startUpstream(t)
+
+	// Build a two-arch OCI image index; push to the upstream.
+	imgA, err := random.Image(1024, 2)
+	if err != nil {
+		t.Fatalf("random.Image A: %v", err)
+	}
+	imgB, err := random.Image(1024, 2)
+	if err != nil {
+		t.Fatalf("random.Image B: %v", err)
+	}
+	idx := mutate.AppendManifests(empty.Index,
+		mutate.IndexAddendum{Add: imgA, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}}},
+		mutate.IndexAddendum{Add: imgB, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "arm64"}}},
+	)
+	ref, err := name.ParseReference(host+"/team/multi:v1", name.Insecure)
+	if err != nil {
+		t.Fatalf("parse ref: %v", err)
+	}
+	if err := remote.WriteIndex(ref, idx); err != nil {
+		t.Fatalf("push index: %v", err)
+	}
+
+	f := startRegistry(t)
+	got := manifestDigestVia(t, f.Addr(), host, "team/multi", "v1")
+	want, err := idx.Digest()
+	if err != nil {
+		t.Fatalf("index digest: %v", err)
+	}
+	if got != want.String() {
+		t.Errorf("index served %s, want %s", got, want.String())
 	}
 }

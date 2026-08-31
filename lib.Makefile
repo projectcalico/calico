@@ -582,47 +582,6 @@ define update_replace_pin
 		fi'
 endef
 
-# Get the latest release tag from projectcalico/go-build.
-GO_BUILD_REPO=https://github.com/projectcalico/go-build.git
-define get_go_build_version
-	$(shell git ls-remote --tags --refs --sort=-version:refname $(GO_BUILD_REPO) | head -n 1 | awk -F '/' '{print $$NF}')
-endef
-
-# update_go_build_pin updates the GO_BUILD_VER in metadata.mk or Makefile.
-# for annotated git tags, we need to remove the trailing `^{}`.
-# for the obsoleted vx.y go-build version, we need to remove the leading `v` for bash string comparison to work properly.
-define update_go_build_pin
-	$(eval new_ver := $(subst ^{},,$(call get_go_build_version)))
-	$(eval old_ver := $(shell grep -E "^GO_BUILD_VER" $(1) | cut -d'=' -f2 | xargs | sed 's/^v//'))
-
-	@echo "current GO_BUILD_VER=$(old_ver)"
-	@echo "latest GO_BUILD_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^GO_BUILD_VER[[:space:]]*=.*/GO_BUILD_VER=$(new_ver)/" $(1); \
-			echo "GO_BUILD_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update GO_BUILD_VER"; \
-		fi'
-endef
-
-# update_calico_base_pin updates the CALICO_BASE_VER in metadata.mk.
-define update_calico_base_pin
-	$(eval new_ver := $(shell curl -s "https://hub.docker.com/v2/repositories/calico/base/tags/?page_size=100" | jq -r '.results[].name' | grep -E "^ubi9-[0-9]+$$" | sort -r | head -n 1))
-	$(eval old_ver := $(shell grep -E "^CALICO_BASE_VER" $(1) | cut -d'=' -f2 | xargs))
-
-	@echo "current CALICO_BASE_VER=$(old_ver)"
-	@echo "latest CALICO_BASE_VER=$(new_ver)"
-
-	bash -c '\
-		if [[ "$(new_ver)" > "$(old_ver)" ]]; then \
-			sed -i "s/^CALICO_BASE_VER[[:space:]]*=.*/CALICO_BASE_VER=$(new_ver)/" $(1); \
-			echo "CALICO_BASE_VER is updated to $(new_ver)"; \
-		else \
-			echo "no need to update CALICO_BASE_VER"; \
-		fi'
-endef
 
 API_BRANCH?=$(PIN_BRANCH)
 API_REPO?=github.com/projectcalico/calico/api
@@ -679,11 +638,6 @@ update-cni-plugin-pin:
 replace-cni-pin:
 	$(call update_replace_pin,github.com/projectcalico/calico/cni-plugin,$(CNI_REPO),$(CNI_BRANCH))
 
-update-go-build-pin:
-	$(call update_go_build_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
-
-update-calico-base-pin:
-	$(call update_calico_base_pin,$(GIT_GO_BUILD_UPDATE_COMMIT_FILE))
 
 git-status:
 	git status --porcelain
@@ -758,7 +712,6 @@ GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
 PIN_UPDATE_BRANCH?=semaphore-auto-pin-updates-$(GIT_PR_BRANCH_BASE)
 GIT_PR_BRANCH_HEAD?=$(PIN_UPDATE_BRANCH)
 GIT_PIN_UPDATE_COMMIT_FILES?=go.mod go.sum
-GIT_GO_BUILD_UPDATE_COMMIT_FILE?=metadata.mk
 GIT_PIN_UPDATE_COMMIT_EXTRA_FILES?=$(GIT_COMMIT_EXTRA_FILES)
 GIT_COMMIT_FILES?=$(GIT_PIN_UPDATE_COMMIT_FILES) $(GIT_PIN_UPDATE_COMMIT_EXTRA_FILES)
 
@@ -1532,7 +1485,9 @@ bin/crane: $(REPO_ROOT)/bin/crane
 $(REPO_ROOT)/bin/crane:
 	$(info ::: Downloading crane from $(CRANE_URL))
 	@mkdir -p $(REPO_ROOT)/bin
-	@curl -sSfL --retry 5 $(CRANE_URL) | tar xz -C $(REPO_ROOT)/bin crane
+	@curl -sSfL --retry 5 --retry-all-errors -o /tmp/calico-crane.tar.gz $(CRANE_URL)
+	@tar xz -C $(REPO_ROOT)/bin -f /tmp/calico-crane.tar.gz crane
+	@rm -f /tmp/calico-crane.tar.gz
 
 ###############################################################################
 # Common functions for launching a local Kubernetes control plane.
@@ -1885,21 +1840,11 @@ kind-reload:
 ###############################################################################
 ENVTEST_DIR := $(REPO_ROOT)/hack/test/envtest
 ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envtest
-# Pick the envtest k8s version and how to fetch its binaries from K8S_VERSION.
-# setup-envtest only publishes assets for RELEASED minors:
-#   - stable: setup-envtest with a major.minor.x wildcard (latest patch).
-#   - -beta/-rc pre-release: no upstream assets yet, so assemble the bundle from
-#     the release binaries (kube-apiserver+kubectl from dl.k8s.io, etcd from
-#     ETCD_VERSION). Self-reverts to setup-envtest once the minor GAs.
-# -alpha is intentionally excluded (too unstable to pin); it fails loudly instead.
-# Skip on Windows: envtest is Linux-only; bash sed/cut would error there.
+# Derive major.minor from K8S_VERSION (e.g. v1.34.3 -> 1.34.x) for setup-envtest.
+# Envtest publishes binaries per minor version, not per patch, so we use a wildcard.
+# Skip on Windows: envtest is Linux-only test infra; bash sed/cut would error otherwise.
 ifneq ($(OS),Windows_NT)
-ifneq ($(or $(findstring -beta,$(K8S_VERSION)),$(findstring -rc,$(K8S_VERSION))),)
-ENVTEST_K8S_VERSION ?= $(K8S_VERSION:v%=%)
-ENVTEST_K8S_PRERELEASE := true
-else
 ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
-endif
 endif
 ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
 
@@ -1910,14 +1855,24 @@ $(ENVTEST_ASSETS_MARKER):
 	@echo "Setting up envtest binaries for Kubernetes $(ENVTEST_K8S_VERSION)..."
 	mkdir -p $(ENVTEST_DIR)
 	rm -f $(ENVTEST_DIR)/.envtest-*
-ifeq ($(ENVTEST_K8S_PRERELEASE),true)
-	# No upstream kubebuilder-tools release exists for a pre-release k8s, so build
-	# the bundle in the same layout the consumers glob: k8s/<ver>-<os>-<arch>/.
-	# Each downloaded binary is sha256-verified against its published checksum
-	# (dl.k8s.io <bin>.sha256 for the k8s binaries; the etcd release SHA256SUMS).
+	# Prefer the bundle controller-tools publishes. It only exists for minors it
+	# has already cut an envtest release for, which trails the Kubernetes release
+	# by anywhere from hours to a fortnight, and it never covers most
+	# pre-releases. Assemble the same layout from the release binaries when it is
+	# missing, so a Kubernetes bump is never blocked waiting on that release; the
+	# published bundle takes over again on the next clean setup once it lands.
+	# -alpha is excluded either way: too unstable to pin, so it fails loudly.
 	$(DOCKER_GO_BUILD) sh -c 'set -e; \
+		case "$(K8S_VERSION)" in \
+			*-alpha*) echo "K8S_VERSION $(K8S_VERSION) is an alpha; envtest does not pin to alphas." >&2; exit 1;; \
+		esac; \
+		if go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
+			use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION); then \
+			exit 0; \
+		fi; \
+		echo "No published envtest bundle for $(ENVTEST_K8S_VERSION); assembling one from the $(K8S_VERSION) release binaries."; \
 		base=https://dl.k8s.io/release/$(K8S_VERSION)/bin/$(BUILDOS)/$(BUILDARCH); \
-		d=$(ENVTEST_CONTAINER_DIR)/k8s/$(ENVTEST_K8S_VERSION)-$(BUILDOS)-$(BUILDARCH); \
+		d=$(ENVTEST_CONTAINER_DIR)/k8s/$(K8S_VERSION:v%=%)-$(BUILDOS)-$(BUILDARCH); \
 		mkdir -p $$d; \
 		for b in kube-apiserver kubectl; do \
 			curl -fsSL --retry 5 -o $$d/$$b $$base/$$b; \
@@ -1933,15 +1888,11 @@ ifeq ($(ENVTEST_K8S_PRERELEASE),true)
 		tar -xzf /tmp/$$etcd_tgz -C /tmp; \
 		mv /tmp/etcd-$(ETCD_VERSION)-$(BUILDOS)-$(BUILDARCH)/etcd $$d/etcd; \
 		chmod +x $$d/kube-apiserver $$d/kubectl $$d/etcd'
-else
-	$(DOCKER_GO_BUILD) sh -c \
-		'go run sigs.k8s.io/controller-runtime/tools/setup-envtest@latest \
-		use --bin-dir $(ENVTEST_CONTAINER_DIR) -p path $(ENVTEST_K8S_VERSION)'
-endif
 	touch $@
 
-# Minimum supported Kubernetes version for CEL IP/CIDR library (available in 1.31+).
-MIN_K8S_VERSION ?= v1.31.0
+# Minimum supported Kubernetes version. 1.32 is the first release that estimates
+# the cost of the CEL IP/CIDR library well enough for our CRD rules to install.
+MIN_K8S_VERSION ?= v1.32.0
 ifneq ($(OS),Windows_NT)
 ENVTEST_MIN_K8S_VERSION ?= $(shell echo $(MIN_K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 # Major.minor prefix for globbing the downloaded envtest directory (e.g. "1.29").

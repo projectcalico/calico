@@ -101,11 +101,8 @@ else
   export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 fi
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
-# Despite the name this is an Azure *subscription name*, not a project or a
-# resource group: azr-aso/azr-capi select the subscription by matching it
-# against `az account list` output. The spelling is banzai-core's variable, so
-# it can't be renamed from here. banzai-core defaults it to the developer
-# subscription; azr-aks ignores it, which is why only the ASO/CAPI paths break.
+# banzai-core's name for the Azure *subscription name*: azr-aso/azr-capi
+# resolve the subscription id by matching it against `az account list`.
 export AZ_PROJECT=${AZ_PROJECT:-tigera-dev-ci}
 
 # GCP placement: gcp-openstack has its own defaults in banzai-core

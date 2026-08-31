@@ -323,6 +323,7 @@ func (t *TyphaDaemon) CreateServer() {
 			PingInterval:                   t.ConfigParams.ServerPingIntervalSecs,
 			PongTimeout:                    t.ConfigParams.ServerPongTimeoutSecs,
 			HandshakeTimeout:               t.ConfigParams.ServerHandshakeTimeoutSecs,
+			WriteTimeout:                   t.ConfigParams.ServerWriteTimeoutSecs,
 			DropInterval:                   t.ConfigParams.ConnectionDropIntervalSecs,
 			ShutdownTimeout:                t.ConfigParams.ShutdownTimeoutSecs,
 			ShutdownMaxDropInterval:        t.ConfigParams.ShutdownConnectionDropIntervalMaxSecs,
@@ -375,9 +376,8 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 					t.ConfigParams.PrometheusMetricsClientAuth,
 					t.ConfigParams.PrometheusMetricsCAFile,
 				)
-				if err != nil {
-					log.Info("Error starting metrics https server.", err)
-				}
+				// The server retries internally, so it only returns on failure.
+				log.Info("Error starting metrics https server.", err)
 			}()
 		} else {
 			log.Info("Starting metrics http server.")

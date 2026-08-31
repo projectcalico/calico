@@ -38,7 +38,7 @@ on:
   # A schedule is repository-level: nothing to approve, and it still gets the
   # secrets and the working `contents: write` the dedup marker needs. Cost is
   # latency: a cycle, plus GitHub's own delay in starting scheduled runs, which
-  # on this repo measures 31-46 minutes (sampled from sync-operator-crds.yml,
+  # on this repo measures 31-46 minutes (sampled from sync-generated-files.yml,
   # whose hourly cron starts at :31 to :46). A finer cron buys nothing against
   # a delay that size — GitHub drops schedule slots it cannot start — so this
   # is hourly, and an approval DM should be expected within roughly two hours.

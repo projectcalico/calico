@@ -70,7 +70,7 @@ check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
 check-images-availability: bin/crane bin/yq
-	cd ./hack && ./check-images-availability.sh
+	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
@@ -243,7 +243,10 @@ push-chart: bin/helm
 ###############################################################################
 E2E_PROCS ?= 4
 E2E_TIMEOUT ?= 90m
-E2E_TEST_CONFIG ?= e2e/config/kind.yaml
+# Local-development default only. CI never reaches it: run_tests.sh always passes
+# E2E_TEST_CONFIG on make's command line, and a command-line assignment overrides
+# ?= even when its value is empty.
+E2E_TEST_CONFIG ?= e2e/config/kind/conformance.yaml
 E2E_OUTPUT_DIR ?= report
 E2E_JUNIT_REPORT ?= e2e_conformance.xml
 K8S_NETPOL_SUPPORTED_FEATURES ?= "ClusterNetworkPolicy,ClusterNetworkPolicyNamedPorts"
@@ -303,7 +306,7 @@ e2e-test-bpf:
 	$(MAKE) e2e-run \
 		KIND_NAME=kind \
 		KUBECONFIG=$(KIND_KUBECONFIG) \
-		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind-bpf.yaml
+		E2E_TEST_CONFIG=$(REPO_ROOT)/e2e/config/kind/bpf.yaml
 
 ## Build the rapidclient helper image from PR source and load it into the kind
 ## nodes so the packet-size server pods (ImagePullPolicy=Never) find it. Note:
@@ -332,13 +335,13 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against the cluster at $KUBECONFIG.
 ## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
-## Selection comes from E2E_TEST_CONFIG, or from E2E_GINKGO_ARGS (legacy
-## focus/skip regexes) when it is empty. E2E_GINKGO_ARGS expands in the shell so
-## its regex metacharacters survive.
+## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
+## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
+## --fail-on-empty fails a run that selects no specs instead of passing it.
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:
@@ -464,7 +467,7 @@ release: release/bin/release
 	@release/bin/release release build
 
 # Publish an already built release.
-release-publish: release/bin/release bin/ghr bin/helm
+release-publish: release/bin/release bin/gh bin/ghr bin/helm
 	@release/bin/release release publish
 
 release-public: bin/gh release/bin/release
@@ -524,8 +527,6 @@ endif
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
-
-update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation

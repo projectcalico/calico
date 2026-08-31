@@ -18,6 +18,7 @@ import (
 	"context"
 
 	operatorv1 "github.com/tigera/operator/api/v1"
+	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -33,17 +34,39 @@ func GetInstallation(cli ctrlclient.Client) *operatorv1.Installation {
 	return installation
 }
 
-// UsesCalicoIPAM reports whether the cluster uses Calico IPAM. If the operator
-// Installation resource is available, it checks the configured IPAM type.
-// Returns true if Calico IPAM is in use or if the IPAM type cannot be determined
-// (e.g., on manifest-based installs without an Installation resource).
-func UsesCalicoIPAM(cli ctrlclient.Client) bool {
+// InstallationConfig returns the defaulted installation config the operator publishes on the
+// status. Nil if the cluster isn't operator managed, or if the operator hasn't reconciled yet.
+func InstallationConfig(cli ctrlclient.Client) *operatorv1.InstallationSpec {
 	installation := GetInstallation(cli)
-	if installation != nil &&
-		installation.Spec.CNI != nil &&
-		installation.Spec.CNI.IPAM != nil &&
-		installation.Spec.CNI.IPAM.Type != operatorv1.IPAMPluginCalico {
+	if installation == nil {
+		return nil
+	}
+	return installation.Status.Computed
+}
+
+// UsesCalicoIPAM reports whether the cluster uses Calico IPAM. Defaults to true when the IPAM
+// type can't be determined, as on manifest-based installs with no Installation resource.
+func UsesCalicoIPAM(cli ctrlclient.Client) bool {
+	config := InstallationConfig(cli)
+	if config != nil &&
+		config.CNI != nil &&
+		config.CNI.IPAM != nil &&
+		config.CNI.IPAM.Type != operatorv1.IPAMPluginCalico {
 		return false
 	}
 	return true
+}
+
+// RequireBGPEnabled fails the test unless the operator installed the cluster with BGP
+// networking enabled. Lanes whose clusters run in another networking mode should exclude
+// the RequiresBGP label instead of running these tests.
+func RequireBGPEnabled(cli ctrlclient.Client) {
+	config := InstallationConfig(cli)
+	if config == nil {
+		framework.Failf("No computed configuration on the Installation; is this cluster operator managed?")
+	}
+	network := config.CalicoNetwork
+	if network == nil || network.BGP == nil || *network.BGP != operatorv1.BGPEnabled {
+		framework.Failf("BGP is not enabled in this cluster, so the lane should exclude the RequiresBGP label")
+	}
 }
