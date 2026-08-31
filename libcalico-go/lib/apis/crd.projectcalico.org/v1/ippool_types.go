@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,12 @@ import (
 
 // +k8s:openapi-gen=true
 // +kubebuilder:resource:scope=Cluster
+// +kubebuilder:subresource:status
 type IPPool struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              v3.IPPoolSpec `json:"spec,omitempty"`
+
+	// +optional
+	Status *v3.IPPoolStatus `json:"status,omitempty"`
 }
