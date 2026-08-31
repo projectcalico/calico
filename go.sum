@@ -699,8 +699,8 @@ github.com/pquerna/cachecontrol v0.1.0 h1:yJMy84ti9h/+OEWa752kBTKv4XC30OtVVHYv/8
 github.com/pquerna/cachecontrol v0.1.0/go.mod h1:NrUG3Z7Rdu85UNR3vm7SOsl1nFIeSiQnrHV5K9mBcUI=
 github.com/pquerna/otp v1.4.0 h1:wZvl1TIVxKRThZIBiwOOHOGP/1+nZyWBil9Y2XNEDzg=
 github.com/pquerna/otp v1.4.0/go.mod h1:dkJfzwRKNiegxyNb54X/3fLwhCynbMspSyWKnvi1AEg=
-github.com/projectcalico/knftables v0.0.23-0.20260831183006-7631ccb2c3d9 h1:Yo8FqBUCcnsPbb6zBOY2JPj/GMRnEidImaQfu4sVD5E=
-github.com/projectcalico/knftables v0.0.23-0.20260831183006-7631ccb2c3d9/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
+github.com/projectcalico/knftables v0.0.23-0.20260831184608-e620411b33fd h1:BaRoUP7fkVBxNcrB498t/Y4zZnLjXVvEEECOkrG2BK4=
+github.com/projectcalico/knftables v0.0.23-0.20260831184608-e620411b33fd/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1 h1:URbjn501/IBFTzPtGXrYDXHi+ZcbP2W60o6JeTrY3vQ=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1/go.mod h1:Gfzi4500QCMnptFIQc8YdDi8YZ4QA0vs22LROWZ3+YU=
 github.com/prometheus/client_golang v1.24.0 h1:5XStIklKuAtJSNpdD3s8XJj/Yv78IQmE1kbNk87JrAI=
