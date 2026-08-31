@@ -929,6 +929,27 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(pool.Status.Conditions).To(HaveLen(1))
 		})
 
+		It("should not mark a disabled pool allocatable", func() {
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:     "1.2.3.0/24",
+					Disabled: true,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+
+			By("Checking the stored pool carries no condition either")
+			pool, err = c.IPPools().Get(ctx, "ippool1", options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			if pool.Status != nil {
+				Expect(pool.Status.Conditions).To(BeEmpty())
+			}
+		})
+
 		It("should not mark a pool created through UnsafeCreate, which skips the overlap check", func() {
 			pool, err := c.IPPools().UnsafeCreate(ctx, &apiv3.IPPool{
 				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},

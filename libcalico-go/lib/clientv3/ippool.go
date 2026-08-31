@@ -121,6 +121,10 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	if err != nil {
 		return pool, err
 	}
+	if pool.Spec.Disabled {
+		// Marking it would contradict the pool controller, which reports a disabled pool as not allocatable.
+		return pool, nil
+	}
 	return r.markAllocatable(ctx, pool, opts), nil
 }
 
@@ -142,6 +146,9 @@ func (r ipPools) markAllocatable(ctx context.Context, pool *apiv3.IPPool, opts o
 	out, err := r.UpdateStatus(ctx, marked, opts)
 	if err != nil {
 		log.WithError(err).WithField("pool", pool.Name).Warn("Failed to mark new IPPool allocatable")
+		return pool
+	}
+	if out == nil {
 		return pool
 	}
 	return out
