@@ -57,6 +57,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 	"golang.org/x/sync/singleflight"
@@ -124,6 +125,15 @@ type Registry struct {
 	// nodes and pods, and without dedup each one would spawn its own
 	// full pull-through.
 	sf singleflight.Group
+
+	// repoOverrides maps a repository leaf (last path segment, e.g. "calico")
+	// to a local image served for EVERY ns/tag of that repo — a tag-agnostic
+	// override (see OverrideRepoFromDaemon), applied lazily in pullManifest.
+	repoOverrides map[string]v1.Image
+	// repoOverrideTars are the `docker save` tarballs backing the lazy images in
+	// repoOverrides; they must outlive registration (the images read them on each
+	// serve) and are removed on Stop.
+	repoOverrideTars []string
 }
 
 // detachContext returns a context whose values are inherited from parent
@@ -165,10 +175,11 @@ func Start(ctx context.Context, cfg Config) (*Registry, error) {
 	}
 
 	f := &Registry{
-		cfg:      cfg,
-		log:      log.With("component", "kind-mirror"),
-		keychain: keychain,
-		cached:   map[string]bool{},
+		cfg:           cfg,
+		log:           log.With("component", "kind-mirror"),
+		keychain:      keychain,
+		cached:        map[string]bool{},
+		repoOverrides: map[string]v1.Image{},
 	}
 
 	// Internal store: disk-backed blobs (persist across runs), in-memory
@@ -319,6 +330,25 @@ func (f *Registry) pullManifest(ctx context.Context, ns, repo, ref, k string) er
 		return nil
 	}
 	f.mu.Unlock()
+
+	// A tag-agnostic repo override wins over the upstream for every tag of that
+	// repo: materialize the local image under the exact ref the node asked for.
+	// This is what lets a build be swapped in for an image whose tag isn't known
+	// ahead of time (e.g. an operator picks the version at deploy time).
+	f.mu.Lock()
+	override := f.repoOverrides[repoLeaf(repo)]
+	f.mu.Unlock()
+	if override != nil {
+		internal := joinRef(f.internalHost, safeNS(ns), repo, ref)
+		if err := crane.Push(override, internal, f.pushOpts(ctx)...); err != nil {
+			return fmt.Errorf("store repo override %s: %w", internal, err)
+		}
+		f.mu.Lock()
+		f.cached[k] = true
+		f.mu.Unlock()
+		f.log.Info("repo override", "upstream", joinRef("", ns, repo, ref), "internal", internal)
+		return nil
+	}
 
 	// The in-memory map is only a fast path. The authoritative "do I already
 	// have this?" is the internal store itself — which also covers manifests
@@ -502,6 +532,14 @@ func (f *Registry) Stop() error {
 			firstErr = err
 		}
 	}
+	// Remove the docker-save tarballs backing any repo overrides (kept alive for
+	// the registry's lifetime so lazy serves could read them).
+	f.mu.Lock()
+	for _, p := range f.repoOverrideTars {
+		_ = os.Remove(p)
+	}
+	f.repoOverrideTars = nil
+	f.mu.Unlock()
 	return firstErr
 }
 
