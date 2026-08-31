@@ -1345,7 +1345,7 @@ func (t *NftablesTable) applyUpdates() error {
 			Name:     dataplanedefs.FlowtableName,
 			Priority: &prio,
 			Devices:  devices,
-			Counter:  t.flowtableCounter,
+			Counter:  knftables.PtrTo(t.flowtableCounter),
 		})
 		t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
 		t.gaugeNumFlowtableMissingDevices.Set(float64(len(t.flowtableDevices) - len(devices)))

@@ -71,7 +71,7 @@ func probeFlowtable(ctx context.Context, nft knftables.Interface, counter bool) 
 	tx.Add(&knftables.Flowtable{
 		Name:     "probe",
 		Priority: &prio,
-		Counter:  counter,
+		Counter:  knftables.PtrTo(counter),
 	})
 	if err := nft.Run(ctx, tx); err != nil {
 		logrus.WithError(err).WithField("counter", counter).Debug("Kernel rejected the flowtable probe.")
