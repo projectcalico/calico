@@ -151,6 +151,7 @@ local:cni-plugin/pkg/upgrade
 local:cni-plugin/pkg/wait
 local:cni-plugin/tests
 local:crypto/pkg/tls
+local:felix/ip
 local:lib/logrusr
 local:lib/std/log
 local:lib/std/uniquelabels
