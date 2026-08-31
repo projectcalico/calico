@@ -666,88 +666,122 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 	}
 }
 
-// The staging layout is the whole reason a release and a hashrelease differ:
-// ghr populates GitHub release assets from the top level of the upload dir and
-// does not recurse, while the hashrelease server serves the directory tree.
-func TestE2EStagingDir(t *testing.T) {
+// The e2e binaries ship inside the release archive and are published to S3 for
+// individual download; they are deliberately not flat GitHub release assets.
+func TestBuildReleaseTarIncludesE2EBinaries(t *testing.T) {
 	tests := []struct {
-		name          string
-		isHashRelease bool
-		want          string
+		name        string
+		e2eBinaries bool
+		staged      bool
+		wantInTar   bool
 	}{
-		{name: "release stages flat for ghr", want: "out"},
-		{name: "hashrelease stages under files/e2e", isHashRelease: true, want: filepath.Join("out", "files", "e2e")},
+		{name: "staged binaries are added to bin/e2e", e2eBinaries: true, staged: true, wantInTar: true},
+		{name: "nothing staged adds nothing", e2eBinaries: true, staged: false},
+		{name: "disabled adds nothing", e2eBinaries: false, staged: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &CalicoManager{outputDir: "out", isHashRelease: tt.isHashRelease}
-			require.Equal(t, tt.want, r.e2eStagingDir())
+			outputDir := filepath.Join(t.TempDir(), "upload")
+			require.NoError(t, os.MkdirAll(outputDir, 0o755))
+			if tt.staged {
+				e2eDir := filepath.Join(outputDir, "files", "e2e")
+				require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, "e2e-linux-amd64.test"), []byte("x"), 0o755))
+			}
+
+			f := newFakeRunner()
+			f.on("cp", "", nil)
+			f.on("tar", "", nil)
+
+			r := &CalicoManager{
+				runner:        f,
+				tarball:       true,
+				binaries:      true,
+				e2eBinaries:   tt.e2eBinaries,
+				calicoVersion: "v3.30.0",
+				outputDir:     outputDir,
+				repoRoot:      t.TempDir(),
+			}
+			require.NoError(t, r.buildReleaseTar())
+
+			var copiedE2E bool
+			for _, c := range f.calls {
+				if strings.HasPrefix(c, "cp ") && strings.Contains(c, filepath.Join("bin", "e2e")) {
+					copiedE2E = true
+				}
+			}
+			require.Equal(t, tt.wantInTar, copiedE2E, "calls: %v", f.calls)
 		})
 	}
 }
 
-// The e2e-binaries flag belongs to the build step and is never passed to
-// publish, so the release note has to key off what was actually staged.
-func TestPublishGithubReleaseE2ENote(t *testing.T) {
-	const bullet = "e2e-linux-<arch>.test"
+func TestPublishE2EBinaries(t *testing.T) {
+	const bucket = "example-bucket"
 
 	tests := []struct {
-		name        string
-		staged      []string
-		e2eBinaries bool
-		wantNote    bool
+		name     string
+		staged   []string
+		bucket   string
+		wantS3   bool
+		wantErr  bool
+		wantDest string
 	}{
 		{
-			name:        "staged binaries are listed",
-			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
-			e2eBinaries: true,
-			wantNote:    true,
+			name:     "staged binaries go to <version>/files/e2e/",
+			staged:   []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			bucket:   bucket,
+			wantS3:   true,
+			wantDest: "s3://" + bucket + "/v3.30.0/files/e2e/",
 		},
 		{
-			name:        "nothing staged is not listed even with the flag defaulted on",
-			e2eBinaries: true,
-			wantNote:    false,
+			name:   "nothing staged is a no-op",
+			bucket: bucket,
 		},
 		{
-			name:        "staged binaries are listed even with the flag off",
-			staged:      []string{"e2e-linux-amd64.test"},
-			e2eBinaries: false,
-			wantNote:    true,
+			// The flag is not passed to publish, so a missing bucket must fail
+			// rather than silently skip a release that did stage binaries.
+			name:    "staged binaries without a bucket error",
+			staged:  []string{"e2e-linux-amd64.test"},
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			outputDir := t.TempDir()
+			e2eDir := filepath.Join(outputDir, "files", "e2e")
+			require.NoError(t, os.MkdirAll(e2eDir, 0o755))
 			for _, name := range tt.staged {
-				require.NoError(t, os.WriteFile(filepath.Join(outputDir, name), []byte(name), 0o755))
+				require.NoError(t, os.WriteFile(filepath.Join(e2eDir, name), []byte(name), 0o755))
 			}
 
 			f := newFakeRunner()
-			f.on("./bin/gh release view", "release not found", fmt.Errorf("release not found"))
-			f.on("./bin/ghr", "", nil)
+			f.on("aws", "", nil)
 
 			r := &CalicoManager{
 				runner:        f,
-				githubRelease: true,
-				e2eBinaries:   tt.e2eBinaries,
 				calicoVersion: "v3.30.0",
-				githubOrg:     "projectcalico",
-				repo:          "calico",
+				s3Bucket:      tt.bucket,
 				outputDir:     outputDir,
 			}
-			require.NoError(t, r.publishGithubRelease())
-
-			var ghr string
-			for _, c := range f.calls {
-				if strings.HasPrefix(c, "./bin/ghr") {
-					ghr = c
-				}
+			err := r.publishE2EBinaries()
+			if tt.wantErr {
+				require.Error(t, err)
+				require.False(t, f.ran("aws"), "no upload should be attempted (calls: %v)", f.calls)
+				return
 			}
-			require.NotEmpty(t, ghr, "ghr was not invoked (calls: %v)", f.calls)
-			require.Equal(t, tt.wantNote, strings.Contains(ghr, bullet),
-				"release note mentions %q = %v, want %v", bullet, strings.Contains(ghr, bullet), tt.wantNote)
+			require.NoError(t, err)
+			require.Equal(t, tt.wantS3, f.ran("aws"), "calls: %v", f.calls)
+			if tt.wantS3 {
+				var dest string
+				for _, c := range f.calls {
+					if strings.HasPrefix(c, "aws") {
+						dest = c
+					}
+				}
+				require.Contains(t, dest, tt.wantDest)
+			}
 		})
 	}
 }
