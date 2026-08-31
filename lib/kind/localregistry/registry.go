@@ -331,10 +331,25 @@ func (f *Registry) pullManifest(ctx context.Context, ns, repo, ref, k string) er
 	}
 	f.mu.Unlock()
 
-	// A tag-agnostic repo override wins over the upstream for every tag of that
-	// repo: materialize the local image under the exact ref the node asked for.
-	// This is what lets a build be swapped in for an image whose tag isn't known
-	// ahead of time (e.g. an operator picks the version at deploy time).
+	// The in-memory map is only a fast path. The authoritative "do I already
+	// have this?" is the internal store itself — which also covers manifests
+	// put there out-of-band: a shell override pushed with `docker push`/crane,
+	// or content from a previous process. If it's there, serve it and do NOT
+	// pull through, so an override is never clobbered by the upstream (this is
+	// what makes a pushed override stick, even under imagePullPolicy: Always).
+	if f.manifestExistsInternal(ctx, ns, repo, ref) {
+		f.mu.Lock()
+		f.cached[k] = true
+		f.mu.Unlock()
+		return nil
+	}
+
+	// A tag-agnostic repo override stands in for the upstream for every tag of a
+	// matching repo: materialize the local image under the exact ref the node
+	// asked for. Checked AFTER the internal store so an explicit or shell-pushed
+	// override (or content from a previous process) still wins — this only
+	// replaces the upstream pull-through below. Lets a build be swapped in for an
+	// image whose tag isn't known ahead of time (an operator picks it at deploy).
 	f.mu.Lock()
 	override := f.repoOverrides[repoLeaf(repo)]
 	f.mu.Unlock()
@@ -347,19 +362,6 @@ func (f *Registry) pullManifest(ctx context.Context, ns, repo, ref, k string) er
 		f.cached[k] = true
 		f.mu.Unlock()
 		f.log.Info("repo override", "upstream", joinRef("", ns, repo, ref), "internal", internal)
-		return nil
-	}
-
-	// The in-memory map is only a fast path. The authoritative "do I already
-	// have this?" is the internal store itself — which also covers manifests
-	// put there out-of-band: a shell override pushed with `docker push`/crane,
-	// or content from a previous process. If it's there, serve it and do NOT
-	// pull through, so an override is never clobbered by the upstream (this is
-	// what makes a pushed override stick, even under imagePullPolicy: Always).
-	if f.manifestExistsInternal(ctx, ns, repo, ref) {
-		f.mu.Lock()
-		f.cached[k] = true
-		f.mu.Unlock()
 		return nil
 	}
 

@@ -178,6 +178,59 @@ func TestRepoOverrideServesEveryTag(t *testing.T) {
 	}
 }
 
+// TestRepoOverrideYieldsToExistingContent proves a tag-agnostic repo override
+// does NOT clobber content already in the internal store (an explicit or
+// shell-pushed override, or content from a previous process) -- that would break
+// the "an existing override beats upstream" contract. The repo override only
+// stands in for the upstream pull-through, so it applies to tags the store
+// doesn't already answer.
+func TestRepoOverrideYieldsToExistingContent(t *testing.T) {
+	f := startRegistry(t)
+
+	// A shell-pushed exact override for one tag of a matching-leaf repo.
+	shellImg, err := random.Image(2048, 3)
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+	_, port, err := net.SplitHostPort(f.Addr())
+	if err != nil {
+		t.Fatalf("split addr: %v", err)
+	}
+	if err := crane.Push(shellImg, "127.0.0.1:"+port+"/example.com/team/calico:v1", crane.Insecure); err != nil {
+		t.Fatalf("shell push: %v", err)
+	}
+
+	// A repo override for the same leaf ("calico"), with distinct content.
+	repoImg, err := random.Image(4096, 2)
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+	f.mu.Lock()
+	f.repoOverrides["calico"] = repoImg
+	f.mu.Unlock()
+
+	// The shell-pushed tag serves the shell push, not the repo override.
+	if got, want := manifestDigestVia(t, f.Addr(), "example.com", "team/calico", "v1"), mustDigest(t, shellImg); got != want {
+		t.Errorf("v1 served %s, want shell push %s (repo override clobbered existing content)", got, want)
+	}
+	// A different, never-pushed tag of the same repo still gets the repo override.
+	if got, want := manifestDigestVia(t, f.Addr(), "example.com", "team/calico", "v2-new"), mustDigest(t, repoImg); got != want {
+		t.Errorf("v2-new served %s, want repo override %s", got, want)
+	}
+}
+
+// TestOverrideRepoFromDaemonRejectsBadLeaf guards the leaf contract: a
+// multi-segment or empty leaf is rejected up front (it would silently never
+// match a repository's last segment), before any docker save.
+func TestOverrideRepoFromDaemonRejectsBadLeaf(t *testing.T) {
+	f := startRegistry(t)
+	for _, leaf := range []string{"", "tigera/calico"} {
+		if err := f.OverrideRepoFromDaemon(context.Background(), leaf, "irrelevant:latest"); err == nil {
+			t.Errorf("OverrideRepoFromDaemon(leaf=%q) = nil, want error", leaf)
+		}
+	}
+}
+
 // TestShellPushOverride proves the no-code override path: pushing an image to
 // the facade under the upstream host as the first path segment — exactly what
 //

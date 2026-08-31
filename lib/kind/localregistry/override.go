@@ -64,13 +64,19 @@ func (f *Registry) OverrideFromDaemon(ctx context.Context, upstreamRef, localDoc
 // use it when your build should stand in for an image whose exact tag isn't
 // known ahead of time (e.g. an operator picks the version at deploy time). The
 // image is materialized into the internal store lazily, under whatever ref the
-// node actually requests (see ensure), so it can be registered before any pull.
+// node actually requests (see pullManifest), so it can be registered before any
+// pull. leaf must be a single, non-empty path segment (it's matched against a
+// repository's last segment); a multi-segment value like "tigera/calico" would
+// silently never match, so it's rejected.
 func (f *Registry) OverrideRepoFromDaemon(ctx context.Context, leaf, localDockerRef string) error {
+	if leaf == "" || strings.Contains(leaf, "/") {
+		return fmt.Errorf("repo override leaf %q must be a single non-empty path segment (e.g. \"calico\", not \"tigera/calico\")", leaf)
+	}
 	img, tarPath, err := loadDaemonImage(ctx, localDockerRef)
 	if err != nil {
 		return err
 	}
-	// The image is served lazily on later pulls (materialized in ensure/pullManifest),
+	// The image is served lazily on later pulls (materialized in pullManifest),
 	// so its tarball must live for the registry's lifetime -- keep it, and Stop
 	// removes it. Removing it here would break the serve with "no such file".
 	f.mu.Lock()
