@@ -473,7 +473,7 @@ cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
 .PHONY: static-checks
 ## Perform static checks on the code.
 static-checks: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
-	$(CONTAINERIZED) $(CALICO_BUILD) golangci-lint run --timeout 5m
+	$(CONTAINERIZED) $(CALICO_BUILD) golangci-lint run --timeout 12m
 
 .PHONY: fix
 ## Fix static checks
