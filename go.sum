@@ -699,6 +699,8 @@ github.com/pquerna/cachecontrol v0.1.0 h1:yJMy84ti9h/+OEWa752kBTKv4XC30OtVVHYv/8
 github.com/pquerna/cachecontrol v0.1.0/go.mod h1:NrUG3Z7Rdu85UNR3vm7SOsl1nFIeSiQnrHV5K9mBcUI=
 github.com/pquerna/otp v1.4.0 h1:wZvl1TIVxKRThZIBiwOOHOGP/1+nZyWBil9Y2XNEDzg=
 github.com/pquerna/otp v1.4.0/go.mod h1:dkJfzwRKNiegxyNb54X/3fLwhCynbMspSyWKnvi1AEg=
+github.com/projectcalico/knftables v0.0.23-0.20260831183006-7631ccb2c3d9 h1:Yo8FqBUCcnsPbb6zBOY2JPj/GMRnEidImaQfu4sVD5E=
+github.com/projectcalico/knftables v0.0.23-0.20260831183006-7631ccb2c3d9/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1 h1:URbjn501/IBFTzPtGXrYDXHi+ZcbP2W60o6JeTrY3vQ=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1/go.mod h1:Gfzi4500QCMnptFIQc8YdDi8YZ4QA0vs22LROWZ3+YU=
 github.com/prometheus/client_golang v1.24.0 h1:5XStIklKuAtJSNpdD3s8XJj/Yv78IQmE1kbNk87JrAI=
@@ -1380,8 +1382,6 @@ sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5E
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730/go.mod h1:mdzfpAEoE6DHQEN0uh9ZbOCuHbLK5wOm7dK4ctXE9Tg=
 sigs.k8s.io/kind v0.32.0 h1:p9hscbj98u/qyrjVpjId86LI70nQmbSsipV7wCG10Xk=
 sigs.k8s.io/kind v0.32.0/go.mod h1:FSqriGaoTPruiXWfRnUXNykF8r2t+fHtK0P0m1AbGF8=
-sigs.k8s.io/knftables v0.0.22 h1:RMbBSxQb4t730I6m492NDzWTOaActPpF9OCACQmF9bE=
-sigs.k8s.io/knftables v0.0.22/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
 sigs.k8s.io/kustomize/api v0.21.1 h1:lzqbzvz2CSvsjIUZUBNFKtIMsEw7hVLJp0JeSIVmuJs=
 sigs.k8s.io/kustomize/api v0.21.1/go.mod h1:f3wkKByTrgpgltLgySCntrYoq5d3q7aaxveSagwTlwI=
 sigs.k8s.io/kustomize/kyaml v0.21.1 h1:IVlbmhC076nf6foyL6Taw4BkrLuEsXUXNpsE+ScX7fI=

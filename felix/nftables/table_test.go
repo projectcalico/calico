@@ -1359,6 +1359,41 @@ var _ = Describe("Table with flowtable offload enabled", func() {
 		Expect(f.List(context.TODO(), "flowtable")).To(ConsistOf(dataplanedefs.FlowtableName))
 	})
 
+	It("should leave the counter flag off when the kernel doesn't support it", func() {
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.Fake().Dump()).NotTo(ContainSubstring("counter ;"))
+	})
+
+	It("should set the counter flag when the kernel supports it", func() {
+		newDataplane := func(fam knftables.Family, name string, options ...knftables.Option) (knftables.Interface, error) {
+			f = NewFake(fam, name)
+			return f, nil
+		}
+		table = nftables.NewTable(
+			"calico",
+			4,
+			rulesdefs.RuleHashPrefix,
+			environment.NewFeatureDetector(nil),
+			nftables.TableOptions{
+				NewDataplane:     newDataplane,
+				LookPathOverride: testutils.LookPathNoLegacy,
+				OpRecorder:       logrusr.NewSummarizer("test loop"),
+				FlowtableCounter: true,
+				ListInterfacesOverride: func() ([]string, error) {
+					return []string{"vxlan.calico"}, nil
+				},
+			},
+			true,
+		)
+
+		table.SetOverlayDevices([]string{"vxlan.calico"})
+		Expect(table.Apply()).To(BeNumerically("<", 100*time.Millisecond))
+
+		Expect(f.Fake().Dump()).To(ContainSubstring("counter ;"))
+	})
+
 	It("should attach the configured overlay and workload devices to the flowtable", func() {
 		table.SetOverlayDevices([]string{"vxlan.calico"})
 		table.SetWorkloadInterfaces([]string{"cali1234"})
