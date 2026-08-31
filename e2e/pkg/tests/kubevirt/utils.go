@@ -31,6 +31,7 @@ import (
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -831,24 +832,39 @@ func pickThirdWorkerNode(ctx context.Context, f *framework.Framework, node1, nod
 	return ""
 }
 
-// isMockVirtDeployed returns true if the cluster is running MockVirt (simulated
-// KubeVirt). Detection checks the KubeVirt CR's simulationMode field, which the
-// MockVirt deploy script patches to true.
+var kubeVirtResource = schema.GroupVersionResource{
+	Group:    "kubevirt.io",
+	Version:  "v1",
+	Resource: "kubevirts",
+}
+
+// isMockVirtDeployed reports whether the cluster runs MockVirt, which the deploy
+// script marks by patching simulationMode on the KubeVirt CR.
 func isMockVirtDeployed(f *framework.Framework) bool {
 	GinkgoHelper()
 	dynClient, err := dynamic.NewForConfig(f.ClientConfig())
 	Expect(err).NotTo(HaveOccurred(), "failed to create dynamic client")
-	kvResource := schema.GroupVersionResource{
-		Group:    "kubevirt.io",
-		Version:  "v1",
-		Resource: "kubevirts",
+	deployed, err := mockVirtDeployed(dynClient)
+	Expect(err).NotTo(HaveOccurred(), "failed to read KubeVirt CR kubevirt/kubevirt")
+	return deployed
+}
+
+// mockVirtDeployed reads simulationMode from the KubeVirt CR. A missing CR, or no
+// KubeVirt CRD at all, reports false rather than an error.
+func mockVirtDeployed(dynClient dynamic.Interface) (bool, error) {
+	obj, err := dynClient.Resource(kubeVirtResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+		return false, nil
 	}
-	obj, err := dynClient.Resource(kvResource).Namespace("kubevirt").Get(context.Background(), "kubevirt", metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred(), "failed to get KubeVirt CR kubevirt/kubevirt")
+	if err != nil {
+		return false, err
+	}
 	simMode, found, err := unstructured.NestedBool(obj.Object,
 		"spec", "configuration", "developerConfiguration", "simulationMode")
-	Expect(err).NotTo(HaveOccurred(), "failed to read simulationMode from KubeVirt CR")
-	return found && simMode
+	if err != nil {
+		return false, err
+	}
+	return found && simMode, nil
 }
 
 // setupMockVirtEBGPPeering configures eBGP peering between a BIRD container on
