@@ -1537,11 +1537,11 @@ func (c *apiServer) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{"applicationlayers", "packetcaptureapis", "compliances", "intrusiondetections"},
 			Verbs:     []string{"get", "update", "patch", "create", "delete"},
 		},
-		// Allow the user to read the gatewayapis CR to detect if Gateway API is enabled/disabled.
+		// Allow the user to read and write the gatewayapis CR to enable Gateway API.
 		{
 			APIGroups: []string{"operator.tigera.io"},
 			Resources: []string{"gatewayapis"},
-			Verbs:     []string{"get"},
+			Verbs:     []string{"get", "create", "update", "patch"},
 		},
 		// Allow the user to read Gateways and HTTPRoutes to offer as WAF policy attach targets.
 		{
