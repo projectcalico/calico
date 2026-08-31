@@ -263,7 +263,7 @@ func (r *ReconcileWindows) Reconcile(ctx context.Context, request reconcile.Requ
 		return reconcile.Result{}, err
 	}
 
-	typhaNodeTLS, err := GetTyphaNodeTLSConfig(r.client, certificateManager)
+	typhaNodeTLS, err := utils.GetTyphaNodeTLSConfig(r.client, certificateManager)
 	if err != nil {
 		logw.Error(err, "Error with Typha/Felix secrets")
 		r.status.SetDegraded(operatorv1.CertificateError, "Error with Typha/Felix secrets", err, reqLogger)

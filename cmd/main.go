@@ -43,6 +43,7 @@ import (
 	"github.com/tigera/operator/pkg/controller/utils"
 	"github.com/tigera/operator/pkg/dns"
 	"github.com/tigera/operator/pkg/enterprise"
+	entcontroller "github.com/tigera/operator/pkg/enterprise/controller"
 	"github.com/tigera/operator/pkg/imports/admission"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
@@ -596,7 +597,7 @@ admission policy installation; once an Installation exists it is the authority o
 		UseV3CRDs:         v3CRDs,
 		APIDiscovery:      apiDiscovery,
 		Extensions:        extensionRegistry,
-		Controllers:       enterprise.Controllers(variant),
+		Controllers:       entcontroller.Controllers(variant),
 	}
 
 	err = controller.AddToManager(mgr, options)

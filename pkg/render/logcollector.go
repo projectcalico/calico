@@ -25,11 +25,9 @@ import (
 	"github.com/tigera/operator/pkg/tls/certificatemanagement"
 )
 
-// This file holds log-collector symbols that must remain in the render package
-// because other render components depend on them. The bulk of the log-collector
-// (fluent-bit / EKS log-forwarder) rendering lives in pkg/render/logcollector;
-// these symbols stay here to avoid a render -> render/logcollector import cycle.
-// The logcollector package aliases the constants below for its own use.
+// Log-collector symbols other render components depend on. The bulk of the
+// fluent-bit and EKS log-forwarder rendering lives in its own package, which
+// aliases these rather than the other way around, to avoid an import cycle.
 
 const (
 	LogCollectorNamespace = "calico-system"

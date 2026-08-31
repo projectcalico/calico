@@ -48,6 +48,7 @@ import (
 	"github.com/tigera/operator/pkg/common"
 	"github.com/tigera/operator/pkg/controller/options"
 	"github.com/tigera/operator/pkg/enterprise"
+	entcontroller "github.com/tigera/operator/pkg/enterprise/controller"
 	eoptions "github.com/tigera/operator/pkg/enterprise/options"
 	"github.com/tigera/operator/pkg/imports/crds"
 	"github.com/tigera/operator/pkg/render"
@@ -340,7 +341,7 @@ func setupManager(manageCRDs bool, multiTenant bool, variant operator.ProductVar
 		DetectedProvider: operator.ProviderNone,
 		Variant:          variant,
 		Extensions:       enterprise.New(variant, eoptions.Options{}),
-		Controllers:      enterprise.Controllers(variant),
+		Controllers:      entcontroller.Controllers(variant),
 		ManageCRDs:       manageCRDs,
 		ShutdownContext:  ctx,
 		K8sClientset:     clientset,

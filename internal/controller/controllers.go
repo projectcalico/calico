@@ -45,47 +45,12 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "APIServer", err)
 	}
-	if err := (&LogStorageReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("LogStorage"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "LogStorage", err)
-	}
-	if err := (&IntrusionDetectionReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("IntrusionDetection"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "IntrusionDetection", err)
-	}
-	if err := (&LogCollectorReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("LogCollector"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "LogCollector", err)
-	}
 	if err := (&IstioReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Istio"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller Istio: %v", err)
-	}
-	if err := (&ApplicationLayerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("ApplicationLayer"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "ApplicationLayer", err)
-	}
-	if err := (&ManagerReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Manager"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "Manager", err)
 	}
 	if err := (&ManagementClusterConnectionReconciler{
 		Client: mgr.GetClient(),
@@ -94,40 +59,12 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "ManagementClusterConnection", err)
 	}
-	if err := (&NonClusterHostReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("NonClusterHost"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "NonClusterHost", err)
-	}
-	if err := (&AuthenticationReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("Authentication"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "Authentication", err)
-	}
 	if err := (&TiersReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("Tiers"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "Tiers", err)
-	}
-	if err := (&PolicyRecommendationReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PolicyRecommendation"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "PolicyRecommendation", err)
-	}
-	if err := (&EgressGatewayReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("EgressGateway"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "EgressGateway", err)
 	}
 	if err := (&SecretsReconciler{
 		Client: mgr.GetClient(),
@@ -149,13 +86,6 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "CSR", err)
-	}
-	if err := (&PacketCaptureReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("PacketCapture"),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "PacketCapture", err)
 	}
 	if err := (&GatewayAPIReconciler{
 		Client: mgr.GetClient(),
@@ -187,12 +117,6 @@ func AddToManager(mgr ctrl.Manager, options options.ControllerOptions) error {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr, options); err != nil {
 		return fmt.Errorf("failed to create controller %s: %v", "PodIPRecovery", err)
-	}
-	if err := (&OpenTelemetryCollectorReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, options); err != nil {
-		return fmt.Errorf("failed to create controller %s: %v", "OpenTelemetry", err)
 	}
 	// +kubebuilder:scaffold:builder
 
