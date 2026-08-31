@@ -47,10 +47,13 @@ func (f *Registry) Override(ctx context.Context, upstreamRef string, img v1.Imag
 //
 //	mir.OverrideFromDaemon(ctx, "quay.io/calico/node:v3.30.1", "calico/node:latest-amd64")
 func (f *Registry) OverrideFromDaemon(ctx context.Context, upstreamRef, localDockerRef string) error {
-	img, err := loadDaemonImage(ctx, localDockerRef)
+	img, tarPath, err := loadDaemonImage(ctx, localDockerRef)
 	if err != nil {
 		return err
 	}
+	// Override fully consumes img (crane.Push reads every layer) before it
+	// returns, so the lazy tarball is safe to remove right after.
+	defer func() { _ = os.Remove(tarPath) }()
 	return f.Override(ctx, upstreamRef, img)
 }
 
@@ -63,12 +66,16 @@ func (f *Registry) OverrideFromDaemon(ctx context.Context, upstreamRef, localDoc
 // image is materialized into the internal store lazily, under whatever ref the
 // node actually requests (see ensure), so it can be registered before any pull.
 func (f *Registry) OverrideRepoFromDaemon(ctx context.Context, leaf, localDockerRef string) error {
-	img, err := loadDaemonImage(ctx, localDockerRef)
+	img, tarPath, err := loadDaemonImage(ctx, localDockerRef)
 	if err != nil {
 		return err
 	}
+	// The image is served lazily on later pulls (materialized in ensure/pullManifest),
+	// so its tarball must live for the registry's lifetime -- keep it, and Stop
+	// removes it. Removing it here would break the serve with "no such file".
 	f.mu.Lock()
 	f.repoOverrides[leaf] = img
+	f.repoOverrideTars = append(f.repoOverrideTars, tarPath)
 	f.mu.Unlock()
 	f.log.Info("repo override registered", "repoLeaf", leaf, "local", localDockerRef)
 	return nil
@@ -76,25 +83,29 @@ func (f *Registry) OverrideRepoFromDaemon(ctx context.Context, leaf, localDocker
 
 // loadDaemonImage snapshots a local docker image (localDockerRef, a tag as
 // `docker images` shows it) to an OCI tarball via `docker save` and loads it as
-// a v1.Image. Reuses the docker CLI (already a hard dependency of kind).
-func loadDaemonImage(ctx context.Context, localDockerRef string) (v1.Image, error) {
+// a v1.Image. Reuses the docker CLI (already a hard dependency of kind). The
+// returned image is LAZY -- it reads tarPath on demand (when crane.Push consumes
+// it) -- so the caller MUST keep tarPath alive until the image is fully consumed,
+// then remove it. Returns tarPath so the caller controls that lifetime.
+func loadDaemonImage(ctx context.Context, localDockerRef string) (v1.Image, string, error) {
 	tar, err := os.CreateTemp("", "kind-mirror-*.tar")
 	if err != nil {
-		return nil, fmt.Errorf("temp file: %w", err)
+		return nil, "", fmt.Errorf("temp file: %w", err)
 	}
 	// Only the name is wanted; crane.Load reopens it.
 	_ = tar.Close()
-	defer func() { _ = os.Remove(tar.Name()) }()
 
 	out, err := exec.CommandContext(ctx, "docker", "save", "-o", tar.Name(), localDockerRef).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("docker save %s: %s: %w", localDockerRef, strings.TrimSpace(string(out)), err)
+		_ = os.Remove(tar.Name())
+		return nil, "", fmt.Errorf("docker save %s: %s: %w", localDockerRef, strings.TrimSpace(string(out)), err)
 	}
 	img, err := crane.Load(tar.Name())
 	if err != nil {
-		return nil, fmt.Errorf("load tarball %s: %w", tar.Name(), err)
+		_ = os.Remove(tar.Name())
+		return nil, "", fmt.Errorf("load tarball %s: %w", tar.Name(), err)
 	}
-	return img, nil
+	return img, tar.Name(), nil
 }
 
 // OverrideFromTarball pins an image from a `docker save` / OCI tarball as the

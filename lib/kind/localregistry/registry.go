@@ -130,6 +130,10 @@ type Registry struct {
 	// to a local image served for EVERY ns/tag of that repo — a tag-agnostic
 	// override (see OverrideRepoFromDaemon), applied lazily in pullManifest.
 	repoOverrides map[string]v1.Image
+	// repoOverrideTars are the `docker save` tarballs backing the lazy images in
+	// repoOverrides; they must outlive registration (the images read them on each
+	// serve) and are removed on Stop.
+	repoOverrideTars []string
 }
 
 // detachContext returns a context whose values are inherited from parent
@@ -528,6 +532,14 @@ func (f *Registry) Stop() error {
 			firstErr = err
 		}
 	}
+	// Remove the docker-save tarballs backing any repo overrides (kept alive for
+	// the registry's lifetime so lazy serves could read them).
+	f.mu.Lock()
+	for _, p := range f.repoOverrideTars {
+		_ = os.Remove(p)
+	}
+	f.repoOverrideTars = nil
+	f.mu.Unlock()
 	return firstErr
 }
 
