@@ -158,8 +158,6 @@ github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl
 github.com/buger/jsonparser v1.2.0 h1:4EFcvK1kD4jyj6YqNK6skK6w+y7FHHBR+XBCtxwu/6g=
 github.com/buger/jsonparser v1.2.0/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/bwesterb/go-ristretto v1.2.3/go.mod h1:fUIoIZaG73pV5biE2Blr2xEzDoMj7NFEuV9ekS419A0=
-github.com/caseydavenport/knftables v0.0.0-20260811210040-3c58db541a55 h1:oD6EciwWRSF1XBNw2axlWu2ybJFlYxHVn3bAxop7wxA=
-github.com/caseydavenport/knftables v0.0.0-20260811210040-3c58db541a55/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
 github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
 github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
@@ -701,6 +699,8 @@ github.com/pquerna/cachecontrol v0.1.0 h1:yJMy84ti9h/+OEWa752kBTKv4XC30OtVVHYv/8
 github.com/pquerna/cachecontrol v0.1.0/go.mod h1:NrUG3Z7Rdu85UNR3vm7SOsl1nFIeSiQnrHV5K9mBcUI=
 github.com/pquerna/otp v1.4.0 h1:wZvl1TIVxKRThZIBiwOOHOGP/1+nZyWBil9Y2XNEDzg=
 github.com/pquerna/otp v1.4.0/go.mod h1:dkJfzwRKNiegxyNb54X/3fLwhCynbMspSyWKnvi1AEg=
+github.com/projectcalico/knftables v0.0.23-0.20260811210040-3c58db541a55 h1:irhbD8Rnhf8Ut/VLD/s4rzPY9//jVxK9qusnAsr2/oc=
+github.com/projectcalico/knftables v0.0.23-0.20260811210040-3c58db541a55/go.mod h1:tig4GDnk1aG8sNsKW/iqid/PGgVLxJLEZkuUlO5C44Y=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1 h1:URbjn501/IBFTzPtGXrYDXHi+ZcbP2W60o6JeTrY3vQ=
 github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1/go.mod h1:Gfzi4500QCMnptFIQc8YdDi8YZ4QA0vs22LROWZ3+YU=
 github.com/prometheus/client_golang v1.24.0 h1:5XStIklKuAtJSNpdD3s8XJj/Yv78IQmE1kbNk87JrAI=
