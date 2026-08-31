@@ -301,6 +301,9 @@ type NftablesTable struct {
 	// pruning dropped a device. Bounded by MaxFlowtablePruneRetries.
 	flowtablePruneRetries int
 
+	// flowtableCounter programs the flowtable's counter flag, from TableOptions.
+	flowtableCounter bool
+
 	// chainToDataplaneHashes contains the rule hashes that we think are in the dataplane.
 	// it is updated when we write to the dataplane but it can also be read back and compared
 	// to what we calculate from chainToContents.
@@ -375,6 +378,10 @@ type TableOptions struct {
 	// ListInterfacesOverride for tests, if non-nil, replaces the net.Interfaces()-based
 	// lister used to prune the flowtable device list against kernel truth.
 	ListInterfacesOverride func() ([]string, error)
+
+	// FlowtableCounter keeps conntrack accounting up to date for offloaded flows. Only set it
+	// when the kernel supports the flag.
+	FlowtableCounter bool
 
 	// Thunk to call periodically when doing a long-running operation.
 	OnStillAlive func()
@@ -544,6 +551,8 @@ func newTable(
 		timeNow:   now,
 
 		listInterfaces: listInterfaces,
+
+		flowtableCounter: options.FlowtableCounter,
 
 		gaugeNumChains:                  gaugeNumChains.WithLabelValues(gaugeLabel),
 		gaugeNumRules:                   gaugeNumRules.WithLabelValues(gaugeLabel),
@@ -1336,6 +1345,7 @@ func (t *NftablesTable) applyUpdates() error {
 			Name:     dataplanedefs.FlowtableName,
 			Priority: &prio,
 			Devices:  devices,
+			Counter:  t.flowtableCounter,
 		})
 		t.gaugeNumFlowtableDevices.Set(float64(len(devices)))
 		t.gaugeNumFlowtableMissingDevices.Set(float64(len(t.flowtableDevices) - len(devices)))
