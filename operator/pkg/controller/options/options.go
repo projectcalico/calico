@@ -18,9 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	ctrl "sigs.k8s.io/controller-runtime"
-
 	"k8s.io/client-go/kubernetes"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	v1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/common"
