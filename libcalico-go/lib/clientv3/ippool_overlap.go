@@ -10,7 +10,7 @@ import (
 	"github.com/projectcalico/calico/felix/ip"
 )
 
-func isAllocatable(pool *v3.IPPool) bool {
+func isExplicitlyAllocatable(pool *v3.IPPool) bool {
 	if pool.Status == nil {
 		return false
 	}
@@ -22,8 +22,8 @@ func isAllocatable(pool *v3.IPPool) bool {
 	return false
 }
 
-// selectable reports whether IPAM may allocate from the pool, before overlap is considered.
-func selectable(pool *v3.IPPool) bool {
+// isCandidate reports whether IPAM may allocate from the pool, before overlap is considered.
+func isCandidate(pool *v3.IPPool) bool {
 	if !pool.DeletionTimestamp.IsZero() {
 		logrus.Debugf("Skipping deleting IP pool (%s)", pool.Name)
 		return false
@@ -51,13 +51,12 @@ func masks(pool *v3.IPPool) bool {
 	if pool.Spec.Disabled {
 		return false
 	}
-	return isAllocatable(pool) || !pool.DeletionTimestamp.IsZero()
+	return isExplicitlyAllocatable(pool) || !pool.DeletionTimestamp.IsZero()
 }
 
 type poolCandidate struct {
-	pool        *v3.IPPool
-	cidr        ip.CIDR
-	allocatable bool
+	pool *v3.IPPool
+	cidr ip.CIDR
 }
 
 // selectAllocatablePools returns the pools IPAM may allocate from. The IP pool controller resolves
@@ -80,15 +79,15 @@ func selectAllocatablePools(pools []v3.IPPool, ipVersion int) []v3.IPPool {
 		if masks(pool) {
 			maskers.Update(cidr, pool)
 		}
-		if selectable(pool) {
-			candidates = append(candidates, poolCandidate{pool: pool, cidr: cidr, allocatable: isAllocatable(pool)})
+		if isCandidate(pool) {
+			candidates = append(candidates, poolCandidate{pool: pool, cidr: cidr})
 		}
 	}
 
 	filtered := make([]v3.IPPool, 0, len(candidates))
 	for _, c := range candidates {
-		// The controller's verdict is taken as-is, so a marked pool never tests itself.
-		if !c.allocatable && maskers.Overlaps(c.cidr) {
+		// A masking pool sits in the trie itself, so it would always match its own entry.
+		if !masks(c.pool) && maskers.Overlaps(c.cidr) {
 			logrus.Debugf("Skipping IP pool (%s) overlapped by an allocatable pool", c.pool.Name)
 			continue
 		}
