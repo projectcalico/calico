@@ -140,6 +140,44 @@ func TestOverrideBeatsUpstream(t *testing.T) {
 	}
 }
 
+// TestRepoOverrideServesEveryTag proves a tag-agnostic repo override (the
+// pre-load path, registered before any specific tag is known) is served for
+// EVERY tag of a matching repository — including a tag never pushed upstream —
+// and that it does not leak to a non-matching repo leaf. The override is set
+// directly here; OverrideRepoFromDaemon's only extra step is `docker save`,
+// which a unit test can't exercise hermetically.
+func TestRepoOverrideServesEveryTag(t *testing.T) {
+	host, srv := startUpstream(t)
+	pushRandom(t, host, "tigera/calico:v1")            // a real upstream tag
+	otherImg := pushRandom(t, host, "tigera/other:v1") // an unrelated repo
+
+	override, err := random.Image(4096, 2) // distinct content
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+
+	f := startRegistry(t)
+	f.mu.Lock()
+	f.repoOverrides["calico"] = override
+	f.mu.Unlock()
+
+	// A non-matching repo leaf still comes from upstream — the override must not
+	// leak to it.
+	if got, want := manifestDigestVia(t, f.Addr(), host, "tigera/other", "v1"), mustDigest(t, otherImg); got != want {
+		t.Errorf("tigera/other served %s, want upstream %s (override leaked to a non-matching repo)", got, want)
+	}
+
+	// Kill the upstream: the override must be served without contacting it, for
+	// both an upstream-known tag and a tag that was never pushed.
+	srv.Close()
+	want := mustDigest(t, override)
+	for _, ref := range []string{"v1", "v999-never-pushed"} {
+		if got := manifestDigestVia(t, f.Addr(), host, "tigera/calico", ref); got != want {
+			t.Errorf("tigera/calico:%s served %s, want override %s", ref, got, want)
+		}
+	}
+}
+
 // TestShellPushOverride proves the no-code override path: pushing an image to
 // the facade under the upstream host as the first path segment — exactly what
 //
