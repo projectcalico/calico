@@ -448,4 +448,4 @@ replace (
 )
 
 // Flowtable counter support has not landed in an upstream knftables release yet.
-replace sigs.k8s.io/knftables => github.com/projectcalico/knftables v0.0.23-0.20260831172505-19f0257ed0f5
+replace sigs.k8s.io/knftables => github.com/projectcalico/knftables v0.0.23-0.20260831183006-7631ccb2c3d9
