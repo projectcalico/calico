@@ -29,10 +29,10 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 

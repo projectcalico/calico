@@ -14,11 +14,9 @@
 
 package render
 
-// Identity of the OpenTelemetry Collector workload. These live here rather than
-// in pkg/render/otelcollector because that package imports pkg/render/monitor
-// (for the Prometheus federation target), so the monitor render cannot import it
-// back to build the collector's ServiceMonitor. Same arrangement as the
-// fluent-bit constants in logcollector.go.
+// Identity of the OpenTelemetry Collector workload. They live here because the
+// monitoring render builds the collector's ServiceMonitor and cannot import the
+// package that renders the collector.
 const (
 	OpenTelemetryCollectorName      = "otel-collector"
 	OpenTelemetryCollectorNamespace = "calico-system"

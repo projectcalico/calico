@@ -31,13 +31,13 @@ import (
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/controller"
-	"github.com/projectcalico/calico/operator/pkg/controller/monitor"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/controller/monitor"
+	rmonitor "github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	rmonitor "github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 

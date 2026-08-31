@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/imports/crds"
@@ -38,7 +39,6 @@ import (
 	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 

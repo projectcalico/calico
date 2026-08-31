@@ -35,12 +35,12 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 )
 
 var _ = Describe("installation controller extension", func() {

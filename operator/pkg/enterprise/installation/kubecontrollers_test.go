@@ -39,15 +39,15 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	"github.com/projectcalico/calico/operator/pkg/enterprise/installation"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/applicationlayer"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/extensions/extensionstest"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls"
 )
 

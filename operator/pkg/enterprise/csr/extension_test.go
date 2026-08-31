@@ -34,12 +34,12 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/controller"
-	"github.com/projectcalico/calico/operator/pkg/controller/monitor"
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/controller/monitor"
+	rmonitor "github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	rmonitor "github.com/projectcalico/calico/operator/pkg/render/monitor"
 )
 
 var _ = Describe("CSR extension", func() {

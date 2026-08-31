@@ -990,7 +990,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	typhaNodeTLS, err := GetOrCreateTyphaNodeTLSConfig(r.client, certificateManager)
+	typhaNodeTLS, err := utils.GetOrCreateTyphaNodeTLSConfig(r.client, certificateManager)
 	if err != nil {
 		log.Error(err, "Error with Typha/Felix secrets")
 		r.status.SetDegraded(operatorv1.CertificateError, "Error with Typha/Felix secrets", err, reqLogger)
@@ -1003,7 +1003,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, err
 	}
 
-	bgpLayout, err := getConfigMap(r.client, render.BGPLayoutConfigMapName)
+	bgpLayout, err := utils.GetOperatorConfigMap(r.client, render.BGPLayoutConfigMapName)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error retrieving BGP layout ConfigMap", err, reqLogger)
 		return reconcile.Result{}, err
@@ -1596,83 +1596,6 @@ func calicoDirectoryExists() bool {
 	return err == nil
 }
 
-func GetOrCreateTyphaNodeTLSConfig(cli client.Client, certificateManager certificatemanager.CertificateManager) (*render.TyphaNodeTLS, error) {
-	return getOrCreateTyphaNodeTLSConfig(cli, certificateManager, certificateManager.GetOrCreateKeyPair)
-}
-
-func GetTyphaNodeTLSConfig(cli client.Client, certificateManager certificatemanager.CertificateManager) (*render.TyphaNodeTLS, error) {
-	return getOrCreateTyphaNodeTLSConfig(cli, certificateManager, certificateManager.GetKeyPair)
-}
-
-// getOrCreateTyphaNodeTLSConfig reads and validates the CA ConfigMap and Secrets for
-// Typha and Felix configuration. It returns the validated resources or error
-// if there was one.
-func getOrCreateTyphaNodeTLSConfig(cli client.Client, certificateManager certificatemanager.CertificateManager, createKeyPairFunc func(cli client.Client, secretName, secretNamespace string, dnsNames []string) (certificatemanagement.KeyPairInterface, error)) (*render.TyphaNodeTLS, error) {
-	// accumulate all the error messages so all problems with the certs
-	// and CA are reported.
-	var errMsgs []string
-	getOrCreateKeyPair := func(secretName, commonName string, requireCNOrURISAN bool) (keyPair certificatemanagement.KeyPairInterface, cn string, uriSAN string) {
-		keyPair, err := createKeyPairFunc(cli, secretName, common.OperatorNamespace(), []string{commonName})
-		if err != nil {
-			errMsgs = append(errMsgs, err.Error())
-		} else {
-
-			if !keyPair.BYO() {
-				cn = commonName
-			} else {
-				// todo: Integrate this with the new certificate manager or find another alternative for uriSAN and cn.
-				secret, err := utils.GetSecret(context.Background(), cli, secretName, common.OperatorNamespace())
-				if err != nil {
-					errMsgs = append(errMsgs, err.Error())
-				} else if secret != nil {
-					data := secret.Data
-					if data != nil {
-						cn, uriSAN = string(data[render.CommonName]), string(data[render.URISAN])
-					}
-				}
-			}
-			if requireCNOrURISAN && cn == "" && uriSAN == "" {
-				errMsgs = append(errMsgs, "CertPair for Felix does not contain common-name or uri-san")
-			}
-		}
-		return
-	}
-	node, nodeCommonName, nodeURISAN := getOrCreateKeyPair(render.NodeTLSSecretName, render.FelixCommonName, true)
-	typha, typhaCommonName, typhaURISAN := getOrCreateKeyPair(render.TyphaTLSSecretName, render.TyphaCommonName, true)
-	var trustedBundle certificatemanagement.TrustedBundle
-	configMap, err := getConfigMap(cli, render.TyphaCAConfigMapName)
-	if err != nil {
-		errMsgs = append(errMsgs, fmt.Sprintf("CA for Typha is invalid: %s", err))
-	} else if configMap != nil {
-		if len(configMap.Data[render.TyphaCABundleName]) == 0 {
-			errMsgs = append(errMsgs, fmt.Sprintf("ConfigMap %q does not have a field named %q", render.TyphaCAConfigMapName, render.TyphaCABundleName))
-		} else {
-			trustedBundle, err = certificateManager.CreateTrustedBundleWithSystemRootCertificates(node, typha,
-				certificatemanagement.NewCertificate(render.TyphaCAConfigMapName, common.CalicoNamespace, []byte(configMap.Data[render.TyphaCABundleName]), nil))
-			if err != nil {
-				errMsgs = append(errMsgs, fmt.Sprintf("Error creating trusted bundle %s", err))
-			}
-		}
-	} else {
-		trustedBundle, err = certificateManager.CreateTrustedBundleWithSystemRootCertificates(node, typha)
-		if err != nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("Error creating trusted bundle %s", err))
-		}
-	}
-	if len(errMsgs) != 0 {
-		return nil, fmt.Errorf("%s", strings.Join(errMsgs, ";"))
-	}
-	return &render.TyphaNodeTLS{
-		TrustedBundle:   trustedBundle,
-		TyphaSecret:     typha,
-		TyphaCommonName: typhaCommonName,
-		TyphaURISAN:     typhaURISAN,
-		NodeSecret:      node,
-		NodeCommonName:  nodeCommonName,
-		NodeURISAN:      nodeURISAN,
-	}, nil
-}
-
 func (r *ReconcileInstallation) setNftablesMode(_ context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
 	updated := false
 
@@ -2171,23 +2094,8 @@ func (r *ReconcileInstallation) syncManagedAdmissionPolicies(
 	return nil
 }
 
-func getConfigMap(client client.Client, cmName string) (*corev1.ConfigMap, error) {
-	cm := &corev1.ConfigMap{}
-	cmNamespacedName := types.NamespacedName{
-		Name:      cmName,
-		Namespace: common.OperatorNamespace(),
-	}
-	if err := client.Get(context.Background(), cmNamespacedName, cm); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to read ConfigMap %q: %s", cmName, err)
-	}
-	return cm, nil
-}
-
 func getBirdTemplates(client client.Client) (map[string]string, error) {
-	cm, err := getConfigMap(client, render.BirdTemplatesConfigMapName)
+	cm, err := utils.GetOperatorConfigMap(client, render.BirdTemplatesConfigMapName)
 	if err != nil || cm == nil {
 		return nil, err
 	}

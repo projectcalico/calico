@@ -16,6 +16,9 @@ package options
 
 import (
 	"context"
+	"fmt"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -78,4 +81,27 @@ type ControllerOptions struct {
 	// Extensions are the variant extensions the operator runs with, for the Variant
 	// above. The core operator leaves them unset and runs the base behavior.
 	Extensions extensions.Extensions
+
+	// Controllers are the reconcilers the running variant adds to the core set. The
+	// core operator leaves them unset and runs only the controllers every variant runs.
+	Controllers []Controller
+}
+
+// AddControllers adds the reconcilers the running variant contributes.
+func (o ControllerOptions) AddControllers(mgr ctrl.Manager) error {
+	for _, c := range o.Controllers {
+		if err := c.Add(mgr, o); err != nil {
+			return fmt.Errorf("failed to create controller %s: %v", c.Name, err)
+		}
+	}
+	return nil
+}
+
+// Controller is a reconciler a variant contributes, so that the core controller
+// manager can add it without naming the type.
+type Controller struct {
+	// Name identifies the controller when its setup fails.
+	Name string
+
+	Add func(mgr ctrl.Manager, opts ControllerOptions) error
 }

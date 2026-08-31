@@ -44,12 +44,12 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/extensions/extensionstest"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/render/webhooks"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
@@ -351,20 +351,25 @@ var _ = Describe("API server enterprise modifier", func() {
 			Verbs: []string{"create", "update", "delete", "patch", "get", "watch", "list"},
 		}))
 
-		// Both roles can read the Gateway API, so the WAF UI can detect it and offer
-		// Gateways and HTTPRoutes as policy attach targets.
+		// Both roles can read Gateways and HTTPRoutes to offer as WAF policy attach targets.
 		for _, role := range []*rbacv1.ClusterRole{uiUser, networkAdmin} {
-			Expect(role.Rules).To(ContainElement(rbacv1.PolicyRule{
-				APIGroups: []string{"operator.tigera.io"},
-				Resources: []string{"gatewayapis"},
-				Verbs:     []string{"get"},
-			}))
 			Expect(role.Rules).To(ContainElement(rbacv1.PolicyRule{
 				APIGroups: []string{"gateway.networking.k8s.io"},
 				Resources: []string{"gateways", "httproutes"},
 				Verbs:     []string{"get", "list", "watch"},
 			}))
 		}
+
+		Expect(uiUser.Rules).To(ContainElement(rbacv1.PolicyRule{
+			APIGroups: []string{"operator.tigera.io"},
+			Resources: []string{"gatewayapis"},
+			Verbs:     []string{"get"},
+		}))
+		Expect(networkAdmin.Rules).To(ContainElement(rbacv1.PolicyRule{
+			APIGroups: []string{"operator.tigera.io"},
+			Resources: []string{"gatewayapis"},
+			Verbs:     []string{"get", "create", "update", "patch"},
+		}))
 
 		// Audit policy configmap.
 		_, ok := extensions.FindObject[*corev1.ConfigMap](objs, "calico-audit-policy")

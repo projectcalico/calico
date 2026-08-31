@@ -43,6 +43,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/ctrlruntime"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
@@ -53,7 +54,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/render/webhooks"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
@@ -1536,11 +1536,11 @@ func (c *apiServer) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{"applicationlayers", "packetcaptureapis", "compliances", "intrusiondetections"},
 			Verbs:     []string{"get", "update", "patch", "create", "delete"},
 		},
-		// Allow the user to read the gatewayapis CR to detect if Gateway API is enabled/disabled.
+		// Allow the user to read and write the gatewayapis CR to enable Gateway API.
 		{
 			APIGroups: []string{"operator.tigera.io"},
 			Resources: []string{"gatewayapis"},
-			Verbs:     []string{"get"},
+			Verbs:     []string{"get", "create", "update", "patch"},
 		},
 		// Allow the user to read Gateways and HTTPRoutes to offer as WAF policy attach targets.
 		{

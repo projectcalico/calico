@@ -39,15 +39,15 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils/imageset"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	entkubecontrollers "github.com/projectcalico/calico/operator/pkg/enterprise/kubecontrollers"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/applicationlayer"
+	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
-	"github.com/projectcalico/calico/operator/pkg/render/applicationlayer"
 	rcomp "github.com/projectcalico/calico/operator/pkg/render/common/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/kubecontrollers"
-	"github.com/projectcalico/calico/operator/pkg/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
 
