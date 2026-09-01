@@ -21,7 +21,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/calico/goldmane/pkg/client"
+	"github.com/projectcalico/calico/goldmane/pkg/internal/flowcache"
 	"github.com/projectcalico/calico/goldmane/pkg/types"
 	"github.com/projectcalico/calico/goldmane/proto"
 	"github.com/projectcalico/calico/lib/std/time"
@@ -430,7 +430,9 @@ func dedupWindowBuckets(interval, numBuckets int) int {
 	if interval <= 0 || numBuckets <= 1 {
 		return 1
 	}
-	want := int(client.FlowCacheExpiry.Seconds())/interval + 2
+	// The two spare buckets cover the partial bucket at each end of the replay window,
+	// which also absorbs whatever this division truncates.
+	want := int(flowcache.Expiry.Seconds())/interval + 2
 	if want < numBuckets {
 		return want
 	}
