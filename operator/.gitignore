@@ -99,8 +99,8 @@ ut/
 # tgz helm charts
 *.tgz
 
-# Tar files created as part of running FVs
-*.tar
+# Image build markers
+*.created
 
 # Logs
 *.log

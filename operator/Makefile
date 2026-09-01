@@ -33,222 +33,51 @@ HACK_BIN ?= hack/bin
 $(HACK_BIN):
 	mkdir -p $(HACK_BIN)
 
-# Shortcut targets
-default: build
+PACKAGE_NAME = github.com/projectcalico/calico/operator
 
-## Build binary for current platform
-all: build
+# The image, registry and arches the ci/cd common targets in lib.Makefile read.
+# These sit above metadata.mk, whose Calico defaults would otherwise win, and use
+# ?= for the registry so a hashrelease can send the image somewhere else (see
+# hack/release/README.md).
+CLOUD_LDFLAGS =
+ifeq ($(VARIANT),cloud)
+# Calico Cloud variant: operator-cloud on GCR, amd64 only.
+BUILD_IMAGES    = tigera-tesla/operator-cloud
+DEV_REGISTRIES ?= gcr.io
+ARCHES          = amd64
+BINARY_NAME    ?= operator-cloud
+# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
+CLOUD_LDFLAGS = -X $(PACKAGE_NAME)/version.BuildVariant=cloud
+else
+BUILD_IMAGES    = tigera/operator
+DEV_REGISTRIES ?= quay.io
+ARCHES          = amd64 arm64 ppc64le s390x
+BINARY_NAME    ?= operator
+endif
+
+include ../metadata.mk
+
+# The FV suite talks to the shared kind cluster from inside the build container,
+# where the repo is mounted at /go/src/github.com/projectcalico/calico.
+EXTRA_DOCKER_ARGS += -e GOPRIVATE=github.com/tigera/* \
+	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/kind/kind-kubeconfig.yaml
+
+BUILD_DIR ?= build/_output
+BINDIR    ?= $(BUILD_DIR)/bin
+
+include ../lib.Makefile
+
+# ARCH is settled by lib.Makefile. The operator links against BoringCrypto on
+# amd64 and the build asserts it, so this has to follow the include.
+ifeq ($(ARCH),amd64)
+GOEXPERIMENT = boringcrypto
+endif
 
 ## Run the tests for the current platform/architecture
 test: fmt vet ut
 
-# Both native and cross architecture builds are supported.
-# The target architecture is select by setting the ARCH variable.
-# When ARCH is undefined it is set to the detected host architecture.
-# When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES ?= amd64 arm64 ppc64le s390x
-
-# BUILDARCH is the host architecture
-# ARCH is the target architecture
-# we need to keep track of them separately
-BUILDARCH ?= $(shell uname -m)
-BUILDOS ?= $(shell uname -s | tr A-Z a-z)
-
-# canonicalized names for host architecture
-ifeq ($(BUILDARCH),aarch64)
-    BUILDARCH=arm64
-endif
-ifeq ($(BUILDARCH),x86_64)
-    BUILDARCH=amd64
-endif
-
-# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
-ARCH ?= $(BUILDARCH)
-
-# canonicalized names for target architecture
-ifeq ($(ARCH),aarch64)
-    override ARCH=arm64
-endif
-ifeq ($(ARCH),x86_64)
-    override ARCH=amd64
-endif
-
-# location of docker credentials to push manifests
-DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-# we want to be able to run the same recipe on multiple targets keyed on the image name
-# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
-# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
-# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
-# in the target, we then unescape them back
-escapefs = $(subst :,---,$(subst /,___,$(1)))
-unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
-
-# list of arches *not* to build when doing *-all
-EXCLUDEARCH ?=
-VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
-
-# We need CGO to leverage Boring SSL.  However, the cross-compile doesn't support CGO yet.
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-CGO_ENABLED=1
-GOEXPERIMENT=boringcrypto
-TAGS=osusergo,netgo
-else
-CGO_ENABLED=0
-endif
-
-###############################################################################
-REPO?=tigera/operator
-PACKAGE_NAME?=github.com/projectcalico/calico/operator
-# The operator is a subdirectory of the monorepo's root module, so the
-# container mount needs to expose the repo root, not just this directory.
-MODULE_ROOT?=github.com/projectcalico/calico
-LOCAL_USER_ID?=$(shell id -u $$USER)
-# The operator compiles against the root module, so its toolchain has to be
-# whatever the monorepo pins rather than a version of its own.
-CALICO_METADATA?=../metadata.mk
-mk_var = $(shell sed -n 's/^$(1)[[:space:]]*[?:]\{0,1\}=[[:space:]]*//p' $(CALICO_METADATA))
-GO_VERSION?=$(call mk_var,GO_VERSION)
-K8S_VERSION?=$(call mk_var,K8S_VERSION)
-LLVM_VERSION?=$(call mk_var,LLVM_VERSION)
-# Calico toolchain versions and the calico/go-build image to use.
-GO_BUILD_VER?=$(GO_VERSION)-llvm$(LLVM_VERSION)-k8s$(K8S_VERSION:v%=%)
-CALICO_BASE_VER ?= ubi9-1784675397
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)-$(BUILDARCH)
-CALICO_BASE ?= calico/base:$(CALICO_BASE_VER)
-SRC_FILES=$(shell find ./pkg -name '*.go')
-SRC_FILES+=$(shell find ./api -name '*.go')
-SRC_FILES+=$(shell find ./internal/ -name '*.go')
-SRC_FILES+=$(shell find ./test -name '*.go')
-SRC_FILES+=cmd/main.go
-
-EXTRA_DOCKER_ARGS += -e GOPRIVATE=github.com/tigera/*
-GIT_CLONE_URL_BASE?=git@github.com:
-ifeq ($(GIT_USE_SSH),true)
-	GIT_CONFIG_SSH ?= git config --global url."ssh://git@github.com/".insteadOf "https://github.com/";
-endif
-
-ifdef SSH_AUTH_SOCK
-  EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
-endif
-
-ifneq ($(GOPATH),)
-	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
-	# is the default one used by go modules.
-	GOMOD_CACHE = $(shell echo $(GOPATH) | cut -d':' -f1)/pkg/mod
-else
-	# If gopath is empty, default to $(HOME)/go.
-	GOMOD_CACHE = $(HOME)/go/pkg/mod
-endif
-
-EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
-
-CONTAINERIZED= mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
-	docker run --rm \
-		-v $(CURDIR)/..:/go/src/$(MODULE_ROOT):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOPATH=/go \
-		-e GOCACHE=/go-cache \
-		-e GOOS=linux \
-		-e GOARCH=$(ARCH) \
-		-e KUBECONFIG=/go/src/$(PACKAGE_NAME)/kubeconfig.yaml \
-		-w /go/src/$(PACKAGE_NAME) \
-		--net=host \
-		$(EXTRA_DOCKER_ARGS)
-
-DOCKER_RUN := $(CONTAINERIZED) $(CALICO_BUILD)
-
-# Calico Cloud build variant. `make <target> VARIANT=cloud` builds and pushes the operator-cloud
-# image to GCR (gcr.io/tigera-tesla/operator-cloud), amd64 only.
-# These sit before the enterprise defaults and use `?=` so the environment still wins: hashreleases
-# push the cloud image to the hashrelease registry instead (see hack/release/README.md).
-CLOUD_LDFLAGS=
-ifeq ($(VARIANT),cloud)
-BUILD_IMAGE?=tigera-tesla/operator-cloud
-BINARY_NAME?=operator-cloud
-IMAGE_REGISTRY?=gcr.io
-PUSH_IMAGE_PREFIXES?=gcr.io/
-EXCLUDE_MANIFEST_REGISTRIES?=gcr.io/
-# amd64 only. Constrain ARCHES (not just VALIDARCHES) so push-all, which iterates ARCHES, does not
-# try to push arches that were never built.
-ARCHES:=amd64
-# Bake cloud mode into the operator binary so it cannot be disabled at runtime.
-CLOUD_LDFLAGS=-X $(PACKAGE_NAME)/version.BuildVariant=cloud
-endif
-
-BUILD_IMAGE?=tigera/operator
-
-BUILD_DIR?=build/_output
-BINDIR?=$(BUILD_DIR)/bin
-
-# Name of the built operator binary. The Calico Cloud variant suffixes it with -cloud
-# (see VARIANT=cloud above) so the cloud artifact is easy to tell apart from the enterprise one.
-BINARY_NAME?=operator
-
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
-
-IMAGE_REGISTRY?=quay.io
-PUSH_IMAGE_PREFIXES?=quay.io/
-RELEASE_PREFIXES?=
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
-PUSH_IMAGE_PREFIXES+=$(RELEASE_PREFIXES)
-endif
-
-# remove from the list to push to manifest any registries that do not support multi-arch
-EXCLUDE_MANIFEST_REGISTRIES?=""
-PUSH_MANIFEST_IMAGE_PREFIXES=$(PUSH_IMAGE_PREFIXES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
-PUSH_NONMANIFEST_IMAGE_PREFIXES=$(filter-out $(PUSH_MANIFEST_IMAGE_PREFIXES),$(PUSH_IMAGE_PREFIXES))
-
-imagetag:
-ifndef IMAGETAG
-	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
-endif
-
-## push one arch
-push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(PUSH_IMAGE_PREFIXES)))
-
-sub-single-push-%:
-	docker push $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG)-$(ARCH))
-
-## push all arches
-push-all: imagetag $(addprefix sub-push-,$(ARCHES))
-sub-push-%:
-	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
-
-push-manifests: imagetag  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGE_PREFIXES)))
-sub-manifest-%:
-	docker manifest create $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG)) $(addprefix --amend ,$(addprefix $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG))-,$(VALIDARCHES)))
-	docker manifest push --purge $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG))
-
-## push default amd64 arch where multi-arch manifest is not supported
-push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGE_PREFIXES)))
-sub-non-manifest-%:
-ifeq ($(ARCH),amd64)
-	docker push $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG))
-else
-	$(NOECHO) $(NOOP)
-endif
-
-## tag images of one arch
-tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGE_PREFIXES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGE_PREFIXES)))
-sub-single-tag-images-arch-%:
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG)-$(ARCH))
-
-# because some still do not support multi-arch manifest
-sub-single-tag-images-non-manifest-%:
-ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*$(BUILD_IMAGE):$(IMAGETAG))
-else
-	$(NOECHO) $(NOOP)
-endif
-
-## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
-sub-tag-images-%:
-	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ###############################################################################
 # Building the code
@@ -307,49 +136,35 @@ $(HELM_BUILDARCH_VERSIONED_BINARY): | $(HACK_BIN)
 build: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	mkdir -p $(BINDIR)
-	$(CONTAINERIZED) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) $(CALICO_BUILD) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
 ifeq ($(ARCH), $(filter $(ARCH),amd64))
-	$(CONTAINERIZED) $(CALICO_BUILD) sh -c 'strings $(BINDIR)/$(BINARY_NAME)-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
+	$(DOCKER_GO_BUILD) sh -c 'strings $(BINDIR)/$(BINARY_NAME)-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
 endif
 
-.PHONY: image
-image: build $(BUILD_IMAGE)
+OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
+IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
 
-$(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): $(BINDIR)/$(BINARY_NAME)-$(ARCH)
-	docker buildx build --load --platform=linux/$(ARCH) --pull \
-		--build-arg GIT_VERSION=$(GIT_VERSION) \
-		--build-arg CALICO_BASE=$(CALICO_BASE) \
-		--build-arg BINARY_NAME=$(BINARY_NAME) \
-		-t $(BUILD_IMAGE):latest-$(ARCH) \
-		-f build/Dockerfile .
+.PHONY: image images
+image images: $(IMAGE_BUILD_MARKER)
+
+$(BUILD_DIR)/LICENSE: ../LICENSE.md | $(BUILD_DIR)
+	cp ../LICENSE.md $@
+
+# register is order-only (|) so binfmt setup doesn't trigger unnecessary rebuilds.
+$(IMAGE_BUILD_MARKER): $(BINDIR)/$(BINARY_NAME)-$(ARCH) $(BUILD_DIR)/LICENSE | register
+	$(DOCKER_BUILD) --build-arg BINARY_NAME=$(BINARY_NAME) -t $(OPERATOR_IMAGE_NAME):latest-$(ARCH) -f build/Dockerfile .
+	$(MAKE) retag-build-images-with-registries BUILD_IMAGES=$(BUILD_IMAGES) VALIDARCHES=$(ARCH) IMAGETAG=latest
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
+	docker tag $(OPERATOR_IMAGE_NAME):latest-$(ARCH) $(OPERATOR_IMAGE_NAME):latest
 endif
+	touch $@
 
-.PHONY: images
-images: image
-
-# Build the images for the target architecture
 .PHONY: image-all
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
-	$(MAKE) images ARCH=$*
-
-BINDIR?=build/init/bin
-# Match the kubectl client to the version of the kind test cluster.
-KUBECTL_VERSION?=$(KINDEST_NODE_VERSION)
-$(BINDIR)/kubectl:
-	mkdir -p $(BINDIR)
-	curl -sSf -L --retry 5 https://dl.k8s.io/release/$(KUBECTL_VERSION)/bin/linux/$(ARCH)/kubectl -o $@
-	chmod +x $@
-
-kubectl: $(BINDIR)/kubectl
-
-$(BINDIR)/kind:
-	$(CONTAINERIZED) $(CALICO_BUILD) sh -c "GOBIN=/go/src/$(PACKAGE_NAME)/$(BINDIR) go install sigs.k8s.io/kind"
+	$(MAKE) image ARCH=$*
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -358,8 +173,9 @@ clean:
 	rm -rf build/init/bin
 	rm -rf hack/bin
 	rm -rf .go-pkg-cache
+	rm -f *.created
 	find . -type f -name 'release-*.log' -delete -o  -name '*release-notes.md' -delete
-	docker rmi -f $(shell docker images -f "reference=$(BUILD_IMAGE):latest*" -q) > /dev/null 2>&1 || true
+	docker rmi -f $(shell docker images -f "reference=$(OPERATOR_IMAGE_NAME):latest*" -q) > /dev/null 2>&1 || true
 
 ###############################################################################
 # Tests
@@ -373,112 +189,69 @@ ENVTEST_K8S_VERSION?=1.34.x
 .PHONY: ut
 ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
-	$(CONTAINERIZED) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
 	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
 	ginkgo -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) "$(UT_DIR)"'
 
-## Run the functional tests
-fv: cluster-create load-container-images run-fvs cluster-destroy
+## Run the functional tests against a local kind cluster.
+fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
-	$(CONTAINERIZED) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
+	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	ginkgo -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) "$(FV_DIR)"'
 
-## Create a local kind dual stack cluster.
-KIND_CLUSTER_NAME?=tigera-operator-kind
-KIND_KUBECONFIG?=./kubeconfig.yaml
-KINDEST_NODE_VERSION?=v1.35.5
-cluster-create: $(BINDIR)/kubectl $(BINDIR)/kind
-	# First make sure any previous cluster is deleted
-	make cluster-destroy
+# The tag the operator resolves for these components, from config/calico_versions.yml.
+FV_IMAGE_TAG ?= master
+FV_IMAGES     = calico/calico calico/node calico/whisker
 
-	# Create a kind cluster.
-	$(BINDIR)/kind create cluster \
-	        --name $(KIND_CLUSTER_NAME) \
-	        --config ./deploy/kind-config.yaml \
-	        --kubeconfig $(KIND_KUBECONFIG) \
-	        --image kindest/node:$(KINDEST_NODE_VERSION)
-
-	KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) ./deploy/scripts/ipv6_kind_cluster_update.sh
-	# Deploy resources needed in test env.
-	$(MAKE) deploy-crds
-
-	# Wait for controller manager to be running and healthy.
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(BINDIR)/kubectl get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-
-FV_IMAGE_REGISTRY := docker.io
-VERSION_TAG := master
-CALICO_IMAGE := calico/calico
-NODE_IMAGE := calico/node
-WHISKER_IMAGE := calico/whisker
-
-.PHONY: calico-calico.tar
-calico-calico.tar:
-	docker pull $(FV_IMAGE_REGISTRY)/$(CALICO_IMAGE):$(VERSION_TAG)
-	docker save --output $@ $(CALICO_IMAGE):$(VERSION_TAG)
-
-.PHONY: calico-node.tar
-calico-node.tar:
-	docker pull $(FV_IMAGE_REGISTRY)/$(NODE_IMAGE):$(VERSION_TAG)
-	docker save --output $@ $(NODE_IMAGE):$(VERSION_TAG)
-
-.PHONY: calico-whisker.tar
-calico-whisker.tar:
-	docker pull $(FV_IMAGE_REGISTRY)/$(WHISKER_IMAGE):$(VERSION_TAG)
-	docker save --output $@ $(WHISKER_IMAGE):$(VERSION_TAG)
-
-IMAGE_TARS := calico-calico.tar \
-	calico-node.tar \
-	calico-whisker.tar
-
-load-container-images: ./test/load_images_on_kind_cluster.sh $(IMAGE_TARS)
-	# Load the latest tar files onto the currently running kind cluster.
-	KUBECONFIG=$(KIND_KUBECONFIG) KIND_CLUSTER_NAME=$(KIND_CLUSTER_NAME) ./test/load_images_on_kind_cluster.sh $(IMAGE_TARS)
+# Prefer the images built from this commit, which CI restores from its cache before
+# the FV runs, and fall back to a pull for a local run that has none.
+load-container-images: $(KIND)
+	@for image in $(FV_IMAGES); do \
+		if docker image inspect $$image:latest-$(ARCH) >/dev/null 2>&1; then \
+			docker tag $$image:latest-$(ARCH) $$image:$(FV_IMAGE_TAG); \
+		else \
+			docker pull $$image:$(FV_IMAGE_TAG); \
+		fi; \
+		$(KIND) load docker-image --name $(KIND_NAME) $$image:$(FV_IMAGE_TAG); \
+	done
 	# Restart the Calico containers so they launch with the newly loaded code.
 	# TODO: We should be able to do this without restarting everything in kube-system.
-	KUBECONFIG=$(KIND_KUBECONFIG) $(BINDIR)/kubectl delete pods -n kube-system --all
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n kube-system --all
 
-## Deploy CRDs needed for UTs.  CRDs needed by ECK that we don't use are not deployed.
+## Deploy the CRDs the FVs need on top of the ones kind-cluster-create installs:
+## every operator CRD, including the Enterprise-only kinds, plus prometheus.
 ## kubectl create is used for prometheus as a workaround for https://github.com/prometheus-community/helm-charts/issues/1500
-## kubectl create is used for operator CRDS since the Installation API is large enough now that we hit the following error:
+## and for the operator CRDs since the Installation API is large enough to hit
 ##
 ##   The CustomResourceDefinition "installations.operator.tigera.io" is invalid: metadata.annotations: Too long: must have at most 262144 bytes
 ##
-deploy-crds: kubectl
+deploy-crds: $(KUBECTL)
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
-		$(BINDIR)/kubectl create -f pkg/crds/operator/ && \
-		$(BINDIR)/kubectl apply -f ../libcalico-go/config/crd/ && \
-		$(BINDIR)/kubectl create -f deploy/crds/prometheus
+		$(KUBECTL) apply --server-side -f pkg/crds/operator/ && \
+		$(KUBECTL) create -f deploy/crds/prometheus
 
-create-tigera-operator-namespace: kubectl
-	KUBECONFIG=$(KIND_KUBECONFIG) $(BINDIR)/kubectl create ns tigera-operator
-
-## Destroy local kind cluster
-cluster-destroy: $(BINDIR)/kubectl $(BINDIR)/kind
-	-$(BINDIR)/kind delete cluster --name $(KIND_CLUSTER_NAME)
-	rm -f $(KIND_KUBECONFIG)
-
-
+create-tigera-operator-namespace: $(KUBECTL)
+	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create ns tigera-operator
 
 ###############################################################################
 # Static checks
 ###############################################################################
-.PHONY: static-checks
-## Perform static checks on the code.
+# golangci-lint loads the operator's packages, so the embedded charts have to be on
+# disk before lib.Makefile's recipe runs.
 static-checks: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
-	$(CONTAINERIZED) $(CALICO_BUILD) golangci-lint run --timeout 12m
 
 .PHONY: fix
 ## Fix static checks
 fix:
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	goimports -w $(SRC_FILES)'
 
 .PHONY: format-check
 format-check:
-	@$(CONTAINERIZED) $(CALICO_BUILD) \
+	@$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	files=$$(gofmt -l ./pkg ./internal/controller ./api ./test); \
 	[ "$$files" = "" ] && exit 0; \
@@ -524,15 +297,7 @@ validate-gen-versions:
 	$(MAKE) dirty-check
 
 ## Deploys images to registry
-cd: image-all
-ifndef CONFIRM
-	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
-endif
-ifndef BRANCH_NAME
-	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
-endif
-	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(shell git describe --tags --dirty --always --long --abbrev=12) EXCLUDEARCH="$(EXCLUDEARCH)"
+cd: image-all cd-common
 
 ###############################################################################
 # Release
@@ -556,7 +321,7 @@ release: clean hack/bin/release
 	hack/bin/release build
 
 ## Produces a clean build of release artifacts at the specified version.
-release-build: release-prereqs var-require-all-VERSION-GIT_VERSION
+release-build: operator-release-prereqs var-require-all-VERSION-GIT_VERSION
 # Check that the correct code is checked out.
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
@@ -566,10 +331,10 @@ endif
 	# Generate the `latest` images.
 	$(MAKE) tag-images-all IMAGETAG=latest
 
-release-check-image-exists: release-prereqs
-	@echo "Checking if $(IMAGE_REGISTRY)/$(BUILD_IMAGE):$(VERSION) exists already"; \
-	if docker manifest inspect $(IMAGE_REGISTRY)/$(BUILD_IMAGE):$(VERSION) >/dev/null; \
-		then echo "Image $(IMAGE_REGISTRY)/$(BUILD_IMAGE):$(VERSION) already exists"; \
+release-check-image-exists: operator-release-prereqs
+	@echo "Checking if $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) exists already"; \
+	if docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) >/dev/null; \
+		then echo "Image $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION) already exists"; \
 		exit 1; \
 	else \
 		echo "Image tag check passed; image does not already exist"; \
@@ -578,7 +343,7 @@ release-check-image-exists: release-prereqs
 release-publish: hack/bin/release
 	hack/bin/release publish
 
-release-publish-images: release-prereqs release-check-image-exists var-require-all-VERSION
+release-publish-images: operator-release-prereqs release-check-image-exists var-require-all-VERSION
 	# Push images.
 	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
 
@@ -595,7 +360,7 @@ hack/bin/gh:
 
 hack/bin/release: $(shell find ./hack/release -type f)
 	mkdir -p hack/bin
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o hack/bin/release ./hack/release'
 
@@ -606,18 +371,16 @@ hack/bin/release: $(shell find ./hack/release -type f)
 
 hack/release/ut:
 	mkdir -p report/release
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	gotestsum --format=testname --junitfile report/release/ut.xml $$(go list $(PACKAGE_NAME)/hack/release/... | grep -v /hack/release/validate)'
 
 release-from: hack/bin/release var-require-all-VERSION-OPERATOR_BASE_VERSION var-require-one-of-EE_IMAGES_VERSIONS-OS_IMAGES_VERSIONS
 	hack/bin/release from
 
-# release-prereqs checks that the environment is configured properly to create a release.
-release-prereqs:
-ifndef VERSION
-	$(error VERSION is undefined - specify using "VERSION=vX.Y.Z" with make target(s))
-endif
+# operator-release-prereqs checks the environment on top of lib.Makefile's own
+# release-prereqs, which the release targets below also depend on.
+operator-release-prereqs: release-prereqs
 ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
 endif
@@ -675,14 +438,14 @@ gen-versions-enterprise: $(BINDIR)/gen-versions
 
 $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
 	mkdir -p $(BINDIR)
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
 
 .PHONY: prepull-image
 prepull-image:
 	@echo Pulling operator image...
-	docker pull $(IMAGE_REGISTRY)/$(BUILD_IMAGE):v$(VERSION)
+	docker pull $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION)
 
 # Get the digest for the image. This target runs docker commands on the host since the
 # build container doesn't have docker-in-docker. 'docker inspect' returns output like the example
@@ -704,25 +467,9 @@ prepull-image:
 .PHONY: get-digest
 get-digest: prepull-image
 	@echo Getting operator image digest...
-	$(eval OPERATOR_IMAGE_INSPECT=$(shell sh -c "docker image inspect $(IMAGE_REGISTRY)/$(BUILD_IMAGE):v$(VERSION) | base64 -w 0"))
-	$(eval OPERATOR_MANIFEST_INSPECT=$(shell sh -c "docker manifest inspect $(IMAGE_REGISTRY)/$(BUILD_IMAGE):v$(VERSION) | base64 -w 0"))
+	$(eval OPERATOR_IMAGE_INSPECT=$(shell sh -c "docker image inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
+	$(eval OPERATOR_MANIFEST_INSPECT=$(shell sh -c "docker manifest inspect $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):v$(VERSION) | base64 -w 0"))
 
-.PHONY: help
-## Display this help text
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
-		nb = sub( /^## /, "", helpMsg );                                \
-		if(nb == 0) {                                                   \
-			helpMsg = $$0;                                              \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
-		}                                                               \
-		if (nb)                                                         \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}                                                                   \
-	{ helpMsg = $$0 }'                                                  \
-	width=20                                                            \
-	$(MAKEFILE_LIST)
 #####################################
 #####################################
 # Image URL to use all building/pushing image targets
@@ -748,30 +495,27 @@ deploy: manifests kustomize
 # Generate manifests e.g. CRD
 # Can also generate RBAC and webhooks but that is not enabled currently.
 manifests:
-	$(DOCKER_RUN) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
+	$(DOCKER_GO_BUILD) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
 	for x in $$(find pkg/crds/operator/*); do sed -i -e '/creationTimestamp: null/d' -e '/^---/d' -e '/^\s*$$/d' $$x; done
 	@docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/pkg/crds/operator/:/work/crds/operator/ tmknom/prettier --write --parser=yaml /work
 
 # Run go fmt against code
 fmt:
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go fmt ./...'
 
 # Run go vet against code
 vet: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
-	$(CONTAINERIZED) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go vet ./...'
-
-mod-tidy:
-	$(DOCKER_RUN) sh -c 'go mod tidy'
 
 # Generate code
 # We use the upstream latest release of controller-gen as this is compatible with golang 1.19+ and we have no need
 # for custom projectcalico.org types.
 generate: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
-	$(DOCKER_RUN) sh -c 'controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./api/..." && \
+	$(DOCKER_GO_BUILD) sh -c 'controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./api/..." && \
 		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./pkg/..." && \
 		controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./internal/controller/..."'
 	-# Run fix because generate was removing `//go:build !ignore_autogenerated` from the generated files
@@ -840,7 +584,7 @@ ifndef PREV_VERSION
 	$(error PREV_VERSION is undefined - run using make $@ VERSION=X.Y.Z PREV_VERSION=D.E.F)
 endif
 	$(eval EXTRA_DOCKER_ARGS += -e BUNDLE_CRD_DIR=$(BUNDLE_CRD_DIR) -e BUNDLE_DEPLOY_DIR=$(BUNDLE_DEPLOY_DIR))
-	$(CONTAINERIZED) $(CALICO_BUILD) "hack/gen-bundle/get-manifests.sh"
+	$(DOCKER_GO_BUILD) "hack/gen-bundle/get-manifests.sh"
 
 .PHONY: bundle-generate
 bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
@@ -858,7 +602,7 @@ bundle-generate: manifests $(KUSTOMIZE) $(OPERATOR_SDK_BARE) bundle-manifests
 .PHONY: update-bundle
 update-bundle: $(OPERATOR_SDK_BARE) get-digest
 	$(eval EXTRA_DOCKER_ARGS += -e OPERATOR_IMAGE_INSPECT="$(OPERATOR_IMAGE_INSPECT)" -e OPERATOR_MANIFEST_INSPECT="$(OPERATOR_MANIFEST_INSPECT)" -e VERSION=$(VERSION) -e PREV_VERSION=$(PREV_VERSION))
-	$(CONTAINERIZED) $(CALICO_BUILD) hack/gen-bundle/update-bundle.sh
+	$(DOCKER_GO_BUILD) hack/gen-bundle/update-bundle.sh
 
 # Build the bundle image.
 .PHONY: bundle-build
@@ -884,32 +628,6 @@ test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
 
-# var-set-% checks if there is a non empty variable for the value describe by %. If FAIL_NOT_SET is set, then var-set-%
-# fails with an error message. If FAIL_NOT_SET is not set, then var-set-% appends a 1 to VARSET if the variable isn't
-# set.
-var-set-%:
-	$(if $($*),$(eval VARSET+=1),$(if $(FAIL_NOT_SET),$(error $* is required but not set),))
-
-# var-require is used to check if one or all of the variables are set in REQUIRED_VARS, and fails if not. The variables
-# in REQUIRE_VARS are hyphen separated.
-#
-# If FAIL_NOT_SET is set, then all variables described in REQUIRED_VARS must be set for var-require to not fail,
-# otherwise only one variable needs to be set for var-require to not fail.
-var-require: $(addprefix var-set-,$(subst -, ,$(REQUIRED_VARS)))
-	$(if $(VARSET),,$(error one of $(subst -, ,$(REQUIRED_VARS)) is not set or empty, but at least one is required))
-
-# var-require-all-% checks if the there are non empty variables set for the hyphen separated values in %, and fails if
-# there isn't a non empty variable for each given value. For instance, to require FOO and BAR both must be set you would
-# call var-require-all-FOO-BAR.
-var-require-all-%:
-	$(MAKE) var-require REQUIRED_VARS=$* FAIL_NOT_SET=true
-
-# var-require-one-of-% checks if the there are non empty variables set for the hyphen separated values in %, and fails
-# there isn't a non empty variable for at least one of the given values. For instance, to require either FOO or BAR both
-# must be set you would call var-require-all-FOO-BAR.
-var-require-one-of-%:
-	$(MAKE) var-require REQUIRED_VARS=$*
-
 #####################################
 #####################################
 # ImageSet utility targets
@@ -919,9 +637,9 @@ clean-imageset:
 
 
 ifdef VERSION
-OPERATOR_IMAGE ?= $(IMAGE_REGISTRY)/$(BUILD_IMAGE):$(VERSION)
+OPERATOR_IMAGE ?= $(DEV_REGISTRY)/$(OPERATOR_IMAGE_NAME):$(VERSION)
 else
-OPERATOR_IMAGE ?= $(BUILD_IMAGE):latest
+OPERATOR_IMAGE ?= $(OPERATOR_IMAGE_NAME):latest
 endif
 
 double_quote := $(shell echo '"')

@@ -25,7 +25,7 @@ ARG BINARY_NAME=operator
 COPY --from=ubi /etc/pki /etc/pki/
 COPY --from=ubi /usr/share/pki /usr/share/pki/
 
-COPY LICENSE /licenses/LICENSE
+COPY build/_output/LICENSE /licenses/LICENSE
 
 COPY build/_output/bin/${BINARY_NAME}-${TARGETARCH} /usr/bin/operator
 
