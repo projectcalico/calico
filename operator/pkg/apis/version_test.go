@@ -73,9 +73,9 @@ func TestUseV3CRDs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.apiGroup != "" {
-				t.Setenv("CALICO_API_GROUP", tc.apiGroup)
-			}
+			// Always set it: the build container exports CALICO_API_GROUP, which
+			// would otherwise decide the cases that mean to exercise discovery.
+			t.Setenv("CALICO_API_GROUP", tc.apiGroup)
 			c := fake.NewClientset()
 			c.Resources = tc.resources
 			got, err := useV3CRDs(c.Discovery(), emptyDynamicClient())
