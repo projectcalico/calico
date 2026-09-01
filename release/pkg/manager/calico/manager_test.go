@@ -733,12 +733,15 @@ func TestBuildReleaseTarIncludesE2EBinaries(t *testing.T) {
 	tests := []struct {
 		name        string
 		e2eBinaries bool
+		binaries    bool
 		staged      bool
 		wantInTar   bool
 	}{
-		{name: "staged binaries are added to bin/e2e", e2eBinaries: true, staged: true, wantInTar: true},
-		{name: "nothing staged adds nothing", e2eBinaries: true, staged: false},
-		{name: "disabled adds nothing", e2eBinaries: false, staged: true},
+		{name: "staged binaries are added to bin/e2e", e2eBinaries: true, binaries: true, staged: true, wantInTar: true},
+		{name: "nothing staged adds nothing", e2eBinaries: true, binaries: true, staged: false},
+		{name: "disabled adds nothing", e2eBinaries: false, binaries: true, staged: true},
+		// The two flags are independent, so --no-binaries must not drop them.
+		{name: "included even without the other binaries", e2eBinaries: true, binaries: false, staged: true, wantInTar: true},
 	}
 
 	for _, tt := range tests {
@@ -758,7 +761,7 @@ func TestBuildReleaseTarIncludesE2EBinaries(t *testing.T) {
 			r := &CalicoManager{
 				runner:        f,
 				tarball:       true,
-				binaries:      true,
+				binaries:      tt.binaries,
 				e2eBinaries:   tt.e2eBinaries,
 				calicoVersion: "v3.30.0",
 				outputDir:     outputDir,

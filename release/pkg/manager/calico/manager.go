@@ -982,6 +982,15 @@ func (r *CalicoManager) publishPrereqs() error {
 			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
 		}
 	}
+	// The e2e binaries go to S3 late in the publish, so check the bucket up front
+	// rather than after the images and charts are already out.
+	if !r.isHashRelease && r.s3Bucket == "" {
+		if staged, err := r.stagedE2EBinaries(); err != nil {
+			errStack = errors.Join(errStack, err)
+		} else if len(staged) > 0 {
+			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for publishing e2e binaries"))
+		}
+	}
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
 		errStack = errors.Join(errStack, fmt.Errorf("there are uncommitted changes in the repository, please commit or stash them before publishing the release"))
 	}
@@ -1198,27 +1207,32 @@ func (r *CalicoManager) buildReleaseTar() error {
 		}
 	}
 
-	// Add in release binaries that we ship.
+	// Add in release binaries that we ship. Sources are repo-relative (cp runs
+	// in repoRoot) except the e2e binaries, which come from the output directory.
+	binDir := filepath.Join(releaseBase, "bin")
+	binaries := map[string]string{}
 	if r.binaries {
-		binDir := filepath.Join(releaseBase, "bin")
+		// Calicoctl binaries.
+		binaries["calicoctl/bin/"] = filepath.Join(binDir, "calicoctl")
+
+		// Felix binaries.
+		binaries["felix/bin/calico-bpf"] = binDir
+	}
+	// Per-arch e2e test binaries, taken from the staged copy so the archive and
+	// the S3 publish ship the same files. Independent of r.binaries: the two are
+	// separate flags.
+	if r.e2eBinaries {
+		staged, err := r.stagedE2EBinaries()
+		if err != nil {
+			return err
+		}
+		if len(staged) > 0 {
+			binaries[r.e2eBinariesDir()+"/"] = filepath.Join(binDir, "e2e")
+		}
+	}
+	if len(binaries) > 0 {
 		if err := os.MkdirAll(binDir, os.ModePerm); err != nil {
-			return fmt.Errorf("failed to create images dir: %s", err)
-		}
-
-		binaries := map[string]string{
-			// Calicoctl binaries.
-			"calicoctl/bin/": filepath.Join(binDir, "calicoctl"),
-
-			// Felix binaries.
-			"felix/bin/calico-bpf": binDir,
-		}
-		// Per-arch e2e test binaries, when the build produced them. Sourced from
-		// the staged copy rather than e2e/bin/k8s so the archive and the S3
-		// publish ship the same files.
-		if e2eStaged := filepath.Join(r.uploadDir(), "files", "e2e"); r.e2eBinaries {
-			if _, err := os.Stat(e2eStaged); err == nil {
-				binaries[e2eStaged+"/"] = filepath.Join(binDir, "e2e")
-			}
+			return fmt.Errorf("failed to create bin dir: %s", err)
 		}
 		// -al (archive + hard-link) keeps staging disk usage flat and preserves symlinks
 		for src, dst := range binaries {
@@ -1261,6 +1275,24 @@ func e2eArchitectures(configured []string) []string {
 	return arches
 }
 
+// e2eBinariesDir is the single owner of where the per-arch e2e test binaries
+// live in the output directory. files/e2e/ is the layout the hashrelease server
+// serves, and publishE2EBinaries mirrors it under the release version on S3.
+func (r *CalicoManager) e2eBinariesDir() string {
+	return filepath.Join(r.uploadDir(), "files", "e2e")
+}
+
+// stagedE2EBinaries lists the e2e binaries the build produced. Callers on the
+// publish side key off this rather than r.e2eBinaries, because the e2e-binaries
+// flag belongs to the build step and is never passed to publish.
+func (r *CalicoManager) stagedE2EBinaries() ([]string, error) {
+	staged, err := filepath.Glob(filepath.Join(r.e2eBinariesDir(), "e2e-linux-*.test"))
+	if err != nil {
+		return nil, fmt.Errorf("looking for staged e2e binaries: %w", err)
+	}
+	return staged, nil
+}
+
 func (r *CalicoManager) buildE2EBinaries() error {
 	arches := e2eArchitectures(r.architectures)
 	if len(arches) == 0 {
@@ -1279,10 +1311,8 @@ func (r *CalicoManager) buildE2EBinaries() error {
 	}
 
 	// Hard-link the built binaries into the output directory to avoid
-	// duplicating ~1 GB of cross-compiled test binaries on disk. files/e2e/ is
-	// the layout the hashrelease server serves and that publishArtifactsToS3
-	// mirrors for a release.
-	e2eOutputDir := filepath.Join(r.uploadDir(), "files", "e2e")
+	// duplicating ~1 GB of cross-compiled test binaries on disk.
+	e2eOutputDir := r.e2eBinariesDir()
 	if err := os.MkdirAll(e2eOutputDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create e2e output dir: %w", err)
 	}
@@ -1647,27 +1677,22 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 // fetch one directly instead of unpacking the release archive. The layout
 // matches Enterprise (<version>/files/e2e/), so both products resolve a binary
 // the same way.
-//
-// Keyed off what the build staged rather than r.e2eBinaries: the e2e-binaries
-// flag belongs to the build step and is never passed to publish.
 func (r *CalicoManager) publishE2EBinaries() error {
-	e2eDir := filepath.Join(r.uploadDir(), "files", "e2e")
-	staged, err := filepath.Glob(filepath.Join(e2eDir, "e2e-linux-*.test"))
+	staged, err := r.stagedE2EBinaries()
 	if err != nil {
-		return fmt.Errorf("looking for staged e2e binaries: %w", err)
+		return err
 	}
 	if len(staged) == 0 {
 		logrus.Info("Skipping publishing e2e test binaries (none staged)")
 		return nil
 	}
+	// publishPrereqs catches this too; repeated here for a --no-validate run,
+	// which would otherwise upload to "s3:///".
 	if r.s3Bucket == "" {
-		return fmt.Errorf("no S3 bucket specified for publishing e2e binaries")
+		return fmt.Errorf("no S3 bucket specified")
 	}
 	dest := fmt.Sprintf("s3://%s/%s/files/e2e/", r.s3Bucket, r.calicoVersion)
-	if err := r.s3Cp(e2eDir+"/", dest, s3ACLPublicRead...); err != nil {
-		return fmt.Errorf("publish e2e binaries: %w", err)
-	}
-	return nil
+	return r.s3Cp(r.e2eBinariesDir()+"/", dest, s3ACLPublicRead...)
 }
 
 func (r *CalicoManager) assertReleaseNotesPresent(ver string) error {
