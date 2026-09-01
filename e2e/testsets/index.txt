@@ -52,7 +52,7 @@
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-w-azure-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-aks-with-calico-cni | wireguard | 1
 .argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-aws-cni | wireguard | 1
-.argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | iptables/eks-xtables-encap-wireguard-aws | 207
+.argoci/cron/e2e-iptables.yaml | focused-wireguard-e2e-eks-kdd-calico-cni | iptables/eks-xtables-encap-wireguard-aws | 181
 .argoci/cron/e2e-iptables.yaml | ipvs | iptables/xtables-v3crd | 224
 .argoci/cron/e2e-iptables.yaml | k8s-beta-runs | iptables/xtables-manifest | 218
 .argoci/cron/e2e-iptables.yaml | k8s-distros | iptables/xtables | 228
@@ -166,7 +166,7 @@
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS w/ Azure CNI) / kdd | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (AKS with Calico CNI) / kdd | wireguard | 1
 .semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (AWS CNI) | wireguard | 1
-.semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | iptables/eks-xtables-encap-wireguard-aws | 207
+.semaphore/end-to-end/pipelines/iptables.yml | Focused WireGuard E2E (EKS) / kdd (Calico CNI) | iptables/eks-xtables-encap-wireguard-aws | 181
 .semaphore/end-to-end/pipelines/iptables.yml | IPVS / ipvs | iptables/xtables-v3crd | 224
 .semaphore/end-to-end/pipelines/iptables.yml | KubeVirt e2e tests / KubeVirt IP persistence and live migration | gcp/kubevirt | 9
 .semaphore/end-to-end/pipelines/iptables.yml | Migration / Flannel migration | iptables/xtables-manifest | 218
