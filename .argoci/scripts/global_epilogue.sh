@@ -21,15 +21,18 @@ CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
 
 # ArgoCI publishes each step's artifact prefix as CI_ARTIFACT_STEP_STORAGE
 # (gs://<bucket>/<workflow>/<pod name>) and the viewer lists exactly that
-# prefix, so use it verbatim rather than composing one.  e2e-vpp publishes to a
-# bucket of its own, so a cron that sets GS_BUCKET still wins; the composed
-# path otherwise survives only as a fallback for local runs.
-if [[ -n "${GS_BUCKET:-}" && "${GS_BUCKET}" != "argoci-artifacts" ]]; then
+# prefix, so use it verbatim rather than composing one.  A cron that sets
+# GS_BUCKET is asking for a bucket of its own (e2e-vpp) and still wins.
+if [[ -n "${GS_BUCKET:-}" ]]; then
   ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
 else
-  ARTIFACT_DEST="${CI_ARTIFACT_STEP_STORAGE:-gs://argoci-artifacts/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}}"
+  ARTIFACT_DEST="${CI_ARTIFACT_STEP_STORAGE:-}"
 fi
-echo "[INFO] publishing artifacts to ${ARTIFACT_DEST}"
+if [[ -n "${ARTIFACT_DEST}" ]]; then
+  echo "[INFO] publishing artifacts to ${ARTIFACT_DEST}"
+else
+  echo "[WARN] neither CI_ARTIFACT_STEP_STORAGE nor GS_BUCKET set; not publishing"
+fi
 
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
