@@ -234,12 +234,10 @@ These are distinct mechanisms with overlapping effect:
   against **drift Felix didn't cause and wasn't told about** — the
   drift-detection job noted in
   [`DESIGN.md` §1](../DESIGN.md#dataplane-managers-and-drivers).
-  Most drivers resync everything in one pass. The **legacy ipsets
-  driver is the exception**: a periodic refresh there is satisfied
-  *incrementally* over several apply loops (see
-  [IP sets](#ip-sets)), because re-listing every set at once is too
-  slow. Start-of-day and error-triggered ipset resyncs stay full and
-  synchronous.
+  Most drivers resync everything in one pass; the legacy ipsets
+  driver satisfies a periodic refresh *incrementally* over several
+  apply loops, because re-listing every set at once is too slow (see
+  [IP sets](#ip-sets)).
 
 ### Review notes for this section
 
@@ -476,11 +474,10 @@ Two invariants follow:
   it does not disqualify an endpoint.
 
   Keeping the endpoint's veth out of the flowtable device set is
-  **not** a substitute, and this was measured rather than assumed: the
-  offload rule creates the entry whichever devices the flow uses, and
-  the fast path then fires from the *ingress* device. A plain pod
-  talking to a connection-limited pod still short-circuits at its own
-  veth, skipping the limit. Only the reply direction would be
+  **not** a substitute: the offload rule creates the entry whichever
+  devices the flow uses, and the fast path fires from the *ingress*
+  device, so a plain pod talking to a connection-limited pod still
+  short-circuits at its own veth. Only the reply direction would be
   protected.
 
 Membership is also gated on the interface being up, in both the
@@ -495,12 +492,12 @@ entire table.
 A node can switch backends across a Felix restart, so Felix sweeps
 every dataplane it isn't currently programming. There are three, and
 `iptablesBackend: Auto` can move a node between the last two on its
-own — detection keys off kube-proxy's chains, so boot ordering
-changes the answer:
+own, since detection keys off kube-proxy's chains and so depends on
+boot ordering.
 
 The shared tables (`filter`/`nat`/`mangle`/`raw`) exist twice in the
-kernel, once per iptables backend, so this doc calls them the
-**legacy copies** and the **nftables copies**.
+kernel, once per iptables backend; this doc calls them the **legacy
+copies** and the **nftables copies**.
 
 | Dataplane | Swept by | Needed when |
 |---|---|---|
@@ -508,35 +505,30 @@ kernel, once per iptables backend, so this doc calls them the
 | the nftables copies of the shared tables, where `iptables-nft` writes | `nftables.IPTablesNFTCleanup` | nftables mode, or iptables mode on iptables-legacy |
 | the legacy copies of the shared tables, where `iptables-legacy` writes | `iptables.Table` pinned to iptables-legacy, `CleanupOnly` | nftables mode, or iptables mode on iptables-nft |
 
-Two details that are easy to get wrong:
+Four constraints on the sweep:
 
 - The nftables copies are read over **netlink**, not with
-  `iptables-nft-save`, which refuses to read a table holding anything
-  iptables can't express - a neighbouring tool's native nft rules used
-  to crash-loop Felix that way. Only **base chains** are read for
-  rules, the only chains Felix ever inserted into, which is what keeps
-  the rule dumps off kube-proxy's thousands of chains. The chain list
-  itself is one dump of the whole family, since netlink has no
-  per-table filter for it, so the sweep is paced by the refresh
-  interval rather than run on every apply.
+  `iptables-nft-save`, which refuses a table holding anything iptables
+  can't express — a neighbouring tool's native nft rules are enough.
+  Only **base chains** are read for rules, the only chains Felix ever
+  inserted into, which keeps the dumps off kube-proxy's thousands of
+  chains. The chain list is one dump of the whole family (netlink has
+  no per-table filter), so the sweep is paced by the refresh interval
+  rather than run every apply.
 - A `CleanupOnly` table never panics: the backend it names may have no
-  kernel support on this host, in which case there is nothing of ours
-  in it anyway. It also retries on a latch rather than on every apply,
-  so a backend Felix can't read doesn't burn a retry budget each time
-  round the loop.
-- Felix declines to build the legacy tables at all unless **both**
-  sets of binaries are present. Without the legacy ones,
-  `FindBestBinary` falls back to the default `iptables` and the sweep
-  lands on the backend Felix is programming; without the nft ones, the
-  tables Felix programs take that same fallback and *are* the legacy
-  ones. The first check also gates the nft view in iptables mode.
-- Nor does Felix build them unless the legacy modules are already
-  loaded, since `iptables-legacy-save` would autoload them onto a node
-  running pure nftables. `environment.DetectBackend` shares that check
-  for the same reason, so backend detection no longer probes a backend
-  the kernel hasn't got - which used to load the modules before the
-  cleanup path got a chance to decline, and to count nft's rules as
-  legacy ones when `FindBestBinary` fell back.
+  kernel support here, in which case nothing of ours is in it. It
+  retries on a latch rather than every apply, so an unreadable backend
+  doesn't burn a retry budget each time round the loop.
+- The legacy tables are built only when **both** sets of binaries are
+  present. Otherwise `FindBestBinary` falls back to the default
+  `iptables`: with the legacy binaries missing the sweep would land on
+  the backend Felix is programming, and with the nft ones missing the
+  tables Felix programs are themselves the legacy copies. The same
+  check gates the nft view in iptables mode.
+- They are also built only when the legacy modules are already loaded,
+  since `iptables-legacy-save` would autoload them onto a node running
+  pure nftables. `environment.DetectBackend` shares that check, so
+  backend detection never probes a backend the kernel hasn't got.
 
 Cleanup **never terminates**. A shared table can be written again at
 any point (kube-proxy restarting, say), so one clean read proves
@@ -572,9 +564,8 @@ converts lists of Calico-internal rules/endpoints/etc into concrete
   per-endpoint dispatch rules is a real per-packet tax. This really is
   per-*packet*, not per-connection: the conntrack accept lives in the
   per-endpoint chain, downstream of dispatch, so even established flows
-  traverse the dispatch chains (an earlier short-circuit further up the
-  path was moved into the per-endpoint chain because it broke setups
-  with non-Calico rules). Felix builds
+  traverse the dispatch chains; it cannot be hoisted above dispatch
+  without breaking setups that carry non-Calico rules. Felix builds
   a **shallow (typically single-level) tree of dispatch chains**,
   binning endpoints by the next character after the common
   interface-name prefix (`sortAndDivideEndpointNamesToPrefixTree` /
@@ -613,9 +604,6 @@ Mechanism and invariants:
   *before* the endpoint-mark block grab. Reserved from packet-mark
   space because the Log rules below also use it as a scratch packet
   mark, and so user `CONNMARK --save-mark` rules can't corrupt it.
-  `Config.validate()`'s reflection scan has an explicit
-  exception allowing this one `Mark*` field to be zero when the
-  feature is disabled.
 - **Setting the bit** (`rules/policy.go`): a rendered `Log` rule is
   followed by a `CONNMARK` rule with the same match. When
   `LogActionRateLimit` is set, both must instead hang off a single
@@ -656,19 +644,16 @@ Mechanism and invariants:
   so only real ICMP errors get the `-icmp-err` log (conntrack
   associates ICMP errors with the *original* connection's entry,
   which is why they carry its connmark; other RELATED flows, e.g.
-  helper children, fall through to the established branch). Nothing
-  in the chain is rate-limited: the bit that brings a packet here is
-  only set when the policy LOG fired, so these logs are already
-  bounded by `LogActionRateLimit` and each one pairs with a log the
-  user has seen.
+  helper children, fall through to the established branch). The
+  chain needs no rate limiting of its own: a packet only gets here
+  if the policy LOG fired, so these logs are already bounded by
+  `LogActionRateLimit`.
 - **Log prefixes** come from the dedicated
   `LogConnectionTransitionsPrefix` param (default
-  `calico-response`), used verbatim — the chain is static and
-  shared by all policies, so `LogPrefix`-style `%`-specifiers
-  cannot be resolved and are rendered literally (the API doc says
-  so) — with the base truncated so suffix plus the `": "` appended
-  by the Log action fit the backend limit (29 chars iptables, 127
-  nftables).
+  `calico-response`) and are used verbatim: the chain is static and
+  shared by all policies, so `LogPrefix`-style `%`-specifiers cannot
+  be resolved and render literally. The base is truncated to leave
+  room for the suffix within the backend's prefix limit.
 - **RST visibility**: netfilter hooks run before the TCP stack sees
   a packet (forwarded traffic never touches the host TCP stack at
   all), and conntrack only *classifies* an RST (valid → ESTABLISHED
@@ -710,26 +695,19 @@ kernel constraints behind them:
   caps deletions per iteration (`MaxIPSetDeletionsPerIteration = 1`,
   rescheduling with a ~100ms floor), so a big policy teardown of
   thousands of sets doesn't stall the whole dataplane on cleanup.
-- **Periodic resyncs are incremental**, for the same reason. Felix
-  reads back each set with its own `ipset list <name>` (needed for an
-  ipset compatibility issue), so re-listing every set on each refresh
-  is far too slow. A refresh instead lists only the *names* cheaply,
-  repairs any set that vanished or appeared unexpectedly right away,
-  and re-checks the surviving sets' contents from a two-tier queue
-  (`resyncQueue`) drained a time-boxed batch per apply
-  (`BackgroundResyncTimeBudget`), paced by the same ≤100ms reschedule
-  as deletions. The **must** tier (start-of-day and error-forced
-  resyncs) is drained fully before Felix trusts the dataplane; the
-  **background** tier (periodic refresh) is spread over apply loops. A
-  desired set found missing from the name listing is repaired in the
-  *same* apply — its dataplane view is cleared so the normal
-  create-path recreates it — rather than being queued for a wasted
-  per-set list. On nodes with many sets the queue may never fully
-  drain between refreshes; re-adds keep an entry's queue position, so
-  the sweep degrades into a continuous rolling scan and a given set's
-  contents are re-checked roughly once per *sweep* time, which can
-  exceed `IpsetsRefreshInterval`. That is the intended trade-off, not
-  a pacing bug.
+- **Periodic resyncs are incremental**, for the same reason: each set
+  is read back with its own `ipset list <name>`, so re-listing every
+  set per refresh is far too slow. A refresh lists only the *names*,
+  repairs any set that vanished or appeared unexpectedly in the same
+  apply, and queues the survivors' contents for re-checking a
+  time-boxed batch per apply, paced by the same ≤100ms reschedule as
+  deletions. The queue has two tiers: **must** (start-of-day and
+  error-forced) is drained fully before Felix trusts the dataplane,
+  **background** (periodic refresh) is spread over apply loops. On
+  nodes with many sets it may never fully drain, so the sweep becomes
+  a continuous rolling scan whose effective re-check period is one
+  sweep — which can exceed `IpsetsRefreshInterval`. That is the
+  intended trade-off, not a pacing bug.
 
 **The cross-layer invariant: never reference an IP set before it is
 programmed.** This is enforced jointly by the calc graph and the
@@ -817,16 +795,11 @@ programming.
 For those components the dual-stack trap is not "did you duplicate
 the code" but **"did you fan out to every family's manager"**. A
 singleton holding a *single* reference to its downstream manager
-silently serves IPv4 only, and nothing fails loudly: the IPv6
-manager simply never learns the state, so its routes keep their
-default behaviour. That was CORE-12806 — the live migration
-monitor's `listener` field was assigned the IPv4 endpoint manager
-only, so IPv6 workload routes were never suppressed on a migration
-target nor elevated after cutover, and IPv6 traffic to a migrating
-VM could black-hole for the duration of the migration. Prefer a list
+serves IPv4 only and fails silently — the IPv6 manager never learns
+the state, so its routes keep their default behaviour. Prefer a list
 plus an explicit registration call (`registerListener`) over a
-single-valued field: a missing family then shows up as a missing
-call at the construction site in `int_dataplane.go`, alongside the
+single-valued field: a missing family then shows up as a missing call
+at the construction site in `int_dataplane.go`, alongside the
 `RegisterManager` call it belongs with.
 
 ### Review notes for this section
