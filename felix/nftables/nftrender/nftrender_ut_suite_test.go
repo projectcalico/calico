@@ -12,14 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !linux
+package nftrender
 
-package nftables
+import (
+	"testing"
 
-import "sigs.k8s.io/knftables"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 
-// readTablesViaNetlink reports no tables off Linux, where there is no nftables to clean up. The
-// netlink client we use for the real read doesn't build anywhere else.
-func readTablesViaNetlink(family knftables.Family, tables []string, onStillAlive func()) (map[string]*iptablesTableState, error) {
-	return nil, nil
+	"github.com/projectcalico/calico/libcalico-go/lib/testutils"
+)
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
+
+func TestNftRenderUT(t *testing.T) {
+	gomega.RegisterFailHandler(ginkgo.Fail)
+	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
+	reporterConfig.JUnitReport = "../../report/felix_nftrender_suite.xml"
+	ginkgo.RunSpecs(t, "UT: felix/nftables/nftrender", suiteConfig, reporterConfig)
 }
