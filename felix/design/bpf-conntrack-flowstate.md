@@ -139,6 +139,64 @@ Readers and writers alike have to reach it: a `NAT_FWD` hit gives
 `src_to_dst`/`dst_to_src` into the tracking entry's legs and uses
 `tracking_v` for the fields hanging off the value itself.
 
+### The forwarding hint on a leg
+
+Each leg records the ifindex where that direction's packets ingress,
+and the *opposite* direction reads it as an egress hint
+(`result.ifindex_fwd`) so it can `bpf_redirect` without a FIB lookup.
+That equivalence — "where your packets come from is where mine should
+go" — only holds while a flow is symmetric.
+
+Two flags on the leg (`CALI_CT_LEG_*` in `conntrack_types.h`) make the
+hint self-describing rather than assumed:
+
+- **`TUNNEL`** — the recorded device is a validated egress for this
+  flow's encap-flagged destinations. A hint without it must not be used
+  for an encap destination: `bpf_redirect` writes no headers, so a
+  physical device ignores the tunnel key and puts the raw inner frame
+  on the wire. The consumer's test pairs `cali_rt_needs_tunnel_egress`
+  ("does this destination require encap right now?" — per-packet
+  routing truth) with this flag ("can the recorded device perform it?"
+  — cached per-flow). The bit is written only by whoever has authority
+  over the device: the program attached to it for an ingress record, or
+  the validator for a leg it pinned.
+- **`PINNED`** — the ifindex is a resolved egress for the opposite
+  direction, not this direction's ingress record. Bookkeeping for
+  userspace cleanup; the dataplane keeps reconciling the leg like any
+  other ingress mismatch.
+
+A hint is repaired at two points, both while the entry is held:
+
+1. **From the reply side**, once per leg generation
+   (`CALI_CT_LEG_CHECKED` marks it done, keeping the route lookup off
+   the per-packet path): if the destination needs encapsulation and the
+   hint is not a tunnel, the egress is resolved by FIB and pinned; a
+   hint already naming the right device is only marked checked. This
+   repairs the asymmetrically-routed flow — natively-routed forward,
+   tunneled reply — whose reply would otherwise leave a physical NIC
+   raw. NAT'd flows are validated against the post-NAT destination, the
+   address the packet is routed by.
+2. **From the forward side**, in the loose-RPF arm: `hep_rpf_check`
+   has just computed the device that reaches the packet's source —
+   exactly the hint the opposite direction needs — so it is recorded
+   and pinned instead of discarded. A re-run with an unchanged answer
+   writes nothing; a changed answer re-pins.
+
+Neither writer touches a `tun_ip` flow's leg: that hint is half of the
+`{tun_ip, ifindex}` ARP-map key of the return-encap fast path, an
+egress record that must not be rewritten.
+
+Stale state heals from packets. A route move re-pins via the loose arm
+(a pin naming a departed device would otherwise blackhole —
+`bpf_redirect` does not validate an ifindex). A packet confirming the
+recorded ingress refreshes the leg's claims from the program's own
+provenance: a wrong `TUNNEL` claim is corrected and `CHECKED` cleared
+so the reply side revalidates, and a pin that routing made the honest
+ingress sheds its `PINNED` label. A planned userspace scanner clearing
+pins for departed devices is an optimization on top, except for flows
+whose forward traffic has stopped — those never re-enter the reconcile,
+so the scanner is their only repair.
+
 ### Cleanup: three layers
 
 #### 1. Userspace scanners
