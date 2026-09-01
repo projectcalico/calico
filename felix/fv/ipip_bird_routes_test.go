@@ -137,11 +137,11 @@ var _ = infrastructure.DatastoreDescribe(
 			dest, gw := match[1], match[2]
 
 			// Stand in for the route the old BIRD left behind for the same destination: same
-			// next hop and device, but BIRD's protocol.
+			// next hop and device, but BIRD's protocol.  Exec fails the test if the kernel
+			// rejects this, which is the only check available: Felix can reclaim the route
+			// within milliseconds, so nothing here can reliably observe it in place first.
 			felixes[0].Exec("ip", "route", "replace", dest, "via", gw,
 				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
-			Expect(tunl0Routes()).To(ContainSubstring("proto "+birdRouteProto),
-				"test setup did not install a BIRD-protocol route")
 
 			// Felix owns it, so it takes it back.  It must end up replaced rather than simply
 			// removed: this is a destination the cluster needs a route to.
@@ -156,8 +156,6 @@ var _ = infrastructure.DatastoreDescribe(
 			// replace it with.  Without the ownership rule nothing would ever clean this up.
 			felixes[0].Exec("ip", "route", "add", birdStrayCIDR, "via", felixes[1].IP,
 				"dev", dataplanedefs.IPIPIfaceName, "onlink", "proto", birdRouteProto)
-			Expect(tunl0Routes()).To(ContainSubstring(birdStrayCIDR),
-				"test setup did not install a BIRD-protocol route")
 
 			Eventually(tunl0Routes, "30s", "500ms").ShouldNot(ContainSubstring(birdStrayCIDR),
 				"Felix did not remove BIRD's stale route")

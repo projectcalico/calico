@@ -101,7 +101,8 @@ type CalicoNodeDaemonSetPodSpec struct {
 	// +optional
 	Tolerations []v1.Toleration `json:"tolerations"`
 
-	// DNSPolicy is the DNS policy for the calico-node pods.
+	// DNSPolicy is the DNS policy for the calico-node pods. Defaults to Default, which uses the node's
+	// own resolver, since calico-node runs before cluster DNS is reachable.
 	// +kubebuilder:validation:Enum="";Default;ClusterFirst;ClusterFirstWithHostNet;None
 	// +optional
 	DNSPolicy *v1.DNSPolicy `json:"dnsPolicy,omitempty"`

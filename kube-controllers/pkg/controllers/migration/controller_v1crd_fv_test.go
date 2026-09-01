@@ -17,6 +17,7 @@ package migration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -135,7 +136,7 @@ func TestLifecycle_RealV1CRDs(t *testing.T) {
 	g.Eventually(func(g Gomega) {
 		err := fvRTClient.Get(ctx, dmKey, &migrationv1.DatastoreMigration{})
 		g.Expect(kerrors.IsNotFound(err)).To(BeTrue(), "CR should be deleted after cleanup, got: %v", err)
-		g.Expect(countV1CRDs(ctx)).To(Equal(0), "v1 CRDs should have been deleted by the finalizer")
+		g.Expect(describeV1CRDs(ctx)).To(BeEmpty(), "v1 CRDs should have been deleted by the finalizer")
 	}, 60*time.Second, 250*time.Millisecond).Should(Succeed())
 }
 
@@ -343,19 +344,26 @@ func ensureV1CRDs(t *testing.T, g Gomega) {
 	}, 60*time.Second, time.Second).Should(Succeed())
 }
 
-// countV1CRDs returns the number of installed crd.projectcalico.org CRDs.
-func countV1CRDs(ctx context.Context) (int, error) {
+// describeV1CRDs returns one line per remaining crd.projectcalico.org CRD, naming its
+// deletion timestamp, finalizers and conditions so a failure says why the CRD is still there.
+func describeV1CRDs(ctx context.Context) ([]string, error) {
 	crds, err := fvCRDClient.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	count := 0
+	var out []string
 	for _, crd := range crds.Items {
-		if crd.Spec.Group == "crd.projectcalico.org" {
-			count++
+		if crd.Spec.Group != "crd.projectcalico.org" {
+			continue
 		}
+		var conditions []string
+		for _, c := range crd.Status.Conditions {
+			conditions = append(conditions, fmt.Sprintf("%s=%s(%s)", c.Type, c.Status, c.Reason))
+		}
+		out = append(out, fmt.Sprintf("%s deletionTimestamp=%v finalizers=%v conditions=%v",
+			crd.Name, crd.DeletionTimestamp, crd.Finalizers, conditions))
 	}
-	return count, nil
+	return out, nil
 }
 
 // createNamespace creates a namespace for the namespaced seed resources.
