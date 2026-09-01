@@ -41,7 +41,10 @@ EOF
 def read_status(name):
     status_json = kubectl("get caliconodestatus %s -o json" % name)
     status_dict = json.loads(status_json)
-    return status_dict['status']
+    status = status_dict.get('status')
+    if not status:
+        raise Exception("status not yet populated for %s" % name)
+    return status
 
 def delete_status(name):
     kubectl("delete caliconodestatus %s" % name)
