@@ -173,24 +173,27 @@ clean:
 ###############################################################################
 UT_DIR?=./pkg
 FV_DIR?=./test
-GINKGO_ARGS?= -v -trace -r
-GINKGO_FOCUS?=.*
+GO_TEST_ARGS ?= -count 1
+GINKGO_FOCUS ?= .*
 ENVTEST_K8S_VERSION?=1.34.x
 
+# gotestsum, rather than the ginkgo CLI, because it writes one JUnit report from the
+# directory it runs in. Ginkgo resolves its report path against each suite instead,
+# which scatters the reports through the package tree where CI cannot collect them.
 .PHONY: ut
 ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
 	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
-	ginkgo -focus="$(GINKGO_FOCUS)" --output-dir=report --junit-report=ut.xml $(GINKGO_ARGS) "$(UT_DIR)"'
+	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) -ginkgo.focus="$(GINKGO_FOCUS)"'
 
 ## Run the functional tests against a local kind cluster.
 fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	ginkgo -focus="$(GINKGO_FOCUS)" --output-dir=report --junit-report=fv.xml $(GINKGO_ARGS) "$(FV_DIR)"'
+	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -ginkgo.focus="$(GINKGO_FOCUS)"'
 
 # The tag the operator resolves for these components, from config/calico_versions.yml.
 FV_IMAGE_TAG ?= master
