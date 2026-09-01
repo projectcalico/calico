@@ -387,7 +387,7 @@ require (
 	k8s.io/controller-manager v0.37.0 // indirect
 	k8s.io/cri-api v0.37.0 // indirect
 	k8s.io/cri-client v0.37.0 // indirect
-	k8s.io/cri-streaming v0.0.0 // indirect
+	k8s.io/cri-streaming v0.37.0 // indirect
 	k8s.io/csi-translation-lib v0.37.0 // indirect
 	k8s.io/dynamic-resource-allocation v0.37.0 // indirect
 	k8s.io/kms v0.37.0 // indirect

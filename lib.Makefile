@@ -1891,7 +1891,10 @@ ENVTEST_CONTAINER_DIR := /go/src/github.com/projectcalico/calico/hack/test/envte
 ifneq ($(OS),Windows_NT)
 ENVTEST_K8S_VERSION ?= $(shell echo $(K8S_VERSION) | sed 's/^v//' | cut -d. -f1,2).x
 endif
-ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(ENVTEST_K8S_VERSION)
+# Key the marker off the full K8S_VERSION rather than the minor wildcard. The
+# fallback below stores its assets under k8s/<full version>-<os>-<arch>, so a
+# bump inside one minor (rc to GA, say) has to force a fresh setup.
+ENVTEST_ASSETS_MARKER := $(ENVTEST_DIR)/.envtest-$(K8S_VERSION:v%=%)
 
 ## Download envtest binaries (kube-apiserver, etcd, kubectl) for use by tests that use controller-runtime envtest.
 .PHONY: setup-envtest
