@@ -1,15 +1,17 @@
 ---
 name: operator-versioning
-description: Map between Calico/enterprise versions and tigera/operator release branches. Use this skill whenever you need to determine which operator branch corresponds to a Calico or enterprise release (e.g., "which operator branch is Calico v3.30?"), or the reverse (e.g., "what Calico version does release-v1.40 ship?"). Also use this skill whenever cherry-picking to operator release branches, creating cherry-pick PRs targeting release branches, or any task that requires knowing the operator↔Calico version relationship. Trigger even if the user doesn't explicitly ask about versioning — if the task involves targeting an operator release branch by Calico version, use this skill to find the right branch.
+description: Map between Calico/enterprise versions and tigera/operator release branches, for the releases that predate the operator moving into this repo. Use this skill whenever you need to determine which operator branch corresponds to a Calico or enterprise release (e.g., "which operator branch is Calico v3.30?"), or the reverse (e.g., "what Calico version does release-v1.40 ship?"). Also use this skill whenever cherry-picking to operator release branches, creating cherry-pick PRs targeting release branches, or any task that requires knowing the operator↔Calico version relationship. Trigger even if the user doesn't explicitly ask about versioning — if the task involves targeting an operator release branch by Calico version, use this skill to find the right branch.
 ---
 
 # Operator Version Mapping
+
+The operator is built from `operator/` in this repo and ships on the Calico version stream, so from master and any release branch cut after v3.32 there is no separate operator branch to map. Everything below is for v3.32 and earlier, where the operator was built from tigera/operator.
 
 The tigera/operator repo uses its own versioning (release-v1.X) that does NOT have a simple 1:1 offset with Calico versions. Some operator branches correspond to Calico OSS releases, others to Calico Enterprise releases, and the mapping changes over time. Never guess the mapping — always look it up.
 
 ## Calico version → operator branch
 
-The authoritative source is the `OPERATOR_BRANCH` variable in `metadata.mk`:
+The authoritative source is the `OPERATOR_BRANCH` variable in `metadata.mk`, which those release branches still carry:
 
 1. **Calico OSS (projectcalico/calico)**: check `metadata.mk` on the `release-vX.Y` branch.
    ```bash

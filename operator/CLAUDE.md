@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Operational guidance for the operator, which builds out of this directory. Repo-wide rules live in the root `.claude/CLAUDE.md`.
 
 ## Project Overview
 
