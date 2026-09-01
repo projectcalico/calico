@@ -47,14 +47,13 @@ enum cali_ct_type {
 #define CALI_CT_FLAG_CONNLIMIT_EGRESS	0x100000 /* marks connections counted against an egress connection limit */
 #define CALI_CT_FLAG_CONNLIMIT_DEC	0x200000 /* marks connections already decremented from connlimit counter */
 
-/* Flags kept in calico_ct_leg's bits_word. Live map entries are shared between
- * the two directions of a flow, which can run on different CPUs, so every
- * write to the word on a live entry must go through the atomic helpers below:
- * a bitfield assignment is a read-modify-write of the whole word and would
- * resurrect or drop a concurrent update from the other side. Plain bitfield
- * writes are for entries still on the stack (the create path) only. The masks
- * mirror the bitfield members' little-endian layout, the same one
- * felix/bpf/conntrack/v4/map.go encodes.
+/* Flags kept in calico_ct_leg's bits_word. A live entry is shared by the two
+ * directions of a flow, on possibly different CPUs, so every write to the
+ * word on a live entry must go through the atomic helpers below - a bitfield
+ * assignment is a read-modify-write of the whole word and can drop a
+ * concurrent update. Plain bitfield writes are for stack-local entries (the
+ * create path) only. The masks mirror the bitfield members' layout, which
+ * felix/bpf/conntrack/v4/map.go also encodes.
  */
 #define CALI_CT_LEG_SYN_SEEN	(1U << 0)
 #define CALI_CT_LEG_ACK_SEEN	(1U << 1)
@@ -65,19 +64,16 @@ enum cali_ct_type {
 #define CALI_CT_LEG_WORKLOAD	(1U << 6)
 #define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
 					   * flow's encap-flagged destinations: a tunnel
-					   * device, or whatever the FIB resolved for such
-					   * a destination (under wireguard, remote routes
-					   * are encap-flagged even where the egress for a
-					   * keyless peer is a plain NIC - CORE-13520).
-					   * Written only by whoever has authority over
-					   * the device: the program attached to it for an
-					   * ingress record (create / strict-RPF arm /
-					   * kind refresh), or the validator for a leg it
-					   * pinned - no program is attached to a pinned
-					   * egress. Invariant: never observable next to
-					   * an ifindex it does not describe - transitions
-					   * clear it before the ifindex store and re-set
-					   * it only after.
+					   * device, or whatever the FIB resolved for one
+					   * (under wireguard, remote routes are
+					   * encap-flagged even where a keyless peer's
+					   * egress is a plain NIC - CORE-13520). Written
+					   * only by whoever has authority over the
+					   * device: the program attached to it for an
+					   * ingress record, or the validator for a leg
+					   * it pinned. Invariant: never observable next
+					   * to an ifindex it does not describe - cleared
+					   * before the ifindex store, re-set only after.
 					   */
 #define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
 					   * opposite direction, not this direction's
@@ -345,12 +341,10 @@ struct calico_ct_result {
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
 				*
-				* Meaningful only as the WEP a workload-opened flow was
-				* created at (or a HEP for a host-networked opener) -
-				* what DNS snooping keys on. For a HEP-opened flow the
-				* opener leg can be pinned (CALI_CT_LEG_PINNED), making
-				* its ifindex an egress record, but no consumer reads
-				* those flows.
+				* Meaningful only for WEP- or host-opened flows - what
+				* DNS snooping keys on. A HEP-opened flow's opener leg
+				* can be pinned (an egress record), but no consumer
+				* reads those flows.
 				*/
 };
 

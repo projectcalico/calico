@@ -200,15 +200,13 @@ skip_redir_ifindex:
 		if (state->ct_result.ifindex_fwd != CT_INVALID_IFINDEX &&
 				!(state->ct_result.fwd_flags & CT_FWD_FLAG_TUNNEL) &&
 				cali_rt_needs_tunnel_egress(dest_rt)) {
-			/* The hint is the device through which the opposite direction
-			 * ingresses, which is only a valid egress for an encap
-			 * destination if it is the tunnel itself. Redirecting to a
-			 * physical device instead emits the raw inner frame there,
-			 * because the tunnel key means nothing to it. Conntrack
-			 * normally replaces such a hint on the flow's first reply, so
-			 * reaching here means it could not - no route at the time, a
-			 * failed lookup, or an entry predating the tunnel bit. Resolve
-			 * it the slow way for this packet.
+			/* The hint is the opposite direction's ingress device - a
+			 * valid egress for an encap destination only if it is the
+			 * tunnel itself; redirecting to a physical device would emit
+			 * the raw inner frame there. Conntrack normally replaces such
+			 * a hint on the flow's first reply; reaching here means it
+			 * could not (no route yet, failed lookup, entry predating the
+			 * tunnel bit). Resolve the slow way for this packet.
 			 */
 			CALI_DEBUG("Tunneled dest " IP_FMT " but fwd hint dev %d is not a tunnel,"
 					" resolving by FIB",
