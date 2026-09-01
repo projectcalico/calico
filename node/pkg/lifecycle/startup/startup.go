@@ -299,13 +299,8 @@ func MarkNetworkAvailable(ctx context.Context, timeout time.Duration) error {
 }
 
 // nodeClient builds the Kubernetes client used to write this node's status. A nil clientset with
-// a nil error means Calico isn't managing networking here, or there is no Kubernetes to talk to.
+// a nil error means there is no Kubernetes to talk to.
 func nodeClient() (kubernetes.Interface, string, error) {
-	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
-		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
-		return nil, "", nil
-	}
-
 	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
 	if err != nil {
 		if clientcmd.IsEmptyConfig(err) && os.Getenv("DATASTORE_TYPE") != "kubernetes" {
@@ -349,6 +344,13 @@ func waitForReady(ctx context.Context, timeout time.Duration) error {
 	// Check Felix health if FELIX_HEALTHENABLED is set to true.
 	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
 
+	if !checkBIRD && !checkBIRD6 && !checkFelix {
+		// Nothing to wait for. health.RunOutput errors out rather than passing when it is given
+		// no checks to run, so this has to short-circuit.
+		log.Info("No health checks configured, treating Calico as ready")
+		return nil
+	}
+
 	log.Info("Waiting for Calico to become ready before continuing...")
 	to := time.After(timeout)
 	for {
@@ -371,7 +373,11 @@ func waitForReady(ctx context.Context, timeout time.Duration) error {
 // markNetworkAvailable publishes that Calico is up on this node. Setting the condition is left
 // late in startup: it makes the node-lifecycle controller re-evaluate the node's taints.
 func markNetworkAvailable(ctx context.Context, clientset kubernetes.Interface, k8sNodeName string) error {
-	err := utils.SetNodeNetworkUnavailableCondition(
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		// Another CNI owns networking here, so the condition is not ours to set. The taint still
+		// has to go: admission tainted the node and nothing else will clear it.
+		log.Info("Calico is not managing networking, skipping the NetworkUnavailable condition")
+	} else if err := utils.SetNodeNetworkUnavailableCondition(
 		ctx,
 		clientset,
 		k8sNodeName,
@@ -379,8 +385,7 @@ func markNetworkAvailable(ctx context.Context, clientset kubernetes.Interface, k
 		nodestatus.NetworkReadyReason,
 		nodestatus.NetworkReadyMessage,
 		30*time.Second,
-	)
-	if err != nil {
+	); err != nil {
 		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 		return err
 	}
