@@ -361,7 +361,7 @@ blocks:
             - make -C felix gen-files
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
-            - make -C operator gen-files update-calico-crds
+            - make -C operator gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -832,6 +832,8 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-typha.yml',
         '/.semaphore/vms/',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -962,6 +964,7 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -6018,8 +6021,11 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
+        '/libcalico-go/config/crd/*.go',
         '/metadata.mk',
         '/operator/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -6029,7 +6035,9 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
     dependencies:
       - Prerequisites
     task:
@@ -6058,8 +6066,11 @@ blocks:
         '/.semaphore/semaphore.yml.d/09-blocks.yml',
         '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
+        '/libcalico-go/config/crd/*.go',
         '/metadata.mk',
         '/operator/**'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
@@ -6069,7 +6080,9 @@ blocks:
         '/**/DEVELOPER_GUIDE*',
         '/**/LICENSE*',
         '/**/README*',
-        '/**/SECURITY.md']})
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
     dependencies:
       - Prerequisites
       - "Build: calico image"

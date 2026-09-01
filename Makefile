@@ -105,9 +105,8 @@ generate:
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) -C kube-controllers gen-files
-	# After libcalico-go and api, whose CRDs the operator embeds, and before the
-	# manifests, which take the operator's CRDs from its own tree.
-	$(MAKE) -C operator gen-files update-calico-crds
+	# Before the manifests, which take the operator's CRDs from its own tree.
+	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 

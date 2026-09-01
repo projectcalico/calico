@@ -20,6 +20,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
+	"testing/fstest"
 
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
@@ -84,21 +85,19 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 			Expect(mapbCount).To(Equal(2))
 		})
 
-		It("returns Enterprise MAPs at the chosen version", func() {
-			objs := GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)
-			Expect(objs).To(HaveLen(4))
+		It("returns the policies a variant registers", func() {
+			RegisterVariantPolicies(opv1.CalicoEnterprise, fstest.MapFS{
+				"policy.yaml": &fstest.MapFile{Data: []byte(enterpriseMAP)},
+			})
+			DeferCleanup(func() { RegisterVariantPolicies(opv1.CalicoEnterprise, nil) })
 
-			var mapCount, mapbCount int
-			for _, obj := range objs {
-				switch obj.(type) {
-				case *admissionregistrationv1.MutatingAdmissionPolicy:
-					mapCount++
-				case *admissionregistrationv1.MutatingAdmissionPolicyBinding:
-					mapbCount++
-				}
-			}
-			Expect(mapCount).To(Equal(2))
-			Expect(mapbCount).To(Equal(2))
+			objs := GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)
+			Expect(objs).To(HaveLen(1))
+			Expect(objs[0].GetLabels()).To(HaveKeyWithValue(ManagedMAPLabel, ManagedMAPLabelValue))
+		})
+
+		It("returns nothing for a variant whose policies this build does not ship", func() {
+			Expect(GetMutatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)).To(BeEmpty())
 		})
 
 		It("returns empty when v3=false", func() {
@@ -176,9 +175,8 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 			Expect(vapbCount).To(Equal(1))
 		})
 
-		It("returns Enterprise VAPs at the chosen version", func() {
-			objs := GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)
-			Expect(objs).To(HaveLen(2))
+		It("returns nothing for a variant whose policies this build does not ship", func() {
+			Expect(GetValidatingAdmissionPolicies(opv1.CalicoEnterprise, true, VersionV1)).To(BeEmpty())
 		})
 
 		It("returns empty when v3=false", func() {
@@ -191,3 +189,12 @@ var _ = Describe("MutatingAdmissionPolicies", func() {
 		})
 	})
 })
+
+const enterpriseMAP = `apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: test-policy
+spec:
+  matchConstraints:
+    resourceRules: []
+`

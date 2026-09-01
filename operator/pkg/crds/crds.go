@@ -19,7 +19,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"path"
+	"io/fs"
 	"strings"
 	"sync"
 	"time"
@@ -30,21 +30,26 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
+	v3crd "github.com/projectcalico/api/config/crd"
+	v1crd "github.com/projectcalico/calico/libcalico-go/config/crd"
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
-var (
+// k8sPolicyPrefix marks the policy.networking.k8s.io CRDs, which are generated
+// alongside the crd.projectcalico.org ones but installed as their own set.
+const k8sPolicyPrefix = "policy.networking.k8s.io_"
 
-	//go:embed calico
-	calicoCRDFiles embed.FS
-	//go:embed enterprise
-	enterpriseCRDFiles embed.FS
+var (
 	//go:embed operator/*
 	operatorCRDFiles embed.FS
 	//go:embed calico_operator_crds.txt
 	calicoOperatorCRDList string
 
 	calicoOperatorCRDs map[string]bool
+
+	// variantCRDs holds the CRDs a variant installs beyond the operator's own.
+	// Enterprise registers its own, which are not built from this repo.
+	variantCRDs map[opv1.ProductVariant][]CRDSource
 
 	// We cache these CRDs because to generate the calico and enterprise takes
 	// approximately 40ms, with the caching 1ms.
@@ -53,7 +58,21 @@ var (
 	enterpriseCRDs []*apiextenv1.CustomResourceDefinition
 )
 
+// CRDSource returns CRD YAML documents keyed by a name unique within the source.
+type CRDSource func(v3 bool) map[string][]byte
+
+// RegisterVariantCRDs adds CRDs a variant installs on top of the operator's own,
+// for variants whose CRDs are not generated in this repo.
+func RegisterVariantCRDs(variant opv1.ProductVariant, sources ...CRDSource) {
+	lock.Lock()
+	defer lock.Unlock()
+	variantCRDs[variant] = append(variantCRDs[variant], sources...)
+	calicoCRDs = nil
+	enterpriseCRDs = nil
+}
+
 func init() {
+	variantCRDs = map[opv1.ProductVariant][]CRDSource{}
 	calicoOperatorCRDs = map[string]bool{}
 	for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
 		if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
@@ -62,148 +81,65 @@ func init() {
 	}
 }
 
+// readCRDs splits every file the filter accepts into its YAML documents, keyed by
+// file name and document index.
+func readCRDs(files fs.FS, what string, keep func(name string) bool) map[string][]byte {
+	ret := map[string][]byte{}
+	entries, err := fs.ReadDir(files, ".")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to read %s CRDs: %v", what, err))
+	}
+
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".yaml") || !keep(entry.Name()) {
+			continue
+		}
+
+		b, err := fs.ReadFile(files, entry.Name())
+		if err != nil {
+			panic(fmt.Sprintf("Failed to read %s CRD %s: %v", what, entry.Name(), err))
+		}
+
+		docs := bytes.Split(b, []byte("\n---"))
+		for i, doc := range docs {
+			ret[fmt.Sprintf("%s_%d", entry.Name(), i)] = doc
+		}
+	}
+
+	return ret
+}
+
+// getCalicoCRDSource returns the datastore CRDs, which libcalico-go generates for
+// v1 and the api module for v3.
 func getCalicoCRDSource(v3 bool) map[string][]byte {
-	ret := map[string][]byte{}
-	dir := "calico/v1.crd.projectcalico.org"
+	files, what := v1crd.FS(), "Calico v1"
 	if v3 {
-		dir = "calico/v3.projectcalico.org"
+		files, what = v3crd.FS(), "Calico v3"
 	}
-	entries, err := calicoCRDFiles.ReadDir(dir)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read Calico CRDs: %v", err))
-	}
-
-	for _, entry := range entries {
-		b, err := calicoCRDFiles.ReadFile(path.Join(dir, entry.Name()))
-		if err != nil {
-			panic(fmt.Sprintf("Failed to read Calico CRD %s: %v", entry.Name(), err))
-		}
-
-		crds := bytes.Split(b, []byte("\n---"))
-		for i, crd := range crds {
-			ret[fmt.Sprintf("%s_%d", entry.Name(), i)] = crd
-		}
-	}
-
-	return ret
+	return readCRDs(files, what, func(name string) bool {
+		return !strings.HasPrefix(name, k8sPolicyPrefix)
+	})
 }
 
-func getEnterpriseCRDSource(v3 bool) map[string][]byte {
-	ret := map[string][]byte{}
-	dir := "enterprise/v1.crd.projectcalico.org"
-	if v3 {
-		dir = "enterprise/v3.projectcalico.org"
-	}
-	entries, err := enterpriseCRDFiles.ReadDir(dir)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read Enterprise CRDs: %v", err))
-	}
-
-	// Determine paths of each file to parse, loading all of the files discovered in
-	// the Calico CRD directory plus the ECK CRD bundle file.
-	files := map[string]string{}
-	for _, entry := range entries {
-		files[entry.Name()] = path.Join(dir, entry.Name())
-	}
-	files["01-crd-eck-bundle.yaml"] = "enterprise/01-crd-eck-bundle.yaml"
-
-	for name, path := range files {
-		b, err := enterpriseCRDFiles.ReadFile(path)
-		if err != nil {
-			panic(fmt.Sprintf("Failed to read Enterprise CRD %s: %v", name, err))
-		}
-
-		crds := bytes.Split(b, []byte("\n---"))
-		for i, crd := range crds {
-			ret[fmt.Sprintf("%s_%d", name, i)] = crd
-		}
-	}
-	return ret
+// getK8sPolicyCRDSource returns the policy.networking.k8s.io CRDs, which libcalico-go
+// generates beside the v1 datastore CRDs and both CRD modes install.
+func getK8sPolicyCRDSource() map[string][]byte {
+	return readCRDs(v1crd.FS(), "K8s policy", func(name string) bool {
+		return strings.HasPrefix(name, k8sPolicyPrefix)
+	})
 }
 
-func getK8sPolicyCRDSource(variant opv1.ProductVariant) map[string][]byte {
-	ret := map[string][]byte{}
-	var fs embed.FS
-	var dir string
-	if variant == opv1.Calico {
-		fs = calicoCRDFiles
-		dir = "calico/policy.networking.k8s.io"
-	} else {
-		fs = enterpriseCRDFiles
-		dir = "enterprise/policy.networking.k8s.io"
-	}
-	entries, err := fs.ReadDir(dir)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read K8s policy CRDs: %v", err))
-	}
-
-	for _, entry := range entries {
-		b, err := fs.ReadFile(path.Join(dir, entry.Name()))
-		if err != nil {
-			panic(fmt.Sprintf("Failed to read K8s policy CRD %s: %v", entry.Name(), err))
-		}
-
-		crds := bytes.Split(b, []byte("\n---"))
-		for i, crd := range crds {
-			ret[fmt.Sprintf("%s_%d", entry.Name(), i)] = crd
-		}
-	}
-
-	return ret
-}
-
-// getApplicationLayerCRDSource returns the applicationlayer.projectcalico.org CRDs
-// (the gateway WAF kinds). This is a distinct, CRD-only API group that is not served
-// by the aggregated apiserver and has a single v3 schema, so - unlike the
-// projectcalico.org datastore CRDs - it is installed in both v1-CRD and v3-CRD modes.
-// Enterprise only.
-func getApplicationLayerCRDSource() map[string][]byte {
-	ret := map[string][]byte{}
-	dir := "enterprise/applicationlayer.projectcalico.org"
-	entries, err := enterpriseCRDFiles.ReadDir(dir)
-	if err != nil {
-		panic(fmt.Sprintf("Failed to read ApplicationLayer CRDs: %v", err))
-	}
-
-	for _, entry := range entries {
-		b, err := enterpriseCRDFiles.ReadFile(path.Join(dir, entry.Name()))
-		if err != nil {
-			panic(fmt.Sprintf("Failed to read ApplicationLayer CRD %s: %v", entry.Name(), err))
-		}
-
-		crds := bytes.Split(b, []byte("\n---"))
-		for i, crd := range crds {
-			ret[fmt.Sprintf("%s_%d", entry.Name(), i)] = crd
-		}
-	}
-
-	return ret
-}
-
+// getOperatorCRDSource returns the operator's own CRDs, trimmed to the set a Calico
+// install ships.
 func getOperatorCRDSource(variant opv1.ProductVariant) map[string][]byte {
-	ret := map[string][]byte{}
-	entries, err := operatorCRDFiles.ReadDir("operator")
+	files, err := fs.Sub(operatorCRDFiles, "operator")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to read Operator CRDs: %v", err))
 	}
 
-	for _, entry := range entries {
-		if variant == opv1.Calico && !calicoOperatorCRDs[entry.Name()] {
-			continue
-		}
-
-		b, err := operatorCRDFiles.ReadFile(path.Join("operator", entry.Name()))
-		if err != nil {
-			panic(fmt.Sprintf("Failed to read Operator CRD %s: %v", entry.Name(), err))
-		}
-
-		crds := bytes.Split(b, []byte("\n---"))
-		for i, crd := range crds {
-			ret[fmt.Sprintf("%s_%d", entry.Name(), i)] = crd
-		}
-	}
-
-	return ret
+	return readCRDs(files, "Operator", func(name string) bool {
+		return variant != opv1.Calico || calicoOperatorCRDs[name]
+	})
 }
 
 func convertYamlsToCRDs(yamls ...map[string][]byte) []*apiextenv1.CustomResourceDefinition {
@@ -230,12 +166,16 @@ func GetCRDs(variant opv1.ProductVariant, v3 bool) []*apiextenv1.CustomResourceD
 	var crds []*apiextenv1.CustomResourceDefinition
 	if variant == opv1.Calico {
 		if len(calicoCRDs) == 0 {
-			calicoCRDs = convertYamlsToCRDs(getCalicoCRDSource(v3), getK8sPolicyCRDSource(variant), getOperatorCRDSource(variant))
+			calicoCRDs = convertYamlsToCRDs(getCalicoCRDSource(v3), getK8sPolicyCRDSource(), getOperatorCRDSource(variant))
 		}
 		crds = calicoCRDs
 	} else {
 		if len(enterpriseCRDs) == 0 {
-			enterpriseCRDs = convertYamlsToCRDs(getEnterpriseCRDSource(v3), getK8sPolicyCRDSource(variant), getOperatorCRDSource(variant), getApplicationLayerCRDSource())
+			yamls := []map[string][]byte{getOperatorCRDSource(variant)}
+			for _, source := range variantCRDs[variant] {
+				yamls = append(yamls, source(v3))
+			}
+			enterpriseCRDs = convertYamlsToCRDs(yamls...)
 		}
 		crds = enterpriseCRDs
 	}

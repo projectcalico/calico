@@ -17,9 +17,10 @@ package admission
 import (
 	"bytes"
 	"context"
-	"embed"
 	"fmt"
-	"path"
+	"io/fs"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
+	apiadmission "github.com/projectcalico/api/admission"
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
@@ -81,11 +83,20 @@ var ValidatingPolicyGroupKind = schema.GroupKind{Group: APIGroup, Kind: KindVali
 type policyParseFunc func(doc []byte, filename, apiVersion string) (client.Object, error)
 
 var (
-	//go:embed calico
-	calicoAdmissionFiles embed.FS
-	//go:embed enterprise
-	enterpriseAdmissionFiles embed.FS
+	// variantPolicies holds the admission policies a variant installs. Enterprise
+	// registers its own, which are not generated in this repo.
+	variantPolicies = map[opv1.ProductVariant]fs.FS{}
+
+	lock sync.Mutex
 )
+
+// RegisterVariantPolicies adds the admission policies a variant installs, for
+// variants whose policies are not generated in this repo.
+func RegisterVariantPolicies(variant opv1.ProductVariant, files fs.FS) {
+	lock.Lock()
+	defer lock.Unlock()
+	variantPolicies[variant] = files
+}
 
 // GetMutatingAdmissionPolicies returns MutatingAdmissionPolicy and MutatingAdmissionPolicyBinding
 // objects for the given variant, typed at the requested API version. These are only applicable
@@ -103,6 +114,17 @@ func GetValidatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVer
 	return getAdmissionPolicies(variant, v3, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedVAPLabelValue)
 }
 
+// policyFiles returns the policies for a variant, or nil when this build ships none.
+func policyFiles(variant opv1.ProductVariant) fs.FS {
+	if variant == opv1.Calico {
+		return apiadmission.FS()
+	}
+
+	lock.Lock()
+	defer lock.Unlock()
+	return variantPolicies[variant]
+}
+
 // getAdmissionPolicies reads the embedded admission policy files for the given variant and returns
 // the documents that parseFn recognizes, each labeled with labelKey=labelValue. The mutating and
 // validating policies live in the same embedded files, so parseFn returns a nil object for kinds
@@ -113,24 +135,23 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 		return nil
 	}
 
-	var fs embed.FS
-	var dir string
-	if variant == opv1.Calico {
-		fs = calicoAdmissionFiles
-		dir = "calico"
-	} else {
-		fs = enterpriseAdmissionFiles
-		dir = "enterprise"
+	files := policyFiles(variant)
+	if files == nil {
+		return nil
 	}
 
-	entries, err := fs.ReadDir(dir)
+	entries, err := fs.ReadDir(files, ".")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to read admission policy files from %s: %v", dir, err))
+		panic(fmt.Sprintf("Failed to read admission policy files: %v", err))
 	}
 
 	var objs []client.Object
 	for _, entry := range entries {
-		b, err := fs.ReadFile(path.Join(dir, entry.Name()))
+		if !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
+
+		b, err := fs.ReadFile(files, entry.Name())
 		if err != nil {
 			panic(fmt.Sprintf("Failed to read admission policy file %s: %v", entry.Name(), err))
 		}

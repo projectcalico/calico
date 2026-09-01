@@ -12,7 +12,6 @@ hack/bin
 hack/release/_output/
 operator-sdk*
 *-release-notes.md
-.crds
 # Created by https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 ### Emacs ###
 # -*- mode: gitignore; -*-
@@ -89,6 +88,8 @@ tags
 .history
 # End of https://www.gitignore.io/api/go,vim,emacs,visualstudiocode
 .go-pkg-cache
+# Left by an Enterprise CRD fetch, which only the repo that ships Enterprise runs.
+.crds
 report/*
 cscope.*
 .idea/

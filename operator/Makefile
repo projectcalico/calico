@@ -358,7 +358,6 @@ clean:
 	rm -rf build/init/bin
 	rm -rf hack/bin
 	rm -rf .go-pkg-cache
-	rm -rf .crds
 	find . -type f -name 'release-*.log' -delete -o  -name '*release-notes.md' -delete
 	docker rmi -f $(shell docker images -f "reference=$(BUILD_IMAGE):latest*" -q) > /dev/null 2>&1 || true
 
@@ -449,12 +448,7 @@ load-container-images: ./test/load_images_on_kind_cluster.sh $(IMAGE_TARS)
 deploy-crds: kubectl
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
 		$(BINDIR)/kubectl create -f pkg/crds/operator/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/calico/v1.crd.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/calico/policy.networking.k8s.io/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/v1.crd.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/policy.networking.k8s.io/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/applicationlayer.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/01-crd-eck-bundle.yaml && \
+		$(BINDIR)/kubectl apply -f ../libcalico-go/config/crd/ && \
 		$(BINDIR)/kubectl create -f deploy/crds/prometheus
 
 create-tigera-operator-namespace: kubectl
@@ -673,10 +667,10 @@ EE_VERSIONS?=config/enterprise_versions.yml
 
 gen-versions: gen-versions-calico gen-versions-enterprise
 
-gen-versions-calico: $(BINDIR)/gen-versions update-calico-crds
+gen-versions-calico: $(BINDIR)/gen-versions
 	$(BINDIR)/gen-versions -os-versions=$(OS_VERSIONS) > pkg/components/calico.go
 
-gen-versions-enterprise: $(BINDIR)/gen-versions update-enterprise-crds
+gen-versions-enterprise: $(BINDIR)/gen-versions
 	$(BINDIR)/gen-versions -ee-versions=$(EE_VERSIONS) > pkg/components/enterprise.go
 
 $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
@@ -684,102 +678,6 @@ $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
 	$(CONTAINERIZED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -o $(BINDIR)/gen-versions ./hack/gen-versions'
-
-# $(1) is the product
-define prep_local_crds
-    $(eval product := $(1))
-	rm -rf pkg/crds/$(product)
-	rm -rf pkg/admission/$(product)
-	rm -rf .crds/$(product)
-	mkdir -p pkg/crds/$(product)/v1.crd.projectcalico.org/
-	mkdir -p pkg/crds/$(product)/v3.projectcalico.org/
-	mkdir -p pkg/crds/$(product)/policy.networking.k8s.io/
-	mkdir -p pkg/crds/$(product)/applicationlayer.projectcalico.org/
-	mkdir -p pkg/admission/$(product)
-	mkdir -p .crds/$(product)
-endef
-
-# $(1) is the github project
-# $(2) is the branch or tag to fetch
-# $(3) is the directory name to use
-define fetch_crds
-    $(eval project := $(1))
-    $(eval branch := $(2))
-    $(eval dir := $(3))
-	@echo "Fetching $(dir) CRDs from $(project) branch $(branch)"
-	git -C .crds/$(dir) clone --depth 1 --branch $(branch) --single-branch $(GIT_CLONE_URL_BASE)$(project).git ./
-endef
-define copy_v1_crds
-    $(eval dir := $(1))
-		$(eval product := $(2))
-	@cp $(dir)/libcalico-go/config/crd/* pkg/crds/$(product)/v1.crd.projectcalico.org/ && echo "Copied $(product) CRDs"
-endef
-define copy_v3_crds
-    $(eval dir := $(1))
-		$(eval product := $(2))
-	@cp $(dir)/api/config/crd/* pkg/crds/$(product)/v3.projectcalico.org/ && echo "Copied $(product) CRDs"
-endef
-define copy_k8s_policy_crds
-    $(eval product := $(1))
-	@mv pkg/crds/$(product)/v1.crd.projectcalico.org/policy.networking.k8s.io_* pkg/crds/$(product)/policy.networking.k8s.io/ 2>/dev/null; true
-	@echo "Moved $(product) K8s policy CRDs to dedicated directory"
-endef
-define copy_applicationlayer_crds
-    $(eval product := $(1))
-	@mv pkg/crds/$(product)/v3.projectcalico.org/applicationlayer.projectcalico.org_* pkg/crds/$(product)/applicationlayer.projectcalico.org/ 2>/dev/null; true
-	@echo "Moved $(product) ApplicationLayer CRDs to dedicated directory"
-endef
-define copy_eck_crds
-    $(eval dir := $(1))
-		$(eval product := $(2))
-	@cp $(dir)/charts/crd.projectcalico.org.v1/templates/eck/* pkg/crds/$(product)/ && echo "Copied $(product) ECK CRDs"
-endef
-define copy_admission_policies
-    $(eval dir := $(1))
-		$(eval product := $(2))
-	@cp $(dir)/api/admission/* pkg/admission/$(product)/ && echo "Copied $(product) admission policies"
-endef
-
-.PHONY: read-libcalico-version read-libcalico-enterprise-version
-.PHONY: update-calico-crds update-enterprise-crds
-.PHONY: fetch-enterprise-crds
-.PHONY: prepare-for-calico-crds prepare-for-enterprise-crds
-
-# The Calico CRDs live beside the operator in this repo, so they are copied
-# rather than fetched. The Enterprise ones still come from a private repo.
-CALICO_CRDS_DIR?=..
-
-update-calico-crds: prepare-for-calico-crds
-	$(call copy_v1_crds, $(CALICO_CRDS_DIR),"calico")
-	$(call copy_v3_crds, $(CALICO_CRDS_DIR),"calico")
-	$(call copy_k8s_policy_crds,"calico")
-	$(call copy_admission_policies, $(CALICO_CRDS_DIR),"calico")
-
-prepare-for-calico-crds:
-	$(call prep_local_crds,"calico")
-
-CALICO_ENTERPRISE?=tigera/calico-private
-ENTERPRISE_CRDS_DIR?=.crds/enterprise
-DEFAULT_EE_CRDS_DIR=.crds/enterprise
-read-libcalico-enterprise-version:
-	$(eval CALICO_ENTERPRISE_BRANCH := $(shell $(CONTAINERIZED) $(CALICO_BUILD) \
-	bash -c '$(GIT_CONFIG_SSH) \
-	yq -e ".components.libcalico-go.version" config/enterprise_versions.yml'))
-	if [ -z "$(CALICO_ENTERPRISE_BRANCH)" ]; then echo "libcalico enterprise branch not defined"; exit 1; fi
-
-update-enterprise-crds: fetch-enterprise-crds
-	$(call copy_v1_crds,$(ENTERPRISE_CRDS_DIR),"enterprise")
-	$(call copy_v3_crds, $(ENTERPRISE_CRDS_DIR),"enterprise")
-	$(call copy_k8s_policy_crds,"enterprise")
-	$(call copy_applicationlayer_crds,"enterprise")
-	$(call copy_eck_crds,$(ENTERPRISE_CRDS_DIR),"enterprise")
-	$(call copy_admission_policies,$(ENTERPRISE_CRDS_DIR),"enterprise")
-
-prepare-for-enterprise-crds:
-	$(call prep_local_crds,"enterprise")
-
-fetch-enterprise-crds: prepare-for-enterprise-crds  read-libcalico-enterprise-version
-	$(if $(filter $(DEFAULT_EE_CRDS_DIR),$(ENTERPRISE_CRDS_DIR)), $(call fetch_crds,$(CALICO_ENTERPRISE),$(CALICO_ENTERPRISE_BRANCH),"enterprise"))
 
 .PHONY: prepull-image
 prepull-image:
