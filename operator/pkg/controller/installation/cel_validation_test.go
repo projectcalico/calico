@@ -44,7 +44,7 @@ var _ = Describe("Installation CRD CEL validation", Serial, func() {
 
 		_, thisFile, _, ok := runtime.Caller(0)
 		Expect(ok).To(BeTrue())
-		crdDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "config", "crd", "bases")
+		crdDir := filepath.Join(filepath.Dir(thisFile), "..", "..", "crds", "operator")
 
 		testEnv = &envtest.Environment{
 			CRDDirectoryPaths:     []string{crdDir},
