@@ -43,15 +43,15 @@ and external resources. Follow the links.
 
 ## Update rule
 
-The repo-wide doc-update rule
+The repo-wide rule
 ([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
-mirrored in
-[`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies. For the
-BPF dataplane, "changes how it works" means a new sub-program,
-CT flag, mark bit, map or map field, or any change to the packet
-path or forwarding decision. The relevant section of the matching
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies;
+**the default is no edit**. In the BPF dataplane the usual candidates
+for it are a new sub-program, CT flag, mark bit, map or map field, or
+a change to the packet path or forwarding decision — candidates, not
+triggers on their own. A warranted edit goes in the matching
 sub-design (and `bpf-overview.md` if cross-cutting content is
-affected) must be updated in the same PR.
+affected) in the same PR.
 
 ## Amending the PR
 
@@ -59,10 +59,10 @@ The Copilot automated code-review step is read-only with respect
 to the PR branch — it cannot push the doc amendment itself. When
 the review flags a missing update per the rule above, its comment
 should include a ready-to-paste `@copilot` prompt naming the
-sub-design, the section, and the new invariant or mechanic, for
-example:
+sub-design, the section, and the one invariant to state — not a
+list of mechanics to describe. For example:
 
-> `@copilot update felix/design/bpf-conntrack-flowstate.md "Conntrack & cleanup" to cover the new CT flag CALI_CT_FLAG_FOO — the fields it uses, where it is set, how it interacts with the fast path.`
+> `@copilot update felix/design/bpf-conntrack-flowstate.md "Conntrack & cleanup": state in one sentence the invariant CALI_CT_FLAG_FOO introduces. Edit the existing prose in that section; do not add a heading, and do not restate the commit message.`
 
 The reviewer (or author) drops that into a new PR comment; the
 Copilot coding agent picks it up and pushes a commit with the
