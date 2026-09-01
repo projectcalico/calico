@@ -101,7 +101,7 @@ func NewBucketRing(n, interval int, now int64, opts ...BucketRingOption) *Bucket
 	}
 	// Use a time-based Ring index by default.
 	ring.defaultIndex = NewRingIndex(ring)
-	ring.dedupBuckets = dedupWindowBuckets(interval)
+	ring.dedupBuckets = dedupWindowBuckets(interval, n)
 
 	for _, opt := range opts {
 		opt(ring)
@@ -424,12 +424,21 @@ func (r *BucketRing) nodeID(node string) uint32 {
 }
 
 // dedupWindowBuckets is how many buckets have to keep dedup state, taken from the length of
-// the flow cache a client replays after a reconnect.
-func dedupWindowBuckets(interval int) int {
-	if interval <= 0 {
+// the flow cache a client replays after a reconnect. A short aggregation window can make
+// that exceed the ring, and dropping state that far back would wrap onto a live bucket.
+func dedupWindowBuckets(interval, numBuckets int) int {
+	if interval <= 0 || numBuckets <= 1 {
 		return 1
 	}
-	return int(client.FlowCacheExpiry.Seconds())/interval + 2
+	want := int(client.FlowCacheExpiry.Seconds())/interval + 2
+	if want < numBuckets {
+		return want
+	}
+	logrus.WithFields(logrus.Fields{
+		"aggregationWindow": interval,
+		"numBuckets":        numBuckets,
+	}).Warn("Ring holds less history than clients replay, so some duplicate flows will be counted twice")
+	return numBuckets - 1
 }
 
 // FlowSet returns the set of flows that exist across buckets within the given time range.
