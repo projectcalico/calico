@@ -101,6 +101,9 @@ else
   export TEST_TYPE=${TEST_TYPE:-k8s-e2e}
 fi
 export GOOGLE_PROJECT=${GOOGLE_PROJECT:-unique-caldron-775}
+# banzai-core's name for the Azure *subscription name*: azr-aso/azr-capi
+# resolve the subscription id by matching it against `az account list`.
+export AZ_PROJECT=${AZ_PROJECT:-tigera-dev-ci}
 
 # GCP placement: gcp-openstack has its own defaults in banzai-core
 # (europe-west3-c in the openstack-calico-test VPC, which carries the
@@ -117,6 +120,15 @@ if [[ "${PROVISIONER}" != "gcp-openstack" ]]; then
   export GOOGLE_NETWORK=${GOOGLE_NETWORK:-semaphore-autotest}
 fi
 export AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-west-2}
+
+# banzai-core defaults these to the tigera-dev developer account (the
+# kops-tigera-dev bucket and the *.crc.aws.eng.tigera.net zones), which the CI
+# IAM user cannot reach: kops 403s reading its state store and the OpenShift
+# installer finds no matching Route53 zone. Semaphore set them in its own
+# prologue, so the ArgoCI port has to as well.
+export KOPS_STATE_STORE_NAME=${KOPS_STATE_STORE_NAME:-kops-tigera-dev-ci}
+export KOPS_AWS_DNS_ZONE=${KOPS_AWS_DNS_ZONE:-kops.ci.aws.eng.tigera.net}
+export OPENSHIFT_BASE_DOMAIN=${OPENSHIFT_BASE_DOMAIN:-openshift.ci.aws.eng.tigera.net}
 
 # RELEASE_STREAM: release-vX.Y -> vX.Y, else master. BRANCH is passed by the
 # workflow (from the cron's `branch` parameter).

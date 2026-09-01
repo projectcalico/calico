@@ -1,5 +1,5 @@
 - title: v3.31.0
-  manifest_url: https://test-release.docs.eng.tigera.net
+  manifest_url: https://test-release.hashrelease.tools.tigera.net
   release_name: test-release
   note: test-release - generated at [Date1] using release-v3.31 release branch with release-v1.40 operator branch
   full_hash: v3.31.0-v1.40.0

@@ -117,6 +117,17 @@ zapDevel: false
 # Resource requests and limits for the tigera/operator pod.
 resources: {}
 
+# Security context applied to all containers in the tigera-operator deployment.
+# By default no security context is set; override to harden the operator pod.
+# Example hardened config:
+#   containerSecurityContext:
+#     allowPrivilegeEscalation: false
+#     runAsNonRoot: true
+#     runAsUser: 10000
+#     runAsGroup: 10000
+#     readOnlyRootFilesystem: true
+containerSecurityContext: {}
+
 # Common labels for all resources created by this chart
 additionalLabels: {}
 
@@ -143,7 +154,12 @@ podAnnotations: {}
 # Custom labels for the tigera/operator pod.
 podLabels: {}
 
-# Custom DNS configuration for the tigera/operator pod.
+# DNS policy for the tigera/operator pod. Set "None" with a dnsConfig listing cluster and node
+# resolvers where cluster DNS is not reachable at install time, such as EKS with kube-proxy disabled.
+dnsPolicy: ""
+
+# Custom DNS configuration for the tigera/operator pod. calico-node inherits this and dnsPolicy
+# when set.
 dnsConfig: {}
 
 # Image and registry configuration for the tigera/operator pod.

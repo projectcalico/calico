@@ -39,6 +39,7 @@ import eventlet
 from eventlet.event import Event
 from eventlet.queue import Empty
 from eventlet.queue import LightQueue
+from eventlet.semaphore import Semaphore
 
 import netaddr
 
@@ -268,6 +269,19 @@ class MTUWatcher(object):
 
 
 class DnsmasqUpdater(object):
+
+    # How long to wait before retrying, after a Dnsmasq driver call has
+    # failed.  (On top of any retrying that the driver itself does
+    # internally.)
+    FAILED_CALL_RETRY_SECS = 10
+
+    # Limit on how many Dnsmasq driver calls may run concurrently, so that a
+    # flood of updates - e.g. following an etcd snapshot - cannot spawn an
+    # unbounded number of dnsmasq processes at the same moment.  (The
+    # reference Neutron DHCP agent similarly bounds its driver calls, with a
+    # green pool of up to 32 workers.)
+    MAX_CONCURRENT_DRIVER_CALLS = 16
+
     def __init__(self, agent):
         self.agent = agent
         self.updates_needed = LightQueue()
@@ -276,32 +290,78 @@ class DnsmasqUpdater(object):
         # network ID.
         self._last_dnsmasq_ports = {}
 
+        # Queues for the networks that currently have a worker thread; see
+        # start().
+        self._worker_queues = {}
+
+        self._driver_semaphore = Semaphore(self.MAX_CONCURRENT_DRIVER_CALLS)
+
     def update_network(self, network_id):
         self.updates_needed.put(network_id)
 
     def start(self):
+        # Dispatch each requested update to a worker thread for the network
+        # concerned.  Updates for the same network are serialized on that
+        # network's worker, but a driver call that blocks for one network
+        # then cannot delay processing for any other network.  That matters
+        # because a dnsmasq start blocks, inside the driver, for as long as
+        # dnsmasq fails to bind its listen address - which is exactly what
+        # happens when the address is still held by the dnsmasq of a
+        # deleted network with the same subnet CIDR, and the driver call
+        # that would stop that dnsmasq is still pending.
         while True:
             LOG.debug("DnsmasqUpdater: wait until updates needed")
-            dirty_network_ids = set()
-            dirty_network_ids.add(self.updates_needed.get())
+            network_id = self.updates_needed.get()
+            worker_queue = self._worker_queues.get(network_id)
+            if worker_queue is None:
+                worker_queue = LightQueue()
+                self._worker_queues[network_id] = worker_queue
+                eventlet.spawn(self._worker, network_id, worker_queue)
+            worker_queue.put(network_id)
+
+    def _worker(self, network_id, worker_queue):
+        while True:
+            worker_queue.get()
+
+            # Coalesce any further updates already requested for this
+            # network; a single really_update_dnsmasq call covers them all,
+            # because it recomputes what is needed from the current cache
+            # state.
             try:
                 while True:
-                    dirty_network_ids.add(self.updates_needed.get_nowait())
+                    worker_queue.get_nowait()
             except Empty:
                 pass
-            LOG.debug("DnsmasqUpdater: updating now for %r", dirty_network_ids)
-            for network_id in dirty_network_ids:
-                # Handle any exceptions here so that the dnsmasq updater thread
-                # doesn't die.  There aren't any expected exception scenarios,
-                # but better to be more resilient here.
-                try:
+            LOG.debug("DnsmasqUpdater: updating now for %s", network_id)
+
+            # Handle any exceptions here so that the worker thread doesn't
+            # die.  There aren't any expected exception scenarios, but better
+            # to be more resilient here.
+            try:
+                with self._driver_semaphore:
                     self.really_update_dnsmasq(network_id)
-                except Exception:
-                    LOG.exception("really_update_dnsmasq")
+            except Exception:
+                LOG.exception("really_update_dnsmasq")
+
+            # If no further update has been requested for this network, this
+            # worker is finished.  There is no yield point between the
+            # emptiness check here and the removal from _worker_queues, so
+            # the dispatcher in start() cannot deliver an update into a
+            # queue that no worker is serving.
+            if worker_queue.empty():
+                del self._worker_queues[network_id]
+                return
 
     def really_update_dnsmasq(self, network_id):
         # Get NetModel for that network ID.
         net = self.agent.cache.get_network_by_id(network_id)
+        net_in_cache = net is not None
+        if not net_in_cache:
+            # The network is no longer in the cache - this update can have
+            # been requested before the network's removal - but its dnsmasq
+            # could still be running; carry on with a synthetic empty network
+            # model, so as to ensure that it is stopped.
+            net = empty_network(network_id)
         LOG.debug("Net: %s", net)
 
         # Compute the set of ports that we need Dnsmasq to handle for this
@@ -340,16 +400,34 @@ class DnsmasqUpdater(object):
                     network_id,
                     len(ports_needed),
                 )
-                self.agent.call_driver("restart", net)
+                success = self.agent.call_driver("restart", net)
             else:
                 # No ports left, so also remove this network from the cache.
-                _fix_network_cache_port_lookup(self.agent, net.id)
-                self.agent.cache.remove(net)
+                if net_in_cache:
+                    _fix_network_cache_port_lookup(self.agent, net.id)
+                    self.agent.cache.remove(net)
                 LOG.info("Disable dnsmasq for network %s", network_id)
-                self.agent.call_driver("disable", net)
+                success = self.agent.call_driver("disable", net)
 
-            # Remember what we've asked Dnsmasq for.
-            self._last_dnsmasq_ports[network_id] = ports_needed_as_string
+            if success:
+                # Remember what we've asked Dnsmasq for.
+                self._last_dnsmasq_ports[network_id] = ports_needed_as_string
+            else:
+                # The driver call failed, so what dnsmasq is actually now
+                # handling for this network is unknown; a failed restart, in
+                # particular, can have stopped the previous dnsmasq without
+                # starting a new one.  Forget our record for this network, so
+                # that the retry cannot be skipped as "no change", and
+                # schedule that retry.
+                LOG.warning(
+                    "Driver call failed for network %s; will retry in %ss",
+                    network_id,
+                    self.FAILED_CALL_RETRY_SECS,
+                )
+                self._last_dnsmasq_ports.pop(network_id, None)
+                eventlet.spawn_after(
+                    self.FAILED_CALL_RETRY_SECS, self.update_network, network_id
+                )
         else:
             LOG.debug("No change")
 
@@ -389,11 +467,12 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Create MTU watcher.
         self.mtu_watcher = MTUWatcher(agent, self)
 
-        # Also watch the etcd subnet trees: both the new region-aware
-        # one, and the old pre-region one, so as to support a VM
-        # renewing its DHCP lease while an upgrade is still in
-        # progress.  When something in that subtree changes, the
-        # subnet watcher will tell _this_ watcher to resync.
+        # Also watch the etcd subnet trees: both the new region-aware one,
+        # and the old pre-region one, so as to support a VM renewing its DHCP
+        # lease while an upgrade is still in progress.  The subnet watchers
+        # just maintain a store of subnet data (CIDR, gateway, DNS and so
+        # on), which the endpoint processing in _this_ watcher consults; a
+        # subnet change on its own does not trigger any dnsmasq update.
         self.v1_subnet_watcher = SubnetWatcher(self, datamodel_v1.SUBNET_DIR)
         self.subnet_watcher = SubnetWatcher(
             self, datamodel_v2.subnet_dir(self.region_string)
@@ -754,6 +833,28 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
         )
         self.subnets_by_id = {}
 
+        # While a snapshot is being processed, the IDs of the subnets that we
+        # knew about before the snapshot began, minus those that the snapshot
+        # has (re)reported so far; see _pre_snapshot_hook.
+        self._possibly_stale_subnet_ids = set()
+
+    def _pre_snapshot_hook(self):
+        # Deletion events can be missed - for example when the deletion falls
+        # between one watch being cancelled and the next being created - so
+        # reconcile against each snapshot: note all the subnet IDs that we
+        # currently know about; on_subnet_set removes each ID that the
+        # snapshot reports, and _post_snapshot_hook then discards the
+        # leftovers, i.e. the subnets that no longer exist.  subnets_by_id
+        # itself continues to serve lookups throughout.
+        self._possibly_stale_subnet_ids = set(self.subnets_by_id.keys())
+        return None
+
+    def _post_snapshot_hook(self, _):
+        for subnet_id in self._possibly_stale_subnet_ids:
+            LOG.info("Subnet %s no longer exists; discarding", subnet_id)
+            self.subnets_by_id.pop(subnet_id, None)
+        self._possibly_stale_subnet_ids = set()
+
     def start(self):
         # Catch and report any exceptions that escape here.
         try:
@@ -774,6 +875,13 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
     def on_subnet_set(self, response, subnet_id):
         """Handler for subnet creations and updates."""
         LOG.debug("Subnet %s created or updated", subnet_id)
+
+        # This subnet's key is present, so snapshot reconciliation must not
+        # discard it - even if its data turns out to be invalid, in which
+        # case we hold on to any previously cached data for it, just as for
+        # an invalid update event on an established watch.
+        self._possibly_stale_subnet_ids.discard(subnet_id)
+
         subnet_data = etcdutils.safe_decode_json(response.value, "subnet")
 
         if subnet_data is None:
@@ -794,8 +902,8 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
     def on_subnet_del(self, response, subnet_id):
         """Handler for subnet deletions."""
         LOG.info("Subnet %s deleted", subnet_id)
-        if subnet_id in self.subnets_by_id:
-            del self.subnets_by_id[subnet_id]
+        self.subnets_by_id.pop(subnet_id, None)
+        self._possibly_stale_subnet_ids.discard(subnet_id)
         return
 
     def get_subnet_id_for_addr(self, ip_str, network_id):

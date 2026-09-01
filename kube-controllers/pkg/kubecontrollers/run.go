@@ -44,6 +44,7 @@ import (
 	rtclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/projectcalico/calico/crypto/pkg/tls"
+	migrationv1 "github.com/projectcalico/calico/kube-controllers/pkg/apis/migration/v1"
 	"github.com/projectcalico/calico/kube-controllers/pkg/config"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/flannelmigration"
@@ -424,6 +425,7 @@ func (cc *controllerControl) initControllers(
 	namespaceInformer := factory.Core().V1().Namespaces().Informer()
 
 	if v3c != nil {
+		// The resync period doubles as the recovery path for controllers that drop work after max retries.
 		calicoFactory := externalversions.NewSharedInformerFactory(v3c, 5*time.Minute)
 		poolInformer := calicoFactory.Projectcalico().V3().IPPools().Informer()
 		blockInformer := calicoFactory.Projectcalico().V3().IPAMBlocks().Informer()
@@ -497,14 +499,20 @@ func (cc *controllerControl) initControllers(
 			logrus.WithError(err).Fatal("Failed to create apiregistration client for migration controller")
 		}
 
-		migrationScheme := k8sruntime.NewScheme()
-		if err := apiv3.AddToScheme(migrationScheme); err != nil {
-			logrus.WithError(err).Fatal("Failed to add Calico v3 types to scheme for migration controller")
+		// The migration CRD serves both v1 and v1beta1; the controller resolves
+		// which one from discovery.
+		rtClientForVersion := func(version string) (rtclient.WithWatch, error) {
+			migrationScheme := k8sruntime.NewScheme()
+			if err := apiv3.AddToScheme(migrationScheme); err != nil {
+				return nil, fmt.Errorf("adding Calico v3 types to the migration scheme: %w", err)
+			}
+			if err := migrationv1.AddToSchemeForVersion(migrationScheme, version); err != nil {
+				return nil, fmt.Errorf("adding migration types to the migration scheme: %w", err)
+			}
+			return rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
 		}
-		if err := dsmigration.AddToScheme(migrationScheme); err != nil {
-			logrus.WithError(err).Fatal("Failed to add migration types to scheme for migration controller")
-		}
-		rtClient, err := rtclient.NewWithWatch(k8sconfig, rtclient.Options{Scheme: migrationScheme})
+
+		rtClient, err := rtClientForVersion(migrationv1.Version)
 		if err != nil {
 			logrus.WithError(err).Fatal("Failed to create controller-runtime client for migration controller")
 		}
@@ -514,14 +522,15 @@ func (cc *controllerControl) initControllers(
 		}
 
 		migrationController := dsmigration.NewController(dsmigration.ControllerConfig{
-			Ctx:           ctx,
-			K8sClient:     k8sClientset,
-			BackendClient: bc,
-			RTClient:      rtClient,
-			DynamicClient: dynClient,
-			APIRegClient:  apiregCS.ApiregistrationV1(),
-			CRDClient:     crdClient,
-			Migrators:     dsmigration.NewMigrators(bc, rtClient),
+			Ctx:                ctx,
+			K8sClient:          k8sClientset,
+			BackendClient:      bc,
+			RTClient:           rtClient,
+			RTClientForVersion: rtClientForVersion,
+			DynamicClient:      dynClient,
+			APIRegClient:       apiregCS.ApiregistrationV1(),
+			CRDClient:          crdClient,
+			Migrators:          dsmigration.NewMigrators(bc, rtClient),
 		})
 		cc.controllers["DatastoreMigration"] = migrationController
 	}

@@ -15,9 +15,11 @@ package nftables
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
+	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
 	"sigs.k8s.io/knftables"
 
@@ -45,7 +47,8 @@ var MinKernelVersionForNftables = environment.MustParseVersion("5.13")
 //   - a kernel of at least MinKernelVersionForNftables.
 //
 // It is used to resolve NFTablesMode=Auto on hosts that run no kube-proxy,
-// where the kube-proxy-based detection gives no signal.
+// where the kube-proxy-based detection gives no signal. The only caller is in
+// calico-private, which has the non-cluster host deployment that open source lacks.
 // Both dependencies are injectable for testing; pass nil for the defaults.
 func HostNftablesSupportedFn(newDataplane NewNftablesDataplaneFn, getKernelVersion func() (*environment.Version, error)) func() bool {
 	if newDataplane == nil {
@@ -153,4 +156,37 @@ func KubeProxyNftablesEnabledFn(newDataplane NewNftablesDataplaneFn) func() (boo
 		// Neither IPv4 nor IPv6 nftables interfaces are available, kube-proxy must not be in nftables mode.
 		return false, nil
 	}
+}
+
+// Enabled resolves the configured nftables mode to the dataplane this host will use.
+// The detection functions are only consulted in Auto mode: detectKubeProxyNftables is the
+// primary signal, and hostNftablesSupported, when non-nil, is the fallback for hosts that
+// never run kube-proxy (hosts outside any cluster). A cluster host must follow its
+// kube-proxy so that the two use the same dataplane.
+func Enabled(mode string, detectKubeProxyNftables func() (bool, error), hostNftablesSupported func() bool) (bool, error) {
+	use := false
+	kubeProxyNftables := false
+
+	switch mode {
+	case string(v3.NFTablesModeAuto):
+		var err error
+		kubeProxyNftables, err = detectKubeProxyNftables()
+		if err != nil {
+			return false, fmt.Errorf("detect kube-proxy nftables mode: %w", err)
+		}
+
+		use = kubeProxyNftables
+		if !use && hostNftablesSupported != nil {
+			use = hostNftablesSupported()
+		}
+	case string(v3.NFTablesModeEnabled):
+		use = true
+	}
+
+	log.WithFields(log.Fields{
+		"kubeProxyEnabled": kubeProxyNftables,
+		"calicoMode":       mode,
+		"useNftables":      use,
+	}).Info("Determined whether or not to use nftables")
+	return use, nil
 }

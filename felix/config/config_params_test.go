@@ -63,6 +63,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 
 		// Temporary field to implement and test IPv6 in BPF dataplane
 		"BpfIpv6Support",
+
+		// Resolved from NFTablesMode at startup rather than configured directly.
+		"NFTablesEnabled",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
@@ -998,5 +1001,79 @@ var _ = Describe("ParamForField", func() {
 		Expect(intParam.Ranges[0].Max).To(BeNumerically("==", math.MaxInt))
 		Expect(defaultStr).To(Equal("1024"))
 		Expect(flags).To(Equal(""))
+	})
+})
+
+var _ = Describe("ProgramClusterRoutes", func() {
+	It("defaults to Felix owning the IPIP cluster routes and BIRD owning the rest", func() {
+		c := config.New()
+		Expect(c.ProgramClusterRoutes).To(Equal(v3.EnabledIPIPOnly))
+		Expect(c.ProgramIPIPClusterRoutes()).To(BeTrue())
+		Expect(c.ProgramNoEncapClusterRoutes()).To(BeFalse())
+	})
+
+	DescribeTable("splits the configured value into per-encapsulation ownership",
+		func(raw string, expectedIPIP, expectedNoEncap bool) {
+			c := config.New()
+			_, err := c.UpdateFrom(map[string]string{"ProgramClusterRoutes": raw}, config.DatastoreGlobal)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c.ProgramIPIPClusterRoutes()).To(Equal(expectedIPIP))
+			Expect(c.ProgramNoEncapClusterRoutes()).To(Equal(expectedNoEncap))
+		},
+		Entry("Disabled", v3.Disabled, false, false),
+		Entry("EnabledIPIPOnly", v3.EnabledIPIPOnly, true, false),
+		Entry("EnabledNoEncapOnly", v3.EnabledNoEncapOnly, false, true),
+		Entry("Enabled", v3.Enabled, true, true),
+		// Values are matched case-insensitively, as for every other oneof parameter.
+		Entry("enabledipiponly", strings.ToLower(v3.EnabledIPIPOnly), true, false),
+	)
+
+	It("falls back to the default if the value is not recognised", func() {
+		c := config.New()
+		_, err := c.UpdateFrom(map[string]string{"ProgramClusterRoutes": "NotAValue"}, config.DatastoreGlobal)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.ProgramClusterRoutes).To(Equal(v3.EnabledIPIPOnly))
+	})
+})
+
+var _ = Describe("Dataplane-specific parameters", func() {
+	var c *config.Config
+
+	BeforeEach(func() {
+		c = config.New()
+		_, err := c.UpdateFrom(map[string]string{
+			"NFTablesMode":              "Auto",
+			"IptablesFilterAllowAction": "RETURN",
+			"IptablesMangleAllowAction": "RETURN",
+			"IptablesFilterDenyAction":  "REJECT",
+			"IptablesMarkMask":          "0xff000000",
+			"IptablesRefreshInterval":   "11",
+			"NftablesFilterAllowAction": "ACCEPT",
+			"NftablesMangleAllowAction": "ACCEPT",
+			"NftablesFilterDenyAction":  "DROP",
+			"NftablesMarkMask":          "0xffff0000",
+			"NftablesRefreshInterval":   "22",
+		}, config.DatastoreGlobal)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// The accessors follow the resolved dataplane, not NFTablesMode, so that a cluster
+	// on the default Auto still gets its nftables values.
+	It("returns the nftables values when nftables was resolved", func() {
+		c.NFTablesEnabled = true
+		Expect(c.FilterAllowAction()).To(Equal("ACCEPT"))
+		Expect(c.MangleAllowAction()).To(Equal("ACCEPT"))
+		Expect(c.FilterDenyAction()).To(Equal("DROP"))
+		Expect(c.MarkMask()).To(Equal(uint32(0xffff0000)))
+		Expect(c.TableRefreshInterval()).To(Equal(22 * time.Second))
+	})
+
+	It("returns the iptables values when iptables was resolved", func() {
+		c.NFTablesEnabled = false
+		Expect(c.FilterAllowAction()).To(Equal("RETURN"))
+		Expect(c.MangleAllowAction()).To(Equal("RETURN"))
+		Expect(c.FilterDenyAction()).To(Equal("REJECT"))
+		Expect(c.MarkMask()).To(Equal(uint32(0xff000000)))
+		Expect(c.TableRefreshInterval()).To(Equal(11 * time.Second))
 	})
 })

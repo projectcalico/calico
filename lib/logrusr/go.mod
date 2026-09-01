@@ -1,6 +1,6 @@
 module github.com/projectcalico/calico/lib/logrusr
 
-go 1.26.5
+go 1.27.0
 
 require (
 	github.com/projectcalico/calico/lib/std v0.0.0-00010101000000-000000000000
@@ -9,7 +9,7 @@ require (
 
 require (
 	github.com/stretchr/testify v1.11.1 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
 
 replace github.com/projectcalico/calico/lib/std => ../std

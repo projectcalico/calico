@@ -20,8 +20,8 @@ import (
 
 	cli "github.com/urfave/cli/v3"
 
+	"github.com/projectcalico/calico/release/internal/branch"
 	"github.com/projectcalico/calico/release/internal/utils"
-	"github.com/projectcalico/calico/release/pkg/manager/branch"
 	"github.com/projectcalico/calico/release/pkg/manager/calico"
 )
 
@@ -45,12 +45,14 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				orgFlag,
 				repoFlag,
 				repoRemoteFlag,
-				baseBranchFlag,
+				mainBranchFlag,
 				releaseBranchPrefixFlag,
 				devTagSuffixFlag,
 				operatorBranchFlag,
 				localFlag,
 				validationFlag,
+				planFlag,
+				skipFlag(branch.StepNames()),
 			},
 			Action: func(_ context.Context, c *cli.Command) error {
 				configureLogging("branch-cut.log")
@@ -62,20 +64,27 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
+					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
+					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
+					calico.WithGitRef(!c.Bool(localFlag.Name)),
+					calico.WithBranchCutOptions(calico.CutOptions{
+						Plan:        c.Bool(planFlag.Name),
+						Skip:        skipSet(c.StringSlice(skipFlagName)),
+						BranchCheck: c.Bool(branchCheckFlagName),
+					}),
 				)
 
-				m := branch.NewManager(
-					branch.WithRepoRoot(cfg.RepoRootDir),
-					branch.WithRepoRemote(c.String(repoRemoteFlag.Name)),
-					branch.WithMainBranch(c.String(baseBranchFlag.Name)),
-					branch.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
-					branch.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					branch.WithRepoManager(calicoManager),
-					branch.WithValidation(c.Bool(validationFlag.Name)),
-					branch.WithPublish(!c.Bool(localFlag.Name)))
-				return m.CutReleaseBranch()
+				return calicoManager.CutBranch()
 			},
 		},
 	}
+}
+
+func skipSet(ss []string) map[string]bool {
+	out := make(map[string]bool, len(ss))
+	for _, s := range ss {
+		out[s] = true
+	}
+	return out
 }

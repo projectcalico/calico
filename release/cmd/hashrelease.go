@@ -272,6 +272,7 @@ func hashreleaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithPublishHashrelease(c.Bool(publishHashreleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),
 					calico.WithReleaseBranchValidation(c.Bool(branchCheckFlag.Name)),
+					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
 				}
 				if reg := c.StringSlice(registryFlag.Name); len(reg) > 0 {
 					opts = append(opts,

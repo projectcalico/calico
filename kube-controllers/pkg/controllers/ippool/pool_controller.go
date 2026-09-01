@@ -19,13 +19,17 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/client/clientset_generated/clientset"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"github.com/projectcalico/calico/felix/ip"
 	"github.com/projectcalico/calico/kube-controllers/pkg/controllers/controller"
@@ -35,6 +39,14 @@ import (
 
 const (
 	IPPoolFinalizer = "projectcalico.org/ippool-finalizer"
+
+	// maxRetries is how many times a failed reconcile is retried before we fall back
+	// to the informer resync in run.go.
+	maxRetries = 5
+
+	// reconcileKey is the single workqueue key this controller uses. Overlap detection is global
+	// across all pools, so there is nothing to gain from per-pool keys.
+	reconcileKey = "reconcile"
 )
 
 // IPPoolController is responsible for watching IPPool and IPAMBlock resources and managing the finalization / deletion
@@ -47,8 +59,9 @@ type IPPoolController struct {
 	poolInformer  cache.SharedIndexInformer
 	blockInformer cache.SharedIndexInformer
 
-	cli  clientset.Interface
-	ipam ipam.Interface
+	cli   clientset.Interface
+	ipam  ipam.Interface
+	queue workqueue.TypedRateLimitingInterface[string]
 }
 
 func NewController(
@@ -64,71 +77,23 @@ func NewController(
 		poolInformer:  poolInformer,
 		blockInformer: blockInformer,
 		ipam:          ipam,
+		queue:         workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[string]()),
 	}
 
-	// Configure events for new IP pools.
+	// Every pool event triggers the same global reconcile, so the handlers just enqueue the
+	// sentinel key and let the workqueue collapse bursts into a single pass.
 	poolHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj any) {
-			pool, ok := poolFromDeleteObj(obj)
-			if !ok {
-				return
-			}
-			logrus.WithField("name", pool.Name).Info("Handling pool deletion")
-			if err := c.Reconcile(pool); err != nil {
-				logrus.WithError(err).Error("Error handling pool deletion")
-			}
-		},
-		AddFunc: func(obj any) {
-			logrus.WithField("name", obj.(*v3.IPPool).Name).Info("Handling pool add")
-			if err := c.Reconcile(obj.(*v3.IPPool)); err != nil {
-				logrus.WithError(err).Error("Error handling pool add")
-			}
-		},
-		UpdateFunc: func(oldObj, newObj any) {
-			logrus.WithField("name", newObj.(*v3.IPPool).Name).Info("Handling pool update")
-			if err := c.Reconcile(newObj.(*v3.IPPool)); err != nil {
-				logrus.WithError(err).Error("Error handling pool update")
-			}
-		},
+		AddFunc:    func(obj any) { c.queue.Add(reconcileKey) },
+		UpdateFunc: func(oldObj, newObj any) { c.queue.Add(reconcileKey) },
+		DeleteFunc: func(obj any) { c.queue.Add(reconcileKey) },
 	}
 	if _, err := poolInformer.AddEventHandler(poolHandlers); err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPPool")
 	}
 
-	// Configure handlers for IPAM block updates. We need to trigger a reconcile for any
-	// deleting IP pools when blocks are deleted, to ensure we can finalize the pool.
+	// Block deletions can unblock finalization of a deleting pool, so they need a reconcile too.
 	blockHandlers := cache.ResourceEventHandlerFuncs{
-		DeleteFunc: func(obj any) {
-			block, ok := blockFromDeleteObj(obj)
-			if !ok {
-				return
-			}
-
-			// Find any pools that might be associated with this block and trigger a reconcile.
-			for _, i := range poolInformer.GetIndexer().List() {
-				pool := i.(*v3.IPPool)
-				if pool.DeletionTimestamp == nil {
-					// Pool is not being deleted, skip it.
-					continue
-				}
-				_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
-				if err != nil {
-					logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
-					continue
-				}
-				_, blockNet, err := cnet.ParseCIDR(block.Spec.CIDR)
-				if err != nil {
-					logrus.WithError(err).WithField("cidr", block.Spec.CIDR).Error("Failed to parse CIDR from IPAMBlock")
-					continue
-				}
-				if poolNet.Contains(blockNet.IP) {
-					logrus.WithField("name", pool.Name).Debug("Triggering reconcile for finalizing pool due to block deletion")
-					if err := c.Reconcile(pool); err != nil {
-						logrus.WithError(err).Error("Error handling pool reconcile due to block deletion")
-					}
-				}
-			}
-		},
+		DeleteFunc: func(obj any) { c.queue.Add(reconcileKey) },
 	}
 	if _, err := blockInformer.AddEventHandler(blockHandlers); err != nil {
 		logrus.WithError(err).Fatal("Failed to register event handler for IPAMBlock")
@@ -137,10 +102,11 @@ func NewController(
 	return c
 }
 
-// Run starts the node controller. It does start-of-day preparation
+// Run starts the IP pool controller. It does start-of-day preparation
 // and then launches worker threads.
 func (c *IPPoolController) Run(stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
+	defer c.queue.ShutDown()
 
 	logrus.Info("Starting IPPool controller")
 
@@ -153,35 +119,92 @@ func (c *IPPoolController) Run(stopCh chan struct{}) {
 
 	logrus.Debug("Finished syncing with Kubernetes API")
 
+	// Run once against a consistent view of both caches now that they are synced.
+	c.queue.Add(reconcileKey)
+
+	go wait.Until(c.runWorker, time.Second, stopCh)
+
 	<-stopCh
 	logrus.Info("Stopping IPPool controller")
 }
 
-func (c *IPPoolController) Reconcile(p *v3.IPPool) error {
-	ctx := context.TODO()
-	logCtx := logrus.WithFields(logrus.Fields{
-		"name":         p.Name,
-		"cidr":         p.Spec.CIDR,
-		"hasFinalizer": hasFinalizer(p),
-	})
-	logCtx.Debug("Reconciling IPPool")
-
-	// First, check for overlapping IP pools and update their status accordingly.
-	if err := c.reconcileConditions(ctx); err != nil {
-		logCtx.WithError(err).Warn("Failed to reconcile pool overlaps")
+func (c *IPPoolController) runWorker() {
+	for c.processNextItem() {
 	}
-
-	// Next, ensure that the finalizer is added / removed as needed.
-	if err := c.reconcileFinalizer(ctx, logCtx, p); err != nil {
-		return fmt.Errorf("failed to reconcile finalizer for IPPool: %w", err)
-	}
-	return nil
 }
 
-// reconcileConditions checks for various conditions that should be set on each IP pool.
-func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
-	pools := c.poolInformer.GetIndexer().List()
+func (c *IPPoolController) processNextItem() bool {
+	key, quit := c.queue.Get()
+	if quit {
+		return false
+	}
+	defer c.queue.Done(key)
+
+	err := c.reconcile()
+	c.handleErr(err, key)
+	return true
+}
+
+func (c *IPPoolController) handleErr(err error, key string) {
+	if err == nil {
+		c.queue.Forget(key)
+		return
+	}
+	if c.queue.NumRequeues(key) < maxRetries {
+		logrus.WithError(err).Warning("Error reconciling IP pools, will retry")
+		c.queue.AddRateLimited(key)
+		return
+	}
+	c.queue.Forget(key)
+	logrus.WithError(err).Error("Dropping IP pool reconcile out of queue after max retries")
+}
+
+// reconcile derives the desired state for every pool. Overlap detection is global, so a single
+// pass covers all pools rather than keying off whichever pool triggered the event.
+func (c *IPPoolController) reconcile() error {
+	var errs []error
+
+	// Conditions first: whether a pool is allocatable decides whether it should carry a finalizer.
+	pools, err := c.reconcileConditions(c.ctx)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	for _, p := range pools {
+		logCtx := logrus.WithFields(logrus.Fields{
+			"name":         p.Name,
+			"cidr":         p.Spec.CIDR,
+			"hasFinalizer": hasFinalizer(p),
+		})
+		if err := c.reconcileFinalizer(c.ctx, logCtx, p); err != nil {
+			logCtx.WithError(err).Error("Failed to reconcile finalizer for IPPool")
+			errs = append(errs, fmt.Errorf("reconcile finalizer for IPPool %s: %w", p.Name, err))
+		}
+	}
+
+	return utilerrors.NewAggregate(errs)
+}
+
+// reconcileConditions checks for various conditions that should be set on each IP pool. It returns
+// the pools with the derived conditions applied, so the finalizer pass acts on what we just wrote
+// rather than on the informer cache, which will not have caught up yet.
+func (c *IPPoolController) reconcileConditions(ctx context.Context) ([]*v3.IPPool, error) {
+	// Copy up front. Objects in the indexer are shared with the informer and every other handler,
+	// so mutating one in place both races and leaves the cache asserting state the API server may
+	// have rejected, which would suppress every future write attempt.
+	objs := c.poolInformer.GetIndexer().List()
+	pools := make([]*v3.IPPool, 0, len(objs))
+	for _, obj := range objs {
+		p, ok := obj.(*v3.IPPool)
+		if !ok {
+			logrus.WithField("type", fmt.Sprintf("%T", obj)).Error("Unexpected object type in IPPool cache")
+			continue
+		}
+		pools = append(pools, p.DeepCopy())
+	}
 	slices.SortFunc(pools, poolSortFunc)
+
+	var errs []error
 
 	// Every time an IP pool is added, updated, or deleted, we need to check if it changes the active set of pools. We only
 	// allow a single IP pool covering a given CIDR to be active at a time, and so we need to ensure that:
@@ -193,9 +216,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 	triev6 := ip.NewCIDRTrie()
 	active := map[string]*v3.IPPool{}
 	overlapping := map[string]*v3.IPPool{}
-	for _, p := range pools {
-		pool := p.(*v3.IPPool)
-
+	for _, pool := range pools {
 		cidr, err := ip.CIDRFromString(pool.Spec.CIDR)
 		if err != nil {
 			logrus.WithError(err).WithField("cidr", pool.Spec.CIDR).Error("Failed to parse CIDR from IPPool")
@@ -219,6 +240,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			}
 			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
 				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
+				errs = append(errs, err)
 			}
 			continue
 		}
@@ -231,6 +253,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			}
 			if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
 				logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
+				errs = append(errs, err)
 			}
 			// If the pool is being deleted, we still want to consider it for overlaps.
 			// This ensures we don't preemptively enable another pool that might overlap with it until this pool
@@ -265,6 +288,7 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 		}
 		if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
 			logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
+			errs = append(errs, err)
 		}
 	}
 
@@ -276,27 +300,16 @@ func (c *IPPoolController) reconcileConditions(ctx context.Context) error {
 			Reason:  v3.IPPoolReasonOK,
 			Message: "IPPool is available for IP allocation.",
 		}
-		if setConditionOnPool(pool, cond) {
-			logrus.WithField("pool", pool.Name).Infof("Setting condition %s to %s", cond.Type, cond.Status)
-			if _, err := c.cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, pool, metav1.UpdateOptions{}); err != nil {
-				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to update status of IPPool")
-			}
-
-			// If this pool was previously disabled, we need to ensure the finalizer is correctly set on it since
-			// it would not have had one applied when it was disabled.
-			if err := c.reconcileFinalizer(ctx, logrus.WithField("pool", pool.Name), pool); err != nil {
-				logrus.WithError(err).WithField("otherPool", pool.Name).Error("Failed to reconcile finalizer for IPPool")
-			}
+		if err := updateCondition(ctx, c.cli, pool, cond); err != nil {
+			logrus.WithError(err).WithField("pool", pool.Name).Error("Failed to update status of IPPool")
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return pools, utilerrors.NewAggregate(errs)
 }
 
-func poolSortFunc(a, b any) int {
-	poolA := a.(*v3.IPPool)
-	poolB := b.(*v3.IPPool)
-
+func poolSortFunc(poolA, poolB *v3.IPPool) int {
 	aCat := poolSortCategory(poolA)
 	bCat := poolSortCategory(poolB)
 	if aCat != bCat {
@@ -351,8 +364,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 			// pool if the user tries to delete it to resolve the overlap.
 			if hasFinalizer(p) {
 				logCtx.Info("IPPool is not active, removing finalizer")
-				p.Finalizers = slices.DeleteFunc(p.Finalizers, func(s string) bool { return s == IPPoolFinalizer })
-				if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
+				if err = c.updateFinalizers(ctx, p, withoutFinalizer(p)); err != nil {
 					logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 					return err
 				}
@@ -363,8 +375,7 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 		// If the IP pool is not being deleted, add a finalizer to it so we can insert ourselves into the deletion flow.
 		if !hasFinalizer(p) {
 			logCtx.Info("Adding finalizer to IPPool")
-			p.SetFinalizers(append(p.Finalizers, IPPoolFinalizer))
-			if _, err = c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
+			if err = c.updateFinalizers(ctx, p, append(slices.Clone(p.Finalizers), IPPoolFinalizer)); err != nil {
 				logCtx.WithError(err).Error("Failed to add finalizer to IPPool")
 				return err
 			}
@@ -396,12 +407,24 @@ func (c *IPPoolController) reconcileFinalizer(ctx context.Context, logCtx *logru
 	}
 
 	logCtx.Info("No IPAM blocks left in pool, removing finalizer")
-	p.Finalizers = slices.DeleteFunc(p.Finalizers, func(s string) bool { return s == IPPoolFinalizer })
-	if _, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, p, metav1.UpdateOptions{}); err != nil {
+	if err := c.updateFinalizers(ctx, p, withoutFinalizer(p)); err != nil {
 		logCtx.WithError(err).Error("Failed to remove finalizer from IPPool")
 		return err
 	}
 	return nil
+}
+
+// updateFinalizers writes p with the given finalizer set, leaving p itself untouched so that a
+// failed write cannot strand a mutation on an object we may not own.
+func (c *IPPoolController) updateFinalizers(ctx context.Context, p *v3.IPPool, finalizers []string) error {
+	updated := p.DeepCopy()
+	updated.Finalizers = finalizers
+	_, err := c.cli.ProjectcalicoV3().IPPools().Update(ctx, updated, metav1.UpdateOptions{})
+	return err
+}
+
+func withoutFinalizer(p *v3.IPPool) []string {
+	return slices.DeleteFunc(slices.Clone(p.Finalizers), func(s string) bool { return s == IPPoolFinalizer })
 }
 
 func (c *IPPoolController) blocksInPool(cidr cnet.IPNet) bool {
@@ -439,14 +462,20 @@ func hasCondition(p *v3.IPPool, conditionType string, status metav1.ConditionSta
 }
 
 // updateCondition updates the given condition on the IP pool if it has changed, and updates the status of the pool if needed.
+// It mutates p, so p must be a copy the caller owns rather than an object from the informer cache.
 func updateCondition(ctx context.Context, cli clientset.Interface, p *v3.IPPool, condition metav1.Condition) error {
-	if setConditionOnPool(p, condition) {
-		logrus.WithField("pool", p.Name).Infof("Updating condition %s to %s", condition.Type, condition.Status)
-		if _, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{}); err != nil {
-			logrus.WithError(err).WithField("pool", p.Name).Error("Failed to update status of IPPool")
-			return err
-		}
+	if !setConditionOnPool(p, condition) {
+		return nil
 	}
+
+	logrus.WithField("pool", p.Name).Infof("Updating condition %s to %s", condition.Type, condition.Status)
+	updated, err := cli.ProjectcalicoV3().IPPools().UpdateStatus(ctx, p, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update status of IPPool %s: %w", p.Name, err)
+	}
+
+	// Take the accepted object so a later finalizer write on this pool does not conflict.
+	*p = *updated
 	return nil
 }
 
@@ -481,43 +510,4 @@ func setConditionOnPool(p *v3.IPPool, condition metav1.Condition) bool {
 	condition.LastTransitionTime = metav1.Now()
 	p.Status.Conditions = append(p.Status.Conditions, condition)
 	return true
-}
-
-// poolFromDeleteObj extracts an *v3.IPPool from an informer delete event
-// object, unwrapping cache.DeletedFinalStateUnknown if present. Returns
-// ok=false (and logs) when the object isn't an IPPool so callers can skip
-// the delete instead of panicking.
-func poolFromDeleteObj(obj any) (*v3.IPPool, bool) {
-	if pool, ok := obj.(*v3.IPPool); ok {
-		return pool, true
-	}
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in IPPool delete event")
-		return nil, false
-	}
-	pool, ok := tombstone.Obj.(*v3.IPPool)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-IPPool object")
-		return nil, false
-	}
-	return pool, true
-}
-
-// blockFromDeleteObj is the IPAMBlock counterpart to poolFromDeleteObj.
-func blockFromDeleteObj(obj any) (*v3.IPAMBlock, bool) {
-	if block, ok := obj.(*v3.IPAMBlock); ok {
-		return block, true
-	}
-	tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", obj)).Warn("Unexpected object type in IPAMBlock delete event")
-		return nil, false
-	}
-	block, ok := tombstone.Obj.(*v3.IPAMBlock)
-	if !ok {
-		logrus.WithField("type", fmt.Sprintf("%T", tombstone.Obj)).Warn("Tombstone contained non-IPAMBlock object")
-		return nil, false
-	}
-	return block, true
 }

@@ -121,6 +121,11 @@ func (v *Version) Stream() string {
 	return stream
 }
 
+// PrimaryStream returns the stream without any EP suffix.
+func (v *Version) PrimaryStream() string {
+	return strings.Split(v.Stream(), "-")[0]
+}
+
 func (v *Version) Semver() *semver.Version {
 	ver := semver.MustParse(string(*v))
 	return ver
@@ -140,6 +145,24 @@ func (v *Version) NextBranchVersion() Version {
 		}
 	}
 	return New(ver.IncMinor().String())
+}
+
+var epIsEarlyPreview = func(v *semver.Version) (bool, int) {
+	if v.Prerelease() == "" {
+		return false, -1
+	}
+	if strings.HasPrefix(v.Prerelease(), "1.") {
+		return true, 1
+	} else if strings.HasPrefix(v.Prerelease(), "2.") {
+		return true, 2
+	}
+	return false, -1
+}
+
+// IsEarlyPreviewVersion reports whether v is an early-preview version and, if
+// so, its EP line. GA and non-EP versions return (false, -1).
+func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
+	return epIsEarlyPreview(v)
 }
 
 // NextReleaseVersion returns the next version for a release in the current branch.
@@ -170,21 +193,6 @@ func (v *Version) NextReleaseVersion() (Version, error) {
 	}
 	// GA versions - increment patch version i.e vX.Y.Z to vX.Y.Z+1
 	return New(ver.IncPatch().String()), nil
-}
-
-// IsEarlyPreviewVersion handles the logic for determining if a version is an early preview (EP) version.
-//
-// An early preview version is a version that has a prerelease tag starting with "1." or "2.".
-// The function returns true if it is an EP and EP major version as EP 1 is treated differently from EP 2.
-func IsEarlyPreviewVersion(v *semver.Version) (bool, int) {
-	if v.Prerelease() != "" {
-		if strings.HasPrefix(v.Prerelease(), "1.") {
-			return true, 1
-		} else if strings.HasPrefix(v.Prerelease(), "2.") {
-			return true, 2
-		}
-	}
-	return false, -1
 }
 
 // GitVersion returns the current git version of the directory as a Version object.
@@ -269,14 +277,24 @@ func VersionsFromManifests(repoRoot string) (Version, Version, error) {
 	return productVersion, operatorVersion, nil
 }
 
+// epBranchStreamSuffix returns the stream suffix (e.g. "-2") for a release
+// branch that carries one. The default returns "" so the stream comes from the
+// version alone; a build can override it to key the stream off the branch name.
+var epBranchStreamSuffix = func(branch string) string { return "" }
+
 // DeterminePublishStream returns the stream for a given branch and version.
 // If the branch is the default branch i.e. master, the stream is master.
-// Otherwise, the stream is the major and minor version of the version.
+// Otherwise, the stream is the major and minor version of the version. When the
+// branch carries a stream suffix (see epBranchStreamSuffix), that suffix is
+// used instead of any suffix the version would give.
 func DeterminePublishStream(branch string, version string) string {
 	if branch == utils.DefaultBranch {
 		return branch
 	}
 	ver := New(version)
+	if suffix := epBranchStreamSuffix(branch); suffix != "" {
+		return ver.PrimaryStream() + suffix
+	}
 	return ver.Stream()
 }
 

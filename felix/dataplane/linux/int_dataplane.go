@@ -73,11 +73,13 @@ import (
 	"github.com/projectcalico/calico/felix/linkaddrs"
 	"github.com/projectcalico/calico/felix/netlinkshim"
 	"github.com/projectcalico/calico/felix/nftables"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/felix/proto"
 	"github.com/projectcalico/calico/felix/routerule"
 	"github.com/projectcalico/calico/felix/routetable"
 	"github.com/projectcalico/calico/felix/routetable/ownershippol"
 	"github.com/projectcalico/calico/felix/rules"
+	"github.com/projectcalico/calico/felix/rules/rulesdefs"
 	"github.com/projectcalico/calico/felix/throttle"
 	"github.com/projectcalico/calico/felix/types"
 	"github.com/projectcalico/calico/felix/vxlanfdb"
@@ -174,8 +176,14 @@ type Config struct {
 	DeviceRouteSourceAddressIPv6 net.IP
 	DeviceRouteProtocol          netlink.RouteProtocol
 	RemoveExternalRoutes         bool
-	ProgramClusterRoutes         bool
-	NoEncapEnabled               bool
+
+	// ProgramIPIPClusterRoutes and ProgramNoEncapClusterRoutes record whether Felix, as opposed
+	// to confd and BIRD, is responsible for the cluster routes of IPIP and of unencapsulated IP
+	// Pools respectively.  NoEncapNeeded already incorporates ProgramNoEncapClusterRoutes (see
+	// calc.EncapsulationCalculator.NoEncapNeeded).
+	ProgramIPIPClusterRoutes    bool
+	ProgramNoEncapClusterRoutes bool
+	NoEncapNeeded               bool
 
 	IPForwarding                   string
 	TableRefreshInterval           time.Duration
@@ -307,6 +315,26 @@ type Config struct {
 	NewNftablesDataplane nftables.NewNftablesDataplaneFn
 }
 
+// ctlbExcludesUDP returns whether the connect-time load balancer leaves UDP to
+// the TC programs.
+func (config *Config) ctlbExcludesUDP() bool {
+	return config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) &&
+		config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled)
+}
+
+// ctlbUDPAffinityTimeout returns how long the connect-time load balancer holds a
+// backend affine to an unconnected UDP socket, or 0 if the CTLB does not handle
+// UDP on this node. The CTLB uses this so that consecutive datagrams from one
+// socket reach one backend; the BPF kube-proxy needs the same value so that its
+// affinity map cleanup leaves those entries alone until they really have expired.
+func (config *Config) ctlbUDPAffinityTimeout() time.Duration {
+	if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBDisabled) || config.ctlbExcludesUDP() {
+		return 0
+	}
+	// The BPF programs are given the timeout in whole seconds.
+	return config.BPFConntrackTimeouts.UDPTimeout.Truncate(time.Second)
+}
+
 type UpdateBatchResolver interface {
 	// Opportunity for a manager component to resolve state that depends jointly on the updates
 	// that it has seen since the preceding CompleteDeferredWork call.  Processing here can
@@ -350,6 +378,7 @@ type InternalDataplane struct {
 
 	mainRouteTables []routetable.SyncerInterface
 	allTables       []generictables.Table
+	cleanupTables   []generictables.CleanupTable
 	mangleTables    []generictables.Table
 	natTables       []generictables.Table
 	rawTables       []generictables.Table
@@ -461,6 +490,61 @@ const (
 	aksMTUOverhead         = 100
 )
 
+// sweepIPTablesNFT reports whether the nftables copies of the shared tables belong to someone else:
+//
+//   - On native nftables, anything iptables-nft left there is stale.
+//   - On iptables-legacy, so is anything iptables-nft wrote. Only if the legacy binaries are real,
+//     though: without them Felix programs these very tables.
+func sweepIPTablesNFT(ipVersion uint8, nftablesEnabled bool, backendMode string, lookPath func(string) (string, error)) bool {
+	if nftablesEnabled {
+		return true
+	}
+	return backendMode == environment.IPTablesBackendLegacy &&
+		environment.BackendBinariesPresent(lookPath, ipVersion, environment.IPTablesBackendLegacy)
+}
+
+// legacyIPTablesCleanupTables returns tables that sweep the legacy copies of the shared tables.
+// They're cleanup-only: iptables-legacy is unreadable on some distros, and holds nothing of ours
+// there anyway.
+func legacyIPTablesCleanupTables(
+	ipVersion uint8,
+	featureDetector environment.FeatureDetectorIface,
+	options iptables.TableOptions,
+	natOptions iptables.TableOptions,
+) []generictables.CleanupTable {
+	// Without the legacy binaries these tables would drive iptables-nft, where Felix programs.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendLegacy) {
+		return nil
+	}
+
+	// And without the nft binaries, the tables Felix programs fall back to plain iptables, which is
+	// then legacy: sweeping it would delete the rules Felix just wrote.
+	if !environment.BackendBinariesPresent(options.LookPathOverride, ipVersion, environment.IPTablesBackendNFT) {
+		return nil
+	}
+
+	// Reading the legacy tables would autoload the xtables modules, putting legacy hooks on a node
+	// that deliberately runs nftables only.
+	if !environment.LegacyIPTablesModulesLoaded(ipVersion) {
+		return nil
+	}
+
+	options.BackendMode = environment.IPTablesBackendLegacy
+	options.CleanupOnly = true
+	natOptions.BackendMode = environment.IPTablesBackendLegacy
+	natOptions.CleanupOnly = true
+
+	var tables []generictables.CleanupTable
+	for _, name := range rulesdefs.SharedTables {
+		tableOptions := options
+		if name == "nat" {
+			tableOptions = natOptions
+		}
+		tables = append(tables, iptables.NewTable(name, ipVersion, rulesdefs.RuleHashPrefix, featureDetector, tableOptions))
+	}
+	return tables
+}
+
 func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFLogLevel == "info" {
 		config.BPFLogLevel = "off"
@@ -468,13 +552,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	log.WithField("config", config).Info("Creating internal dataplane driver.")
 
-	// Decide whether to use nftables or iptables based on configuration and kube-proxy mode.
-	detectKubeProxyNftablesMode := nftables.KubeProxyNftablesEnabledFn(config.NewNftablesDataplane)
-	kubeProxyNftablesEnabled, err := detectKubeProxyNftablesMode()
-	if err != nil {
-		log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
+	// Resolved at startup, before the dataplane-specific config values were read, so that
+	// those values match the dataplane we program here.
+	nftablesEnabled := config.RulesConfig.NFTablesEnabled
+
+	// In Auto mode, a later change to kube-proxy's mode means Felix must restart onto the
+	// other dataplane, so record the mode we started with for the monitor to compare against.
+	var detectKubeProxyNftablesMode func() (bool, error)
+	kubeProxyNftablesEnabled := false
+	if config.RulesConfig.NFTablesMode == string(apiv3.NFTablesModeAuto) {
+		detectKubeProxyNftablesMode = nftables.KubeProxyNftablesEnabledFn(config.NewNftablesDataplane)
+		var err error
+		kubeProxyNftablesEnabled, err = detectKubeProxyNftablesMode()
+		if err != nil {
+			log.WithError(err).Panic("Unable to detect kube-proxy nftables mode, shutting down")
+		}
 	}
-	nftablesEnabled := useNftables(config.RulesConfig.NFTablesMode, kubeProxyNftablesEnabled, nil)
 
 	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
 		// Best-effort load of the flowtable module before probing: on hosts where it ships as a
@@ -524,8 +617,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	actionSet := iptables.Actions()
 	newMatchFn := iptables.Match
 	if nftablesEnabled {
-		actionSet = nftables.Actions()
-		newMatchFn = nftables.Match
+		actionSet = nftrender.Actions()
+		newMatchFn = nftrender.Match
 	}
 
 	dp := &InternalDataplane{
@@ -554,7 +647,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	// Most tables need the same options.
 	iptablesOptions := iptables.TableOptions{
-		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+		HistoricChainPrefixes: rulesdefs.AllHistoricChainNamePrefixes,
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.TableRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
@@ -573,7 +666,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		NewDataplane:     config.NewNftablesDataplane,
 	}
 
-	var cleanupTables []generictables.Table
+	var cleanupTables []generictables.CleanupTable
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables/nftables layer to clean up kube-proxy's rules.")
@@ -582,10 +675,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Delete the ip kube-proxy and ip6 kube-proxy tables in nftables.
 		nftablesKPOptions := nftablesOptions
 		nftablesKPOptions.Disabled = true
-		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+		kubeProxyTableV4NFT := nftables.NewTable("kube-proxy", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 		cleanupTables = append(cleanupTables, kubeProxyTableV4NFT)
 		if config.IPv6Enabled {
-			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rules.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
+			kubeProxyTableV6NFT := nftables.NewTable("kube-proxy", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesKPOptions, nftablesEnabled)
 			cleanupTables = append(cleanupTables, kubeProxyTableV6NFT)
 		}
 	}
@@ -605,12 +698,31 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		iptablesNATOptions.ExtraCleanupRegexPattern += "|" + rules.HistoricInsertedNATRuleRegex
 	}
 
+	// If we're on native nftables or iptables-nft, clean up iptables-legacy, assuming it's
+	// available in the kernel.
+	if nftablesEnabled || backendMode == environment.IPTablesBackendNFT {
+		cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(4, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		if config.IPv6Enabled {
+			cleanupTables = append(cleanupTables, legacyIPTablesCleanupTables(6, featureDetector, iptablesOptions, iptablesNATOptions)...)
+		}
+	}
+
+	// And the other direction: clean up what iptables-nft left in the nftables copies of the
+	// shared tables. HistoricChainPrefixes rather than rulesdefs.AllHistoricChainNamePrefixes,
+	// since in BPF mode it also covers kube-proxy's chains.
+	if sweepIPTablesNFT(4, nftablesEnabled, backendMode, config.LookPathOverride) {
+		cleanupTables = append(cleanupTables, nftables.NewIPTablesNFTCleanup(4, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+	}
+	if config.IPv6Enabled && sweepIPTablesNFT(6, nftablesEnabled, backendMode, config.LookPathOverride) {
+		cleanupTables = append(cleanupTables, nftables.NewIPTablesNFTCleanup(6, iptablesOptions.HistoricChainPrefixes, nftablesOptions))
+	}
+
 	// iptables and nftables implementations.
 	var mangleTableV4NFT, natTableV4NFT, rawTableV4NFT, filterTableV4NFT generictables.Table
 	var mangleTableV4IPT, natTableV4IPT, rawTableV4IPT, filterTableV4IPT generictables.Table
 
 	// This is required when nftables mode is configured; but also useful for cleanup in other modes.
-	nftablesV4RootTable := nftables.NewTable("calico", 4, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
+	nftablesV4RootTable := nftables.NewTable("calico", 4, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 
 	if nftablesEnabled {
 		// Create nftables Table implementations.
@@ -618,13 +730,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		natTableV4NFT = nftables.NewTableLayer("nat", nftablesV4RootTable)
 		rawTableV4NFT = nftables.NewTableLayer("raw", nftablesV4RootTable)
 		filterTableV4NFT = nftables.NewTableLayer("filter", nftablesV4RootTable)
+	} else {
+		// Create iptables table implementations.
+		mangleTableV4IPT = iptables.NewTable("mangle", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		natTableV4IPT = iptables.NewTable("nat", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+		rawTableV4IPT = iptables.NewTable("raw", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+		filterTableV4IPT = iptables.NewTable("filter", 4, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
-
-	// Create iptables table implementations.
-	mangleTableV4IPT = iptables.NewTable("mangle", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	natTableV4IPT = iptables.NewTable("nat", 4, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-	rawTableV4IPT = iptables.NewTable("raw", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-	filterTableV4IPT = iptables.NewTable("filter", 4, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 	// Based on configuration, some of the above tables should be active and others not.
 	var mangleTableV4, natTableV4, rawTableV4, filterTableV4 generictables.Table
@@ -637,14 +749,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		rawTableV4 = rawTableV4NFT
 		filterTableV4 = filterTableV4NFT
 		ipSetsV4 = nftablesV4RootTable
-
-		// Cleanup iptables.
-		cleanupTables = append(cleanupTables,
-			mangleTableV4IPT,
-			natTableV4IPT,
-			rawTableV4IPT,
-			filterTableV4IPT,
-		)
 		cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV4, dp.loopSummarizer))
 	} else {
 		// Enable iptables.
@@ -680,6 +784,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.DeviceRouteProtocol,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			config.RemoveExternalRoutes,
+			config.ProgramIPIPClusterRoutes,
 		)
 		routeTableV4 = routetable.New(
 			mainTablePolV4,
@@ -701,6 +806,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.DeviceRouteProtocol,
 				config.RulesConfig.WorkloadIfacePrefixes,
 				config.RemoveExternalRoutes,
+				// IPIP is IPv4-only, so there is no IPIP device in the v6 table
+				// for BIRD to program routes through.
+				false,
 			)
 			routeTableV6 = routetable.New(
 				mainTablePolV6,
@@ -732,7 +840,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	// Start a noEncap manager if an IP pool with no encapsulation exists.
-	if config.ProgramClusterRoutes && config.NoEncapEnabled {
+	if config.ProgramNoEncapClusterRoutes && config.NoEncapNeeded {
 		log.Info("NoEncap IP pool present, starting thread to keep IPv4 noencap routes in sync.")
 		dp.noEncapManager = newNoEncapManager(
 			routeTableV4,
@@ -884,22 +992,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	ipsetsManager := dpsets.NewIPSetsManager("ipv4", ipSetsV4, config.MaxIPSetSize)
 	ipsetsManagerV6 := dpsets.NewIPSetsManager("ipv6", nil, config.MaxIPSetSize)
 
-	// iptables / nftables specific filter Table implementations for IPv6.
-	var filterTableV6NFT, filterTableV6IPT generictables.Table
+	// Required when nftables mode is configured, and for cleanup in the other modes.
+	nftablesV6RootTable := nftables.NewTable("calico", 6, rulesdefs.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
 
-	// Create nftables Table implementations for IPv6.
-	nftablesV6RootTable := nftables.NewTable("calico", 6, rules.RuleHashPrefix, featureDetector, nftablesOptions, nftablesEnabled)
-	filterTableV6NFT = nftables.NewTableLayer("filter", nftablesV6RootTable)
-
-	// Create iptables Table implementations for IPv6.
-	filterTableV6IPT = iptables.NewTable("filter", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-
-	// Select the correct table implementation based on whether we're using nftables or iptables.
 	var filterTableV6 generictables.Table
 	if nftablesEnabled {
-		filterTableV6 = filterTableV6NFT
+		filterTableV6 = nftables.NewTableLayer("filter", nftablesV6RootTable)
 	} else {
-		filterTableV6 = filterTableV6IPT
+		filterTableV6 = iptables.NewTable("filter", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 	}
 
 	dp.RegisterManager(ipsetsManager)
@@ -1088,10 +1188,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		if config.BPFConnTimeLB != string(apiv3.BPFConnectTimeLBDisabled) {
-			excludeUDP := false
-			if config.BPFConnTimeLB == string(apiv3.BPFConnectTimeLBTCP) && config.BPFHostNetworkedNAT == string(apiv3.BPFHostNetworkedNATEnabled) {
-				excludeUDP = true
-			}
+			excludeUDP := config.ctlbExcludesUDP()
 			logLevel := strings.ToLower(config.BPFLogLevel)
 			if config.BPFLogFilters != nil {
 				if logLevel != "off" && config.BPFCTLBLogFilter != "all" {
@@ -1223,7 +1320,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			OpRecorder:       dp.loopSummarizer,
 			NewDataplane:     config.NewNftablesDataplane,
 		}
-		arpRootTable = nftables.NewARPTable("calico-arp", rules.RuleHashPrefix, featureDetector, arpTableOptions, false)
+		arpRootTable = nftables.NewARPTable("calico-arp", rulesdefs.RuleHashPrefix, featureDetector, arpTableOptions, false)
 	}
 	var arpFilterTable generictables.Table
 	var arpMaps nftables.MapsDataplane
@@ -1276,7 +1373,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
-	dp.liveMigrationMonitor.listener = epManager
+	dp.liveMigrationMonitor.registerListener(epManager)
 	if mainTablePolV4 != nil {
 		mainTablePolV4.IsWorkloadBGPPeerIface = epManager.ifaceIsForLocalBGPPeer
 	}
@@ -1292,8 +1389,21 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newDSCPManager(ipSetsV4, mangleTableV4, ruleRenderer, 4, config))
 	}
 
+	if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+		dp.RegisterManager(newFlowtableExclusionManager(ipSetsV4, 4, config.MaxIPSetSize))
+	}
+
 	if config.RulesConfig.IPIPEnabled {
 		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+
+		if !config.ProgramIPIPClusterRoutes {
+			log.Warn("IPIP is enabled but ProgramClusterRoutes leaves the IPIP cluster routes to " +
+				"confd and BIRD.  That is deprecated as of v3.33 and will be removed in v3.35; " +
+				"set FelixConfiguration.programClusterRoutes to EnabledIPIPOnly (or " +
+				"Enabled) and BGPConfiguration.programClusterRoutes to EnabledNoEncapOnly (or " +
+				"Disabled) to let Felix program them instead.")
+		}
+
 		// Add a manager to keep the all-hosts IP set up to date.
 		dp.ipipManager = newIPIPManager(
 			routeTableV4,
@@ -1349,12 +1459,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			mangleTableV6NFT = nftables.NewTableLayer("mangle", nftablesV6RootTable)
 			natTableV6NFT = nftables.NewTableLayer("nat", nftablesV6RootTable)
 			rawTableV6NFT = nftables.NewTableLayer("raw", nftablesV6RootTable)
+		} else {
+			// Define iptables table implementations for IPv6.
+			mangleTableV6IPT = iptables.NewTable("mangle", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
+			natTableV6IPT = iptables.NewTable("nat", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesNATOptions)
+			rawTableV6IPT = iptables.NewTable("raw", 6, rulesdefs.RuleHashPrefix, featureDetector, iptablesOptions)
 		}
-
-		// Define iptables table implementations for IPv6.
-		mangleTableV6IPT = iptables.NewTable("mangle", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
-		natTableV6IPT = iptables.NewTable("nat", 6, rules.RuleHashPrefix, featureDetector, iptablesNATOptions)
-		rawTableV6IPT = iptables.NewTable("raw", 6, rules.RuleHashPrefix, featureDetector, iptablesOptions)
 
 		// Select the correct table implementation based on whether we're using nftables or iptables.
 		var mangleTableV6, natTableV6, rawTableV6 generictables.Table
@@ -1365,14 +1475,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			natTableV6 = natTableV6NFT
 			rawTableV6 = rawTableV6NFT
 			ipSetsV6 = nftablesV6RootTable
-
-			// Cleanup iptables.
-			cleanupTables = append(cleanupTables,
-				mangleTableV6IPT,
-				natTableV6IPT,
-				rawTableV6IPT,
-				filterTableV6IPT,
-			)
 			cleanupIPSets = append(cleanupIPSets, ipsets.NewIPSets(config.RulesConfig.IPSetConfigV6, dp.loopSummarizer))
 		} else {
 			// Enable iptables.
@@ -1516,6 +1618,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			nil, // arpMaps
 		)
 		dp.RegisterManager(epManagerV6)
+		dp.liveMigrationMonitor.registerListener(epManagerV6)
 		if mainTablePolV6 != nil {
 			mainTablePolV6.IsWorkloadBGPPeerIface = epManagerV6.ifaceIsForLocalBGPPeer
 		}
@@ -1529,6 +1632,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if !config.BPFEnabled {
 			dp.RegisterManager(newDSCPManager(ipSetsV6, mangleTableV6, ruleRenderer, 6, config))
+		}
+
+		if nftablesEnabled && config.RulesConfig.NFTablesFlowTableOffload {
+			dp.RegisterManager(newFlowtableExclusionManager(ipSetsV6, 6, config.MaxIPSetSize))
 		}
 
 		// Add a manager for IPv6 wireguard configuration. This is added irrespective of whether wireguard is actually enabled
@@ -1566,8 +1673,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newFlowtableManager(flowtableTargets, config.NFTablesFlowTableDataIfacePattern))
 	}
 
-	// Include cleanup tables in allTables so that they are cleaned up.
-	dp.allTables = append(dp.allTables, cleanupTables...)
+	dp.cleanupTables = append(dp.cleanupTables, cleanupTables...)
 	dp.ipSets = append(dp.ipSets, cleanupIPSets...)
 
 	// Register that we will report liveness and readiness.
@@ -1621,34 +1727,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	return dp
-}
-
-// useNftables determines whether to use nftables based on the FelixConfig setting and
-// the detected kube-proxy mode. In Auto mode, hostNftablesSupported, if non-nil, is
-// consulted as a fallback when kube-proxy is not detected to be in nftables mode.
-// Only supply it on hosts that never run kube-proxy (hosts outside any cluster): a
-// cluster host must follow its kube-proxy so that the two use the same dataplane.
-func useNftables(mode string, proxyEnabled bool, hostNftablesSupported func() bool) bool {
-	use := false
-
-	switch mode {
-	case "Auto":
-		// Detect based on kube-proxy mode, falling back to the host's own
-		// nftables support where there is no kube-proxy to give that signal.
-		use = proxyEnabled
-		if !use && hostNftablesSupported != nil {
-			use = hostNftablesSupported()
-		}
-	case "Enabled":
-		use = true
-	}
-
-	log.WithFields(log.Fields{
-		"kubeProxyEnabled": proxyEnabled,
-		"calicoMode":       mode,
-		"useNftables":      use,
-	}).Info("Determined whether or not to use nftables")
-	return use
 }
 
 // findHostMTU auto-detects the smallest host interface MTU.
@@ -1925,7 +2003,7 @@ func (d *InternalDataplane) checkIPVSConfigOnStateUpdate(state ifacemonitor.Stat
 // monitorKubeProxyNftablesMode monitors kube-proxy's nftables mode has changed and
 // triggers a Felix restart if it has. This is only active if the nftables mode is set to "Auto".
 func (d *InternalDataplane) monitorKubeProxyNftablesMode() {
-	if d.config.RulesConfig.NFTablesMode != "Auto" {
+	if d.config.RulesConfig.NFTablesMode != string(apiv3.NFTablesModeAuto) {
 		// We can skip this check if nftables is not configured to Auto.
 		log.Debug("Skipping kube-proxy nftables mode monitoring as NFTablesMode is not set to Auto.")
 		return
@@ -2033,7 +2111,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	// Wildcard matching varies based on iptables vs nftables.
 	wildcard := iptables.Wildcard
 	if d.nftablesEnabled {
-		wildcard = nftables.Wildcard
+		wildcard = nftrender.Wildcard
 	}
 
 	rulesConfig := d.config.RulesConfig
@@ -2211,8 +2289,8 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 
 	for _, t := range d.arpTables {
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  nftables.Match(),
-			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+			Match:  nftrender.Match(),
+			Action: nftrender.Actions().Jump(rules.ChainARPDispatch),
 		}})
 	}
 }
@@ -2329,8 +2407,8 @@ func (d *InternalDataplane) setUpIptablesNormal() {
 	}
 	for _, t := range d.arpTables {
 		t.InsertOrAppendRules("OUTPUT", []generictables.Rule{{
-			Match:  nftables.Match(),
-			Action: nftables.Actions().Jump(rules.ChainARPDispatch),
+			Match:  nftrender.Match(),
+			Action: nftrender.Actions().Jump(rules.ChainARPDispatch),
 		}})
 	}
 	if d.xdpState != nil {
@@ -2436,15 +2514,15 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.onLiveMigrationGARPDetected(id)
 			drainChan(d.liveMigrationMonitor.garpC, d.onLiveMigrationGARPDetected)
 		case name := <-d.ipipParentIfaceC:
-			d.ipipManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.ipipManager.routeMgr, name)
 		case name := <-d.noEncapParentIfaceC:
-			d.noEncapManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.noEncapManager.routeMgr, name)
 		case name := <-d.noEncapParentIfaceCV6:
-			d.noEncapManagerV6.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.noEncapManagerV6.routeMgr, name)
 		case name := <-d.vxlanParentIfaceC:
-			d.vxlanManager.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.vxlanManager.routeMgr, name)
 		case name := <-d.vxlanParentIfaceCV6:
-			d.vxlanManagerV6.routeMgr.OnParentDeviceUpdate(name)
+			d.onParentDeviceUpdate(d.vxlanManagerV6.routeMgr, name)
 		case <-ipSetsRefreshC:
 			log.Debug("Refreshing IP sets state")
 			d.forceIPSetsRefresh = true
@@ -2568,6 +2646,14 @@ func (d *InternalDataplane) processMsgFromCalcGraph(msg any) {
 		log.WithField("timeSinceStart", time.Since(processStartTime)).Info(
 			"Datastore in sync, flushing the dataplane for the first time...")
 		d.datastoreInSync = true
+	}
+}
+
+// onParentDeviceUpdate marks the dataplane dirty when a tunnel's parent device moves, since the
+// goroutine that spots the move may be the only thing happening at the time.
+func (d *InternalDataplane) onParentDeviceUpdate(mgr *routeManager, name string) {
+	if mgr.OnParentDeviceUpdate(name) {
+		d.dataplaneNeedsSync = true
 	}
 }
 
@@ -2890,10 +2976,11 @@ func (d *InternalDataplane) apply() {
 	var reschedDelayMutex sync.Mutex
 	var reschedDelay time.Duration
 	var iptablesWG sync.WaitGroup
-	for _, t := range d.allTables {
+	runTable := func(f func() time.Duration) {
 		iptablesWG.Add(1)
-		go func(t generictables.Table) {
-			tableReschedAfter := t.Apply()
+		go func() {
+			defer iptablesWG.Done()
+			tableReschedAfter := f()
 
 			reschedDelayMutex.Lock()
 			defer reschedDelayMutex.Unlock()
@@ -2901,8 +2988,15 @@ func (d *InternalDataplane) apply() {
 				reschedDelay = tableReschedAfter
 			}
 			d.reportHealth()
-			iptablesWG.Done()
-		}(t)
+		}()
+	}
+	for _, t := range d.allTables {
+		runTable(t.Apply)
+	}
+
+	// Sweep the tables we're no longer programming, for whatever a previous Felix left in them.
+	for _, t := range d.cleanupTables {
+		runTable(t.CleanUp)
 	}
 	iptablesWG.Wait()
 
@@ -3051,6 +3145,7 @@ func startBPFDataplaneComponents(
 	bpfproxyOpts := []bpfproxy.Option{
 		bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 		bpfproxy.WithMaglevLUTSize(config.BPFMaglevLUTSize),
+		bpfproxy.WithCTLBUDPAffinityTimeout(config.ctlbUDPAffinityTimeout()),
 	}
 
 	if config.bpfProxyHealthCheck != nil {

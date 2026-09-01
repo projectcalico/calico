@@ -75,6 +75,11 @@
     when: "${CHANGE_IN(node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,non-go:/.semaphore/vms/)}"
   dependencies:
     - "Prerequisites"
+    # cache-test-artifacts ships these images to the test VMs. Without the
+    # dependency the VMs build from source instead, which fails on the VM.
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 	//nolint:staticcheck // Ignore ST1001: should not use dot imports
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +40,7 @@ var _ = describe.CalicoDescribe(
 	describe.WithFeature("IPIP"),
 	describe.WithCategory(describe.Networking),
 	describe.RequiresNoEncap(),
+	describe.RequiresBGP(),
 	describe.WithSerial(),
 	"IP-in-IP tests",
 	func() {
@@ -71,14 +71,7 @@ var _ = describe.CalicoDescribe(
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 2)
 
-			// Make sure the cluster is in BGP mode by querying the Installation resource. The tests in this file
-			// all require BGP, and all require Calico be installed by the operator.
-			installation := &v1.Installation{}
-			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
-			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
-			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
-			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
-			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
+			utils.RequireBGPEnabled(cli)
 
 			// Create an IP pool for the test.
 			poolName = utils.GenerateRandomName("ipip-pool")
@@ -185,7 +178,7 @@ var _ = describe.CalicoDescribe(
 			// Routes should now be using tunl0 again, and be owned by whichever
 			// programmer (Felix or BIRD) the cluster is configured to use.
 			ginkgo.By("Verifying that node routes are using tunl0 with the expected protocol owner")
-			expectedProto := expectedClusterRouteProto(cli)
+			expectedProto := expectedIPIPClusterRouteProto(cli)
 			Eventually(func() error {
 				routes := GetNodeRoutes(cli, "", "203.0.113")
 				if len(routes) == 0 {

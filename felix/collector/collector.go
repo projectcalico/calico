@@ -363,7 +363,7 @@ func (c *collector) loopProcessingDataplaneInfoUpdates(dpInfoC <-chan *proto.ToD
 		c.policyStoreManager.DoWithLock(func(ps *policystore.PolicyStore) {
 			log.Debugf("Dataplane payload: %+v and sequenceNumber: %d, ", dpInfo.Payload, dpInfo.SequenceNumber)
 			// Get the data and update the endpoints.
-			ps.ProcessUpdate(perHostPolicySubscription, dpInfo, true)
+			ps.ProcessUpdate(perHostPolicySubscription, dpInfo)
 		})
 		if _, ok := dpInfo.Payload.(*proto.ToDataplane_InSync); ok {
 			// Sync the policy store. This will swap the pending store to the active store. Setting the
@@ -597,7 +597,6 @@ func (c *collector) checkEpStats() {
 	minLastRuleUpdatedAt := monotime.Now() - c.config.InitialReportingDelay
 
 	now := monotime.Now()
-	minExpirationAt := now - c.config.AgeTimeout
 
 	// For each entry
 	// - report metrics.  Metrics reported through the ticker processing will wait for the initial reporting delay
@@ -605,33 +604,45 @@ func (c *collector) checkEpStats() {
 	//   the flow is terminated or has changed.
 	// - check age and expire the entry if needed.
 	for _, data := range c.epStats {
+		ageTimeout := c.config.AgeTimeout
 		if c.config.IsBPFDataplane {
-			switch data.Tuple.Proto {
-			case 6 /* TCP */ :
-				// We use reset because likely already cleaned it up as an expired
-				// connection if we haven't seen any update this long.
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.TCPResetSeen
-			case 17 /* UDP */ :
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.UDPTimeout
-			case 1 /* ICMP */, 58 /* ICMPv6 */ :
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.ICMPTimeout
-			default:
-				minExpirationAt = now - c.config.BPFConntrackTimeouts.GenericTimeout
-			}
-			if minExpirationAt < 2*bpfconntrack.ScanPeriod {
-				minExpirationAt = now - 2*bpfconntrack.ScanPeriod
-			}
+			ageTimeout = bpfAgeTimeout(c.config.BPFConntrackTimeouts, data.Tuple.Proto)
 		}
 
 		if data.IsDirty() && (data.Reported || data.RuleUpdatedAt() < minLastRuleUpdatedAt) {
 			c.checkPreDNATTuple(data)
 			c.reportMetrics(data, true)
 		}
-		if data.UpdatedAt() < minExpirationAt {
+		if data.UpdatedAt() < now-ageTimeout {
 			c.expireMetrics(data)
 			c.deleteDataFromEpStats(data)
 		}
 	}
+}
+
+// bpfAgeTimeout returns how long the collector keeps an epStats entry after its last update when
+// running the BPF dataplane, based on the dataplane's conntrack timeout for the entry's protocol.
+//
+// The collector only touches an entry when the BPF conntrack scanner reports it, i.e. once per
+// ScanPeriod, so a timeout shorter than a couple of scan periods would expire flows that are still
+// alive.  Re-creating the entry afterwards re-credits the conntrack counters' absolute values as a
+// fresh delta, so premature expiry over-counts traffic as well as churning flow logs.  Hence the
+// floor.
+func bpfAgeTimeout(timeouts bpfconntrack.Timeouts, proto int) time.Duration {
+	var timeout time.Duration
+	switch proto {
+	case 6 /* TCP */ :
+		// We use reset because likely already cleaned it up as an expired
+		// connection if we haven't seen any update this long.
+		timeout = timeouts.TCPResetSeen
+	case 17 /* UDP */ :
+		timeout = timeouts.UDPTimeout
+	case 1 /* ICMP */, 58 /* ICMPv6 */ :
+		timeout = timeouts.ICMPTimeout
+	default:
+		timeout = timeouts.GenericTimeout
+	}
+	return max(timeout, 2*bpfconntrack.ScanPeriod)
 }
 
 func (c *collector) checkPreDNATTuple(data *Data) {
@@ -1047,7 +1058,14 @@ func (c *collector) evaluatePendingRuleTraceForLocalEp(data *Data, reason policy
 func (c *collector) evaluatePendingRuleTrace(direction rules.RuleDir, store *policystore.PolicyStore, ep calc.EndpointData, flow TupleAsFlow, ruleIDs *[]*calc.RuleID) {
 	// Get the proto.WorkloadEndpoint, needed for the evaluation, from the policy store.
 	if protoEp := c.lookupProtoWorkloadEndpoint(store, ep.Key()); protoEp != nil {
-		trace := checker.Evaluate(direction, store, protoEp, &flow)
+		trace, err := checker.Evaluate(checker.StagedAsEnforced, direction, store, protoEp, &flow)
+		if err != nil {
+			// Keep the trace we worked out last time: reporting no pending policy at all would be a
+			// stronger claim than we are in a position to make. The checker logs the reason, rate
+			// limited, so this one stays at trace level.
+			log.WithError(err).Tracef("Pending %s evaluation failed, tuple: %v", direction, flow)
+			return
+		}
 		if !equal(*ruleIDs, trace) {
 			*ruleIDs = append([]*calc.RuleID(nil), trace...)
 			log.Tracef("Updated pending %s, tuple: %v, rule trace: %v", direction, flow, ruleIDs)

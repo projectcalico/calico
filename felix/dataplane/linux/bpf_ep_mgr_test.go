@@ -79,6 +79,10 @@ type mockDataplane struct {
 	netlinkShim          netlinkshim.Interface
 	natDevicesConfigured bool
 
+	// netkitPins stands in for the netkit link pins under /sys/fs/bpf/netkit,
+	// i.e. the interfaces a previous Felix left netkit-attached.
+	netkitPins map[string]bool
+
 	ensureStartedFn        func()
 	ensureQdiscFn          func(string) (bool, error)
 	interfaceByIndexFn     func(ifindex int) (*net.Interface, error)
@@ -87,6 +91,7 @@ type mockDataplane struct {
 
 	jitHarden             bool
 	finalTrampolineStride int
+	erangeCount           int
 }
 
 func newMockDataplane() *mockDataplane {
@@ -102,6 +107,7 @@ func newMockDataplane() *mockDataplane {
 		policy:      map[string]polprog.Rules{},
 		routes:      map[ip.CIDR]struct{}{},
 		netlinkShim: netlinkShim,
+		netkitPins:  map[string]bool{},
 	}
 }
 
@@ -218,6 +224,12 @@ func (m *mockDataplane) getIfaceLink(name string) (netlink.Link, error) {
 	return link, err
 }
 
+func (m *mockDataplane) netkitPinned(name string) bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.netkitPins[name]
+}
+
 func (m *mockDataplane) deleteIface(name string) error {
 	attr := netlink.NewLinkAttrs()
 	attr.Name = name
@@ -296,6 +308,18 @@ func (m *mockDataplane) numOfAttaches(key string) int {
 	return m.numAttaches[key]
 }
 
+func (m *mockDataplane) getFinalTrampolineStride() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.finalTrampolineStride
+}
+
+func (m *mockDataplane) getErangeCount() int {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.erangeCount
+}
+
 func (m *mockDataplane) setRoute(cidr ip.CIDR) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
@@ -351,10 +375,15 @@ func (m *mockProgMapDP) loadPolicyProgram(progName string,
 		}
 
 		if builder.TrampolineStride() > 15000 {
+			m.mutex.Lock()
+			m.erangeCount++
+			m.mutex.Unlock()
 			return nil, nil, unix.ERANGE
 		}
 
+		m.mutex.Lock()
 		m.finalTrampolineStride = builder.TrampolineStride()
+		m.mutex.Unlock()
 	}
 
 	fdCounterLock.Lock()
@@ -390,6 +419,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocatorV6   *idalloc.IDAllocator
 		vxlanMTU             int
 		nodePortDSR          bool
+		bpfAttachType        v3.BPFAttachOption
 		maps                 *bpfmap.Maps
 		v4Maps               *bpfmap.IPMaps
 		v6Maps               *bpfmap.IPMaps
@@ -417,6 +447,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		ipSetIDAllocatorV6 = idalloc.New()
 		vxlanMTU = 0
 		nodePortDSR = true
+		bpfAttachType = v3.BPFAttachOptionNetkit
 
 		maps = new(bpfmap.Maps)
 
@@ -473,6 +504,8 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		// bpfEndpointManager indexes into them unconditionally (e.g. syncIfStateMap).
 		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsIng))
 		commonMaps.NetkitJumpMaps = append(commonMaps.NetkitJumpMaps, mock.NewMockMap(progsParamsEg))
+		commonMaps.NetkitProgramsMaps = append(commonMaps.NetkitProgramsMaps, mock.NewMockMap(progsParamsIng))
+		commonMaps.NetkitProgramsMaps = append(commonMaps.NetkitProgramsMaps, mock.NewMockMap(progsParamsEg))
 		xdpJumpMap = mock.NewMockMap(progsParamsIng)
 		commonMaps.XDPJumpMap = xdpJumpMap
 
@@ -521,6 +554,7 @@ var _ = Describe("BPF Endpoint Manager", func() {
 				BPFHostNetworkedNAT:     "Enabled",
 				BPFPolicyDebugEnabled:   true,
 				BPFIpv6Enabled:          ipv6Enabled,
+				BPFAttachType:           bpfAttachType,
 			},
 			maps,
 			regexp.MustCompile(workloadIfaceRegex),
@@ -719,6 +753,43 @@ var _ = Describe("BPF Endpoint Manager", func() {
 
 	It("exists", func() {
 		Expect(bpfEpMgr).NotTo(BeNil())
+	})
+
+	It("keeps a not-managed host interface's ifstate entry across a felix restart", func() {
+		// A host interface that matches neither the data, workload, nor L3
+		// pattern (e.g. an ExternalNetwork exit device) is recorded in the
+		// ifstate map with FlgNotManaged. fib_approve relies on that entry to
+		// let an egress gateway's own traffic out; without it the gateway's
+		// health probes are dropped and it never becomes ready (CORE-13245).
+		const (
+			exitDev = "extnet0"
+			exitIdx = 37
+		)
+
+		// The device exists throughout, so the start-of-day resync sees it as
+		// present when it walks the pinned ifstate map after a restart.
+		dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+			if ifindex == exitIdx {
+				return &net.Interface{Name: exitDev, Index: exitIdx, Flags: net.FlagUp}, nil
+			}
+			return nil, errors.New("no such network interface")
+		}
+
+		By("recording the not-managed entry when the device first comes up")
+		genIfaceUpdate(exitDev, ifacemonitor.StateUp, exitIdx)()
+		checkIfState(exitIdx, exitDev, ifstate.FlgNotManaged)
+
+		By("restarting felix with the device already present")
+		// A fresh manager reuses the pinned ifstate map. The pre-existing
+		// device's up event is delivered before the start-of-day sync runs
+		// (both happen in the first CompleteDeferredWork).
+		newBpfEpMgr(false)
+		genIfaceUpdate(exitDev, ifacemonitor.StateUp, exitIdx)()
+
+		// The entry must still be there. syncIfStateMap must not prune a
+		// present, not-managed device's entry just because it is not one we
+		// actively manage.
+		checkIfState(exitIdx, exitDev, ifstate.FlgNotManaged)
 	})
 
 	Context("with lookup cache", func() {
@@ -1112,7 +1183,28 @@ var _ = Describe("BPF Endpoint Manager", func() {
 	})
 
 	Context("with netkit workload endpoint", func() {
+		var (
+			origIsNetkitSupported func() bool
+			qdiscs                []string
+		)
+
+		BeforeEach(func() {
+			// Netkit support is otherwise probed from the running kernel, which
+			// would make the mechanism under test depend on the test machine.
+			origIsNetkitSupported = tc.IsNetkitSupported
+			tc.IsNetkitSupported = func() bool { return true }
+			qdiscs = nil
+		})
+
+		AfterEach(func() {
+			tc.IsNetkitSupported = origIsNetkitSupported
+		})
+
 		JustBeforeEach(func() {
+			dp.ensureQdiscFn = func(iface string) (bool, error) {
+				qdiscs = append(qdiscs, iface)
+				return false, nil
+			}
 			newBpfEpMgr(false)
 			err := dp.createIface("calinkit0", 50, "netkit")
 			Expect(err).NotTo(HaveOccurred())
@@ -1134,12 +1226,95 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			// Netkit workload should have policy indices allocated.
 			Expect(iface.dpState.v4.policyIdx[hook.Ingress]).To(BeNumerically(">=", 0))
 			Expect(iface.dpState.v4.policyIdx[hook.Egress]).To(BeNumerically(">=", 0))
+			// ...and they must come from the netkit allocator, since netkit
+			// programs cannot share a prog_array with TC/TCX ones.
+			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).To(HaveKey(iface.dpState.v4.policyIdx[hook.Ingress]))
+			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).To(HaveKey(iface.dpState.v4.policyIdx[hook.Egress]))
+			Expect(iface.dpState.netkitJumps).To(BeTrue())
+		})
+
+		It("should not ensure a qdisc for it", func() {
+			Expect(qdiscs).NotTo(ContainElement("calinkit0"))
 		})
 
 		It("should clean up netkit jump maps on interface removal", func() {
 			genIfaceUpdate("calinkit0", ifacemonitor.StateNotPresent, 50)()
 			genWLUpdateEpRemove("calinkit0")()
 		})
+
+		Context("with netkit attachment turned off", func() {
+			BeforeEach(func() {
+				bpfAttachType = v3.BPFAttachOptionTCX
+			})
+
+			It("should drive the netkit device through TC/TCX instead", func() {
+				bpfEpMgr.ifacesLock.Lock()
+				iface := bpfEpMgr.nameToIface["calinkit0"]
+				bpfEpMgr.ifacesLock.Unlock()
+
+				// Still recognised as a netkit device...
+				Expect(iface.info.ifaceType).To(Equal(IfaceTypeNetkit))
+				// ...but programmed like any other workload, from the regular
+				// allocator, which is what makes a downgrade to a release
+				// without netkit support safe.
+				Expect(iface.dpState.netkitJumps).To(BeFalse())
+				Expect(bpfEpMgr.jumpMapAllocs[hook.Ingress].inUse).To(HaveKey(iface.dpState.v4.policyIdx[hook.Ingress]))
+				Expect(bpfEpMgr.jumpMapAllocs[hook.Egress].inUse).To(HaveKey(iface.dpState.v4.policyIdx[hook.Egress]))
+				Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).To(BeEmpty())
+				Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).To(BeEmpty())
+			})
+
+			It("should ensure a qdisc for it", func() {
+				// A netkit device never had one, but the TC attach path needs it.
+				Expect(qdiscs).To(ContainElement("calinkit0"))
+			})
+		})
+	})
+
+	// The manager only drops a nameToIface entry once every field of the
+	// bpfInterface has gone back to its zero value.  A field left set by a
+	// teardown leaks the entry for the lifetime of the process, so check the
+	// teardown of each kind of workload that sets an otherwise-sticky field.
+	//
+	// Both teardown orderings matter.  In practice the CNI deletes the veth
+	// before the datastore reports the endpoint gone, and that ordering is the
+	// weaker one: once the interface is down, applyPolicy short-circuits and
+	// stops refreshing the derived state.
+	describeTeardown := func(desc string, teardown func(name string)) {
+		DescribeTable("should not leak a nameToIface entry when the workload is torn down, "+desc,
+			func(ep *proto.WorkloadEndpoint) {
+				newBpfEpMgr(false)
+				ep.Name = "cali12345"
+				bpfEpMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+					Id: &proto.WorkloadEndpointID{
+						OrchestratorId: "k8s",
+						WorkloadId:     ep.Name,
+						EndpointId:     ep.Name,
+					},
+					Endpoint: ep,
+				})
+				genIfaceUpdate(ep.Name, ifacemonitor.StateUp, 15)()
+				Expect(bpfEpMgr.nameToIface).To(HaveKey(ep.Name))
+				// Pre-flight: the entry must actually be carrying the sticky
+				// state, otherwise the teardown check below is vacuous.
+				Expect(bpfEpMgr.nameToIface[ep.Name].info.hasIstioDSCP).
+					To(Equal(ep.IsIstioAmbient), "istio DSCP flag not recorded")
+
+				teardown(ep.Name)
+				Expect(bpfEpMgr.nameToIface).NotTo(HaveKey(ep.Name))
+			},
+			Entry("plain workload", &proto.WorkloadEndpoint{}),
+			Entry("istio ambient workload", &proto.WorkloadEndpoint{IsIstioAmbient: true}),
+		)
+	}
+
+	describeTeardown("interface first", func(name string) {
+		genIfaceUpdate(name, ifacemonitor.StateNotPresent, 15)()
+		genWLUpdateEpRemove(name)()
+	})
+	describeTeardown("endpoint first", func(name string) {
+		genWLUpdateEpRemove(name)()
+		genIfaceUpdate(name, ifacemonitor.StateNotPresent, 15)()
 	})
 
 	Context("with jit-harden", func() {
@@ -1156,7 +1331,13 @@ var _ = Describe("BPF Endpoint Manager", func() {
 		It("should load program with shorter trampoline jumps", func() {
 			Expect(dp.programAttached("cali12345:ingress")).To(BeTrue())
 			Expect(dp.programAttached("cali12345:egress")).To(BeTrue())
-			Expect(dp.finalTrampolineStride).To(BeNumerically("<=", 15000))
+			// The initial (default-stride) attempt(s) must have been rejected
+			// with ERANGE before the retry loop found a stride that fits;
+			// otherwise finalTrampolineStride's "<= 15000" check below is
+			// trivially true regardless of whether the retry logic ran.
+			Expect(dp.getErangeCount()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically(">", 0))
+			Expect(dp.getFinalTrampolineStride()).To(BeNumerically("<=", 15000))
 		})
 	})
 
@@ -1975,45 +2156,95 @@ var _ = Describe("BPF Endpoint Manager", func() {
 			}))
 		})
 
-		It("should reclaim a netkit WEP's index into the netkit jump map allocator", func() {
-			// Regression test for the netkit jump-map index corruption on
-			// Felix restart (CORE-12937). A netkit workload allocates its
-			// policy indices from netkitJumpMapAllocs (see allocJumpIndicesForWEP
-			// / wepStateFillJumps), so start-of-day resync must reclaim its
-			// persisted indices from that same allocator. If they were reclaimed
-			// into the regular jumpMapAllocs instead, the netkit allocator would
-			// believe the index is free and later hand it to another netkit WEP,
-			// leaving two endpoints on one jump map slot and corrupting one of
-			// their policy programs.
-			err := dp.createIface("calinkit0", 50, "netkit")
-			Expect(err).NotTo(HaveOccurred())
+		Context("restarting on a node whose WEP was netkit-attached", func() {
+			var origIsNetkitSupported func() bool
 
-			dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
-				if ifindex == 50 {
-					return &net.Interface{Name: "calinkit0", Index: 50, Flags: net.FlagUp}, nil
+			BeforeEach(func() {
+				// Netkit support is otherwise probed from the running kernel,
+				// which would make the mechanism under test depend on the test
+				// machine.
+				origIsNetkitSupported = tc.IsNetkitSupported
+				tc.IsNetkitSupported = func() bool { return true }
+			})
+
+			AfterEach(func() {
+				tc.IsNetkitSupported = origIsNetkitSupported
+			})
+
+			JustBeforeEach(func() {
+				err := dp.createIface("calinkit0", 50, "netkit")
+				Expect(err).NotTo(HaveOccurred())
+				// The pinned netkit link is what says the previous Felix
+				// attached this interface through netkit.
+				dp.netkitPins["calinkit0"] = true
+
+				dp.interfaceByIndexFn = func(ifindex int) (*net.Interface, error) {
+					if ifindex == 50 {
+						return &net.Interface{Name: "calinkit0", Index: 50, Flags: net.FlagUp}, nil
+					}
+					return nil, errors.New("no such network interface")
 				}
-				return nil, errors.New("no such network interface")
-			}
 
-			// Persisted ifstate from before the restart: a netkit WEP using
-			// policy index 2 on both hooks.
-			_ = ifStateMap.Update(
-				ifstate.NewKey(50).AsBytes(),
-				ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgIPv4Ready, "calinkit0",
-					-1, 2, 2, -1, -1, -1, -1, -1).AsBytes(),
-			)
-			genWLUpdate("calinkit0")()
+				// Persisted ifstate from before the restart: a netkit WEP using
+				// policy index 2 on both hooks.
+				_ = ifStateMap.Update(
+					ifstate.NewKey(50).AsBytes(),
+					ifstate.NewValue(ifstate.FlgWEP|ifstate.FlgIPv4Ready, "calinkit0",
+						-1, 2, 2, -1, -1, -1, -1, -1).AsBytes(),
+				)
+				genWLUpdate("calinkit0")()
+			})
 
-			err = bpfEpMgr.CompleteDeferredWork()
-			Expect(err).NotTo(HaveOccurred())
+			It("should reclaim its index into the netkit jump map allocator", func() {
+				// Regression test for the netkit jump-map index corruption on
+				// Felix restart (CORE-12937). A netkit workload allocates its
+				// policy indices from netkitJumpMapAllocs (see allocJumpIndicesForWEP
+				// / wepStateFillJumps), so start-of-day resync must reclaim its
+				// persisted indices from that same allocator. If they were reclaimed
+				// into the regular jumpMapAllocs instead, the netkit allocator would
+				// believe the index is free and later hand it to another netkit WEP,
+				// leaving two endpoints on one jump map slot and corrupting one of
+				// their policy programs.
+				err := bpfEpMgr.CompleteDeferredWork()
+				Expect(err).NotTo(HaveOccurred())
 
-			// The persisted index must be reclaimed by the netkit allocator...
-			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
-			Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
-			// ...and must NOT land in the regular allocator (where the bug put it,
-			// leaving the netkit allocator free to hand index 2 out a second time).
-			Expect(bpfEpMgr.jumpMapAllocs[hook.Ingress].inUse).NotTo(HaveKey(2))
-			Expect(bpfEpMgr.jumpMapAllocs[hook.Egress].inUse).NotTo(HaveKey(2))
+				// The persisted index must be reclaimed by the netkit allocator...
+				Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
+				Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).To(HaveKeyWithValue(2, "calinkit0"))
+				// ...and must NOT land in the regular allocator (where the bug put it,
+				// leaving the netkit allocator free to hand index 2 out a second time).
+				Expect(bpfEpMgr.jumpMapAllocs[hook.Ingress].inUse).NotTo(HaveKey(2))
+				Expect(bpfEpMgr.jumpMapAllocs[hook.Egress].inUse).NotTo(HaveKey(2))
+			})
+
+			Context("with netkit attachment turned off", func() {
+				BeforeEach(func() {
+					bpfAttachType = v3.BPFAttachOptionTCX
+				})
+
+				It("should hand its index back and reallocate from the TC/TCX allocator", func() {
+					// Step 2 of the supported downgrade (CORE-13281): the operator
+					// selects TC/TCX, Felix restarts, and from then on drives the
+					// existing netkit devices through TC/TCX. The indices the
+					// netkit-attached run persisted belong to the netkit allocator
+					// and must go back to it; carrying them into the TC/TCX programs
+					// would leave both allocators believing they own the slot.
+					err := bpfEpMgr.CompleteDeferredWork()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Ingress].inUse).NotTo(HaveKey(2))
+					Expect(bpfEpMgr.netkitJumpMapAllocs[hook.Egress].inUse).NotTo(HaveKey(2))
+
+					bpfEpMgr.ifacesLock.Lock()
+					iface := bpfEpMgr.nameToIface["calinkit0"]
+					bpfEpMgr.ifacesLock.Unlock()
+					Expect(iface.dpState.netkitJumps).To(BeFalse())
+					Expect(bpfEpMgr.jumpMapAllocs[hook.Ingress].inUse).To(
+						HaveKeyWithValue(iface.dpState.v4.policyIdx[hook.Ingress], "calinkit0"))
+					Expect(bpfEpMgr.jumpMapAllocs[hook.Egress].inUse).To(
+						HaveKeyWithValue(iface.dpState.v4.policyIdx[hook.Egress], "calinkit0"))
+				})
+			})
 		})
 
 		It("should handle jump map collision: single iface", func() {
