@@ -18,54 +18,53 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	uruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	v1lister "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
-	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/kube-controllers/pkg/converter"
+	"github.com/projectcalico/calico/libcalico-go/lib/nodestatus"
 )
 
 const (
-	calicoNodeLabel               = "k8s-app"
-	calicoNodeLabelValue          = "calico-node"
-	defaultConditionGracePeriod   = 30 * time.Second
-	defaultConditionCheckInterval = 10 * time.Second
+	// notReadyGracePeriod is how long a node goes without a Ready calico-node pod before we
+	// call its network unavailable. Long enough to ride out a calico-node restart.
+	notReadyGracePeriod = 30 * time.Second
+
+	// maxRetries is how many times a node is retried before it is dropped from the queue.
+	// A later pod or node event brings it back.
+	nodeConditionMaxRetries = 5
+
+	// calicoNodePodsByNodeIndex indexes calico-node pods by node name.
+	calicoNodePodsByNodeIndex = "calicoNodePodsByNode"
 )
 
-// nodeConditionController watches calico-node pods and sets the NetworkUnavailable
-// condition on Kubernetes nodes when calico-node pods are not Ready. This handles the
-// case where calico-node crashes or is OOMKilled, which the in-pod health monitoring
-// cannot detect. It only sets NetworkUnavailable=True; recovery (setting False) is left
-// to calico-node's own startup logic to avoid races.
+// nodeConditionController keeps the NetworkUnavailable condition, and optionally the
+// network-ready taint, in step with calico-node pod readiness. See node/DESIGN.md for why this
+// lives here rather than in calico-node.
 type nodeConditionController struct {
 	k8sClientset kubernetes.Interface
 	nodeLister   v1lister.NodeLister
-	podLister    v1lister.PodLister
+	podIndexer   cache.Indexer
+	workqueue    workqueue.TypedRateLimitingInterface[string]
 
-	// notReadySince tracks when we first detected that a node has no Ready calico-node pod.
-	notReadySince map[string]time.Time
+	gracePeriod time.Duration
 
-	// markedUnavailable tracks nodes we've already patched to avoid duplicate patches.
-	markedUnavailable map[string]bool
-
-	gracePeriod   time.Duration
-	checkInterval time.Duration
-
-	// manageTaint controls whether we also add the network-ready taint. It mirrors the condition:
-	// we only ever add the taint here as a backstop, and leave removal to calico-node startup.
+	// manageTaint controls whether we add the network-ready taint alongside the condition.
+	// Removal is unconditional, so turning the feature off drains the taint.
 	manageTaint bool
 
-	// For testing: allow injecting a custom time function and patch functions.
-	nowFn   func() time.Time
-	patchFn func(nodeName string) error
-	taintFn func(nodeName string) error
+	nowFn func() time.Time
 }
 
 func newNodeConditionController(
@@ -74,184 +73,286 @@ func newNodeConditionController(
 	podInformer cache.SharedIndexInformer,
 ) *nodeConditionController {
 	c := &nodeConditionController{
-		k8sClientset:      k8sClientset,
-		nodeLister:        v1lister.NewNodeLister(nodeInformer.GetIndexer()),
-		podLister:         v1lister.NewPodLister(podInformer.GetIndexer()),
-		notReadySince:     make(map[string]time.Time),
-		markedUnavailable: make(map[string]bool),
-		gracePeriod:       defaultConditionGracePeriod,
-		checkInterval:     defaultConditionCheckInterval,
-		manageTaint:       os.Getenv(names.NetworkReadyTaintEnvVar) == "true",
-		nowFn:             time.Now,
+		k8sClientset: k8sClientset,
+		nodeLister:   v1lister.NewNodeLister(nodeInformer.GetIndexer()),
+		podIndexer:   podInformer.GetIndexer(),
+		workqueue: workqueue.NewTypedRateLimitingQueue(
+			workqueue.DefaultTypedControllerRateLimiter[string](),
+		),
+		gracePeriod: notReadyGracePeriod,
+		manageTaint: nodestatus.AddNetworkReadyTaintEnabled(),
+		nowFn:       time.Now,
 	}
-	c.patchFn = c.patchNodeUnavailable
-	c.taintFn = c.addNetworkReadyTaint
+	indexers := cache.Indexers{calicoNodePodsByNodeIndex: calicoNodePodsByNode}
+	if err := podInformer.AddIndexers(indexers); err != nil {
+		log.WithError(err).Fatal("Failed to index calico-node pods by node")
+	}
+	c.registerHandlers(nodeInformer, podInformer)
 	return c
 }
 
-func (c *nodeConditionController) Start(stopCh chan struct{}) {
-	go c.run(stopCh)
-}
+func (c *nodeConditionController) registerHandlers(nodeInformer, podInformer cache.SharedIndexInformer) {
+	podHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj any) { c.enqueuePod(obj) },
+		UpdateFunc: func(_, obj any) { c.enqueuePod(obj) },
+		DeleteFunc: func(obj any) { c.enqueuePod(obj) },
+	}
+	if _, err := podInformer.AddEventHandler(podHandlers); err != nil {
+		log.WithError(err).Fatal("Failed to watch pods for the node condition controller")
+	}
 
-func (c *nodeConditionController) run(stopCh chan struct{}) {
-	log.Info("Starting node condition controller")
-	ticker := time.NewTicker(c.checkInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stopCh:
-			log.Info("Stopping node condition controller")
-			return
-		case <-ticker.C:
-			c.checkNodes()
-		}
+	nodeHandlers := cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj any) { c.enqueueNode(obj) },
+		DeleteFunc: func(obj any) { c.enqueueNode(obj) },
+	}
+	if _, err := nodeInformer.AddEventHandler(nodeHandlers); err != nil {
+		log.WithError(err).Fatal("Failed to watch nodes for the node condition controller")
 	}
 }
 
-// checkNodes iterates over all Kubernetes nodes and checks whether each has a Ready
-// calico-node pod. If a node has no Ready calico-node pod for longer than the grace
-// period, it sets NetworkUnavailable=True.
-func (c *nodeConditionController) checkNodes() {
+func (c *nodeConditionController) enqueuePod(obj any) {
+	pod, ok := obj.(*v1.Pod)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return
+		}
+		if pod, ok = tombstone.Obj.(*v1.Pod); !ok {
+			return
+		}
+	}
+	if pod.Spec.NodeName == "" || !converter.IsCalicoNodePod(pod) {
+		return
+	}
+	c.workqueue.Add(pod.Spec.NodeName)
+}
+
+func (c *nodeConditionController) enqueueNode(obj any) {
+	node, ok := obj.(*v1.Node)
+	if !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return
+		}
+		if node, ok = tombstone.Obj.(*v1.Node); !ok {
+			return
+		}
+	}
+	c.workqueue.Add(node.Name)
+}
+
+func (c *nodeConditionController) Start(stopCh chan struct{}) {
+	go c.Run(stopCh)
+}
+
+func (c *nodeConditionController) Run(stopCh chan struct{}) {
+	defer uruntime.HandleCrash()
+	defer c.workqueue.ShutDown()
+
+	log.Info("Starting node condition controller")
+
+	// The informer caches are already synced by the parent node controller, but the initial
+	// List events fired before our handlers were registered on a restart, so sweep once.
 	nodes, err := c.nodeLister.List(labels.Everything())
 	if err != nil {
-		log.WithError(err).Warn("Failed to list nodes for condition check")
-		return
+		log.WithError(err).Error("Failed to list nodes; the first sweep will be skipped")
 	}
-
-	// List pods once per tick and index the nodes that have a Ready calico-node pod, rather
-	// than listing all pods once per node (which is O(nodes*pods) on large clusters).
-	readyNodes, err := c.nodesWithReadyCalicoNodePod()
-	if err != nil {
-		// Err on the side of caution: skip this tick rather than risk marking nodes
-		// unavailable when we can't see the pods. Grace-period tracking is left intact.
-		log.WithError(err).Warn("Failed to list pods for condition check")
-		return
-	}
-
-	now := c.nowFn()
-	activeNodes := make(map[string]bool)
-
 	for _, node := range nodes {
-		nodeName := node.Name
-		activeNodes[nodeName] = true
-
-		if readyNodes[nodeName] {
-			// Node has a Ready calico-node pod. Clear any not-ready tracking and
-			// allow calico-node to handle setting the condition back to False.
-			delete(c.notReadySince, nodeName)
-			c.markedUnavailable[nodeName] = false
-			continue
-		}
-
-		// No Ready calico-node pod found for this node.
-		if _, tracked := c.notReadySince[nodeName]; !tracked {
-			c.notReadySince[nodeName] = now
-			log.WithField("node", nodeName).Info("No Ready calico-node pod detected, starting grace period")
-			continue
-		}
-
-		// Check if we've exceeded the grace period.
-		if now.Sub(c.notReadySince[nodeName]) < c.gracePeriod {
-			continue
-		}
-
-		// Grace period exceeded. Patch the node if we haven't already.
-		if c.markedUnavailable[nodeName] {
-			continue
-		}
-
-		log.WithField("node", nodeName).Warn("Calico-node pod not Ready, setting NetworkUnavailable=True")
-		if err := c.patchFn(nodeName); err != nil {
-			log.WithError(err).WithField("node", nodeName).Error("Failed to set NetworkUnavailable condition")
-			continue
-		}
-		if c.manageTaint {
-			if err := c.taintFn(nodeName); err != nil {
-				log.WithError(err).WithField("node", nodeName).Error("Failed to add network-ready taint")
-			}
-		}
-		c.markedUnavailable[nodeName] = true
+		c.workqueue.Add(node.Name)
 	}
 
-	// Clean up tracking for nodes that no longer exist.
-	for nodeName := range c.notReadySince {
-		if !activeNodes[nodeName] {
-			delete(c.notReadySince, nodeName)
-			delete(c.markedUnavailable, nodeName)
-		}
+	go wait.Until(c.runWorker, time.Second, stopCh)
+
+	<-stopCh
+	log.Info("Stopping node condition controller")
+}
+
+func (c *nodeConditionController) runWorker() {
+	for c.processNextItem() {
 	}
 }
 
-// nodesWithReadyCalicoNodePod lists pods once and returns the set of node names that have at
-// least one Ready calico-node pod.
-func (c *nodeConditionController) nodesWithReadyCalicoNodePod() (map[string]bool, error) {
-	pods, err := c.podLister.List(labels.Everything())
+func (c *nodeConditionController) processNextItem() bool {
+	nodeName, quit := c.workqueue.Get()
+	if quit {
+		return false
+	}
+	defer c.workqueue.Done(nodeName)
+
+	c.handleErr(c.syncNode(context.Background(), nodeName), nodeName)
+	return true
+}
+
+func (c *nodeConditionController) handleErr(err error, nodeName string) {
+	if err == nil {
+		c.workqueue.Forget(nodeName)
+		return
+	}
+	if c.workqueue.NumRequeues(nodeName) < nodeConditionMaxRetries {
+		log.WithError(err).WithField("node", nodeName).Error("Failed to sync node network status")
+		c.workqueue.AddRateLimited(nodeName)
+		return
+	}
+	c.workqueue.Forget(nodeName)
+	uruntime.HandleError(err)
+	log.WithError(err).WithField("node", nodeName).Error("Dropping node out of the queue")
+}
+
+// syncNode reconciles one node's condition and taint against its calico-node pod readiness. It
+// reads the node's current state rather than tracking what it wrote, so a restart of this
+// process doesn't re-mark or strand anything.
+func (c *nodeConditionController) syncNode(ctx context.Context, nodeName string) error {
+	node, err := c.nodeLister.Get(nodeName)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	pods, err := c.calicoNodePodsOn(nodeName)
+	if err != nil {
+		return err
+	}
+	if len(pods) == 0 {
+		// Nothing here identifies as calico-node, so this isn't a node we can speak for.
+		return nil
+	}
+
+	if anyPodReady(pods) {
+		return c.markAvailable(ctx, node)
+	}
+
+	if remaining := c.gracePeriod - c.nowFn().Sub(notReadySince(pods)); remaining > 0 {
+		log.WithField("node", nodeName).WithField("remaining", remaining).Info("No Ready calico-node pod")
+		c.workqueue.AddAfter(nodeName, remaining)
+		return nil
+	}
+
+	return c.markUnavailable(ctx, node)
+}
+
+// markAvailable clears the condition and the taint, but only touches a condition Calico set.
+func (c *nodeConditionController) markAvailable(ctx context.Context, node *v1.Node) error {
+	if nodestatus.NetworkUnavailable(node) == v1.ConditionTrue && nodestatus.OwnsNetworkUnavailable(node) {
+		log.WithField("node", node.Name).Info("Calico-node pod is Ready, setting NetworkUnavailable=False")
+		if err := c.patchCondition(ctx, node.Name, false); err != nil {
+			return err
+		}
+	}
+	if !nodestatus.HasNetworkReadyTaint(node) {
+		return nil
+	}
+
+	updated := node.DeepCopy()
+	updated.Spec.Taints = nodestatus.WithoutNetworkReadyTaint(updated.Spec.Taints)
+	return c.updateTaints(ctx, updated)
+}
+
+func (c *nodeConditionController) markUnavailable(ctx context.Context, node *v1.Node) error {
+	if nodestatus.NetworkUnavailable(node) != v1.ConditionTrue {
+		log.WithField("node", node.Name).Warn("No Ready calico-node pod, setting NetworkUnavailable=True")
+		if err := c.patchCondition(ctx, node.Name, true); err != nil {
+			return err
+		}
+	}
+	if !c.manageTaint || nodestatus.HasNetworkReadyTaint(node) {
+		return nil
+	}
+
+	updated := node.DeepCopy()
+	updated.Spec.Taints = append(updated.Spec.Taints, v1.Taint{
+		Key:    nodestatus.NetworkReadyTaintKey,
+		Effect: v1.TaintEffectNoSchedule,
+	})
+	return c.updateTaints(ctx, updated)
+}
+
+func (c *nodeConditionController) patchCondition(ctx context.Context, nodeName string, unavailable bool) error {
+	condition := v1.NodeCondition{
+		Type:               v1.NodeNetworkUnavailable,
+		Status:             v1.ConditionFalse,
+		Reason:             nodestatus.NetworkReadyReason,
+		Message:            nodestatus.NetworkReadyMessage,
+		LastTransitionTime: metav1.Now(),
+		LastHeartbeatTime:  metav1.Now(),
+	}
+	if unavailable {
+		condition.Status = v1.ConditionTrue
+		condition.Reason = nodestatus.NetworkDownReason
+		condition.Message = nodestatus.NetworkDownUnhealthy
+	}
+
+	raw, err := json.Marshal(&[]v1.NodeCondition{condition})
+	if err != nil {
+		return fmt.Errorf("marshal node condition: %w", err)
+	}
+	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
+	_, err = c.k8sClientset.CoreV1().Nodes().PatchStatus(ctx, nodeName, patch)
+	return err
+}
+
+func (c *nodeConditionController) updateTaints(ctx context.Context, node *v1.Node) error {
+	log.WithField("node", node.Name).Info("Updating the network-ready taint")
+	_, err := c.k8sClientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	return err
+}
+
+// calicoNodePodsOn returns the calico-node pods scheduled to a node.
+func (c *nodeConditionController) calicoNodePodsOn(nodeName string) ([]*v1.Pod, error) {
+	objs, err := c.podIndexer.ByIndex(calicoNodePodsByNodeIndex, nodeName)
 	if err != nil {
 		return nil, err
 	}
 
-	ready := make(map[string]bool)
-	for _, pod := range pods {
-		if pod.Spec.NodeName == "" {
-			continue
+	pods := make([]*v1.Pod, 0, len(objs))
+	for _, obj := range objs {
+		pod, ok := obj.(*v1.Pod)
+		if !ok {
+			return nil, fmt.Errorf("expected *v1.Pod in the pod index, got %T", obj)
 		}
-		if pod.Labels[calicoNodeLabel] != calicoNodeLabelValue {
-			continue
-		}
-		if isPodReady(pod) {
-			ready[pod.Spec.NodeName] = true
-		}
+		pods = append(pods, pod)
 	}
-	return ready, nil
+	return pods, nil
 }
 
-// isPodReady returns true if the pod has a Ready condition set to True.
-func isPodReady(pod *v1.Pod) bool {
-	for _, cond := range pod.Status.Conditions {
-		if cond.Type == v1.PodReady {
-			return cond.Status == v1.ConditionTrue
+// calicoNodePodsByNode indexes calico-node pods by the node they run on. Pods are matched on the
+// container name rather than a label, because Canal labels the same DaemonSet "canal".
+func calicoNodePodsByNode(obj any) ([]string, error) {
+	pod, ok := obj.(*v1.Pod)
+	if !ok || pod.Spec.NodeName == "" || !converter.IsCalicoNodePod(pod) {
+		return nil, nil
+	}
+	return []string{pod.Spec.NodeName}, nil
+}
+
+func anyPodReady(pods []*v1.Pod) bool {
+	for _, pod := range pods {
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == v1.PodReady && cond.Status == v1.ConditionTrue {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// patchNodeUnavailable patches the node's NetworkUnavailable condition to True.
-func (c *nodeConditionController) patchNodeUnavailable(nodeName string) error {
-	condition := v1.NodeCondition{
-		Type:               v1.NodeNetworkUnavailable,
-		Status:             v1.ConditionTrue,
-		Reason:             "CalicoIsDown",
-		Message:            "Calico node pod is not Ready",
-		LastTransitionTime: metav1.Now(),
-		LastHeartbeatTime:  metav1.Now(),
-	}
-	raw, err := json.Marshal(&[]v1.NodeCondition{condition})
-	if err != nil {
-		return fmt.Errorf("failed to marshal condition: %w", err)
-	}
-	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
-	_, err = c.k8sClientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
-	return err
-}
-
-// addNetworkReadyTaint adds the network-ready taint to the node if it isn't already present.
-// Removal is left to calico-node startup, so we never remove the taint here.
-func (c *nodeConditionController) addNetworkReadyTaint(nodeName string) error {
-	node, err := c.nodeLister.Get(nodeName)
-	if err != nil {
-		return err
-	}
-	for _, t := range node.Spec.Taints {
-		if t.Key == names.NetworkReadyTaintKey {
-			return nil
+// notReadySince returns the most recent moment one of these pods could still have been Ready.
+// Reading the clock off the pods keeps the grace period honest across a restart of this
+// controller.
+func notReadySince(pods []*v1.Pod) time.Time {
+	var latest time.Time
+	for _, pod := range pods {
+		since := pod.CreationTimestamp.Time
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == v1.PodReady && !cond.LastTransitionTime.IsZero() {
+				since = cond.LastTransitionTime.Time
+				break
+			}
+		}
+		if since.After(latest) {
+			latest = since
 		}
 	}
-
-	node = node.DeepCopy()
-	node.Spec.Taints = append(node.Spec.Taints, v1.Taint{
-		Key:    names.NetworkReadyTaintKey,
-		Effect: v1.TaintEffectNoSchedule,
-	})
-	_, err = c.k8sClientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
-	return err
+	return latest
 }

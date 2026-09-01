@@ -24,7 +24,7 @@ import (
 )
 
 var _ = Describe("PodTransformer", func() {
-	newPod := func() *v1.Pod {
+	calicoNodePod := func() *v1.Pod {
 		return &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "calico-node-xyz",
@@ -35,10 +35,12 @@ var _ = Describe("PodTransformer", func() {
 					"controller-revision-hash":       "abc123",
 					"projectcalico.org/orchestrator": "k8s",
 				},
+				OwnerReferences: []metav1.OwnerReference{{Kind: "DaemonSet", Name: "calico-node"}},
 			},
 			Spec: v1.PodSpec{
 				NodeName:           "nodeA",
 				ServiceAccountName: "calico-node",
+				Containers:         []v1.Container{{Name: "calico-node"}},
 			},
 			Status: v1.PodStatus{
 				PodIP: "10.0.0.1",
@@ -53,7 +55,17 @@ var _ = Describe("PodTransformer", func() {
 		}
 	}
 
+	workloadPod := func() *v1.Pod {
+		pod := calicoNodePod()
+		pod.Name = "nginx-abc"
+		pod.Labels = map[string]string{"app": "nginx"}
+		pod.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "nginx"}}
+		pod.Spec.Containers = []v1.Container{{Name: "nginx"}}
+		return pod
+	}
+
 	transform := func(podControllerEnabled bool, pod *v1.Pod) *v1.Pod {
+		GinkgoHelper()
 		out, err := converter.PodTransformer(podControllerEnabled)(pod)
 		Expect(err).NotTo(HaveOccurred())
 		transformed, ok := out.(*v1.Pod)
@@ -61,33 +73,59 @@ var _ = Describe("PodTransformer", func() {
 		return transformed
 	}
 
-	It("retains only the PodReady condition regardless of pod controller state", func() {
-		for _, enabled := range []bool{true, false} {
-			out := transform(enabled, newPod())
+	Describe("identifying calico-node pods", func() {
+		It("matches on the container name, so Canal's k8s-app label doesn't matter", func() {
+			pod := calicoNodePod()
+			pod.Labels["k8s-app"] = "canal"
+			Expect(converter.IsCalicoNodePod(pod)).To(BeTrue())
+		})
+
+		It("does not match a pod that is not owned by a DaemonSet", func() {
+			pod := calicoNodePod()
+			pod.OwnerReferences = []metav1.OwnerReference{{Kind: "ReplicaSet", Name: "impostor"}}
+			Expect(converter.IsCalicoNodePod(pod)).To(BeFalse())
+		})
+
+		It("does not match a DaemonSet pod with no calico-node container", func() {
+			Expect(converter.IsCalicoNodePod(workloadPod())).To(BeFalse())
+		})
+
+		It("still matches after the pod has been through the transformer", func() {
+			for _, enabled := range []bool{true, false} {
+				Expect(converter.IsCalicoNodePod(transform(enabled, calicoNodePod()))).To(BeTrue())
+			}
+		})
+	})
+
+	Describe("slimming the cached pod", func() {
+		It("keeps only the PodReady condition for a calico-node pod", func() {
+			out := transform(false, calicoNodePod())
 			Expect(out.Status.Conditions).To(ConsistOf(v1.PodCondition{Type: v1.PodReady, Status: v1.ConditionTrue}))
-		}
-	})
-
-	When("the pod controller is enabled", func() {
-		It("keeps the full label set and service account name for policy matching", func() {
-			out := transform(true, newPod())
-			Expect(out.Labels).To(HaveLen(4))
-			Expect(out.Spec.ServiceAccountName).To(Equal("calico-node"))
-		})
-	})
-
-	When("the pod controller is disabled", func() {
-		It("keeps only the k8s-app label and drops the service account name", func() {
-			out := transform(false, newPod())
-			Expect(out.Labels).To(Equal(map[string]string{"k8s-app": "calico-node"}))
-			Expect(out.Spec.ServiceAccountName).To(BeEmpty())
 		})
 
-		It("sets no labels on a pod without the k8s-app label", func() {
-			pod := newPod()
-			delete(pod.Labels, "k8s-app")
-			out := transform(false, pod)
-			Expect(out.Labels).To(BeNil())
+		It("caches no conditions or containers for an ordinary workload pod", func() {
+			// Every pod in the cluster passes through here, so the extra fields are worth
+			// keeping only on the pods the node condition controller actually reads.
+			out := transform(false, workloadPod())
+			Expect(out.Status.Conditions).To(BeEmpty())
+			Expect(out.Spec.Containers).To(BeEmpty())
+			Expect(out.OwnerReferences).To(BeEmpty())
+		})
+
+		When("the pod controller is enabled", func() {
+			It("keeps the full label set and service account name for policy matching", func() {
+				out := transform(true, workloadPod())
+				Expect(out.Labels).To(Equal(map[string]string{"app": "nginx"}))
+				Expect(out.Spec.ServiceAccountName).To(Equal("calico-node"))
+			})
+		})
+
+		When("the pod controller is disabled", func() {
+			It("drops the labels and the service account name", func() {
+				out := transform(false, calicoNodePod())
+				Expect(out.Labels).To(BeEmpty())
+				Expect(out.Spec.ServiceAccountName).To(BeEmpty())
+			})
 		})
 	})
 })

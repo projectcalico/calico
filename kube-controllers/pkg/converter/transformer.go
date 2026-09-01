@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,9 +23,32 @@ import (
 	"github.com/projectcalico/calico/libcalico-go/lib/backend/k8s/conversion"
 )
 
-// calicoNodePodLabel is the well-known label the node condition controller uses to identify
-// calico-node pods in the shared pod cache.
-const calicoNodePodLabel = "k8s-app"
+// calicoNodeContainerName identifies a calico-node pod. The pod label varies by install flavour
+// (Canal uses "canal"), but every flavour names the container calico-node.
+const calicoNodeContainerName = "calico-node"
+
+// IsCalicoNodePod reports whether the pod is a calico-node pod managed by a DaemonSet. It works
+// on both full pods and the slimmed-down copies PodTransformer puts in the kube-controllers cache.
+func IsCalicoNodePod(pod *v1.Pod) bool {
+	if !ownedByDaemonSet(pod) {
+		return false
+	}
+	for _, container := range pod.Spec.Containers {
+		if container.Name == calicoNodeContainerName {
+			return true
+		}
+	}
+	return false
+}
+
+func ownedByDaemonSet(pod *v1.Pod) bool {
+	for _, ref := range pod.OwnerReferences {
+		if ref.Kind == "DaemonSet" {
+			return true
+		}
+	}
+	return false
+}
 
 // podTransformer is passed to the pod informer used by kube-controllers in order to reduce the amount of
 // memory used by the pod cache.  It takes a full v1.Pod and returns a slimmed down version of the pod
@@ -61,18 +84,18 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 			// are sync'd to etcd for policy matching.
 			p.Labels = pod.Labels
 			p.Spec.ServiceAccountName = pod.Spec.ServiceAccountName
-		} else if value, ok := pod.Labels[calicoNodePodLabel]; ok {
-			// The node condition controller only needs to identify calico-node pods, so when
-			// the Pod controller is disabled we keep just that one label to save cache memory.
-			p.Labels = map[string]string{calicoNodePodLabel: value}
 		}
 
-		// The node condition controller only reads the PodReady condition, so retain that one
-		// rather than the pod's full condition set.
-		for _, cond := range pod.Status.Conditions {
-			if cond.Type == v1.PodReady {
-				p.Status.Conditions = []v1.PodCondition{cond}
-				break
+		if IsCalicoNodePod(pod) {
+			// Keep the few fields the node condition controller reads, and only for the pods it
+			// reads them from - a Ready condition per pod across the cluster is not worth caching.
+			p.OwnerReferences = pod.OwnerReferences
+			p.Spec.Containers = []v1.Container{{Name: calicoNodeContainerName}}
+			for _, cond := range pod.Status.Conditions {
+				if cond.Type == v1.PodReady {
+					p.Status.Conditions = []v1.PodCondition{cond}
+					break
+				}
 			}
 		}
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/nodestatus"
 )
 
 const (
@@ -180,23 +181,16 @@ func WriteNodeConfig(nodeName string) {
 	}
 }
 
-// Reason/message pairs for the NetworkUnavailable condition. The condition surfaces in
-// `kubectl describe node`, so the message needs to reflect why Calico set it — startup,
-// shutdown, and runtime health failures are all distinct situations.
-const (
-	NetworkReadyReason   = "CalicoIsUp"
-	NetworkReadyMessage  = "Calico is running on this node"
-	NetworkDownReason    = "CalicoIsDown"
-	NetworkDownShutdown  = "Calico is shutting down on this node"
-	NetworkDownUnhealthy = "Calico node health checks are failing on this node"
-)
+// retryInterval paces the retry loops below, which ride out transient API errors while the
+// node is still coming up.
+const retryInterval = time.Second
 
 // SetNodeNetworkUnavailableCondition sets the Kubernetes NetworkUnavailable node condition to
-// value, using the caller-supplied reason and message so the condition describes the actual
-// situation (startup, shutdown, or a runtime health failure).
+// value, retrying until timeout.
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
 func SetNodeNetworkUnavailableCondition(
-	clientset kubernetes.Clientset,
+	ctx context.Context,
+	clientset kubernetes.Interface,
 	nodeName string,
 	value bool,
 	reason string,
@@ -223,83 +217,55 @@ func SetNodeNetworkUnavailableCondition(
 		return err
 	}
 	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
-	to := time.After(timeout)
-	for {
-		select {
-		case <-to:
-			err = fmt.Errorf("timed out patching node, last error was: %s", err.Error())
-			return err
-		default:
-			_, err = clientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to set NetworkUnavailable; will retry")
-			} else {
-				// Success!
-				return nil
-			}
-		}
-	}
+
+	return retryUntil(ctx, timeout, "set the NetworkUnavailable condition", func() error {
+		_, err := clientset.CoreV1().Nodes().PatchStatus(ctx, nodeName, patch)
+		return err
+	})
 }
 
-// NetworkReadyTaintEnabled reports whether the operator has asked us to manage the network-ready taint.
-func NetworkReadyTaintEnabled() bool {
-	return os.Getenv(names.NetworkReadyTaintEnvVar) == "true"
-}
-
-// SetNodeNetworkReadyTaint adds (present=true) or removes (present=false) the network-ready taint on
-// the given node. It retries until timeout to ride out transient API errors during startup.
-func SetNodeNetworkReadyTaint(
-	clientset kubernetes.Clientset,
+// RemoveNetworkReadyTaint clears the network-ready taint, retrying until timeout. It runs
+// whether or not the feature is enabled, so disabling it drains the taint rather than
+// stranding every node that already carries one.
+func RemoveNetworkReadyTaint(
+	ctx context.Context,
+	clientset kubernetes.Interface,
 	nodeName string,
-	present bool,
 	timeout time.Duration,
 ) error {
-	to := time.After(timeout)
+	return retryUntil(ctx, timeout, "remove the network-ready taint", func() error {
+		node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if !nodestatus.HasNetworkReadyTaint(node) {
+			return nil
+		}
+
+		node.Spec.Taints = nodestatus.WithoutNetworkReadyTaint(node.Spec.Taints)
+		if _, err := clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+		log.WithField("node", nodeName).Info("Removed the network-ready taint")
+		return nil
+	})
+}
+
+func retryUntil(ctx context.Context, timeout time.Duration, description string, attempt func() error) error {
+	deadline := time.After(timeout)
 	var lastErr error
 	for {
-		select {
-		case <-to:
-			return fmt.Errorf("timed out updating network-ready taint, last error was: %w", lastErr)
-		default:
-			node, err := clientset.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
-			if err != nil {
-				lastErr = err
-				log.WithError(err).Warn("Failed to get node for taint update; will retry")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			hasTaint := false
-			var kept []kapiv1.Taint
-			for _, t := range node.Spec.Taints {
-				if t.Key == names.NetworkReadyTaintKey {
-					hasTaint = true
-					continue
-				}
-				kept = append(kept, t)
-			}
-			if hasTaint == present {
-				return nil
-			}
-
-			if present {
-				node.Spec.Taints = append(node.Spec.Taints, kapiv1.Taint{
-					Key:    names.NetworkReadyTaintKey,
-					Effect: kapiv1.TaintEffectNoSchedule,
-				})
-			} else {
-				node.Spec.Taints = kept
-			}
-
-			_, err = clientset.CoreV1().Nodes().Update(context.Background(), node, metav1.UpdateOptions{})
-			if err != nil {
-				lastErr = err
-				log.WithError(err).Warn("Failed to update network-ready taint; will retry")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			log.WithFields(log.Fields{"node": nodeName, "present": present}).Info("Updated network-ready taint")
+		if lastErr = attempt(); lastErr == nil {
 			return nil
+		}
+		log.WithError(lastErr).Warnf("Failed to %s; will retry", description)
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("gave up trying to %s: %w", description, lastErr)
+		case <-deadline:
+			return fmt.Errorf("timed out trying to %s: %w", description, lastErr)
+		case <-time.After(retryInterval):
 		}
 	}
 }

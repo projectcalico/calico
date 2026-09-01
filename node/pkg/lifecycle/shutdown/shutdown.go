@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,14 @@
 package shutdown
 
 import (
+	"context"
 	"os"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/projectcalico/calico/libcalico-go/lib/nodestatus"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
 	"github.com/projectcalico/calico/node/pkg/lifecycle/utils"
 )
@@ -74,11 +76,12 @@ func Run() {
 			// Depends on how we configure terminationGracePeriod (currently 5 seconds with operator install),
 			// this operation may not be successful if it takes too long to update node condition.
 			err := utils.SetNodeNetworkUnavailableCondition(
-				*clientset,
+				context.Background(),
+				clientset,
 				k8sNodeName,
 				true,
-				utils.NetworkDownReason,
-				utils.NetworkDownShutdown,
+				nodestatus.NetworkDownReason,
+				nodestatus.NetworkDownShutdown,
 				hundredYears,
 			)
 			if err != nil {
