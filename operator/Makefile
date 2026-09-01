@@ -742,14 +742,14 @@ endef
 
 .PHONY: read-libcalico-version read-libcalico-enterprise-version
 .PHONY: update-calico-crds update-enterprise-crds
-.PHONY: fetch-calico-crds fetch-enterprise-crds
+.PHONY: fetch-enterprise-crds
 .PHONY: prepare-for-calico-crds prepare-for-enterprise-crds
 
-CALICO?=projectcalico/calico
+# The Calico CRDs live beside the operator in this repo, so they are copied
+# rather than fetched. The Enterprise ones still come from a private repo.
 CALICO_CRDS_DIR?=..
-DEFAULT_OS_CRDS_DIR?=.crds/calico
 
-update-calico-crds: fetch-calico-crds
+update-calico-crds: prepare-for-calico-crds
 	$(call copy_v1_crds, $(CALICO_CRDS_DIR),"calico")
 	$(call copy_v3_crds, $(CALICO_CRDS_DIR),"calico")
 	$(call copy_k8s_policy_crds,"calico")
@@ -757,9 +757,6 @@ update-calico-crds: fetch-calico-crds
 
 prepare-for-calico-crds:
 	$(call prep_local_crds,"calico")
-
-fetch-calico-crds: prepare-for-calico-crds
-	$(if $(filter $(DEFAULT_OS_CRDS_DIR),$(CALICO_CRDS_DIR)), $(call fetch_crds,$(CALICO),$(CALICO_BRANCH),"calico"))
 
 CALICO_ENTERPRISE?=tigera/calico-private
 ENTERPRISE_CRDS_DIR?=.crds/enterprise
@@ -988,23 +985,6 @@ test-calico-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 # fields won't necessarily be in the same order or indentation.
 test-enterprise-crds: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 	$(BINDIR)/$(BINARY_NAME)-$(ARCH) --print-enterprise-crds all >/dev/null 2>&1
-
-# Always install the git hooks to prevent potentially problematic commits.
-hooks_installed:=$(shell ./install-git-hooks)
-
-.PHONY: install-git-hooks
-install-git-hooks:
-	./install-git-hooks
-
-GIT_COMMON_DIR := $(realpath $(shell git rev-parse --git-common-dir 2>/dev/null))
-ifneq ($(GIT_COMMON_DIR),$(realpath $(CURDIR)/.git))
-# Handle worktrees where .git is a file - we need to get the actual location
-WORKTREE_GIT_MOUNT := -v $(GIT_COMMON_DIR):$(GIT_COMMON_DIR):rw
-endif
-
-.PHONY: pre-commit
-pre-commit:
-	$(CONTAINERIZED) $(WORKTREE_GIT_MOUNT) $(foreach ALTERNATE,$(shell cat $(GIT_COMMON_DIR)/objects/info/alternates 2>/dev/null),-v $(ALTERNATE):$(ALTERNATE):ro) $(CALICO_BUILD) git-hooks/pre-commit-in-container
 
 # var-set-% checks if there is a non empty variable for the value describe by %. If FAIL_NOT_SET is set, then var-set-%
 # fails with an error message. If FAIL_NOT_SET is not set, then var-set-% appends a 1 to VARSET if the variable isn't
