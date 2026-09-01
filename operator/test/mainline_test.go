@@ -46,10 +46,10 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
+	"github.com/projectcalico/calico/operator/pkg/crds"
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	entcontroller "github.com/projectcalico/calico/operator/pkg/enterprise/controller"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
-	"github.com/projectcalico/calico/operator/pkg/crds"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 

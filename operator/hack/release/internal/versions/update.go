@@ -82,7 +82,7 @@ type VersionsConfig struct {
 // Generate updates the version config files and runs the appropriate make targets
 // to regenerate derived files for the configured products.
 func (vc *VersionsConfig) Generate() error {
-	makeTargets := []string{"fix"}
+	makeTargets := []string{"fix-changed"}
 	env := os.Environ()
 	if vc.Calico.Version != "" {
 		err := UpdateCalicoConfigVersion(vc.RepoRootDir, vc.Calico.Version)

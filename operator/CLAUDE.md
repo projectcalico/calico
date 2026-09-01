@@ -28,7 +28,7 @@ make gen-versions       # Regenerate component version mappings from config/*.ym
 ```bash
 make static-checks      # golangci-lint
 make format-check       # Check gofmt compliance
-make fix                # Auto-format with goimports
+make fix-changed        # Auto-format changed files
 ```
 
 ### Local Development

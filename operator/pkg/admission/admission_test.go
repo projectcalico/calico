@@ -15,12 +15,13 @@
 package admission
 
 import (
+	"testing/fstest"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	"testing/fstest"
 
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )

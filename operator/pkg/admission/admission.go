@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	apiadmission "github.com/projectcalico/api/admission"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1alpha1 "k8s.io/api/admissionregistration/v1alpha1"
 	admissionv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -33,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	apiadmission "github.com/projectcalico/api/admission"
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 

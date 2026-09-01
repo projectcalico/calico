@@ -15,7 +15,7 @@ This command:
 - Creates a `release-vX.Y` branch from master
 - Updates `config/calico_versions.yml` and `config/enterprise_versions.yml` to point at the given refs
 - Updates `VERSION_TAG` in `Makefile` to match the Calico version
-- Runs `make fix gen-versions-calico gen-versions-enterprise` to regenerate files
+- Runs `make fix-changed gen-versions-calico gen-versions-enterprise` to regenerate files
 - Commits the changes to the release branch
 - Switches back to master, creates an empty commit, and tags it `vX.(Y+1).0-0.dev`
 - Pushes the release branch, master, and tag to the remote
@@ -74,7 +74,7 @@ This command:
 - Validates that the provided Calico/Enterprise versions exist as tags in their remote repositories
 - Updates `config/calico_versions.yml` and/or `config/enterprise_versions.yml` with the specified versions
 - Updates the Enterprise registry if needed
-- Runs `make fix gen-versions` to regenerate component files
+- Runs `make fix-changed gen-versions` to regenerate component files
 - Commits the changes to a new `build-<VERSION>` branch
 - Pushes the branch and creates a PR against the release branch
 - Manages GitHub milestones for the release stream (creates next patch milestone, closes current)

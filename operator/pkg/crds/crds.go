@@ -25,12 +25,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	v3crd "github.com/projectcalico/api/config/crd"
 	apiextenv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml" // gopkg.in/yaml.v2 didn't parse all the fields but this package did
 
-	v3crd "github.com/projectcalico/api/config/crd"
 	v1crd "github.com/projectcalico/calico/libcalico-go/config/crd"
 	opv1 "github.com/projectcalico/calico/operator/api/v1"
 )

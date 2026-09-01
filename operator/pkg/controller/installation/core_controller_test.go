@@ -46,6 +46,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	operator "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/admission"
 	"github.com/projectcalico/calico/operator/pkg/apis"
 	"github.com/projectcalico/calico/operator/pkg/common"
 	"github.com/projectcalico/calico/operator/pkg/common/discovery"
@@ -58,7 +59,6 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
-	"github.com/projectcalico/calico/operator/pkg/admission"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
