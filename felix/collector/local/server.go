@@ -49,7 +49,7 @@ func newFlowStore() *flowStore {
 	return &flowStore{}
 }
 
-func (s *flowStore) Receive(f *types.Flow) {
+func (s *flowStore) Receive(f *types.Flow, _ string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.flows = append(s.flows, f)
