@@ -47,10 +47,9 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("pool-management")
 
 		var (
-			cli           ctrlclient.Client
-			ctx           context.Context
-			installation  *operatorv1.Installation
-			originalPools []operatorv1.IPPool
+			cli          ctrlclient.Client
+			ctx          context.Context
+			installation *operatorv1.Installation
 		)
 
 		ginkgo.BeforeEach(func() {
@@ -76,38 +75,6 @@ var _ = describe.CalicoDescribe(
 			Expect(config.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
 			Expect(config.CNI).NotTo(BeNil(), "No CNI configured in the Installation")
 			Expect(config.CNI.Type).To(Equal(operatorv1.PluginCalico), "Cluster is not using the Calico CNI plugin")
-
-			// Save the original pool list so we can revert the cluster after the test.
-			if installation.Spec.CalicoNetwork != nil {
-				originalPools = slices.Clone(installation.Spec.CalicoNetwork.IPPools)
-			} else {
-				originalPools = nil
-			}
-		})
-
-		// patchPools applies mutate to the Installation's IP pool list, sending only
-		// that field.
-		patchPools := func(mutate func(*operatorv1.Installation)) error {
-			current := &operatorv1.Installation{}
-			if err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, current); err != nil {
-				return err
-			}
-			patch := ctrlclient.MergeFrom(current.DeepCopy())
-			if current.Spec.CalicoNetwork == nil {
-				current.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}
-			}
-			mutate(current)
-			return cli.Patch(ctx, current, patch)
-		}
-
-		ginkgo.AfterEach(func() {
-			// Revert the pool list to its original state. This might take an attempt or
-			// two if we hit resource version conflicts.
-			Eventually(func() error {
-				return patchPools(func(i *operatorv1.Installation) {
-					i.Spec.CalicoNetwork.IPPools = originalPools
-				})
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 		})
 
 		// This test verifies that the operator properly creates and deletes IP pools when added / removed
@@ -140,13 +107,17 @@ var _ = describe.CalicoDescribe(
 			}
 
 			// The operator's defaulted pools are absent from the spec, so declare them too or the update deletes them.
-			desiredPools := append(slices.Clone(installation.Status.Computed.CalicoNetwork.IPPools), newPool)
+			originalPools := slices.Clone(installation.Status.Computed.CalicoNetwork.IPPools)
+			desiredPools := append(slices.Clone(originalPools), newPool)
 
-			Eventually(func() error {
-				return patchPools(func(i *operatorv1.Installation) {
-					i.Spec.CalicoNetwork.IPPools = desiredPools
-				})
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
+			restore, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{}, func(i *operatorv1.Installation) {
+				if i.Spec.CalicoNetwork == nil {
+					i.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}
+				}
+				i.Spec.CalicoNetwork.IPPools = desiredPools
+			})
+			Expect(err).NotTo(HaveOccurred())
+			ginkgo.DeferCleanup(restore)
 
 			// Wait for the IP pool to be created.
 			pool := &v3.IPPool{}
@@ -178,13 +149,16 @@ var _ = describe.CalicoDescribe(
 			// The operator reverted the IP pool. Now modify the IP pool via the Installation. We expect
 			// the operator to make the change to the pool.
 			Eventually(func() error {
-				return patchPools(func(i *operatorv1.Installation) {
-					for p := range i.Spec.CalicoNetwork.IPPools {
-						if i.Spec.CalicoNetwork.IPPools[p].Name == poolName {
-							i.Spec.CalicoNetwork.IPPools[p].NodeSelector = "has(dummy-key)"
-						}
+				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
+				if err != nil {
+					return err
+				}
+				for i := range installation.Spec.CalicoNetwork.IPPools {
+					if installation.Spec.CalicoNetwork.IPPools[i].Name == poolName {
+						installation.Spec.CalicoNetwork.IPPools[i].NodeSelector = "has(dummy-key)"
 					}
-				})
+				}
+				return cli.Update(ctx, installation)
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 			Eventually(func() error {
@@ -200,9 +174,12 @@ var _ = describe.CalicoDescribe(
 
 			// Remove the IP pool from the installation.
 			Eventually(func() error {
-				return patchPools(func(i *operatorv1.Installation) {
-					i.Spec.CalicoNetwork.IPPools = originalPools
-				})
+				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
+				if err != nil {
+					return err
+				}
+				installation.Spec.CalicoNetwork.IPPools = originalPools
+				return cli.Update(ctx, installation)
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 			// The IP pool should be deleted.
