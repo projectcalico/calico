@@ -18,7 +18,21 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # every failure to 0 and skipped the diags capture below. Read the handler's
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
-ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+
+# ArgoCI publishes each step's artifact prefix as CI_ARTIFACT_STEP_STORAGE
+# (gs://<bucket>/<workflow>/<pod name>) and the viewer lists exactly that
+# prefix, so use it verbatim rather than composing one.  A cron that sets
+# GS_BUCKET is asking for a bucket of its own (e2e-vpp) and still wins.
+if [[ -n "${GS_BUCKET:-}" ]]; then
+  ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+else
+  ARTIFACT_DEST="${CI_ARTIFACT_STEP_STORAGE:-}"
+fi
+if [[ -n "${ARTIFACT_DEST}" ]]; then
+  echo "[INFO] publishing artifacts to ${ARTIFACT_DEST}"
+else
+  echo "[WARN] neither CI_ARTIFACT_STEP_STORAGE nor GS_BUCKET set; not publishing"
+fi
 
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
