@@ -86,8 +86,30 @@ func TestRingDedupWindowExpires(t *testing.T) {
 }
 
 func newDedupRing() *storage.BucketRing {
+	return newDedupRingOf(242, dedupInterval)
+}
+
+func newDedupRingOf(numBuckets, interval int) *storage.BucketRing {
 	nowFunc := func() time.Time { return time.Unix(dedupRingStart, 0) }
-	return storage.NewBucketRing(242, dedupInterval, dedupRingStart, storage.WithNowFunc(nowFunc))
+	return storage.NewBucketRing(numBuckets, interval, dedupRingStart, storage.WithNowFunc(nowFunc))
+}
+
+// TestRingDedupWindowFitsTheRing covers a short aggregation window, where the replay cache
+// spans more buckets than the ring holds. Dropping state that far back would wrap onto a
+// live bucket and bring the double count back.
+func TestRingDedupWindowFitsTheRing(t *testing.T) {
+	ring := newDedupRingOf(10, 1)
+	flow := dedupFlow(dedupRingStart)
+
+	ring.AddFlow(storage.FlowFromNode{Flow: flow, Node: "node-a"})
+
+	// Three rollovers puts the flow's bucket well inside the ring, so its claim has to hold.
+	for range 3 {
+		ring.Rollover(nil)
+	}
+	ring.AddFlow(storage.FlowFromNode{Flow: flow, Node: "node-a"})
+
+	require.Equal(t, dedupBytesIn, ringBytesIn(t, ring))
 }
 
 func dedupFlow(start int64) *types.Flow {
