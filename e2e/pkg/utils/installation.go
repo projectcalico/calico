@@ -53,9 +53,9 @@ func UsesCalicoIPAM(cli ctrlclient.Client) bool {
 // networking enabled. Lanes whose clusters run in another networking mode should exclude
 // the RequiresBGP label instead of running these tests.
 func RequireBGPEnabled(cli ctrlclient.Client) {
-	installation := GetInstallation(cli)
-	if installation == nil {
-		framework.Failf("No Installation resource; is this cluster operator managed?")
+	installation := &operatorv1.Installation{}
+	if err := cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation); err != nil {
+		framework.Failf("Error querying the Installation resource: %v", err)
 	}
 	network := installation.Spec.CalicoNetwork
 	if network == nil || network.BGP == nil || *network.BGP != operatorv1.BGPEnabled {
