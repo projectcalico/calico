@@ -86,5 +86,5 @@ Read the relevant doc before working in these areas:
 
 ## Build Environment
 - Tests and builds run in a containerized environment (`calico/go-build`) by default
-- CGO enabled on amd64 with BoringCrypto; disabled for other architectures
+- CGO enabled on amd64, disabled for other architectures
 - Multi-arch support: amd64, arm64, ppc64le, s390x

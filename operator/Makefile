@@ -67,12 +67,6 @@ BINDIR    ?= $(BUILD_DIR)/bin
 
 include ../lib.Makefile
 
-# ARCH is settled by lib.Makefile. The operator links against BoringCrypto on
-# amd64 and the build asserts it, so this has to follow the include.
-ifeq ($(ARCH),amd64)
-GOEXPERIMENT = boringcrypto
-endif
-
 ## Run the tests for the current platform/architecture
 test: fmt vet ut
 
@@ -136,12 +130,9 @@ $(HELM_BUILDARCH_VERSIONED_BINARY): | $(HACK_BIN)
 build: $(BINDIR)/$(BINARY_NAME)-$(ARCH)
 $(BINDIR)/$(BINARY_NAME)-$(ARCH): $(SRC_FILES) $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	mkdir -p $(BINDIR)
-	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) -e GOEXPERIMENT=$(GOEXPERIMENT) $(CALICO_BUILD) \
+	$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD) \
 	sh -c '$(GIT_CONFIG_SSH) \
 	go build -buildvcs=false -v -o $(BINDIR)/$(BINARY_NAME)-$(ARCH) -tags "$(TAGS)" -ldflags "-X $(PACKAGE_NAME)/version.VERSION=$(GIT_VERSION) $(CLOUD_LDFLAGS) -s -w" ./cmd/'
-ifeq ($(ARCH), $(filter $(ARCH),amd64))
-	$(DOCKER_GO_BUILD) sh -c 'strings $(BINDIR)/$(BINARY_NAME)-$(ARCH) | grep '_Cfunc__goboringcrypto_' 1> /dev/null'
-endif
 
 OPERATOR_IMAGE_NAME = $(firstword $(BUILD_IMAGES))
 IMAGE_BUILD_MARKER  = operator_container-$(ARCH).created
