@@ -87,11 +87,11 @@ switch safe:
   dataplanes at once, each with its own policy and conntrack
   state. Detaching is safe because a netkit pair created with
   `NETKIT_POLICY_FORWARD` and no programs forwards like a veth.
-- `wepStateFillJumps` returns jump-map indices to whichever
-  allocator issued them — the two are disjoint — using the
-  `netkitJumps` record, which at start of day comes from the
-  netkit link pin rather than the device type, since the device
-  is still netkit while the mechanism may already have changed.
+- Jump-map indices are returned to whichever allocator issued them;
+  the netkit and TC/TCX allocators are disjoint. At start of day
+  which one issued them is read from the netkit link pin, not the
+  device type — the device is still netkit while the mechanism may
+  already have changed.
 - `ensureQdisc` keys off the mechanism, not the link type, so a
   TC-driven device gets the qdisc it now needs.
 
@@ -395,17 +395,9 @@ track" — which is what each of those callers wants.
 
 ---
 
-## Keep this doc in sync with the code
+## Cross-cutting rules
 
-A change to how the BPF dataplane works in the area this file
-covers must update the relevant section in the same PR — new
-mechanism, new flag, new map field, new config knob, or any
-change to the packet path. Exemptions: (a) bug fix restoring
-documented behaviour, (b) mechanical refactor with no observable
-change, (c) comment / log-message edits, (d) dependency bumps.
-If in doubt, update.
-
-Cross-cutting rules that apply to **every** BPF change (map
-versioning, mark discipline, sub-program registration, kernel-
-version sensitivity) live in
+Rules that apply to **every** BPF change (map versioning, mark
+discipline, sub-program registration, kernel-version sensitivity)
+live in
 [`bpf-overview.md` → Cross-cutting review notes](./bpf-overview.md).
