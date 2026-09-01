@@ -68,10 +68,16 @@ enum cali_ct_type {
 					   * device, or whatever the FIB resolved for such
 					   * a destination (under wireguard, remote routes
 					   * are encap-flagged even where the egress for a
-					   * keyless peer is a plain NIC). Invariant: never
-					   * observable next to an ifindex it does not
-					   * describe - transitions clear it before the
-					   * ifindex store and re-set it only after.
+					   * keyless peer is a plain NIC - CORE-13520).
+					   * Written only by whoever has authority over
+					   * the device: the program attached to it for an
+					   * ingress record (create / strict-RPF arm /
+					   * kind refresh), or the validator for a leg it
+					   * pinned - no program is attached to a pinned
+					   * egress. Invariant: never observable next to
+					   * an ifindex it does not describe - transitions
+					   * clear it before the ifindex store and re-set
+					   * it only after.
 					   */
 #define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
 					   * opposite direction, not this direction's
@@ -338,6 +344,13 @@ struct calico_ct_result {
 				* through an interface towards the host, this is the
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
+				*
+				* Meaningful only as the WEP a workload-opened flow was
+				* created at (or a HEP for a host-networked opener) -
+				* what DNS snooping keys on. For a HEP-opened flow the
+				* opener leg can be pinned (CALI_CT_LEG_PINNED), making
+				* its ifindex an egress record, but no consumer reads
+				* those flows.
 				*/
 };
 
