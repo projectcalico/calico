@@ -2,9 +2,20 @@
 installation:
   enabled: true
 
-  # Always re-pull so clusters pick up new digests under stable tags
-  # (e.g. test-build) on `make kind-reload`.
-  imagePullPolicy: Always
+  # IfNotPresent, so that a calico-node pod recreated mid-test-run starts from
+  # the node's local image store instead of re-pulling from kind-registry.
+  #
+  # Always deadlocks: a config change from a test rolls calico-node
+  # (nodeUpdateStrategy is RollingUpdate maxUnavailable=1), and the host
+  # endpoint tests put a default-deny HostEndpoint on the node's primary
+  # interface -- which is also the path to kind-registry. tcp:5000 is not a
+  # failsafe outbound port, so the re-pull is dropped, the pod wedges in
+  # Init:ImagePullBackOff, and Felix never starts to program the allow policy
+  # that would have let the pull through. See CORE-13363.
+  #
+  # `make kind-reload` re-pulls new digests under the stable test-build tag by
+  # overriding this back to Always on its helm upgrade.
+  imagePullPolicy: IfNotPresent
 
   # Disable HA control plane.
   controlPlaneReplicas: 1
@@ -172,13 +183,14 @@ manageCRDs: false
 zapDevel: true
 
 # Operator image lives in the local kind registry alongside everything else.
-# imagePullPolicy: Always so kubelet repulls when the test-build digest
-# changes under a stable tag on `make kind-reload`.
+# imagePullPolicy: IfNotPresent for the same reason as the installation above --
+# a re-pull mid-run can be blocked by host policy the tests install.
+# `make kind-reload` overrides this back to Always.
 tigeraOperator:
   image: calico/operator
   version: test-build
   registry: localhost:5000
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
 
 resources:
   requests:
