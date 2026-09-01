@@ -41,6 +41,7 @@ import (
 	client "github.com/projectcalico/calico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/calico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/calico/libcalico-go/lib/net"
+	"github.com/projectcalico/calico/libcalico-go/lib/nodestatus"
 	"github.com/projectcalico/calico/libcalico-go/lib/options"
 	"github.com/projectcalico/calico/libcalico-go/lib/selector"
 	"github.com/projectcalico/calico/libcalico-go/lib/winutils"
@@ -248,20 +249,92 @@ func Run(opts ...RunOpt) {
 	}
 }
 
-// ManageNodeCondition updates the Kubernetes node condition on successful startup and then sleeps forever. It
-// waits for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
-func ManageNodeCondition(done context.Context, timeout time.Duration) error {
-	if err := waitForReady(timeout); err != nil {
-		log.WithError(err).Error("Calico failed to become ready, continuing anyway")
-	}
-	if err := MarkNetworkAvailable(); err != nil {
+// ManageNodeCondition waits for Calico to become ready on this node, then clears the
+// NetworkUnavailable condition and the network-ready taint. Runtime health belongs to
+// kube-controllers; see node/DESIGN.md.
+func ManageNodeCondition(ctx context.Context, timeout time.Duration) error {
+	clientset, k8sNodeName, err := nodeClient()
+	if err != nil {
 		return err
 	}
-	<-done.Done()
+	if clientset == nil {
+		// No Kubernetes client to write to, so there is no condition to manage. Stay running so
+		// the surrounding service group doesn't treat this as a failure.
+		<-ctx.Done()
+		return nil
+	}
+
+	// Keep waiting rather than declaring the node ready on a timeout. The taint exists to hold
+	// workloads off a node whose dataplane isn't programmed, and a node that never gets there
+	// should stay tainted.
+	for {
+		if err := waitForReady(ctx, timeout); err == nil {
+			break
+		} else if ctx.Err() != nil {
+			return nil
+		} else {
+			log.WithError(err).Warn("Calico is still not ready; continuing to wait")
+		}
+	}
+
+	if err := markNetworkAvailable(ctx, clientset, k8sNodeName); err != nil {
+		return err
+	}
+
+	<-ctx.Done()
 	return nil
 }
 
-func waitForReady(timeout time.Duration) error {
+// MarkNetworkAvailable waits for Calico to become ready and then clears the NetworkUnavailable
+// condition and the network-ready taint. Used by the one-shot `startup --complete-startup` path.
+func MarkNetworkAvailable(ctx context.Context, timeout time.Duration) error {
+	clientset, k8sNodeName, err := nodeClient()
+	if err != nil || clientset == nil {
+		return err
+	}
+	if err := waitForReady(ctx, timeout); err != nil {
+		return err
+	}
+	return markNetworkAvailable(ctx, clientset, k8sNodeName)
+}
+
+// nodeClient builds the Kubernetes client used to write this node's status. A nil clientset with
+// a nil error means Calico isn't managing networking here, or there is no Kubernetes to talk to.
+func nodeClient() (kubernetes.Interface, string, error) {
+	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
+		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
+		return nil, "", nil
+	}
+
+	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
+	if err != nil {
+		if clientcmd.IsEmptyConfig(err) && os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+			log.Info("Kubernetes configuration not detected; skipping NetworkUnavailable condition update")
+			return nil, "", nil
+		}
+		log.WithError(err).Error("Failed to build Kubernetes config")
+		return nil, "", err
+	}
+
+	config.Timeout = nodeStatusClientTimeout
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		log.WithError(err).Error("Failed to create clientset")
+		return nil, "", err
+	}
+
+	k8sNodeName := utils.DetermineNodeName()
+	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
+		k8sNodeName = nodeRef
+	}
+	return clientset, k8sNodeName, nil
+}
+
+// nodeStatusClientTimeout bounds each node status request. Every write is retried, so a slow
+// apiserver costs a retry rather than a stuck startup.
+const nodeStatusClientTimeout = 10 * time.Second
+
+func waitForReady(ctx context.Context, timeout time.Duration) error {
 	// Determine which components should be checked for readiness. We don't do any liveness checking here.
 	// Do this by checking the contents of /etc/service/enabled.
 	checkBIRD := false
@@ -276,65 +349,46 @@ func waitForReady(timeout time.Duration) error {
 	// Check Felix health if FELIX_HEALTHENABLED is set to true.
 	checkFelix := os.Getenv("FELIX_HEALTHENABLED") == "true"
 
-	// Wait for Felix and BIRD to be ready before setting the NetworkUnavailable condition to false.
-	//
-	// If we don't succeed, continue anyway to be extra paranoid. This should handle the mainline use case of ensuring
-	// calico/node is ready before allowing pods to run on the node.
 	log.Info("Waiting for Calico to become ready before continuing...")
 	to := time.After(timeout)
 	for {
+		if err := health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err == nil {
+			return nil
+		} else {
+			log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
+		}
+
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-to:
 			return fmt.Errorf("timed out waiting for Calico to become ready")
-		default:
-			if err := health.RunOutput(checkBIRD, checkBIRD6, checkFelix, false, false, false, 5*time.Minute); err != nil {
-				// If we fail to check the health of the components, log the error and continue waiting.
-				log.WithField("reason", err.Error()).Warn("Calico is not ready yet, waiting...")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			// success !
-			return nil
+		case <-time.After(time.Second):
 		}
 	}
 }
 
-// MarkNetworkAvailable updates the Kubernetes node condition on successful startup.
-func MarkNetworkAvailable() error {
-	if os.Getenv("CALICO_NETWORKING_BACKEND") == "none" {
-		// Calico is not managing networking, so we don't need to set the NetworkUnavailable condition.
-		log.Info("Calico is not managing networking, skipping NetworkUnavailable condition update")
-		return nil
+// markNetworkAvailable publishes that Calico is up on this node. Setting the condition is left
+// late in startup: it makes the node-lifecycle controller re-evaluate the node's taints.
+func markNetworkAvailable(ctx context.Context, clientset kubernetes.Interface, k8sNodeName string) error {
+	err := utils.SetNodeNetworkUnavailableCondition(
+		ctx,
+		clientset,
+		k8sNodeName,
+		false,
+		nodestatus.NetworkReadyReason,
+		nodestatus.NetworkReadyMessage,
+		30*time.Second,
+	)
+	if err != nil {
+		log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+		return err
 	}
 
-	k8sNodeName := utils.DetermineNodeName()
-	if nodeRef := os.Getenv("CALICO_K8S_NODE_REF"); nodeRef != "" {
-		k8sNodeName = nodeRef
-	}
-
-	config, err := winutils.BuildConfigFromFlags("", os.Getenv("KUBECONFIG"))
-	if err == nil {
-		// Create the k8s clientset.
-		config.Timeout = 2 * time.Second
-		clientset, err := kubernetes.NewForConfig(config)
-		if err != nil {
-			log.WithError(err).Error("Failed to create clientset")
-			return err
-		}
-
-		// All done. Set NetworkUnavailable to false if using Calico for networking.
-		// We do it late in the process to avoid node resource update conflict because setting
-		// node condition will trigger node-controller updating node taints.
-		err = utils.SetNodeNetworkUnavailableCondition(*clientset, k8sNodeName, false, 30*time.Second)
-		if err != nil {
-			log.WithError(err).Error("Unable to set NetworkUnavailable to False")
-			return err
-		}
-	} else if clientcmd.IsEmptyConfig(err) && os.Getenv("DATASTORE_TYPE") != "kubernetes" {
-		log.Info("Kubernetes configuration not detected; skipping NetworkUnavailable condition update")
-	} else {
-		log.WithError(err).Error("Failed to build Kubernetes config")
+	// New nodes are tainted at admission time, so this is where the taint gets cleared. Do it
+	// even when the feature is off, otherwise disabling it strands the nodes already tainted.
+	if err := utils.RemoveNetworkReadyTaint(ctx, clientset, k8sNodeName, 30*time.Second); err != nil {
+		log.WithError(err).Error("Unable to remove the network-ready taint")
 		return err
 	}
 

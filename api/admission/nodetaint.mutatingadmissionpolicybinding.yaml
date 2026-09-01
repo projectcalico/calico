@@ -1,0 +1,13 @@
+# This MutatingAdmissionPolicyBinding binds the network-ready taint mutation to node creates.
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: networkreadytaint-binding
+spec:
+  policyName: networkreadytaint.projectcalico.org
+  matchResources:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["nodes"]
