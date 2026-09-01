@@ -2811,7 +2811,9 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		Expect(componentHandler.objectsToDelete).To(BeEmpty())
 	})
 
-	It("should work with Enterprise variant", func() {
+	// This build registers no Enterprise policies, so the Enterprise path creates
+	// nothing. pkg/admission covers what a registered variant produces.
+	It("should create nothing for a variant that registers no policies", func() {
 		r = ReconcileInstallation{
 			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
@@ -2831,7 +2833,7 @@ var _ = Describe("updateMutatingAdmissionPolicies", func() {
 		installation.Spec.Variant = operator.CalicoEnterprise
 
 		Expect(r.updateMutatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(4))
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 })
 
@@ -3059,7 +3061,8 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		Expect(deletedNames).To(HaveKey("stale-binding"))
 	})
 
-	It("should work with Enterprise variant", func() {
+	// See the mutating case above: no Enterprise policies are registered here.
+	It("should create nothing for a variant that registers no policies", func() {
 		r = ReconcileInstallation{
 			ext: testExtensions.Installation(),
 			opts: options.ControllerOptions{
@@ -3079,7 +3082,7 @@ var _ = Describe("updateValidatingAdmissionPolicies", func() {
 		installation.Spec.Variant = operator.CalicoEnterprise
 
 		Expect(r.updateValidatingAdmissionPolicies(ctx, installation, log)).NotTo(HaveOccurred())
-		Expect(componentHandler.objectsToCreate).To(HaveLen(2))
+		Expect(componentHandler.objectsToCreate).To(BeEmpty())
 	})
 })
 
