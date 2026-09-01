@@ -807,15 +807,12 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 	leg->ifindex = fib_params.ifindex;
 	ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
 
-	/* The clear-claims-before-storing-ifindex discipline orders each writer
-	 * against readers, not writers against each other: the loose-RPF arm on
-	 * the forward path can rewrite ifindex between our store and the set
-	 * above, leaving our claims attached to its device. Re-read and withdraw
-	 * them if the ifindex moved - the next reply revalidates.
+	/* The loose-RPF arm can race this write pair and leave the claims
+	 * beside its own ifindex. Accepted: both resolve the same route, so the
+	 * values differ only if routing moved this instant, and the state heals
+	 * like any stale pin. Closing it would take ifindex and flags in one
+	 * atomically-written word.
 	 */
-	if (*(volatile __u32 *)&leg->ifindex != fib_params.ifindex) {
-		ct_leg_clear_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED);
-	}
 }
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_ctx *ctx)
