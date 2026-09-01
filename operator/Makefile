@@ -174,7 +174,11 @@ clean:
 UT_DIR?=./pkg
 FV_DIR?=./test
 GO_TEST_ARGS ?= -count 1
-GINKGO_FOCUS ?= .*
+
+# Only the ginkgo suites accept -ginkgo.focus, so a focused run has to narrow
+# UT_DIR/FV_DIR to those packages as well.
+GINKGO_FOCUS ?=
+GINKGO_FOCUS_ARG = $(if $(GINKGO_FOCUS),-ginkgo.focus="$(GINKGO_FOCUS)")
 ENVTEST_K8S_VERSION?=1.34.x
 
 # gotestsum, rather than the ginkgo CLI, because it writes one JUnit report from the
@@ -186,14 +190,14 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
 	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
-	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) -ginkgo.focus="$(GINKGO_FOCUS)"'
+	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
 fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -ginkgo.focus="$(GINKGO_FOCUS)"'
+	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 # The tag the operator resolves for these components, from config/calico_versions.yml.
 FV_IMAGE_TAG ?= master

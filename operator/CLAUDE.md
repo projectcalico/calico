@@ -13,10 +13,9 @@ Kubernetes operator (built with operator-sdk/controller-runtime) that manages th
 make build                              # Build operator binary
 make test                               # Format, vet, then run unit tests
 make ut                                 # Unit tests only (Ginkgo v2)
-make ut GINKGO_FOCUS="description"      # Run specific tests by Ginkgo description
 make ut UT_DIR=./pkg/render             # Run tests in a specific package
+make ut UT_DIR=./pkg/render GINKGO_FOCUS="description"   # Focus by Ginkgo description
 make image                              # Build Docker image
-make ci                                 # Full CI: format-check, static-checks, image-all, test, gen-files, dirty-check, test-crds
 ```
 
 ### Code Generation (required after API/CRD changes)

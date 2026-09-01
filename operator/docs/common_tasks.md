@@ -127,9 +127,9 @@ To run all the unit tests, run:
 
 	make test
 
-To run a specific test or set of tests, use the `GINKGO_FOCUS` argument.
+To run a specific test or set of tests, narrow `UT_DIR` to the Ginkgo suites you want and focus within them. Packages that do not use Ginkgo reject the focus flag, so `UT_DIR` is required here.
 
-	make test GINKGO_FOCUS="component function tests"
+	make ut UT_DIR=./pkg/render GINKGO_FOCUS="component function tests"
 
 ### Making temporary changes to components the operator manages
 
