@@ -177,7 +177,7 @@ func TestCtLegPinValidator(t *testing.T) {
 		})
 	})
 
-	t.Run("stamps kind without pinning when the hint already names the right device", func(t *testing.T) {
+	t.Run("marks checked only when the hint already names the right device", func(t *testing.T) {
 		f := setupCtPinFixture(t, "PIN2")
 		f.tunneledCaliRoute(t, ctPinDstCIDR())
 		f.kernelRoute(t, ctPinDstCIDR(), f.tunl)
@@ -189,8 +189,9 @@ func TestCtLegPinValidator(t *testing.T) {
 
 			leg := f.leg(t, key, true)
 			Expect(leg.Ifindex).To(Equal(uint32(f.tunl.Attrs().Index)), "hint should be untouched")
-			Expect(leg.Tunnel).To(BeTrue())
 			Expect(leg.Checked).To(BeTrue())
+			Expect(leg.Tunnel).To(BeFalse(),
+				"the kind claim belongs to the device's own program, not route inference")
 			Expect(leg.Pinned).To(BeFalse(), "an honest ingress record must not become a pin")
 		})
 	})
@@ -373,6 +374,54 @@ func TestCtLegPinReconcileArms(t *testing.T) {
 			Expect(leg.Tunnel).To(BeFalse(), "the new device's kind is unknown to a from-host program")
 			Expect(leg.Checked).To(BeFalse(), "the reply side must revalidate the new device")
 		}, withRPFEnabled(), withIngressIfindex(uint32(f.phys.Attrs().Index)))
+	})
+
+	t.Run("loose arm leaves a tun_ip flow's egress record alone", func(t *testing.T) {
+		f := setupCtPinFixture(t, "ARM6")
+		// Same routing as the re-pin case: without the tun_ip gate the loose
+		// arm would rewrite this leg to the tunnel device and pin it,
+		// breaking the {tun_ip, ifindex} ARP-map key of the return-encap
+		// fast path.
+		f.kernelRoute(t, extCIDR, f.tunl)
+		key := ctv4.NewKey(17, srcIP, dstPort, extIP, srcPort)
+		wlLeg := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+			Workload: true, Ifindex: ctPinWlIfindex}
+		extLeg := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+			Ifindex: uint32(f.phys.Attrs().Index)}
+		val := ctv4.NewValueNATReverse(0, 0, wlLeg, extLeg, node1ip, srcIP, dstPort)
+		Expect(f.ctMap.Update(key.AsBytes(), val.AsBytes())).NotTo(HaveOccurred())
+
+		runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			_, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg := f.leg(t, key, true)
+			Expect(leg.Ifindex).To(Equal(uint32(f.phys.Attrs().Index)),
+				"the ARP-path egress record must survive")
+			Expect(leg.Pinned).To(BeFalse())
+			Expect(leg.Tunnel).To(BeFalse())
+			Expect(leg.Checked).To(BeFalse())
+		}, withRPFEnabled(), withIngressIfindex(uint32(f.phys.Attrs().Index)))
+	})
+
+	t.Run("kind refresh drops a stale pin once traffic symmetrizes onto it", func(t *testing.T) {
+		f := setupCtPinFixture(t, "ARM7")
+		// The packet arrives on the very device the pin names (the UT skb
+		// ifindex), so the leg is an honest ingress record again: nothing
+		// else ever reaches the PINNED bit for a leg that no longer
+		// mismatches, so the refresh path must drop the label.
+		key := entry(f, ctv4.Leg{Ifindex: ctPinWlIfindex, Pinned: true, Checked: true})
+
+		runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			_, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg := f.leg(t, key, true)
+			Expect(leg.Ifindex).To(Equal(uint32(ctPinWlIfindex)))
+			Expect(leg.Pinned).To(BeFalse(), "a confirmed ingress record must shed the pin label")
+			Expect(leg.Checked).To(BeTrue(), "the kind claim was right, validation stands")
+			Expect(leg.Tunnel).To(BeFalse())
+		})
 	})
 
 	t.Run("disabled RPF resets the record like any unexpected ingress", func(t *testing.T) {
