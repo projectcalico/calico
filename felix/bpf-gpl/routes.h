@@ -75,6 +75,19 @@ static CALI_BPF_INLINE enum cali_rt_flags cali_rt_lookup_flags(ipv46_addr_t *add
 #define cali_rt_is_tunneled(rt)	((rt)->flags & CALI_RT_TUNNELED)
 #define cali_rt_is_vxlan(rt)	((rt)->flags & CALI_RT_VXLAN)
 #define cali_rt_is_same_subnet(rt) ((rt)->flags & CALI_RT_SAME_SUBNET)
+
+/* The route half of the encap-boundary test: does this destination require
+ * tunnel egress right now? Current routing truth, evaluated per packet (the
+ * route also supplies the VTEP). Its counterpart is the CALI_CT_LEG_TUNNEL leg
+ * flag - a cached per-flow property of a forwarding hint answering "can the
+ * recorded device perform that encap?". The two must be tested together:
+ * route-says-encap paired with a hint that cannot encap means the hint must
+ * not be used for forwarding, or the inner frame leaves the device raw.
+ */
+static CALI_BPF_INLINE bool cali_rt_needs_tunnel_egress(struct cali_rt *rt)
+{
+	return cali_rt_is_tunneled(rt) && !cali_rt_is_same_subnet(rt);
+}
 #define cali_rt_is_blackhole_drop(rt) ((rt)->flags & CALI_RT_BLACKHOLE_DROP)
 #define cali_rt_is_blackhole_reject(rt) ((rt)->flags & CALI_RT_BLACKHOLE_REJECT)
 #define cali_rt_is_in_pool(rt) ((rt)->flags & CALI_RT_IN_POOL)

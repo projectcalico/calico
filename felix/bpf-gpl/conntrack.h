@@ -124,28 +124,32 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct cali_tc_ctx *ctx,
 			}
 			goto create;
 		}
+		struct calico_ct_leg *pkt_leg, *appr_leg;
+
 		if (srcLTDest) {
 			CALI_DEBUG("CT-ALL update src_to_dst A->B");
-			ct_value->a_to_b.seqno = seq;
-			ct_value->a_to_b.syn_seen = syn;
-			if (CALI_F_TO_HOST) {
-				ct_value->a_to_b.approved = 1;
-				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
-			} else {
-				ct_value->b_to_a.approved = 1;
-				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
-			}
+			pkt_leg = &ct_value->a_to_b;
+			appr_leg = CALI_F_TO_HOST ? &ct_value->a_to_b : &ct_value->b_to_a;
 		} else  {
 			CALI_DEBUG("CT-ALL update src_to_dst B->A");
-			ct_value->b_to_a.seqno = seq;
-			ct_value->b_to_a.syn_seen = syn;
-			if (CALI_F_TO_HOST) {
-				ct_value->b_to_a.approved = 1;
-				ct_value->b_to_a.workload = CALI_F_WEP ? 1 : 0;
-			} else {
-				ct_value->a_to_b.approved = 1;
-				ct_value->a_to_b.workload = CALI_F_WEP ? 1 : 0;
-			}
+			pkt_leg = &ct_value->b_to_a;
+			appr_leg = CALI_F_TO_HOST ? &ct_value->b_to_a : &ct_value->a_to_b;
+		}
+
+		/* This is a live map entry, shared with the program handling the
+		 * opposite direction - flag writes must go through the atomic
+		 * helpers (see the bits_word comment).
+		 */
+		pkt_leg->seqno = seq;
+		if (syn) {
+			ct_leg_set_flags(pkt_leg, CALI_CT_LEG_SYN_SEEN);
+		} else {
+			ct_leg_clear_flags(pkt_leg, CALI_CT_LEG_SYN_SEEN);
+		}
+		ct_leg_set_flags(appr_leg, CALI_CT_LEG_APPROVED |
+				(CALI_F_WEP ? CALI_CT_LEG_WORKLOAD : 0));
+		if (!CALI_F_WEP) {
+			ct_leg_clear_flags(appr_leg, CALI_CT_LEG_WORKLOAD);
 		}
 
 		return 0;
@@ -215,6 +219,9 @@ create:
 		 */
 		src_to_dst->ifindex = ctx->globals->data.host_ifindex ?
 			ctx->globals->data.host_ifindex : ctx->skb->ifindex;
+		if (CALI_F_TUNNEL) {
+			src_to_dst->bits_word |= CALI_CT_LEG_TUNNEL;
+		}
 	} else {
 		src_to_dst->ifindex = CT_INVALID_IFINDEX;
 	}
@@ -536,14 +543,14 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 {
 	if (tcp_header->fin) {
 		CALI_CT_VERB("FIN seen, marking CT entry.");
-		src_to_dst->fin_seen = 1;
+		ct_leg_set_flags(src_to_dst, CALI_CT_LEG_FIN_SEEN);
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
 			CALI_CT_VERB("SYN+ACK seen, marking CT entry.");
-			src_to_dst->syn_seen = 1;
-			src_to_dst->ack_seen = 1;
+			ct_leg_set_flags(src_to_dst,
+					CALI_CT_LEG_SYN_SEEN | CALI_CT_LEG_ACK_SEEN);
 			src_to_dst->seqno = tcp_header->seq;
 		} else {
 			CALI_CT_VERB("SYN+ACK seen but packet's ACK (%u) "
@@ -555,7 +562,7 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
 			CALI_CT_VERB("ACK seen, marking CT entry.");
-			src_to_dst->ack_seen = 1;
+			ct_leg_set_flags(src_to_dst, CALI_CT_LEG_ACK_SEEN);
 		} else {
 			CALI_CT_VERB("ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).",
@@ -573,7 +580,8 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct cali_tc_ctx *ctx,
 			 * have the RST timestamp in case this is some residual
 			 * traffic and the connection becomes silent.
 			 */
-			src_to_dst->rst_seen = dst_to_src->rst_seen = 0;
+			ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_RST_SEEN);
+			ct_leg_clear_flags(dst_to_src, CALI_CT_LEG_RST_SEEN);
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.");
 		}
@@ -653,6 +661,160 @@ static CALI_BPF_INLINE void qos_connlimit_decrement_for_ct(struct calico_ct_valu
 		if (pod_ifindex != CT_INVALID_IFINDEX) {
 			qos_connlimit_decrement(pod_ifindex, 0, family);
 		}
+	}
+}
+
+/* Refresh the leg's kind claim from this program's own provenance. Called only
+ * when the packet confirms the recorded ingress, so this program's
+ * CALI_F_TUNNEL is authoritative for the recorded device.
+ *
+ * The same confirmation proves the leg is no longer a pin - packets do ingress
+ * on the recorded device - so a stale PINNED label is dropped here too;
+ * otherwise a pin that routing later made the honest ingress would stay
+ * labelled forever (nothing else clears the bit outside the ingress-mismatch
+ * path, which such a leg never takes again).
+ *
+ * Writes only when a bit is actually wrong, so the common caller - every
+ * to-host packet of a healthy flow - pays a read and no atomic. When the kind
+ * claim was wrong, whatever validation stamped it is void too: CHECKED is
+ * cleared so the reply side revalidates. That is what gives a wrongly stamped
+ * leg (e.g. pinned from a FIB answer taken during a routing convergence
+ * window) a path back to the pinned fast path instead of a permanent
+ * per-packet fallback.
+ */
+static CALI_BPF_INLINE void ct_leg_refresh_kind(struct calico_ct_leg *leg)
+{
+	__u32 want = CALI_F_TUNNEL ? CALI_CT_LEG_TUNNEL : 0;
+	__u32 bits = leg->bits_word;
+
+	if ((bits & CALI_CT_LEG_TUNNEL) != want) {
+		if (want) {
+			ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL);
+			ct_leg_clear_flags(leg, CALI_CT_LEG_CHECKED | CALI_CT_LEG_PINNED);
+		} else {
+			ct_leg_clear_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED |
+					CALI_CT_LEG_PINNED);
+		}
+	} else if (bits & CALI_CT_LEG_PINNED) {
+		ct_leg_clear_flags(leg, CALI_CT_LEG_PINNED);
+	}
+}
+
+/* Validate the egress hint a CT leg offers to the opposite direction, and
+ * replace it if it cannot carry this flow's forward destination ip_dst (the
+ * real, post-NAT destination - the address the packet is routed by).
+ *
+ * CHECKED is per leg generation, not per flow: set once per recorded device,
+ * cleared whenever the device or its kind claim changes so the new value gets
+ * validated too. An unresolvable destination (FIB failure below) deliberately
+ * stays unchecked so a later packet retries once routing settles.
+ */
+static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
+						struct calico_ct_leg *leg,
+						ipv46_addr_t *ip_dst, __u16 dport)
+{
+	struct cali_rt *dest_rt = cali_rt_lookup(ip_dst);
+
+	/* Only an encap destination can be misserved by a non-tunnel hint. That
+	 * covers the no-route case too: with no route the consumer never
+	 * raw-redirects (it falls back to its own lookup and the host stack),
+	 * so there is nothing to protect against and nothing to resolve - mark
+	 * the leg checked rather than retrying on every packet. Should a route
+	 * appear later, the consumer's per-packet guard still distrusts a
+	 * non-tunnel hint for it.
+	 */
+	if (!dest_rt || !cali_rt_needs_tunnel_egress(dest_rt) ||
+			ct_leg_flag(leg, CALI_CT_LEG_TUNNEL)) {
+		ct_leg_set_flags(leg, CALI_CT_LEG_CHECKED);
+		return;
+	}
+
+	struct bpf_fib_lookup fib_params = {
+#ifdef IPVER6
+		.family = 10, /* AF_INET6 */
+#else
+		.family = 2, /* AF_INET */
+#endif
+		.tot_len = 0,
+		.ifindex = ctx->globals->data.host_ifindex ?
+			ctx->globals->data.host_ifindex : ctx->skb->ifindex,
+		.l4_protocol = ctx->state->ip_proto,
+		/* The same ports the consumer's fallback lookup uses (post-NAT,
+		 * like ip_dst), so under a ports-hashing multipath policy both
+		 * resolve the same nexthop and the pin cannot ping-pong against
+		 * the consumer's per-packet answer.
+		 */
+		.sport = bpf_htons(ctx->state->sport),
+		.dport = bpf_htons(dport),
+	};
+
+#ifdef IPVER6
+	ipv6_addr_t_to_be32_4_ip(fib_params.ipv6_src, &ctx->state->ip_src);
+	ipv6_addr_t_to_be32_4_ip(fib_params.ipv6_dst, ip_dst);
+#else
+	fib_params.ipv4_src = ctx->state->ip_src;
+	fib_params.ipv4_dst = *ip_dst;
+#endif
+
+	int rc = bpf_fib_lookup(ctx->skb, &fib_params, sizeof(fib_params),
+			BPF_FIB_LOOKUP_SKIP_NEIGH);
+	switch (rc) {
+	case 0:
+	case BPF_FIB_LKUP_RET_NO_NEIGH:
+		break;
+	case BPF_FIB_LKUP_RET_FRAG_NEEDED:
+		/* Routing resolved fine; the kernel only downgraded the result
+		 * because this packet cannot leave that device right now - too big
+		 * for its MTU, or the device is not up yet. Neither says anything
+		 * about where the flow belongs. We ask for no MTU check (tot_len
+		 * 0), so this can only come from the check the helper does after a
+		 * successful lookup, i.e. after the device has been recorded.
+		 * Refusing it would leave the leg unvalidated and make every later
+		 * packet resolve the route again - worst for exactly the
+		 * large-packet flows that end up here.
+		 */
+		break;
+	default:
+		/* Routing cannot tell us where the reply belongs yet. Leave the
+		 * leg unchecked so a later packet retries; the consumer sees a
+		 * hint that does not match the route and falls back to its own
+		 * lookup meanwhile.
+		 */
+		CALI_CT_DEBUG("fwd hint validation: FIB lookup failed %d", rc);
+		return;
+	}
+
+	if (fib_params.ifindex == CT_INVALID_IFINDEX) {
+		/* Nothing to record; do not replace the hint with no device. */
+		return;
+	}
+
+	if (fib_params.ifindex == leg->ifindex) {
+		/* The record already names the right device: an honest ingress
+		 * record, so no pin - and no TUNNEL either. That claim belongs to
+		 * the program attached to the device, which restates it on every
+		 * confirming packet (ct_leg_refresh_kind); writing it here from
+		 * route inference would fight that owner forever when the two
+		 * disagree, which routes can make them do (an encap-flagged route
+		 * whose real egress is a plain NIC - see CALI_CT_LEG_TUNNEL).
+		 */
+		ct_leg_set_flags(leg, CALI_CT_LEG_CHECKED);
+		return;
+	}
+
+	CALI_CT_DEBUG("fwd hint %d is not a tunnel for an encap dest, pinning %d",
+			leg->ifindex, fib_params.ifindex);
+	leg->ifindex = fib_params.ifindex;
+	ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
+
+	/* The clear-claims-before-storing-ifindex discipline orders each writer
+	 * against readers, not writers against each other: the loose-RPF arm on
+	 * the forward path can rewrite ifindex between our store and the set
+	 * above, leaving our claims attached to its device. Re-read and withdraw
+	 * them if the ifindex moved - the next reply revalidates.
+	 */
+	if (*(volatile __u32 *)&leg->ifindex != fib_params.ifindex) {
+		ct_leg_clear_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED);
 	}
 }
 
@@ -788,7 +950,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 
 	result.flags = ct_value_get_flags(v);
 
-	// Return the if_index where the CT state was created.
+	/* Return the if_index where the CT state was created. A pinned opener leg
+	 * would report a resolved egress rather than an ingress here, but only
+	 * HEP-opened flows can have their opener leg pinned (the validator and
+	 * the loose-RPF arm rewrite legs recorded at a HEP), and the field's
+	 * consumers (DNS snooping) only read WEP- or host-opened flows - disjoint
+	 * populations, see conntrack_types.h.
+	 */
 	if (v->a_to_b.opener) {
 		result.ifindex_created = v->a_to_b.ifindex;
 	} else if (v->b_to_a.opener) {
@@ -1085,7 +1253,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 		}
 		if (tcp_header->rst) {
 			CALI_CT_DEBUG("RST seen, marking CT entry.");
-			src_to_dst->rst_seen = 1;
+			ct_leg_set_flags(src_to_dst, CALI_CT_LEG_RST_SEEN);
 			tracking_v->rst_seen = now;
 		} else if (tracking_v->rst_seen) {
 			if (now - tracking_v->rst_seen > 2 * 60 * 1000000000ull || now - tracking_v->rst_seen > (1ull << 63)) {
@@ -1146,6 +1314,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			}
 
 			int rpf_passed = RPF_RES_FAIL;
+			__u32 rev_ifindex = CT_INVALID_IFINDEX;
 			if (same_if || ret_from_tun || CALI_F_NAT_IF || CALI_F_LO) {
 				/* Do not worry about packets returning from the same direction as
 				 * the outgoing packets.
@@ -1154,7 +1323,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				 */
 				rpf_passed = RPF_RES_STRICT;
 			} else if (CALI_F_HEP) {
-				rpf_passed = hep_rpf_check(ctx);
+				rpf_passed = hep_rpf_check(ctx, &rev_ifindex);
 			} else {
 				rpf_passed = wep_rpf_check(ctx, cali_rt_lookup(&ctx->state->ip_src));
 			}
@@ -1162,6 +1331,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 			switch (rpf_passed) {
 			case RPF_RES_FAIL:
 				ct_result_set_flag(result.rc, CT_RES_RPF_FAILED);
+				/* Claims cleared before the ifindex store so no reader
+				 * pairs an ifindex with a claim that does not describe
+				 * it (see CALI_CT_LEG_TUNNEL).
+				 */
+				ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
+						CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
 				src_to_dst->ifindex = CT_INVALID_IFINDEX;
 				CALI_CT_DEBUG("CT RPF failed invalidating ifindex");
 				break;
@@ -1169,15 +1344,78 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 				if (!related) {
 					CALI_CT_DEBUG("Updating ifindex from %d to %d",
 							src_to_dst->ifindex, ifindex);
+					/* An honest ingress record again: the pin and any
+					 * validation of what the leg held before are void,
+					 * and the kind claim is this program's own. Stale
+					 * claims are cleared before the ifindex store and
+					 * the new claim set only after it, so no reader
+					 * pairs an ifindex with a claim that does not
+					 * describe it. TUNNEL may ride across the store
+					 * when both old and new device are tunnels - the
+					 * claim is then true for either value.
+					 */
+					__u32 want = CALI_F_TUNNEL ? CALI_CT_LEG_TUNNEL : 0;
+					__u32 stale = src_to_dst->bits_word &
+						(CALI_CT_LEG_TUNNEL | CALI_CT_LEG_PINNED |
+						 CALI_CT_LEG_CHECKED) & ~want;
+
+					if (stale) {
+						ct_leg_clear_flags(src_to_dst, stale);
+					}
 					src_to_dst->ifindex = ifindex;
+					if (want && !(src_to_dst->bits_word & want)) {
+						ct_leg_set_flags(src_to_dst, want);
+					}
 				}
 				break;
 			case RPF_RES_DISABLED:
 			case RPF_RES_LOOSE:
-				if (!related) {
-					CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose or disabled "
-							"- reset ifindex", src_to_dst->ifindex, ifindex);
-					src_to_dst->ifindex = CT_INVALID_IFINDEX;
+				if (!related && ip_void(result.tun_ip)) {
+					/* Routing says the source is reached through
+					 * rev_ifindex, which is exactly the egress hint
+					 * this leg owes the opposite direction. Record it
+					 * instead of discarding it and making every later
+					 * packet of that direction resolve the route
+					 * again. Pinned, because it is no longer an
+					 * ingress record.
+					 *
+					 * tun_ip flows are excluded for the same reason
+					 * the reply-side validator excludes them: this
+					 * leg's ifindex is half of the {tun_ip, ifindex}
+					 * ARP-map key of the return-encap fast path, an
+					 * egress record rather than a routing hint, and
+					 * a packet from a stray device must not rewrite
+					 * it - the leg is left untouched.
+					 *
+					 * When the pin already holds this value, this is a
+					 * pure re-validation and must write nothing:
+					 * clearing the claims here would void the reply
+					 * side's kind stamp on every forward packet and
+					 * ping-pong both directions onto per-packet route
+					 * lookups. Only an actual change clears them - the
+					 * new device's kind is unknown to this program, the
+					 * reply side stamps it - and does so before the
+					 * ifindex store, so no reader pairs an ifindex
+					 * with a claim that does not describe it.
+					 */
+					if (rev_ifindex != CT_INVALID_IFINDEX) {
+						if (src_to_dst->ifindex != rev_ifindex) {
+							CALI_CT_DEBUG("Packet from unexpected ingress dev %d "
+									"- pinning egress %d", ifindex, rev_ifindex);
+							ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
+									CALI_CT_LEG_CHECKED);
+							src_to_dst->ifindex = rev_ifindex;
+						}
+						if (!ct_leg_flag(src_to_dst, CALI_CT_LEG_PINNED)) {
+							ct_leg_set_flags(src_to_dst, CALI_CT_LEG_PINNED);
+						}
+					} else {
+						CALI_CT_DEBUG("Packet from unexpected ingress dev - rpf loose or disabled "
+								"- reset ifindex", src_to_dst->ifindex, ifindex);
+						ct_leg_clear_flags(src_to_dst, CALI_CT_LEG_TUNNEL |
+								CALI_CT_LEG_PINNED | CALI_CT_LEG_CHECKED);
+						src_to_dst->ifindex = CT_INVALID_IFINDEX;
+					}
 				}
 				break;
 			}
@@ -1185,11 +1423,80 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_lookup(struct cali_tc_c
 	}
 
 	if (CALI_F_TO_HOST) {
+		/* The conntrack map outlives felix upgrades and restarts, so a leg
+		 * written by a version without the tunnel bit may have it unset
+		 * even though its recorded ifindex is a tunnel device. When the
+		 * packet confirms the recorded ingress, refresh the bit from this
+		 * program's provenance.
+		 */
+		if (!related && src_to_dst->ifindex == ifindex) {
+			ct_leg_refresh_kind(src_to_dst);
+		}
+		/* The opposite leg's ifindex is where packets of that direction
+		 * ingress, and it is handed to this direction as an egress hint.
+		 * That only holds while the flow is symmetric: if this direction's
+		 * destination has to be encapsulated but the opposite direction
+		 * arrives natively, the hint is a physical device and redirecting
+		 * to it would emit the raw inner frame there. Resolve the real
+		 * egress once and record it in the leg, so the rest of the flow
+		 * costs a single bit test.
+		 */
+		if (CALI_F_FROM_WEP && !related &&
+				ct_result_rc(result.rc) >= CALI_CT_ESTABLISHED &&
+				ct_result_rc(result.rc) <= CALI_CT_ESTABLISHED_DNAT &&
+				!ct_result_rpf_failed(result.rc) &&
+				!ct_leg_flag(dst_to_src, CALI_CT_LEG_CHECKED) &&
+				dst_to_src->ifindex != CT_INVALID_IFINDEX &&
+				ip_void(result.tun_ip)) {
+			/* Only a packet whose verdict stands may spend the flow's
+			 * once-per-leg validation. An RPF-failed packet is dropped
+			 * later but code here still runs, and outside the
+			 * ESTABLISHED range the rc no longer describes the entry:
+			 * the approval check downgrades an unapproved direction's
+			 * rc to NEW/INVALID while result.nat_ip keeps the backend,
+			 * so the DNAT test below would miss and a service flow
+			 * would be validated against its VIP - no route, CHECKED
+			 * stamped, fast path gone for the flow's lifetime. Legs
+			 * born at FROM_WEP are approved at creation, so today the
+			 * downgrade cannot happen here; the range check keeps that
+			 * an invariant of this gate rather than of approval
+			 * semantics (CORE-13223 plans to make approvals clearable).
+			 *
+			 * tun_ip flows are excluded: their return path encapsulates
+			 * to tun_ip and raw-redirects to this hint, using
+			 * {tun_ip, hint} as the ARP-map key - the hint is that
+			 * path's egress record, not a routing hint, and rewriting
+			 * it would break the keying.
+			 *
+			 * The CT lookup runs before NAT, so for a DNAT flow ip_dst
+			 * still holds the service address; validate against the
+			 * backend, which is what the packet is routed by.
+			 */
+			ipv46_addr_t *fwd_dst = &ctx->state->ip_dst;
+			__u16 fwd_dport = ctx->state->dport;
+
+			if (ct_result_rc(result.rc) == CALI_CT_ESTABLISHED_DNAT) {
+				fwd_dst = &result.nat_ip;
+				fwd_dport = result.nat_port;
+			}
+			ct_leg_validate_fwd(ctx, dst_to_src, fwd_dst, fwd_dport);
+		}
+
 		/* Fill in the ifindex we recorded in the opposite direction. The caller
 		 * may use it to directly forward the packet to the same interface where
 		 * packets in the opposite direction are coming from.
+		 *
+		 * The flags must be read before the ifindex - the writers store the
+		 * ifindex first and claim TUNNEL only after, so this order can at
+		 * worst pair a fresh tunnel ifindex with a stale "no tunnel", which
+		 * fails safe (the consumer distrusts the hint and re-resolves). The
+		 * opposite order could pair a stale physical ifindex with a fresh
+		 * TUNNEL claim and put a raw frame on that device. Volatile loads
+		 * keep the compiler from reordering the two reads.
 		 */
-		result.ifindex_fwd = dst_to_src->ifindex;
+		result.fwd_flags = ((*(volatile __u32 *)&dst_to_src->bits_word) &
+				CALI_CT_LEG_TUNNEL) ? CT_FWD_FLAG_TUNNEL : 0;
+		result.ifindex_fwd = *(volatile __u32 *)&dst_to_src->ifindex;
 		if (dst_to_src->workload) {
 			ct_result_set_flag(result.rc, CT_RES_TO_WORKLOAD);
 		}
