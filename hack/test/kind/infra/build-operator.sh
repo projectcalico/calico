@@ -25,9 +25,7 @@ make build/_output/bin/gen-versions
 # same file the repo keeps generated from config/calico_versions.yml. Put the
 # committed one back once the image is built.
 COMPONENTS="${OPERATOR_DIR}/pkg/components/calico.go"
-SAVED=$(mktemp /tmp/calico_components_XXXXXX.go)
-cp "${COMPONENTS}" "${SAVED}"
-trap 'cp "${SAVED}" "${COMPONENTS}"; rm -f "${SAVED}"' EXIT
+trap 'git -C "${OPERATOR_DIR}" checkout -- pkg/components/calico.go' EXIT INT TERM
 
 VERSIONS_FILE=$(mktemp /tmp/calico_versions_XXXXXX.yml)
 sed -e "s/test-build/${DEV_IMAGE_TAG}/g" \

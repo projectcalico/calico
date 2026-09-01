@@ -157,6 +157,8 @@ clean: clean-windows
 	rm -rf certs *.tar $(NODE_CONTAINER_BIN_DIR)
 	rm -rf $(BUILD_DEPS)
 	rm -rf filesystem/included-source
+	# Left behind by the old kind flow, which cloned the operator instead of building it in tree.
+	rm -rf ../hack/test/kind/infra/operator
 	rm -rf dist
 	rm -rf bin
 	# We build these as part of the node build, so clean them as part of the clean.

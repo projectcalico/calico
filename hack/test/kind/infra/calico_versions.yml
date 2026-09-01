@@ -1,5 +1,5 @@
-# Overrides operator/config/calico_versions.yml for the dev build. Only the
-# components in KIND_CALICO_IMAGES carry the test-build tag.
+# Overrides operator/config/calico_versions.yml for the dev build. Every image
+# listed here has to exist in the dev registry under the test-build tag.
 title: latest
 components:
   libcalico-go:
