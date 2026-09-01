@@ -18,7 +18,18 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # every failure to 0 and skipped the diags capture below. Read the handler's
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
-ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+
+# ArgoCI publishes each step's artifact prefix as CI_ARTIFACT_STEP_STORAGE
+# (gs://<bucket>/<workflow>/<pod name>) and the viewer lists exactly that
+# prefix, so use it verbatim rather than composing one.  e2e-vpp publishes to a
+# bucket of its own, so a cron that sets GS_BUCKET still wins; the composed
+# path otherwise survives only as a fallback for local runs.
+if [[ -n "${GS_BUCKET:-}" && "${GS_BUCKET}" != "argoci-artifacts" ]]; then
+  ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+else
+  ARTIFACT_DEST="${CI_ARTIFACT_STEP_STORAGE:-gs://argoci-artifacts/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}}"
+fi
+echo "[INFO] publishing artifacts to ${ARTIFACT_DEST}"
 
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
