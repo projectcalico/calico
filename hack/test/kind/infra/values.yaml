@@ -2,9 +2,11 @@
 installation:
   enabled: true
 
-  # Always re-pull so clusters pick up new digests under stable tags
-  # (e.g. test-build) on `make kind-reload`.
-  imagePullPolicy: Always
+  # A run's images are pushed to kind-registry before install and don't change
+  # while it runs, so re-pulling on every pod recreation buys nothing and only
+  # makes the dataplane depend on the registry still being reachable.
+  # `make kind-reload` overrides this back to Always.
+  imagePullPolicy: IfNotPresent
 
   # Disable HA control plane.
   controlPlaneReplicas: 1
@@ -172,13 +174,12 @@ manageCRDs: false
 zapDevel: true
 
 # Operator image lives in the local kind registry alongside everything else.
-# imagePullPolicy: Always so kubelet repulls when the test-build digest
-# changes under a stable tag on `make kind-reload`.
+# IfNotPresent for the same reason as installation above.
 tigeraOperator:
   image: calico/operator
   version: test-build
   registry: localhost:5000
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
 
 resources:
   requests:
