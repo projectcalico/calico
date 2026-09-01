@@ -173,8 +173,10 @@ A hint is repaired at two points, both while the entry is held:
    it done, so the route lookup stays off the per-packet path): if the
    destination needs encapsulation and the hint is not a tunnel, the
    egress is resolved by FIB and pinned; a hint that already names the
-   right device only has its kind stamped and stays an honest ingress
-   record. This is the asymmetrically-routed flow — natively-routed
+   right device is only marked checked and stays an honest ingress
+   record — its kind claim belongs to the program attached to that
+   device, not to route inference (an encap-flagged route's real egress
+   can be a plain NIC under wireguard). This is the asymmetrically-routed flow — natively-routed
    forward, tunneled reply — whose reply would otherwise leave a
    physical NIC raw. Flows that return encapsulated to a `tun_ip`
    (nodeport return encap) are excluded: their hint keys the ARP-map
@@ -184,22 +186,29 @@ A hint is repaired at two points, both while the entry is held:
 2. **From the forward side**, in the loose-RPF arm: `hep_rpf_check`
    has just computed the device that reaches the packet's source,
    which is exactly the hint the opposite direction needs, so it is
-   recorded and pinned instead of being discarded.
+   recorded and pinned instead of being discarded. `tun_ip` flows are
+   excluded here for the same reason as in the validator: their hint
+   is the ARP-map egress record and a stray-device packet must not
+   rewrite it.
 
 Pinned hints are cached routing decisions, so they can go stale — and
 `bpf_redirect` does not validate an ifindex, so a pin naming a departed
 device would drop packets with no signal back to the program. The
-per-forward-packet reconcile is what bounds that: because a pinned leg
-still mismatches its ingress, every forward packet re-runs the RPF
-check and the loose arm re-pins from the FIB's current answer, so a
-route move or device replacement heals as soon as forward traffic
-flows. A planned userspace scanner that clears pins naming departed
-devices is an optimization on top (repair without waiting for forward
-traffic), not a correctness requirement. The kind-refresh path gives
-the complementary repair: a wrongly stamped `TUNNEL` claim is cleared
-by the next forward packet that confirms the recorded ingress, which
-also reopens validation (`CHECKED` cleared) so the reply side converges
-back to the pinned fast path.
+per-forward-packet reconcile is what bounds that: while a pinned leg
+mismatches its ingress, every forward packet re-runs the RPF check and
+the loose arm re-pins from the FIB's current answer, so a route move
+or device replacement heals as soon as forward traffic flows. When
+routing instead settles onto the pinned device — forward packets now
+genuinely ingress there — the leg has become an honest ingress record,
+and the kind-refresh path drops the stale `PINNED` label. A planned
+userspace scanner that clears pins naming departed devices is an
+optimization on top (repair without waiting for forward traffic) — with
+one caveat: a flow whose *forward* traffic has stopped never re-enters
+the reconcile, so for those the scanner is the only repair. The
+kind-refresh path gives the complementary repair: a wrongly stamped
+`TUNNEL` claim is cleared by the next forward packet that confirms the
+recorded ingress, which also reopens validation (`CHECKED` cleared) so
+the reply side converges back to the pinned fast path.
 
 ### Cleanup: three layers
 
