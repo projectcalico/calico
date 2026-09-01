@@ -25,5 +25,5 @@ func TestStatus(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reporterConfig.JUnitReport = "../../../report/ut/crds_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/imports/crds Suite", suiteConfig, reporterConfig)
+	ginkgo.RunSpecs(t, "pkg/crds Suite", suiteConfig, reporterConfig)
 }

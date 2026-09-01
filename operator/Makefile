@@ -448,13 +448,13 @@ load-container-images: ./test/load_images_on_kind_cluster.sh $(IMAGE_TARS)
 ##
 deploy-crds: kubectl
 	@export KUBECONFIG=$(KIND_KUBECONFIG) && \
-		$(BINDIR)/kubectl create -f pkg/imports/crds/operator/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/calico/v1.crd.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/calico/policy.networking.k8s.io/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/enterprise/v1.crd.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/enterprise/policy.networking.k8s.io/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/enterprise/applicationlayer.projectcalico.org/ && \
-		$(BINDIR)/kubectl apply -f pkg/imports/crds/enterprise/01-crd-eck-bundle.yaml && \
+		$(BINDIR)/kubectl create -f pkg/crds/operator/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/calico/v1.crd.projectcalico.org/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/calico/policy.networking.k8s.io/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/v1.crd.projectcalico.org/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/policy.networking.k8s.io/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/applicationlayer.projectcalico.org/ && \
+		$(BINDIR)/kubectl apply -f pkg/crds/enterprise/01-crd-eck-bundle.yaml && \
 		$(BINDIR)/kubectl create -f deploy/crds/prometheus
 
 create-tigera-operator-namespace: kubectl
@@ -500,11 +500,11 @@ yaml-lint:
 
 .PHONY: dirty-check
 dirty-check:
-	@if [ "$$(git diff --stat)" != "" ]; then \
-	echo "The following files are dirty"; git diff --stat; exit 1; fi
+	@if [ "$$(git diff --stat -- .)" != "" ]; then \
+	echo "The following files are dirty"; git diff --stat -- .; exit 1; fi
 	@# Check that no new CRDs or admission policies needed to be committed
-	@if [ "$$(git status --porcelain pkg/imports)" != "" ]; then \
-	echo "The following imported files need to be added"; git status --porcelain pkg/imports; exit 1; fi
+	@if [ "$$(git status --porcelain pkg/crds pkg/admission)" != "" ]; then \
+	echo "The following imported files need to be added"; git status --porcelain pkg/crds pkg/admission; exit 1; fi
 
 foss-checks:
 	@echo Running $@...
@@ -688,14 +688,14 @@ $(BINDIR)/gen-versions: $(shell find ./hack/gen-versions -type f)
 # $(1) is the product
 define prep_local_crds
     $(eval product := $(1))
-	rm -rf pkg/imports/crds/$(product)
-	rm -rf pkg/imports/admission/$(product)
+	rm -rf pkg/crds/$(product)
+	rm -rf pkg/admission/$(product)
 	rm -rf .crds/$(product)
-	mkdir -p pkg/imports/crds/$(product)/v1.crd.projectcalico.org/
-	mkdir -p pkg/imports/crds/$(product)/v3.projectcalico.org/
-	mkdir -p pkg/imports/crds/$(product)/policy.networking.k8s.io/
-	mkdir -p pkg/imports/crds/$(product)/applicationlayer.projectcalico.org/
-	mkdir -p pkg/imports/admission/$(product)
+	mkdir -p pkg/crds/$(product)/v1.crd.projectcalico.org/
+	mkdir -p pkg/crds/$(product)/v3.projectcalico.org/
+	mkdir -p pkg/crds/$(product)/policy.networking.k8s.io/
+	mkdir -p pkg/crds/$(product)/applicationlayer.projectcalico.org/
+	mkdir -p pkg/admission/$(product)
 	mkdir -p .crds/$(product)
 endef
 
@@ -712,32 +712,32 @@ endef
 define copy_v1_crds
     $(eval dir := $(1))
 		$(eval product := $(2))
-	@cp $(dir)/libcalico-go/config/crd/* pkg/imports/crds/$(product)/v1.crd.projectcalico.org/ && echo "Copied $(product) CRDs"
+	@cp $(dir)/libcalico-go/config/crd/* pkg/crds/$(product)/v1.crd.projectcalico.org/ && echo "Copied $(product) CRDs"
 endef
 define copy_v3_crds
     $(eval dir := $(1))
 		$(eval product := $(2))
-	@cp $(dir)/api/config/crd/* pkg/imports/crds/$(product)/v3.projectcalico.org/ && echo "Copied $(product) CRDs"
+	@cp $(dir)/api/config/crd/* pkg/crds/$(product)/v3.projectcalico.org/ && echo "Copied $(product) CRDs"
 endef
 define copy_k8s_policy_crds
     $(eval product := $(1))
-	@mv pkg/imports/crds/$(product)/v1.crd.projectcalico.org/policy.networking.k8s.io_* pkg/imports/crds/$(product)/policy.networking.k8s.io/ 2>/dev/null; true
+	@mv pkg/crds/$(product)/v1.crd.projectcalico.org/policy.networking.k8s.io_* pkg/crds/$(product)/policy.networking.k8s.io/ 2>/dev/null; true
 	@echo "Moved $(product) K8s policy CRDs to dedicated directory"
 endef
 define copy_applicationlayer_crds
     $(eval product := $(1))
-	@mv pkg/imports/crds/$(product)/v3.projectcalico.org/applicationlayer.projectcalico.org_* pkg/imports/crds/$(product)/applicationlayer.projectcalico.org/ 2>/dev/null; true
+	@mv pkg/crds/$(product)/v3.projectcalico.org/applicationlayer.projectcalico.org_* pkg/crds/$(product)/applicationlayer.projectcalico.org/ 2>/dev/null; true
 	@echo "Moved $(product) ApplicationLayer CRDs to dedicated directory"
 endef
 define copy_eck_crds
     $(eval dir := $(1))
 		$(eval product := $(2))
-	@cp $(dir)/charts/crd.projectcalico.org.v1/templates/eck/* pkg/imports/crds/$(product)/ && echo "Copied $(product) ECK CRDs"
+	@cp $(dir)/charts/crd.projectcalico.org.v1/templates/eck/* pkg/crds/$(product)/ && echo "Copied $(product) ECK CRDs"
 endef
 define copy_admission_policies
     $(eval dir := $(1))
 		$(eval product := $(2))
-	@cp $(dir)/api/admission/* pkg/imports/admission/$(product)/ && echo "Copied $(product) admission policies"
+	@cp $(dir)/api/admission/* pkg/admission/$(product)/ && echo "Copied $(product) admission policies"
 endef
 
 .PHONY: read-libcalico-version read-libcalico-enterprise-version
@@ -850,9 +850,9 @@ deploy: manifests kustomize
 # Generate manifests e.g. CRD
 # Can also generate RBAC and webhooks but that is not enabled currently.
 manifests:
-	$(DOCKER_RUN) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=config/crd/bases'
-	for x in $$(find config/crd/bases/*); do sed -i -e '/creationTimestamp: null/d' -e '/^---/d' -e '/^\s*$$/d' $$x; done
-	@docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/pkg/imports/crds/operator/:/work/crds/operator/ tmknom/prettier --write --parser=yaml /work
+	$(DOCKER_RUN) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
+	for x in $$(find pkg/crds/operator/*); do sed -i -e '/creationTimestamp: null/d' -e '/^---/d' -e '/^\s*$$/d' $$x; done
+	@docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/pkg/crds/operator/:/work/crds/operator/ tmknom/prettier --write --parser=yaml /work
 
 # Run go fmt against code
 fmt:
@@ -927,7 +927,7 @@ bundle: bundle-generate bundle-crd-clean update-bundle bundle-validate bundle-im
 
 .PHONY: bundle-crd-clean
 bundle-crd-clean:
-	git checkout -- config/crd/bases
+	git checkout -- pkg/crds/operator
 
 .PHONY: bundle-validate
 bundle-validate: $(OPERATOR_SDK_BARE)

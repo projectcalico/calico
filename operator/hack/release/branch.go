@@ -53,8 +53,8 @@ var (
 		versions.CalicoConfigPath,
 		versions.EnterpriseConfigPath,
 		"pkg/components",
-		"pkg/imports/crds",
-		"pkg/imports/admission",
+		"pkg/crds",
+		"pkg/admission",
 	}
 )
 

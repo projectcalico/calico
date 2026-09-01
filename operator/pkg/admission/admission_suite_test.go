@@ -25,5 +25,5 @@ func TestAdmission(t *testing.T) {
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	suiteConfig, reporterConfig := ginkgo.GinkgoConfiguration()
 	reporterConfig.JUnitReport = "../../../report/ut/admission_suite.xml"
-	ginkgo.RunSpecs(t, "pkg/imports/admission Suite", suiteConfig, reporterConfig)
+	ginkgo.RunSpecs(t, "pkg/admission Suite", suiteConfig, reporterConfig)
 }

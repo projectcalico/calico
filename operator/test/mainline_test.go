@@ -49,7 +49,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/enterprise"
 	entcontroller "github.com/projectcalico/calico/operator/pkg/enterprise/controller"
 	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
-	"github.com/projectcalico/calico/operator/pkg/imports/crds"
+	"github.com/projectcalico/calico/operator/pkg/crds"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 

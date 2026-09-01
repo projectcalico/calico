@@ -34,7 +34,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
-	"github.com/projectcalico/calico/operator/pkg/imports/crds"
+	"github.com/projectcalico/calico/operator/pkg/crds"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"

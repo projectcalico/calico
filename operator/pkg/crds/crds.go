@@ -20,7 +20,6 @@ import (
 	"embed"
 	"fmt"
 	"path"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -42,8 +41,10 @@ var (
 	enterpriseCRDFiles embed.FS
 	//go:embed operator/*
 	operatorCRDFiles embed.FS
+	//go:embed calico_operator_crds.txt
+	calicoOperatorCRDList string
 
-	calicoOprtrCRDsRe *regexp.Regexp
+	calicoOperatorCRDs map[string]bool
 
 	// We cache these CRDs because to generate the calico and enterprise takes
 	// approximately 40ms, with the caching 1ms.
@@ -53,8 +54,12 @@ var (
 )
 
 func init() {
-	calicoCRDNames := []string{"installation", "apiserver", "gatewayapi", "imageset", "tigerastatus", "whisker", "goldmane", "managementclusterconnection", "istio"}
-	calicoOprtrCRDsRe = regexp.MustCompile(fmt.Sprintf("(%s)", strings.Join(calicoCRDNames, "|")))
+	calicoOperatorCRDs = map[string]bool{}
+	for _, line := range strings.Split(calicoOperatorCRDList, "\n") {
+		if name := strings.TrimSpace(line); name != "" && !strings.HasPrefix(name, "#") {
+			calicoOperatorCRDs[name] = true
+		}
+	}
 }
 
 func getCalicoCRDSource(v3 bool) map[string][]byte {
@@ -183,10 +188,8 @@ func getOperatorCRDSource(variant opv1.ProductVariant) map[string][]byte {
 	}
 
 	for _, entry := range entries {
-		if variant == opv1.Calico {
-			if !calicoOprtrCRDsRe.MatchString(entry.Name()) {
-				continue
-			}
+		if variant == opv1.Calico && !calicoOperatorCRDs[entry.Name()] {
+			continue
 		}
 
 		b, err := operatorCRDFiles.ReadFile(path.Join("operator", entry.Name()))
