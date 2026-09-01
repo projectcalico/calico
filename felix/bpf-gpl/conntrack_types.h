@@ -64,19 +64,16 @@ enum cali_ct_type {
 #define CALI_CT_LEG_WORKLOAD	(1U << 6) /* This leg was created from workload */
 #define CALI_CT_LEG_TUNNEL	(1U << 7) /* ifindex is a validated egress for this
 					   * flow's encap-flagged destinations: a tunnel
-					   * device, or whatever the FIB resolved for such
-					   * a destination (under wireguard, remote routes
-					   * are encap-flagged even where the egress for a
-					   * keyless peer is a plain NIC - CORE-13520).
-					   * Written only by whoever has authority over
-					   * the device: the program attached to it for an
-					   * ingress record (create / strict-RPF arm /
-					   * kind refresh), or the validator for a leg it
-					   * pinned - no program is attached to a pinned
-					   * egress. Invariant: never observable next to
-					   * an ifindex it does not describe - transitions
-					   * clear it before the ifindex store and re-set
-					   * it only after.
+					   * device, or whatever the FIB resolved for one
+					   * (under wireguard, remote routes are
+					   * encap-flagged even where a keyless peer's
+					   * egress is a plain NIC - CORE-13520). Written
+					   * only by whoever has authority over the
+					   * device: the program attached to it for an
+					   * ingress record, or the validator for a leg
+					   * it pinned. Invariant: never observable next
+					   * to an ifindex it does not describe - cleared
+					   * before the ifindex store, re-set only after.
 					   */
 #define CALI_CT_LEG_PINNED	(1U << 8) /* ifindex is a resolved egress for the
 					   * opposite direction, not this direction's
@@ -331,12 +328,10 @@ struct calico_ct_result {
 				* ingress interface index.  For a CT state created by a
 				* packet _from_ the host, it's CT_INVALID_IFINDEX (0).
 				*
-				* Meaningful only as the WEP a workload-opened flow was
-				* created at (or a HEP for a host-networked opener) -
-				* what DNS snooping keys on. For a HEP-opened flow the
-				* opener leg can be pinned (CALI_CT_LEG_PINNED), making
-				* its ifindex an egress record, but no consumer reads
-				* those flows.
+				* Meaningful only for WEP- or host-opened flows - what
+				* DNS snooping keys on. A HEP-opened flow's opener leg
+				* can be pinned (an egress record), but no consumer
+				* reads those flows.
 				*/
 };
 

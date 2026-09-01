@@ -151,64 +151,51 @@ Two flags on the leg (`CALI_CT_LEG_*` in `conntrack_types.h`) make the
 hint self-describing rather than assumed:
 
 - **`TUNNEL`** — the recorded device is a validated egress for this
-  flow's encap-flagged destinations: a tunnel device (stamped from the
-  ingress program's own `CALI_F_TUNNEL`), or whatever the FIB resolved
-  for such a destination. A hint without it must not be used for an
-  encap destination: `bpf_redirect` writes no headers, so a physical
-  device ignores the tunnel key and puts the raw inner frame on the
-  wire. The two halves of that test live in one predicate,
-  `cali_rt_needs_tunnel_egress` ("does this destination require encap
-  right now?" — per-packet routing truth) paired with this flag ("can
-  the recorded device perform it?" — cached per-flow).
+  flow's encap-flagged destinations. A hint without it must not be used
+  for an encap destination: `bpf_redirect` writes no headers, so a
+  physical device ignores the tunnel key and puts the raw inner frame
+  on the wire. The consumer's test pairs `cali_rt_needs_tunnel_egress`
+  ("does this destination require encap right now?" — per-packet
+  routing truth) with this flag ("can the recorded device perform it?"
+  — cached per-flow). The bit is written only by whoever has authority
+  over the device: the program attached to it for an ingress record, or
+  the validator for a leg it pinned.
 - **`PINNED`** — the ifindex is a resolved egress for the opposite
-  direction, not this direction's ingress record. It is bookkeeping
-  for userspace cleanup; the dataplane keeps reconciling the leg like
-  any other ingress mismatch, so each forward packet re-runs the RPF
-  check and the loose arm *refreshes* the pin from the FIB — writing
-  nothing when the value is unchanged, re-pinning when routing moved.
+  direction, not this direction's ingress record. Bookkeeping for
+  userspace cleanup; the dataplane keeps reconciling the leg like any
+  other ingress mismatch.
 
 A hint is repaired at two points, both while the entry is held:
 
-1. **From the reply side**, once per flow (`CALI_CT_LEG_CHECKED` marks
-   it done, so the route lookup stays off the per-packet path): if the
-   destination needs encapsulation and the hint is not a tunnel, the
-   egress is resolved by FIB and pinned; a hint that already names the
-   right device is only marked checked and stays an honest ingress
-   record — its kind claim belongs to the program attached to that
-   device, not to route inference (an encap-flagged route's real egress
-   can be a plain NIC under wireguard). This is the asymmetrically-routed flow — natively-routed
-   forward, tunneled reply — whose reply would otherwise leave a
-   physical NIC raw. Flows that return encapsulated to a `tun_ip`
-   (nodeport return encap) are excluded: their hint keys the ARP-map
-   fast path and must stay an ingress record. NAT'd flows are
-   validated against the post-NAT destination, the address the packet
-   is actually routed by.
+1. **From the reply side**, once per leg generation
+   (`CALI_CT_LEG_CHECKED` marks it done, keeping the route lookup off
+   the per-packet path): if the destination needs encapsulation and the
+   hint is not a tunnel, the egress is resolved by FIB and pinned; a
+   hint already naming the right device is only marked checked. This
+   repairs the asymmetrically-routed flow — natively-routed forward,
+   tunneled reply — whose reply would otherwise leave a physical NIC
+   raw. NAT'd flows are validated against the post-NAT destination, the
+   address the packet is routed by.
 2. **From the forward side**, in the loose-RPF arm: `hep_rpf_check`
-   has just computed the device that reaches the packet's source,
-   which is exactly the hint the opposite direction needs, so it is
-   recorded and pinned instead of being discarded. `tun_ip` flows are
-   excluded here for the same reason as in the validator: their hint
-   is the ARP-map egress record and a stray-device packet must not
-   rewrite it.
+   has just computed the device that reaches the packet's source —
+   exactly the hint the opposite direction needs — so it is recorded
+   and pinned instead of discarded. A re-run with an unchanged answer
+   writes nothing; a changed answer re-pins.
 
-Pinned hints are cached routing decisions, so they can go stale — and
-`bpf_redirect` does not validate an ifindex, so a pin naming a departed
-device would drop packets with no signal back to the program. The
-per-forward-packet reconcile is what bounds that: while a pinned leg
-mismatches its ingress, every forward packet re-runs the RPF check and
-the loose arm re-pins from the FIB's current answer, so a route move
-or device replacement heals as soon as forward traffic flows. When
-routing instead settles onto the pinned device — forward packets now
-genuinely ingress there — the leg has become an honest ingress record,
-and the kind-refresh path drops the stale `PINNED` label. A planned
-userspace scanner that clears pins naming departed devices is an
-optimization on top (repair without waiting for forward traffic) — with
-one caveat: a flow whose *forward* traffic has stopped never re-enters
-the reconcile, so for those the scanner is the only repair. The
-kind-refresh path gives the complementary repair: a wrongly stamped
-`TUNNEL` claim is cleared by the next forward packet that confirms the
-recorded ingress, which also reopens validation (`CHECKED` cleared) so
-the reply side converges back to the pinned fast path.
+Neither writer touches a `tun_ip` flow's leg: that hint is half of the
+`{tun_ip, ifindex}` ARP-map key of the return-encap fast path, an
+egress record that must not be rewritten.
+
+Stale state heals from packets. A route move re-pins via the loose arm
+(a pin naming a departed device would otherwise blackhole —
+`bpf_redirect` does not validate an ifindex). A packet confirming the
+recorded ingress refreshes the leg's claims from the program's own
+provenance: a wrong `TUNNEL` claim is corrected and `CHECKED` cleared
+so the reply side revalidates, and a pin that routing made the honest
+ingress sheds its `PINNED` label. A planned userspace scanner clearing
+pins for departed devices is an optimization on top, except for flows
+whose forward traffic has stopped — those never re-enter the reconcile,
+so the scanner is their only repair.
 
 ### Cleanup: three layers
 
