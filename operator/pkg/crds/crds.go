@@ -81,6 +81,12 @@ func init() {
 	}
 }
 
+// ReadCRDs splits every CRD in files into its YAML documents, for variants whose
+// CRDs are generated outside this repo. what names the set in panic messages.
+func ReadCRDs(files fs.FS, what string) map[string][]byte {
+	return readCRDs(files, what, func(string) bool { return true })
+}
+
 // readCRDs splits every file the filter accepts into its YAML documents, keyed by
 // file name and document index.
 func readCRDs(files fs.FS, what string, keep func(name string) bool) map[string][]byte {
