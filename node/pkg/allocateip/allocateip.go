@@ -20,6 +20,7 @@ import (
 	gnet "net"
 	"os"
 	"reflect"
+	"time"
 
 	api "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	log "github.com/sirupsen/logrus"
@@ -47,6 +48,16 @@ import (
 //
 // It will assign an address if there are any available, and remove any tunnel addresses
 // that are configured and should no longer be.
+
+// defaultResyncInterval is how often the daemon re-reconciles the tunnel addresses
+// even when the syncer has reported no change.
+//
+// The syncer is purely edge-triggered, so any trigger that is missed is missed
+// permanently: the node keeps running with no tunnel address, and every pod on it
+// is unreachable over that overlay until calico/node happens to restart. A single
+// lost Node status write during an apiserver blip is enough to get there. A cheap
+// periodic resync bounds that window instead of leaving it open indefinitely.
+const defaultResyncInterval = 5 * time.Minute
 
 // Run runs the tunnel IP allocator. In oneshot mode it reconciles once and
 // returns. In daemon mode it watches for IP pool and node configuration
@@ -94,6 +105,10 @@ func run(
 		ch:             make(chan struct{}),
 		data:           make(map[string]any),
 		felixEnvConfig: felixEnvConfig,
+		resyncInterval: defaultResyncInterval,
+	}
+	r.reconcile = func() error {
+		return reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig)
 	}
 
 	// Either create a typha syncclient or a local syncer depending on configuration. This calls back into the
@@ -115,11 +130,22 @@ func run(
 }
 
 func (r reconciler) run(ctx context.Context) error {
+	resync := time.NewTicker(r.resyncInterval)
+	defer resync.Stop()
+
 	for {
 		select {
 		case <-r.ch:
-			if err := reconcileTunnelAddrs(r.nodename, r.client, r.felixEnvConfig); err != nil {
+			if err := r.reconcile(); err != nil {
 				return fmt.Errorf("failed to reconcile tunnel address: %w", err)
+			}
+		case <-resync.C:
+			// Periodic resync. Unlike the event-driven path this does NOT return the
+			// error: the resync exists to recover from transient failures, so making
+			// it fatal would turn a blip that the next tick would have healed into a
+			// calico/node restart. The next tick retries.
+			if err := r.reconcile(); err != nil {
+				log.WithError(err).Warn("Failed to reconcile tunnel addresses during periodic resync, will retry")
 			}
 		case <-ctx.Done():
 			return nil
@@ -137,6 +163,13 @@ type reconciler struct {
 	data                 map[string]any
 	felixEnvConfig       *felixconfig.Config
 	initialSyncCompleted bool
+
+	// resyncInterval is how often to reconcile even with no syncer activity.
+	resyncInterval time.Duration
+
+	// reconcile performs a single reconciliation. It is a field so that tests can
+	// exercise the run loop's triggering without a datastore.
+	reconcile func() error
 }
 
 // OnStatusUpdated handles the syncer status callback method.
