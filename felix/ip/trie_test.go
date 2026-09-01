@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -465,6 +465,34 @@ var _ = Describe("CIDRTrie tests", func() {
 		pEntry("fc00:fe11::/96", "fc00:fe11:1:2:3::/120", "fc00:fe11:1:2:3::1/128"),
 	)
 })
+
+var _ = DescribeTable("CIDRTrie Overlaps",
+	func(contents []string, query string, expected bool) {
+		trie := ip.NewCIDRTrie()
+		for _, c := range contents {
+			cidr := ip.MustParseCIDROrIP(c)
+			trie.Update(cidr, "data:"+cidr.String())
+		}
+		Expect(trie.Overlaps(ip.MustParseCIDROrIP(query))).To(Equal(expected))
+	},
+	oEntry(nil, "10.0.0.0/8", false),
+	oEntry([]string{"10.0.0.0/8"}, "10.0.0.0/8", true),
+	oEntry([]string{"10.0.0.0/8"}, "10.1.0.0/16", true),
+	oEntry([]string{"10.1.0.0/16"}, "10.0.0.0/8", true),
+	oEntry([]string{"10.0.0.1/32"}, "10.0.0.0/8", true),
+	oEntry([]string{"0.0.0.0/0"}, "10.0.0.0/8", true),
+	oEntry([]string{"10.0.0.0/8"}, "11.0.0.0/8", false),
+	oEntry([]string{"10.1.0.0/16"}, "10.2.0.0/16", false),
+	oEntry([]string{"10.0.0.0/8", "192.168.0.0/16"}, "192.168.5.0/24", true),
+	oEntry([]string{"10.0.0.0/8", "192.168.0.0/16"}, "172.16.0.0/12", false),
+	oEntry([]string{"fc00::/16"}, "fc00:1::/32", true),
+	oEntry([]string{"fc00:1::/32"}, "fc00::/16", true),
+	oEntry([]string{"fc00::/16"}, "fd00::/16", false),
+)
+
+func oEntry(contents []string, query string, expected bool) TableEntry {
+	return Entry(fmt.Sprintf("%v should overlap %v: %v", contents, query, expected), contents, query, expected)
+}
 
 // Based on the blog post at https://yourbasic.org/golang/generate-permutation-slice-string/ (CC-BY-3.0)
 // permute calls f with each permutation of a.

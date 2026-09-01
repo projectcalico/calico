@@ -136,6 +136,12 @@ rules:
     verbs:
       - create
       - update
+  # Calico marks the IP pools it creates allocatable.
+  - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
+    resources:
+      - ippools/status
+    verbs:
+      - update
   # Calico must update some CRDs.
   - apiGroups: ["projectcalico.org", "crd.projectcalico.org"]
     resources:
