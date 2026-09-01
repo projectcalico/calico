@@ -80,7 +80,7 @@ ${HELM} -n tigera-operator template \
 # This manifest is used in "Calico the hard way" documentation.
 ##########################################################################
 echo "# CustomResourceDefinitions for Calico the Hard Way" > crds.yaml
-for FILE in $(ls ../charts/calico/crds); do
+for FILE in $(ls ../charts/calico/crds/*.yaml | xargs -n1 basename); do
 	${HELM} template ../charts/calico \
 		--include-crds \
 		--show-only "crds/$FILE" \
