@@ -144,6 +144,18 @@ rules:
       - watch
       - list
       - get
+  # The node controller keeps the NetworkUnavailable condition, and optionally the
+  # network-ready taint, in step with calico-node pod readiness.
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - update
   # Services are monitored for service LoadBalancer IP allocation
   - apiGroups: [""]
     resources:
@@ -232,6 +244,12 @@ rules:
       - configmaps
     verbs:
       - get
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      # Needed for clearing the network-ready taint once Calico is up.
+      - update
   - apiGroups: [""]
     resources:
       - nodes/status

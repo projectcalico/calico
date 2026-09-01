@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Tigera, Inc. All rights reserved.
+// Copyright (c) 2021-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/calico/libcalico-go/lib/names"
+	"github.com/projectcalico/calico/libcalico-go/lib/nodestatus"
 )
 
 const (
@@ -180,35 +181,35 @@ func WriteNodeConfig(nodeName string) {
 	}
 }
 
-// Set Kubernetes NodeNetworkUnavailable to false when starting
+// retryInterval paces the retry loops below, which ride out transient API errors while the
+// node is still coming up.
+const retryInterval = time.Second
+
+// SetNodeNetworkUnavailableCondition sets the Kubernetes NetworkUnavailable node condition to
+// value, retrying until timeout.
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
 func SetNodeNetworkUnavailableCondition(
-	clientset kubernetes.Clientset,
+	ctx context.Context,
+	clientset kubernetes.Interface,
 	nodeName string,
 	value bool,
+	reason string,
+	message string,
 	timeout time.Duration,
 ) error {
 	log.Infof("Setting NetworkUnavailable to %t", value)
 
-	var condition kapiv1.NodeCondition
+	status := kapiv1.ConditionFalse
 	if value {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionTrue,
-			Reason:             "CalicoIsDown",
-			Message:            "Calico is shutting down on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
-	} else {
-		condition = kapiv1.NodeCondition{
-			Type:               kapiv1.NodeNetworkUnavailable,
-			Status:             kapiv1.ConditionFalse,
-			Reason:             "CalicoIsUp",
-			Message:            "Calico is running on this node",
-			LastTransitionTime: metav1.Now(),
-			LastHeartbeatTime:  metav1.Now(),
-		}
+		status = kapiv1.ConditionTrue
+	}
+	condition := kapiv1.NodeCondition{
+		Type:               kapiv1.NodeNetworkUnavailable,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+		LastHeartbeatTime:  metav1.Now(),
 	}
 
 	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})
@@ -216,20 +217,55 @@ func SetNodeNetworkUnavailableCondition(
 		return err
 	}
 	patch := fmt.Appendf(nil, `{"status":{"conditions":%s}}`, raw)
-	to := time.After(timeout)
-	for {
-		select {
-		case <-to:
-			err = fmt.Errorf("timed out patching node, last error was: %s", err.Error())
+
+	return retryUntil(ctx, timeout, "set the NetworkUnavailable condition", func() error {
+		_, err := clientset.CoreV1().Nodes().PatchStatus(ctx, nodeName, patch)
+		return err
+	})
+}
+
+// RemoveNetworkReadyTaint clears the network-ready taint, retrying until timeout. It runs
+// whether or not the feature is enabled, so disabling it drains the taint rather than
+// stranding every node that already carries one.
+func RemoveNetworkReadyTaint(
+	ctx context.Context,
+	clientset kubernetes.Interface,
+	nodeName string,
+	timeout time.Duration,
+) error {
+	return retryUntil(ctx, timeout, "remove the network-ready taint", func() error {
+		node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
+		if err != nil {
 			return err
-		default:
-			_, err = clientset.CoreV1().Nodes().PatchStatus(context.Background(), nodeName, patch)
-			if err != nil {
-				log.WithError(err).Warnf("Failed to set NetworkUnavailable; will retry")
-			} else {
-				// Success!
-				return nil
-			}
+		}
+		if !nodestatus.HasNetworkReadyTaint(node) {
+			return nil
+		}
+
+		node.Spec.Taints = nodestatus.WithoutNetworkReadyTaint(node.Spec.Taints)
+		if _, err := clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+		log.WithField("node", nodeName).Info("Removed the network-ready taint")
+		return nil
+	})
+}
+
+func retryUntil(ctx context.Context, timeout time.Duration, description string, attempt func() error) error {
+	deadline := time.After(timeout)
+	var lastErr error
+	for {
+		if lastErr = attempt(); lastErr == nil {
+			return nil
+		}
+		log.WithError(lastErr).Warnf("Failed to %s; will retry", description)
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("gave up trying to %s: %w", description, lastErr)
+		case <-deadline:
+			return fmt.Errorf("timed out trying to %s: %w", description, lastErr)
+		case <-time.After(retryInterval):
 		}
 	}
 }

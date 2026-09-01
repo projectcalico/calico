@@ -149,7 +149,8 @@ func newStartupCommand() *cobra.Command {
 			logrus.SetFormatter(&logrusr.Formatter{Component: "startup"})
 			startup.Run()
 			if completeStartup {
-				if err := startup.MarkNetworkAvailable(); err != nil {
+				if err := startup.MarkNetworkAvailable(context.Background(), 5*time.Minute); err != nil {
+					logrus.WithError(err).Error("Failed to mark the node network-available")
 					utils.Terminate()
 				}
 			}
