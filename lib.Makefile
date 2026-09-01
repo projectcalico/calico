@@ -1823,11 +1823,7 @@ kind-deploy:
 
 # Rebuild any images whose source files have changed, push changed layers to
 # the local registry, upgrade the Helm release, and restart pods so kubelet
-# re-pulls the new digests under the test-build tag.
-#
-# values.yaml pins IfNotPresent since a run's images don't change while it runs.
-# Reload is the exception: the test-build tag is stable, so only a fresh pull
-# picks up the new digest.
+# re-pulls the new digests under the test-build tag (PullAlways).
 .PHONY: kind-reload
 kind-reload:
 	$(MAKE) -j$(NUM_BUILD_JOBS) kind-build-images
@@ -1835,8 +1831,6 @@ kind-reload:
 	KUBECONFIG=$(KIND_KUBECONFIG) $(REPO_ROOT)/bin/helm upgrade calico \
 		$(REPO_ROOT)/bin/tigera-operator-$(GIT_VERSION).tgz \
 		--reuse-values \
-		--set installation.imagePullPolicy=Always \
-		--set tigeraOperator.imagePullPolicy=Always \
 		-n tigera-operator
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) delete pods -n calico-system --all
 	KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(KIND_INFRA_DIR)/calicoctl.yaml
