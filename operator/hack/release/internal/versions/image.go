@@ -30,12 +30,10 @@ var sedReplacer = strings.NewReplacer(`\`, `\\`, `&`, `\&`, `|`, `\|`)
 
 // Component image config key constants used as keys in ModifyComponentImageConfig.
 const (
-	CalicoRegistryConfigKey      = "CalicoRegistry"
-	CalicoImagePathConfigKey     = "CalicoImagePath"
-	EnterpriseRegistryConfigKey  = "TigeraRegistry"
-	EnterpriseImagePathConfigKey = "TigeraImagePath"
-	OperatorRegistryConfigKey    = "OperatorRegistry"
-	OperatorImagePathConfigKey   = "OperatorImagePath"
+	CalicoRegistryConfigKey    = "CalicoRegistry"
+	CalicoImagePathConfigKey   = "CalicoImagePath"
+	OperatorRegistryConfigKey  = "OperatorRegistry"
+	OperatorImagePathConfigKey = "OperatorImagePath"
 )
 
 // ComponentImageConfigRelPath is the repo-relative path to the component image config file.
@@ -43,12 +41,10 @@ var ComponentImageConfigRelPath = "pkg/components/images.go"
 
 // componentImageConfigMap maps config keys to human-readable descriptions.
 var componentImageConfigMap = map[string]string{
-	CalicoRegistryConfigKey:      "Calico Registry",
-	CalicoImagePathConfigKey:     "Calico Image Path",
-	EnterpriseRegistryConfigKey:  "Enterprise Registry",
-	EnterpriseImagePathConfigKey: "Enterprise Image Path",
-	OperatorRegistryConfigKey:    "Operator Registry",
-	OperatorImagePathConfigKey:   "Operator Image Path",
+	CalicoRegistryConfigKey:    "Calico Registry",
+	CalicoImagePathConfigKey:   "Calico Image Path",
+	OperatorRegistryConfigKey:  "Operator Registry",
+	OperatorImagePathConfigKey: "Operator Image Path",
 }
 
 // ModifyComponentImageConfig modifies variables in the specified component image config file.

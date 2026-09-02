@@ -38,7 +38,6 @@ var releaseFromCommand = &cli.Command{
 		baseOperatorFlag,
 		versionFlag,
 		exceptCalicoFlag,
-		exceptEnterpriseFlag,
 		publishFlag,
 		archFlag,
 		registryFlag,
@@ -112,17 +111,6 @@ var releaseFromAction = cli.ActionFunc(func(ctx context.Context, c *cli.Command)
 		logrus.WithField("components", cmpts).Debug("Applying Calico version overrides")
 		if err := versions.UpdateCalicoComponents(repoRootDir, cmpts); err != nil {
 			return fmt.Errorf("overriding calico config: %s", err)
-		}
-	}
-	if enterpriseOverrides := c.StringSlice(exceptEnterpriseFlag.Name); len(enterpriseOverrides) > 0 {
-		cmpts := make(map[string]string)
-		for _, override := range enterpriseOverrides {
-			parts := strings.Split(override, ":")
-			cmpts[parts[0]] = parts[1]
-		}
-		logrus.WithField("components", cmpts).Debug("Applying Enterprise version overrides")
-		if err := versions.UpdateEnterpriseComponents(repoRootDir, cmpts); err != nil {
-			return fmt.Errorf("overriding enterprise config: %s", err)
 		}
 	}
 
