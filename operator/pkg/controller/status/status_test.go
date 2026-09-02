@@ -2041,3 +2041,109 @@ var _ = Describe("Status manager integration tests", Ordered, func() {
 		})
 	})
 })
+
+var _ = Describe("Status.Message", func() {
+	var sm *statusManager
+
+	BeforeEach(func() {
+		scheme := runtime.NewScheme()
+		Expect(apis.AddToScheme(scheme, false)).NotTo(HaveOccurred())
+		cl := ctrlrfake.DefaultFakeClientBuilder(scheme).Build()
+		sm = New(cl, "message-test", &common.VersionInfo{Major: 1, Minor: 19}).(*statusManager)
+	})
+
+	degraded := func(status operator.ConditionStatus, msg string) operator.TigeraStatusCondition {
+		return operator.TigeraStatusCondition{Type: operator.ComponentDegraded, Status: status, Message: msg}
+	}
+	progressing := func(status operator.ConditionStatus, msg string) operator.TigeraStatusCondition {
+		return operator.TigeraStatusCondition{Type: operator.ComponentProgressing, Status: status, Message: msg}
+	}
+
+	DescribeTable("precedence",
+		func(warnings map[string]string, conditions []operator.TigeraStatusCondition, expected string) {
+			for k, v := range warnings {
+				sm.SetWarning(k, v)
+			}
+			Expect(sm.statusMessage(conditions)).To(Equal(expected))
+		},
+		Entry("degraded outranks progressing and warnings",
+			map[string]string{"w": "warned"},
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionTrue, "it broke"), progressing(operator.ConditionTrue, "rolling out")},
+			"it broke",
+		),
+		Entry("progressing outranks warnings",
+			map[string]string{"w": "warned"},
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionFalse, ""), progressing(operator.ConditionTrue, "rolling out")},
+			"rolling out",
+		),
+		Entry("warnings show when healthy",
+			map[string]string{"w": "warned"},
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionFalse, ""), progressing(operator.ConditionFalse, "")},
+			"warned",
+		),
+		Entry("empty when healthy with no warnings",
+			nil,
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionFalse, ""), progressing(operator.ConditionFalse, "")},
+			"",
+		),
+		Entry("a degraded message present but not active does not win",
+			map[string]string{"w": "warned"},
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionFalse, "stale failure text")},
+			"warned",
+		),
+		Entry("multiple warnings join on one line",
+			map[string]string{"a": "first", "b": "second"},
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionFalse, "")},
+			"first; second",
+		),
+		Entry("newlines in a degraded message collapse to one line",
+			nil,
+			[]operator.TigeraStatusCondition{degraded(operator.ConditionTrue, "dep1 is unhealthy\ndep2 is unhealthy")},
+			"dep1 is unhealthy; dep2 is unhealthy",
+		),
+		Entry("newlines in a progressing message collapse to one line",
+			nil,
+			[]operator.TigeraStatusCondition{progressing(operator.ConditionTrue, "dep1 rolling out\ndep2 rolling out")},
+			"dep1 rolling out; dep2 rolling out",
+		),
+	)
+
+	It("does not write again when an older CRD prunes the message field", func() {
+		sm.OnCRFound()
+		sm.ReadyToMonitor()
+		sm.SetWarning("ignore-annotation", "the operator is not managing this resource")
+		sm.updateStatus()
+
+		ts := &operator.TigeraStatus{}
+		Expect(sm.client.Get(context.TODO(), types.NamespacedName{Name: "message-test"}, ts)).NotTo(HaveOccurred())
+		Expect(ts.Status.Message).To(Equal("the operator is not managing this resource"))
+
+		// An older CRD has no message field, so the apiserver drops it on write.
+		ts.Status.Message = ""
+		Expect(sm.client.Status().Update(context.TODO(), ts)).NotTo(HaveOccurred())
+		Expect(sm.client.Get(context.TODO(), types.NamespacedName{Name: "message-test"}, ts)).NotTo(HaveOccurred())
+		pruned := ts.ResourceVersion
+
+		sm.updateStatus()
+
+		Expect(sm.client.Get(context.TODO(), types.NamespacedName{Name: "message-test"}, ts)).NotTo(HaveOccurred())
+		Expect(ts.ResourceVersion).To(Equal(pruned), "status manager rewrote an unchanged status")
+	})
+
+	It("writes again when the message actually changes", func() {
+		sm.OnCRFound()
+		sm.ReadyToMonitor()
+		sm.updateStatus()
+
+		ts := &operator.TigeraStatus{}
+		Expect(sm.client.Get(context.TODO(), types.NamespacedName{Name: "message-test"}, ts)).NotTo(HaveOccurred())
+		before := ts.ResourceVersion
+
+		sm.SetWarning("ignore-annotation", "the operator is not managing this resource")
+		sm.updateStatus()
+
+		Expect(sm.client.Get(context.TODO(), types.NamespacedName{Name: "message-test"}, ts)).NotTo(HaveOccurred())
+		Expect(ts.ResourceVersion).NotTo(Equal(before))
+		Expect(ts.Status.Message).To(Equal("the operator is not managing this resource"))
+	})
+})

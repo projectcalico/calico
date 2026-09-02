@@ -23891,9 +23891,14 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Human-readable summary of the component's current state.
+          jsonPath: .status.message
+          name: Message
+          type: string
         - description: Error message when the component is degraded.
           jsonPath: .status.conditions[?(@.type=='Degraded')].message
-          name: Message
+          name: Error
+          priority: 1
           type: string
       name: v1
       schema:
@@ -23971,6 +23976,12 @@ spec:
                       - type
                     type: object
                   type: array
+                message:
+                  description: |-
+                    Message is a human-readable summary of the component's current state: the degraded
+                    message if degraded, the progressing message if progressing, then any warnings.
+                    Empty when healthy with no warnings.
+                  type: string
               required:
                 - conditions
               type: object

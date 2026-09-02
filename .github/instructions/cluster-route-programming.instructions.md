@@ -36,15 +36,12 @@ both.
 
 ## Update rule
 
-A PR that **changes how cluster routes are programmed** — which
-component owns which encapsulation type, the enum values or
-defaults of either `programClusterRoutes` field, the BIRD
-kernel-programming filter, or the deprecation and removal plan —
-must update `design/cluster-route-programming/DESIGN.md` in the
-same PR.
-
-**Exemption.** No doc update is needed if the PR is exclusively
-one of: (a) a bug fix that restores behavior the doc already
-describes, (b) a mechanical refactor with no observable change,
-(c) comment / log-message edits, (d) a dependency bump. If in
-doubt, update the doc.
+The repo-wide rule
+([`.github/copilot-instructions.md` → Documentation map](../copilot-instructions.md),
+mirrored in [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)) applies;
+**the default is no edit**. Here the usual candidates for it are a
+change to which component owns which encapsulation type, to the enum
+values or defaults of either `programClusterRoutes` field, to the BIRD
+kernel-programming filter, or to the deprecation and removal plan —
+candidates, not triggers on their own. A warranted edit goes in
+`design/cluster-route-programming/DESIGN.md` in the same PR.

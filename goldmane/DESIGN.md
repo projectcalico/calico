@@ -189,12 +189,5 @@ is a contract change for dashboards and alerting; record it here.
 
 ## Cross-cutting review notes
 
-- **Keep this document in sync with the code.** A change to the
-  gRPC services, core components, key concepts, config surface,
-  or Prometheus metrics must update the relevant section in the
-  same PR. Exemptions: (a) a bug fix that restores behaviour
-  this doc already describes, (b) a mechanical refactor with no
-  observable change, (c) comment / log-message edits, (d)
-  dependency bumps. If in doubt, update the doc.
 - Operational recipes (build, test, debug) do not belong here —
   they live in [`goldmane/CLAUDE.md`](./CLAUDE.md).
