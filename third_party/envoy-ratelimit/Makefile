@@ -32,9 +32,9 @@ $(ENVOY_RATELIMIT_DOWNLOADED):
 # 	For each valid patch file, it applies the patch to the envoy-ratelimit directory using patch -p1.
 	for patch in patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-ratelimit -p1 < "$$patch"; \
+			patch -d envoy-ratelimit -p1 < "$$patch" || exit 1; \
 		fi; \
-	done; \
+	done
 	touch $@
 
 .PHONY: build
