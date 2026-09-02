@@ -377,9 +377,25 @@ func (c Config) imageNames(u unit) ([]string, error) {
 	return names, nil
 }
 
+// tagPrefix returns the prefix a unit's published tags carry. The component
+// Makefile derives it from the variant's own environment, so it is read rather
+// than declared here.
+func (c Config) tagPrefix(u unit) (string, error) {
+	dir := filepath.Join(c.RepoRoot, u.dir)
+	out, err := c.runner.RunInDir("", "make", []string{"-C", dir, "-s", "image-tag-prefix"}, u.env)
+	if err != nil {
+		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // publishedRefs returns the digest refs a unit put in the registries.
 func (c Config) publishedRefs(u unit, resolve DigestResolver) ([]string, error) {
 	names, err := c.imageNames(u)
+	if err != nil {
+		return nil, err
+	}
+	tags, err := c.unitTags(u)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +403,7 @@ func (c Config) publishedRefs(u unit, resolve DigestResolver) ([]string, error) 
 	var refs []string
 	for _, reg := range c.Registries {
 		for _, name := range names {
-			for _, tag := range c.unitTags(u) {
+			for _, tag := range tags {
 				image := fmt.Sprintf("%s/%s:%s", reg, name, tag)
 				digest, exists, err := resolve(image)
 				if err != nil {
@@ -408,15 +424,22 @@ func (c Config) publishedRefs(u unit, resolve DigestResolver) ([]string, error) 
 
 // unitTags returns the tags a unit publishes. The Windows variant copies only
 // its manifest list to the release tag, so it has no per-architecture tags.
-func (c Config) unitTags(u unit) []string {
+func (c Config) unitTags(u unit) ([]string, error) {
+	prefix, err := c.tagPrefix(u)
+	if err != nil {
+		return nil, err
+	}
+	if prefix != "" {
+		prefix += "-"
+	}
 	if u.variant == windowsVariant {
-		return []string{c.Version}
+		return []string{prefix + c.Version}, nil
 	}
-	tags := []string{c.Version}
+	tags := []string{prefix + c.Version}
 	for _, arch := range c.Arches {
-		tags = append(tags, fmt.Sprintf("%s-%s", c.Version, arch))
+		tags = append(tags, fmt.Sprintf("%s%s-%s", prefix, c.Version, arch))
 	}
-	return tags
+	return tags, nil
 }
 
 // Build builds every variant's images. Publish-only settings are rejected

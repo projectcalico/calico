@@ -506,6 +506,10 @@ func (r *fakeRecorder) Add(refs ...string) error {
 type imageNameRunner struct {
 	fakeRunner
 	images string
+	// prefix is echoed for image-tag-prefix only when the call carries envKey,
+	// mimicking a Makefile that sets IMAGETAG_PREFIX from a variant's env.
+	prefix string
+	envKey string
 }
 
 func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, error) {
@@ -514,6 +518,12 @@ func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, err
 	}
 	if slices.Contains(args, "build-images") {
 		return r.images, nil
+	}
+	if slices.Contains(args, "image-tag-prefix") {
+		if r.envKey == "" || slices.Contains(env, r.envKey) {
+			return r.prefix, nil
+		}
+		return "", nil
 	}
 	return "", nil
 }
@@ -765,5 +775,41 @@ func TestArchiveRejectsNoDir(t *testing.T) {
 	})
 	if err := Archive(cfg, "", false); err == nil {
 		t.Fatal("expected an error when no archive directory is given")
+	}
+}
+
+// A variant whose Makefile prefixes its tags must publish and record under that
+// prefix, not under the unprefixed tag another variant already owns.
+func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
+	f := &imageNameRunner{images: "calico", prefix: "tesla", envKey: "ALT_VARIANT=true"}
+	rec := &fakeRecorder{}
+	cfg := recordingConfig(f, rec, alwaysResolves("sha256:abc"), []Variant{
+		{Name: StandardVariant, Target: "publish-image", ReleaseDirs: []string{"cmd/calico"}},
+		{Name: "alt", Target: "publish-image", Env: []string{"ALT_VARIANT=true"}, ReleaseDirs: []string{"cmd/calico"}},
+	})
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	var prefixed, bare int
+	for _, c := range f.calls {
+		if !slices.Contains(c.args, "image-tag-prefix") {
+			continue
+		}
+		if hasEnv(c.env, "ALT_VARIANT=true") {
+			prefixed++
+		} else {
+			bare++
+		}
+	}
+	if prefixed != 1 || bare != 1 {
+		t.Errorf("tag-prefix lookups: %d with the variant env, %d without; want 1 and 1", prefixed, bare)
+	}
+	if len(rec.refs) == 0 {
+		t.Fatal("nothing recorded")
 	}
 }
