@@ -1660,7 +1660,9 @@ func (r *CalicoManager) archiveContainerImages(dir string) error {
 		Version:    r.calicoVersion,
 		Registries: r.imageRegistries,
 		Arches:     r.architectures,
-		Variants:   images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
+		// Standard images only: the release tarball ships what a user deploys,
+		// and the Windows images have an archive of their own.
+		Variants: images.NarrowVariants(images.StandardVariants(images.PublishVariants), r.imageReleaseDirs),
 	}, dir, pull, images.WithRunner(r.runner))
 }
 

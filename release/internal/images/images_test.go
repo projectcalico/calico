@@ -701,6 +701,18 @@ func TestPublishRecordsWhatSucceededWhenAUnitFails(t *testing.T) {
 	}
 }
 
+// The release tarball ships the standard images only; the Windows images have
+// an archive of their own.
+func TestStandardVariantsDropsOtherKinds(t *testing.T) {
+	got := StandardVariants(PublishVariants)
+	if len(got) != 1 {
+		t.Fatalf("expected only the standard variant, got %d", len(got))
+	}
+	if got[0].Name != StandardVariant {
+		t.Errorf("kept %q, want %q", got[0].Name, StandardVariant)
+	}
+}
+
 // Archiving saves every image a variant ships, not a hardcoded pair.
 func TestArchiveSavesEveryVariantsImages(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}

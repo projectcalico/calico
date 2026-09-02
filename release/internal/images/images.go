@@ -126,6 +126,18 @@ func VariantDirs(variants []Variant) []string {
 	return out
 }
 
+// StandardVariants keeps only the variant every component ships, dropping the
+// Windows and any other kind.
+func StandardVariants(variants []Variant) []Variant {
+	var out []Variant
+	for _, v := range variants {
+		if v.Name == StandardVariant {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // NarrowVariants scopes variants to a subset of release directories. An empty
 // subset leaves them untouched.
 func NarrowVariants(variants []Variant, dirs []string) []Variant {
