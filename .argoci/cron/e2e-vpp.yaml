@@ -8,7 +8,6 @@ globalPrologue: |
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
   export ARGO_WORKFLOW_UID="{{workflow.uid}}"
   export BGP_STATUS="${BGP_STATUS:-Enabled}"
-  export CI_ARTIFACT_STEP_STORAGE="gs://vpp-results/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
   export CNI_PLUGIN="${CNI_PLUGIN:-Calico}"
   export DATAPLANE="${DATAPLANE:-CalicoVPP}"
   export ENABLE_CLOUD_PROVIDER="${ENABLE_CLOUD_PROVIDER:-false}"
@@ -24,6 +23,12 @@ globalPrologue: |
   export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
   export USE_PRIVATE_REGISTRY="${USE_PRIVATE_REGISTRY:-true}"
   export VPP_VERSION="${VPP_VERSION:-master}"
+  # Last, so it sees every variable above. Assign-then-export: with
+  # `export X="$(...)"` the status is export's, so a broken builder would go
+  # unnoticed and simply publish nothing.
+  VPP_RESULTS_PREFIX="$(.argoci/scripts/vpp_metadata.sh)" ||
+    { echo "[WARN] vpp_metadata.sh failed; not publishing a vpp copy"; VPP_RESULTS_PREFIX=""; }
+  export VPP_RESULTS_PREFIX
   source .argoci/scripts/global_prologue.sh
 globalEpilogue: |
   source "${CI_HOME}/${CI_GIT_DIR}/.argoci/scripts/global_epilogue.sh"
