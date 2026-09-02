@@ -1462,6 +1462,12 @@ func (r *CalicoManager) publishContainerImages() error {
 	if err != nil {
 		return err
 	}
+	// An earlier run of this version records what it published, so a resume
+	// skips the units already done.
+	published, err := outputs.ReadRefs(r.outputDir, "images-publish", r.calicoVersion)
+	if err != nil {
+		return err
+	}
 	p, err := images.NewPublisher(images.Config{
 		RepoRoot:      r.repoRoot,
 		Version:       r.calicoVersion,
@@ -1472,6 +1478,7 @@ func (r *CalicoManager) publishContainerImages() error {
 		LogsDir:       r.logsDir,
 		Scan:          r.scanRequest(),
 		Refs:          refs,
+		Published:     published,
 		ResolveDigest: r.resolveDigest,
 	}, images.WithRunner(r.runner))
 	if err != nil {

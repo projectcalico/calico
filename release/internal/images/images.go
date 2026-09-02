@@ -195,6 +195,15 @@ type Config struct {
 	// ResolveDigest reports a published tag's digest. Defaults to the registry.
 	ResolveDigest DigestResolver
 
+	// Published are the refs an earlier run of this version recorded. A unit
+	// whose refs are all present is skipped, so an interrupted release resumes
+	// on what is left rather than pushing everything again.
+	Published []string
+
+	// Force republishes a unit whose published digest differs from the record.
+	// Without it the difference is an error: the tag moved under us.
+	Force bool
+
 	// runner is unexported so it can only be set through WithRunner, which
 	// keeps the zero-value config pointed at real commands.
 	runner command.CommandRunner
@@ -387,6 +396,64 @@ func (c Config) tagPrefix(u unit) (string, error) {
 		return "", fmt.Errorf("reading tag prefix in %s: %w", u.dir, err)
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// unitState reports whether a unit still needs publishing, judged against the
+// refs an earlier run recorded. It reads the record rather than the registry:
+// the record already names what landed, and a local read costs nothing.
+//
+// done is true when every ref the unit publishes is already recorded at the
+// digest the registry currently serves.
+func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error) {
+	if len(c.Published) == 0 {
+		return false, nil
+	}
+	names, err := c.imageNames(u)
+	if err != nil {
+		return false, err
+	}
+	tags, err := c.unitTags(u)
+	if err != nil {
+		return false, err
+	}
+
+	recorded := make(map[string]string, len(c.Published))
+	for _, ref := range c.Published {
+		name, digest, ok := strings.Cut(ref, "@")
+		if !ok {
+			continue
+		}
+		recorded[name] = digest
+	}
+
+	for _, reg := range c.Registries {
+		for _, name := range names {
+			repo := fmt.Sprintf("%s/%s", reg, name)
+			want, ok := recorded[repo]
+			if !ok {
+				return false, nil
+			}
+			for _, tag := range tags {
+				image := fmt.Sprintf("%s:%s", repo, tag)
+				got, exists, err := resolve(image)
+				if err != nil {
+					return false, fmt.Errorf("resolving %s: %w", image, err)
+				}
+				if !exists {
+					return false, nil
+				}
+				if got != want {
+					if !c.Force {
+						return false, fmt.Errorf(
+							"%s is published at %s but the record says %s; "+
+								"pass --force to republish over it", image, got, want)
+					}
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
 }
 
 // publishedRefs returns the digest refs a unit put in the registries.

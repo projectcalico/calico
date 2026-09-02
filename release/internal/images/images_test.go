@@ -813,3 +813,100 @@ func TestPrefixedVariantRecordsPrefixedRefs(t *testing.T) {
 		t.Fatal("nothing recorded")
 	}
 }
+
+// A unit whose refs are already recorded at the digest the registry serves is
+// skipped, so an interrupted release resumes on what is left.
+func TestPublishSkipsAlreadyPublishedUnits(t *testing.T) {
+	f := &imageNameRunner{images: "whisker"}
+	rec := &fakeRecorder{}
+	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
+	})
+	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "release-publish") {
+			t.Errorf("republished an already-published unit: %v", c.args)
+		}
+	}
+}
+
+// A tag serving a digest the record does not know is an error: something moved
+// it, and republishing over it silently would ship the wrong image.
+func TestPublishFailsOnDigestMismatch(t *testing.T) {
+	f := &imageNameRunner{images: "whisker"}
+	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:bbb"), []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
+	})
+	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	err = p.Publish()
+	if err == nil {
+		t.Fatal("expected a mismatch to be reported")
+	}
+	// The message has to be actionable at 2am mid-release.
+	for _, want := range []string{"sha256:aaa", "sha256:bbb", "whisker", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should name %q, got %q", want, err)
+		}
+	}
+}
+
+// --force republishes over a mismatch rather than failing.
+func TestPublishForceOverridesMismatch(t *testing.T) {
+	f := &imageNameRunner{images: "whisker"}
+	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:bbb"), []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
+	})
+	cfg.Published = []string{"quay.io/calico/whisker@sha256:aaa"}
+	cfg.Force = true
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err != nil {
+		t.Fatalf("Publish with --force: %v", err)
+	}
+	var republished bool
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "release-publish") {
+			republished = true
+		}
+	}
+	if !republished {
+		t.Error("--force did not republish over the mismatch")
+	}
+}
+
+// An empty record means nothing is known, so everything publishes.
+func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
+	f := &imageNameRunner{images: "whisker"}
+	cfg := recordingConfig(f, &fakeRecorder{}, alwaysResolves("sha256:aaa"), []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"whisker"}},
+	})
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	var published bool
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "release-publish") {
+			published = true
+		}
+	}
+	if !published {
+		t.Error("a run with no record published nothing")
+	}
+}

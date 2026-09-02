@@ -251,6 +251,13 @@ var (
 		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
 	}
 
+	forceFlag = &cli.BoolFlag{
+		Name:     "force",
+		Category: containerImageCategory,
+		Usage:    "Republish images whose published digest differs from the record.",
+		Sources:  cli.EnvVars("FORCE"),
+	}
+
 	// imageReleaseDirsFlag limits a run to some of the directories that ship
 	// images.
 	imageReleaseDirsFlag = &cli.StringSliceFlag{

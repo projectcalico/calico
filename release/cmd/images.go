@@ -74,7 +74,7 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 		Usage: "Publish container images to their registries",
 		Flags: append([]cli.Flag{
 			registryFlag, archFlag, localFlag, imageReleaseDirsFlag,
-			fromRegistryFlag, fromTagFlag, skipDevImageRetagFlag,
+			fromRegistryFlag, fromTagFlag, skipDevImageRetagFlag, forceFlag,
 		}, imageScanFlags...),
 		Action: func(_ context.Context, c *cli.Command) error {
 			configureLogging("images-publish.log")
@@ -92,6 +92,13 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 			if err != nil {
 				return err
 			}
+			// An earlier run of this version records what it published, so a
+			// resume skips the units already done.
+			published, err := outputs.ReadRefs(cfg.OutputDir, "images-publish", ver.FormattedString())
+			if err != nil {
+				return err
+			}
+
 			var refs images.RefRecorder
 			if !c.Bool(localFlag.Name) {
 				w, err := outputs.NewRefsWriter(cfg.OutputDir, "images-publish", ver.FormattedString())
@@ -112,6 +119,8 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 				LogsDir:    cfg.LogsDir,
 				Scan:       scan,
 				Refs:       refs,
+				Published:  published,
+				Force:      c.Bool(forceFlag.Name),
 
 				SkipDevImageRetag: c.Bool(skipDevImageRetagFlag.Name),
 				ResolveDigest:     imagesDigestResolver,

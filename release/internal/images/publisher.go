@@ -49,7 +49,14 @@ func NewPublisher(cfg Config, opts ...Option) (*Publisher, error) {
 }
 
 func (p *Publisher) Publish() error {
-	units := p.cfg.units(p.publishEnv())
+	units, err := p.pending(p.cfg.units(p.publishEnv()))
+	if err != nil {
+		return err
+	}
+	if len(units) == 0 {
+		logrus.Info("Every image is already published")
+		return nil
+	}
 	logrus.WithField("images", len(units)).Info("Publishing container images")
 	publishErr := p.cfg.runUnits(units, publishStep)
 
@@ -92,6 +99,32 @@ func (p *Publisher) publishEnv() []string {
 		}
 	}
 	return env
+}
+
+// pending drops the units an earlier run already published, so a release
+// interrupted partway resumes on what is left.
+func (p *Publisher) pending(units []unit) ([]unit, error) {
+	if len(p.cfg.Published) == 0 {
+		return units, nil
+	}
+	resolve := p.cfg.ResolveDigest
+	if resolve == nil {
+		resolve = registry.ResolveDigest
+	}
+	var out []unit
+	for _, u := range units {
+		done, err := p.cfg.unitState(u, resolve)
+		if err != nil {
+			return nil, err
+		}
+		if done {
+			logrus.WithFields(logrus.Fields{"variant": u.variant, "component": u.dir}).
+				Info("Already published, skipping")
+			continue
+		}
+		out = append(out, u)
+	}
+	return out, nil
 }
 
 // record writes the digest refs the publish produced. A dry run leaves Refs
