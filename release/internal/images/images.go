@@ -414,10 +414,10 @@ func Build(cfg Config, opts ...Option) error {
 		return err
 	}
 	if cfg.From != "" || cfg.FromTag != "" {
-		return fmt.Errorf("From is a publish setting and cannot be used to build")
+		return fmt.Errorf("from is a publish setting and cannot be used to build")
 	}
 	if cfg.Scan != nil {
-		return fmt.Errorf("Scan is a publish setting and cannot be used to build")
+		return fmt.Errorf("scan is a publish setting and cannot be used to build")
 	}
 	cfg = cfg.apply(opts)
 

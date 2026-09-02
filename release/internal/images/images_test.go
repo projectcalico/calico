@@ -509,7 +509,7 @@ type imageNameRunner struct {
 }
 
 func (r *imageNameRunner) RunInDir(_, _ string, args, env []string) (string, error) {
-	if _, err := r.fakeRunner.record(args, env, ""); err != nil {
+	if _, err := r.record(args, env, ""); err != nil {
 		return "", err
 	}
 	if slices.Contains(args, "build-images") {

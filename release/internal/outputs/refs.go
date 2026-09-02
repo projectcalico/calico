@@ -59,7 +59,6 @@ func (w *RefsWriter) Add(refs ...string) error {
 	if err != nil {
 		return fmt.Errorf("opening refs file: %w", err)
 	}
-	defer f.Close()
 
 	var b strings.Builder
 	for _, ref := range refs {
@@ -67,10 +66,15 @@ func (w *RefsWriter) Add(refs ...string) error {
 		b.WriteString("\n")
 	}
 	if _, err := f.WriteString(b.String()); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("writing refs file: %w", err)
 	}
 	// The record must survive a run that dies partway.
-	return f.Sync()
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("syncing refs file: %w", err)
+	}
+	return f.Close()
 }
 
 // ReadRefs returns a step's recorded refs in publish order, without duplicates.
@@ -83,7 +87,7 @@ func ReadRefs(baseDir, step, version string) ([]string, error) {
 		}
 		return nil, fmt.Errorf("opening refs file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var refs []string
 	seen := map[string]struct{}{}

@@ -38,7 +38,7 @@ func NewPublisher(cfg Config, opts ...Option) (*Publisher, error) {
 		return nil, fmt.Errorf("no registries to publish to")
 	}
 	if (cfg.From == "") != (cfg.FromTag == "") {
-		return nil, fmt.Errorf("From and FromTag must be set together")
+		return nil, fmt.Errorf("from and fromTag must be set together")
 	}
 	if !cfg.Publish {
 		// A dry run reaches no registry, so anything it recorded would claim
