@@ -61,8 +61,8 @@ var (
 // CRDSource returns CRD YAML documents keyed by a name unique within the source.
 type CRDSource func(v3 bool) map[string][]byte
 
-// RegisterVariantCRDs adds CRDs a variant installs on top of the operator's own,
-// for variants whose CRDs are not generated in this repo.
+// RegisterVariantCRDs adds CRDs a variant installs beyond the operator's own.
+// Call from an init(): the bootstrap path reads the registry before main runs.
 func RegisterVariantCRDs(variant opv1.ProductVariant, sources ...CRDSource) {
 	lock.Lock()
 	defer lock.Unlock()

@@ -90,26 +90,24 @@ var (
 	lock sync.Mutex
 )
 
-// RegisterVariantPolicies adds the admission policies a variant installs, for
-// variants whose policies are not generated in this repo.
+// RegisterVariantPolicies adds the admission policies a variant installs.
+// Call from an init(): the bootstrap path reads the registry before main runs.
 func RegisterVariantPolicies(variant opv1.ProductVariant, files fs.FS) {
 	lock.Lock()
 	defer lock.Unlock()
 	variantPolicies[variant] = files
 }
 
-// GetMutatingAdmissionPolicies returns MutatingAdmissionPolicy and MutatingAdmissionPolicyBinding
-// objects for the given variant, typed at the requested API version. These are only applicable
-// when v3 CRDs are enabled. Each returned object is labeled with ManagedMAPLabel to enable stale
-// resource cleanup.
+// GetMutatingAdmissionPolicies returns the variant's MutatingAdmissionPolicy and Binding objects,
+// typed at the requested API version and labeled with ManagedMAPLabel so stale ones can be found.
+// Only v3 CRDs use these.
 func GetMutatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string) []client.Object {
 	return getAdmissionPolicies(variant, v3, apiVersion, parseMutatingAdmissionPolicyYAML, ManagedMAPLabel, ManagedMAPLabelValue)
 }
 
-// GetValidatingAdmissionPolicies returns ValidatingAdmissionPolicy and ValidatingAdmissionPolicyBinding
-// objects for the given variant, typed at the requested API version. These are only applicable when
-// v3 CRDs are enabled. Each returned object is labeled with ManagedVAPLabel to enable stale resource
-// cleanup.
+// GetValidatingAdmissionPolicies returns the variant's ValidatingAdmissionPolicy and Binding objects,
+// typed at the requested API version and labeled with ManagedVAPLabel so stale ones can be found.
+// Only v3 CRDs use these.
 func GetValidatingAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string) []client.Object {
 	return getAdmissionPolicies(variant, v3, apiVersion, parseValidatingAdmissionPolicyYAML, ManagedVAPLabel, ManagedVAPLabelValue)
 }
@@ -125,11 +123,9 @@ func policyFiles(variant opv1.ProductVariant) fs.FS {
 	return variantPolicies[variant]
 }
 
-// getAdmissionPolicies reads the embedded admission policy files for the given variant and returns
-// the documents that parseFn recognizes, each labeled with labelKey=labelValue. The mutating and
-// validating policies live in the same embedded files, so parseFn returns a nil object for kinds
-// outside its family and we skip those - this lets each path pick up only its own kinds at its own
-// served API version.
+// getAdmissionPolicies returns the variant's policy documents that parseFn recognizes, each labeled
+// labelKey=labelValue. Mutating and validating policies share the same files, so parseFn returns nil
+// for kinds outside its family and those are skipped.
 func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion string, parseFn policyParseFunc, labelKey, labelValue string) []client.Object {
 	if !v3 || apiVersion == "" {
 		return nil
@@ -187,18 +183,16 @@ func getAdmissionPolicies(variant opv1.ProductVariant, v3 bool, apiVersion strin
 	return objs
 }
 
-// Ensure ensures that MutatingAdmissionPolicies necessary for bootstrapping exist in the cluster.
-// Further reconciliation is handled by the core controller. If apiVersion is empty (no served
-// version of MutatingAdmissionPolicy on the cluster), a warning is logged and the function returns
-// nil. MAPs are only installed when v3 CRDs are enabled.
+// Ensure creates the MutatingAdmissionPolicies needed to bootstrap, leaving further reconciliation
+// to the core controller. An empty apiVersion means the cluster serves none, which logs a warning
+// and returns nil. Only v3 CRDs get them.
 func Ensure(c client.Client, variant string, v3 bool, apiVersion string, log logr.Logger) error {
 	return ensure(c, GetMutatingAdmissionPolicies(opv1.ProductVariant(variant), v3, apiVersion), v3, apiVersion, log)
 }
 
-// EnsureValidating ensures that ValidatingAdmissionPolicies necessary for bootstrapping exist in the
-// cluster, mirroring Ensure. ValidatingAdmissionPolicy has its own served version (it reached GA well
-// before MutatingAdmissionPolicy), so it is bootstrapped independently and is not gated on whether the
-// cluster serves MutatingAdmissionPolicy.
+// EnsureValidating mirrors Ensure for ValidatingAdmissionPolicies. It bootstraps against its own
+// served version, which reached GA well before MutatingAdmissionPolicy, so it is never gated on
+// whether the cluster serves MAP.
 func EnsureValidating(c client.Client, variant string, v3 bool, apiVersion string, log logr.Logger) error {
 	return ensure(c, GetValidatingAdmissionPolicies(opv1.ProductVariant(variant), v3, apiVersion), v3, apiVersion, log)
 }
@@ -239,11 +233,9 @@ func ensure(c client.Client, objs []client.Object, v3 bool, apiVersion string, l
 	return nil
 }
 
-// parseMutatingAdmissionPolicyYAML parses a YAML document into either a MutatingAdmissionPolicy
-// or MutatingAdmissionPolicyBinding at the requested API version. The MAP types are identical
-// in shape across v1alpha1, v1beta1, and v1, so we deserialize the same YAML into the requested
-// target type and overwrite TypeMeta to reflect the chosen GroupVersion. Documents of any other
-// kind return a nil object and nil error so the caller can skip them.
+// parseMutatingAdmissionPolicyYAML parses a document into a MutatingAdmissionPolicy or its Binding.
+// The MAP types are identical across v1alpha1, v1beta1 and v1, so one YAML deserializes into any of
+// them with TypeMeta overwritten. Other kinds return nil.
 func parseMutatingAdmissionPolicyYAML(doc []byte, filename, apiVersion string) (client.Object, error) {
 	var meta struct {
 		Kind string `json:"kind"`
@@ -313,10 +305,8 @@ func parseMutatingAdmissionPolicyYAML(doc []byte, filename, apiVersion string) (
 	return nil, nil
 }
 
-// parseValidatingAdmissionPolicyYAML parses a YAML document into either a ValidatingAdmissionPolicy
-// or ValidatingAdmissionPolicyBinding at the requested API version, mirroring
-// parseMutatingAdmissionPolicyYAML. Documents of any other kind return a nil object and nil error
-// so the caller can skip them.
+// parseValidatingAdmissionPolicyYAML parses a document into a ValidatingAdmissionPolicy or its
+// Binding at the requested API version. Other kinds return nil, nil.
 func parseValidatingAdmissionPolicyYAML(doc []byte, filename, apiVersion string) (client.Object, error) {
 	var meta struct {
 		Kind string `json:"kind"`
