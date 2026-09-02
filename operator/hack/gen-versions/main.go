@@ -33,6 +33,7 @@ var (
 	eeVersionsPath    string
 	osVersionsPath    string
 	cloudVersionsPath string
+	outPath           string
 )
 
 func main() {
@@ -41,6 +42,7 @@ func main() {
 	flag.StringVar(&eeVersionsPath, "ee-versions", "", "path to enterprise versions file")
 	flag.StringVar(&osVersionsPath, "os-versions", "", "path to calico versions file")
 	flag.StringVar(&cloudVersionsPath, "cloud-versions", "", "path to cloud versions file")
+	flag.StringVar(&outPath, "out", "", "path to write the generated file to, or stdout when unset")
 	flag.Parse()
 
 	if debug {
@@ -63,25 +65,28 @@ func main() {
 
 	switch {
 	case osVersionsPath != "":
-		if err := run(osVersionsPath, filepath.Join(templateDir, osVersionsTpl)); err != nil {
+		if err := run(osVersionsPath, filepath.Join(templateDir, osVersionsTpl), outPath); err != nil {
 			log.Fatalln(err)
 		}
 	case eeVersionsPath != "":
-		if err := run(eeVersionsPath, filepath.Join(templateDir, eeVersionsTpl)); err != nil {
+		if err := run(eeVersionsPath, filepath.Join(templateDir, eeVersionsTpl), outPath); err != nil {
 			log.Fatalln(err)
 		}
 	case cloudVersionsPath != "":
-		if err := run(cloudVersionsPath, filepath.Join(templateDir, cloudVersionsTpl)); err != nil {
+		if err := run(cloudVersionsPath, filepath.Join(templateDir, cloudVersionsTpl), outPath); err != nil {
 			log.Fatalln(err)
 		}
 	}
 }
 
-func run(versionsPath, tpl string) error {
+func run(versionsPath, tpl, outPath string) error {
 	vz, err := GetComponents(versionsPath)
 	if err != nil {
 		return err
 	}
 
-	return render(os.Stdout, tpl, vz)
+	if outPath == "" {
+		return render(os.Stdout, tpl, vz)
+	}
+	return renderFile(outPath, tpl, vz)
 }

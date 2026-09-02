@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -167,6 +168,17 @@ func readComponents(versionsPath string) (Release, error) {
 	}
 
 	return cr, nil
+}
+
+// renderFile writes the rendered template to path, buffering first so a failed
+// render leaves any existing file alone.
+func renderFile(path, tplFile string, vz Release) error {
+	var buf bytes.Buffer
+	if err := render(&buf, tplFile, vz); err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
 func render(w io.Writer, tplFile string, vz Release) error {

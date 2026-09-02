@@ -15,7 +15,7 @@
 package main
 
 import (
-	"io"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,20 +53,37 @@ func TestRenderRequiresTemplateComponents(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read %s: %v", tt.versions, err)
 			}
-			if err := render(io.Discard, tt.tpl, vz); err != nil {
+
+			dest := filepath.Join(t.TempDir(), "components.go")
+			if err := renderFile(dest, tt.tpl, vz); err != nil {
 				t.Fatalf("render of %s failed: %v", tt.versions, err)
+			}
+			generated, err := os.ReadFile(dest)
+			if err != nil {
+				t.Fatalf("failed to read %s: %v", dest, err)
+			}
+			if !strings.Contains(string(generated), "package components") {
+				t.Fatalf("%s does not look like generated Go source", dest)
 			}
 
 			trimmed, err := GetComponents(versionsWithout(t, tt.versions, tt.omit))
 			if err != nil {
 				t.Fatalf("failed to read trimmed versions file: %v", err)
 			}
-			err = render(io.Discard, tt.tpl, trimmed)
+			err = renderFile(dest, tt.tpl, trimmed)
 			if err == nil {
 				t.Fatalf("render succeeded with component %q missing", tt.omit)
 			}
 			if !strings.Contains(err.Error(), tt.omit) {
 				t.Errorf("error %q does not name the missing component %q", err, tt.omit)
+			}
+
+			after, err := os.ReadFile(dest)
+			if err != nil {
+				t.Fatalf("failed to read %s: %v", dest, err)
+			}
+			if !bytes.Equal(after, generated) {
+				t.Errorf("failed render overwrote %s", dest)
 			}
 		})
 	}
