@@ -1,0 +1,4 @@
+apiVersion: operator.tigera.io/v1
+kind: LogCollector
+metadata:
+  name: example-logcollector

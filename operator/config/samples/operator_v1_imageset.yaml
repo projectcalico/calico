@@ -1,0 +1,16 @@
+apiVersion: operator.tigera.io/v1
+kind: ImageSet
+metadata:
+  name: calico-v3.4.0
+spec:
+  images:
+  - image: "calico/node"
+    digest: "sha256:0deadbeef1234567890"
+  - image: "calico/cni"
+    digest: "sha256:0deadbeef1234567890"
+  - image: "calico/typha"
+    digest: "sha256:0deadbeef1234567890"
+  - image: "calico/kube-controllers"
+    digest: "sha256:0deadbeef1234567890"
+  - image: "tigera/operator"
+    digest: "sha256:0deadbeef1234567890"

@@ -1,0 +1,112 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.apiserver-access",
+    "namespace": "calico-system"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "k8s-app == 'calico-apiserver'",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {
+          "nets": [
+            "0.0.0.0/0"
+          ]
+        },
+        "destination": {
+          "ports": [
+            443,
+            5443,
+            8080,
+            10443
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {
+          "nets": [
+            "::/0"
+          ]
+        },
+        "destination": {
+          "ports": [
+            443,
+            5443,
+            8080,
+            10443
+          ]
+        }
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
+          "selector": "k8s-app in { 'kube-dns', 'coredns' }",
+          "ports": [
+            53
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "kubernetes",
+	    "namespace": "default"
+	  }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-prometheus'",
+          "selector": "k8s-app == 'tigera-prometheus'",
+          "ports": [
+            9095
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "selector": "k8s-app == 'tigera-dex'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-dex'",
+          "ports" : [
+            5556
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-elasticsearch'",
+          "selector": "k8s-app == 'tigera-linseed'",
+          "ports": [
+            8444
+          ]
+        }
+      },
+      {
+        "action": "Pass"
+      }
+    ]
+  }
+}

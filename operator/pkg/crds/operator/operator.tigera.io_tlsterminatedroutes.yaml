@@ -1,0 +1,165 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: tlsterminatedroutes.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: TLSTerminatedRoute
+    listKind: TLSTerminatedRouteList
+    plural: tlsterminatedroutes
+    singular: tlsterminatedroute
+  scope: Namespaced
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                caBundle:
+                  description: |-
+                    CABundle is where we read the CA bundle from to authenticate the
+                    destination (if non-empty)
+                  properties:
+                    key:
+                      description: |-
+                        The key to select from the ConfigMap's Data field.
+                        Keys in the BinaryData field are not currently propagated to container env vars.
+                      type: string
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    optional:
+                      description:
+                        Specify whether the ConfigMap or its key must be
+                        defined
+                      type: boolean
+                  required:
+                    - key
+                  type: object
+                  x-kubernetes-map-type: atomic
+                destination:
+                  description:
+                    Destination is the destination URL where matching traffic
+                    is routed to.
+                  type: string
+                mtlsCert:
+                  description: |-
+                    ForwardingMTLSCert is the certificate used for mTLS between voltron and the destination. Either both ForwardingMTLSCert
+                    and ForwardingMTLSKey must be specified, or neither can be specified.
+                  properties:
+                    key:
+                      description:
+                        The key of the secret to select from.  Must be a
+                        valid secret key.
+                      type: string
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    optional:
+                      description: Specify whether the Secret or its key must be defined
+                      type: boolean
+                  required:
+                    - key
+                  type: object
+                  x-kubernetes-map-type: atomic
+                mtlsKey:
+                  description: |-
+                    ForwardingMTLSKey is the key used for mTLS between voltron and the destination. Either both ForwardingMTLSCert
+                    and ForwardingMTLSKey must be specified, or neither can be specified.
+                  properties:
+                    key:
+                      description:
+                        The key of the secret to select from.  Must be a
+                        valid secret key.
+                      type: string
+                    name:
+                      default: ""
+                      description: |-
+                        Name of the referent.
+                        This field is effectively required, but due to backwards compatibility is
+                        allowed to be empty. Instances of this type with an empty value here are
+                        almost certainly wrong.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    optional:
+                      description: Specify whether the Secret or its key must be defined
+                      type: boolean
+                  required:
+                    - key
+                  type: object
+                  x-kubernetes-map-type: atomic
+                pathMatch:
+                  description: |-
+                    PathMatch is used to match requests based on what's in the path. Matching requests will be proxied to the Destination
+                    defined in this structure.
+                  properties:
+                    path:
+                      description:
+                        Path is the path portion of the URL based on which
+                        we proxy.
+                      type: string
+                    pathRegexp:
+                      description:
+                        PathRegexp, if not nil, checks if Regexp matches
+                        the path.
+                      type: string
+                    pathReplace:
+                      description:
+                        PathReplace if not nil will be used to replace PathRegexp
+                        matches.
+                      type: string
+                  required:
+                    - path
+                  type: object
+                target:
+                  enum:
+                    - UpstreamTunnel
+                    - UI
+                  type: string
+                unauthenticated:
+                  description: |-
+                    Unauthenticated says whether the request should go through authentication. This is only applicable if the Target
+                    is UI.
+                  type: boolean
+              required:
+                - caBundle
+                - destination
+                - pathMatch
+                - target
+              type: object
+          type: object
+      served: true
+      storage: true

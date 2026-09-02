@@ -58,7 +58,7 @@ clean:
 check-go-mod:
 	$(DOCKER_GO_BUILD) ./hack/check-go-mod.sh
 
-go-vet:
+go-vet: operator-charts
 	# Go vet will check that libbpf headers can be found; make sure they're available.
 	$(MAKE) -C felix clone-libbpf
 	$(DOCKER_GO_BUILD) go vet --tags fvtests ./...
@@ -105,27 +105,21 @@ generate:
 	$(MAKE) -C felix gen-files
 	$(MAKE) -C goldmane gen-files
 	$(MAKE) -C kube-controllers gen-files
-	$(MAKE) get-operator-crds
+	# Before the manifests, which take the operator's CRDs from its own tree.
+	$(MAKE) -C operator gen-files
 	$(MAKE) gen-manifests
 	$(MAKE) fix-changed
 
 gen-manifests: bin/helm bin/yq
 	cd ./manifests && ./generate.sh
 
-# Get operator CRDs from the operator repo, OPERATOR_BRANCH must be set
-get-operator-crds: var-require-all-OPERATOR_ORGANIZATION-OPERATOR_GIT_REPO-OPERATOR_BRANCH
-	@echo ==============================================================================================================
-	@echo === Pulling new operator CRDs from $(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO) branch $(OPERATOR_BRANCH) ===
-	@echo ==============================================================================================================
-	cd ./charts/crd.projectcalico.org.v1/templates/ && \
-	for file in operator.tigera.io_*.yaml; do \
-		echo "downloading $$file from operator repo"; \
-		curl -fsSL --retry 5 https://raw.githubusercontent.com/$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)/$(OPERATOR_BRANCH)/pkg/imports/crds/operator/$${file} -o $${file}; \
-		cp $${file} ../../projectcalico.org.v3/templates/$${file}; \
-	done
-	$(MAKE) fix-changed
+# The operator's go:embed directives need these on disk before any target can
+# load its packages.
+.PHONY: operator-charts
+operator-charts:
+	$(MAKE) -C operator embedded_charts
 
-gen-semaphore-yaml:
+gen-semaphore-yaml: operator-charts
 	$(DOCKER_GO_BUILD) sh -c "DEFAULT_BRANCH_OVERRIDE=$(DEFAULT_BRANCH_OVERRIDE) \
 	                          SEMAPHORE_GIT_BRANCH=$(SEMAPHORE_GIT_BRANCH) \
 	                          RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) \
@@ -134,7 +128,7 @@ gen-semaphore-yaml:
 GO_DIRS=$(shell ./hack/list-go-sources.sh dirs)
 DEP_FILES=$(patsubst %, %/deps.txt, $(GO_DIRS))
 
-gen-deps-files:
+gen-deps-files: operator-charts
 	$(MAKE) -j$$(nproc) $(DEP_FILES)
 
 $(DEP_FILES): go.mod go.sum $(shell ./hack/list-go-sources.sh files) Makefile ./hack/list-go-sources.sh hack/cmd/deps/*
@@ -213,8 +207,7 @@ image:
 	  $(REPO_ROOT)/hack/dev-build.sh --tag
 	@STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
-	  OPERATOR_REPO="$(OPERATOR_ORGANIZATION)/$(OPERATOR_GIT_REPO)" \
-	  OPERATOR_BRANCH="$(OPERATOR_BRANCH)" \
+	  REPO_ROOT="$(REPO_ROOT)" \
 	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
 	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
 	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \

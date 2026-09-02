@@ -1,0 +1,118 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.prometheus",
+    "namespace": "tigera-prometheus"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "k8s-app == 'tigera-prometheus'",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            9095
+          ]
+        }
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
+          "selector": "k8s-app in { 'kube-dns', 'coredns' }",
+          "ports": [
+            53
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "kubernetes",
+	    "namespace": "default"
+	  }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            9081,
+            9091
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            2020
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            9900
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            8080
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "selector": "(app == 'alertmanager' && alertmanager == 'calico-node-alertmanager') || (app.kubernetes.io/name == 'alertmanager' && alertmanager == 'calico-node-alertmanager')",
+          "ports": [
+            9093
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-dex'",
+          "selector": "k8s-app == 'tigera-dex'",
+          "ports": [
+            5556
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "ports": [
+            9094
+          ]
+        }
+      }
+    ]
+  }
+}

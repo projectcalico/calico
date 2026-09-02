@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,32 +81,34 @@ func filter(pkg string) string {
 
 func loadPackages() []Package {
 	var out, stderr bytes.Buffer
-	cmd := exec.Command("go", "list", "-json", "all")
+	// -e keeps a package that cannot be loaded from failing the whole listing. The
+	// operator embeds tarballs its Makefile fetches, so a clean checkout has packages
+	// go list cannot load, and their imports are still what this tool needs.
+	cmd := exec.Command("go", "list", "-e", "-json", "all")
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
 		failClosed(fmt.Sprintf("go list: %s: %s", err, stderr.String()))
 	}
-	splits := strings.SplitAfter(out.String(), "}\n")
+	// go list emits one JSON object per package, concatenated rather than as an array.
+	decoder := json.NewDecoder(&out)
 
-	// Load each package.
 	packages := []Package{}
-	for _, s := range splits {
-		if len(s) == 0 {
-			// Sometimes we get empty strings here since the output from go list
-			// isn't actually proper json.
-			continue
-		}
-
+	for {
 		pkg := Package{}
-		err := json.Unmarshal([]byte(s), &pkg)
-		if err != nil {
+		if err := decoder.Decode(&pkg); err == io.EOF {
+			break
+		} else if err != nil {
 			failClosed(fmt.Sprintf("parsing go list output: %s", err))
 		}
 
 		// Filter out packages that aren't part of this repo.
 		if isLocalDir(pkg.Dir) {
+			if pkg.Error != nil {
+				fmt.Fprintf(os.Stderr, "test spider: %s did not load cleanly, using its imports anyway: %s\n", pkg.Dir, pkg.Error.Err)
+			}
+
 			// Canonicalize the package names, since by default the packages are
 			// absolute paths based on the host filesystem.
 			pkg.Dir = canonical(pkg.Dir)
@@ -251,6 +254,10 @@ type Package struct {
 	// The package's name / directory.
 	Dir string `json:"Dir"`
 
+	// Set when go list could not fully load the package. Its imports are still
+	// listed, so this is reported rather than treated as fatal.
+	Error *PackageError `json:"Error"`
+
 	// List of other packages that this package imports - either directly or
 	// indirectly.
 	Deps []string `json:"Deps"`
@@ -260,4 +267,8 @@ type Package struct {
 
 	// List of imports from _test.go files outside the package.
 	XTestImports []string `json:"XTestImports"`
+}
+
+type PackageError struct {
+	Err string `json:"Err"`
 }

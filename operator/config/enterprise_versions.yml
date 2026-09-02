@@ -1,0 +1,110 @@
+# Components defined here are required to be kept in sync with hack/gen-versions/enterprise.go.tpl
+title: master
+components:
+  libcalico-go:
+    version: master
+  manager:
+    image: manager
+    version: master
+  calico:
+    image: calico
+    version: master
+  node:
+    image: node
+    version: master
+  node-windows:
+    image: node-windows
+    version: master
+  fluent-bit:
+    image: fluent-bit
+    version: master
+  fluent-bit-windows:
+    image: fluent-bit-windows
+    version: master
+  dex:
+    image: dex
+    version: master
+  # eck-kibana holds the version of Kibana built for tigera/kibana
+  eck-kibana:
+    version: 8.19.17
+  kibana:
+    image: kibana
+    version: master
+  # eck-elasticsearch holds the version of Elasticsearch built for tigera/elasticsearch
+  eck-elasticsearch:
+    version: 8.19.17
+  elasticsearch:
+    image: elasticsearch
+    version: master
+  elastic-tsee-installer:
+    image: intrusion-detection-job-installer
+    version: master
+  es-curator:
+    image: es-curator
+    version: master
+  intrusion-detection-controller:
+    image: intrusion-detection-controller
+    version: master
+  tigera-cni-windows:
+    image: cni-windows
+    version: master
+  tigera-third-party-cni-plugins:
+    image: third-party-cni-plugins
+    version: master
+  # coreos-prometheus holds the version of prometheus built for tigera/prometheus,
+  # which prometheus operator uses to validate.
+  coreos-prometheus:
+    version: v3.13.2
+  prometheus:
+    image: prometheus
+    version: master
+  # coreos-alertmanager holds the version of alertmanager built for tigera/alertmanager,
+  # which prometheus operator uses to validate.
+  coreos-alertmanager:
+    version: v0.32.1
+  alertmanager:
+    image: alertmanager
+    version: master
+  deep-packet-inspection:
+    image: deep-packet-inspection
+    version: master
+  elasticsearch-operator:
+    image: eck-operator
+    version: master
+  # eck-elasticsearch-operator holds the version of the ECK operator used to manage
+  # Elasticsearch
+  eck-elasticsearch-operator:
+    version: 3.5.0
+  gateway-l7-collector:
+    image: gateway-l7-collector
+    version: master
+  envoy:
+    image: envoy
+    version: master
+  dikastes:
+    image: dikastes
+    version: master
+  egress-gateway:
+    image: egress-gateway
+    version: master
+  gateway-api-envoy-gateway:
+    image: envoy-gateway
+    version: master
+  gateway-api-envoy-proxy:
+    image: envoy-proxy
+    version: master
+  gateway-api-envoy-ratelimit:
+    image: envoy-ratelimit
+    version: master
+  istio-pilot:
+    image: istio-pilot
+    version: master
+  istio-install-cni:
+    image: istio-install-cni
+    version: master
+  istio-ztunnel:
+    image: istio-ztunnel
+    version: master
+  istio-proxyv2:
+    image: istio-proxyv2
+    version: master

@@ -1,0 +1,37 @@
+{
+  "service": {
+    "flush": 5,
+    "health_check": true,
+    "http_port": 2020,
+    "http_server": true,
+    "log_level": "info",
+    "plugins_file": "/etc/fluent-bit/plugins.conf"
+  },
+  "pipeline": {
+    "inputs": [
+      {
+        "name": "in_eks",
+        "tag": "audit.kube"
+      }
+    ],
+    "outputs": [
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "audit.kube",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/tigera-eks-log-forwarder-tls/tls.crt",
+        "tls.key_file": "/tigera-eks-log-forwarder-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/audit/logs/kube/bulk"
+      }
+    ]
+  }
+}

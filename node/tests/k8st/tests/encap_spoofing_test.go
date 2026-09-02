@@ -29,13 +29,13 @@ import (
 
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
-	operatorv1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	e2eutils "github.com/projectcalico/calico/e2e/pkg/utils"
 	"github.com/projectcalico/calico/node/tests/k8st/utils"
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 )
 
 const (

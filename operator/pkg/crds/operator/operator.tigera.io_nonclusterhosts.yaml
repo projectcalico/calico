@@ -1,0 +1,64 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: nonclusterhosts.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: NonClusterHost
+    listKind: NonClusterHostList
+    plural: nonclusterhosts
+    singular: nonclusterhost
+  scope: Cluster
+  versions:
+    - name: v1
+      schema:
+        openAPIV3Schema:
+          description: |-
+            NonClusterHost installs the components required for non-cluster host log collection.
+            At most one instance of this resource is supported. It must be named "tigera-secure".
+          properties:
+            apiVersion:
+              description: |-
+                APIVersion defines the versioned schema of this representation of an object.
+                Servers should convert recognized schemas to the latest internal value, and
+                may reject unrecognized values.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: |-
+                Kind is a string value representing the REST resource this object represents.
+                Servers may infer this from the endpoint the client submits requests to.
+                Cannot be updated.
+                In CamelCase.
+                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description:
+                Specification of the desired state for non-cluster host log
+                collection.
+              properties:
+                endpoint:
+                  description:
+                    "Location of the log ingestion point for non-cluster
+                    hosts. For example: https://1.2.3.4:443"
+                  pattern: ^https://.+$
+                  type: string
+                typhaEndpoint:
+                  description:
+                    "Location of the Typha endpoint for non-cluster host
+                    Felix and Typha communication. For example: 5.6.7.8:5473"
+                  type: string
+              required:
+                - endpoint
+              type: object
+          type: object
+          x-kubernetes-validations:
+            - message: resource name must be 'tigera-secure'
+              rule: self.metadata.name == 'tigera-secure'
+      served: true
+      storage: true
