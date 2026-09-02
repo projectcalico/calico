@@ -343,23 +343,13 @@ func (r *CalicoManager) Build() error {
 
 		// Build multi-arch e2e test binaries and copy them into the output directory.
 		if r.e2eBinaries {
-			// Temporary disk relief before the e2e build until hashreleases are
-			// split into per-component jobs: reclaim build cache, dangling layers,
-			// and the spent operator cache (tagged images and module cache needed).
-			r.logDiskUsage("before e2e disk reclaim")
-			for _, c := range [][]string{
-				{"docker", "builder", "prune", "-af"},
-				{"docker", "image", "prune", "-f"},
-				{"rm", "-rf", filepath.Join(r.tmpDir, r.operatorRepo, ".go-pkg-cache")},
-			} {
-				if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
-					logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
+			if arches := e2eArchitectures(r.architectures); len(arches) == 0 {
+				logrus.Warnf("e2e binaries requested but none of %v is a supported e2e arch (amd64/arm64); skipping", r.architectures)
+			} else {
+				r.reclaimDiskBeforeE2E()
+				if err = r.buildE2EBinaries(arches); err != nil {
+					return err
 				}
-			}
-			r.logDiskUsage("after e2e disk reclaim")
-
-			if err = r.buildE2EBinaries(); err != nil {
-				return err
 			}
 		} else {
 			logrus.Info("Skipping building e2e test binaries")
@@ -1248,22 +1238,46 @@ func (r *CalicoManager) buildReleaseTar() error {
 // e2e runners and only cost build time and disk.
 var e2eSupportedArches = []string{"amd64", "arm64"}
 
-func (r *CalicoManager) buildE2EBinaries() error {
-	logrus.Info("Building multi-arch e2e test binaries")
-	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	// Restrict to supported arches via ARCHES, not VALIDARCHES: lib.Makefile
-	// assigns VALIDARCHES with `=`, so it ignores the env.
-	var e2eArches []string
-	for _, arch := range r.architectures {
+// e2eArchitectures returns the e2e-supported subset of the configured arches.
+// An empty configured set means "all arches" (the tooling-wide convention) and
+// resolves to all supported e2e arches.
+func e2eArchitectures(configured []string) []string {
+	if len(configured) == 0 {
+		return slices.Clone(e2eSupportedArches)
+	}
+	var arches []string
+	for _, arch := range configured {
 		if slices.Contains(e2eSupportedArches, arch) {
-			e2eArches = append(e2eArches, arch)
+			arches = append(arches, arch)
 		}
 	}
-	if len(e2eArches) == 0 {
-		logrus.Info("No amd64/arm64 in the configured architectures; skipping e2e test binaries")
-		return nil
+	return arches
+}
+
+// reclaimDiskBeforeE2E frees transient disk before the multi-arch e2e build.
+// Temporary until hashreleases are split into per-component jobs: reclaim build
+// cache, dangling layers, and the spent operator cache (tagged images and the
+// module cache are still needed).
+func (r *CalicoManager) reclaimDiskBeforeE2E() {
+	r.logDiskUsage("before e2e disk reclaim")
+	for _, c := range [][]string{
+		{"docker", "builder", "prune", "-af"},
+		{"docker", "image", "prune", "-f"},
+		{"rm", "-rf", filepath.Join(r.tmpDir, r.operatorRepo, ".go-pkg-cache")},
+	} {
+		if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
+			logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
+		}
 	}
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(e2eArches, " "))
+	r.logDiskUsage("after e2e disk reclaim")
+}
+
+func (r *CalicoManager) buildE2EBinaries(arches []string) error {
+	logrus.Info("Building multi-arch e2e test binaries")
+	e2eDir := filepath.Join(r.repoRoot, "e2e")
+	// Restrict the build via ARCHES, not VALIDARCHES: lib.Makefile assigns
+	// VALIDARCHES with `=`, so it ignores the env.
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(arches, " "))
 	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
 	if err != nil {
 		logrus.Error(out)
