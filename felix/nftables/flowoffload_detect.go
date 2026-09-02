@@ -23,8 +23,15 @@ import (
 )
 
 // flowOffloadProbeTable is a throwaway table used only while probing for flowtable offload
-// support. It is created and immediately deleted, so it never coexists with the real "calico" table.
+// support, so a failed cleanup can't disturb the real "calico" table.
 const flowOffloadProbeTable = "calico-flowtable-probe"
+
+// The two probes use different flowtable names because the kernel turns an add of an existing
+// flowtable into an update, and pre-5.13 update paths accept the counter flag they reject on add.
+const (
+	counterProbeFlowtable = "probe-counter"
+	plainProbeFlowtable   = "probe"
+)
 
 // DetectFlowOffloadSupported reports whether the kernel accepts an nftables flowtable, and whether
 // it also accepts the flowtable counter flag.
@@ -44,10 +51,10 @@ func DetectFlowOffloadSupported(newDataplane NewNftablesDataplaneFn) (supported 
 
 	// Counters arrived in 5.13, long after flowtables. Probing twice separates a kernel with no
 	// flowtables from one with no counters.
-	supported = probeFlowtable(ctx, nft, true)
+	supported = probeFlowtable(ctx, nft, counterProbeFlowtable, true)
 	counter = supported
 	if !supported {
-		supported = probeFlowtable(ctx, nft, false)
+		supported = probeFlowtable(ctx, nft, plainProbeFlowtable, false)
 	}
 
 	if supported {
@@ -64,12 +71,12 @@ func DetectFlowOffloadSupported(newDataplane NewNftablesDataplaneFn) (supported 
 
 // probeFlowtable adds a device-less flowtable, which kernels without nf_flow_table reject just as
 // they would the real one.
-func probeFlowtable(ctx context.Context, nft knftables.Interface, counter bool) bool {
+func probeFlowtable(ctx context.Context, nft knftables.Interface, name string, counter bool) bool {
 	prio := knftables.FilterIngressPriority
 	tx := nft.NewTransaction()
 	tx.Add(&knftables.Table{})
 	tx.Add(&knftables.Flowtable{
-		Name:     "probe",
+		Name:     name,
 		Priority: &prio,
 		Counter:  knftables.PtrTo(counter),
 	})
