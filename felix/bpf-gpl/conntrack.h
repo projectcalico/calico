@@ -772,11 +772,21 @@ static CALI_BPF_INLINE void ct_leg_validate_fwd(struct cali_tc_ctx *ctx,
 	}
 
 	if (fib_params.ifindex == leg->ifindex) {
-		/* The record already names the right device: an honest ingress
-		 * record - no pin, and no kind claim either. That belongs to the
-		 * program attached to the device (ct_leg_refresh_kind); writing it
-		 * from route inference would fight that owner forever where the
-		 * two permanently disagree (see CALI_CT_LEG_TUNNEL).
+		if (ct_leg_flag(leg, CALI_CT_LEG_PINNED)) {
+			/* A leg the loose arm pinned to this egress, leaving the
+			 * kind to us: we reached here only for an encap dest and
+			 * the FIB resolved this ifindex for it, so it is a tunnel
+			 * egress - complete the claim. No program is attached to a
+			 * pinned leg, so nothing competes to flap it.
+			 */
+			ct_leg_set_flags(leg, CALI_CT_LEG_TUNNEL | CALI_CT_LEG_CHECKED);
+			return;
+		}
+		/* An honest ingress record that already names the right device:
+		 * no pin, and no kind claim either - that belongs to the program
+		 * attached to the device (ct_leg_refresh_kind); writing it from
+		 * route inference would fight that owner forever where the two
+		 * permanently disagree (see CALI_CT_LEG_TUNNEL).
 		 */
 		ct_leg_set_flags(leg, CALI_CT_LEG_CHECKED);
 		return;

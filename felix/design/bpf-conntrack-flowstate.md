@@ -171,8 +171,12 @@ A hint is repaired at two points, both while the entry is held:
    (`CALI_CT_LEG_CHECKED` marks it done, keeping the route lookup off
    the per-packet path): if the destination needs encapsulation and the
    hint is not a tunnel, the egress is resolved by FIB and pinned; a
-   hint already naming the right device is only marked checked. This
-   repairs the asymmetrically-routed flow — natively-routed forward,
+   hint already naming the right device is only marked checked, unless
+   the loose arm had already pinned it (below), in which case the
+   validator completes the `TUNNEL` claim the loose arm deferred to it —
+   for a pinned leg no returns ingress on the tunnel, so no device
+   program would ever stamp it. This repairs the asymmetrically-routed
+   flow — natively-routed forward,
    tunneled reply — whose reply would otherwise leave a physical NIC
    raw. NAT'd flows are validated against the post-NAT destination, the
    address the packet is routed by.

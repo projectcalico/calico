@@ -196,6 +196,36 @@ func TestCtLegPinValidator(t *testing.T) {
 		})
 	})
 
+	t.Run("completes the tunnel claim when confirming a loose-arm-pinned leg", func(t *testing.T) {
+		f := setupCtPinFixture(t, "PIN2B")
+		// The hint leg is already pinned to the tunnel by the loose arm
+		// (PINNED, ifindex = tunnel) but carries no kind claim - its returns
+		// ingress natively, so no device program will ever stamp it. The
+		// validator, reaching here only for an encap dest whose FIB egress is
+		// this same ifindex, must complete the claim the loose arm deferred.
+		f.tunneledCaliRoute(t, ctPinDstCIDR())
+		f.kernelRoute(t, ctPinDstCIDR(), f.tunl)
+		key := ctv4.NewKey(17, srcIP, srcPort, dstIP, dstPort)
+		legSrcToDst := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true, Opener: true,
+			Workload: true, Ifindex: ctPinWlIfindex}
+		legDstToSrc := ctv4.Leg{SynSeen: true, AckSeen: true, Approved: true,
+			Pinned: true, Ifindex: uint32(f.tunl.Attrs().Index)}
+		val := ctv4.NewValueNormal(0, 0, legSrcToDst, legDstToSrc)
+		Expect(f.ctMap.Update(key.AsBytes(), val.AsBytes())).NotTo(HaveOccurred())
+
+		runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			_, err := bpfrun(pkt)
+			Expect(err).NotTo(HaveOccurred())
+
+			leg := f.leg(t, key, true)
+			Expect(leg.Ifindex).To(Equal(uint32(f.tunl.Attrs().Index)), "hint should be untouched")
+			Expect(leg.Pinned).To(BeTrue(), "the pin stands")
+			Expect(leg.Tunnel).To(BeTrue(),
+				"a pinned tunnel egress must get the kind claim the loose arm deferred to the validator")
+			Expect(leg.Checked).To(BeTrue())
+		})
+	})
+
 	t.Run("marks checked and nothing else for a non-encap dest", func(t *testing.T) {
 		f := setupCtPinFixture(t, "PIN3")
 		// Cali route present but not tunneled.
