@@ -18,7 +18,7 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/distribution/reference v0.6.0
 github.com/emicklei/go-restful v2.15.0+incompatible
 github.com/emicklei/go-restful/v3 v3.13.0
-github.com/envoyproxy/gateway v1.7.2
+github.com/envoyproxy/gateway v1.7.4
 github.com/evanphx/json-patch v5.9.11+incompatible
 github.com/evanphx/json-patch/v5 v5.9.11
 github.com/exponent-io/jsonpath v0.0.0-20210407135951-1de76d718b3f
@@ -81,7 +81,7 @@ github.com/openshift/custom-resource-status v1.1.2
 github.com/peterbourgon/diskv v2.0.1+incompatible
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
-github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.90.1
+github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.91.0
 github.com/prometheus/client_golang v1.24.0
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.70.0
@@ -92,8 +92,8 @@ github.com/russross/blackfriday/v2 v2.1.0
 github.com/sirupsen/logrus v1.9.4
 github.com/spf13/cobra v1.10.2
 github.com/spf13/pflag v1.0.10
-github.com/tigera/api v0.0.0-20260417005328-22f813a9c2dc
-github.com/tigera/operator/api v0.0.0-20260615132847-f444e3b593ce
+github.com/tigera/api v0.0.0-20260604222052-a4ab1787c00b
+github.com/tigera/operator/api v0.0.0-20260901225835-3038ac31c031
 github.com/vishvananda/netlink v1.3.1
 github.com/vishvananda/netns v0.0.5
 github.com/x448/float16 v0.8.4

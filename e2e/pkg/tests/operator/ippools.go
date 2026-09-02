@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,6 +14,7 @@ package calico
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -40,10 +41,9 @@ var _ = describe.CalicoDescribe(
 		f := utils.NewDefaultFramework("pool-management")
 
 		var (
-			cli                  ctrlclient.Client
-			ctx                  context.Context
-			installation         *operatorv1.Installation
-			originalInstallation *operatorv1.Installation
+			cli          ctrlclient.Client
+			ctx          context.Context
+			installation *operatorv1.Installation
 		)
 
 		ginkgo.BeforeEach(func() {
@@ -70,22 +70,6 @@ var _ = describe.CalicoDescribe(
 				ginkgo.Skip("Skipping IP pool management test.")
 			}
 			Expect(err).NotTo(HaveOccurred())
-
-			// Save the original so we can revert the cluster after the test.
-			originalInstallation = installation.DeepCopy()
-		})
-
-		ginkgo.AfterEach(func() {
-			// Revert the installation to its original state. This might take an attempt or two
-			// if we hit resource version conflicts.
-			Eventually(func() error {
-				err := cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
-				if err != nil {
-					return err
-				}
-				originalInstallation.ResourceVersion = installation.ResourceVersion
-				return cli.Update(ctx, originalInstallation)
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 		})
 
 		// This test verifies that the operator properly creates and deletes IP pools when added / removed
@@ -117,14 +101,18 @@ var _ = describe.CalicoDescribe(
 				NodeSelector: "!all()",
 			}
 
-			Eventually(func() error {
-				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
-				if err != nil {
-					return err
+			// Keep the starting pools around: the removal step below restores them.
+			originalPools := slices.Clone(installation.Spec.CalicoNetwork.IPPools)
+			desiredPools := append(slices.Clone(originalPools), newPool)
+
+			restore, err := utils.ConfigureWithCleanup(cli, ctrlclient.ObjectKey{Name: "default"}, &operatorv1.Installation{}, func(i *operatorv1.Installation) {
+				if i.Spec.CalicoNetwork == nil {
+					i.Spec.CalicoNetwork = &operatorv1.CalicoNetworkSpec{}
 				}
-				installation.Spec.CalicoNetwork.IPPools = append(installation.Spec.CalicoNetwork.IPPools, newPool)
-				return cli.Update(ctx, installation)
-			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
+				i.Spec.CalicoNetwork.IPPools = desiredPools
+			})
+			Expect(err).NotTo(HaveOccurred())
+			ginkgo.DeferCleanup(restore)
 
 			// Wait for the IP pool to be created.
 			pool := &v3.IPPool{}
@@ -179,14 +167,14 @@ var _ = describe.CalicoDescribe(
 				return nil
 			}).ShouldNot(HaveOccurred())
 
-			// Remove the IP pool from the installation. We need to query the Installation to get its revision.
+			// Remove the IP pool from the installation.
 			Eventually(func() error {
 				err = cli.Get(ctx, ctrlclient.ObjectKey{Name: "default"}, installation)
 				if err != nil {
 					return err
 				}
-				originalInstallation.ResourceVersion = installation.ResourceVersion
-				return cli.Update(ctx, originalInstallation)
+				installation.Spec.CalicoNetwork.IPPools = originalPools
+				return cli.Update(ctx, installation)
 			}, 20*time.Second, 2*time.Second).ShouldNot(HaveOccurred())
 
 			// The IP pool should be deleted.
