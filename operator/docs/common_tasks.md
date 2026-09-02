@@ -40,7 +40,7 @@ Export the kubeconfig it writes:
 
 Create the tigera-operator namespace:
 
-	make create-tigera-operator-namespace
+	kubectl create ns tigera-operator
 
 Then, run the operator against the local cluster:
 
