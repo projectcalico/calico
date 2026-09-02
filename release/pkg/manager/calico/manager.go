@@ -341,24 +341,25 @@ func (r *CalicoManager) Build() error {
 			logrus.Info("Skipping building windows archive")
 		}
 
-		// Free transient disk before the multi-arch e2e build. Tagged component and
-		// operator images are still needed by PublishRelease, and the Go module
-		// cache is still needed to compile e2e, so only the build cache, dangling
-		// layers, and the already-consumed operator build cache are reclaimed here.
-		r.logDiskUsage("before e2e disk reclaim")
-		for _, c := range [][]string{
-			{"docker", "builder", "prune", "-af"},
-			{"docker", "image", "prune", "-f"},
-			{"rm", "-rf", filepath.Join(r.tmpDir, "operator", ".go-pkg-cache")},
-		} {
-			if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
-				logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
-			}
-		}
-		r.logDiskUsage("after e2e disk reclaim")
-
 		// Build multi-arch e2e test binaries and copy them into the output directory.
 		if r.e2eBinaries {
+			// Free transient disk before the multi-arch e2e build. Tagged component
+			// and operator images are still needed by PublishRelease, and the Go
+			// module cache is still needed to compile e2e, so only the build cache,
+			// dangling layers, and the already-consumed operator build cache are
+			// reclaimed here.
+			r.logDiskUsage("before e2e disk reclaim")
+			for _, c := range [][]string{
+				{"docker", "builder", "prune", "-af"},
+				{"docker", "image", "prune", "-f"},
+				{"rm", "-rf", filepath.Join(r.tmpDir, "operator", ".go-pkg-cache")},
+			} {
+				if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
+					logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
+				}
+			}
+			r.logDiskUsage("after e2e disk reclaim")
+
 			if err = r.buildE2EBinaries(); err != nil {
 				return err
 			}
@@ -1289,7 +1290,7 @@ func (r *CalicoManager) logDiskUsage(stage string) {
 	logrus.Infof("=== disk usage: %s ===", stage)
 	for _, c := range [][]string{
 		{"df", "-h", "/"},
-		{"docker", "system", "df", "-v"},
+		{"docker", "system", "df"},
 		{"docker", "images", "--format", "{{.Size}}\t{{.Repository}}:{{.Tag}}"},
 	} {
 		out, err := r.runner.Run(c[0], c[1:], nil)

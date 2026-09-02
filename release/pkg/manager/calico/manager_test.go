@@ -16,6 +16,8 @@ package calico
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -582,5 +584,42 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestBuildE2EBinariesRestrictsArchitectures asserts the hashrelease e2e build
+// is pinned to the architectures consumed by test cycles (amd64, arm64). This
+// keeps ppc64le/s390x out of the build so it does not exhaust the release
+// agent's disk.
+func TestBuildE2EBinariesRestrictsArchitectures(t *testing.T) {
+	repoRoot := t.TempDir()
+	// Stage a built e2e binary so the post-build hard-link step succeeds.
+	e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+	if err := os.MkdirAll(e2eBinDir, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:        f,
+		repoRoot:      repoRoot,
+		outputDir:     t.TempDir(),
+		calicoVersion: "v3.33.0-0.dev-1-gabcdef123456",
+	}
+
+	if err := r.buildE2EBinaries(); err != nil {
+		t.Fatalf("buildE2EBinaries() unexpected error: %v", err)
+	}
+
+	makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
+	env := f.envFor(makePrefix)
+	if env == nil {
+		t.Fatalf("e2e build-all was not run (calls: %v)", f.calls)
+	}
+	if !slices.Contains(env, "VALIDARCHES=amd64 arm64") {
+		t.Errorf("e2e build-all env = %v, want it to contain VALIDARCHES=amd64 arm64", env)
 	}
 }
