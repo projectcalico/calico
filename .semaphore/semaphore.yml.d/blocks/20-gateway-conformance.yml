@@ -1,14 +1,27 @@
 - name: "E2E tests: Gateway API Conformance"
+  # The trigger is spelled as a CHANGE_IN macro because the "Build: *"
+  # producers derive their own triggers from their dependents, and only that
+  # form can be merged into the superset.
   run:
-    when: "${FORCE_RUN} or change_in(['/e2e/cmd/gateway', '/hack/test/kind/gateway-setup.sh', '/third_party/envoy-gateway', '/third_party/envoy-proxy', '/third_party/envoy-ratelimit'], {pipeline_file: 'ignore', exclude: ['/**/.gitignore', '/**/README.md', '/**/LICENSE']})"
+    when: "${CHANGE_IN(e2e/cmd/gateway,non-go:/hack/test/kind/gateway-setup.sh,non-go:/third_party/envoy-gateway,non-go:/third_party/envoy-proxy,non-go:/third_party/envoy-ratelimit)}"
   execution_time_limit:
     minutes: 60
   dependencies:
     - Prerequisites
+    - "Build: calico image"
+    - "Build: node image"
+    - "Build: whisker image"
+    - "Build: operator image"
+    - "Build: third-party images"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
-        value: "node"
+        value: "calico"
+    prologue:
+      commands:
+        # Free /var/lib/docker space for the cached image tarballs.
+        - docker system prune -af
+        - .semaphore/load-cached-images
     jobs:
       - name: "Gateway API: Conformance Tests"
         commands:

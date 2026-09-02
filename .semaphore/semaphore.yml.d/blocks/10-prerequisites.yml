@@ -379,6 +379,43 @@
           - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
           - zstd -3 --rm /tmp/operator-image.tar
           - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
+- name: "Build: third-party images"
+  # The four upstream images the kind lanes need. Every build fetches source
+  # over the public internet, so one producer saves six consumer jobs ~5
+  # minutes of build time and four network fetches each.
+  run:
+    when: "${CHANGE_IN_WITH_DEPENDENTS(non-go:/third_party/)}"
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: f1-standard-4
+        os_image: ubuntu2204
+    jobs:
+      - name: "Build and cache envoy-gateway image"
+        commands:
+          - make -C third_party/envoy-gateway image
+          - docker save calico/envoy-gateway:latest-amd64 -o /tmp/envoy-gateway-image.tar
+          - zstd -3 --rm /tmp/envoy-gateway-image.tar
+          - gcloud storage cp /tmp/envoy-gateway-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-gateway-image.tar.zst"
+      - name: "Build and cache envoy-proxy image"
+        commands:
+          - make -C third_party/envoy-proxy image
+          - docker save calico/envoy-proxy:latest-amd64 -o /tmp/envoy-proxy-image.tar
+          - zstd -3 --rm /tmp/envoy-proxy-image.tar
+          - gcloud storage cp /tmp/envoy-proxy-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-proxy-image.tar.zst"
+      - name: "Build and cache envoy-ratelimit image"
+        commands:
+          - make -C third_party/envoy-ratelimit image
+          - docker save calico/envoy-ratelimit:latest-amd64 -o /tmp/envoy-ratelimit-image.tar
+          - zstd -3 --rm /tmp/envoy-ratelimit-image.tar
+          - gcloud storage cp /tmp/envoy-ratelimit-image.tar.zst "${GCS_WORKFLOW_DIR}/envoy-ratelimit-image.tar.zst"
+      - name: "Build and cache third-party-cni-plugins image"
+        commands:
+          - make -C third_party/cni-plugins image
+          - docker save calico/third-party-cni-plugins:latest-amd64 -o /tmp/third-party-cni-plugins-image.tar
+          - zstd -3 --rm /tmp/third-party-cni-plugins-image.tar
+          - gcloud storage cp /tmp/third-party-cni-plugins-image.tar.zst "${GCS_WORKFLOW_DIR}/third-party-cni-plugins-image.tar.zst"
 - name: Prerequisites
   skip:
     # Always skip, this is a dummy job used to group prerequisite checks.
