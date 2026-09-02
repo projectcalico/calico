@@ -19,7 +19,7 @@ package components
 
 var (
 	EnterpriseRelease string = "{{ .Title }}"
-{{ with index .Components "calico" }}
+{{ with required .Components "calico" }}
 	ComponentTigeraCalico = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -28,7 +28,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "deep-packet-inspection" }}
+{{ with required .Components "deep-packet-inspection" }}
 	ComponentDeepPacketInspection = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -37,19 +37,19 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "eck-elasticsearch" }}
+{{ with required .Components "eck-elasticsearch" }}
 	ComponentEckElasticsearch = Component{
 		Version: "{{ .Version }}",
 		variant: enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "eck-kibana" }}
+{{ with required .Components "eck-kibana" }}
 	ComponentEckKibana = Component{
 		Version: "{{ .Version }}",
 		variant: enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "elastic-tsee-installer" }}
+{{ with required .Components "elastic-tsee-installer" }}
 	ComponentElasticTseeInstaller = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -58,7 +58,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with .Components.elasticsearch }}
+{{ with required .Components "elasticsearch" }}
 	ComponentElasticsearch = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -67,13 +67,13 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "eck-elasticsearch-operator" }}
+{{ with required .Components "eck-elasticsearch-operator" }}
 	ComponentECKElasticsearchOperator = Component{
 		Version: "{{ .Version }}",
 		variant: enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "elasticsearch-operator" }}
+{{ with required .Components "elasticsearch-operator" }}
 	ComponentElasticsearchOperator = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -82,7 +82,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "fluent-bit" }}
+{{ with required .Components "fluent-bit" }}
 	ComponentFluentBit = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -91,7 +91,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "fluent-bit-windows" }}
+{{ with required .Components "fluent-bit-windows" }}
 	ComponentFluentBitWindows = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -100,7 +100,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "intrusion-detection-controller" }}
+{{ with required .Components "intrusion-detection-controller" }}
 	ComponentIntrusionDetectionController = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -109,7 +109,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with .Components.kibana }}
+{{ with required .Components "kibana" }}
 	ComponentKibana = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -118,7 +118,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "manager" }}
+{{ with required .Components "manager" }}
 	ComponentManager = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -127,7 +127,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "dex" }}
+{{ with required .Components "dex" }}
 	ComponentDex = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -136,7 +136,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "egress-gateway" }}
+{{ with required .Components "egress-gateway" }}
 	ComponentEgressGateway = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -145,7 +145,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "gateway-l7-collector" }}
+{{ with required .Components "gateway-l7-collector" }}
 	ComponentGatewayL7Collector = Component{
 		Version:  "{{ .Version }}",
 		Image:    "{{ .Image }}",
@@ -153,7 +153,7 @@ var (
 		variant:  enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "envoy" }}
+{{ with required .Components "envoy" }}
 	ComponentEnvoyProxy = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -162,7 +162,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "dikastes" }}
+{{ with required .Components "dikastes" }}
 	ComponentDikastes = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -171,13 +171,13 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "coreos-prometheus" }}
+{{ with required .Components "coreos-prometheus" }}
 	ComponentCoreOSPrometheus = Component{
 		Version: "{{ .Version }}",
 		variant: enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "prometheus" }}
+{{ with required .Components "prometheus" }}
 	ComponentPrometheus = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -186,13 +186,13 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "coreos-alertmanager" }}
+{{ with required .Components "coreos-alertmanager" }}
 	ComponentCoreOSAlertmanager = Component{
 		Version: "{{ .Version }}",
 		variant: enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "alertmanager" }}
+{{ with required .Components "alertmanager" }}
 	ComponentPrometheusAlertmanager = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -201,7 +201,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "node" }}
+{{ with required .Components "node" }}
 	ComponentTigeraNode = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -210,7 +210,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "node-windows" }}
+{{ with required .Components "node-windows" }}
 	ComponentTigeraNodeWindows = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -219,7 +219,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "tigera-cni-windows" }}
+{{ with required .Components "tigera-cni-windows" }}
 	ComponentTigeraCNIWindows = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -228,7 +228,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "tigera-third-party-cni-plugins" }}
+{{ with required .Components "tigera-third-party-cni-plugins" }}
 	ComponentTigeraCNIPlugins = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -237,7 +237,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "gateway-api-envoy-gateway" }}
+{{ with required .Components "gateway-api-envoy-gateway" }}
 	ComponentGatewayAPIEnvoyGateway = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -246,7 +246,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "gateway-api-envoy-proxy" }}
+{{ with required .Components "gateway-api-envoy-proxy" }}
 	ComponentGatewayAPIEnvoyProxy = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -255,7 +255,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "gateway-api-envoy-ratelimit" }}
+{{ with required .Components "gateway-api-envoy-ratelimit" }}
 	ComponentGatewayAPIEnvoyRatelimit = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -264,7 +264,7 @@ var (
 		variant:   enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-pilot" }}
+{{ with required .Components "istio-pilot" }}
 	ComponentIstioPilot = Component{
 		Version:  "{{ .Version }}",
 		Image:    "{{ .Image }}",
@@ -272,7 +272,7 @@ var (
 		variant:  enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-install-cni" }}
+{{ with required .Components "istio-install-cni" }}
 	ComponentIstioInstallCNI = Component{
 		Version:  "{{ .Version }}",
 		Image:    "{{ .Image }}",
@@ -280,7 +280,7 @@ var (
 		variant:  enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-ztunnel" }}
+{{ with required .Components "istio-ztunnel" }}
 	ComponentIstioZTunnel = Component{
 		Version:  "{{ .Version }}",
 		Image:    "{{ .Image }}",
@@ -288,7 +288,7 @@ var (
 		variant:  enterpriseVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-proxyv2" }}
+{{ with required .Components "istio-proxyv2" }}
 	ComponentIstioProxyv2 = Component{
 		Version:  "{{ .Version }}",
 		Image:    "{{ .Image }}",

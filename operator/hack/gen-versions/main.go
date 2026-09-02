@@ -83,5 +83,5 @@ func run(versionsPath, tpl string) error {
 		return err
 	}
 
-	return render(tpl, vz)
+	return render(os.Stdout, tpl, vz)
 }
