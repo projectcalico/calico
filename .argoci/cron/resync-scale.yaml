@@ -16,13 +16,23 @@
 # them apart.  Per-PR runs from Semaphore carry env=ci.
 version: condensed
 generateName: resync-scale-
-# Sundays 17:00 UTC (the handler emits no CronWorkflow timezone, so cron fields
-# are UTC).
-schedule: 0 17 * * 0
+# Sundays 14:00 UTC (the handler emits no CronWorkflow timezone, so cron fields
+# are UTC).  Three hours ahead of e2e-openstack's 17:00 slot: both build
+# OpenStack in the same GCP project, and a run that overlaps competes for quota
+# and makes a bad Sunday look like two unrelated failures.  A full run is about
+# an hour, so the two do not meet.
+schedule: 0 14 * * 0
 
 steps:
   - name: resync-scale
     runOn: vm
+
+    # Deliberately far above the ~60 minutes a full run takes: its job is to
+    # catch a genuinely stuck run, not to enforce the time budget.  A run killed
+    # mid-ladder publishes nothing at all -- not even the rungs it finished --
+    # so cutting it close would trade an overrun for total data loss.  Trimming
+    # the ladder is the lever for the budget.
+    timeout: 3h
 
     # runAsNonRoot because DevStack expects to own the box and wants a non-root
     # user that can sudo.  Machine type is a starting point, not a measurement:
@@ -36,6 +46,18 @@ steps:
       runAsNonRoot: true
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
+
+    # The JSON the benchmark writes is its whole output, and it is written on
+    # the machine.  `outputs:` collects from the pod, so pull it back first --
+    # the epilogue runs in the pod while the machine is still up.  Doing this
+    # here rather than after bootstrap.sh means a run that fails part-way still
+    # surfaces the rungs it completed.  Best-effort: a failed upload must not
+    # mask the step's own result, which is what the reader came for.
+    epilogue: |
+      copyFromVirtualMachine "${CI_HOME}/${CI_GIT_DIR}/artifacts/perf" ./perf \
+          || echo "[WARN] could not pull perf artifacts off the machine"
+      artifact push job ./perf -d perf -f \
+          || echo "[WARN] could not publish perf artifacts"
     commands: |
       set -eo pipefail
 
@@ -96,6 +118,11 @@ steps:
       # (off by default).  All are covered by per-PR CI; this run has a time
       # budget to meet and only the scale numbers are wanted here.
       export SCALE_ONLY=true
+
+      # The machine is deleted the moment this step ends, so tearing 10,000
+      # ports back down first would cost ~28 minutes to no end.  See the test's
+      # docstring -- this is only safe because the machine is disposable.
+      export RESYNC_SKIP_FINAL_CLEANUP=true
 
       # The BIRD config in the DevStack setup generates loads of errors and is
       # not needed for a single node, so disable it -- as the Semaphore job does.
