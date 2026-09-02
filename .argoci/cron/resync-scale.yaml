@@ -8,7 +8,7 @@
 # Why this is not just a FORCE_RUN of the Semaphore OpenStack block:
 # that block is pinned to an f1-standard-2 agent (2 vCPU), and the binding
 # constraint at 10,000 ports is *populating* Neutron rather than the resync
-# being measured.  A gcp-vm step lets us size the machine for the job.
+# being measured.  A `runOn: vm` step lets us size the machine for the job.
 #
 # Because the machine type differs from per-PR runs, the two are not directly
 # comparable -- hence PERF_ENV=weekly below, which lands these documents in the
@@ -22,31 +22,32 @@ schedule: 0 17 * * 0
 
 steps:
   - name: resync-scale
-    runOn: gcp-vm
-    # The VM knobs are set as env vars rather than via the condensed `vm:`
-    # block, because the deployed ArgoCI pre-processor rejects that field
-    # ("unknown field \"vm\" in a step") even though cc-utils main carries it.
-    # `vm:` is only sugar for these anyway -- see vmEnv() in the handler, which
-    # maps each field to exactly one of these names for gcp-vm-runner to read.
-    # Worth switching back once the deployed handler understands `vm:`.
-    #
-    # RUN_AS_NONROOT because DevStack expects to own the box and wants a
-    # non-root user that can sudo.  Machine type is a starting point, not a
-    # measurement: the 2-hour budget wants checking against a real run.
-    env:
-      - {name: GOOGLE_VM_MACHINE_TYPE, value: n2-standard-16}
-      - {name: GOOGLE_VM_DISK_TYPE, value: pd-ssd}
-      - {name: GOOGLE_VM_DISK_SIZE, value: 200GB}
-      - {name: RUN_AS_NONROOT, value: "true"}
+    runOn: vm
+
+    # runAsNonRoot because DevStack expects to own the box and wants a non-root
+    # user that can sudo.  Machine type is a starting point, not a measurement:
+    # the 2-hour budget wants checking against a real run.  No zone or image is
+    # named, which takes the provisioner's default zone and the stock Ubuntu it
+    # assembles at boot, so nothing here depends on a hand-maintained image.
+    vm:
+      machineType: n2-standard-16
+      diskType: pd-ssd
+      diskSize: 200GB
+      runAsNonRoot: true
+
+    # A VM step checks out by default, into ${CI_HOME}.  This one clones the
+    # repo itself, a few lines below, so that would be a second copy that
+    # nothing reads.
+    checkout: false
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
     commands: |
       set -o pipefail
 
-      # gcp-vm steps get no checkout (and no globalPrologue), so fetch the
-      # code ourselves.  The scale test and the publisher both come from this
-      # checkout, and DevStack's Calico plugin clones the networking-calico
-      # code from it too, via NC_PLUGIN_REPO/NC_PLUGIN_REF below.
+      # `checkout: false` above, so fetch the code ourselves.  The scale test
+      # and the publisher both come from this clone, and DevStack's Calico
+      # plugin clones the networking-calico code from it too, via
+      # NC_PLUGIN_REPO/NC_PLUGIN_REF below.
       export CALICO_REPO_DIR="${HOME}/calico"
       git clone --depth 1 --branch "${CI_GIT_BRANCH:-master}" \
         https://github.com/projectcalico/calico.git "${CALICO_REPO_DIR}"
