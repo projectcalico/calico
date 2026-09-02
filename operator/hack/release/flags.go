@@ -339,19 +339,6 @@ var (
 		Sources:  cli.EnvVars("CALICO_DIR"),
 		Action:   dirFlagCheck,
 	}
-	calicoGitRepoFlag = &cli.StringFlag{
-		Name:     "calico-repo",
-		Category: calicoFlagCategory,
-		Usage:    "The git repository to clone Calico from. Used when no Calico dir for CRDs is provided (development and testing purposes only)",
-		Sources:  cli.EnvVars("CALICO_REPO"),
-		Value:    "projectcalico/calico",
-	}
-	calicoGitBranchFlag = &cli.StringFlag{
-		Name:     "calico-branch",
-		Category: calicoFlagCategory,
-		Usage:    "The git branch to clone Calico from. Used when no Calico dir for CRDs is provided (development and testing purposes only)",
-		Sources:  cli.EnvVars("CALICO_BRANCH"),
-	}
 )
 
 // Enterprise related flags.
@@ -420,19 +407,6 @@ var (
 		Usage:    "The directory containing the Enterprise CRDs to bundle with the operator (development and testing purposes only)",
 		Sources:  cli.EnvVars("ENTERPRISE_DIR"),
 		Action:   dirFlagCheck,
-	}
-	enterpriseGitRepoFlag = &cli.StringFlag{
-		Name:     "enterprise-repo",
-		Category: enterpriseFlagCategory,
-		Usage:    "The git repository to clone Enterprise from. Used when no Enterprise dir for CRDs is provided (development and testing purposes only)",
-		Sources:  cli.EnvVars("ENTERPRISE_REPO"),
-		Value:    "tigera/calico-private",
-	}
-	enterpriseGitBranchFlag = &cli.StringFlag{
-		Name:     "enterprise-branch",
-		Category: enterpriseFlagCategory,
-		Usage:    "The git branch to clone Enterprise from. Use in place of specifying the Enterprise dir for CRDs (development and testing purposes only)",
-		Sources:  cli.EnvVars("ENTERPRISE_BRANCH", "CALICO_ENTERPRISE_BRANCH"),
 	}
 	exceptEnterpriseFlag = &cli.StringSliceFlag{
 		Name:     "except-calico-enterprise",

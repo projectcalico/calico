@@ -36,8 +36,6 @@ var (
 	releaseBranchPrefix = flag.String("release-branch-prefix", "release", "Release branch prefix")
 	devTagSuffix        = flag.String("dev-tag-suffix", "0.dev", "Dev tag suffix")
 	repo                = flag.String("repo", "tigera/operator", "Operator GitHub repo")
-	calicoRepo          = flag.String("calico-repo", "projectcalico/calico", "Calico GitHub repo")
-	enterpriseRepo      = flag.String("enterprise-repo", "tigera/calico-private", "Calico Enterprise GitHub repo")
 )
 
 func requireStream(t *testing.T) string {
@@ -117,8 +115,6 @@ func TestBranchCutCalico(t *testing.T) {
 		t.Fatalf("calico version is still %s on release branch", defaultBaseBranch)
 	}
 
-	checkGitBranchExists(t, fmt.Sprintf("git@github.com:%s.git", *calicoRepo), cv.Title)
-
 	// Check that the version in the config file matches the VERSION_TAG in Makefile.
 	content, err := command.GitShowFile(fmt.Sprintf("%s/%s", *remote, branch), "Makefile")
 	if err != nil {
@@ -157,8 +153,6 @@ func TestBranchCutEnterprise(t *testing.T) {
 	if cv.Title == defaultBaseBranch {
 		t.Fatalf("enterprise version is still %s on release branch", defaultBaseBranch)
 	}
-
-	checkGitBranchExists(t, fmt.Sprintf("git@github.com:%s.git", *enterpriseRepo), cv.Title)
 }
 
 func TestBranchCutNextDevRelease(t *testing.T) {

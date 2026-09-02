@@ -78,9 +78,7 @@ var branchCutCommand = &cli.Command{
 	Flags: []cli.Flag{
 		streamFlag,
 		calicoRefFlag,
-		calicoGitRepoFlag,
 		enterpriseRefFlag,
-		enterpriseGitRepoFlag,
 		releaseBranchPrefixFlag,
 		devTagSuffixFlag,
 		calicoDirFlag,
@@ -160,7 +158,6 @@ var isReleaseBranch = func(releaseBranchPrefix, branch string) (bool, error) {
 //   - check that the stream flag is in the correct format
 //   - check that the operator branch does not already exist
 //   - check that both calico and enterprise refs are provided
-//   - check that the provided calico and enterprise refs exist as a branch or tag in the remote repository
 //   - check that the base operator branch is either a release branch (or master) (if not skipping branch check)
 var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	// check that the stream format is valid
@@ -190,24 +187,6 @@ var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Cont
 	enterpriseRef := c.String(enterpriseRefFlag.Name)
 	if calicoRef == "" || enterpriseRef == "" {
 		return ctx, fmt.Errorf("both --%s and --%s are required for branch creation", calicoRefFlag.Name, enterpriseRefFlag.Name)
-	}
-
-	// check that the provided calico and enterprise refs exist as a branch or tag in the remote repository
-	for _, check := range []struct {
-		ref  string
-		repo string
-		flag string
-	}{
-		{calicoRef, c.String(calicoGitRepoFlag.Name), calicoRefFlag.Name},
-		{enterpriseRef, c.String(enterpriseGitRepoFlag.Name), enterpriseRefFlag.Name},
-	} {
-		out, err := command.GitLsRemote(fmt.Sprintf("git@github.com:%s", check.repo), check.ref, "--heads", "--tags")
-		if err != nil {
-			return ctx, fmt.Errorf("checking if ref %q exists in %s: %w", check.ref, check.repo, err)
-		}
-		if !command.GitRefExistsInRemote(out, check.ref) {
-			return ctx, fmt.Errorf("ref %q not found as a branch or tag in %s", check.ref, check.repo)
-		}
 	}
 
 	// check operator base branch is either the default base branch or a release branch (if not skipping branch check)
@@ -456,8 +435,6 @@ var branchValidateCommand = &cli.Command{
 		releaseBranchPrefixFlag,
 		streamFlag,
 		devTagSuffixFlag,
-		calicoGitRepoFlag,
-		enterpriseGitRepoFlag,
 		&cli.StringFlag{
 			Name:     "base-branch",
 			Category: operatorFlagCategory,
@@ -506,8 +483,6 @@ var branchValidateAction = func(ctx context.Context, c *cli.Command) (string, ma
 		"-run", "^TestBranchCut",
 		fmt.Sprintf("-stream=%s", stream),
 		fmt.Sprintf("-repo=%s", c.String(gitRepoFlag.Name)),
-		fmt.Sprintf("-calico-repo=%s", c.String(calicoGitRepoFlag.Name)),
-		fmt.Sprintf("-enterprise-repo=%s", c.String(enterpriseGitRepoFlag.Name)),
 		fmt.Sprintf("-release-branch-prefix=%s", c.String(releaseBranchPrefixFlag.Name)),
 		fmt.Sprintf("-dev-tag-suffix=%s", c.String(devTagSuffixFlag.Name)),
 		fmt.Sprintf("-base-branch=%s", baseBranch),

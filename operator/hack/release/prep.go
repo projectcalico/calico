@@ -43,10 +43,8 @@ to point to local repositories for Calico and Enterprise respectively.`,
 		releaseBranchPrefixFlag,
 		calicoVersionFlag,
 		calicoDirFlag,
-		calicoGitRepoFlag,
 		enterpriseVersionFlag,
 		enterpriseDirFlag,
-		enterpriseGitRepoFlag,
 		enterpriseRegistryFlag,
 		skipValidationFlag,
 		skipMilestoneFlag,
@@ -63,7 +61,6 @@ to point to local repositories for Calico and Enterprise respectively.`,
 // validatePrepRefs checks the required refs for release prep:
 //   - check that at least one of calico or enterprise version is provided
 //   - if calico version is not provided, check that the version in calico_versions.yml is a released version
-//   - check that the provided calico and enterprise refs exist as a tag in the remote repository (if local directory not provided)
 //   - check that the base branch is a release branch (if not skipped)
 var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	// check that at least one of calico/enterprise version is set for prep
@@ -91,33 +88,6 @@ var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Contex
 		return ctx, fmt.Errorf("error validating Calico version format: %w", err)
 	} else if !valid {
 		return ctx, fmt.Errorf("every release must contain a released Calico version, but found %s", calicoVersion)
-	}
-
-	// check that the ref for calico and/or enterprise provided exists as a tag in the specified remote repository
-	// unless a local directory is provided for the respective component, in which case we assume the version exists since it is being pulled from the local repo
-	for _, check := range []struct {
-		repo     string
-		tag      string
-		flag     string
-		localDir string
-	}{
-		{tag: calicoVersion, repo: c.String(calicoGitRepoFlag.Name), localDir: c.String(calicoDirFlag.Name), flag: calicoVersionFlag.Name},
-		{tag: c.String(enterpriseVersionFlag.Name), repo: c.String(enterpriseGitRepoFlag.Name), localDir: c.String(enterpriseDirFlag.Name), flag: enterpriseVersionFlag.Name},
-	} {
-		if check.tag == "" {
-			continue
-		}
-		if check.localDir != "" {
-			logrus.Warnf("Local directory provided for %s, skipping remote ref validation", check.flag)
-			continue
-		}
-		out, err := command.GitLsRemoteTags(fmt.Sprintf("git@github.com:%s", check.repo), check.tag)
-		if err != nil {
-			return ctx, fmt.Errorf("checking if ref %q exists in %s: %w", check.tag, check.repo, err)
-		}
-		if !command.GitRefExistsInRemote(out, check.tag) {
-			return ctx, fmt.Errorf("ref %q not found as a tag in %s", check.tag, check.repo)
-		}
 	}
 
 	// check operator base branch is a release branch unless skipped

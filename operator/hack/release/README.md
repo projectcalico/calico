@@ -209,9 +209,7 @@ release build --version <operator version>
 ```
 
 For hashrelease, use the `--hashrelease` flag and provide either the Calico or Calico Enterprise version or versions file.
-When using Calico or/and Calico Enterprise version, the local directory of the respective repository must be provided.
-When using versions file, provide the path to the local director of the respective repository if local changes are to be included;
-otherwise, the latest commit for the respective
+CRDs come from the working tree. Pass `--calico-dir` or `--enterprise-dir` to read them from another checkout instead.
 
 ```sh
 release build --version <operator version> --hashrelease \
