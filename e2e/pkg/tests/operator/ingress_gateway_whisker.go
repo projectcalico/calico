@@ -74,9 +74,9 @@ const (
 // the degrade cases, and the per-namespace RBAC the GatewayAPI controller
 // provisions are all covered by operator unit and FV tests.
 //
-// Unlike the Manager gateway, Whisker's gateway defaults to the namespace its
-// backing Service already lives in, so this exercises the same-namespace render
-// including the proxy NetworkPolicy.
+// Whisker's gateway defaults to the namespace its backing Service already
+// lives in, so this exercises the same-namespace render including the proxy
+// NetworkPolicy.
 var _ = describe.CalicoDescribe(
 	describe.WithTeam(describe.Core),
 	describe.WithFeature("Ingress-Gateway"),
