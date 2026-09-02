@@ -37,7 +37,6 @@ github.com/clipperhouse/uax29/v2 v2.7.0
 github.com/cloudflare/cfssl v1.6.5
 github.com/cloudflare/circl v1.6.3
 github.com/containernetworking/cni v1.3.0
-github.com/corazawaf/coraza-coreruleset/v4 v4.25.0
 github.com/cyphar/filepath-securejoin v0.7.0
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 github.com/docker/cli v29.6.2+incompatible
@@ -57,7 +56,6 @@ github.com/fsnotify/fsnotify v1.10.1
 github.com/fxamacker/cbor/v2 v2.9.2
 github.com/go-errors/errors v1.5.1
 github.com/go-gorp/gorp/v3 v3.1.0
-github.com/go-ldap/ldap v3.0.3+incompatible
 github.com/go-logr/logr v1.4.4
 github.com/go-logr/zapr v1.3.0
 github.com/go-openapi/jsonpointer v1.0.0
@@ -90,7 +88,6 @@ github.com/huandu/xstrings v1.5.0
 github.com/jinzhu/copier v0.4.0
 github.com/jmoiron/sqlx v1.4.0
 github.com/joeshaw/multierror v0.0.0-20140124173710-69b34d4ec901
-github.com/josharian/intern v1.0.0
 github.com/json-iterator/go v1.1.12
 github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.7.7
 github.com/klauspost/compress v1.19.0
@@ -98,7 +95,6 @@ github.com/lann/builder v0.0.0-20180802200727-47ae307949d0
 github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0
 github.com/lib/pq v1.12.3
 github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de
-github.com/mailru/easyjson v0.9.1
 github.com/mattn/go-colorable v0.1.15
 github.com/mattn/go-isatty v0.0.22
 github.com/mattn/go-runewidth v0.0.24
@@ -110,7 +106,6 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
 github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
-github.com/olivere/elastic/v7 v7.0.32
 github.com/onsi/ginkgo v1.16.5
 github.com/onsi/ginkgo/v2 v2.32.1
 github.com/onsi/gomega v1.42.1
@@ -164,7 +159,6 @@ golang.org/x/time v0.15.0
 golang.org/x/tools v0.49.0
 gomodules.xyz/jsonpatch/v2 v2.5.0
 google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
-gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d
 gopkg.in/evanphx/json-patch.v4 v4.13.0
 gopkg.in/inf.v0 v0.9.1
 gopkg.in/natefinch/lumberjack.v2 v2.2.1
@@ -223,7 +217,6 @@ local:operator/pkg/common/validation
 local:operator/pkg/common/validation/apiserver
 local:operator/pkg/common/validation/calico-node
 local:operator/pkg/common/validation/csi-node-driver
-local:operator/pkg/common/validation/enterprise/otelcollector
 local:operator/pkg/common/validation/kube-controllers
 local:operator/pkg/common/validation/typha
 local:operator/pkg/common/validation/webhooks
@@ -249,67 +242,14 @@ local:operator/pkg/controller/options
 local:operator/pkg/controller/podiprecovery
 local:operator/pkg/controller/secrets
 local:operator/pkg/controller/status
-local:operator/pkg/controller/tenancy
-local:operator/pkg/controller/tenantsecrets
 local:operator/pkg/controller/tiers
 local:operator/pkg/controller/typhaautoscaler
 local:operator/pkg/controller/utils
 local:operator/pkg/controller/utils/imageset
 local:operator/pkg/controller/whisker
 local:operator/pkg/crds
-local:operator/pkg/crypto
 local:operator/pkg/ctrlruntime
 local:operator/pkg/dns
-local:operator/pkg/enterprise
-local:operator/pkg/enterprise/apiserver
-local:operator/pkg/enterprise/certificatemanager
-local:operator/pkg/enterprise/cloudconfig
-local:operator/pkg/enterprise/clusterconnection
-local:operator/pkg/enterprise/controller
-local:operator/pkg/enterprise/controller/applicationlayer
-local:operator/pkg/enterprise/controller/authentication
-local:operator/pkg/enterprise/controller/egressgateway
-local:operator/pkg/enterprise/controller/intrusiondetection
-local:operator/pkg/enterprise/controller/istio/waypoint
-local:operator/pkg/enterprise/controller/logcollector
-local:operator/pkg/enterprise/controller/logstorage
-local:operator/pkg/enterprise/controller/logstorage/common
-local:operator/pkg/enterprise/controller/logstorage/dashboards
-local:operator/pkg/enterprise/controller/logstorage/elastic
-local:operator/pkg/enterprise/controller/logstorage/esmetrics
-local:operator/pkg/enterprise/controller/logstorage/esutils
-local:operator/pkg/enterprise/controller/logstorage/initializer
-local:operator/pkg/enterprise/controller/logstorage/kubecontrollers
-local:operator/pkg/enterprise/controller/logstorage/linseed
-local:operator/pkg/enterprise/controller/logstorage/managedcluster
-local:operator/pkg/enterprise/controller/logstorage/secrets
-local:operator/pkg/enterprise/controller/logstorage/users
-local:operator/pkg/enterprise/controller/manager
-local:operator/pkg/enterprise/controller/monitor
-local:operator/pkg/enterprise/controller/nonclusterhost
-local:operator/pkg/enterprise/controller/otelcollector
-local:operator/pkg/enterprise/controller/packetcapture
-local:operator/pkg/enterprise/controller/policyrecommendation
-local:operator/pkg/enterprise/csr
-local:operator/pkg/enterprise/gatewayapi
-local:operator/pkg/enterprise/goldmane
-local:operator/pkg/enterprise/installation
-local:operator/pkg/enterprise/istio
-local:operator/pkg/enterprise/kubecontrollers
-local:operator/pkg/enterprise/options
-local:operator/pkg/enterprise/policysync
-local:operator/pkg/enterprise/render/applicationlayer
-local:operator/pkg/enterprise/render/applicationlayer/ruleset
-local:operator/pkg/enterprise/render/egressgateway
-local:operator/pkg/enterprise/render/intrusiondetection/dpi
-local:operator/pkg/enterprise/render/logcollector
-local:operator/pkg/enterprise/render/monitor
-local:operator/pkg/enterprise/render/otelcollector
-local:operator/pkg/enterprise/tiers
-local:operator/pkg/enterprise/uigateway
-local:operator/pkg/enterprise/utils
-local:operator/pkg/enterprise/whisker
-local:operator/pkg/enterprise/windows
 local:operator/pkg/extensions
 local:operator/pkg/render
 local:operator/pkg/render/certificatemanagement
@@ -334,16 +274,7 @@ local:operator/pkg/render/gatewayapi
 local:operator/pkg/render/goldmane
 local:operator/pkg/render/istio
 local:operator/pkg/render/kubecontrollers
-local:operator/pkg/render/logstorage
-local:operator/pkg/render/logstorage/dashboards
-local:operator/pkg/render/logstorage/eck
-local:operator/pkg/render/logstorage/esgateway
-local:operator/pkg/render/logstorage/esmetrics
-local:operator/pkg/render/logstorage/externalelasticsearch
-local:operator/pkg/render/logstorage/kibana
-local:operator/pkg/render/logstorage/linseed
 local:operator/pkg/render/manager
-local:operator/pkg/render/nonclusterhost
 local:operator/pkg/render/tiers
 local:operator/pkg/render/webhooks
 local:operator/pkg/render/whisker
