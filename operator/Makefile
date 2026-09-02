@@ -59,8 +59,7 @@ include ../metadata.mk
 
 # The FV suite talks to the shared kind cluster from inside the build container,
 # where the repo is mounted at /go/src/github.com/projectcalico/calico.
-EXTRA_DOCKER_ARGS += -e GOPRIVATE=github.com/tigera/* \
-	-e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/kind/kind-kubeconfig.yaml
+EXTRA_DOCKER_ARGS += -e KUBECONFIG=/go/src/github.com/projectcalico/calico/hack/test/kind/kind-kubeconfig.yaml
 
 BUILD_DIR ?= build/_output
 BINDIR    ?= $(BUILD_DIR)/bin
