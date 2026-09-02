@@ -88,6 +88,27 @@ steps:
       export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
       export PERF_ENV=weekly
 
+      # TEMPORARY -- REVERT BEFORE MERGE.  The first full run published nothing:
+      # "ELASTICSEARCH_URL or credentials unset; skipping send".  secretRequired
+      # would have failed the step outright had LENS_ELASTICSEARCH_TOKEN been
+      # absent from the pod, but it succeeds on a variable set to the empty
+      # string -- so report what actually reaches the machine.  Lengths and
+      # names only; no value is ever printed.
+      for v in LENS_ELASTICSEARCH_TOKEN ELASTICSEARCH_URL ELASTICSEARCH_USER \
+               ELASTICSEARCH_TOKEN PERF_ENV; do
+          if printenv "${v}" >/dev/null; then
+              probe_val=$(printenv "${v}")
+              echo "[PROBE] ${v}: set, length=${#probe_val}"
+          else
+              echo "[PROBE] ${v}: NOT SET"
+          fi
+      done
+      # Names only, to catch the key being exposed under a name we do not expect.
+      echo "[PROBE] credential-ish variable names present on the VM:"
+      printenv | cut -d= -f1 | grep -iE 'lens|elastic|token|secret' | sort \
+          | sed 's/^/[PROBE]   /' || true
+      exit 0
+
       # The headline ladder.  Keep the smaller rungs: they are what tell us
       # whether scaling is still linear, which is the point of trending this.
       export RESYNC_SCALES=100,1000,3000,10000
