@@ -158,6 +158,17 @@ var nonGoDeps = map[string][]string{
 	"kube-controllers": {
 		"/kube-controllers/pkg/apis/migration/v1/crd",
 	},
+
+	// The YAML the operator embeds and installs is invisible to the dir-scan:
+	// its own CRDs, the Calico CRDs it pulls from libcalico-go, the whisker
+	// config it renders, and the deploy-time manifests.
+	"operator": {
+		"/libcalico-go/config/crd",
+		"/operator/config",
+		"/operator/deploy/crds",
+		"/operator/pkg/crds",
+		"/operator/pkg/render/whisker",
+	},
 }
 
 var defaultExclusions = []string{
