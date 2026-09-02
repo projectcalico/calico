@@ -113,6 +113,8 @@
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM GC should garbage-collect leaked IP addresses [Serial]
 [sig-calico] [Team:CORE] [Feature:IPAM] [RequiresCalicoIPAM] [Category:Networking] IPAM StrictAffinity should respect StrictAffinity when toggled [Serial]
 [sig-calico] [Team:CORE] [Feature:IPPool] [Category:Operator] [RequiresOperator] [RequiresCalicoCNI] operator IPPool management tests should create and delete IP pools [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should clean up gateway resources when spec.ingressGateway is removed [Serial]
+[sig-calico] [Team:CORE] [Feature:Ingress-Gateway] [Category:Operator] [RequiresGoldmane] whisker access via calico ingress gateway Whisker accessible through Gateway in the install namespace should serve the Whisker UI through the Gateway [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] Istio OpenShift Platform Configuration should deploy Istio with correct OpenShift platform configuration [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should allow UDP traffic to bypass ztunnel while Calico enforces UDP policy [Serial]
 [sig-calico] [Team:CORE] [Feature:Istio] [Category:Networking] [RequiresOperator] Istio Ambient Mode should encrypt traffic with ambient mode and enforce Calico NetworkPolicy [Serial]
