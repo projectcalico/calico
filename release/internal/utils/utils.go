@@ -93,6 +93,18 @@ func FirstNonEmpty(values ...string) string {
 	return ""
 }
 
+// FilterDirs keeps the entries of want that appear in have, in their original
+// order.
+func FilterDirs(have, want []string) []string {
+	var out []string
+	for _, w := range want {
+		if slices.Contains(have, w) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // AllReleaseCharts returns a list of all Helm charts to be released.
 func AllReleaseCharts() []string {
 	return []string{
@@ -132,12 +144,11 @@ var (
 		"node",
 	}
 
-	releaseImages = []string{}
+	releaseImages    = []string{}
+	releaseImagesErr error
 )
 
-// imageDiscoveryDirs returns the union of ImageReleaseDirs and
-// WindowsReleaseDirs, preserving order and de-duplicating. Used to discover
-// every image the release produces, regardless of which target builds it.
+// imageDiscoveryDirs returns every directory that produces an image.
 func imageDiscoveryDirs() []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(ImageReleaseDirs)+len(WindowsReleaseDirs))
@@ -156,19 +167,26 @@ func imageDiscoveryDirs() []string {
 func initReleaseImages() {
 	rootDir, err := command.GitDir()
 	if err != nil {
-		logrus.Panicf("Cannot determine root git dir: %v", err)
+		releaseImagesErr = fmt.Errorf("determining root git dir: %w", err)
+		return
 	}
 	dirs := imageDiscoveryDirs()
 	images, err := BuildReleaseImageList(rootDir, dirs...)
 	if err != nil {
-		logrus.Panicf("Cannot build release images list for release dirs[%s]: %v", strings.Join(dirs, ","), err)
+		releaseImagesErr = fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)
+		return
 	}
 	releaseImages = images
 }
 
-func ReleaseImages() []string {
+// ReleaseImages returns every image the release publishes. The list is
+// resolved once by running make in each release directory.
+func ReleaseImages() ([]string, error) {
 	once.Do(initReleaseImages)
-	return slices.Clone(releaseImages)
+	if releaseImagesErr != nil {
+		return nil, releaseImagesErr
+	}
+	return slices.Clone(releaseImages), nil
 }
 
 // buildImages returns the list of images built by the given directory.

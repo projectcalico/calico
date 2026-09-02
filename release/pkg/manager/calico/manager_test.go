@@ -16,10 +16,15 @@ package calico
 
 import (
 	"fmt"
+	"path"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/projectcalico/calico/release/internal/images"
 
 	"github.com/projectcalico/calico/release/internal/command"
 )
@@ -33,6 +38,8 @@ type fakeResult struct {
 // fakeRunner is a command.CommandRunner that returns canned output per command
 // and records every invocation so tests can assert what was (and was not) run.
 type fakeRunner struct {
+	mu sync.Mutex
+
 	// responses maps a command key ("name arg1 arg2 ...") to its canned result.
 	// A key that is a prefix of the invoked command also matches (longest-prefix
 	// wins), so tests can match on a stable command head without spelling out
@@ -41,6 +48,10 @@ type fakeRunner struct {
 
 	// calls records every command invoked, as "name arg1 arg2 ...".
 	calls []string
+
+	// Parallel to calls, so a test can assert what a step passed to make.
+	envs     [][]string
+	logPaths []string
 }
 
 func newFakeRunner() *fakeRunner {
@@ -54,8 +65,17 @@ func (f *fakeRunner) on(key, stdout string, err error) *fakeRunner {
 }
 
 func (f *fakeRunner) record(name string, args []string) (string, error) {
+	return f.recordFull(name, args, nil, "")
+}
+
+// Image steps run their units concurrently, so recording has to be locked.
+func (f *fakeRunner) recordFull(name string, args, env []string, logPath string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	cmd := strings.TrimSpace(name + " " + strings.Join(args, " "))
 	f.calls = append(f.calls, cmd)
+	f.envs = append(f.envs, slices.Clone(env))
+	f.logPaths = append(f.logPaths, logPath)
 	if res, ok := f.responses[cmd]; ok {
 		return res.stdout, res.err
 	}
@@ -82,7 +102,7 @@ func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
 }
 
 func (f *fakeRunner) RunInDir(dir, name string, args, env []string) (string, error) {
-	return f.record(name, args)
+	return f.recordFull(name, args, env, "")
 }
 
 func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) error {
@@ -91,7 +111,7 @@ func (f *fakeRunner) RunInDirNoCapture(dir, name string, args, env []string) err
 }
 
 func (f *fakeRunner) RunInDirToFile(dir, name string, args, env []string, logPath string) (string, error) {
-	return f.record(name, args)
+	return f.recordFull(name, args, env, logPath)
 }
 
 // ran reports whether any recorded call starts with the given command prefix.
@@ -540,4 +560,152 @@ func TestRequireOnMainBranch(t *testing.T) {
 	run("checkout", "-q", "-b", "release-v3.33")
 	require.NoError(t, m.requireOnMainBranch("release-v3.33"),
 		"a resume must be allowed when the derived branch exists")
+}
+
+// envForDir returns the environment of the first recorded make call in a
+// component directory.
+func (f *fakeRunner) envForDir(dir string) []string {
+	for i, c := range f.calls {
+		if strings.Contains(c, dir) {
+			return f.envs[i]
+		}
+	}
+	return nil
+}
+
+// logPathsForDir returns the log paths of every recorded make call in a
+// component directory.
+func (f *fakeRunner) logPathsForDir(dir string) []string {
+	var out []string
+	for i, c := range f.calls {
+		// Only unit targets are logged to a file.
+		if strings.Contains(c, dir) && f.logPaths[i] != "" {
+			out = append(out, f.logPaths[i])
+		}
+	}
+	return out
+}
+
+// unitCalls returns the calls that ran a unit's make target, ignoring the
+// image-name queries.
+func unitCalls(f *fakeRunner, target string) []string {
+	var out []string
+	for _, c := range f.calls {
+		if strings.Contains(c, " "+target) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func imageManager(t *testing.T, f *fakeRunner, logsDir string) *CalicoManager {
+	t.Helper()
+	// A publish asks each directory for its image names before recording refs.
+	for _, dir := range images.VariantDirs(images.PublishVariants) {
+		base := path.Base(dir)
+		f.on(fmt.Sprintf("make -C /repo/%s -s build-images", dir), base+" "+base+"-windows", nil)
+	}
+	return &CalicoManager{
+		runner:          f,
+		repoRoot:        "/repo",
+		calicoVersion:   "v3.30.0",
+		imageRegistries: []string{"quay.io/tigera"},
+		images:          true,
+		logsDir:         logsDir,
+		outputDir:       t.TempDir(),
+		resolveDigest: func(string) (string, bool, error) {
+			return "sha256:aaa", true, nil
+		},
+	}
+}
+
+// A publish must latch CONFIRM; DRYRUN pushes nothing and still reports
+// success.
+func TestPublishContainerImagesConfirms(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	if !f.ran("make -C /repo/cmd/calico release-publish") {
+		t.Errorf("publish did not run release-publish in cmd/calico, calls: %v", f.calls)
+	}
+	env := f.envForDir("/repo/cmd/calico ")
+	if !slices.Contains(env, "CONFIRM=true") {
+		t.Error("publish env missing CONFIRM=true")
+	}
+	if slices.Contains(env, "DRYRUN=true") {
+		t.Error("publish env should not carry DRYRUN=true")
+	}
+}
+
+// Each image unit gets its own log file; concurrent units would otherwise
+// interleave into one stream.
+func TestImageStepsWriteLogFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*CalicoManager) error
+		want []string
+	}{
+		{"build", (*CalicoManager).buildContainerImages, []string{
+			"/logs/images-build/node-windows.log",
+			"/logs/images-build/node.log",
+		}},
+		{"publish", (*CalicoManager).publishContainerImages, []string{
+			"/logs/images-publish/node-windows.log",
+			"/logs/images-publish/node.log",
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			if err := tc.run(imageManager(t, f, "/logs")); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			// node ships both variants, so its two units must not share a file.
+			got := f.logPathsForDir("/repo/node ")
+			slices.Sort(got)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("node log paths\n got %v\nwant %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Narrowing must scope the manager's image steps the same way the CLI does.
+func TestImageStepsNarrowedToReleaseDirs(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		run    func(*CalicoManager) error
+		target string
+	}{
+		{"build", (*CalicoManager).buildContainerImages, "release-build"},
+		{"publish", (*CalicoManager).publishContainerImages, "release-publish"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFakeRunner()
+			m := imageManager(t, f, "")
+			m.imageReleaseDirs = []string{"whisker"}
+			if err := tc.run(m); err != nil {
+				t.Fatalf("%s: %v", tc.name, err)
+			}
+			units := unitCalls(f, tc.target)
+			if len(units) != 1 {
+				t.Fatalf("expected one unit for whisker, ran: %v", units)
+			}
+			if !f.ran("make -C /repo/whisker " + tc.target) {
+				t.Errorf("did not run %s in whisker, ran: %v", tc.target, f.calls)
+			}
+		})
+	}
+}
+
+// An empty list leaves every directory in play.
+func TestImageStepsUnnarrowedByDefault(t *testing.T) {
+	f := newFakeRunner()
+	if err := imageManager(t, f, "").publishContainerImages(); err != nil {
+		t.Fatalf("publishContainerImages: %v", err)
+	}
+	want := len(images.VariantDirs([]images.Variant{images.PublishVariants[0]}))
+	if got := len(unitCalls(f, "release-publish")); got != want {
+		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
+	}
 }
