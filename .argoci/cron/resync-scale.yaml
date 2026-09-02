@@ -34,23 +34,19 @@ steps:
       diskType: pd-ssd
       diskSize: 200GB
       runAsNonRoot: true
-
-    # A VM step checks out by default, into ${CI_HOME}.  This one clones the
-    # repo itself, a few lines below, so that would be a second copy that
-    # nothing reads.
-    checkout: false
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
     commands: |
-      set -o pipefail
+      set -eo pipefail
 
-      # `checkout: false` above, so fetch the code ourselves.  The scale test
-      # and the publisher both come from this clone, and DevStack's Calico
-      # plugin clones the networking-calico code from it too, via
-      # NC_PLUGIN_REPO/NC_PLUGIN_REF below.
-      export CALICO_REPO_DIR="${HOME}/calico"
-      git clone --depth 1 --branch "${CI_GIT_BRANCH:-master}" \
-        https://github.com/projectcalico/calico.git "${CALICO_REPO_DIR}"
+      # Use the checkout the VM step has already made under ${CI_HOME}: it
+      # clones CI_GIT_URL at CI_GIT_SHA, so a PR run tests the PR's code.  A
+      # hand-rolled clone cannot -- the branch lives on a fork, and CI_GIT_URL
+      # is the only variable that names it.  The scale test and the publisher
+      # both come from here, and DevStack's Calico plugin clones the
+      # networking-calico code from it too, via NC_PLUGIN_REPO/NC_PLUGIN_REF
+      # below.
+      export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
       cd "${CALICO_REPO_DIR}/networking-calico"
       # DevStack's Calico plugin clones from NC_PLUGIN_REPO as the `stack`
       # user, so git sees a repo owned by someone else and refuses unless the
