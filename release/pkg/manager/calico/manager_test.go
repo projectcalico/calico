@@ -588,38 +588,57 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 }
 
 // TestBuildE2EBinariesRestrictsArchitectures asserts the hashrelease e2e build
-// is pinned to the architectures consumed by test cycles (amd64, arm64). This
-// keeps ppc64le/s390x out of the build so it does not exhaust the release
-// agent's disk.
+// is limited to the architectures consumed by test cycles (amd64, arm64), the
+// intersection of the configured arches and the supported set. The restriction
+// must go through ARCHES: lib.Makefile assigns VALIDARCHES with `=`, so passing
+// VALIDARCHES via the environment is a no-op.
 func TestBuildE2EBinariesRestrictsArchitectures(t *testing.T) {
-	repoRoot := t.TempDir()
-	// Stage a built e2e binary so the post-build hard-link step succeeds.
-	e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
-	if err := os.MkdirAll(e2eBinDir, 0o755); err != nil {
-		t.Fatalf("setup: %v", err)
+	tests := []struct {
+		name          string
+		architectures []string
+		wantArches    string
+	}{
+		{"default four arches drop ppc64le/s390x", []string{"amd64", "arm64", "ppc64le", "s390x"}, "amd64 arm64"},
+		{"narrowed build keeps only its supported arch", []string{"arm64"}, "arm64"},
 	}
-	if err := os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repoRoot := t.TempDir()
+			// Stage a built e2e binary so the post-build hard-link step succeeds.
+			e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+			if err := os.MkdirAll(e2eBinDir, 0o755); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644); err != nil {
+				t.Fatalf("setup: %v", err)
+			}
 
-	f := newFakeRunner()
-	r := &CalicoManager{
-		runner:        f,
-		repoRoot:      repoRoot,
-		outputDir:     t.TempDir(),
-		calicoVersion: "v3.33.0-0.dev-1-gabcdef123456",
-	}
+			f := newFakeRunner()
+			r := &CalicoManager{
+				runner:        f,
+				repoRoot:      repoRoot,
+				outputDir:     t.TempDir(),
+				calicoVersion: "v3.33.0-0.dev-1-gabcdef123456",
+				architectures: tt.architectures,
+			}
 
-	if err := r.buildE2EBinaries(); err != nil {
-		t.Fatalf("buildE2EBinaries() unexpected error: %v", err)
-	}
+			if err := r.buildE2EBinaries(); err != nil {
+				t.Fatalf("buildE2EBinaries() unexpected error: %v", err)
+			}
 
-	makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
-	env := f.envFor(makePrefix)
-	if env == nil {
-		t.Fatalf("e2e build-all was not run (calls: %v)", f.calls)
-	}
-	if !slices.Contains(env, "VALIDARCHES=amd64 arm64") {
-		t.Errorf("e2e build-all env = %v, want it to contain VALIDARCHES=amd64 arm64", env)
+			makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
+			env := f.envFor(makePrefix)
+			if env == nil {
+				t.Fatalf("e2e build-all was not run (calls: %v)", f.calls)
+			}
+			if !slices.Contains(env, "ARCHES="+tt.wantArches) {
+				t.Errorf("e2e build-all env = %v, want it to contain ARCHES=%s", env, tt.wantArches)
+			}
+			for _, e := range env {
+				if strings.HasPrefix(e, "VALIDARCHES=") {
+					t.Errorf("e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
+				}
+			}
+		})
 	}
 }

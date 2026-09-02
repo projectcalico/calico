@@ -352,7 +352,7 @@ func (r *CalicoManager) Build() error {
 			for _, c := range [][]string{
 				{"docker", "builder", "prune", "-af"},
 				{"docker", "image", "prune", "-f"},
-				{"rm", "-rf", filepath.Join(r.tmpDir, "operator", ".go-pkg-cache")},
+				{"rm", "-rf", filepath.Join(r.tmpDir, r.operatorRepo, ".go-pkg-cache")},
 			} {
 				if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
 					logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
@@ -1249,11 +1249,23 @@ func (r *CalicoManager) buildReleaseTar() error {
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	// Only amd64 and arm64 e2e test binaries are consumed by test cycles: runners
-	// select the binary by their own node arch, and there are no ppc64le/s390x e2e
-	// runners. Building all four exhausts the release agent's disk, so restrict to
-	// the two architectures we actually ship.
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "VALIDARCHES=amd64 arm64")
+	// e2e test binaries are only consumed on amd64 and arm64: test runners pick
+	// the binary matching their own node arch, and there are no ppc64le/s390x e2e
+	// runners. Building every configured arch also exhausts the release agent's
+	// disk. Build the intersection of the configured and the supported arches.
+	// The set is controlled via ARCHES, not VALIDARCHES: lib.Makefile assigns
+	// VALIDARCHES with `=`, so it ignores the environment.
+	var e2eArches []string
+	for _, arch := range r.architectures {
+		if arch == "amd64" || arch == "arm64" {
+			e2eArches = append(e2eArches, arch)
+		}
+	}
+	if len(e2eArches) == 0 {
+		logrus.Info("No amd64/arm64 in the configured architectures; skipping e2e test binaries")
+		return nil
+	}
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(e2eArches, " "))
 	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
 	if err != nil {
 		logrus.Error(out)
