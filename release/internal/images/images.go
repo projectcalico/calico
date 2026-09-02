@@ -18,6 +18,7 @@ package images
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -417,19 +418,25 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 		return false, err
 	}
 
-	recorded := make(map[string]string, len(c.Published))
+	// A repo publishes several tags, each at its own digest, and the record
+	// keeps refs rather than tags. So a repo maps to the SET of digests it
+	// recorded, and a tag counts as published when its digest is in that set.
+	recorded := make(map[string]map[string]struct{}, len(c.Published))
 	for _, ref := range c.Published {
-		name, digest, ok := strings.Cut(ref, "@")
+		repo, digest, ok := strings.Cut(ref, "@")
 		if !ok {
 			continue
 		}
-		recorded[name] = digest
+		if recorded[repo] == nil {
+			recorded[repo] = map[string]struct{}{}
+		}
+		recorded[repo][digest] = struct{}{}
 	}
 
 	for _, reg := range c.Registries {
 		for _, name := range names {
 			repo := fmt.Sprintf("%s/%s", reg, name)
-			want, ok := recorded[repo]
+			digests, ok := recorded[repo]
 			if !ok {
 				return false, nil
 			}
@@ -442,11 +449,12 @@ func (c Config) unitState(u unit, resolve DigestResolver) (done bool, err error)
 				if !exists {
 					return false, nil
 				}
-				if got != want {
+				if _, known := digests[got]; !known {
 					if !c.Force {
 						return false, fmt.Errorf(
-							"%s is published at %s but the record says %s; "+
-								"pass --force to republish over it", image, got, want)
+							"%s is published at %s; this release recorded %s. "+
+								"Pass --force to republish over it",
+							image, got, strings.Join(slices.Sorted(maps.Keys(digests)), ", "))
 					}
 					return false, nil
 				}

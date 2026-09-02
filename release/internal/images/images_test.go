@@ -853,7 +853,8 @@ func TestPublishFailsOnDigestMismatch(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected a mismatch to be reported")
 	}
-	// The message has to be actionable at 2am mid-release.
+	// The message has to be actionable at 2am mid-release: what is published,
+	// what this release recorded, and how to override.
 	for _, want := range []string{"sha256:aaa", "sha256:bbb", "whisker", "--force"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should name %q, got %q", want, err)
