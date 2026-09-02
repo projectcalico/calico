@@ -34,8 +34,7 @@ import (
 
 // Build context keys
 const (
-	calicoBuildCtxKey     contextKey = "calico-build-type"
-	enterpriseBuildCtxKey contextKey = "enterprise-build-type"
+	calicoBuildCtxKey contextKey = "calico-build-type"
 )
 
 // Build types
@@ -44,7 +43,7 @@ const (
 	versionBuild  buildType = "version"
 )
 
-// type of build being performed. Either using the Calico/Enterprise version or its corresponding versions file.
+// type of build being performed. Either using the Calico version or its corresponding versions file.
 type buildType string
 
 // Command to build release artifacts.
@@ -61,11 +60,6 @@ var buildCommand = &cli.Command{
 		calicoImagePathFlag,
 		calicoVersionsConfigFlag,
 		calicoDirFlag,
-		enterpriseVersionFlag,
-		enterpriseRegistryFlag,
-		enterpriseImagePathFlag,
-		enterpriseVersionsConfigFlag,
-		enterpriseDirFlag,
 		hashreleaseFlag,
 		skipValidationFlag,
 		versionCheckFlag,
@@ -87,7 +81,7 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 
 	var err error
 
-	// Determine build types for Calico and Enterprise
+	// Determine the Calico build type
 	if ver := c.String(calicoVersionsConfigFlag.Name); ver != "" {
 		ctx = context.WithValue(ctx, calicoBuildCtxKey, versionsBuild)
 		logrus.Debug("Calico build using versions file selected")
@@ -95,14 +89,6 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 	if ver := c.String(calicoVersionFlag.Name); ver != "" {
 		ctx = context.WithValue(ctx, calicoBuildCtxKey, versionBuild)
 		logrus.Debug("Calico build using specific version selected")
-	}
-	if ver := c.String(enterpriseVersionsConfigFlag.Name); ver != "" {
-		ctx = context.WithValue(ctx, enterpriseBuildCtxKey, versionsBuild)
-		logrus.Debug("Enterprise build using versions file selected")
-	}
-	if ver := c.String(enterpriseVersionFlag.Name); ver != "" {
-		ctx = context.WithValue(ctx, enterpriseBuildCtxKey, versionBuild)
-		logrus.Debug("Enterprise build using specific version selected")
 	}
 
 	// Run version validations. This is a mandatory check.
@@ -128,12 +114,10 @@ var buildBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (cont
 		return ctx, nil
 	}
 
-	// For hashrelease builds, ensure at least one of Calico or Enterprise version or versions file is
-	// specified. CRDs come from the working tree unless a dir flag points somewhere else.
-	_, calicoBuildOk := ctx.Value(calicoBuildCtxKey).(buildType)
-	_, enterpriseBuildOk := ctx.Value(enterpriseBuildCtxKey).(buildType)
-	if !calicoBuildOk && !enterpriseBuildOk {
-		return ctx, fmt.Errorf("for hashrelease builds, at least one of Calico or Enterprise version or versions file must be specified")
+	// For hashrelease builds, ensure the Calico version or versions file is specified. CRDs come from
+	// the working tree unless --calico-dir points somewhere else.
+	if _, ok := ctx.Value(calicoBuildCtxKey).(buildType); !ok {
+		return ctx, fmt.Errorf("for hashrelease builds, the Calico version or versions file must be specified")
 	}
 
 	return ctx, nil
@@ -301,16 +285,6 @@ var setupHashreleaseBuild = func(ctx context.Context, c *cli.Command, repoRootDi
 			return fmt.Errorf("updating Calico image path: %w", err)
 		}
 	}
-	if registry := c.String(enterpriseRegistryFlag.Name); registry != "" {
-		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.EnterpriseRegistryConfigKey, addTrailingSlash(registry)); err != nil {
-			return fmt.Errorf("updating Enterprise registry: %w", err)
-		}
-	}
-	if imagePath := c.String(enterpriseImagePathFlag.Name); imagePath != "" {
-		if err := versions.ModifyComponentImageConfig(repoRootDir, versions.ComponentImageConfigRelPath, versions.EnterpriseImagePathConfigKey, imagePath); err != nil {
-			return fmt.Errorf("updating Enterprise image path: %w", err)
-		}
-	}
 
 	// Update versions and CRDs
 	genEnv := os.Environ()
@@ -318,11 +292,8 @@ var setupHashreleaseBuild = func(ctx context.Context, c *cli.Command, repoRootDi
 	if dir := c.String(calicoDirFlag.Name); dir != "" {
 		genEnv = append(genEnv, fmt.Sprintf("CALICO_CRDS_DIR=%s", dir))
 	}
-	if dir := c.String(enterpriseDirFlag.Name); dir != "" {
-		genEnv = append(genEnv, fmt.Sprintf("ENTERPRISE_CRDS_DIR=%s", dir))
-	}
 	if bt, ok := ctx.Value(calicoBuildCtxKey).(buildType); ok {
-		genMakeTargets = append(genMakeTargets, "gen-versions-calico")
+		genMakeTargets = append(genMakeTargets, versions.MakeTargetGenVersionsCalico)
 		switch bt {
 		case versionBuild:
 			if err := versions.UpdateCalicoConfigVersion(repoRootDir, c.String(calicoVersionFlag.Name)); err != nil {
@@ -330,17 +301,6 @@ var setupHashreleaseBuild = func(ctx context.Context, c *cli.Command, repoRootDi
 			}
 		case versionsBuild:
 			genEnv = append(genEnv, fmt.Sprintf("OS_VERSIONS=%s", c.String(calicoVersionsConfigFlag.Name)))
-		}
-	}
-	if bt, ok := ctx.Value(enterpriseBuildCtxKey).(buildType); ok {
-		genMakeTargets = append(genMakeTargets, "gen-versions-enterprise")
-		switch bt {
-		case versionBuild:
-			if err := versions.UpdateEnterpriseConfigVersion(repoRootDir, c.String(enterpriseVersionFlag.Name)); err != nil {
-				return err
-			}
-		case versionsBuild:
-			genEnv = append(genEnv, fmt.Sprintf("EE_VERSIONS=%s", c.String(enterpriseVersionsConfigFlag.Name)))
 		}
 	}
 	if out, err := command.MakeInDir(repoRootDir, strings.Join(genMakeTargets, " "), genEnv...); err != nil {

@@ -97,9 +97,9 @@ startup in `internal/setup`; see that package's doc comment for how and why.
 
 The cloud defaults for the published image (`BUILD_IMAGE`, `IMAGE_REGISTRY`, `PUSH_IMAGE_PREFIXES`)
 are set with `?=` in the Makefile, so the environment still wins. Calico Enterprise hashreleases use
-that: calico-private's release tool builds the cloud variant with `IMAGE_NAME=tigera/operator-cloud`
-and the hashrelease registry, so hashrelease images land next to the enterprise operator instead of
-in `gcr.io/tigera-tesla`.
+that: they build the cloud variant with `IMAGE_NAME=tigera/operator-cloud` and the hashrelease
+registry, so hashrelease images land next to the enterprise operator instead of in
+`gcr.io/tigera-tesla`.
 
 Here `RELEASE_TAG` is the operator version, which for cloud carries the `-cloud` suffix — not a
 separate git tag. CI never pushes a `-cloud` git tag: pushing a plain `vA.B.C` git tag builds both
@@ -110,8 +110,7 @@ cloud release tags or pipelines.
 ### Build and publish a hashrelease
 
 This is similar to [building and publishing a release](#build-and-publish-a-release), it uses the `release build` and `release publish` commands.
-However, some additonal flags are used to provide more information on the Calico or Calico Enterprise version to be included in the hashrelease.
-Unlike a release, a hashrelease is typically for either a Calico or Calico Enterprise version not both *though it is possible to do both but not advised*.
+However, some additonal flags are used to provide more information on the Calico version to be included in the hashrelease.
 
 1. Given an operator development version `vA.B.C-0.dev-N-gHAAAAAAAAASH`
 
@@ -126,46 +125,26 @@ Unlike a release, a hashrelease is typically for either a Calico or Calico Enter
       #   --calico-versions path/to/calico-versions.yaml
       ```
 
-   1. Build the hashrelease operator image for Calico Enterprise vX.Y.Z-calient-0.dev-N-gSHAAAAAAAAAA
-
-      ```sh
-      make release HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-calient-0.dev-N-gSHAAAAAAAAAA \
-        --enterprise-version vX.Y.Z-calient-0.dev-N-gSHAAAAAAAAAA --enterprise-dir path/to/local/enterprise-repo
-
-      # alternatively, using versions file
-      # make release HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-calient-0.dev-N-gSHAAAAAAAAAA \
-      #   --enterprise-versions path/to/enterprise-versions.yaml
-      ```
-
 1. Publish the hashrelease operator image to the container registry.
 
-   1. For Calico hashrelease
-
-     ```sh
-     make release-publish HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-0.dev-N-gSHAAAAAAAAAA
-     ```
-
-   1. For Calico Enterprise hashrelease
-
-     ```sh
-     make release-publish HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-calient-0.dev-N-gSHAAAAAAAAAA
-     ```
+   ```sh
+   make release-publish HASHRELEASE=true VERSION=vA.B.C-0.dev-XXX-gYYYYYYYYYYYY-vX.Y.Z-0.dev-N-gSHAAAAAAAAAA
+   ```
 
 ## Commands
 
 ### release branch
 
 This command creates a new release branch for the operator.
-It updates the calico and enterprise version configs on the release branch, regenerates files,
+It updates the calico version config on the release branch, regenerates files,
 and commits the changes. It then switches back to master, creates an empty commit tagged
 with `vX.Y.0-0.dev` (so that `git describe --tags` produces sensible versions for subsequent
 master commits), and pushes the release branch, master, and tag to the remote.
 
-Both `--calico-ref` and `--enterprise-ref` are required.
-They specify the git ref (branch or tag) to use for each product's version config.
+`--calico-ref` is required. It specifies the git ref (branch or tag) to use for the Calico version config.
 
 ```sh
-release branch --stream <vX.Y> --calico-ref <git-ref> --enterprise-ref <git-ref>
+release branch --stream <vX.Y> --calico-ref <git-ref>
 ```
 
 If the `--local` flag is specified, the branch and tag are created locally without pushing to the remote.
@@ -174,28 +153,27 @@ If the `--local` flag is specified, the branch and tag are created locally witho
 | ------------------------- | -------------------------- | --------------------------------------------- |
 | `--stream`                | `RELEASE_STREAM`/ `STREAM` | Release stream (e.g., `v1.43`). Required.     |
 | `--calico-ref`            | `CALICO_REF`               | Calico git ref (branch or tag). Required.     |
-| `--enterprise-ref`        | `ENTERPRISE_REF`           | Enterprise git ref (branch or tag). Required. |
 | `--release-branch-prefix` | `RELEASE_BRANCH_PREFIX`    | Branch name prefix (default: `release`).      |
 | `--local`                 | `LOCAL`                    | Skip pushing to remote.                       |
 
 There is also a Makefile target:
 
 ```sh
-make create-release-branch RELEASE_STREAM=vX.Y CALICO_REF=<ref> ENTERPRISE_REF=<ref>
+make create-release-branch RELEASE_STREAM=vX.Y CALICO_REF=<ref>
 ```
 
 #### Examples
 
-1. To create a release branch for operator v1.42 with Calico v3.32 and Enterprise v3.22
+1. To create a release branch for operator v1.42 with Calico v3.32
 
     ```sh
-    release branch --stream v1.42 --calico-ref release-v3.32 --enterprise-ref release-calient-v3.22
+    release branch --stream v1.42 --calico-ref release-v3.32
     ```
 
 1. To perform the same action as above but only locally without pushing to the remote
 
     ```sh
-    release branch --stream v1.42 --calico-ref release-v3.32 --enterprise-ref release-calient-v3.22 --local
+    release branch --stream v1.42 --calico-ref release-v3.32 --local
     ```
 
 ### release build
@@ -208,12 +186,12 @@ To build the operator image, use the following command:
 release build --version <operator version>
 ```
 
-For hashrelease, use the `--hashrelease` flag and provide either the Calico or Calico Enterprise version or versions file.
-CRDs come from the working tree. Pass `--calico-dir` or `--enterprise-dir` to read them from another checkout instead.
+For hashrelease, use the `--hashrelease` flag and provide either the Calico version or versions file.
+CRDs come from the working tree. Pass `--calico-dir` to read them from another checkout instead.
 
 ```sh
 release build --version <operator version> --hashrelease \
-  [--calico-version <calico version> | --calico-versions <path to calico version file> |--enterprise-version <enterprise version> | --enterprise-versions <path to enterprise version file>] [--calico-dir <path to local calico repo> | --enterprise-dir <path to local enterprise repo>]
+  [--calico-version <calico version> | --calico-versions <path to calico version file>] [--calico-dir <path to local calico repo>]
 ```
 
 #### Examples
@@ -238,39 +216,6 @@ release build --version <operator version> --hashrelease \
        ```sh
        release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5 \
         --calico-version v3.30.0-0.dev-338-gca80474016a5 --calico-dir path/to/local/calico-repo
-       ```
-
-1. To build hashrelease operator image for Calico Enterprise v3.22
-
-   1. Using Enterprise versions file
-
-         ```sh
-         release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.22.0-calient-0.dev-100-gabcdef123456 \
-          --enterprise-versions path/to/enterprise-versions.yaml
-         ```
-
-   1. Specifying version directly
-
-       ```sh
-       release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.22.0-calient-0.dev-100-gabcdef123456 \
-        --enterprise-version v3.22.0-calient-0.dev-100-gabcdef123456 --enterprise-dir path/to/local/enterprise-repo
-       ```
-
-1. *Not typically recommended*, but to build hashrelease operator image for both Calico v3.30 and Calico Enterprise v3.22
-
-   1. Using versions file
-
-         ```sh
-         release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5-v3.22.0-calient-0.dev-100-gabcdef123456 \
-          --calico-versions path/to/calico-versions.yaml --enterprise-versions path/to/enterprise-versions.yaml
-         ```
-
-   1. Specifying versions directly
-
-       ```sh
-       release build --hashrelease --version v1.36.0-0.dev-259-g25c811f78fbd-v3.30.0-0.dev-338-gca80474016a5-v3.22.0-calient-0.dev-100-gabcdef123456 \
-        --calico-version v3.30.0-0.dev-338-gca80474016a5 --calico-dir path/to/local/calico-repo \
-        --enterprise-version v3.22.0-calient-0.dev-100-gabcdef123456 --enterprise-dir path/to/local/enterprise-repo
        ```
 
 ### release publish
@@ -322,16 +267,13 @@ which involves creating a new milestone for the next patch version and closing t
 for the release version. All open issues and pull requests associated with the current milestone
 are moved to the new milestone.
 
-  > [!IMPORTANT]
-  > At least one of Calico or Calico Enterprise version must be specified.
-  > If both are specified, the versions files for both products are updated.
-
 To prepare for a new release, use the following command:
 
 ```sh
-release prep --version <new operator version> [--calico-version <calico version> |
---enterprise-version <calico enterprise version>]
+release prep --version <new operator version> [--calico-version <calico version>]
 ```
+
+If `--calico-version` is omitted, the version already in `config/calico_versions.yml` is used, and must be a released version.
 
 If the `--local` flag is specified, none of the remote changes will be made i.e.
 no branch in the remote repo and no pull request will be created. Also milestones will not be modified on GitHub.
@@ -344,17 +286,10 @@ no branch in the remote repo and no pull request will be created. Also milestone
     release prep --version v1.36.0 --calico-version v3.30.0
     ```
 
-1. To prepare for a new release `v1.36.0` with Calico Enterprise version `v3.20.0-1.0`
+1. To prepare for a new release `v1.36.0` with Calico version `v3.30.0` using local changes only
 
     ```sh
-    release prep --version v1.36.0 --enterprise-version v3.20.0-1.0
-    ```
-
-1. To prepare for a new release `v1.36.0` with Calico version `v3.30.0`
-   and Calico Enterprise version `v3.20.0-1.0` using local changes only
-
-    ```sh
-    release prep --version v1.36.0 --calico-version v3.30.0 --enterprise-version v3.20.0-1.0 --local
+    release prep --version v1.36.0 --calico-version v3.30.0 --local
     ```
 
 ### release notes
@@ -422,7 +357,7 @@ with updates made to the image list based on the changes passed in.
 
 ```sh
 release from --base-version <previous operator version> --version <version to release> \
-  [--except-calico | --except-calico-enterprise] <image>:<image version>
+  --except-calico <image>:<image version>
 ```
 
 > [!IMPORTANT]
@@ -448,18 +383,7 @@ release from --base-version <previous operator version> --version <version to re
     ```
 
 1. To create a new operator release `v1.36.3` that has almost all the same images as `v1.36.2`
-    with the exception of Enterprise `linseed` component using `v3.20.0-2.2` locally.
-
-    > [!WARNING]
-    > This assumes that user has push access to [`tigera/operator`](https://github.com/tigera/operator)
-
-    ```sh
-    release from --base-version v1.36.2 --version v1.36.3 \
-      --except-calico-enterprise linseed:v3.20.0-2.2
-    ```
-
-1. To create a new operator release `v1.36.3` that has almost all the same images as `v1.36.2`
-    with the exception of Enterprise `linseed` component using `v3.20.0-2.2`.
+    with the exception of the `typha` component using `v3.30.1`.
 
     > [!WARNING]
     > This assumes that user has push access to [`tigera/operator`](https://github.com/tigera/operator)
@@ -467,5 +391,5 @@ release from --base-version <previous operator version> --version <version to re
 
     ```sh
     release from --base-version v1.36.2 --version v1.36.3 \
-      --except-calico-enterprise linseed:v3.20.0-2.2 --publish
+      --except-calico typha:v3.30.1 --publish
     ```

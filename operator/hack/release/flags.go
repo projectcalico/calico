@@ -291,6 +291,7 @@ var (
 		Category: calicoFlagCategory,
 		Usage:    "Calico image and version to update where the image name adheres with config/calico_versions.yaml file. Can be specified multiple times.",
 		Sources:  cli.EnvVars("OS_IMAGES_VERSIONS"),
+		Required: true,
 		Action:   validateOverrides,
 	}
 	calicoRegistryFlag = &cli.StringFlag{
@@ -338,87 +339,6 @@ var (
 		Usage:    "The directory containing the Calico CRDs to bundle with the operator (development and testing purposes only)",
 		Sources:  cli.EnvVars("CALICO_DIR"),
 		Action:   dirFlagCheck,
-	}
-)
-
-// Enterprise related flags.
-var (
-	enterpriseFlagCategory = "Enterprise Options"
-	enterpriseVersionFlag  = &cli.StringFlag{
-		Name:     "enterprise-version",
-		Category: enterpriseFlagCategory,
-		Usage:    "The Calico Enterprise version to use for the release",
-		Sources:  cli.EnvVars("ENTERPRISE_VERSION"),
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			if c.Bool(hashreleaseFlag.Name) {
-				// No need to validate Enterprise version for hashrelease
-				return nil
-			}
-			if valid, err := isEnterpriseReleaseVersionFormat(s); err != nil {
-				return fmt.Errorf("error validating Enterprise version format: %w", err)
-			} else if !valid {
-				return fmt.Errorf("version %q is not a valid Enterprise release version", s)
-			}
-			return nil
-		},
-	}
-	enterpriseRefFlag = &cli.StringFlag{
-		Name:     "enterprise-ref",
-		Category: enterpriseFlagCategory,
-		Usage:    "The Enterprise git ref (branch or tag) to use for version config (e.g. release-calient-vX.Y-1)",
-		Sources:  cli.EnvVars("ENTERPRISE_REF"),
-	}
-	enterpriseRegistryFlag = &cli.StringFlag{
-		Name:     "enterprise-registry",
-		Category: enterpriseFlagCategory,
-		Usage:    "The registry Enterprise images are hosted in.",
-		Sources:  cli.EnvVars("ENTERPRISE_REGISTRY"),
-	}
-	enterpriseImagePathFlag = &cli.StringFlag{
-		Name:     "enterprise-image-path",
-		Category: enterpriseFlagCategory,
-		Usage:    "The path to the Enterprise images file.",
-		Sources:  cli.EnvVars("ENTERPRISE_IMAGE_PATH"),
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			if s != "" && !c.Bool(hashreleaseFlag.Name) {
-				return fmt.Errorf("enterprise-image-path can only be set for hashreleases")
-			}
-			return nil
-		},
-	}
-	enterpriseVersionsConfigFlag = &cli.StringFlag{
-		Name:     "enterprise-versions",
-		Category: enterpriseFlagCategory,
-		Usage:    "The path to the Enterprise versions config file.",
-		Sources:  cli.EnvVars("ENTERPRISE_VERSIONS"),
-		Action: func(ctx context.Context, c *cli.Command, s string) error {
-			if s != "" && !c.Bool(hashreleaseFlag.Name) {
-				return fmt.Errorf("enterprise-versions can only be set for hashreleases")
-			}
-			if s != "" && c.String(enterpriseVersionFlag.Name) != "" {
-				return fmt.Errorf("enterprise-versions and enterprise-version cannot both be set")
-			}
-			return fileFlagCheck(ctx, c, s)
-		},
-	}
-	enterpriseDirFlag = &cli.StringFlag{
-		Name:     "enterprise-dir",
-		Category: enterpriseFlagCategory,
-		Usage:    "The directory containing the Enterprise CRDs to bundle with the operator (development and testing purposes only)",
-		Sources:  cli.EnvVars("ENTERPRISE_DIR"),
-		Action:   dirFlagCheck,
-	}
-	exceptEnterpriseFlag = &cli.StringSliceFlag{
-		Name:     "except-calico-enterprise",
-		Category: enterpriseFlagCategory,
-		Usage:    "Enterprise image and version to update where image name adheres with config/enterprise_versions.yaml file. Can be specified multiple times.",
-		Sources:  cli.EnvVars("EE_IMAGES_VERSIONS"),
-		Action: func(ctx context.Context, c *cli.Command, values []string) error {
-			if len(values) == 0 && len(c.StringSlice("except-calico")) == 0 {
-				return fmt.Errorf("at least one of --except-calico or --except-calico-enterprise must be set")
-			}
-			return validateOverrides(ctx, c, values)
-		},
 	}
 )
 

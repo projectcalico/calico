@@ -75,18 +75,6 @@ func calicoConfigVersions(t *testing.T, ref string) *versions.CalicoVersion {
 	return v
 }
 
-func enterpriseConfigVersions(t *testing.T, ref string) *versions.CalicoVersion {
-	t.Helper()
-	v, err := versions.GitRefConfigEnterpriseVersion(ref)
-	if err != nil {
-		t.Fatalf("failed to get Enterprise config versions: %v", err)
-	}
-	if v.Title == "" {
-		t.Fatalf("no version title found in %s", versions.EnterpriseConfigPath)
-	}
-	return v
-}
-
 // fetchReleaseBranch fetches the release branch ref so git show works.
 func fetchReleaseBranch(t *testing.T, branch string) string {
 	t.Helper()
@@ -142,17 +130,6 @@ func extractMakefileVar(content, name string) (string, error) {
 		return "", fmt.Errorf("%s assignment not found", name)
 	}
 	return m[1], nil
-}
-
-func TestBranchCutEnterprise(t *testing.T) {
-	stream := requireStream(t)
-	branch := releaseBranchName(stream)
-	ref := fetchReleaseBranch(t, branch)
-
-	cv := enterpriseConfigVersions(t, ref)
-	if cv.Title == defaultBaseBranch {
-		t.Fatalf("enterprise version is still %s on release branch", defaultBaseBranch)
-	}
 }
 
 func TestBranchCutNextDevRelease(t *testing.T) {

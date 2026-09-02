@@ -35,17 +35,13 @@ var prepCommand = &cli.Command{
 	Description: `This involves updating version configuration files, creating a new git branch with the changes,
 pushing the branch to remote, and creating a PR against the release branch.
 
-The Calico and Enterprise versions specified must exist as a tag in their respective GitHub repositories.
-Otherwise, use the environment variables "CALICO_CRDS_DIR" and "ENTERPRISE_CRDS_DIR"
-to point to local repositories for Calico and Enterprise respectively.`,
+Calico CRDs come from the working tree. Set the environment variable "CALICO_CRDS_DIR" to take them
+from another checkout instead.`,
 	Flags: []cli.Flag{
 		versionFlag,
 		releaseBranchPrefixFlag,
 		calicoVersionFlag,
 		calicoDirFlag,
-		enterpriseVersionFlag,
-		enterpriseDirFlag,
-		enterpriseRegistryFlag,
 		skipValidationFlag,
 		skipMilestoneFlag,
 		skipBranchCheckFlag,
@@ -59,16 +55,9 @@ to point to local repositories for Calico and Enterprise respectively.`,
 }
 
 // validatePrepRefs checks the required refs for release prep:
-//   - check that at least one of calico or enterprise version is provided
 //   - if calico version is not provided, check that the version in calico_versions.yml is a released version
 //   - check that the base branch is a release branch (if not skipped)
 var validatePrepRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
-	// check that at least one of calico/enterprise version is set for prep
-	ctx, err := checkAtLeastOneOfFlags(ctx, c, calicoVersionFlag.Name, enterpriseVersionFlag.Name)
-	if err != nil {
-		return ctx, err
-	}
-
 	// If Calico is not passed in, check the version in calico_versions.yml is a released version.
 	// An operator release must always include a released Calico version.
 	calicoVersion := c.String(calicoVersionFlag.Name)
@@ -129,9 +118,6 @@ var prepContextValuesFunc = func(ctx context.Context, c *cli.Command) (context.C
 	ctx = context.WithValue(ctx, branchNameCtxKey, fmt.Sprintf("build-%s", version))
 	if calicoVer := c.String(calicoVersionFlag.Name); calicoVer != "" {
 		ctx = context.WithValue(ctx, calicoConfigVersionCtxKey, calicoVer)
-	}
-	if epVer := c.String(enterpriseVersionFlag.Name); epVer != "" {
-		ctx = context.WithValue(ctx, enterpriseConfigVersionCtxKey, epVer)
 	}
 	return ctx, nil
 }
