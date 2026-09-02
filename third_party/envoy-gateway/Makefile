@@ -34,10 +34,9 @@ $(ENVOY_GATEWAY_DOWNLOADED):
 # 	For each valid patch file, it applies the patch to the envoy-gateway directory using patch -p1.
 	for patch in patches/*.patch; do \
 		if [ -f "$$patch" ]; then \
-			patch -d envoy-gateway -p1 < "$$patch"; \
+			patch -d envoy-gateway -p1 < "$$patch" || exit 1; \
 		fi; \
-	done; \
-
+	done
 	touch $@
 
 .PHONY: build
