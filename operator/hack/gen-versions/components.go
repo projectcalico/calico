@@ -16,7 +16,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -167,12 +169,26 @@ func readComponents(versionsPath string) (Release, error) {
 	return cr, nil
 }
 
-func render(tplFile string, vz Release) error {
-	t, err := template.ParseFiles(tplFile)
+func render(w io.Writer, tplFile string, vz Release) error {
+	funcs := template.FuncMap{
+		"required": requiredComponent,
+	}
+
+	name := filepath.Base(tplFile)
+	t, err := template.New(name).Funcs(funcs).Option("missingkey=error").ParseFiles(tplFile)
 	if err != nil {
 		return fmt.Errorf("failed to parse template file file: %v", err)
 	}
-	t.Option("missingkey=error")
 
-	return t.Execute(os.Stdout, vz)
+	return t.Execute(w, vz)
+}
+
+// requiredComponent returns the named component, erroring when the versions file
+// omits it rather than letting the template render an empty image reference.
+func requiredComponent(components Components, key string) (*Component, error) {
+	c, ok := components[key]
+	if !ok || c == nil {
+		return nil, fmt.Errorf("versions file has no entry for required component %q", key)
+	}
+	return c, nil
 }

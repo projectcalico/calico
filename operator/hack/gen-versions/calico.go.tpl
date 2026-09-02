@@ -19,7 +19,7 @@ package components
 
 var (
 	CalicoRelease string = "{{ .Title }}"
-{{ with index .Components "third-party-cni-plugins" }}
+{{ with required .Components "third-party-cni-plugins" }}
 	ComponentCalicoCNIPlugins = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -28,7 +28,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "cni-windows" }}
+{{ with required .Components "cni-windows" }}
 	ComponentCalicoCNIWindows = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -37,7 +37,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components.node }}
+{{ with required .Components "node" }}
 	ComponentCalicoNode = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -46,7 +46,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components  "node-windows" }}
+{{ with required .Components "node-windows" }}
 	ComponentCalicoNodeWindows = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -55,7 +55,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components.whisker }}
+{{ with required .Components "whisker" }}
 	ComponentCalicoWhisker = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -64,7 +64,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "envoy-gateway" }}
+{{ with required .Components "envoy-gateway" }}
 	ComponentCalicoEnvoyGateway = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -73,7 +73,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "envoy-proxy" }}
+{{ with required .Components "envoy-proxy" }}
 	ComponentCalicoEnvoyProxy = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -82,7 +82,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "envoy-ratelimit" }}
+{{ with required .Components "envoy-ratelimit" }}
 	ComponentCalicoEnvoyRatelimit = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -91,7 +91,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-pilot" }}
+{{ with required .Components "istio-pilot" }}
 	ComponentCalicoIstioPilot = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -100,7 +100,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-install-cni" }}
+{{ with required .Components "istio-install-cni" }}
 	ComponentCalicoIstioInstallCNI = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -109,7 +109,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-ztunnel" }}
+{{ with required .Components "istio-ztunnel" }}
 	ComponentCalicoIstioZTunnel = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -118,7 +118,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components "istio-proxyv2" }}
+{{ with required .Components "istio-proxyv2" }}
 	ComponentCalicoIstioProxyv2 = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",
@@ -127,7 +127,7 @@ var (
 		variant:   calicoVariant,
 	}
 {{- end }}
-{{ with index .Components.calico }}
+{{ with required .Components "calico" }}
 	ComponentCalico = Component{
 		Version:   "{{ .Version }}",
 		Image:     "{{ .Image }}",

@@ -167,7 +167,7 @@ clean:
 ###############################################################################
 # Tests
 ###############################################################################
-UT_DIR?=./pkg
+UT_DIR?=./pkg ./hack/gen-versions
 FV_DIR?=./test
 GO_TEST_ARGS ?= -count 1
 
@@ -190,7 +190,7 @@ ut: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 	go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.22 && \
 	export KUBEBUILDER_ASSETS=$$(setup-envtest use $(ENVTEST_K8S_VERSION) --bin-dir /tmp/envtest-bins -p path) && \
-	gotestsum --format testname --junitfile report/operator_ut.xml -- $(UT_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
+	gotestsum --format testname --junitfile report/operator_ut.xml -- $(addsuffix /...,$(UT_DIR)) $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
 
 ## Run the functional tests against a local kind cluster.
 fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-destroy
