@@ -155,7 +155,6 @@ export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-${BZ_HOME}/.local}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-${HOME}/.bz/logs}
 export REPORT_DIR=${REPORT_DIR:-${BZ_LOCAL_DIR}/report/${TEST_TYPE}}
-export GS_BUCKET=${GS_BUCKET:-argoci-artifacts}
 mkdir -p "${BZ_LOGS_DIR}"   # BZ_HOME + .local are created by "bz init profile"
 
 # --- Install the banzai (bz) CLI: the ArgoCI runner image does not ship it ---
