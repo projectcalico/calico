@@ -31,7 +31,7 @@ VERSIONS_FILE=$(mktemp /tmp/calico_versions_XXXXXX.yml)
 sed -e "s/test-build/${DEV_IMAGE_TAG}/g" \
     -e "/version:/a\\    registry: ${DEV_IMAGE_REGISTRY}/\n    imagePath: ${DEV_IMAGE_PATH}" \
     "${INFRA_DIR}/calico_versions.yml" > "${VERSIONS_FILE}"
-build/_output/bin/gen-versions -os-versions="${VERSIONS_FILE}" > "${COMPONENTS}"
+build/_output/bin/gen-versions -os-versions="${VERSIONS_FILE}" -out="${COMPONENTS}"
 rm -f "${VERSIONS_FILE}"
 
 make image
