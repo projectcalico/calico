@@ -89,7 +89,9 @@ fi
 #     to 'true' to run only the scale benchmark.  This exists for the weekly
 #     scheduled scale run, which uses a much larger port count and has a time
 #     budget to meet; the tests it skips are covered by per-PR CI, which runs
-#     the default ladder.  (Tempest is already off unless TEMPEST is set.)
+#     the default ladder.  It also skips the final block, which runs Tempest
+#     when TEMPEST is set and otherwise creates a demonstration Calico network
+#     -- neither of which a benchmark run has any use for.
 #
 # CALICO_REPO_DIR
 #
@@ -321,6 +323,7 @@ EOF
 ) || true
 
 # Run Tempest tests
+if ! ${SCALE_ONLY:-false}; then
 sudo -u stack -H -E bash -x <<'EOF'
 cd /opt/stack/devstack
 if ! ${TEMPEST:-false}; then
@@ -337,6 +340,7 @@ else
     tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
 fi
 EOF
+fi
 
 # Scan the Neutron server log for issues that should not appear in a
 # healthy run.  This is a guard against regressions of code-quality
