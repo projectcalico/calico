@@ -422,7 +422,7 @@ var _ = Describe("Tigera Secure Fluent Bit rendering tests", func() {
 		// fluentdDaemonSet field, using the fluentd-era container names.
 		cfg.LogCollector = &operatorv1.LogCollector{
 			Spec: operatorv1.LogCollectorSpec{
-				FluentdDaemonSet: &operatorv1.FluentBitDaemonSet{
+				FluentdDaemonSet: &operatorv1.FluentBitDaemonSet{ //nolint:staticcheck // deliberate use of the deprecated alias field
 					Spec: &operatorv1.FluentBitDaemonSetSpec{
 						Template: &operatorv1.FluentBitDaemonSetPodTemplateSpec{
 							Spec: &operatorv1.FluentBitDaemonSetPodSpec{
