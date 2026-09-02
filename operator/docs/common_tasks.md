@@ -1,4 +1,10 @@
-### Adding a new CRD
+# Common Tasks
+
+Day-to-day development procedures for the operator. All `make` targets below run
+from `operator/`. For the workflow and code-generation rules, see
+[dev_guidelines.md](dev_guidelines.md).
+
+## Adding a new CRD
 
 New APIs are added using the `operator-sdk` tool.
 
@@ -11,7 +17,7 @@ might change the scope of existing resources to "Namespaced", so make sure to se
 
 See this demo pull request for more detail on adding both a controller and CRD: https://github.com/tigera/operator/pull/3587
 
-### Adding a new controller
+## Adding a new controller
 
 New controllers are also added using the `operator-sdk` tool.
 
@@ -22,24 +28,24 @@ operator-sdk create api --group=operator.tigera.io --version=v1 --kind=<Kind> --
 New controllers will be created in the newer format so it should be considered if it is desirable to keep the
 current format that calls to a controller in `pkg/controller` or add the controller only in `controllers`.
 
-### Running it locally
+## Running it locally
 
-You can create a local k3d cluster with the Makefile:
+Create a local kind cluster with the Makefile:
 
-	make cluster-create
+	make kind-cluster-create
 
-Export the kubeconfig:
+Export the kubeconfig it writes:
 
-	export KUBECONFIG=./kubeconfig.yaml
+	export KUBECONFIG=../hack/test/kind/kind-kubeconfig.yaml
 
 Create the tigera-operator namespace:
 
-	kubectl create ns tigera-operator
+	make create-tigera-operator-namespace
 
 Then, run the operator against the local cluster:
 
 	# enable-leader-election is necessary since you'll be running the operator outside of a cluster
-	KUBECONFIG=./kubeconfig.yaml go run ./ --enable-leader-election=false
+	go run ./cmd/main.go --enable-leader-election=false
 
 To launch Calico, install the default custom resource:
 
@@ -47,9 +53,9 @@ To launch Calico, install the default custom resource:
 
 To tear down the cluster:
 
-	make cluster-destroy
+	make kind-cluster-destroy
 
-#### Running a custom image in your existing Calico (Enterprise) cluster
+### Running a custom image in your existing Calico (Enterprise) cluster
 
 These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following either
 docs.projectcalico.org or docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
@@ -57,7 +63,7 @@ You should see an existing deployment.
 The steps also assume that you have setup your docker such that you can push to a registry.
 
 These are the steps:
-1. Make your own code changes to this repository.
+1. Make your own code changes to the operator.
 2. Create the binaries and a docker image.
    ```bash
    make image
@@ -75,7 +81,7 @@ These are the steps:
    ```
    _If your image is in a private registry, you also need to add [imagePullSecrets](https://kubernetes.io/docs/concepts/containers/images/) to the deployment._
 
-#### Set breakpoints in Goland IDE and run the code against your existing Calico (Enterprise) cluster
+### Set breakpoints in Goland IDE and run the code against your existing Calico (Enterprise) cluster
 
 These steps assume that you already have installed the operator in a Calico (Enterprise) cluster after following either
 https://docs.projectcalico.org or https://docs.tigera.io. To verify, run `kubectl get deployment -n tigera-operator tigera-operator`.
@@ -90,13 +96,13 @@ kubectl scale deploy -n tigera-operator tigera-operator --replicas=0
 kubefwd svc -n calico-system -n tigera-kibana -n tigera-manager -n tigera-dex -n tigera-elasticsearch -n tigera-prometheus -c $KUBECONFIG
 ```
 3. Open a code file in your editor and set a breakpoint.
-4. Create a debug configuration by right-clicking main.go and select `modify run configuration`.
+4. Create a debug configuration by right-clicking `cmd/main.go` and select `modify run configuration`.
    1. Under Run kind, select `Package`
    2. Under Environment, add `KUBECONFIG=/path/to/config`
    3. In Program arguments, add `--enable-leader-election=false`
 5. Save the configuration. You can now run it in debug mode.
 
-### Using Calico Enterprise
+## Using Calico Enterprise
 
 To install Calico Enterprise instead of Calico, you need to install an image pull secret,
 as well as modify the Installation CR.
@@ -121,17 +127,19 @@ spec:
 You can then install additional Calico Enterprise components by creating their CRs from within
 the `./deploy/crds/` directory.
 
-### Running unit tests
+## Running unit tests
 
-To run all the unit tests, run:
+To run the unit tests, run:
 
-	make test
+	make ut
 
-To run a specific test or set of tests, narrow `UT_DIR` to the Ginkgo suites you want and focus within them. Packages that do not use Ginkgo reject the focus flag, so `UT_DIR` is required here.
+`UT_DIR` defaults to `./pkg`; pass `UT_DIR=.` to cover every package in the operator. To run a
+specific test or set of tests, narrow `UT_DIR` to the Ginkgo suites you want and focus within them.
+Packages that do not use Ginkgo reject the focus flag, so `UT_DIR` is required here.
 
 	make ut UT_DIR=./pkg/render GINKGO_FOCUS="component function tests"
 
-### Making temporary changes to components the operator manages
+## Making temporary changes to components the operator manages
 
 The operator creates and manages resources and will reconcile them to be in the desired state. Due to the
 reconciliation it does, if a user makes direct changes to a resource the operator will revert those changes.
@@ -146,7 +154,7 @@ Adding the following as an annotation to any resource will prevent the operator 
   unsupported.operator.tigera.io/ignore: "true"
   ```
 
-#### Example update to calico-node DaemonSet
+### Example update to calico-node DaemonSet
 
 Notice that the annotation is added in the top level metadata (not in the spec.template.metadata).
 (note the below is not a valid manifest but just an example)
@@ -174,7 +182,7 @@ spec:
           image: calico/node:my-special-tag
 ```
 
-### Updating the bundled version of Envoy Gateway
+## Updating the bundled version of Envoy Gateway
 
 1. In `go.mod`, update the version for `github.com/envoyproxy/gateway`.
 
@@ -190,8 +198,6 @@ spec:
 
 1. Run `make ut`, and address issues if there are any.
 
-1. Commit everything and post as a `tigera/operator` PR.
-
 1. Identify the corresponding new versions of the `gateway`, `proxy` and `ratelimit` images.
 
    - The `gateway` version can be found in the Envoy Gateway release notes ([for example](https://github.com/envoyproxy/gateway/releases/tag/v1.3.2)).  It should be the same as the nominal Envoy Gateway version that you're updating to.
@@ -200,7 +206,7 @@ spec:
 
    - The `ratelimit` version can be found in the Envoy Gateway release notes.
 
-1. Switching to the `projectcalico/calico` repo, update the code under `third_party/envoy-{gateway,proxy,ratelimit}` to build those new image versions.  In each case:
+1. Update the code under `third_party/envoy-{gateway,proxy,ratelimit}` at the repo root to build those new image versions.  In each case:
 
    - Update the relevant version (e.g. `ENVOY_GATEWAY_VERSION`) in `Makefile`.
 
@@ -208,6 +214,6 @@ spec:
 
    - Review if any existing patches still apply cleanly, and update them if not.
 
-1. Commit everything and post as a `projectcalico/calico` PR.
+1. Commit everything and post as a single PR.
 
 1. Review, address issues, merge, monitor hashrelease builds, address any further issues, etc.
