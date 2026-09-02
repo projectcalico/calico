@@ -62,7 +62,13 @@ steps:
       sudo git config --system --add safe.directory "${CALICO_REPO_DIR}/.git"
       sudo git config --system --add safe.directory "${CALICO_REPO_DIR}"
       export NC_PLUGIN_REPO="${CALICO_REPO_DIR}"
-      export NC_PLUGIN_REF="${CI_GIT_BRANCH:-master}"
+      # The commit this checkout is actually on, resolved from the tree rather
+      # than from a CI_GIT_* variable.  A branch name is the wrong shape here:
+      # NC_PLUGIN_REPO is the checkout, whose `master` is the *fork's* master
+      # on a PR run -- which can be years stale and missing the very test this
+      # run exists to execute.  Resolving HEAD is right for a cron run too,
+      # where it is whatever the step checked out this week.
+      export NC_PLUGIN_REF="$(git -C "${CALICO_REPO_DIR}" rev-parse HEAD)"
 
       # bootstrap.sh publishes the results with `go run ./hack/perf/...`,
       # inside a `( ... ) || true` guard -- so a missing or too-old Go
