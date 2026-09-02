@@ -31,6 +31,11 @@ const refsFileName = "published.refs"
 //
 // Refs are appended as they are published, so an interrupted run still records
 // what reached the registry. ReadRefs drops the duplicates a resumed run adds.
+//
+// A ref names a repo and a digest, never the tag it was published under, so a
+// repo reads back as a set of digests. That is enough to tell whether a digest
+// came from this release, but not which tag carried it: anything asserting
+// per-tag provenance needs more than this file holds.
 type RefsWriter struct {
 	mu   sync.Mutex
 	path string

@@ -541,8 +541,20 @@ func recordingConfig(f *imageNameRunner, rec RefRecorder, resolve DigestResolver
 	}.apply([]Option{WithRunner(f)})
 }
 
+// alwaysResolves answers every image with the same digest. Suitable for asking
+// whether anything was recorded, but NOT for anything comparing digests: it
+// cannot tell a repo's tags apart. Use resolvesPerTag for that.
 func alwaysResolves(digest string) DigestResolver {
 	return func(string) (string, bool, error) { return digest, true, nil }
+}
+
+// resolvesPerTag gives each tag its own digest, as a registry does, so a repo
+// carrying a manifest list and its arch tags holds several distinct digests.
+func resolvesPerTag() DigestResolver {
+	return func(image string) (string, bool, error) {
+		_, tag, _ := strings.Cut(image, ":")
+		return "sha256:" + strings.Repeat(fmt.Sprintf("%x", len(tag))[:1], 64), true, nil
+	}
 }
 
 // A publish records the manifest list and every per-arch tag: neither digest is
@@ -909,5 +921,46 @@ func TestPublishWithoutARecordPublishesEverything(t *testing.T) {
 	}
 	if !published {
 		t.Error("a run with no record published nothing")
+	}
+}
+
+// A repo publishes several tags at different digests, so a resume must accept
+// any digest the record holds for that repo rather than one of them.
+func TestResumeAcceptsEveryRecordedDigestForARepo(t *testing.T) {
+	variants := []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+	}
+	resolve := resolvesPerTag()
+
+	// First run publishes and records the manifest list plus both arch tags.
+	f := &imageNameRunner{images: "node"}
+	rec := &fakeRecorder{}
+	p, err := NewPublisher(recordingConfig(f, rec, resolve, variants))
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if len(rec.refs) < 2 {
+		t.Fatalf("expected several refs for one repo, got %v", rec.refs)
+	}
+
+	// Resuming against that record must skip, not report a mismatch between
+	// two of our own digests.
+	f2 := &imageNameRunner{images: "node"}
+	cfg := recordingConfig(f2, &fakeRecorder{}, resolve, variants)
+	cfg.Published = rec.refs
+	p2, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p2.Publish(); err != nil {
+		t.Fatalf("resume of a correct publish failed: %v", err)
+	}
+	for _, c := range f2.calls {
+		if slices.Contains(c.args, "release-publish") {
+			t.Error("resume republished an already-recorded unit")
+		}
 	}
 }
