@@ -205,6 +205,12 @@ image:
 	  ARCH="$(ARCH)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  $(REPO_ROOT)/hack/dev-build.sh --tag
+	$(MAKE) operator-image
+	@echo "image complete"
+
+.PHONY: operator-image
+## Build the operator image with the dev registry's component references baked in.
+operator-image:
 	@STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
 	  REPO_ROOT="$(REPO_ROOT)" \
@@ -212,7 +218,6 @@ image:
 	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
 	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
 	  $(REPO_ROOT)/hack/dev-build.sh --operator
-	@echo "image complete"
 
 .PHONY: push
 ## Push all tagged images to the remote registry.
