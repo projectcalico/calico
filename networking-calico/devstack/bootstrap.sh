@@ -17,10 +17,18 @@
 
 set -ex
 
-sudo pip uninstall -y setuptools
-sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
-sudo find / -name "*setuptools*" || true
-sudo pip list || true
+# The Semaphore agent image ships a pip-installed setuptools that breaks the
+# DevStack install, so take it out of the way there.  Guarded because this is a
+# property of that image, not of DevStack: a fresh machine has neither the
+# offending setuptools nor pip itself, and the script runs with `set -e`, so
+# elsewhere (for example the GCE VM used by the scheduled scale run) `sudo pip`
+# would abort the bootstrap before it started.
+if getent group semaphore >/dev/null 2>&1; then
+    sudo pip uninstall -y setuptools
+    sudo rm -rf /usr/local/lib/python3.8/dist-packages/setuptools-*.dist-info
+    sudo find / -name "*setuptools*" || true
+    sudo pip list || true
+fi
 
 #------------------------------------------------------------------------------
 # IMPORTANT - Review before use!
@@ -219,6 +227,11 @@ ls -la ${CALICO_REPO_DIR}
 # scheduled scale run) adduser would fail and abort the bootstrap.
 if getent group semaphore >/dev/null 2>&1; then
     sudo adduser stack semaphore
+else
+    # Same problem, no shared group to solve it with: `useradd -m` gives a home directory mode
+    # 0750 on Ubuntu, so the stack user cannot even traverse into the checkout.  Opening up
+    # traversal is enough -- the files themselves are world-readable from the default umask.
+    sudo chmod o+x "$(dirname ${CALICO_REPO_DIR})"
 fi
 
 # Guarantee that the stack user will be able to make a Git clone of the checkout.  Since we started
