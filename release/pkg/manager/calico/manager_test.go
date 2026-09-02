@@ -24,9 +24,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/projectcalico/calico/release/internal/images"
-
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/images"
 )
 
 // fakeResult is the canned response for a matched command.
