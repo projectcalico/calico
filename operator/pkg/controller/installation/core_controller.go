@@ -130,8 +130,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		return fmt.Errorf("failed to create tigera-installation-controller: %w", err)
 	}
 
-	// Established deferred watches against the v3 API that should succeed after the Enterprise API Server becomes available.
-	// Watch for changes to Tier, as its status is used as input to determine whether network policy should be reconciled by this controller.
+	// These v3 watches are deferred because they only succeed once the Enterprise API server is available.
 	go utils.WaitToAddTierWatch(networkpolicy.CalicoTierName, c, opts.K8sClientset, log, ri.tierWatchReady)
 
 	go utils.WaitToAddNetworkPolicyWatches(c, opts.K8sClientset, log, []types.NamespacedName{
@@ -168,9 +167,7 @@ func Add(mgr manager.Manager, opts options.ControllerOptions) error {
 		}
 	}
 
-	// Watch for secrets in the operator namespace. We watch for all secrets, since we care
-	// about specifically named ones - e.g., manager-tls, as well as image pull secrets that
-	// may have been provided by the user with arbitrary names.
+	// Watch all secrets in the operator namespace, since user-provided image pull secrets can have arbitrary names.
 	err = utils.AddSecretsWatch(c, "", common.OperatorNamespace())
 	if err != nil {
 		return fmt.Errorf("tigera-installation-controller failed to watch secrets: %w", err)
@@ -402,11 +399,9 @@ func fillDefaults(instance *operatorv1.Installation, currentPools *v3.IPPoolList
 
 	if instance.Spec.TyphaAffinity == nil {
 		switch instance.Spec.KubernetesProvider {
-		// in AKS, there is a feature called 'virtual-nodes' which represent azure's container service as a node in the kubernetes cluster.
-		// virtual-nodes have many limitations, namely it's unable to run hostNetworked pods. virtual-kubelets are tainted to prevent pods from running on them,
-		// but typha tolerates all taints and will run there.
-		// as such, we add a required anti-affinity for virtual-nodes if running on azure
 		case operatorv1.ProviderAKS:
+			// AKS virtual-nodes cannot run hostNetworked pods, and typha tolerates all taints so it would
+			// otherwise schedule there. Keep it off them with a required anti-affinity.
 			instance.Spec.TyphaAffinity = &operatorv1.TyphaAffinity{
 				NodeAffinity: &operatorv1.NodeAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
@@ -696,10 +691,8 @@ func mergeProvider(cr *operatorv1.Installation, provider operatorv1.Provider) er
 		return fmt.Errorf(msg, cr.Spec.KubernetesProvider, provider)
 	}
 
-	// If we've reached this point, it means only one source of provider is being used - auto-detection or
-	// user-provided, but not both. Or, it means that both have been specified but are the same.
-	// If it's the CR provided one, then just use that. Otherwise, use the auto-detected one.
 	if cr.Spec.KubernetesProvider.IsNone() {
+		// The check above guarantees the two agree where both are set, so the detected value is safe to take.
 		cr.Spec.KubernetesProvider = provider
 	}
 	log.WithValues("provider", cr.Spec.KubernetesProvider).V(1).Info("Determined provider")
@@ -822,9 +815,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			return reconcile.Result{}, err
 		}
 
-		// Keep an overarching finalizer on the Installation object until ALL necessary dependencies have been cleaned up.
-		// This ensures we don't delete the CNI plugin and calico-node too early, as they are a pre-requisite for tearing
-		// down networking for other pods deployed by this operator.
+		// Hold the Installation finalizer until every dependency is gone, since the CNI plugin and calico-node
+		// are a pre-requisite for tearing down networking for other pods.
 		doneTerminating := true
 		reqLogger.V(1).Info("Checking if we can remove Installation finalizer", "finalizer", render.OperatorCompleteFinalizer)
 
@@ -936,9 +928,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, nil
 	}
 
-	// Determine if this cluster needs IP pools in order to operate.
-	// - If the installation has IP pools specified, then the cluster wants IP pools.
-	// - If the installation has no IP pools specified, it may still need them if it's using Calico IPAM or networking.
+	// Calico IPAM and Calico networking need IP pools even when the Installation specifies none.
 	needsIPPools := defaulted.Spec.CalicoNetwork != nil && len(defaulted.Spec.CalicoNetwork.IPPools) != 0
 	if defaulted.Spec.CNI.Type == operatorv1.PluginCalico || defaulted.Spec.CNI.IPAM.Type == operatorv1.IPAMPluginCalico {
 		needsIPPools = true
@@ -967,12 +957,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	includeV3NetworkPolicy := false
-	// Ensure the calico-system tier exists, before rendering any network policies within it.
-	//
-	// The creation of the Tier depends on this controller to reconcile it's non-NetworkPolicy resources so that
-	// the API Server becomes available. Therefore, if we fail to query the Tier, we exclude NetworkPolicy from
-	// reconciliation and tolerate errors arising from the Tier not being created or the API server not being available.
-	// We also exclude NetworkPolicy and do not degrade when the Tier watch is not ready, as this means the API server is not available.
+	// The calico-system Tier can only be created once the API server is up, which needs this controller's
+	// other resources. Skip NetworkPolicy rather than degrading while the Tier or its watch is missing.
 	if r.tierWatchReady.IsReady() {
 		if err := r.client.Get(ctx, client.ObjectKey{Name: networkpolicy.CalicoTierName}, &v3.Tier{}); err != nil {
 			if !apierrors.IsNotFound(err) && !meta.IsNoMatchError(err) {
@@ -1033,20 +1019,16 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 		}
 	}
 
-	// Reconcile the migration RBAC ClusterRole/ClusterRoleBinding. We do this
-	// early so kube-controllers can start the migration without waiting for
-	// the rest of this reconcile to complete. Only check migration state once
-	// the watch is established to ensure we use the cache.
+	// Reconciled early so kube-controllers can start the migration without waiting for the rest of this
+	// reconcile. The watch-ready check keeps the migration state query on the cache.
 	migrationExists := r.migrationWatchReady.IsReady() && datastoremigration.Exists(r.client)
 	ch := r.newComponentHandler(reqLogger, r.client, r.scheme, instance)
 	if err := ch.CreateOrUpdateOrDelete(ctx, kubecontrollers.MigrationRBACComponent(migrationExists), nil); err != nil {
 		reqLogger.Info("Failed to reconcile migration RBAC", "error", err)
 	}
 
-	// Determine if we need to migrate resources from the kube-system namespace. If
-	// we do then we'll render the Calico components with additional node selectors to
-	// prevent scheduling, later we will run a migration that migrates nodes one by one
-	// to mimic a 'normal' rolling update.
+	// When migration is needed, the Calico components render with node selectors that block scheduling, and
+	// the migration then moves nodes one at a time to mimic a rolling update.
 	needsNamespaceMigration, err := r.namespaceMigration.NeedsCoreNamespaceMigration(ctx)
 	if err != nil {
 		r.status.SetDegraded(operatorv1.ResourceReadError, "Error checking if namespace migration is needed", err, reqLogger)
@@ -1244,10 +1226,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			reqLogger.Info("All finalizers have been removed, can remove CNI resources")
 		}
 	} else {
-		// In some rare scenarios, we can hit a deadlock where resources have been marked with a deletion timestamp but the operator
-		// does not recognize that it must remove their finalizers. This can happen if, for example, someone manually
-		// deletes a ServiceAccount instead of deleting the Installation object. In this case, we need
-		// to allow the deletion to complete so the operator can re-create the resources. Otherwise the objects will be stuck terminating forever.
+		// An object deleted directly, rather than through the Installation, is stuck terminating on the CNI
+		// finalizer. Drop the finalizer so the deletion completes and the operator can re-create it.
 		toCheck := render.CNIPluginFinalizedObjects()
 		needsCleanup := []client.Object{}
 		for _, obj := range toCheck {
@@ -1315,9 +1295,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	if goldmaneRunning {
 		goldmaneIP, err = utils.ResolveClusterIP(ctx, r.client, goldmane.GoldmaneServiceName, common.CalicoNamespace)
 		if apierrors.IsNotFound(err) {
-			// Service not found - Goldmane is probably still starting. Wait for it to appear. This helps prevent us from rolling out calico/node twice
-			// during initial installation - once when we first Reconcile and again when we detect the Goldmane Service, which triggers
-			// us adding host aliases to the calico/node DaemonSet.
+			// Waiting for the Service avoids a second calico/node rollout when it appears and host aliases
+			// get added to the DaemonSet.
 			r.status.SetDegraded(operatorv1.ResourceNotFound, "Goldmane enabled, waiting for Service to receive an IP", nil, reqLogger)
 			return reconcile.Result{}, nil
 		} else if err != nil {
@@ -1402,9 +1381,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 	components = append(components, kubecontrollers.NewCalicoKubeControllers(&kubeControllersCfg))
 
-	// v3 NetworkPolicy will fail to reconcile if the API server deployment is unhealthy. In case the API Server
-	// deployment becomes unhealthy and reconciliation of non-NetworkPolicy resources in the core controller
-	// would resolve it, we render the network policies of components last to prevent a chicken-and-egg scenario.
+	// Network policies render last: v3 NetworkPolicy cannot reconcile while the API server deployment is
+	// unhealthy, and the resources rendered before it are what bring the API server back.
 	if includeV3NetworkPolicy {
 		components = append(components,
 			kubecontrollers.NewCalicoKubeControllersPolicy(&kubeControllersCfg, calicoSystemDefaultDenyForCalicoSystem()),
@@ -1418,9 +1396,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 
 	if imageSet == nil {
-		// There is no imageSet for the configured variant, but check to see if there are any
-		// ImageSets with a different variant so we can give the user some kind of indication
-		// to why an existing ImageSet is being ignored.
+		// Look for ImageSets of another variant, so the log can tell the user why theirs is being ignored.
 		nvis, err := imageset.DoesNonVariantImageSetExist(ctx, r.client, defaulted.Spec.Variant)
 		if err != nil {
 			r.status.SetDegraded(operatorv1.ResourceReadError, "Error checking for non-variant ImageSet", err, reqLogger)
@@ -1592,9 +1568,8 @@ func calicoDirectoryExists() bool {
 func (r *ReconcileInstallation) setNftablesMode(_ context.Context, install *operatorv1.Installation, fc *v3.FelixConfiguration, reqLogger logr.Logger) (bool, error) {
 	updated := false
 
-	// Set the FelixConfiguration nftables dataplane mode based on the operator configuration. We do this unconditonally because
-	// we don't need to handle upgrades from versions that were previously FelixConfiguration only - nftables mode has always
-	// been controlled by the operator.
+	// Set unconditionally: nftables mode is always operator-owned, so there is no FelixConfiguration-only
+	// upgrade path to preserve.
 	if install.Spec.CalicoNetwork.LinuxDataplane != nil {
 		nftablesMode := v3.NFTablesModeDisabled
 		if install.Spec.IsNftables() {
@@ -1624,18 +1599,11 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 	updated := false
 
 	switch install.Spec.CNI.Type {
-	// If we're using the AWS CNI plugin we need to ensure the route tables that calico-node
-	// uses do not conflict with the ones the AWS CNI plugin uses so default them
-	// in the FelixConfiguration if they are not already set.
 	case operatorv1.PluginAmazonVPC:
 		if fc.Spec.RouteTableRange == nil {
+			// Don't conflict with the AWS CNI plugin's route tables, which may be the ENI device number plus
+			// one (at most 15 ENIs per host) or the VLAN table ID plus 100.
 			updated = true
-			// Defaulting based on that AWS might be using the following:
-			// - The ENI device number + 1
-			//   Currently the max number of ENIs for any host is 15.
-			//   p4d.24xlarge is reported to support 4x15 ENI but it uses 4 cards
-			//   and AWS CNI only uses ENIs on card 0.
-			// - The VLAN table ID + 100 (there is doubt if this is true)
 			fc.Spec.RouteTableRange = &v3.RouteTableRange{
 				Min: 65,
 				Max: 99,
@@ -1664,11 +1632,9 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 	}
 	vxlanVNI := 4096
 	vxlanPort := 4789
-	// MKE uses a vxlanVNI:4096 and vxlanPort:4789 for its docker swarm vxlan.
-	// This results in a conflict with calico's VXLAN and the vxlan.calico interface
-	// gets deleted. To fix this we change the vxlanVNI to 10000 as recommended by
-	// MKE docs (https://docs.mirantis.com/mke/3.7/cli-ref/mke-cli-install.html).
 	if install.Spec.KubernetesProvider == operatorv1.ProviderDockerEE {
+		// MKE's docker swarm VXLAN uses VNI 4096 and port 4789, which collides with Calico's and gets the
+		// vxlan.calico interface deleted. MKE's docs recommend VNI 10000 instead.
 		vxlanVNI = 10000
 		// We are using a flow based VXLAN device for
 		// ebpf dataplane. This requires changing the default VXLAN port to
@@ -1696,12 +1662,9 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 		}
 	}
 
-	// When BPF is enabled but the operator is not managing kube-proxy (e.g. on AKS, where
-	// the platform owns the kube-proxy DaemonSet), the platform's kube-proxy keeps the
-	// default healthz port (10256), and Felix's BPF kube-proxy healthz server would fail
-	// to bind. Default the port to 0 (disabled) so calico-node starts cleanly. Users can
-	// still override by setting BPFKubeProxyHealthzPort explicitly on FelixConfiguration.
 	if install.Spec.BPFEnabled() && !install.Spec.KubeProxyManagementEnabled() && fc.Spec.BPFKubeProxyHealthzPort == nil {
+		// On platforms that own kube-proxy themselves, such as AKS, its kube-proxy holds the default healthz
+		// port 10256 and Felix's BPF healthz server cannot bind. Disable it instead.
 		disableBPFKubeProxyHealthz(fc)
 		updated = true
 	}
@@ -1714,14 +1677,8 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 	}
 	updated = updated || extUpdated
 
-	// If BPF is enabled, but not set on FelixConfiguration, do so here. This could happen when an older
-	// version of operator is replaced by the new one. Older versions of the operator used an
-	// environment variable to enable BPF, but we no longer do so. In order to prevent disruption
-	// when the environment variable is removed by the render code of the new operator, make sure
-	// FelixConfiguration has the correct value set.
-
-	// If calico-node daemonset exists, we need to check the ENV VAR and set FelixConfiguration accordingly.
-	// Otherwise, this is a fresh install in eBPF mode, set the felix config.
+	// A calico-node DaemonSet left by an older operator can carry BPF enablement in an environment variable
+	// that this operator's render code drops. Mirror it into FelixConfiguration to avoid disrupting BPF.
 	ds := &appsv1.DaemonSet{}
 	err = r.client.Get(ctx, types.NamespacedName{Namespace: common.CalicoNamespace, Name: common.NodeDaemonSetName}, ds)
 	if err != nil {
@@ -1729,6 +1686,7 @@ func (r *ReconcileInstallation) setDefaultsOnFelixConfiguration(ctx context.Cont
 			reqLogger.Error(err, "An error occurred when getting the Daemonset resource")
 			return false, err
 		}
+		// No DaemonSet, so this is a fresh install with no environment variable to carry over.
 		if !needNsMigration && install.Spec.BPFEnabled() {
 			err = setBPFEnabledOnFelixConfiguration(fc, true)
 			if err != nil {
@@ -1839,25 +1797,12 @@ func felixProgramsNoEncapClusterRoutes(install *operatorv1.Installation) bool {
 	return clusterRoutingMode(install) == operatorv1.ClusterRoutingModeFelix
 }
 
-// clusterRoutingMode returns the cluster routing mode in effect: the configured one, or -- when the
-// field is unset, which is the common case -- the mode that Calico's own defaults amount to.  Since
-// Calico v3.33 those defaults give Felix the cluster routes for IPIP IP Pools and leave the
-// unencapsulated ones with BIRD, which is exactly FelixIPIPOnly.
-//
-// Returning the effective mode rather than "" does tie this to the Calico version the operator
-// ships with, which is why it previously returned "".  But every caller has to reach some
-// conclusion about who owns the routes, and "nobody knows, so assume BIRD" is not a neutral answer:
-// it rejects a configuration that works, namely IPIP with BGP disabled on a cluster that has simply
-// taken Calico's default.  The operator is released against a known Calico version, so encoding
-// that version's defaults here is well defined.  Revisit when the no-encap default moves.
-//
-// This is deliberately not used to decide whether to *write* programClusterRoutes into
-// FelixConfiguration and BGPConfiguration.  Those writes stay gated on the field being explicitly
-// set (see setClusterRoutingOnFelixConfiguration and setClusterRoutingOnBGPConfiguration), so that
-// leaving it unset continues to mean "whatever Calico's defaults are" rather than pinning today's
-// defaults into the datastore.
+// clusterRoutingMode returns the effective mode: the configured one, or Calico's own default when the
+// field is unset. Don't use it to gate writes of programClusterRoutes, which stay conditional on the
+// field being set explicitly.
 func clusterRoutingMode(install *operatorv1.Installation) operatorv1.ClusterRoutingMode {
 	if install.Spec.CalicoNetwork == nil || install.Spec.CalicoNetwork.ClusterRoutingMode == nil {
+		// Calico's default since v3.33. Revisit if the no-encap default moves.
 		return operatorv1.ClusterRoutingModeFelixIPIPOnly
 	}
 	return *install.Spec.CalicoNetwork.ClusterRoutingMode
@@ -1949,14 +1894,8 @@ func serviceEndpointSlice(endpointSliceList *discoveryv1.EndpointSliceList) []k8
 
 var osExitOverride = os.Exit
 
-// checkActive verifies the operator that calls this function is designated as the active operator.
-// If this operator is not designated as active then this function does an os.Exit(0) so the operator
-// gets restarted.
-// If this operator is the designated operator (or assumed because there is no designation) then
-// this function returns with no error.
-// If the active operator designation needs to be set then the first return field is a ConfigMap that
-// should be created to set the designation, other wise the field is nil.
-// The second returned field reports if there was an error when trying to determine active operator.
+// checkActive verifies this operator is the designated active one, calling os.Exit(0) if not so it gets
+// restarted. Returns the ConfigMap the caller should create when the designation is not yet set.
 func (r *ReconcileInstallation) checkActive(log logr.Logger) (*corev1.ConfigMap, error) {
 	cm, err := active.GetActiveConfigMap(r.client)
 	if err != nil {
@@ -2025,9 +1964,8 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 		return nil
 	}
 
-	// ValidatingAdmissionPolicy reached GA (v1) well before MutatingAdmissionPolicy, so it has its own
-	// served version and is reconciled independently of whether the cluster serves MAPs. If the cluster
-	// doesn't serve it at all there's nothing to do, so skip rather than degrade.
+	// ValidatingAdmissionPolicy went GA before MutatingAdmissionPolicy, so it has its own served version and
+	// reconciles independently. Skip rather than degrade when the cluster does not serve it.
 	vapAPIVersion := r.opts.APIDiscovery.ServedVersion(admission.APIGroup, admission.KindValidatingPolicy)
 	if vapAPIVersion == "" {
 		log.Info("Kubernetes cluster does not serve ValidatingAdmissionPolicy, skipping")
@@ -2044,9 +1982,9 @@ func (r *ReconcileInstallation) updateValidatingAdmissionPolicies(ctx context.Co
 	return r.syncManagedAdmissionPolicies(ctx, install, log, desired, existingVAPs, existingVAPBs, admission.IsValidatingPolicyKind, admission.IsValidatingBindingKind, "Error syncing ValidatingAdmissionPolicy resources")
 }
 
-// syncManagedAdmissionPolicies creates or updates the desired admission policies and bindings and
-// deletes any operator-managed ones that are no longer desired, in a single pass. isPolicy/isBinding
-// bucket the desired objects by kind so stale existing resources can be identified by name.
+// syncManagedAdmissionPolicies reconciles the desired admission policies and bindings, deleting any
+// operator-managed ones missing from the desired set. isPolicy/isBinding bucket the desired objects by
+// kind so stale ones can be matched by name.
 func (r *ReconcileInstallation) syncManagedAdmissionPolicies(
 	ctx context.Context,
 	install *operatorv1.Installation,
