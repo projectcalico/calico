@@ -49,10 +49,6 @@ var (
 	// vX.Y.Z for enterprise, vX.Y.Z-cloud for cloud).
 	IsValidReleaseVersion = matchesFormat(releaseVersionFormat)
 
-	// IsValidCalicoReleaseVersion validates a Calico release version. It stays plain vX.Y.Z for all
-	// variants: the Calico version never carries the -cloud suffix.
-	IsValidCalicoReleaseVersion = matchesFormat(releaseVersionFormat)
-
 	CreateGitHubReleaseDefault = true
 )
 
