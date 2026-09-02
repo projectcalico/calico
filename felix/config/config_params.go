@@ -233,7 +233,7 @@ type Config struct {
 	BPFDisableGROForIfaces             *regexp.Regexp    `config:"regexp;"`
 	BPFExcludeCIDRsFromNAT             []string          `config:"cidr-list;;"`
 	BPFRedirectToPeer                  string            `config:"oneof(Disabled,Enabled,L2Only);Enabled;non-zero"`
-	BPFAttachType                      string            `config:"oneof(TCX,TC);TCX;non-zero"`
+	BPFAttachType                      string            `config:"oneof(Netkit,TCX,TC);Netkit;non-zero"`
 	BPFExportBufferSizeMB              int               `config:"int;1;non-zero"`
 	BPFProfiling                       string            `config:"oneof(Disabled,Enabled);Disabled;non-zero"`
 
@@ -338,14 +338,16 @@ type Config struct {
 	InterfacePrefix  string           `config:"iface-list;cali;non-zero,die-on-fail"`
 	InterfaceExclude []*regexp.Regexp `config:"iface-list-regexp;kube-ipvs0"`
 
-	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
-	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
-	IptablesFilterAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesMangleAllowAction   string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
-	IptablesFilterDenyAction    string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
-	LogPrefix                   string `config:"string;calico-packet"`
-	LogActionRateLimit          string `config:"log-rate;"`
-	LogActionRateLimitBurst     int    `config:"int(0,9999);5"`
+	ChainInsertMode                string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
+	DefaultEndpointToHostAction    string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
+	IptablesFilterAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesMangleAllowAction      string `config:"oneof(ACCEPT,RETURN);ACCEPT;non-zero,die-on-fail"`
+	IptablesFilterDenyAction       string `config:"oneof(DROP,REJECT);DROP;non-zero,die-on-fail"`
+	LogPrefix                      string `config:"string;calico-packet"`
+	LogActionRateLimit             string `config:"log-rate;"`
+	LogActionRateLimitBurst        int    `config:"int(0,9999);5"`
+	LogConnectionTransitions       string `config:"oneof(Disabled,FirstResponseAfterLog);Disabled"`
+	LogConnectionTransitionsPrefix string `config:"string;calico-response"`
 
 	LogFilePath string `config:"file;/var/log/calico/felix.log;die-on-fail"`
 
@@ -517,6 +519,10 @@ type Config struct {
 	// Encapsulation information calculated from IP Pools and FelixConfiguration (VXLANEnabled and IpInIpEnabled)
 	Encapsulation Encapsulation
 
+	// NFTablesEnabled is the dataplane that NFTablesMode resolves to on this host, decided at
+	// startup because Auto mode depends on runtime detection.
+	NFTablesEnabled bool
+
 	// NftablesRefreshInterval controls the interval at which Felix periodically refreshes the nftables rules. [Default: 180s]
 	NftablesRefreshInterval time.Duration `config:"seconds;180"`
 
@@ -558,35 +564,35 @@ type Config struct {
 }
 
 func (config *Config) FilterAllowAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesFilterAllowAction
 	}
 	return config.IptablesFilterAllowAction
 }
 
 func (config *Config) MangleAllowAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesMangleAllowAction
 	}
 	return config.IptablesMangleAllowAction
 }
 
 func (config *Config) FilterDenyAction() string {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesFilterDenyAction
 	}
 	return config.IptablesFilterDenyAction
 }
 
 func (config *Config) MarkMask() uint32 {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesMarkMask
 	}
 	return config.IptablesMarkMask
 }
 
 func (config *Config) TableRefreshInterval() time.Duration {
-	if config.NFTablesMode == "Enabled" {
+	if config.NFTablesEnabled {
 		return config.NftablesRefreshInterval
 	}
 	return config.IptablesRefreshInterval

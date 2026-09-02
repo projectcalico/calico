@@ -141,8 +141,8 @@ func TestCheckBranchCurrent(t *testing.T) {
 	// equalTips scripts local and remote tips for the explicit-remote path.
 	equalTips := func(local, remote string) map[string]string {
 		return map[string]string{
-			"rev-parse " + src:                 local,
-			"rev-parse --verify --quiet " + up: remote,
+			"rev-parse " + src:                                              local,
+			"rev-parse --verify --quiet " + up:                              remote,
 			"rev-parse --abbrev-ref --symbolic-full-name master@{upstream}": "upstream/master",
 		}
 	}

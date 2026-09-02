@@ -70,7 +70,7 @@ check-dockerfiles:
 	./hack/check-dockerfiles.sh
 
 check-images-availability: bin/crane bin/yq
-	cd ./hack && ./check-images-availability.sh
+	cd ./hack && RELEASE_BRANCH_PREFIX=$(RELEASE_BRANCH_PREFIX) ./check-images-availability.sh
 
 check-language:
 	./hack/check-language.sh
@@ -335,13 +335,13 @@ e2e-test-clusternetworkpolicy:
 
 ## Run the general e2e tests against the cluster at $KUBECONFIG.
 ## Callers must set KUBECONFIG explicitly (e.g. $(KIND_KUBECONFIG) for kind).
-## Selection comes from E2E_TEST_CONFIG, or from E2E_GINKGO_ARGS (legacy
-## focus/skip regexes) when it is empty. E2E_GINKGO_ARGS expands in the shell so
-## its regex metacharacters survive.
+## Selection comes from E2E_TEST_CONFIG. E2E_GINKGO_ARGS passes extra ginkgo flags for
+## an ad-hoc local run; it expands in the shell so its regex metacharacters survive.
+## --fail-on-empty fails a run that selects no specs instead of passing it.
 e2e-run:
 	@if [ -z "$(KUBECONFIG)" ]; then echo "e2e-run: KUBECONFIG must be set"; exit 1; fi
 	mkdir -p $(E2E_OUTPUT_DIR)
-	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
+	KUBECONFIG=$(KUBECONFIG) go run github.com/onsi/ginkgo/v2/ginkgo -procs=$(E2E_PROCS) --timeout=$(E2E_TIMEOUT) --fail-on-empty --junit-report=$(E2E_JUNIT_REPORT) --output-dir=$(E2E_OUTPUT_DIR)/ ./e2e/bin/k8s/e2e.test -- $${E2E_GINKGO_ARGS} $(if $(E2E_TEST_CONFIG),--calico.test-config=$(abspath $(E2E_TEST_CONFIG)))
 
 ## Run the ClusterNetworkPolicy specific e2e tests against the cluster at $KUBECONFIG.
 e2e-run-cnp:
@@ -527,8 +527,6 @@ endif
 		-e GITHUB_TOKEN=$(GITHUB_TOKEN) \
 		python:3 \
 		bash -c '/usr/local/bin/python release/get-contributors.py >> /code/AUTHORS.md'
-
-update-pins: update-go-build-pin update-calico-base-pin
 
 ###############################################################################
 # Post-release validation

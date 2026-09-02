@@ -49,7 +49,7 @@
         "react-dom": "^19.2.1",
         "react-hook-form": "^7.54.2",
         "react-json-view-lite": "2.5.0",
-        "react-router-dom": "6.30.4",
+        "react-router-dom": "6.30.6",
         "react-table": "^7.7.0",
         "react-window": "^1.8.6",
         "tailwind-merge": "^3.3.1",
@@ -90,12 +90,16 @@
         "typescript-eslint": "^8.38.0"
     },
     "resolutions": {
+        "@babel/core": "^7.29.6",
         "@eslint/plugin-kit": "^0.3.4",
         "@tootallnate/once": "^2.0.1",
         "brace-expansion": "^2.0.2",
         "flatted": "^3.4.2",
+        "form-data": "^4.0.6",
         "js-yaml": "^4.1.1",
+        "nanoid": "^3.3.18",
         "picomatch": "^2.3.2",
+        "tar": "^7.5.22",
         "ws": "^8.20.1",
         "yaml": "^1.10.3"
     },

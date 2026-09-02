@@ -1487,7 +1487,14 @@ func (r *CalicoManager) publishContainerImages() error {
 	if err != nil {
 		return err
 	}
-	return p.Publish()
+	if err := p.Publish(); err != nil {
+		return err
+	}
+
+	if r.isHashRelease {
+		return r.publishBranchTag()
+	}
+	return nil
 }
 
 // scanRequest is the image scan submission for this release, or nil when
@@ -1505,6 +1512,40 @@ func (r *CalicoManager) scanRequest() *images.ScanRequest {
 		Release:     !r.isHashRelease,
 		OutputDir:   r.tmpDir,
 	}
+}
+
+// publishBranchTag moves the branch-named tag (e.g. release-v3.33) onto the
+// images just published, so the branch always has a pullable tag between
+// official releases.
+func (r *CalicoManager) publishBranchTag() error {
+	if r.releaseBranchPrefix == "" {
+		return fmt.Errorf("release branch prefix is not set, cannot derive the branch tag")
+	}
+	ver := version.Version(r.calicoVersion)
+	tag := fmt.Sprintf("%s-%s", r.releaseBranchPrefix, ver.Stream())
+
+	// The arch images must carry the branch tag before the manifest can list
+	// them as its children.
+	p, err := images.NewPublisher(images.Config{
+		RepoRoot:   r.repoRoot,
+		Version:    tag,
+		Registries: r.imageRegistries,
+		Arches:     r.architectures,
+		Variants: images.NarrowVariants([]images.Variant{{
+			Name:        images.StandardVariant,
+			Target:      "retag-build-images-with-registries push-images-to-registries push-manifests",
+			ReleaseDirs: images.VariantDirs(images.PublishVariants),
+		}}, r.imageReleaseDirs),
+		Publish: true,
+		LogsDir: r.logsDir,
+	}, images.WithRunner(r.runner))
+	if err != nil {
+		return err
+	}
+	if err := p.Publish(); err != nil {
+		return fmt.Errorf("failed to publish branch tag %s: %w", tag, err)
+	}
+	return nil
 }
 
 func (r *CalicoManager) publishHelmCharts() error {

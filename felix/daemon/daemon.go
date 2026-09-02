@@ -372,6 +372,9 @@ configRetry:
 
 	applyBPFOverrides(configParams, dp.SupportsBPF)
 
+	// Resolve NFTablesMode=Auto now, before anything reads the dataplane-specific config.
+	configParams.NFTablesEnabled = dp.NFTablesEnabled(configParams)
+
 	// Set any watchdog timeout overrides before we initialise components.
 	health.SetGlobalTimeoutOverrides(configParams.HealthTimeoutOverrides)
 
@@ -646,7 +649,7 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
-			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
+			usagerep.StaticItems{KubernetesVersion: kubernetesVersion, NFTablesEnabled: configParams.NFTablesEnabled},
 			configParams.UsageReportingInitialDelaySecs,
 			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
@@ -743,9 +746,8 @@ configRetry:
 					configParams.PrometheusMetricsClientAuth,
 					configParams.PrometheusMetricsCAFile,
 				)
-				if err != nil {
-					log.Info("Error starting metrics https server.", err)
-				}
+				// The server retries internally, so it only returns on failure.
+				log.WithError(err).Error("Error starting metrics https server.")
 			}()
 		} else {
 			log.Info("Starting metrics http server.")

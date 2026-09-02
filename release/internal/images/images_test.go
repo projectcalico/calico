@@ -545,7 +545,7 @@ func TestPublishRecordsIndexAndArchRefs(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
 	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: standardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
 	p, err := NewPublisher(cfg)
 	if err != nil {
@@ -598,7 +598,7 @@ func TestPublishSkipsAbsentTags(t *testing.T) {
 		return "sha256:aaa", true, nil
 	}
 	cfg := recordingConfig(f, rec, resolve, []Variant{
-		{Name: standardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
 	p, err := NewPublisher(cfg)
 	if err != nil {
@@ -619,7 +619,7 @@ func TestPublishFailsOnUnresolvableDigest(t *testing.T) {
 		return "", false, fmt.Errorf("network is unreachable")
 	}
 	cfg := recordingConfig(f, &fakeRecorder{}, resolve, []Variant{
-		{Name: standardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
 	p, err := NewPublisher(cfg)
 	if err != nil {
@@ -640,7 +640,7 @@ func TestDryRunRecordsNothing(t *testing.T) {
 	f := &imageNameRunner{images: "node node-windows"}
 	rec := &fakeRecorder{}
 	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
-		{Name: standardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
 	})
 	// Refs stays set: dropping it is the publisher's job, not the caller's.
 	cfg.Publish = false

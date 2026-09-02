@@ -36,8 +36,8 @@ import (
 const maxRetries = 1
 
 const (
-	// standardVariant is the product's main image, the one every component ships.
-	standardVariant = "standard"
+	// StandardVariant is the product's main image, the one every component ships.
+	StandardVariant = "standard"
 
 	// windowsVariant is named apart from the rest and published without
 	// per-architecture tags.
@@ -48,7 +48,7 @@ var (
 	BuildVariants = []Variant{
 		// felix ships an image that is built but never published on its own
 		{
-			Name:        standardVariant,
+			Name:        StandardVariant,
 			Target:      "release-build",
 			ReleaseDirs: append(slices.Clone(utils.ImageReleaseDirs), "felix"),
 		},
@@ -60,7 +60,7 @@ var (
 	}
 	PublishVariants = []Variant{
 		{
-			Name:        standardVariant,
+			Name:        StandardVariant,
 			Target:      "release-publish",
 			ReleaseDirs: slices.Clone(utils.ImageReleaseDirs),
 		},
@@ -300,7 +300,7 @@ func (c Config) logPath(u unit, phase string) string {
 		return ""
 	}
 	slug := strings.ReplaceAll(filepath.Clean(u.dir), string(filepath.Separator), "-")
-	if u.variant != standardVariant {
+	if u.variant != StandardVariant {
 		slug += "-" + u.variant
 	}
 	return filepath.Join(c.LogsDir, "images-"+phase, slug+".log")

@@ -36,13 +36,20 @@ import (
 	"github.com/projectcalico/calico/felix/generictables"
 	"github.com/projectcalico/calico/felix/ipsets"
 	"github.com/projectcalico/calico/felix/iptables/cmdshim"
+	"github.com/projectcalico/calico/felix/nftables/nftrender"
 	"github.com/projectcalico/calico/lib/logrusr"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
 )
 
+// nftrender spells out the chain-name limit rather than importing knftables,
+// so that it stays buildable off Linux. Fail the build if the two ever drift.
+var (
+	_ [knftables.NameLengthMax - nftrender.MaxChainNameLength]struct{}
+	_ [nftrender.MaxChainNameLength - knftables.NameLengthMax]struct{}
+)
+
 const (
-	MaxChainNameLength = knftables.NameLengthMax
-	defaultTimeout     = 30 * time.Second
+	defaultTimeout = 30 * time.Second
 
 	// Object type names as returned by knftables' ListAll, used to index its
 	// result map.
@@ -56,6 +63,9 @@ const (
 	// veth is gone for good - mustn't keep us reprogramming forever.
 	FlowtablePruneRetryDelay = 5 * time.Second
 	MaxFlowtablePruneRetries = 5
+
+	// defaultCleanupRetryInterval paces cleanup retries when the refresh interval is disabled.
+	defaultCleanupRetryInterval = 180 * time.Second
 )
 
 type FlowTableHandler interface {
@@ -224,6 +234,10 @@ type NftablesTable struct {
 	// When true, the table will not program any rules or chains and insted functions
 	// solely to clean up any existing rules and chains that may be programmed.
 	disabled bool
+
+	// nextCleanupAttempt holds off a disabled table after a failure. Nothing else latches it, and a
+	// table we can't clean up would otherwise burn its whole retry budget on every apply.
+	nextCleanupAttempt time.Time
 
 	// baseChains is the set of base chains for this table. This is typically the
 	// package-level baseChains variable, but for ARP family tables it uses arpBaseChains.
@@ -469,7 +483,7 @@ func newTable(
 		}
 	}
 
-	// Allow override of exec.Command() and time.Sleep() for test purposes.
+	// Allow override of time.Sleep() for test purposes.
 	newCmd := cmdshim.NewRealCmd
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
@@ -564,6 +578,13 @@ func (n *NftablesTable) Name() string {
 
 func (n *NftablesTable) IPVersion() uint8 {
 	return n.ipVersion
+}
+
+// CleanUp implements generictables.CleanupTable. A disabled table has no chains to program, so
+// when nftables is disabled an ordinary apply deletes the whole table. That's safe because we
+// don't share the Calico table with any other writers.
+func (n *NftablesTable) CleanUp() time.Duration {
+	return n.Apply()
 }
 
 // SetOverlayDevices sets the overlay/tunnel device names that should be included in the
@@ -786,7 +807,7 @@ func (t *NftablesTable) maybeIncrefReferredChains(chainName string, rules []gene
 		return
 	}
 	for _, r := range rules {
-		if ref, ok := r.Action.(Referrer); ok {
+		if ref, ok := r.Action.(nftrender.Referrer); ok {
 			t.increfChain(ref.ReferencedChain())
 		}
 	}
@@ -800,7 +821,7 @@ func (t *NftablesTable) maybeDecrefReferredChains(chainName string, rules []gene
 		return
 	}
 	for _, r := range rules {
-		if ref, ok := r.Action.(Referrer); ok {
+		if ref, ok := r.Action.(nftrender.Referrer); ok {
 			t.decrefChain(ref.ReferencedChain())
 		}
 	}
@@ -1117,6 +1138,10 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		}
 	}()
 
+	if t.disabled && now.Before(t.nextCleanupAttempt) {
+		return t.nextCleanupAttempt.Sub(now)
+	}
+
 	// We _think_ we're in sync, check if there are any reasons to think we might
 	// not be in sync.
 	lastReadToNow := now.Sub(t.lastReadTime)
@@ -1158,6 +1183,12 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 				t.logCxt.WithError(err).Warn("Retrying...")
 				failedAtLeastOnce = true
 				continue
+			} else if t.disabled {
+				// A table we only sweep, so its state moves under us and there is nothing of ours
+				// left to enforce. Retry on the next pass rather than taking Felix down.
+				t.logCxt.WithError(err).Warn("Failed to clean up nftables, will retry on the next refresh")
+				t.InvalidateDataplaneCache("cleanup failed")
+				return t.scheduleCleanupRetry(now)
 			} else {
 				t.logCxt.WithError(err).Error("Failed to program nftables, loading diags before panic.")
 				t.dumpTableState()
@@ -1190,6 +1221,17 @@ func (t *NftablesTable) Apply() (rescheduleAfter time.Duration) {
 		rescheduleAfter = FlowtablePruneRetryDelay
 	}
 	return
+}
+
+// scheduleCleanupRetry holds this table off until the next attempt is due, and returns how long
+// that is.
+func (t *NftablesTable) scheduleCleanupRetry(now time.Time) time.Duration {
+	delay := t.refreshInterval
+	if delay <= 0 {
+		delay = defaultCleanupRetryInterval
+	}
+	t.nextCleanupAttempt = now.Add(delay)
+	return delay
 }
 
 // queueTableRecreate arranges for the next applyUpdates to delete and re-add the table in the same

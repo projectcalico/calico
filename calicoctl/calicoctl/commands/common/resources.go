@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -226,6 +226,10 @@ func ExecuteConfigCommand(args map[string]any, action action) CommandResults {
 			os.Exit(1)
 		}
 		log.Infof("Client: %v", cclient)
+	} else {
+		// Validation runs offline, so there is no apiserver to enforce the CRD
+		// schema and CEL rules. Run them in-process instead.
+		validator.SetCRDValidationEnabled(true)
 	}
 
 	// Initialise the command results with the number of resources and the name of the

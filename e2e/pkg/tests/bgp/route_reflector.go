@@ -1,4 +1,4 @@
-// Copyright (c) 2025 Tigera, Inc. All rights reserved.
+// Copyright (c) 2025-2026 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	v3 "github.com/projectcalico/api/pkg/apis/projectcalico/v3"
 	"github.com/projectcalico/api/pkg/lib/numorstring"
-	v1 "github.com/tigera/operator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,14 +67,7 @@ var _ = describe.CalicoDescribe(
 			// We need a minimum of two nodes for BGP peering tests.
 			utils.RequireNodeCount(f, 3)
 
-			// Make sure the cluster is in BGP mode by querying the Installation resource. The tests in this file
-			// all require BGP, and all require Calico be installed by the operator.
-			installation := &v1.Installation{}
-			err = cli.Get(context.Background(), ctrlclient.ObjectKey{Name: "default"}, installation)
-			Expect(err).NotTo(HaveOccurred(), "Error querying Installation resource")
-			Expect(installation.Spec.CalicoNetwork).NotTo(BeNil(), "CalicoNetwork is not configured in the Installation")
-			Expect(installation.Spec.CalicoNetwork.BGP).NotTo(BeNil(), "BGP is not enabled in the cluster")
-			Expect(*installation.Spec.CalicoNetwork.BGP).To(Equal(v1.BGPEnabled), "BGP is not enabled in the cluster")
+			utils.RequireBGPEnabled(cli)
 
 			// Ensure full mesh BGP is functioning before each test.
 			restoreBGPConfig = ensureInitialBGPConfig(cli)

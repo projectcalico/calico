@@ -96,6 +96,13 @@ var (
 		Name: "goldmane_aggr_dropped_flows_total",
 		Help: "Total number of flows dropped by the aggregator.",
 	})
+
+	// numDuplicateFlows counts flows a node had already reported into the same bucket,
+	// which is what a client replaying its cache after a reconnect looks like.
+	numDuplicateFlows = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "goldmane_aggr_duplicate_flows_total",
+		Help: "Total number of already-seen flows skipped by the aggregator.",
+	})
 )
 
 func init() {
@@ -108,6 +115,7 @@ func init() {
 	prometheus.MustRegister(backfillLatency)
 	prometheus.MustRegister(numUniqueFlows)
 	prometheus.MustRegister(numDroppedFlows)
+	prometheus.MustRegister(numDuplicateFlows)
 }
 
 // sinkRequest is an internal helper used to set the sink for the aggregator, which can by modified at runtime.
@@ -170,7 +178,7 @@ type Goldmane struct {
 	filterHintsRequests chan filterHintsRequest
 	statisticsRequests  chan statisticsRequest
 	sinkChan            chan *sinkRequest
-	recvChan            chan *types.Flow
+	recvChan            chan storage.FlowFromNode
 }
 
 func NewGoldmane(opts ...Option) *Goldmane {
@@ -182,7 +190,7 @@ func NewGoldmane(opts ...Option) *Goldmane {
 		filterHintsRequests: make(chan filterHintsRequest),
 		statisticsRequests:  make(chan statisticsRequest),
 		sinkChan:            make(chan *sinkRequest, 10),
-		recvChan:            make(chan *types.Flow, channelDepth),
+		recvChan:            make(chan storage.FlowFromNode, channelDepth),
 		rolloverFunc:        time.After,
 		bucketsToAggregate:  20,
 		pushIndex:           30,
@@ -303,9 +311,10 @@ func (a *Goldmane) SetSink(s storage.Sink) chan struct{} {
 	return done
 }
 
-// Receive is used to send a flow update to the aggregator.
-func (a *Goldmane) Receive(f *types.Flow) {
-	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, f, 5*time.Second); err != nil {
+// Receive is used to send a flow update to the aggregator. node identifies the reporting
+// node, and may be empty if the caller cannot determine it.
+func (a *Goldmane) Receive(f *types.Flow, node string) {
+	if err := chanutil.WriteWithDeadline(context.Background(), a.recvChan, storage.FlowFromNode{Flow: f, Node: node}, 5*time.Second); err != nil {
 		numDroppedFlows.Inc()
 		a.rl.Warn("Aggregator receive channel full, dropping flow(s)")
 	}
@@ -467,7 +476,7 @@ func (a *Goldmane) rollover() time.Duration {
 	return rolloverIn
 }
 
-func (a *Goldmane) handleFlowBatch(first *types.Flow) {
+func (a *Goldmane) handleFlowBatch(first storage.FlowFromNode) {
 	// Index the flow that triggered the batch.
 	a.indexFlow(first)
 
@@ -492,15 +501,17 @@ batchLoop:
 	flowIndexBatchSize.Observe(float64(numHandled))
 }
 
-func (a *Goldmane) indexFlow(flow *types.Flow) {
+func (a *Goldmane) indexFlow(f storage.FlowFromNode) {
 	flowStart := time.Now()
-	logrus.WithField("flow", flow).Debug("Received Flow")
+	logrus.WithField("flow", f.Flow).Debug("Received Flow")
 
 	// Increment the received flow counter.
 	receivedFlowCounter.Inc()
 
 	// Add the Flow to our bucket ring.
-	a.flowStore.AddFlow(flow)
+	if a.flowStore.AddFlow(f) {
+		numDuplicateFlows.Inc()
+	}
 
 	// Record time taken to process the flow.
 	flowIndexLatency.Observe(float64(time.Since(flowStart).Milliseconds()))

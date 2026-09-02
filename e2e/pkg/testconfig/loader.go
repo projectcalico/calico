@@ -62,6 +62,12 @@ func load(path string, seen []string) (*Config, error) {
 	}
 
 	if len(cfg.Extends) == 0 {
+		if len(cfg.Enable) > 0 {
+			return nil, fmt.Errorf("%s: enable[0] (%q) has no effect: this config extends nothing", absPath, cfg.Enable[0].Label)
+		}
+		if err := validateResolved(&cfg, absPath); err != nil {
+			return nil, err
+		}
 		return &cfg, nil
 	}
 
@@ -77,17 +83,54 @@ func load(path string, seen []string) (*Config, error) {
 		inherited = merge(inherited, parent)
 	}
 
-	return merge(inherited, &cfg), nil
+	for i, e := range cfg.Enable {
+		if !excludesLabel(inherited, e.Label) {
+			return nil, fmt.Errorf("%s: enable[%d] (%q) is not excluded by any config it extends", absPath, i, e.Label)
+		}
+	}
+
+	resolved := merge(inherited, &cfg)
+	if err := validateResolved(resolved, absPath); err != nil {
+		return nil, err
+	}
+	return resolved, nil
 }
 
-// merge combines a parent and child config. The child's includes and excludes
-// are appended to the parent's, dropping repeats: with composition a shared
+// validateResolved checks a config once its extends chain is folded in, for
+// rules a single file cannot decide on its own.
+func validateResolved(cfg *Config, path string) error {
+	// Ginkgo intersects the label filter with the focus regex, so a config
+	// carrying both selects only specs matching both, never their union.
+	if len(cfg.Include.Labels) > 0 && len(cfg.Include.NamePatterns) > 0 {
+		return fmt.Errorf("%s: include sets both labels (%q) and namePatterns (%q): ginkgo ANDs the two, "+
+			"selecting only specs matching both. Split them into separate configs",
+			path, cfg.Include.Labels[0].Label, strings.Join(cfg.Include.NamePatterns[0].AllPatterns(), "|"))
+	}
+	return nil
+}
+
+func excludesLabel(cfg *Config, label string) bool {
+	for _, e := range cfg.Exclude.Labels {
+		if e.Label == label {
+			return true
+		}
+	}
+	return false
+}
+
+// merge combines a parent and child config. The child's `enable` entries drop
+// matching labels from the inherited exclusions, which is the only way a lane
+// re-selects something a parent excluded. Its includes and excludes are appended
+// to the parent's, dropping repeats: with composition a shared
 // exclusion easily arrives by two routes, and `!Slow && !Slow` in the generated
 // label filter is the string an engineer reads when a lane selects the wrong
 // specs. First occurrence wins, so the earliest reason is the one kept.
 func merge(parent, child *Config) *Config {
 	merged := &Config{
-		Include: make([]IncludeEntry, 0, len(parent.Include)+len(child.Include)),
+		Include: IncludeList{
+			Labels:       make([]IncludeEntry, 0, len(parent.Include.Labels)+len(child.Include.Labels)),
+			NamePatterns: make([]NamePatternEntry, 0, len(parent.Include.NamePatterns)+len(child.Include.NamePatterns)),
+		},
 		Exclude: Exclude{
 			Labels:       make([]ExcludeLabel, 0, len(parent.Exclude.Labels)+len(child.Exclude.Labels)),
 			NamePatterns: make([]NamePatternEntry, 0, len(parent.Exclude.NamePatterns)+len(child.Exclude.NamePatterns)),
@@ -95,20 +138,37 @@ func merge(parent, child *Config) *Config {
 	}
 
 	seenInclude := map[string]bool{}
-	for _, src := range [][]IncludeEntry{parent.Include, child.Include} {
+	for _, src := range [][]IncludeEntry{parent.Include.Labels, child.Include.Labels} {
 		for _, e := range src {
 			if seenInclude[e.Label] {
 				continue
 			}
 			seenInclude[e.Label] = true
-			merged.Include = append(merged.Include, e)
+			merged.Include.Labels = append(merged.Include.Labels, e)
 		}
+	}
+
+	seenFocus := map[string]bool{}
+	for _, src := range [][]NamePatternEntry{parent.Include.NamePatterns, child.Include.NamePatterns} {
+		for _, e := range src {
+			key := patternKey(e)
+			if seenFocus[key] {
+				continue
+			}
+			seenFocus[key] = true
+			merged.Include.NamePatterns = append(merged.Include.NamePatterns, e)
+		}
+	}
+
+	enabled := map[string]bool{}
+	for _, e := range child.Enable {
+		enabled[e.Label] = true
 	}
 
 	seenLabel := map[string]bool{}
 	for _, src := range [][]ExcludeLabel{parent.Exclude.Labels, child.Exclude.Labels} {
 		for _, e := range src {
-			if seenLabel[e.Label] {
+			if seenLabel[e.Label] || enabled[e.Label] {
 				continue
 			}
 			seenLabel[e.Label] = true
@@ -119,7 +179,7 @@ func merge(parent, child *Config) *Config {
 	seenPattern := map[string]bool{}
 	for _, src := range [][]NamePatternEntry{parent.Exclude.NamePatterns, child.Exclude.NamePatterns} {
 		for _, e := range src {
-			key := e.Group + "\x00" + e.Pattern + "\x00" + strings.Join(e.AllPatterns(), "\x00")
+			key := patternKey(e)
 			if seenPattern[key] {
 				continue
 			}
@@ -131,12 +191,29 @@ func merge(parent, child *Config) *Config {
 	return merged
 }
 
+func patternKey(e NamePatternEntry) string {
+	return e.Group + "\x00" + e.Pattern + "\x00" + strings.Join(e.AllPatterns(), "\x00")
+}
+
 // validate checks the structural validity of a config file.
 func validate(cfg *Config, path string) error {
-	for i, entry := range cfg.Include {
+	for i, entry := range cfg.Include.Labels {
 		if entry.Label == "" {
-			return fmt.Errorf("%s: include[%d] must have a non-empty label expression", path, i)
+			return fmt.Errorf("%s: include.labels[%d] must have a non-empty label expression", path, i)
 		}
+	}
+
+	for i, entry := range cfg.Enable {
+		if entry.Label == "" {
+			return fmt.Errorf("%s: enable[%d] must have a 'label' field", path, i)
+		}
+		if entry.Reason == "" {
+			return fmt.Errorf("%s: enable[%d] (%q) must have a 'reason'", path, i, entry.Label)
+		}
+	}
+
+	if err := validatePatterns(cfg.Include.NamePatterns, path, "include"); err != nil {
+		return err
 	}
 
 	for i, entry := range cfg.Exclude.Labels {
@@ -148,16 +225,19 @@ func validate(cfg *Config, path string) error {
 		}
 	}
 
-	for i, entry := range cfg.Exclude.NamePatterns {
+	return validatePatterns(cfg.Exclude.NamePatterns, path, "exclude")
+}
+
+func validatePatterns(entries []NamePatternEntry, path, section string) error {
+	for i, entry := range entries {
 		if err := entry.Validate(); err != nil {
-			return fmt.Errorf("%s: exclude.namePatterns[%d]: %w", path, i, err)
+			return fmt.Errorf("%s: %s.namePatterns[%d]: %w", path, section, i, err)
 		}
 		for _, p := range entry.AllPatterns() {
 			if _, err := regexp.Compile(p); err != nil {
-				return fmt.Errorf("%s: exclude.namePatterns[%d]: invalid regex %q: %w", path, i, p, err)
+				return fmt.Errorf("%s: %s.namePatterns[%d]: invalid regex %q: %w", path, section, i, p, err)
 			}
 		}
 	}
-
 	return nil
 }

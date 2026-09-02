@@ -22,6 +22,15 @@ import (
 	"github.com/projectcalico/calico/lib/std/time"
 )
 
+const (
+	// Expiry is how long a client holds a flow so it can replay it after a reconnect. It
+	// also sets how far back the server has to remember what a node already sent.
+	Expiry = 5 * time.Minute
+
+	// CleanupInterval is how often expired entries are swept.
+	CleanupInterval = 30 * time.Second
+)
+
 // cacheKey wraps the canonical FlowKey type with a start and end time, as well as a scope (typically
 // set to be the the originating node) since this cache stores flows across multiple
 // sources and aggregation intervals.

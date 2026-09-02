@@ -9,8 +9,8 @@ extends: pipeline.yaml
 
 exclude:
   labels:
-    - label: Feature:AutoHEPs
-      reason: "ENABLE_AUTOHEP is not set on this lane, so no automatic host endpoints exist"
+    - label: Feature:Maglev
+      reason: "maglev needs BPF DSR, which this lane does not enable"
     - label: NoEncap
       reason: "cluster uses encapsulation; these specs require unencapsulated routing"
     - label: RequiresBGPMesh

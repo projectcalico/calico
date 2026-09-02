@@ -2096,12 +2096,18 @@ spec:
                 bpfAttachType:
                   description: |-
                     BPFAttachType controls how are the BPF programs at the network interfaces attached.
-                    By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-                    `TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
-                    [Default: TCX]
+                    By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+                    netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+                    easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+                    qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+                    Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+                    instead of the netkit API, which is required before downgrading to a release without netkit
+                    support.
+                    [Default: Netkit]
                   enum:
                     - TC
                     - TCX
+                    - Netkit
                   type: string
                 bpfCTLBLogFilter:
                   description: |-
@@ -3024,6 +3030,8 @@ spec:
                   description: |-
                     LogActionRateLimit sets the rate of hitting a Log action. The value must be in the format "N/unit",
                     where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+                    When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+                    initial log was suppressed by this rate limit gets no follow-up log either.
                   pattern: ^[1-9]\d{0,3}/(?:second|minute|hour|day)$
                   type: string
                 logActionRateLimitBurst:
@@ -3033,6 +3041,33 @@ spec:
                   maximum: 9999
                   minimum: 0
                   type: integer
+                logConnectionTransitions:
+                  description: |-
+                    LogConnectionTransitions controls whether Felix emits an additional kernel log recording the
+                    first observed response for each connection that matched a policy rule with a Log action.
+                    When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+                    follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+                    transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+                    RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+                    port unreachable). The log body is the standard kernel packet log of the response packet,
+                    so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+                    line (with source and destination swapped). A logged connection with no follow-up log never
+                    received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+                    no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+                    consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+                    [Default: Disabled]
+                  enum:
+                    - Disabled
+                    - FirstResponseAfterLog
+                  type: string
+                logConnectionTransitionsPrefix:
+                  description: |-
+                    LogConnectionTransitionsPrefix is the log prefix used for the logs emitted when
+                    LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+                    is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+                    rules that emit these logs are shared by all policies, so per-policy values cannot be
+                    substituted and any %-specifiers are rendered literally. [Default: calico-response]
+                  type: string
                 logDebugFilenameRegex:
                   description: |-
                     LogDebugFilenameRegex controls which source code files have their Debug log output included in the logs.
@@ -5422,8 +5457,8 @@ spec:
                 blockSize:
                   description: |-
                     The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 122 for IPv6.
-                    The block size must be between 0 and 32 for IPv4 and between 0 and 128 for IPv6. It must also be smaller than
-                    or equal to the size of the pool CIDR.
+                    The block size must be between 20 and 32 for IPv4 and between 116 and 128 for IPv6. It must also be smaller
+                    than or equal to the size of the pool CIDR.
                   maximum: 128
                   minimum: 0
                   type: integer
@@ -5541,6 +5576,33 @@ spec:
                 - message: global() selector is not valid for IPPool namespaceSelector
                   reason: FieldValueInvalid
                   rule: "!has(self.namespaceSelector) || !self.namespaceSelector.contains('global(')"
+                - message: IPPool CIDR must be strictly masked
+                  reason: FieldValueInvalid
+                  rule: cidr(self.cidr) == cidr(self.cidr).masked()
+                - message: IPPool CIDR overlaps with IPv4 link local range 169.254.0.0/16
+                  reason: FieldValueInvalid
+                  rule:
+                    "!cidr('169.254.0.0/16').containsIP(cidr(self.cidr).ip()) &&
+                    !cidr(self.cidr).containsIP('169.254.0.0')"
+                - message: IPPool CIDR overlaps with IPv6 link local range fe80::/10
+                  reason: FieldValueInvalid
+                  rule: "!cidr('fe80::/10').containsIP(cidr(self.cidr).ip()) && !cidr(self.cidr).containsIP('fe80::')"
+                - message:
+                    blockSize must be between 20 and 32 for IPv4 pools, and between
+                    116 and 128 for IPv6 pools
+                  reason: FieldValueInvalid
+                  rule:
+                    "!has(self.blockSize) || self.blockSize == 0 || (cidr(self.cidr).ip().family()
+                    == 4 ? self.blockSize >= 20 && self.blockSize <= 32 : self.blockSize
+                    >= 116 && self.blockSize <= 128)"
+                - message:
+                    IP pool size is too small for use with Calico IPAM. It must
+                    be equal to or greater than the block size.
+                  reason: FieldValueInvalid
+                  rule:
+                    "(has(self.disabled) && self.disabled) || cidr(self.cidr).prefixLength()
+                    <= (has(self.blockSize) && self.blockSize != 0 ? self.blockSize :
+                    (cidr(self.cidr).ip().family() == 4 ? 26 : 122))"
             status:
               properties:
                 conditions:
@@ -12527,6 +12589,7 @@ spec:
               name: cni-bin-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -12569,6 +12632,7 @@ spec:
               name: cni-net-dir
           securityContext:
             privileged: true
+            runAsUser: 0
         # This init container mounts the necessary filesystems needed by the BPF data plane
         # i.e. bpf at /sys/fs/bpf and cgroup2 at /run/calico/cgroup. It also configures the initial
         # networking to allow communication with the API Server. Calico-node initialization is executed

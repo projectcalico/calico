@@ -45,8 +45,8 @@ func TestExtendsAcceptsBareString(t *testing.T) {
 	if len(cfg.Exclude.Labels) != 1 || cfg.Exclude.Labels[0].Label != "Slow" {
 		t.Errorf("excludes = %+v, want inherited Slow", cfg.Exclude.Labels)
 	}
-	if len(cfg.Include) != 1 || cfg.Include[0].Label != "sig-calico" {
-		t.Errorf("includes = %+v", cfg.Include)
+	if len(cfg.Include.Labels) != 1 || cfg.Include.Labels[0].Label != "sig-calico" {
+		t.Errorf("includes = %+v", cfg.Include.Labels)
 	}
 }
 
@@ -109,8 +109,8 @@ exclude:
 	if r := cfg.Exclude.Labels[0].Reason; r != "from base" {
 		t.Errorf("reason = %q, want the first occurrence (%q)", r, "from base")
 	}
-	if got := len(cfg.Include); got != 1 {
-		t.Errorf("got %d includes, want 1: %+v", got, cfg.Include)
+	if got := len(cfg.Include.Labels); got != 1 {
+		t.Errorf("got %d includes, want 1: %+v", got, cfg.Include.Labels)
 	}
 	flags, err := ToFlags(cfg)
 	if err != nil {
@@ -134,8 +134,8 @@ func TestExtendsDiamondIsNotCircular(t *testing.T) {
 	if err != nil {
 		t.Fatalf("diamond should load, got: %v", err)
 	}
-	if len(cfg.Include) != 2 {
-		t.Errorf("includes = %+v, want both parents' scopes", cfg.Include)
+	if len(cfg.Include.Labels) != 2 {
+		t.Errorf("includes = %+v, want both parents' scopes", cfg.Include.Labels)
 	}
 }
 
@@ -172,5 +172,100 @@ func TestExtendsMissingParentReportsWhich(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "nope.yaml") {
 		t.Errorf("error = %v, want it to name the missing parent", err)
+	}
+}
+
+// A lane whose cluster provides what a base-excluded label needs cancels the
+// exclusion rather than extending nothing and rebuilding the whole scope.
+func TestEnableCancelsInheritedExclusion(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "base.yaml", `exclude:
+  labels:
+    - label: Slow
+      reason: "slow"
+    - label: Feature:Wireguard
+      reason: "needs a cluster provisioned with WireGuard"
+`)
+	write(t, dir, "pipeline.yaml", "extends: base.yaml\ninclude:\n  - sig-calico\n")
+	child := write(t, dir, "lane.yaml", `extends: pipeline.yaml
+enable:
+  - label: Feature:Wireguard
+    reason: "ENABLE_WIREGUARD is set on this lane"
+`)
+
+	cfg, err := Load(child)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	flags, err := ToFlags(cfg)
+	if err != nil {
+		t.Fatalf("to flags: %v", err)
+	}
+	if want := "(sig-calico) && !Slow"; flags.LabelFilter != want {
+		t.Errorf("label filter = %q, want %q", flags.LabelFilter, want)
+	}
+}
+
+func TestEnableCancelsExclusionFromAnyParent(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "pipeline.yaml", "include:\n  - sig-calico\n")
+	write(t, dir, "platform/eks.yaml", "exclude:\n  labels:\n    - label: RequiresBGP\n      reason: \"vendored CNI\"\n")
+	child := write(t, dir, "lane.yaml", `extends: [pipeline.yaml, platform/eks.yaml]
+enable:
+  - label: RequiresBGP
+    reason: "this lane runs Calico CNI"
+`)
+
+	cfg, err := Load(child)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(cfg.Exclude.Labels) != 0 {
+		t.Errorf("excludes = %+v, want empty", cfg.Exclude.Labels)
+	}
+}
+
+func TestEnableRejectsLabelNoParentExcludes(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "base.yaml", "exclude:\n  labels:\n    - label: Slow\n      reason: \"slow\"\n")
+	child := write(t, dir, "lane.yaml", `extends: base.yaml
+enable:
+  - label: Feature:Wiregaurd
+    reason: "typo"
+`)
+
+	_, err := Load(child)
+	if err == nil {
+		t.Fatal("want error for an enable no parent excludes")
+	}
+	if !strings.Contains(err.Error(), "not excluded by any config it extends") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestEnableRejectsWithoutExtends(t *testing.T) {
+	dir := t.TempDir()
+	child := write(t, dir, "lane.yaml", "enable:\n  - label: Slow\n    reason: \"nothing to cancel\"\n")
+
+	_, err := Load(child)
+	if err == nil {
+		t.Fatal("want error for an enable in a config that extends nothing")
+	}
+	if !strings.Contains(err.Error(), "extends nothing") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestEnableRequiresReason(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "base.yaml", "exclude:\n  labels:\n    - label: Slow\n      reason: \"slow\"\n")
+	child := write(t, dir, "lane.yaml", "extends: base.yaml\nenable:\n  - label: Slow\n")
+
+	_, err := Load(child)
+	if err == nil {
+		t.Fatal("want error for an enable with no reason")
+	}
+	if !strings.Contains(err.Error(), "must have a 'reason'") {
+		t.Errorf("error = %v", err)
 	}
 }

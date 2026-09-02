@@ -93,7 +93,7 @@ func (f *fakeRunner) recordFull(name string, args, env []string, logPath string)
 }
 
 func (f *fakeRunner) Run(name string, args, env []string) (string, error) {
-	return f.record(name, args)
+	return f.recordFull(name, args, env, "")
 }
 
 func (f *fakeRunner) RunNoCapture(name string, args, env []string) error {
@@ -128,6 +128,16 @@ func (f *fakeRunner) count(prefix string) int {
 		}
 	}
 	return n
+}
+
+// envFor returns the env of the first recorded call matching the given prefix.
+func (f *fakeRunner) envFor(prefix string) []string {
+	for i, c := range f.calls {
+		if strings.HasPrefix(c, prefix) {
+			return f.envs[i]
+		}
+	}
+	return nil
 }
 
 func TestTagRelease(t *testing.T) {
@@ -665,6 +675,104 @@ func TestImageStepsWriteLogFiles(t *testing.T) {
 			slices.Sort(got)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("node log paths\n got %v\nwant %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPublishContainerImagesBranchTag(t *testing.T) {
+	tests := []struct {
+		name          string
+		version       string
+		images        bool
+		isHashRelease bool
+		wantPublish   bool
+		wantBranchTag bool
+		wantTag       string
+		prefix        string
+		wantErr       bool
+	}{
+		{
+			name:          "hashrelease also pushes the branch tag",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			wantPublish:   true,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33",
+		},
+		{
+			name:          "early preview keeps its stream suffix",
+			version:       "v3.33.0-1.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			wantPublish:   true,
+			wantBranchTag: true,
+			wantTag:       "release-v3.33-1",
+		},
+		{
+			name:          "official release does not move the branch tag",
+			version:       "v3.33.0",
+			images:        true,
+			isHashRelease: false,
+			wantPublish:   true,
+			wantBranchTag: false,
+		},
+		{
+			// An unset prefix would silently tag images "-v3.33".
+			name:          "missing branch prefix is an error",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        true,
+			isHashRelease: true,
+			prefix:        "",
+			wantPublish:   true,
+			wantErr:       true,
+		},
+		{
+			name:          "images disabled publishes nothing",
+			version:       "v3.33.0-0.dev-1-gabcdef123456",
+			images:        false,
+			isHashRelease: true,
+			wantPublish:   false,
+			wantBranchTag: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFakeRunner()
+
+			prefix := tt.prefix
+			if prefix == "" && !tt.wantErr {
+				prefix = "release"
+			}
+			r := imageManager(t, f, "")
+			r.images = tt.images
+			r.isHashRelease = tt.isHashRelease
+			r.calicoVersion = tt.version
+			r.releaseBranchPrefix = prefix
+
+			err := r.publishContainerImages()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("publishContainerImages() = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("publishContainerImages() unexpected error: %v", err)
+			}
+
+			if got := f.ran("make -C /repo/cmd/calico release-publish"); got != tt.wantPublish {
+				t.Errorf("release-publish ran = %v, want %v (calls: %v)", got, tt.wantPublish, f.calls)
+			}
+			if got := f.ran("make -C /repo/cmd/calico retag-build-images-with-registries"); got != tt.wantBranchTag {
+				t.Errorf("branch tag publish ran = %v, want %v (calls: %v)", got, tt.wantBranchTag, f.calls)
+			}
+			if tt.wantBranchTag {
+				if got := f.envFor("make -C /repo/cmd/calico retag-build-images-with-registries"); !slices.Contains(got, "IMAGETAG="+tt.wantTag) {
+					t.Errorf("branch tag env = %v, want IMAGETAG=%s", got, tt.wantTag)
+				}
 			}
 		})
 	}

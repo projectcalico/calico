@@ -391,6 +391,8 @@ subcomponents, see Felix's logs.
 
 Sets the rate of hitting a Log action. The value must be in the format "N/unit",
 where N is a number and unit is one of: second, minute, hour, or day. For example: "10/second" or "100/hour".
+When LogConnectionTransitions is enabled, this also bounds the follow-up logs: a connection whose
+initial log was suppressed by this rate limit gets no follow-up log either.
 
 | Detail |   |
 | --- | --- |
@@ -413,6 +415,47 @@ Sets the rate limit burst of hitting a Log action when LogActionRateLimit is ena
 | `FelixConfiguration` field | `logActionRateLimitBurst` (YAML) `LogActionRateLimitBurst` (Go API) |
 | `FelixConfiguration` schema | Integer: [0,2<sup>63</sup>-1], [9999,2<sup>63</sup>-1] |
 | Default value (YAML) | `5` |
+
+### `LogConnectionTransitions` (config file) / `logConnectionTransitions` (YAML)
+
+Controls whether Felix emits an additional kernel log recording the
+first observed response for each connection that matched a policy rule with a Log action.
+When set to FirstResponseAfterLog, each connection whose initial log was emitted gets one
+follow-up log, prefixed with LogConnectionTransitionsPrefix plus a suffix identifying the
+transition: "-est" when the first reply packet is seen, "-rst" when the response is a TCP
+RST (connection refused), or "-icmp-err" when the response is a related ICMP error (e.g.
+port unreachable). The log body is the standard kernel packet log of the response packet,
+so the flow is identified by its 5-tuple and can be correlated with the original policy Log
+line (with source and destination swapped). A logged connection with no follow-up log never
+received a response. Connections whose initial log was suppressed by LogActionRateLimit get
+no follow-up log either, so every follow-up log pairs with an initial one. Enabling this
+consumes one bit from the Iptables/NftablesMarkMask space. Not supported in eBPF mode.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogConnectionTransitions` |
+| Encoding (env var/config file) | One of: <code>Disabled</code>, <code>FirstResponseAfterLog</code> |
+| Default value (above encoding) | `Disabled` |
+| `FelixConfiguration` field | `logConnectionTransitions` (YAML) `LogConnectionTransitions` (Go API) |
+| `FelixConfiguration` schema | One of: <code>"Disabled"</code>, <code>"FirstResponseAfterLog"</code>. |
+| Default value (YAML) | `Disabled` |
+
+### `LogConnectionTransitionsPrefix` (config file) / `logConnectionTransitionsPrefix` (YAML)
+
+The log prefix used for the logs emitted when
+LogConnectionTransitions is enabled; the transition suffix ("-est", "-rst" or "-icmp-err")
+is appended to it. Unlike LogPrefix, it does not support %-specifiers (such as %p): the
+rules that emit these logs are shared by all policies, so per-policy values cannot be
+substituted and any %-specifiers are rendered literally.
+
+| Detail |   |
+| --- | --- |
+| Environment variable | `FELIX_LogConnectionTransitionsPrefix` |
+| Encoding (env var/config file) | String |
+| Default value (above encoding) | `calico-response` |
+| `FelixConfiguration` field | `logConnectionTransitionsPrefix` (YAML) `LogConnectionTransitionsPrefix` (Go API) |
+| `FelixConfiguration` schema | String. |
+| Default value (YAML) | `calico-response` |
 
 ### `LogDebugFilenameRegex` (config file) / `logDebugFilenameRegex` (YAML)
 
@@ -1700,17 +1743,22 @@ Controls the interval at which Felix periodically refreshes the nftables rules.
 ### `BPFAttachType` (config file) / `bpfAttachType` (YAML)
 
 Controls how are the BPF programs at the network interfaces attached.
-By default `TCX` is used where available to enable easier coexistence with 3rd party programs.
-`TC` can force the legacy method of attaching via a qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+By default `Netkit` is used, which attaches via the netkit API on workload interfaces that are
+netkit devices and via `TCX` on every other interface. `TCX` is used where available to enable
+easier coexistence with 3rd party programs. `TC` can force the legacy method of attaching via a
+qdisc. `TCX` falls back to `TC` if `TCX` is not available.
+Setting this to `TCX` or `TC` also makes Felix drive existing netkit devices with that mechanism
+instead of the netkit API, which is required before downgrading to a release without netkit
+support.
 
 | Detail |   |
 | --- | --- |
 | Environment variable | `FELIX_BPFAttachType` |
-| Encoding (env var/config file) | One of: <code>TCX</code>, <code>TC</code> |
-| Default value (above encoding) | `TCX` |
+| Encoding (env var/config file) | One of: <code>Netkit</code>, <code>TCX</code>, <code>TC</code> |
+| Default value (above encoding) | `Netkit` |
 | `FelixConfiguration` field | `bpfAttachType` (YAML) `BPFAttachType` (Go API) |
-| `FelixConfiguration` schema | One of: <code>"TC"</code>, <code>"TCX"</code>. |
-| Default value (YAML) | `TCX` |
+| `FelixConfiguration` schema | One of: <code>"Netkit"</code>, <code>"TC"</code>, <code>"TCX"</code>. |
+| Default value (YAML) | `Netkit` |
 | Notes | Required. | 
 
 ### `BPFCTLBLogFilter` (config file) / `bpfCTLBLogFilter` (YAML)
