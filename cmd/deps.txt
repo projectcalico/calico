@@ -137,6 +137,7 @@ github.com/peterbourgon/diskv v2.0.1+incompatible
 github.com/pkg/errors v0.9.1
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 github.com/projectcalico/calico
+github.com/projectcalico/knftables v0.0.23-0.20260831184608-e620411b33fd
 github.com/prometheus/client_golang v1.24.0
 github.com/prometheus/client_model v0.6.2
 github.com/prometheus/common v0.70.0
