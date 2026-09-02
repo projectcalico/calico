@@ -62,6 +62,8 @@ build: gen-files examples
 # Regenerate all files if the gen exes changed or any "types.go" files changed
 .PHONY: gen-files
 gen-files .generate_files: lint-cache-dir clean-generated
+	# Prune stale CRDs, keeping embed.go, which lives with the CRDs it embeds.
+	rm -f config/crd/*.yaml
 	# Generate CRDs using the in-repo Calico-patched controller-gen.
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) $(CALICO_CONTROLLER_GEN) crd:allowDangerousTypes=true,crdVersions=v1 paths=./pkg/apis/... output:crd:dir=config/crd/'

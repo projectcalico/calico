@@ -488,6 +488,8 @@ deploy: manifests kustomize
 # Generate manifests e.g. CRD
 # Can also generate RBAC and webhooks but that is not enabled currently.
 manifests:
+	# Prune stale CRDs so one whose Go type is gone leaves the tree too.
+	rm -f pkg/crds/operator/*.yaml
 	$(DOCKER_GO_BUILD) sh -c 'controller-gen crd paths="./api/..." output:crd:artifacts:config=pkg/crds/operator'
 	for x in $$(find pkg/crds/operator/*); do sed -i -e '/creationTimestamp: null/d' -e '/^---/d' -e '/^\s*$$/d' $$x; done
 	@docker run --rm --user $(id -u):$(id -g) -v $(CURDIR)/pkg/crds/operator/:/work/crds/operator/ tmknom/prettier --write --parser=yaml /work
