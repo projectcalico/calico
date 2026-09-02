@@ -6,6 +6,7 @@
     - "Build: calico image"
     - "Build: node image"
     - "Build: whisker image"
+    - "Build: operator image"
   task:
     env_vars:
       - name: BUILD_CACHE_GROUP
