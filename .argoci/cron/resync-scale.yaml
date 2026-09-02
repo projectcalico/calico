@@ -1,0 +1,98 @@
+# Condensed ArgoCI cron: weekly OpenStack Neutron->etcd resync scale benchmark.
+#
+# Runs networking-calico/devstack/resync_scale_test.py at 100/1000/3000/10000
+# ports and publishes the timings to Lens, so resync performance can be tracked
+# week over week.  The smaller rungs stay in the ladder so we can confirm that
+# scaling is linear; 10,000 is the headline figure.
+#
+# Why this is not just a FORCE_RUN of the Semaphore OpenStack block:
+# that block is pinned to an f1-standard-2 agent (2 vCPU), and the binding
+# constraint at 10,000 ports is *populating* Neutron rather than the resync
+# being measured.  A `runOn: vm` step lets us size the machine for the job.
+#
+# Because the machine type differs from per-PR runs, the two are not directly
+# comparable -- hence PERF_ENV=weekly below, which lands these documents in the
+# same benchmark_data_neutron_resync index but tagged so a dashboard can tell
+# them apart.  Per-PR runs from Semaphore carry env=ci.
+version: condensed
+generateName: resync-scale-
+# Sundays 17:00 UTC (the handler emits no CronWorkflow timezone, so cron fields
+# are UTC).
+schedule: 0 17 * * 0
+
+steps:
+  - name: resync-scale
+    runOn: vm
+
+    # runAsNonRoot because DevStack expects to own the box and wants a non-root
+    # user that can sudo.  Machine type is a starting point, not a measurement:
+    # the 2-hour budget wants checking against a real run.  No zone or image is
+    # named, which takes the provisioner's default zone and the stock Ubuntu it
+    # assembles at boot, so nothing here depends on a hand-maintained image.
+    vm:
+      machineType: n2-standard-16
+      diskType: pd-ssd
+      diskSize: 200GB
+      runAsNonRoot: true
+    secretBundles:
+      - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
+    commands: |
+      set -eo pipefail
+
+      # Use the checkout the VM step has already made under ${CI_HOME}: it
+      # clones CI_GIT_URL at CI_GIT_SHA, so a PR run tests the PR's code.  A
+      # hand-rolled clone cannot -- the branch lives on a fork, and CI_GIT_URL
+      # is the only variable that names it.  The scale test and the publisher
+      # both come from here, and DevStack's Calico plugin clones the
+      # networking-calico code from it too, via NC_PLUGIN_REPO/NC_PLUGIN_REF
+      # below.
+      export CALICO_REPO_DIR="${CI_HOME}/${CI_GIT_DIR}"
+      cd "${CALICO_REPO_DIR}/networking-calico"
+      # DevStack's Calico plugin clones from NC_PLUGIN_REPO as the `stack`
+      # user, so git sees a repo owned by someone else and refuses unless the
+      # path is marked safe.  Two details matter here:
+      #
+      #  - --system, not --global: the clone runs as `stack`, which does not
+      #    read this user's ~/.gitconfig.  (The Semaphore job uses --system
+      #    for the same reason.)
+      #  - Both paths: git reports the *gitdir* when serving a clone, and the
+      #    *worktree* for ordinary in-repo commands, and only an exact match
+      #    is accepted.  The clone is what would otherwise fail here; the
+      #    worktree entry covers any plain git command run against the tree.
+      sudo git config --system --add safe.directory "${CALICO_REPO_DIR}/.git"
+      sudo git config --system --add safe.directory "${CALICO_REPO_DIR}"
+      export NC_PLUGIN_REPO="${CALICO_REPO_DIR}"
+      export NC_PLUGIN_REF="${CI_GIT_BRANCH:-master}"
+
+      # bootstrap.sh publishes the results with `go run ./hack/perf/...`,
+      # inside a `( ... ) || true` guard -- so a missing or too-old Go
+      # toolchain would silently skip publishing, which is the entire point of
+      # this run.  Install the version the repo pins and fail here if that
+      # does not work, rather than discovering an empty index later.
+      GO_VERSION=$(awk -F= '/^GO_VERSION=/{print $2}' "${CALICO_REPO_DIR}/metadata.mk")
+      curl -sSLo /tmp/go.tgz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+      sudo rm -rf /usr/local/go
+      sudo tar -C /usr/local -xzf /tmp/go.tgz
+      export PATH=/usr/local/go/bin:${PATH}
+      go version
+
+      # Publish to the same Lens index as the per-PR Semaphore runs.
+      export ELASTICSEARCH_URL=https://banzai-lens-es.dev-tools.tigera.net:9200
+      export ELASTICSEARCH_USER=elastic
+      export ELASTICSEARCH_TOKEN=${LENS_ELASTICSEARCH_TOKEN}
+      export PERF_ENV=weekly
+
+      # The headline ladder.  Keep the smaller rungs: they are what tell us
+      # whether scaling is still linear, which is the point of trending this.
+      export RESYNC_SCALES=100,1000,3000,10000
+
+      # Skip the QoS responsiveness and resync concurrency tests, and Tempest
+      # (off by default).  All are covered by per-PR CI; this run has a time
+      # budget to meet and only the scale numbers are wanted here.
+      export SCALE_ONLY=true
+
+      # The BIRD config in the DevStack setup generates loads of errors and is
+      # not needed for a single node, so disable it -- as the Semaphore job does.
+      export CALICO_BGP_MODE=none
+
+      OPENSTACK_RELEASE=caracal ./devstack/bootstrap.sh
