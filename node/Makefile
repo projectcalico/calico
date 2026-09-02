@@ -435,6 +435,8 @@ release-windows-archive: release-prereqs
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs .release-$(VERSION).published
+# The stamp records that this checkout pushed the images. A dry run reaches no
+# registry, so it must not leave one behind for a later real publish to skip.
 .release-$(VERSION).published:
 	# Push node images.
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
@@ -442,7 +444,7 @@ release-publish: release-prereqs .release-$(VERSION).published
 	# Push Windows images.
 	$(MAKE) release-windows IMAGETAG=$(VERSION) CONFIRM=$(CONFIRM)
 
-	touch $@
+	$(if $(CONFIRM),touch $@)
 
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.

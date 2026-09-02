@@ -113,6 +113,8 @@ release-build: .release-$(VERSION).created
 ## Pushes the combined calico image to the registries.
 .PHONY: release-publish
 release-publish: release-prereqs .release-$(VERSION).published
+# The stamp records that this checkout pushed the images. A dry run reaches no
+# registry, so it must not leave one behind for a later real publish to skip.
 .release-$(VERSION).published:
 	$(MAKE) push-images-to-registries push-manifests IMAGETAG=$(VERSION) RELEASE=$(RELEASE) CONFIRM=$(CONFIRM)
-	touch $@
+	$(if $(CONFIRM),touch $@)
