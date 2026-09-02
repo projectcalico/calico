@@ -180,8 +180,7 @@ $(CHART_DESTINATION)/projectcalico.org.v3-$(GIT_VERSION).tgz: bin/helm $(shell f
 # optionally push to a remote registry.
 #
 # Images are only re-tagged / re-pushed when their docker image ID changes,
-# and the operator is only rebuilt when its inputs change. This makes repeated
-# runs fast when only one component has been modified.
+# which makes repeated runs fast when only one component has been modified.
 #
 # Usage:
 #   make image                                              # build + tag as calico/<name>:<version>
@@ -205,19 +204,11 @@ image:
 	  ARCH="$(ARCH)" \
 	  STAMP_DIR="$(DEV_STAMP_DIR)" \
 	  $(REPO_ROOT)/hack/dev-build.sh --tag
-	$(MAKE) operator-image
 	@echo "image complete"
 
 .PHONY: operator-image
 ## Build the operator image with the dev registry's component references baked in.
-operator-image:
-	@STAMP_DIR="$(DEV_STAMP_DIR)" \
-	  KIND_INFRA_DIR="$(KIND_INFRA_DIR)" \
-	  REPO_ROOT="$(REPO_ROOT)" \
-	  DEV_IMAGE_TAG="$(DEV_IMAGE_TAG)" \
-	  DEV_IMAGE_REGISTRY="$(DEV_IMAGE_REGISTRY)" \
-	  DEV_IMAGE_PATH="$(DEV_IMAGE_PATH)" \
-	  $(REPO_ROOT)/hack/dev-build.sh --operator
+operator-image: $(REPO_ROOT)/operator/.image.created-$(ARCH)
 
 .PHONY: push
 ## Push all tagged images to the remote registry.

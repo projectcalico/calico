@@ -1854,21 +1854,9 @@ blocks:
             - zstd -3 --rm /tmp/whisker-image.tar
             - gcloud storage cp /tmp/whisker-image.tar.zst "${GCS_WORKFLOW_DIR}/whisker-image.tar.zst"
   - name: "Build: operator image"
-    # The operator image the kind lanes deploy. Unlike the other component
-    # images it bakes in the references it will install
+    # The operator image bakes in the references it will install
     # (localhost:5000/calico/<name>:test-build), so this producer builds it
-    # through the same `make kind-operator-image` its consumers run and every
-    # kind lane can share the one tarball.
-    #
-    # hack/dev-build.sh gates the rebuild on a record of the inputs the image was
-    # built from, not on a marker file, so that stamp ships alongside the
-    # tarball for load-cached-images to restore. Upload it first: a tarball
-    # without its stamp would fail the consumer's untolerated gcloud cp.
-    #
-    # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
-    # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
-    # triggers into the arg below — this block's own inputs, the operator's Go
-    # closure plus the versions file build-operator.sh reads.
+    # through the same `make kind-operator-image` its consumers run.
     run:
       when: >-
         change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
@@ -2049,6 +2037,7 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd',
         '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
@@ -2129,6 +2118,8 @@ blocks:
         '/operator/',
         '/operator/api/v1/*.go',
         '/operator/cmd/*.go',
+        '/operator/config',
+        '/operator/deploy/crds',
         '/operator/hack/gen-versions/*.go',
         '/operator/hack/release/*.go',
         '/operator/hack/release/internal/command/*.go',
@@ -2183,6 +2174,7 @@ blocks:
         '/operator/pkg/controller/utils/*.go',
         '/operator/pkg/controller/utils/imageset/*.go',
         '/operator/pkg/controller/whisker/*.go',
+        '/operator/pkg/crds',
         '/operator/pkg/crds/*.go',
         '/operator/pkg/crypto/*.go',
         '/operator/pkg/ctrlruntime/*.go',
@@ -2273,6 +2265,7 @@ blocks:
         '/operator/pkg/render/nonclusterhost/*.go',
         '/operator/pkg/render/tiers/*.go',
         '/operator/pkg/render/webhooks/*.go',
+        '/operator/pkg/render/whisker',
         '/operator/pkg/render/whisker/*.go',
         '/operator/pkg/tls/*.go',
         '/operator/pkg/tls/certificatemanagement/*.go',
@@ -2382,7 +2375,6 @@ blocks:
         - name: "Build and cache operator image"
           commands:
             - make kind-operator-image
-            - gcloud storage cp .dev-stamps/operator.inputs "${GCS_WORKFLOW_DIR}/operator.inputs"
             - docker save localhost:5000/calico/operator:test-build -o /tmp/operator-image.tar
             - zstd -3 --rm /tmp/operator-image.tar
             - gcloud storage cp /tmp/operator-image.tar.zst "${GCS_WORKFLOW_DIR}/operator-image.tar.zst"
