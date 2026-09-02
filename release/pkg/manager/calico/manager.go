@@ -285,6 +285,9 @@ func (r *CalicoManager) Build() error {
 	ver := r.calicoVersion
 
 	var err error
+	if r.outputDir == "" {
+		return fmt.Errorf("no output directory specified")
+	}
 	if r.validate {
 		if err := r.PreBuildValidation(); err != nil {
 			return fmt.Errorf("failed pre-build validation: %s", err)
@@ -973,6 +976,11 @@ func (r *CalicoManager) assertImageVersions() error {
 
 // Prerequisites specific to publishing a release.
 func (r *CalicoManager) publishPrereqs() error {
+	// Checked whatever validation is set to: without it the release would write
+	// its artifacts somewhere nobody asked for.
+	if r.outputDir == "" {
+		return fmt.Errorf("no output directory specified")
+	}
 	if !r.validate {
 		logrus.Warn("Skipping pre-publish validation")
 		return nil
@@ -1191,22 +1199,8 @@ func (r *CalicoManager) buildReleaseTar() error {
 	}()
 
 	if r.archiveImages {
-		imgDir := filepath.Join(releaseBase, "images")
-		// Create tar files for container image that are shipped.
-		err := os.MkdirAll(imgDir, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("failed to create images dir: %s", err)
-		}
-		registry := r.imageRegistries[0]
-		images := map[string]string{
-			fmt.Sprintf("%s/calico:%s", registry, r.calicoVersion): filepath.Join(imgDir, "calico.tar"),
-			fmt.Sprintf("%s/node:%s", registry, r.calicoVersion):   filepath.Join(imgDir, "calico-node.tar"),
-		}
-		for img, out := range images {
-			err = r.archiveContainerImage(out, img)
-			if err != nil {
-				return fmt.Errorf("failed to archive image %s: %w", img, err)
-			}
+		if err := r.archiveContainerImages(filepath.Join(releaseBase, "images")); err != nil {
+			return err
 		}
 	}
 
@@ -1311,7 +1305,7 @@ func (r *CalicoManager) buildContainerImages() error {
 		logrus.Info("Skip building container images")
 		return nil
 	}
-	b, err := images.NewBuilder(images.Config{
+	return images.Build(images.Config{
 		RepoRoot:   r.repoRoot,
 		Version:    r.calicoVersion,
 		Registries: r.imageRegistries,
@@ -1319,10 +1313,6 @@ func (r *CalicoManager) buildContainerImages() error {
 		Variants:   images.NarrowVariants(images.BuildVariants, r.imageReleaseDirs),
 		LogsDir:    r.logsDir,
 	}, images.WithRunner(r.runner))
-	if err != nil {
-		return err
-	}
-	return b.Build()
 }
 
 func (r *CalicoManager) publishGitTag() error {
@@ -1660,21 +1650,18 @@ func (r *CalicoManager) determineBranch() (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-// Uses docker to build a tgz archive of the specified container image.
-func (r *CalicoManager) archiveContainerImage(out, image string) error {
-	if r.isHashRelease && !r.images {
-		if _, err := r.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
-			logrus.WithError(err).WithField("image", image).Error("Image not found locally, will attempt to pull")
-			if _, err := r.runner.Run("docker", []string{"pull", image}, nil); err != nil {
-				return fmt.Errorf("failed to pull image %s: %w", image, err)
-			}
-		}
-	}
-	_, err := r.runner.Run("docker", []string{"save", "--output", out, image}, nil)
-	if err != nil {
-		return fmt.Errorf("failed to archive image %s: %w", image, err)
-	}
-	return nil
+// archiveContainerImages writes the images this release ships into dir, one tar
+// each, for inclusion in the release archive.
+func (r *CalicoManager) archiveContainerImages(dir string) error {
+	// A hashrelease that did not build its own images has to fetch them.
+	pull := r.isHashRelease && !r.images
+	return images.Archive(images.Config{
+		RepoRoot:   r.repoRoot,
+		Version:    r.calicoVersion,
+		Registries: r.imageRegistries,
+		Arches:     r.architectures,
+		Variants:   images.NarrowVariants(images.PublishVariants, r.imageReleaseDirs),
+	}, dir, pull, images.WithRunner(r.runner))
 }
 
 func (r *CalicoManager) git(args ...string) (string, error) {

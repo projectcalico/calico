@@ -817,3 +817,31 @@ func TestImageStepsUnnarrowedByDefault(t *testing.T) {
 		t.Errorf("published %d dirs, want every one of %d: %v", got, want, f.calls)
 	}
 }
+
+// The output directory is where the release writes its artifacts, so an unset
+// one is an error whatever validation is set to.
+func TestOutputDirRequiredEvenWithoutValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		run  func(*CalicoManager) error
+	}{
+		{"build", (*CalicoManager).Build},
+		{"publish prereqs", (*CalicoManager).publishPrereqs},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &CalicoManager{
+				runner:        newFakeRunner(),
+				repoRoot:      "/repo",
+				calicoVersion: "v3.30.0",
+				validate:      false,
+			}
+			err := tc.run(m)
+			if err == nil {
+				t.Fatal("expected an error when no output directory is set")
+			}
+			if !strings.Contains(err.Error(), "output directory") {
+				t.Errorf("error should name the output directory, got %q", err)
+			}
+		})
+	}
+}

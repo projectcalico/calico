@@ -58,7 +58,11 @@ func (f *fakeRunner) record(args, env []string, logPath string) (string, error) 
 	return "ok", nil
 }
 
-func (f *fakeRunner) Run(string, []string, []string) (string, error)             { return "", nil }
+// Run records too: archiving drives docker through it rather than make.
+func (f *fakeRunner) Run(_ string, args, env []string) (string, error) {
+	return f.record(args, env, "")
+}
+
 func (f *fakeRunner) RunNoCapture(string, []string, []string) error              { return nil }
 func (f *fakeRunner) RunInDirNoCapture(string, string, []string, []string) error { return nil }
 
@@ -295,11 +299,7 @@ func TestPublishConfirmLatch(t *testing.T) {
 func TestLogPaths(t *testing.T) {
 	t.Run("no logs dir captures in memory", func(t *testing.T) {
 		f := &fakeRunner{}
-		b, err := NewBuilder(baseConfig(f, ossVariants()))
-		if err != nil {
-			t.Fatalf("NewBuilder: %v", err)
-		}
-		if err := b.Build(); err != nil {
+		if err := Build(baseConfig(f, ossVariants())); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		for _, c := range f.calls {
@@ -315,11 +315,7 @@ func TestLogPaths(t *testing.T) {
 		f := &fakeRunner{}
 		cfg := baseConfig(f, ossVariants())
 		cfg.LogsDir = "/logs"
-		b, err := NewBuilder(cfg)
-		if err != nil {
-			t.Fatalf("NewBuilder: %v", err)
-		}
-		if err := b.Build(); err != nil {
+		if err := Build(cfg); err != nil {
 			t.Fatalf("Build: %v", err)
 		}
 		var got []string
@@ -405,7 +401,7 @@ func TestPublishCollectsEveryFailure(t *testing.T) {
 	}
 }
 
-func TestNewBuilderRejectsPublishSettings(t *testing.T) {
+func TestBuildRejectsPublishSettings(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		mut  func(*Config)
@@ -416,8 +412,8 @@ func TestNewBuilderRejectsPublishSettings(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := baseConfig(&fakeRunner{}, ossVariants())
 			tc.mut(&cfg)
-			if _, err := NewBuilder(cfg); err == nil {
-				t.Errorf("NewBuilder should reject %s", tc.name)
+			if err := Build(cfg); err == nil {
+				t.Errorf("Build should reject %s", tc.name)
 			}
 		})
 	}
@@ -681,5 +677,81 @@ func TestThirdVariantIsNotTreatedAsWindows(t *testing.T) {
 		if strings.Contains(ref, windowsImageSuffix) {
 			t.Errorf("a non-Windows variant recorded a Windows image: %s", ref)
 		}
+	}
+}
+
+// A partial publish must still record what reached the registry: that record is
+// what a resumed run reads to decide the work left.
+func TestPublishRecordsWhatSucceededWhenAUnitFails(t *testing.T) {
+	f := &imageNameRunner{images: "node node-windows"}
+	f.failures = map[string]int{"/repo/whisker": 9}
+	rec := &fakeRecorder{}
+	cfg := recordingConfig(f, rec, alwaysResolves("sha256:aaa"), []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node", "whisker"}},
+	})
+	p, err := NewPublisher(cfg)
+	if err != nil {
+		t.Fatalf("NewPublisher: %v", err)
+	}
+	if err := p.Publish(); err == nil {
+		t.Fatal("expected the failing unit to be reported")
+	}
+	if len(rec.refs) == 0 {
+		t.Error("a partial publish recorded nothing, so a resume cannot tell what landed")
+	}
+}
+
+// Archiving saves every image a variant ships, not a hardcoded pair.
+func TestArchiveSavesEveryVariantsImages(t *testing.T) {
+	f := &imageNameRunner{images: "node node-windows"}
+	dir := t.TempDir()
+	cfg := baseConfig(&f.fakeRunner, []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+		{Name: windowsVariant, Target: "release-windows", ReleaseDirs: []string{"node"}},
+	})
+	if err := Archive(cfg, dir, false, WithRunner(f)); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	var saved []string
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "save") {
+			saved = append(saved, c.args[len(c.args)-1])
+		}
+	}
+	slices.Sort(saved)
+	want := []string{"quay.io/tigera/node-windows:v3.30.0", "quay.io/tigera/node:v3.30.0"}
+	if !slices.Equal(saved, want) {
+		t.Errorf("archived\n got %v\nwant %v", saved, want)
+	}
+}
+
+// A release that did not build its own images must fetch what is missing.
+func TestArchivePullsWhenAsked(t *testing.T) {
+	f := &imageNameRunner{images: "node"}
+	f.failures = map[string]int{"inspect": 9}
+	cfg := baseConfig(&f.fakeRunner, []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+	})
+	if err := Archive(cfg, t.TempDir(), true, WithRunner(f)); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	var pulled bool
+	for _, c := range f.calls {
+		if slices.Contains(c.args, "pull") {
+			pulled = true
+		}
+	}
+	if !pulled {
+		t.Error("a missing image was not pulled before saving")
+	}
+}
+
+func TestArchiveRejectsNoDir(t *testing.T) {
+	cfg := baseConfig(&fakeRunner{}, []Variant{
+		{Name: StandardVariant, Target: "release-publish", ReleaseDirs: []string{"node"}},
+	})
+	if err := Archive(cfg, "", false); err == nil {
+		t.Fatal("expected an error when no archive directory is given")
 	}
 }

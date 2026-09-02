@@ -148,8 +148,8 @@ var (
 	releaseImagesErr error
 )
 
-// imageDiscoveryDirs returns every directory that produces an image.
-func imageDiscoveryDirs() []string {
+// ImageDiscoveryDirs returns every directory that produces an image.
+func ImageDiscoveryDirs() []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(ImageReleaseDirs)+len(WindowsReleaseDirs))
 	for _, dirs := range [][]string{ImageReleaseDirs, WindowsReleaseDirs} {
@@ -170,7 +170,7 @@ func initReleaseImages() {
 		releaseImagesErr = fmt.Errorf("determining root git dir: %w", err)
 		return
 	}
-	dirs := imageDiscoveryDirs()
+	dirs := ImageDiscoveryDirs()
 	images, err := BuildReleaseImageList(rootDir, dirs...)
 	if err != nil {
 		releaseImagesErr = fmt.Errorf("building release images list for release dirs[%s]: %w", strings.Join(dirs, ","), err)

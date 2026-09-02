@@ -35,6 +35,14 @@ import (
 // flakes often enough that one retry saves a whole release run.
 const maxRetries = 1
 
+// Steps that drive images. The name becomes the log directory and the verb in
+// a failure, so a new step adds one here rather than passing a literal.
+const (
+	buildStep   = "build"
+	publishStep = "publish"
+	archiveStep = "archive"
+)
+
 const (
 	// StandardVariant is the product's main image, the one every component ships.
 	StandardVariant = "standard"
@@ -397,4 +405,83 @@ func (c Config) unitTags(u unit) []string {
 		tags = append(tags, fmt.Sprintf("%s-%s", c.Version, arch))
 	}
 	return tags
+}
+
+// Build builds every variant's images. Publish-only settings are rejected
+// rather than ignored: a caller setting one meant to publish.
+func Build(cfg Config, opts ...Option) error {
+	if err := cfg.validate(); err != nil {
+		return err
+	}
+	if cfg.From != "" || cfg.FromTag != "" {
+		return fmt.Errorf("From is a publish setting and cannot be used to build")
+	}
+	if cfg.Scan != nil {
+		return fmt.Errorf("Scan is a publish setting and cannot be used to build")
+	}
+	cfg = cfg.apply(opts)
+
+	units := cfg.units(cfg.env())
+	logrus.WithField("images", len(units)).Info("Building container images")
+	if err := cfg.runUnits(units, buildStep); err != nil {
+		return err
+	}
+	logrus.Info("Finished building container images")
+	return nil
+}
+
+// Archive writes the images every variant ships into dir, one tar each, for
+// shipping in a release archive. pull fetches an image that is not already
+// local, which a release that did not build its own images needs.
+func Archive(cfg Config, dir string, pull bool, opts ...Option) error {
+	if err := cfg.validate(); err != nil {
+		return err
+	}
+	if len(cfg.Registries) == 0 {
+		return fmt.Errorf("no registry to archive images from")
+	}
+	if dir == "" {
+		return fmt.Errorf("no directory to archive images into")
+	}
+	cfg = cfg.apply(opts)
+
+	units := cfg.units(cfg.env())
+	logrus.WithField("images", len(units)).Info("Archiving container images")
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return fmt.Errorf("creating images dir: %w", err)
+	}
+
+	// Images come from the first registry: an archive holds one copy, whichever
+	// registry it is pulled from.
+	registry := cfg.Registries[0]
+	for _, u := range units {
+		names, err := cfg.imageNames(u)
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			image := fmt.Sprintf("%s/%s:%s", registry, name, cfg.Version)
+			if err := cfg.save(image, filepath.Join(dir, name+".tar"), pull); err != nil {
+				return err
+			}
+		}
+	}
+	logrus.Info("Finished archiving container images")
+	return nil
+}
+
+// save writes one image to a tar file, fetching it first when it is not local.
+func (c Config) save(image, out string, pull bool) error {
+	if pull {
+		if _, err := c.runner.Run("docker", []string{"image", "inspect", image}, nil); err != nil {
+			logrus.WithField("image", image).Info("Image not found locally, pulling")
+			if _, err := c.runner.Run("docker", []string{"pull", image}, nil); err != nil {
+				return fmt.Errorf("pulling %s: %w", image, err)
+			}
+		}
+	}
+	if _, err := c.runner.Run("docker", []string{"save", "--output", out, image}, nil); err != nil {
+		return fmt.Errorf("%s %s: %w", archiveStep, image, err)
+	}
+	return nil
 }

@@ -15,6 +15,7 @@
 package images
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -50,14 +51,17 @@ func NewPublisher(cfg Config, opts ...Option) (*Publisher, error) {
 func (p *Publisher) Publish() error {
 	units := p.cfg.units(p.publishEnv())
 	logrus.WithField("images", len(units)).Info("Publishing container images")
-	if err := p.cfg.runUnits(units, "publish"); err != nil {
-		return err
+	publishErr := p.cfg.runUnits(units, publishStep)
+
+	// Record before reporting a failure: a partial publish is exactly the run
+	// whose record decides what a resume still has to do.
+	if err := p.record(units); err != nil {
+		return errors.Join(publishErr, err)
+	}
+	if publishErr != nil {
+		return publishErr
 	}
 	logrus.Info("Finished publishing container images")
-
-	if err := p.record(units); err != nil {
-		return err
-	}
 
 	if p.cfg.Scan != nil {
 		p.scan(*p.cfg.Scan)

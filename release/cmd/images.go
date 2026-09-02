@@ -56,7 +56,7 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 			if err != nil {
 				return err
 			}
-			b, err := images.NewBuilder(images.Config{
+			return images.Build(images.Config{
 				RepoRoot:   cfg.RepoRootDir,
 				Version:    ver.FormattedString(),
 				Registries: c.StringSlice(registryFlag.Name),
@@ -64,10 +64,6 @@ func imagesBuildCommand(cfg *Config) *cli.Command {
 				Variants:   images.NarrowVariants(images.BuildVariants, c.StringSlice(imageReleaseDirsFlag.Name)),
 				LogsDir:    cfg.LogsDir,
 			}, images.WithRunner(imagesRunner))
-			if err != nil {
-				return err
-			}
-			return b.Build()
 		},
 	}
 }
@@ -90,7 +86,7 @@ func imagesPublishCommand(cfg *Config) *cli.Command {
 			dirs := c.StringSlice(imageReleaseDirsFlag.Name)
 			scanDirs := dirs
 			if len(scanDirs) == 0 {
-				scanDirs = utils.ImageReleaseDirs
+				scanDirs = utils.ImageDiscoveryDirs()
 			}
 			scan, err := scanRequest(c, cfg, scanDirs, ver.Stream(), utils.CalicoProductCode)
 			if err != nil {

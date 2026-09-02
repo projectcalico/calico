@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/projectcalico/calico/release/internal/command"
+	"github.com/projectcalico/calico/release/internal/utils"
 )
 
 // recordingRunner runs nothing and records what it was asked to run. Units run
@@ -334,5 +335,21 @@ func TestImagesPublishRejectsHalfConfiguredRetag(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "FromTag") {
 		t.Errorf("error should name the missing setting, got %q", err)
+	}
+}
+
+// An un-narrowed scan must cover every directory that produces an image,
+// including those shipping only a Windows one.
+func TestImagesPublishScansEveryImageDir(t *testing.T) {
+	dirs := utils.ImageDiscoveryDirs()
+	for _, want := range utils.WindowsReleaseDirs {
+		if !slices.Contains(dirs, want) {
+			t.Errorf("scan dirs omit %s, so its images would go unscanned", want)
+		}
+	}
+	for _, want := range utils.ImageReleaseDirs {
+		if !slices.Contains(dirs, want) {
+			t.Errorf("scan dirs omit %s", want)
+		}
 	}
 }
