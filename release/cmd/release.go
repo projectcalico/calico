@@ -115,6 +115,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithArchitectures(c.StringSlice(archFlag.Name)),
+					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithArchiveImages(c.Bool(archiveImagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithManifests(c.Bool(manifestsFlag.Name)),
@@ -159,6 +160,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithGithubToken(c.String(githubTokenFlag.Name)),
 					calico.WithImages(c.Bool(imagesFlagName)),
+					calico.WithImageReleaseDirs(c.StringSlice(imageReleaseDirsFlag.Name)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
 					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
@@ -312,7 +314,8 @@ func releaseBuildFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), buildStepFlags(false)...)
 	f = append(f,
 		registryFlag,
-		archFlag)
+		archFlag,
+		imageReleaseDirsFlag)
 	f = append(f, operatorGitFlags...)
 	f = append(f,
 		branchCheckFlag,
@@ -326,6 +329,7 @@ func releasePublishFlags() []cli.Flag {
 	f := append(slices.Clone(productFlags), publishStepFlags(false)...)
 	f = append(f,
 		registryFlag,
+		imageReleaseDirsFlag,
 		helmRegistryFlag,
 		githubTokenFlag,
 		awsProfileFlag,
@@ -356,6 +360,11 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				return err
 			}
 
+			imgs, err := utils.ReleaseImages()
+			if err != nil {
+				return err
+			}
+
 			postreleaseDir := filepath.Join(cfg.RepoRootDir, utils.ReleaseFolderName, "pkg", "postrelease")
 			args := []string{
 				"--format=testname",
@@ -366,7 +375,7 @@ func releaseValidationSubCommand(cfg *Config) *cli.Command {
 				fmt.Sprintf("-github-org=%s", c.String(orgFlag.Name)),
 				fmt.Sprintf("-github-repo=%s", c.String(repoFlag.Name)),
 				fmt.Sprintf("-github-repo-remote=%s", c.String(repoRemoteFlag.Name)),
-				fmt.Sprintf("-images=%s", strings.Join(utils.ReleaseImages(), " ")),
+				fmt.Sprintf("-images=%s", strings.Join(imgs, " ")),
 			}
 			if c.String(githubTokenFlag.Name) != "" {
 				args = append(args, fmt.Sprintf("-github-token=%s", c.String(githubTokenFlag.Name)))
