@@ -1,6 +1,6 @@
 # Development Principles
 
-Code architecture and design principles for the tigera/operator repository. For developer workflow, tooling, and day-to-day procedures, see [dev_guidelines.md](dev_guidelines.md).
+Code architecture and design principles for the operator. For developer workflow, tooling, and day-to-day procedures, see [dev_guidelines.md](dev_guidelines.md).
 
 ## API Design
 
