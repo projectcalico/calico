@@ -607,7 +607,7 @@ blocks:
     # Consumers ("E2E tests (KinD)", "KubeVirt live migration (KIND)") list this
     # block in their `dependencies:`, so CHANGE_IN_WITH_DEPENDENTS() folds their
     # triggers into the arg below — this block's own inputs, the operator's Go
-    # closure plus the versions file build-operator.sh reads.
+    # closure plus everything else under operator/.
     run:
       when: "true"
     dependencies: []

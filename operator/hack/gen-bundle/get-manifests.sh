@@ -21,12 +21,9 @@ echo "Building bundle from ${BUNDLE_DEPLOY_DIR}"
 # Get the base path for the Calico docs site. This will be used to download manifests.
 CALICO_BASE_URL=https://raw.githubusercontent.com/projectcalico/calico
 
-if [ -f config/calico_versions.yml ]; then
-    CALICO_VERSION=$(yq '.components.typha.version' < config/calico_versions.yml)
-else
-    echo "Could not find Calico versions file."
-    exit 1
-fi
+# The manifests come from the Calico release this operator is built from; the
+# Makefile resolves it from the most recent reachable tag.
+: "${CALICO_VERSION:?CALICO_VERSION must be set}"
 
 CALICO_BASE_URL=${CALICO_BASE_URL}/${CALICO_VERSION}
 

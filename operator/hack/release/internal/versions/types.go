@@ -26,7 +26,7 @@ type Component struct {
 	Image   string `yaml:"image,omitempty"`
 }
 
-// CalicoVersion represents a config/calico_versions.yml or enterprise_versions.yml.
+// CalicoVersion represents a config/enterprise_versions.yml.
 type CalicoVersion struct {
 	Title      string               `yaml:"title"`
 	Components map[string]Component `yaml:"components"`
