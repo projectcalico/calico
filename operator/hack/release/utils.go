@@ -36,9 +36,6 @@ var (
 )
 
 const (
-	dockerHub    = "docker.io"
-	quayRegistry = "quay.io"
-
 	mainRepo = "tigera/operator"
 
 	enterpriseReleaseFormat = `^v\d+\.\d+\.\d+(-\d+\.\d+)?$`
