@@ -24,6 +24,7 @@ import (
 	cli "github.com/urfave/cli/v3"
 
 	"github.com/projectcalico/calico/release/internal/defaults"
+	"github.com/projectcalico/calico/release/internal/images"
 	"github.com/projectcalico/calico/release/internal/utils"
 	"github.com/projectcalico/calico/release/pkg/manager/operator"
 )
@@ -224,6 +225,50 @@ var (
 				if !slices.Contains(archOptions, arch) {
 					return fmt.Errorf("invalid architecture %s", arch)
 				}
+			}
+			return nil
+		},
+	}
+
+	// fromRegistryFlag and fromTagFlag publish by retagging images that are
+	// already published, instead of pushing a fresh build.
+	fromRegistryFlag = &cli.StringFlag{
+		Name:     "from-registry",
+		Category: containerImageCategory,
+		Usage:    "Publish by retagging the images already in this registry.",
+		Sources:  cli.EnvVars("FROM_REGISTRY"),
+	}
+	fromTagFlag = &cli.StringFlag{
+		Name:     "from-tag",
+		Category: containerImageCategory,
+		Usage:    "The tag to retag from. Required with --from-registry.",
+		Sources:  cli.EnvVars("FROM_TAG"),
+	}
+	skipDevImageRetagFlag = &cli.BoolFlag{
+		Name:     "skip-dev-image-retag",
+		Category: containerImageCategory,
+		Usage:    "Leave the dev tag in place when retagging.",
+		Sources:  cli.EnvVars("SKIP_DEV_IMAGE_RETAG"),
+	}
+
+	// imageReleaseDirsFlag limits a run to some of the directories that ship
+	// images.
+	imageReleaseDirsFlag = &cli.StringSliceFlag{
+		Name:     "image-release-dir",
+		Category: containerImageCategory,
+		Usage:    "Limit image building and publishing to these directories. Repeat for multiple directories.",
+		Sources:  cli.EnvVars("IMAGE_RELEASE_DIRS"),
+		Action: func(_ context.Context, c *cli.Command, dirs []string) error {
+			// Build and publish cover different directories; accept either.
+			valid := append(images.VariantDirs(images.BuildVariants), images.VariantDirs(images.PublishVariants)...)
+			var invalid []string
+			for _, dir := range dirs {
+				if !slices.Contains(valid, dir) {
+					invalid = append(invalid, dir)
+				}
+			}
+			if len(invalid) > 0 {
+				return fmt.Errorf("invalid image release dirs specified: %s", strings.Join(invalid, ", "))
 			}
 			return nil
 		},
