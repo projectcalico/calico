@@ -217,7 +217,7 @@ func (i liveMigrationInput) String() string {
 // FSM table (rows = inputs, columns = current state, cells = next state, empty = no-op):
 //
 //    |              | Base   | Target   | Live     | TimeWait |
-//    |--------------+--------+----------+----------+----------|
+//    |--------------|--------|----------|----------|----------|
 //    | Target       | Target |          |          |          |
 //    | GARPDetected |        | Live     |          |          |
 //    | NoRole       |        | TimeWait | TimeWait |          |
