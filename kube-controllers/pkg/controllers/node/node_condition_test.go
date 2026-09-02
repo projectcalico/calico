@@ -90,8 +90,9 @@ var _ = Describe("nodeConditionController", func() {
 			workqueue: workqueue.NewTypedRateLimitingQueue(
 				workqueue.DefaultTypedControllerRateLimiter[string](),
 			),
-			gracePeriod: notReadyGracePeriod,
-			nowFn:       time.Now,
+			gracePeriod:          notReadyGracePeriod,
+			unmanagedGracePeriod: unmanagedGracePeriod,
+			nowFn:                time.Now,
 		}
 	})
 
@@ -149,6 +150,25 @@ var _ = Describe("nodeConditionController", func() {
 			Expect(networkUnavailable(sync())).To(Equal(v1.ConditionFalse))
 		})
 
+		It("does not mark a node where another CNI provides networking", func() {
+			// Calico for policy over AWS VPC CNI or Azure CNI. Pod networking is not Calico's,
+			// so NetworkUnavailable describes the other CNI rather than us.
+			addNode(node(testNodeName))
+			addPod(policyOnlyPod("calico-node-xyz", testNodeName, notReady, pastGrace))
+
+			Expect(sync().Status.Conditions).To(BeEmpty())
+		})
+
+		It("still clears the taint on a policy-only node", func() {
+			// Admission tainted the node and nothing else will clear it.
+			tainted := node(testNodeName)
+			tainted.Spec.Taints = []v1.Taint{{Key: nodestatus.NetworkReadyTaintKey, Effect: v1.TaintEffectNoSchedule}}
+			addNode(tainted)
+			addPod(policyOnlyPod("calico-node-xyz", testNodeName, ready, withinGrace))
+
+			Expect(nodestatus.HasNetworkReadyTaint(sync())).To(BeFalse())
+		})
+
 		It("gives a replacement pod its own grace period", func() {
 			// The old pod has been gone a while, but the new one only just started, so the node
 			// is not yet unavailable.
@@ -157,6 +177,41 @@ var _ = Describe("nodeConditionController", func() {
 			addPod(calicoNodePod("calico-node-new", testNodeName, notReady, withinGrace))
 
 			Expect(sync().Status.Conditions).To(BeEmpty())
+		})
+	})
+
+	Describe("a node whose calico-node pod is gone entirely", func() {
+		It("releases a node it had marked, so an uninstall doesn't strand it", func() {
+			// Calico uninstalled, or the node drained: the DaemonSet replaces a deleted pod
+			// within seconds, so a sustained absence means Calico is gone from this node.
+			marked := nodeWithCondition(testNodeName, v1.ConditionTrue, nodestatus.NetworkDownReason)
+			marked.CreationTimestamp = metav1.NewTime(time.Now().Add(-24 * time.Hour))
+			marked.Spec.Taints = []v1.Taint{{Key: nodestatus.NetworkReadyTaintKey, Effect: v1.TaintEffectNoSchedule}}
+			addNode(marked)
+
+			released := sync()
+			Expect(networkUnavailable(released)).To(Equal(v1.ConditionFalse))
+			Expect(nodestatus.HasNetworkReadyTaint(released)).To(BeFalse())
+		})
+
+		It("leaves the admission taint on a new node still waiting for its first pod", func() {
+			fresh := node(testNodeName)
+			fresh.CreationTimestamp = metav1.NewTime(time.Now())
+			fresh.Spec.Taints = []v1.Taint{{Key: nodestatus.NetworkReadyTaintKey, Effect: v1.TaintEffectNoSchedule}}
+			addNode(fresh)
+
+			Expect(nodestatus.HasNetworkReadyTaint(sync())).To(BeTrue())
+		})
+
+		It("writes nothing on a node Calico never touched", func() {
+			// A Windows or Fargate node is old and has no pod, so it takes the release path. It
+			// carries no Calico condition and no Calico taint, so there is nothing to write.
+			windows := node("windows-node")
+			windows.CreationTimestamp = metav1.NewTime(time.Now().Add(-24 * time.Hour))
+			addNode(windows)
+
+			Expect(syncNode("windows-node").Status.Conditions).To(BeEmpty())
+			Expect(fakeClient.Actions()).NotTo(ContainElement(HaveField("Verb", "patch")))
 		})
 	})
 
@@ -263,6 +318,13 @@ func calicoNodePod(name, nodeName string, isReady bool, since time.Duration) *v1
 			},
 		},
 	}
+}
+
+// policyOnlyPod is a calico-node pod on a node where another CNI provides pod networking.
+func policyOnlyPod(name, nodeName string, isReady bool, since time.Duration) *v1.Pod {
+	pod := calicoNodePod(name, nodeName, isReady, since)
+	pod.Spec.Containers[0].Env = []v1.EnvVar{{Name: "CALICO_NETWORKING_BACKEND", Value: "none"}}
+	return pod
 }
 
 func networkUnavailable(node *v1.Node) v1.ConditionStatus {

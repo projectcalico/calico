@@ -47,6 +47,13 @@ const (
 
 	// calicoNodePodsByNodeIndex indexes calico-node pods by node name.
 	calicoNodePodsByNodeIndex = "calicoNodePodsByNode"
+
+	// networkingBackendEnvVar tells us whether Calico or another CNI provides pod networking.
+	networkingBackendEnvVar = "CALICO_NETWORKING_BACKEND"
+
+	// unmanagedGracePeriod is how long a node goes with no calico-node pod at all before we
+	// treat Calico as gone from it. Long enough to outlast a new node waiting for its first pod.
+	unmanagedGracePeriod = 5 * time.Minute
 )
 
 // nodeConditionController keeps the NetworkUnavailable condition, and optionally the
@@ -58,7 +65,8 @@ type nodeConditionController struct {
 	podIndexer   cache.Indexer
 	workqueue    workqueue.TypedRateLimitingInterface[string]
 
-	gracePeriod time.Duration
+	gracePeriod          time.Duration
+	unmanagedGracePeriod time.Duration
 
 	// manageTaint controls whether we add the network-ready taint alongside the condition.
 	// Removal is unconditional, so turning the feature off drains the taint.
@@ -79,9 +87,10 @@ func newNodeConditionController(
 		workqueue: workqueue.NewTypedRateLimitingQueue(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 		),
-		gracePeriod: notReadyGracePeriod,
-		manageTaint: nodestatus.AddNetworkReadyTaintEnabled(),
-		nowFn:       time.Now,
+		gracePeriod:          notReadyGracePeriod,
+		unmanagedGracePeriod: unmanagedGracePeriod,
+		manageTaint:          nodestatus.AddNetworkReadyTaintEnabled(),
+		nowFn:                time.Now,
 	}
 	indexers := cache.Indexers{calicoNodePodsByNodeIndex: calicoNodePodsByNode}
 	if err := podInformer.AddIndexers(indexers); err != nil {
@@ -215,8 +224,13 @@ func (c *nodeConditionController) syncNode(ctx context.Context, nodeName string)
 		return err
 	}
 	if len(pods) == 0 {
-		// Nothing here identifies as calico-node, so this isn't a node we can speak for.
-		return nil
+		return c.syncNodeWithoutPod(ctx, node)
+	}
+
+	if !calicoOwnsNetworking(pods) {
+		// Another CNI provides pod networking here, so NetworkUnavailable is not ours to set.
+		// The taint is still ours to clear.
+		return c.releaseNode(ctx, node)
 	}
 
 	if anyPodReady(pods) {
@@ -232,40 +246,63 @@ func (c *nodeConditionController) syncNode(ctx context.Context, nodeName string)
 	return c.markUnavailable(ctx, node)
 }
 
-// markAvailable clears the condition and the taint, but only touches a condition Calico set.
-func (c *nodeConditionController) markAvailable(ctx context.Context, node *v1.Node) error {
-	if nodestatus.NetworkUnavailable(node) == v1.ConditionTrue && nodestatus.OwnsNetworkUnavailable(node) {
-		log.WithField("node", node.Name).Info("Calico-node pod is Ready, setting NetworkUnavailable=False")
-		if err := c.patchCondition(ctx, node.Name, false); err != nil {
-			return err
-		}
-	}
-	if !nodestatus.HasNetworkReadyTaint(node) {
+// syncNodeWithoutPod handles a node with no calico-node pod, where there is nothing to observe.
+// Waiting out unmanagedGracePeriod separates a node still waiting for its first pod from one
+// Calico has stopped managing.
+func (c *nodeConditionController) syncNodeWithoutPod(ctx context.Context, node *v1.Node) error {
+	if age := c.nowFn().Sub(node.CreationTimestamp.Time); age < c.unmanagedGracePeriod {
+		// New node. Its pod is on the way, and the admission-time taint has to survive until
+		// calico-node arrives to clear it.
+		c.workqueue.AddAfter(node.Name, c.unmanagedGracePeriod-age)
 		return nil
 	}
 
-	updated := node.DeepCopy()
-	updated.Spec.Taints = nodestatus.WithoutNetworkReadyTaint(updated.Spec.Taints)
-	return c.updateTaints(ctx, updated)
+	// The DaemonSet controller replaces a deleted pod within seconds, so a sustained absence
+	// means Calico is gone from this node - uninstalled, or the node is on its way out.
+	return c.releaseNode(ctx, node)
+}
+
+// releaseNode gives up whatever Calico wrote on a node it can no longer speak for. Without it an
+// uninstall would leave every node it had marked permanently unschedulable.
+func (c *nodeConditionController) releaseNode(ctx context.Context, node *v1.Node) error {
+	// Same writes as the healthy path: clear our condition, clear our taint, touch nothing else.
+	return c.markAvailable(ctx, node)
+}
+
+// markAvailable clears the taint and the condition, but only touches a condition Calico set.
+func (c *nodeConditionController) markAvailable(ctx context.Context, node *v1.Node) error {
+	if nodestatus.HasNetworkReadyTaint(node) {
+		updated := node.DeepCopy()
+		updated.Spec.Taints = nodestatus.WithoutNetworkReadyTaint(updated.Spec.Taints)
+		if err := c.updateTaints(ctx, updated); err != nil {
+			return err
+		}
+	}
+	if nodestatus.NetworkUnavailable(node) != v1.ConditionTrue || !nodestatus.OwnsNetworkUnavailable(node) {
+		return nil
+	}
+
+	log.WithField("node", node.Name).Info("Calico-node pod is Ready, setting NetworkUnavailable=False")
+	return c.patchCondition(ctx, node.Name, false)
 }
 
 func (c *nodeConditionController) markUnavailable(ctx context.Context, node *v1.Node) error {
-	if nodestatus.NetworkUnavailable(node) != v1.ConditionTrue {
-		log.WithField("node", node.Name).Warn("No Ready calico-node pod, setting NetworkUnavailable=True")
-		if err := c.patchCondition(ctx, node.Name, true); err != nil {
+	if c.manageTaint && !nodestatus.HasNetworkReadyTaint(node) {
+		updated := node.DeepCopy()
+		updated.Spec.Taints = append(updated.Spec.Taints, v1.Taint{
+			Key:    nodestatus.NetworkReadyTaintKey,
+			Effect: v1.TaintEffectNoSchedule,
+		})
+		if err := c.updateTaints(ctx, updated); err != nil {
 			return err
 		}
 	}
-	if !c.manageTaint || nodestatus.HasNetworkReadyTaint(node) {
+	if nodestatus.NetworkUnavailable(node) == v1.ConditionTrue {
 		return nil
 	}
 
-	updated := node.DeepCopy()
-	updated.Spec.Taints = append(updated.Spec.Taints, v1.Taint{
-		Key:    nodestatus.NetworkReadyTaintKey,
-		Effect: v1.TaintEffectNoSchedule,
-	})
-	return c.updateTaints(ctx, updated)
+	log.WithField("node", node.Name).Warn("No Ready calico-node pod, setting NetworkUnavailable=True")
+	return c.patchCondition(ctx, node.Name, true)
 }
 
 func (c *nodeConditionController) patchCondition(ctx context.Context, nodeName string, unavailable bool) error {
@@ -324,6 +361,18 @@ func calicoNodePodsByNode(obj any) ([]string, error) {
 		return nil, nil
 	}
 	return []string{pod.Spec.NodeName}, nil
+}
+
+// calicoOwnsNetworking reports whether Calico provides pod networking on the node these pods run
+// on, read off calico-node's own environment. Under CALICO_NETWORKING_BACKEND=none another CNI
+// owns it, and NetworkUnavailable describes that CNI rather than Calico.
+func calicoOwnsNetworking(pods []*v1.Pod) bool {
+	for _, pod := range pods {
+		if converter.CalicoNodeEnv(pod, networkingBackendEnvVar) == "none" {
+			return false
+		}
+	}
+	return true
 }
 
 func anyPodReady(pods []*v1.Pod) bool {

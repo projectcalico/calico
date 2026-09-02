@@ -15,6 +15,7 @@ package converter
 
 import (
 	"fmt"
+	"slices"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,6 +40,41 @@ func IsCalicoNodePod(pod *v1.Pod) bool {
 		}
 	}
 	return false
+}
+
+// calicoNodeCachedEnv is the calico-node environment the node condition controller reads. The
+// rest is dropped, since calico-node carries a few dozen variables per pod.
+var calicoNodeCachedEnv = []string{"CALICO_NETWORKING_BACKEND"}
+
+func keptCalicoNodeEnv(pod *v1.Pod) []v1.EnvVar {
+	var kept []v1.EnvVar
+	for _, container := range pod.Spec.Containers {
+		if container.Name != calicoNodeContainerName {
+			continue
+		}
+		for _, env := range container.Env {
+			if slices.Contains(calicoNodeCachedEnv, env.Name) {
+				kept = append(kept, v1.EnvVar{Name: env.Name, Value: env.Value})
+			}
+		}
+	}
+	return kept
+}
+
+// CalicoNodeEnv returns the value of one environment variable on the pod's calico-node container,
+// or "" if it isn't set. Only the variables PodTransformer keeps are visible on a cached pod.
+func CalicoNodeEnv(pod *v1.Pod, name string) string {
+	for _, container := range pod.Spec.Containers {
+		if container.Name != calicoNodeContainerName {
+			continue
+		}
+		for _, env := range container.Env {
+			if env.Name == name {
+				return env.Value
+			}
+		}
+	}
+	return ""
 }
 
 func ownedByDaemonSet(pod *v1.Pod) bool {
@@ -90,7 +126,12 @@ func PodTransformer(podControllerEnabled bool) cache.TransformFunc {
 			// Keep the few fields the node condition controller reads, and only for the pods it
 			// reads them from - a Ready condition per pod across the cluster is not worth caching.
 			p.OwnerReferences = pod.OwnerReferences
-			p.Spec.Containers = []v1.Container{{Name: calicoNodeContainerName}}
+			p.Spec.Containers = []v1.Container{
+				{
+					Name: calicoNodeContainerName,
+					Env:  keptCalicoNodeEnv(pod),
+				},
+			}
 			for _, cond := range pod.Status.Conditions {
 				if cond.Type == v1.PodReady {
 					p.Status.Conditions = []v1.PodCondition{cond}

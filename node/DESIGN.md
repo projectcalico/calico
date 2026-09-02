@@ -27,9 +27,10 @@ single container.
   not advisory: Kubernetes maps it to a `NoSchedule` taint that
   only host-networked pods tolerate. One component owns each
   transition (calico-node at startup and shutdown,
-  kube-controllers at runtime in both directions), and removing
-  the `network-not-ready` taint is never gated on the feature
-  being enabled, so disabling it drains rather than strands.
+  kube-controllers at runtime in both directions), and Calico
+  withdraws both the condition and the `network-not-ready` taint
+  from any node it can no longer speak for, so an uninstall or a
+  disabled feature drains rather than strands.
 
 ## Cross-cutting
 
