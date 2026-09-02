@@ -48,6 +48,13 @@ type WhiskerSpec struct {
 	// Allowed values are Enabled or Disabled. Defaults to Enabled.
 	// +optional
 	Notifications *NotificationMode `json:"notifications,omitempty"`
+
+	// IngressGateway configures Calico Ingress Gateway access to the Whisker UI.
+	// When set, the operator renders Gateway API resources (Gateway, HTTPRoute,
+	// Backend, ReferenceGrant, TLS Secret) to expose Whisker via CIG.
+	// Requires a GatewayAPI CR to be present.
+	// +optional
+	IngressGateway *IngressGatewaySpec `json:"ingressGateway,omitempty"`
 }
 
 // +kubebuilder:object:root=true

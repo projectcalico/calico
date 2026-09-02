@@ -18,10 +18,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	rwhisker "github.com/projectcalico/calico/operator/pkg/render/whisker"
 )
+
+const ingressGatewayWarning = "ingressgateway-variant"
 
 // Extension is the Calico Enterprise behavior for the whisker controller.
 type Extension struct {
@@ -33,6 +36,19 @@ var _ extensions.WhiskerExtension = &Extension{}
 // New returns the whisker extension for the variant the operator resolved.
 func New(variant operatorv1.ProductVariant) *Extension {
 	return &Extension{variant: variant}
+}
+
+// ValidateAndDefault drops spec.ingressGateway, which only Calico's whisker serves.
+func (e *Extension) ValidateAndDefault(cr *operatorv1.Whisker, st status.StatusManager) error {
+	if cr.Spec.IngressGateway == nil {
+		st.ClearWarning(ingressGatewayWarning)
+		return nil
+	}
+
+	st.SetWarning(ingressGatewayWarning,
+		"spec.ingressGateway on the Whisker resource is ignored on Calico Enterprise; expose the UI through the Manager resource's spec.ingressGateway instead")
+	cr.Spec.IngressGateway = nil
+	return nil
 }
 
 // Modify dispatches over the components the whisker controller renders.

@@ -2,6 +2,10 @@
 
 [![Docker image](https://img.shields.io/badge/docker-quay.io%2Ftigera%2Foperator-blue)](https://quay.io/repository/tigera/operator)
 
+> **The operator is developed in [projectcalico/calico](https://github.com/projectcalico/calico).**
+> Bugs, feature requests, and pull requests go there. This repository still serves the
+> `release-v1.41` through `release-v1.44` branches for the rest of their supported lives.
+
 This repository contains a Kubernetes operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift. Its goal is
 to make installation, upgrades, and ongoing lifecycle management of Calico and Calico Enterprise as simple and reliable as possible.
 

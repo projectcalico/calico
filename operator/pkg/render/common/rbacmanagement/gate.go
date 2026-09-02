@@ -17,8 +17,6 @@
 package rbacmanagement
 
 import (
-	"strconv"
-
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -27,6 +25,8 @@ const (
 	// operator, ui-apis and rbacsync. Keep in sync with ui-apis rbacmanagement/gate.
 	ConfigMapName = "rbac-ui-config"
 	ConfigMapKey  = "rbac-ui-enabled"
+	// ConfigMapEnabledValue is the only value that switches the feature on.
+	ConfigMapEnabledValue = "true"
 
 	// LDAPConfigSecretName is the RBAC-UI LDAP directory-sync config Secret
 	// (calico-system) the rbacsync process reads to perform the sync.
@@ -39,11 +39,15 @@ const (
 )
 
 // Enabled reports whether the RBAC management UI is switched on for this cluster.
-// A missing ConfigMap, missing key or unparsable value reads as disabled.
+// Only the exact value "true" enables it; a missing ConfigMap, a missing key or
+// any other value reads as disabled.
+//
+// The exact match is deliberate. ui-apis serves the feature and decides the same
+// question with a string comparison, so anything more permissive here renders the
+// feature's RBAC on a cluster where ui-apis is still refusing to serve it.
 func Enabled(cm *corev1.ConfigMap) bool {
 	if cm == nil {
 		return false
 	}
-	enabled, err := strconv.ParseBool(cm.Data[ConfigMapKey])
-	return err == nil && enabled
+	return cm.Data[ConfigMapKey] == ConfigMapEnabledValue
 }

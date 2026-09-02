@@ -112,6 +112,20 @@ var _ = Describe("the zero value Extensions", func() {
 	})
 })
 
+var _ = Describe("the base Whisker validation", func() {
+	var e extensions.Extensions
+
+	It("keeps spec.ingressGateway, which Calico's whisker serves itself", func() {
+		cr := &operatorv1.Whisker{
+			Spec: operatorv1.WhiskerSpec{
+				IngressGateway: &operatorv1.IngressGatewaySpec{Hostname: "whisker.test.local"},
+			},
+		}
+		Expect(e.Whisker().ValidateAndDefault(cr, nil)).NotTo(HaveOccurred())
+		Expect(cr.Spec.IngressGateway).NotTo(BeNil())
+	})
+})
+
 var _ = Describe("the base ManagementClusterConnection validation", func() {
 	var e extensions.Extensions
 

@@ -149,7 +149,7 @@ type NodeConfiguration struct {
 func Node(cfg *NodeConfiguration) Component {
 	// Configure default values for any fields that might not be set.
 	if cfg.DefaultDNSPolicy == "" {
-		cfg.DefaultDNSPolicy = corev1.DNSClusterFirstWithHostNet
+		cfg.DefaultDNSPolicy = corev1.DNSDefault
 	}
 	return &nodeComponent{cfg: cfg}
 }
@@ -502,6 +502,14 @@ func (c *nodeComponent) nodeRole() *rbacv1.ClusterRole {
 				Verbs: []string{"update"},
 			},
 			{
+				// calico/node marks the IP pools it creates allocatable.
+				APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+				Resources: []string{
+					"ippools/status",
+				},
+				Verbs: []string{"update"},
+			},
+			{
 				// For migration code in calico/node startup only. Remove when the migration
 				// code is removed from node.
 				APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
@@ -681,6 +689,13 @@ func (c *nodeComponent) createCalicoPluginConfig() map[string]any {
 		"policy_setup_timeout_seconds": linuxPolicySetupTimeoutSeconds,
 		"endpoint_status_dir":          filepath.Join(c.varRunCalicoVolume().HostPath.Path, "endpoint-status"),
 		"calico_api_group":             apiGroup,
+	}
+
+	// When MTU is auto-detected, the CNI plugin reads the value from
+	// /var/lib/calico/mtu, which Felix writes on startup. Wait for it to avoid
+	// setting the wrong MTU.
+	if mtu == 0 {
+		calicoPluginConfig["require_mtu_file"] = true
 	}
 
 	// Determine logging configuration

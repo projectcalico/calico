@@ -306,6 +306,7 @@ local:operator/pkg/enterprise/render/logcollector
 local:operator/pkg/enterprise/render/monitor
 local:operator/pkg/enterprise/render/otelcollector
 local:operator/pkg/enterprise/tiers
+local:operator/pkg/enterprise/uigateway
 local:operator/pkg/enterprise/utils
 local:operator/pkg/enterprise/whisker
 local:operator/pkg/enterprise/windows
@@ -327,6 +328,7 @@ local:operator/pkg/render/common/secret
 local:operator/pkg/render/common/securitycontext
 local:operator/pkg/render/common/securitycontextconstraints
 local:operator/pkg/render/common/selector
+local:operator/pkg/render/common/wafmanagement
 local:operator/pkg/render/gateway
 local:operator/pkg/render/gatewayapi
 local:operator/pkg/render/goldmane
@@ -348,5 +350,6 @@ local:operator/pkg/render/whisker
 local:operator/pkg/tls
 local:operator/pkg/tls/certificatemanagement
 local:operator/pkg/tls/certkeyusage
+local:operator/pkg/uigateway
 local:operator/pkg/url
 local:operator/version

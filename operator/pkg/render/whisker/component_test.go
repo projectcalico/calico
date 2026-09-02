@@ -18,6 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	v3 "github.com/tigera/api/pkg/apis/projectcalico/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -27,6 +28,7 @@ import (
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
 	"github.com/projectcalico/calico/operator/pkg/components"
 	rmeta "github.com/projectcalico/calico/operator/pkg/render/common/meta"
+	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	rtest "github.com/projectcalico/calico/operator/pkg/render/common/test"
 	"github.com/projectcalico/calico/operator/pkg/render/whisker"
@@ -232,6 +234,45 @@ var _ = Describe("ComponentRendering", func() {
 		actual, ok := config.Data["default.conf"]
 		Expect(ok).To(BeTrue(), "expected default.conf to be present in config map")
 		Expect(actual).To(Equal(whisker.NginxConfigDual))
+	})
+
+	It("should add a gateway ingress rule to the NetworkPolicy when the ingress gateway is configured", func() {
+		cfg := &whisker.Configuration{
+			Installation: &operatorv1.InstallationSpec{
+				KubernetesProvider: operatorv1.ProviderGKE,
+				Variant:            operatorv1.Calico,
+			},
+			TrustedCertBundle:       defaultTrustedCertBundle,
+			WhiskerKeyPair:          defaultWhiskerKeyPair,
+			WhiskerBackendKeyPair:   defaultTLSKeyPair,
+			Whisker:                 &operatorv1.Whisker{Spec: operatorv1.WhiskerSpec{Notifications: ptr.To(operatorv1.Enabled)}},
+			IngressGatewayNamespace: "gateway-ns",
+		}
+		objsToCreate, _ := whisker.Whisker(cfg).Objects()
+		var policy *v3.NetworkPolicy
+		for _, obj := range objsToCreate {
+			if p, ok := obj.(*v3.NetworkPolicy); ok && p.Name == whisker.WhiskerPolicyName {
+				policy = p
+			}
+		}
+		Expect(policy).NotTo(BeNil())
+		Expect(policy.Spec.Ingress).To(HaveLen(1))
+		rule := policy.Spec.Ingress[0]
+		// kubernetes.io/metadata.name, not projectcalico.org/name: the latter is
+		// applied by Calico's namespace controller, which does not run on every
+		// dataplane (see #5151).
+		Expect(rule.Source.NamespaceSelector).To(Equal("kubernetes.io/metadata.name == 'gateway-ns'"))
+		Expect(rule.Source.Selector).To(Equal("gateway.envoyproxy.io/owning-gateway-name == 'calico-whisker-gateway'"))
+		Expect(rule.Destination.Ports).To(Equal(networkpolicy.Ports(uint16(whisker.WhiskerServicePort))))
+
+		// Without the gateway, Whisker stays deny-all.
+		cfg.IngressGatewayNamespace = ""
+		objsToCreate, _ = whisker.Whisker(cfg).Objects()
+		for _, obj := range objsToCreate {
+			if p, ok := obj.(*v3.NetworkPolicy); ok && p.Name == whisker.WhiskerPolicyName {
+				Expect(p.Spec.Ingress).To(BeEmpty())
+			}
+		}
 	})
 
 	It("should render a service with HTTPS port", func() {

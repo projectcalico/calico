@@ -53,6 +53,7 @@ import (
 	eutils "github.com/projectcalico/calico/operator/pkg/enterprise/utils"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	relasticsearch "github.com/projectcalico/calico/operator/pkg/render/common/elasticsearch"
+	rmetatest "github.com/projectcalico/calico/operator/pkg/render/common/meta"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	rsecret "github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/logstorage/eck"
@@ -251,6 +252,76 @@ var _ = Describe("Manager controller tests", func() {
 			// Mark that watches were successful.
 			r.licenseAPIReady.MarkAsReady()
 			r.tierWatchReady.MarkAsReady()
+		})
+
+		It("should degrade and render no gateway when certificateManagement is enabled", func() {
+			// The operator cannot mint the listener key pair under
+			// certificateManagement, and the placeholder it gets back has no
+			// private key. Writing it would leave Envoy with a certificate it
+			// cannot serve, so stop and report the combination as unsupported.
+			Expect(c.Create(ctx, &operatorv1.GatewayAPI{
+				ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+				Spec: operatorv1.GatewayAPISpec{
+					GatewayClasses: []operatorv1.GatewayClassSpec{{Name: "tigera-gateway-class"}},
+				},
+			})).NotTo(HaveOccurred())
+
+			ca, err := tigeratls.MakeCA(rmetatest.DefaultOperatorCASignerName())
+			Expect(err).NotTo(HaveOccurred())
+			caPEM, _, _ := ca.Config.GetPEMBytes()
+
+			install := &operatorv1.Installation{}
+			Expect(c.Get(ctx, types.NamespacedName{Name: "default"}, install)).NotTo(HaveOccurred())
+			install.Status.Computed.CertificateManagement = &operatorv1.CertificateManagement{CACert: caPEM}
+			Expect(c.Status().Update(ctx, install)).NotTo(HaveOccurred())
+
+			Expect(c.Get(ctx, types.NamespacedName{Name: "tigera-secure"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.IngressGateway = &operatorv1.IngressGatewaySpec{Hostname: "manager.example.com"}
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+
+			var degradedErr string
+			mockStatus.On("SetDegraded", operatorv1.ResourceCreateError, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) { degradedErr = args.String(2) }).Return()
+
+			_, err = r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).To(HaveOccurred())
+
+			gw := &gatewayapiv1.Gateway{
+				TypeMeta: metav1.TypeMeta{Kind: "Gateway", APIVersion: "gateway.networking.k8s.io/v1"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ManagerGatewayResourcePrefix + "-gateway",
+					Namespace: common.CalicoNamespace,
+				},
+			}
+			Expect(kerror.IsNotFound(test.GetResource(c, gw))).To(BeTrue(),
+				"no gateway should be rendered without a usable listener certificate")
+
+			Expect(degradedErr).To(ContainSubstring("spec.ingressGateway is not supported"))
+			Expect(degradedErr).To(ContainSubstring("certificateManagement"))
+		})
+
+		It("should degrade when spec.ingressGateway is set but the GatewayAPI CR is missing", func() {
+			Expect(c.Get(ctx, types.NamespacedName{Name: "tigera-secure"}, cr)).NotTo(HaveOccurred())
+			cr.Spec.IngressGateway = &operatorv1.IngressGatewaySpec{Hostname: "manager.example.com"}
+			Expect(c.Update(ctx, cr)).NotTo(HaveOccurred())
+
+			var degradedErr string
+			mockStatus.On("SetDegraded", operatorv1.ResourceCreateError, mock.Anything, mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) { degradedErr = args.String(2) }).Return()
+
+			_, err := r.Reconcile(ctx, reconcile.Request{})
+			Expect(err).To(HaveOccurred())
+			Expect(degradedErr).To(ContainSubstring("GatewayAPI CR not found"))
+
+			gw := &gatewayapiv1.Gateway{
+				TypeMeta: metav1.TypeMeta{Kind: "Gateway", APIVersion: "gateway.networking.k8s.io/v1"},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      ManagerGatewayResourcePrefix + "-gateway",
+					Namespace: common.CalicoNamespace,
+				},
+			}
+			Expect(kerror.IsNotFound(test.GetResource(c, gw))).To(BeTrue(),
+				"no gateway resources should be rendered without a GatewayAPI CR")
 		})
 
 		It("should create an internal manager TLS cert secret", func() {
@@ -1514,38 +1585,6 @@ var _ = Describe("Manager controller tests", func() {
 		})
 	})
 
-	Context("ensureGatewayNamespace", func() {
-		var r ReconcileManager
-
-		BeforeEach(func() {
-			r = ReconcileManager{client: c, scheme: scheme}
-		})
-
-		It("should create the namespace when it does not exist", func() {
-			Expect(r.ensureGatewayNamespace(ctx, "ns-a")).NotTo(HaveOccurred())
-
-			ns := &corev1.Namespace{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: "ns-a"}, ns)).NotTo(HaveOccurred())
-			Expect(ns.Labels).To(HaveKeyWithValue("name", "ns-a"))
-			Expect(ns.OwnerReferences).To(BeEmpty())
-		})
-
-		It("should leave an existing namespace untouched", func() {
-			existing := &corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "ns-a",
-					Labels: map[string]string{"team": "netsec"},
-				},
-			}
-			Expect(c.Create(ctx, existing)).NotTo(HaveOccurred())
-
-			Expect(r.ensureGatewayNamespace(ctx, "ns-a")).NotTo(HaveOccurred())
-
-			ns := &corev1.Namespace{}
-			Expect(c.Get(ctx, types.NamespacedName{Name: "ns-a"}, ns)).NotTo(HaveOccurred())
-			Expect(ns.Labels).To(Equal(map[string]string{"team": "netsec"}))
-		})
-	})
 })
 
 // failingGateReadClient fails the read of the gate ConfigMap and passes everything else

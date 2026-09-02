@@ -44,6 +44,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/secret"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontextconstraints"
+	"github.com/projectcalico/calico/operator/pkg/render/common/wafmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/manager"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 	"github.com/projectcalico/calico/operator/pkg/tls/certkeyusage"
@@ -1187,6 +1188,20 @@ func managerClusterRole(managedCluster bool, kubernetesProvider operatorv1.Provi
 		},
 	}
 
+	// Not gated on the switch itself: ui-apis has to read it to learn its feature is on.
+	// Multi-tenant force-disables both UIs, so a tenant's manager never reads either gate.
+	// Named list and watch do work: the apiserver lifts metadata.name off the field selector.
+	if !tenant.MultiTenant() {
+		cr.Rules = append(cr.Rules,
+			rbacv1.PolicyRule{
+				APIGroups:     []string{""},
+				Resources:     []string{"configmaps"},
+				ResourceNames: []string{rbacmanagement.ConfigMapName, wafmanagement.ConfigMapName},
+				Verbs:         []string{"get", "list", "watch"},
+			},
+		)
+	}
+
 	// Keep in sync with the rbacManagementUINamespacedRole gate.
 	if rbacManagementEnabled {
 		cr.Rules = append(cr.Rules, rbacManagementUIRules()...)
@@ -1269,13 +1284,6 @@ func (c *managerComponent) rbacManagementUINamespacedRole() []client.Object {
 					Resources:     []string{"configmaps"},
 					ResourceNames: []string{rbacmanagement.GroupsConfigMapName},
 					Verbs:         []string{"get", "list", "watch", "update", "patch", "delete"},
-				},
-				{
-					// The gate ui-apis watches; read-only, the value is the admin's.
-					APIGroups:     []string{""},
-					Resources:     []string{"configmaps"},
-					ResourceNames: []string{rbacmanagement.ConfigMapName},
-					Verbs:         []string{"get", "list", "watch"},
 				},
 			},
 		},

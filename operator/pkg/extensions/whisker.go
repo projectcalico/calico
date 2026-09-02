@@ -15,18 +15,29 @@
 package extensions
 
 import (
+	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
+	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/render"
 )
 
 // WhiskerExtension is the variant's hook into the components the whisker controller
 // renders.
 type WhiskerExtension interface {
+	// ValidateAndDefault unsets the fields the variant does not render, reporting each
+	// one it drops. Pass the copy the controller renders from, not the CR it writes back.
+	ValidateAndDefault(cr *operatorv1.Whisker, st status.StatusManager) error
+
 	// Modify layers the variant onto a component the controller rendered.
 	Modify(c render.Component, ri render.Inputs) render.Component
 }
 
 // noopWhisker runs the core operator's behavior unchanged.
 type noopWhisker struct{}
+
+// ValidateAndDefault keeps the CR as written, since Calico renders every Whisker field.
+func (noopWhisker) ValidateAndDefault(_ *operatorv1.Whisker, _ status.StatusManager) error {
+	return nil
+}
 
 func (noopWhisker) Modify(c render.Component, _ render.Inputs) render.Component {
 	return c

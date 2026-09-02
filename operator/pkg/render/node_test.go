@@ -158,6 +158,19 @@ var _ = Describe("Node rendering tests", func() {
 				}))
 			})
 
+			It("should grant calico-node access to the IP pool status subresource", func() {
+				component := render.Node(&cfg)
+				Expect(component.ResolveImages(nil)).To(BeNil())
+				resources, _ := component.Objects()
+
+				role := rtest.GetResource(resources, "calico-node", "", "rbac.authorization.k8s.io", "v1", "ClusterRole").(*rbacv1.ClusterRole)
+				Expect(role.Rules).To(ContainElement(rbacv1.PolicyRule{
+					APIGroups: []string{"projectcalico.org", "crd.projectcalico.org"},
+					Resources: []string{"ippools/status"},
+					Verbs:     []string{"update"},
+				}))
+			})
+
 			It("should render all resources for a default configuration", func() {
 				expectedResources := []struct {
 					name    string
@@ -212,6 +225,7 @@ var _ = Describe("Node rendering tests", func() {
       "endpoint_status_dir": "/var/run/calico/endpoint-status",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -416,6 +430,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -716,6 +731,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -1127,6 +1143,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -1988,6 +2005,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2074,6 +2092,7 @@ var _ = Describe("Node rendering tests", func() {
       "log_file_path": "/var/log/calico/cni/cni.log",
       "log_level": "Debug",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "policy": {
         "type": "k8s"
@@ -2123,6 +2142,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2172,6 +2192,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2220,6 +2241,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2305,6 +2327,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2362,6 +2385,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2413,6 +2437,7 @@ var _ = Describe("Node rendering tests", func() {
       "calico_api_group": "",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2458,6 +2483,7 @@ var _ = Describe("Node rendering tests", func() {
       "endpoint_status_dir": "/var/run/calico/endpoint-status",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2597,6 +2623,7 @@ var _ = Describe("Node rendering tests", func() {
       "endpoint_status_dir": "/var/run/calico/endpoint-status",
       "datastore_type": "kubernetes",
       "mtu": 0,
+      "require_mtu_file": true,
       "nodename_file_optional": false,
       "log_level": "Debug",
       "log_file_path": "/var/log/calico/cni/cni.log",
@@ -2867,6 +2894,17 @@ var _ = Describe("Node rendering tests", func() {
 						corev1.ResourceMemory: resource.MustParse("500Mi"),
 					},
 				}
+
+				It("should default to the node's own DNS resolver", func() {
+					component := render.Node(&cfg)
+					resources, _ := component.Objects()
+					dsResource := rtest.GetResource(resources, "calico-node", "calico-system", "apps", "v1", "DaemonSet")
+					Expect(dsResource).ToNot(BeNil())
+
+					ds := dsResource.(*appsv1.DaemonSet)
+					Expect(ds.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSDefault))
+					Expect(ds.Spec.Template.Spec.DNSConfig).To(BeNil())
+				})
 
 				It("should handle calicoNodeDaemonSet overrides", func() {
 					var minReadySeconds int32 = 20

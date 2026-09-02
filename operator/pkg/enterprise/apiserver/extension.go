@@ -54,6 +54,7 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/networkpolicy"
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/common/securitycontext"
+	"github.com/projectcalico/calico/operator/pkg/render/common/wafmanagement"
 	"github.com/projectcalico/calico/operator/pkg/render/webhooks"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
 )
@@ -1291,6 +1292,14 @@ func (c *apiServer) tigeraUserClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{"gatewayapis"},
 			Verbs:     []string{"get"},
 		},
+		// Allow the user to read the gatewayapi TigeraStatus. Gateway API readiness
+		// lives there, not on the GatewayAPI CR.
+		{
+			APIGroups:     []string{"operator.tigera.io"},
+			Resources:     []string{"tigerastatuses"},
+			ResourceNames: []string{"gatewayapi"},
+			Verbs:         []string{"get"},
+		},
 		// Allow the user to read Gateways and HTTPRoutes to offer as WAF policy attach targets.
 		{
 			APIGroups: []string{"gateway.networking.k8s.io"},
@@ -1542,6 +1551,14 @@ func (c *apiServer) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole {
 			Resources: []string{"gatewayapis"},
 			Verbs:     []string{"get", "create", "update", "patch"},
 		},
+		// Allow the user to read the gatewayapi TigeraStatus. Gateway API readiness
+		// lives there, not on the GatewayAPI CR.
+		{
+			APIGroups:     []string{"operator.tigera.io"},
+			Resources:     []string{"tigerastatuses"},
+			ResourceNames: []string{"gatewayapi"},
+			Verbs:         []string{"get"},
+		},
 		// Allow the user to read Gateways and HTTPRoutes to offer as WAF policy attach targets.
 		{
 			APIGroups: []string{"gateway.networking.k8s.io"},
@@ -1604,6 +1621,22 @@ func (c *apiServer) tigeraNetworkAdminClusterRole() *rbacv1.ClusterRole {
 			Verbs: []string{"patch"},
 		},
 	}...)
+
+	// Ungated: a rule rendered only while a feature is on could never turn it on.
+	rules = append(rules,
+		// create cannot be name-scoped, so this admits any ConfigMap in any namespace.
+		rbacv1.PolicyRule{
+			APIGroups: []string{""},
+			Resources: []string{"configmaps"},
+			Verbs:     []string{"create"},
+		},
+		rbacv1.PolicyRule{
+			APIGroups:     []string{""},
+			Resources:     []string{"configmaps"},
+			ResourceNames: []string{rbacmanagement.ConfigMapName, wafmanagement.ConfigMapName},
+			Verbs:         []string{"get", "list", "watch", "update", "patch", "delete"},
+		},
+	)
 
 	// ui-apis writes these impersonating the caller, so the apiserver enforces escalation
 	// against the user's own permissions.

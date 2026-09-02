@@ -22,9 +22,10 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/render/common/rbacmanagement"
 )
 
-// The gate is hand-edited by an admin, so the parser has to be forgiving about
-// spelling and strict about everything else: anything it cannot read as an explicit
-// true leaves the feature — and all of its access — switched off.
+// The gate is hand-edited by an admin, and only the exact value "true" switches
+// the feature on. Anything else leaves the feature, and all of its access, off.
+// The spellings ui-apis rejects are pinned here too, since a value that enables
+// one side and not the other renders RBAC for a feature that will not serve.
 var _ = DescribeTable("Enabled",
 	func(cm *corev1.ConfigMap, expected bool) {
 		Expect(rbacmanagement.Enabled(cm)).To(Equal(expected))
@@ -33,8 +34,8 @@ var _ = DescribeTable("Enabled",
 	Entry("missing key", &corev1.ConfigMap{Data: map[string]string{}}, false),
 	Entry("explicitly disabled", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "false"}}, false),
 	Entry("enabled", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "true"}}, true),
-	Entry("enabled, capitalised", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "True"}}, true),
-	Entry("enabled as 1", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "1"}}, true),
+	Entry("capitalised stays off, as in ui-apis", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "True"}}, false),
+	Entry("1 stays off, as in ui-apis", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "1"}}, false),
 	Entry("unparsable value stays off", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: "yes please"}}, false),
 	Entry("empty value stays off", &corev1.ConfigMap{Data: map[string]string{rbacmanagement.ConfigMapKey: ""}}, false),
 )

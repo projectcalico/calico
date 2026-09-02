@@ -30,8 +30,8 @@ type IngressGatewaySpec struct {
 
 	// GatewayClassName selects the GatewayClass for the Gateway resource.
 	// If not set and the GatewayAPI CR has exactly one class, that class is
-	// used. If not set and multiple classes exist, the controller sets a
-	// warning requiring the user to specify one.
+	// used. If not set and multiple classes exist, the component degrades
+	// until the user specifies one.
 	// +optional
 	GatewayClassName *string `json:"gatewayClassName,omitempty"`
 }

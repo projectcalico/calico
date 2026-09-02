@@ -1294,15 +1294,8 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 	}
 	goldmaneRunning := goldmaneCR != nil
 
-	// Calico node DNS configuration and policy should be inherited from the tigera/operator Deployment by default since:
-	//
-	// - they are both host networked and run prior to CNI being installed (and thus beofre kube-dns is available)
-	// - they both need access to in-cluster serivces via kube-dns, as well as external services such as the API server.
-	//
-	// So, they will require the same DNS configuration.
-	//
-	// Users can override this with explicit configuration in the Installation resource, but using the operator as
-	// a baseline is a reasonable default.
+	// calico/node runs before CNI is installed, so cluster DNS is not yet reachable on the node. Use the
+	// node's own resolver, and inherit the operator's DNS settings only when it has an explicit dnsConfig.
 	operatorDeployment := &appsv1.Deployment{}
 	defaultDNSPolicy := corev1.DNSDefault
 	var defaultDNSConfig *corev1.PodDNSConfig
@@ -1312,7 +1305,7 @@ func (r *ReconcileInstallation) Reconcile(ctx context.Context, request reconcile
 			return reconcile.Result{}, err
 		}
 		reqLogger.Info("Operator Deployment not found, using default DNS configuration")
-	} else {
+	} else if operatorDeployment.Spec.Template.Spec.DNSConfig != nil {
 		defaultDNSPolicy = operatorDeployment.Spec.Template.Spec.DNSPolicy
 		defaultDNSConfig = operatorDeployment.Spec.Template.Spec.DNSConfig
 	}

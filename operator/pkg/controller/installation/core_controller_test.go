@@ -362,6 +362,52 @@ var _ = Describe("Testing core-controller installation", func() {
 			})
 		})
 
+		Context("DNS configuration", func() {
+			operatorDeployment := func(policy corev1.DNSPolicy, dnsConfig *corev1.PodDNSConfig) *appsv1.Deployment {
+				return &appsv1.Deployment{
+					ObjectMeta: metav1.ObjectMeta{Name: common.OperatorName(), Namespace: common.OperatorNamespace()},
+					Spec: appsv1.DeploymentSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{DNSPolicy: policy, DNSConfig: dnsConfig},
+						},
+					},
+				}
+			}
+
+			nodeDaemonSet := func() appsv1.DaemonSet {
+				_, err := r.Reconcile(ctx, reconcile.Request{})
+				Expect(err).ShouldNot(HaveOccurred())
+
+				ds := appsv1.DaemonSet{}
+				key := types.NamespacedName{Name: common.NodeDaemonSetName, Namespace: common.CalicoNamespace}
+				Expect(c.Get(ctx, key, &ds)).NotTo(HaveOccurred())
+				return ds
+			}
+
+			It("should use the node's resolver when the operator has no explicit dnsConfig", func() {
+				Expect(c.Create(ctx, operatorDeployment(corev1.DNSClusterFirstWithHostNet, nil))).NotTo(HaveOccurred())
+
+				ds := nodeDaemonSet()
+				Expect(ds.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSDefault))
+				Expect(ds.Spec.Template.Spec.DNSConfig).To(BeNil())
+			})
+
+			It("should inherit the operator's DNS settings when it has an explicit dnsConfig", func() {
+				dnsConfig := &corev1.PodDNSConfig{Nameservers: []string{"10.96.0.10", "169.254.169.253"}}
+				Expect(c.Create(ctx, operatorDeployment(corev1.DNSNone, dnsConfig))).NotTo(HaveOccurred())
+
+				ds := nodeDaemonSet()
+				Expect(ds.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSNone))
+				Expect(ds.Spec.Template.Spec.DNSConfig).To(Equal(dnsConfig))
+			})
+
+			It("should use the node's resolver when the operator Deployment is missing", func() {
+				ds := nodeDaemonSet()
+				Expect(ds.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSDefault))
+				Expect(ds.Spec.Template.Spec.DNSConfig).To(BeNil())
+			})
+		})
+
 		It("degrades with a configuration reason when the extension rejects the configuration", func() {
 			mockStatus.On("SetDegraded", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
 

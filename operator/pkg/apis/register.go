@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	aggregator "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset/scheme"
 	gateway "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	csisecret "sigs.k8s.io/secrets-store-csi-driver/apis/v1"
 
 	operatorv1 "github.com/projectcalico/calico/operator/api/v1"
@@ -69,6 +70,7 @@ func init() {
 	AddToSchemes = append(AddToSchemes, policyv1.SchemeBuilder.AddToScheme)
 	AddToSchemes = append(AddToSchemes, policyv1beta1.SchemeBuilder.AddToScheme)
 	AddToSchemes = append(AddToSchemes, gateway.Install)
+	AddToSchemes = append(AddToSchemes, gatewayv1beta1.Install)
 	AddToSchemes = append(AddToSchemes, envoy.AddToScheme)
 	// EnvoyFilter is a hand-rolled shim type defined in pkg/render/istio (used
 	// for waypoint L7 logging); register it centrally like the other types.

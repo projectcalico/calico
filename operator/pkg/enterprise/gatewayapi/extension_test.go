@@ -764,7 +764,6 @@ var _ = Describe("Gateway API enterprise extension", func() {
 
 		rtest.ExpectResourceInList(objs, "waf-http-filter", "app-ns", "", "v1", "ServiceAccount")
 		rtest.ExpectResourceInList(objs, "waf-http-filter-gateway-resources", "app-ns", "rbac.authorization.k8s.io", "v1", "RoleBinding")
-		rtest.ExpectResourceInList(objs, "tigera-operator-secrets", "app-ns", "rbac.authorization.k8s.io", "v1", "RoleBinding")
 		rtest.ExpectResourceInList(objs, "tigera-pull-secret", "app-ns", "", "", "")
 	})
 

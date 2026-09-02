@@ -47,6 +47,7 @@ import (
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
 	egatewayapi "github.com/projectcalico/calico/operator/pkg/enterprise/gatewayapi"
+	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/pkg/render/gatewayapi"
 	"github.com/projectcalico/calico/operator/pkg/tls/certificatemanagement"
@@ -744,6 +745,24 @@ var _ = Describe("Gateway API controller tests", func() {
 		Expect(c.Get(ctx, client.ObjectKey{Namespace: "tigera-gateway", Name: "user-sa"}, &corev1.ServiceAccount{})).NotTo(HaveOccurred())
 		Expect(c.Get(ctx, client.ObjectKey{Namespace: "tigera-gateway", Name: "user-config"}, &corev1.ConfigMap{})).NotTo(HaveOccurred())
 		Expect(c.Get(ctx, client.ObjectKey{Name: gatewayapi.GatewayClassName}, &gapi.GatewayClass{})).NotTo(HaveOccurred())
+	})
+
+	It("writes the bundle and operator-secrets RoleBinding, but not WAF resources, on Calico", func() {
+		r.newComponentHandler = utils.NewComponentHandler
+		r.ext = extensions.Extensions{}.GatewayAPI()
+		bundle, err := certificatemanagement.CreateTrustedBundleWithSystemRootCertificates(nil)
+		Expect(err).NotTo(HaveOccurred())
+		gateways := []gapi.Gateway{
+			{ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "gw1", UID: "u1"}, Spec: gapi.GatewaySpec{GatewayClassName: gatewayapi.GatewayClassName}},
+		}
+		Expect(r.reconcileGatewayNamespaceResources(ctx, bundle, nil, gateways, map[string]bool{gatewayapi.GatewayClassName: true})).NotTo(HaveOccurred())
+
+		// The operator needs secret CRUD for the UI gateway TLS secret on
+		// both variants; the WAF SA/RoleBinding are Enterprise-only.
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: certificatemanagement.TrustedCertConfigMapName}, &corev1.ConfigMap{})).NotTo(HaveOccurred())
+		Expect(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "tigera-operator-secrets"}, &rbacv1.RoleBinding{})).NotTo(HaveOccurred())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "waf-http-filter"}, &corev1.ServiceAccount{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(c.Get(ctx, client.ObjectKey{Namespace: "app-ns", Name: "waf-http-filter-gateway-resources"}, &rbacv1.RoleBinding{}))).To(BeTrue())
 	})
 
 	It("writes per-namespace Gateway resources owned by the namespace's Gateways (Enterprise)", func() {
