@@ -155,10 +155,6 @@ export USE_LATEST_RELEASE="${USE_LATEST_RELEASE:-false}"
 export BZ_LOCAL_DIR=${BZ_LOCAL_DIR:-${BZ_HOME}/.local}
 export BZ_LOGS_DIR=${BZ_LOGS_DIR:-${HOME}/.bz/logs}
 export REPORT_DIR=${REPORT_DIR:-${BZ_LOCAL_DIR}/report/${TEST_TYPE}}
-# GS_BUCKET is deliberately left unset: the epilogue publishes to
-# CI_ARTIFACT_STEP_STORAGE, and setting GS_BUCKET is how a cron asks for a
-# bucket of its own instead (e2e-vpp).  A default here would make the two
-# cases indistinguishable.
 mkdir -p "${BZ_LOGS_DIR}"   # BZ_HOME + .local are created by "bz init profile"
 
 # --- Install the banzai (bz) CLI: the ArgoCI runner image does not ship it ---
