@@ -16,6 +16,8 @@ package calico
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -582,5 +584,78 @@ func TestPublishContainerImagesBranchTag(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestE2EArchitectures covers the supported-arch intersection: an empty set
+// means "all" (the tooling-wide convention), the four-arch default drops
+// ppc64le/s390x, a narrowed build keeps only its supported arches, and an
+// unsupported-only set yields none.
+func TestE2EArchitectures(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured []string
+		want       []string
+	}{
+		{"empty means all supported", nil, []string{"amd64", "arm64"}},
+		{"default four arches drop ppc64le/s390x", []string{"amd64", "arm64", "ppc64le", "s390x"}, []string{"amd64", "arm64"}},
+		{"narrowed build keeps only its supported arch", []string{"arm64"}, []string{"arm64"}},
+		{"unsupported-only yields none", []string{"ppc64le", "s390x"}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := e2eArchitectures(tt.configured); !slices.Equal(got, tt.want) {
+				t.Errorf("e2eArchitectures(%v) = %v, want %v", tt.configured, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBuildE2EBinariesUsesARCHES asserts the e2e build is restricted through
+// ARCHES, not VALIDARCHES (lib.Makefile assigns VALIDARCHES with `=`, so passing
+// it via the environment is a no-op).
+func TestBuildE2EBinariesUsesARCHES(t *testing.T) {
+	repoRoot := t.TempDir()
+	// Stage a built e2e binary so the post-build hard-link step succeeds.
+	e2eBinDir := filepath.Join(repoRoot, "e2e", "bin", "k8s")
+	if err := os.MkdirAll(e2eBinDir, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(e2eBinDir, "e2e-linux-amd64.test"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	f := newFakeRunner()
+	r := &CalicoManager{
+		runner:        f,
+		repoRoot:      repoRoot,
+		outputDir:     t.TempDir(),
+		calicoVersion: "v3.33.0-0.dev-1-gabcdef123456",
+	}
+
+	if err := r.buildE2EBinaries([]string{"amd64", "arm64"}); err != nil {
+		t.Fatalf("buildE2EBinaries() unexpected error: %v", err)
+	}
+
+	makePrefix := "make -C " + filepath.Join(repoRoot, "e2e") + " build-all"
+	env := f.envFor(makePrefix)
+	if env == nil {
+		t.Fatalf("e2e build-all was not run (calls: %v)", f.calls)
+	}
+	// Only inspect the arch env vars: env also carries os.Environ(), which can
+	// hold secrets that must not be printed on failure.
+	var archEnv []string
+	for _, e := range env {
+		if strings.HasPrefix(e, "ARCHES=") || strings.HasPrefix(e, "VALIDARCHES=") {
+			archEnv = append(archEnv, e)
+		}
+	}
+	if !slices.Contains(archEnv, "ARCHES=amd64 arm64") {
+		t.Errorf("e2e build-all arch env = %v, want ARCHES=amd64 arm64", archEnv)
+	}
+	for _, e := range archEnv {
+		if strings.HasPrefix(e, "VALIDARCHES=") {
+			t.Errorf("e2e build-all should not set VALIDARCHES (lib.Makefile ignores it): %s", e)
+		}
 	}
 }
