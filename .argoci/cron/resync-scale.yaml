@@ -36,6 +36,26 @@ steps:
       runAsNonRoot: true
     secretBundles:
       - {name: banzai-secrets, keys: [{name: LENS_ELASTICSEARCH_TOKEN}]}
+
+    # TEMPORARY -- REVERT BEFORE MERGE.  The epilogue runs in the pod, which is
+    # the half the on-VM probe cannot see.  LENS_ELASTICSEARCH_TOKEN reached
+    # neither the VM nor /tmp/secrets, yet secretRequired did not fail the step
+    # -- so either the key is absent from the pod (and secretRequired was never
+    # emitted for it) or it is present and was not pushed.  This distinguishes
+    # the two.  Names and lengths only; no value is printed.
+    epilogue: |
+      if printenv LENS_ELASTICSEARCH_TOKEN >/dev/null; then
+          probe_val=$(printenv LENS_ELASTICSEARCH_TOKEN)
+          echo "[PROBE-POD] LENS_ELASTICSEARCH_TOKEN: set in pod, length=${#probe_val}"
+      else
+          echo "[PROBE-POD] LENS_ELASTICSEARCH_TOKEN: NOT SET in pod"
+      fi
+      echo "[PROBE-POD] variable names written to /tmp/secrets:"
+      sed -n 's/^export \([A-Za-z_][A-Za-z0-9_]*\)=.*/[PROBE-POD]   \1/p' \
+          /tmp/secrets 2>/dev/null | sort || true
+      echo "[PROBE-POD] credential-ish names in the pod environment:"
+      printenv | cut -d= -f1 | grep -iE 'lens|elastic' | sort \
+          | sed 's/^/[PROBE-POD]   /' || true
     commands: |
       set -eo pipefail
 
