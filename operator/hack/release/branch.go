@@ -34,9 +34,8 @@ import (
 
 // Context keys for branch/prep commands
 const (
-	branchNameCtxKey          contextKey = "branch-name"
-	baseBranchCtxKey          contextKey = "base-branch"
-	calicoConfigVersionCtxKey contextKey = "calico-config-version"
+	branchNameCtxKey contextKey = "branch-name"
+	baseBranchCtxKey contextKey = "base-branch"
 )
 
 var (
@@ -49,7 +48,6 @@ var (
 	defaultBaseBranch = "master"
 
 	defaultChangedFiles = []string{
-		versions.CalicoConfigPath,
 		versions.EnterpriseConfigPath,
 		"pkg/components",
 		"pkg/crds",
@@ -72,14 +70,11 @@ var branchCutCommand = &cli.Command{
 	Description: `The branch command creates a new branch for the release off of the current branch (which should be master or a release branch).
 	The new branch name is in the format <release-branch-prefix>-<stream> (e.g. release-v1.43).
 
-	The config versions are updated based on the provided Calico ref, which should point to a branch or tag in the Calico repository.
 	If the base branch is not a release branch, an empty commit and dev tag are also created on the base branch to allow for proper versioning of future commits on the base branch.`,
 	Flags: []cli.Flag{
 		streamFlag,
-		calicoRefFlag,
 		releaseBranchPrefixFlag,
 		devTagSuffixFlag,
-		calicoDirFlag,
 		skipBranchCheckFlag,
 		skipValidationFlag,
 		localFlag,
@@ -125,9 +120,6 @@ var branchCutContextValuesFunc = func(ctx context.Context, c *cli.Command) (cont
 	}
 	ctx = context.WithValue(ctx, baseBranchCtxKey, currentBranch)
 	ctx = context.WithValue(ctx, branchNameCtxKey, fmt.Sprintf("%s-%s", c.String(releaseBranchPrefixFlag.Name), c.String(streamFlag.Name)))
-	if calicoRef := c.String(calicoRefFlag.Name); calicoRef != "" {
-		ctx = context.WithValue(ctx, calicoConfigVersionCtxKey, calicoRef)
-	}
 	return ctx, nil
 }
 
@@ -150,7 +142,6 @@ var isReleaseBranch = func(releaseBranchPrefix, branch string) (bool, error) {
 // validateBranchRefs validates that the required ref flags are set for branch creation.
 //   - check that the stream flag is in the correct format
 //   - check that the operator branch does not already exist
-//   - check that the calico ref is provided
 //   - check that the base operator branch is either a release branch (or master) (if not skipping branch check)
 var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	// check that the stream format is valid
@@ -173,11 +164,6 @@ var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Cont
 	}
 	if out != "" {
 		return ctx, fmt.Errorf("branch %s already exists in remote %s, please choose a different name or delete the existing branch", branchName, remote)
-	}
-
-	// check that the calico ref is provided
-	if c.String(calicoRefFlag.Name) == "" {
-		return ctx, fmt.Errorf("--%s is required for branch creation", calicoRefFlag.Name)
 	}
 
 	// check operator base branch is either the default base branch or a release branch (if not skipping branch check)
@@ -207,23 +193,6 @@ var validateBranchRefs = func(ctx context.Context, c *cli.Command) (context.Cont
 	return ctx, nil
 }
 
-// branchCutPreCommit modifies files in the new branch before committing, and returns a list of changed files to include in the commit.
-var branchCutPreCommit = func(ctx context.Context, c *cli.Command, repoRoot string) ([]string, error) {
-	// Ensure VERSION_TAG in Makefile matches the calico version in config/
-	const makefileRelPath = "Makefile"
-	calicoVer, err := versions.CalicoConfigVersions(repoRoot)
-	if err != nil {
-		return nil, fmt.Errorf("getting calico version from config: %w", err)
-	}
-	// Use | as sed delimiter to avoid clashing with / in version strings; escape &, |, \ in the replacement.
-	title := strings.NewReplacer(`\`, `\\`, `&`, `\&`, `|`, `\|`).Replace(calicoVer.Title)
-	if out, err := command.RunInDir(repoRoot, "sed", []string{"-i", fmt.Sprintf(`s|^VERSION_TAG.*|VERSION_TAG := %s|`, title), makefileRelPath}, nil); err != nil {
-		logrus.Error(out)
-		return nil, fmt.Errorf("updating VERSION_TAG in Makefile: %w", err)
-	}
-	return []string{makefileRelPath}, nil
-}
-
 // Pre-action for branch command.
 var branchCutBefore = cli.BeforeFunc(func(ctx context.Context, c *cli.Command) (context.Context, error) {
 	return branchCutBeforeCommon(ctx, c, branchCutContextValuesFunc, validateBranchRefs)
@@ -243,7 +212,7 @@ var branchCutAction = func(ctx context.Context, c *cli.Command) (map[string]any,
 	}
 	refs := []string{branchName}
 
-	if _, err := branchCutActionCommon(ctx, c, branchCutPreCommit, fmt.Sprintf("build: update config for %s", stream)); err != nil {
+	if _, err := branchCutActionCommon(ctx, c, nil, fmt.Sprintf("build: update config for %s", stream)); err != nil {
 		return nil, err
 	}
 	outputs := map[string]any{
@@ -350,9 +319,9 @@ func switchBranch(ctx context.Context, branchName string) error {
 	return nil
 }
 
-// branchCutActionCommon switches to a new branch, modifies config versions, and commits the changes.
-// It reads the branch name and calico version from context (set by Before functions).
-// It returns the repo root directory for subsequent operations.
+// branchCutActionCommon switches to a new branch and commits any changes the pre-commit
+// function makes. It reads the branch name from context (set by Before functions), and
+// returns the repo root directory for subsequent operations.
 func branchCutActionCommon(ctx context.Context, c *cli.Command, preCommitFunc func(ctx context.Context, c *cli.Command, repoRoot string) (changedFiles []string, err error), commitMsg string) (string, error) {
 	branchName, err := contextString(ctx, branchNameCtxKey)
 	if err != nil {
@@ -364,9 +333,6 @@ func branchCutActionCommon(ctx context.Context, c *cli.Command, preCommitFunc fu
 	repoRootDir, err := command.GitDir()
 	if err != nil {
 		return "", fmt.Errorf("getting git directory: %w", err)
-	}
-	if err := modifyConfigVersions(ctx, c, repoRootDir); err != nil {
-		return "", fmt.Errorf("modifying config versions: %w", err)
 	}
 	var changedFiles []string
 	if preCommitFunc != nil {
@@ -381,26 +347,17 @@ func branchCutActionCommon(ctx context.Context, c *cli.Command, preCommitFunc fu
 	return repoRootDir, nil
 }
 
-// modifyConfigVersions updates config versions and runs make targets to regenerate files.
-// It reads the calico version from context (set by Before functions).
-func modifyConfigVersions(ctx context.Context, c *cli.Command, repoRootDir string) error {
-	// A missing context key is treated as an empty string; Generate() skips the update for an empty version.
-	calicoVersion, _ := ctx.Value(calicoConfigVersionCtxKey).(string)
-	verCfg := &versions.VersionsConfig{
-		RepoRootDir: repoRootDir,
-		Calico: versions.VersionConfig{
-			Version: calicoVersion,
-			Dir:     c.String(calicoDirFlag.Name),
-		},
-	}
-	return verCfg.Generate()
-}
-
 func commitGitChanges(repoRootDir, msg string, additionalFiles ...string) error {
 	changedFiles := append(slices.Clone(defaultChangedFiles), additionalFiles...)
 	if out, err := command.GitInDir(repoRootDir, append([]string{"add"}, changedFiles...)...); err != nil {
 		logrus.Error(out)
 		return fmt.Errorf("staging git changes: %w", err)
+	}
+	// The operator resolves the Calico version from the build, so a branch cut has
+	// nothing of its own to commit unless a pre-commit function changed something.
+	if _, err := command.GitInDir(repoRootDir, "diff", "--cached", "--quiet"); err == nil {
+		logrus.Info("No config changes to commit")
+		return nil
 	}
 	if out, err := command.Git("commit", "-m", msg); err != nil {
 		logrus.Error(out)
