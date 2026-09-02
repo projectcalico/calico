@@ -21,16 +21,15 @@ pushd "${OPERATOR_DIR}"
 
 make build/_output/bin/gen-versions
 
-# The build needs a component list pointing at the dev images, which is the
-# same file the repo keeps generated from config/calico_versions.yml. Put the
-# committed one back once the image is built.
+# Repoint every component in the operator's versions file at the dev registry
+# and tag. Put the committed calico.go back once the image is built.
 COMPONENTS="${OPERATOR_DIR}/pkg/components/calico.go"
 trap 'git -C "${OPERATOR_DIR}" checkout -- pkg/components/calico.go' EXIT INT TERM
 
 VERSIONS_FILE=$(mktemp /tmp/calico_versions_XXXXXX.yml)
-sed -e "s/test-build/${DEV_IMAGE_TAG}/g" \
-    -e "/version:/a\\    registry: ${DEV_IMAGE_REGISTRY}/\n    imagePath: ${DEV_IMAGE_PATH}" \
-    "${INFRA_DIR}/calico_versions.yml" > "${VERSIONS_FILE}"
+sed -e "/^ *\(registry\|imagePath\):/d" \
+    -e "s|^\( *\)version: .*|\1version: ${DEV_IMAGE_TAG}\n\1registry: ${DEV_IMAGE_REGISTRY}/\n\1imagePath: ${DEV_IMAGE_PATH}|" \
+    "${OPERATOR_DIR}/config/calico_versions.yml" > "${VERSIONS_FILE}"
 build/_output/bin/gen-versions -os-versions="${VERSIONS_FILE}" > "${COMPONENTS}"
 rm -f "${VERSIONS_FILE}"
 
