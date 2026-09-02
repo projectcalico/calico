@@ -66,9 +66,6 @@ BINDIR    ?= $(BUILD_DIR)/bin
 
 include ../lib.Makefile
 
-## Run the tests for the current platform/architecture
-test: fmt vet ut
-
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
@@ -174,6 +171,10 @@ UT_DIR?=./pkg
 FV_DIR?=./test
 GO_TEST_ARGS ?= -count 1
 
+# The kind suite runs well past go test's 10 minute default, which the ginkgo CLI
+# used to disable on our behalf.
+FV_TEST_TIMEOUT ?= 60m
+
 # Only the ginkgo suites accept -ginkgo.focus, so a focused run has to narrow
 # UT_DIR/FV_DIR to those packages as well.
 GINKGO_FOCUS ?=
@@ -196,7 +197,7 @@ fv: kind-cluster-create deploy-crds load-container-images run-fvs kind-cluster-d
 run-fvs: $(ENVOY_GATEWAY_CHART) $(ISTIO_CHART_FILES)
 	-mkdir -p .go-pkg-cache report
 	$(DOCKER_GO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
-	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) $(GINKGO_FOCUS_ARG)'
+	gotestsum --format testname --junitfile report/operator_fv.xml -- $(FV_DIR)/... $(GO_TEST_ARGS) -timeout $(FV_TEST_TIMEOUT) $(GINKGO_FOCUS_ARG)'
 
 # The tag the operator resolves for these components, from config/calico_versions.yml.
 FV_IMAGE_TAG ?= master
@@ -277,7 +278,9 @@ foss-checks:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean format-check validate-gen-versions static-checks image-all test gen-files fix dirty-check test-crds
+# Not `test`, which lib.Makefile defines as `ut fv st`. The FV block runs the
+# kind suite on its own.
+ci: clean format-check validate-gen-versions static-checks image-all fmt vet ut gen-files fix-changed dirty-check test-crds
 
 # This repository is public and the Enterprise CRDs come from one that is not,
 # so only the core half is checked here. The Enterprise generated files are
