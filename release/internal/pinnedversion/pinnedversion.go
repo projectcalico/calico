@@ -193,7 +193,11 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		},
 		flannelComponentName: FlannelComponent,
 	}
-	for _, img := range utils.ReleaseImages() {
+	imgs, err := utils.ReleaseImages()
+	if err != nil {
+		return fmt.Errorf("determining release images: %w", err)
+	}
+	for _, img := range imgs {
 		components[img] = registry.Component{Version: p.versionData.ProductVersion()}
 	}
 	pinned := PinnedVersion{
