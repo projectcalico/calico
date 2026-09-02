@@ -1,6 +1,6 @@
 - name: "E2E tests (KinD)"
   run:
-    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico)}"
+    when: "${CHANGE_IN(e2e,node,typha,apiserver,cni-plugin,pod2daemon,calicoctl,kube-controllers,goldmane,whisker,whisker-backend,cmd/calico,operator)}"
   dependencies:
     - Prerequisites
     - "Build: calico image"
