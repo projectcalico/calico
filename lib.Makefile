@@ -706,6 +706,18 @@ commit-and-push-pr:
 # GitHub API helpers
 #   Helper macros and targets to help with communicating with the github API
 ###############################################################################
+# Pass to curl when downloading from github.com or raw.githubusercontent.com.
+# GitHub throttles HTTP/2 more aggressively than HTTP/1.1.
+CURL_GITHUB_OPTS=--http1.1
+
+# On CI, never prompt for git credentials: an anonymous clone that gets a
+# transient 401 would otherwise block on the password prompt until the job
+# times out, instead of failing in seconds. Left alone locally so a developer
+# can still authenticate interactively.
+ifeq ($(SEMAPHORE),true)
+export GIT_TERMINAL_PROMPT=0
+endif
+
 GIT_COMMIT_MESSAGE?="Automatic Pin Updates"
 GIT_COMMIT_TITLE?="Semaphore Auto Pin Update"
 GIT_PR_BRANCH_BASE?=$(SEMAPHORE_GIT_BRANCH)
