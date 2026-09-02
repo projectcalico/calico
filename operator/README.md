@@ -1,28 +1,26 @@
 # Calico Operator
 
-[![Docker image](https://img.shields.io/badge/docker-quay.io%2Ftigera%2Foperator-blue)](https://quay.io/repository/tigera/operator)
+This directory contains the Kubernetes operator that manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes and OpenShift. Each part of an installation gets its own CRD in the `operator.tigera.io` API group, along with a controller that renders the Kubernetes resources for that part, reconciles them, and reports progress through a TigeraStatus.
 
-> **The operator is developed in [projectcalico/calico](https://github.com/projectcalico/calico).**
-> Bugs, feature requests, and pull requests go there. This repository still serves the
-> `release-v1.41` through `release-v1.44` branches for the rest of their supported lives.
+The operator is built with the [operator-sdk](https://github.com/operator-framework/operator-sdk) and controller-runtime, so it is worth being familiar with those before making changes here.
 
-This repository contains a Kubernetes operator which manages the lifecycle of a Calico or Calico Enterprise installation on Kubernetes or OpenShift. Its goal is
-to make installation, upgrades, and ongoing lifecycle management of Calico and Calico Enterprise as simple and reliable as possible.
+## Documentation
 
-This operator is built using the [operator-sdk](https://github.com/operator-framework/operator-sdk), so you should be familiar with how that works before getting started.
+- [docs/principles.md](docs/principles.md) - the operator's architecture and the reasoning behind it.
+- [docs/api_design.md](docs/api_design.md) - conventions for the CRD types in `api/v1`.
+- [docs/dev_guidelines.md](docs/dev_guidelines.md) - code structure, code generation, and cherry-picks.
+- [docs/common_tasks.md](docs/common_tasks.md) - running the operator against a local cluster, testing, and debugging.
 
-## Getting Started Running Calico
+Installation and configuration documentation for users lives at [https://docs.tigera.io/](https://docs.tigera.io/).
 
-There are many avenues to get started running Calico depending on your situation.
+## Building and testing
 
-- Trying out Kubernetes on a single host or on your own hardware? The [quick start guide](https://projectcalico.docs.tigera.io/getting-started/kubernetes/quickstart) will have you up and running in about fifteen minutes.
-- Running a managed public cloud? Use our guides for enabling Calico network policies.
-  - [Amazon Elastic Kubernetes Service (EKS)](https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/eks)
-  - [Google Kubernetes Engine (GKE)](https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/gke)
-  - [IBM Cloud Kubernetes Service (IKS)](https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/iks)
-  - [Microsoft Azure Kubernetes Service (AKS)](https://docs.tigera.io/calico/latest/getting-started/kubernetes/managed-public-cloud/aks)
-- Want to go deeper? Visit [https://docs.tigera.io/](https://docs.tigera.io/) for full documentation.
+Builds and tests run through the Makefile in this directory:
 
-## Get Started Developing
+```
+make build
+make test
+make image
+```
 
-See [the developer guidelines](docs/dev_guidelines.md) for more information on designing, coding, and testing changes.
+Run `make help` for the full list of targets.
