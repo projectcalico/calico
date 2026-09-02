@@ -96,6 +96,25 @@ func (o ControllerOptions) AddControllers(mgr ctrl.Manager) error {
 	return nil
 }
 
+// variantControllers builds the reconcilers the running variant adds.
+var variantControllers func(variant v1.ProductVariant) []Controller
+
+// RegisterVariantControllers declares the reconcilers the running variant adds to
+// the core set. Call from an init(): startup reads the registry as soon as the
+// variant resolves.
+func RegisterVariantControllers(f func(variant v1.ProductVariant) []Controller) {
+	variantControllers = f
+}
+
+// VariantControllers returns the reconcilers the running variant adds, for the
+// caller to put on ControllerOptions. A build that ships no variant adds none.
+func VariantControllers(variant v1.ProductVariant) []Controller {
+	if variantControllers == nil {
+		return nil
+	}
+	return variantControllers(variant)
+}
+
 // Controller is a reconciler a variant contributes, so that the core controller
 // manager can add it without naming the type.
 type Controller struct {

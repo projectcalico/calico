@@ -92,11 +92,11 @@ var _ = Describe("apiserver controller tests", func() {
 				Generation: 2,
 			},
 			Status: operatorv1.InstallationStatus{
-				Variant: operatorv1.CalicoEnterprise,
+				Variant: operatorv1.Calico,
 			},
 			Spec: operatorv1.InstallationSpec{
 				ControlPlaneReplicas: &replicas,
-				Variant:              operatorv1.CalicoEnterprise,
+				Variant:              operatorv1.Calico,
 				Registry:             "some.registry.org/",
 			},
 		}
@@ -163,15 +163,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -186,53 +185,45 @@ var _ = Describe("apiserver controller tests", func() {
 				},
 			}
 			Expect(test.GetResource(cli, &d)).To(BeNil())
-			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(2))
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
 			apiserver := test.GetContainer(d.Spec.Template.Spec.Containers, "calico-apiserver")
 			Expect(apiserver).ToNot(BeNil())
 			Expect(apiserver.Image).To(Equal(
 				fmt.Sprintf("some.registry.org/%s%s:%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
-					components.ComponentTigeraCalico.Version)))
-			qserver := test.GetContainer(d.Spec.Template.Spec.Containers, "tigera-queryserver")
-			Expect(qserver).ToNot(BeNil())
-			Expect(qserver.Image).To(Equal(
-				fmt.Sprintf("some.registry.org/%s%s:%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
-					components.ComponentTigeraCalico.Version)))
-			Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(2))
+					components.CalicoImagePath,
+					components.ComponentCalico.Image,
+					components.ComponentCalico.Version)))
+			Expect(d.Spec.Template.Spec.InitContainers).To(HaveLen(1))
 			csrinit := test.GetContainer(d.Spec.Template.Spec.InitContainers, "calico-apiserver-certs-key-cert-provisioner")
 			Expect(csrinit).ToNot(BeNil())
 			Expect(csrinit.Image).To(Equal(
 				fmt.Sprintf("some.registry.org/%s%s:%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
-					components.ComponentTigeraCalico.Version)))
+					components.CalicoImagePath,
+					components.ComponentCalico.Image,
+					components.ComponentCalico.Version)))
 		})
 		It("should use images from imageset", func() {
 			installation.Spec.CertificateManagement = certificateManagement
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			Expect(cli.Create(ctx, &operatorv1.ImageSet{
-				ObjectMeta: metav1.ObjectMeta{Name: "enterprise-" + components.EnterpriseRelease},
+				ObjectMeta: metav1.ObjectMeta{Name: "calico-" + components.CalicoRelease},
 				Spec: operatorv1.ImageSetSpec{
 					Images: []operatorv1.Image{
-						{Image: "tigera/calico", Digest: "sha256:calicohash"},
+						{Image: "calico/calico", Digest: "sha256:calicohash"},
 					},
 				},
 			})).ToNot(HaveOccurred())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -247,27 +238,20 @@ var _ = Describe("apiserver controller tests", func() {
 				},
 			}
 			Expect(test.GetResource(cli, &d)).To(BeNil())
-			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(2))
+			Expect(d.Spec.Template.Spec.Containers).To(HaveLen(1))
 			apiserver := test.GetContainer(d.Spec.Template.Spec.Containers, "calico-apiserver")
 			Expect(apiserver).ToNot(BeNil())
 			Expect(apiserver.Image).To(Equal(
 				fmt.Sprintf("some.registry.org/%s%s@%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
-					"sha256:calicohash")))
-			qserver := test.GetContainer(d.Spec.Template.Spec.Containers, "tigera-queryserver")
-			Expect(qserver).ToNot(BeNil())
-			Expect(qserver.Image).To(Equal(
-				fmt.Sprintf("some.registry.org/%s%s@%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
+					components.CalicoImagePath,
+					components.ComponentCalico.Image,
 					"sha256:calicohash")))
 			csrinit := test.GetContainer(d.Spec.Template.Spec.InitContainers, "calico-apiserver-certs-key-cert-provisioner")
 			Expect(csrinit).ToNot(BeNil())
 			Expect(csrinit.Image).To(Equal(
 				fmt.Sprintf("some.registry.org/%s%s@%s",
-					components.TigeraImagePath,
-					components.ComponentTigeraCalico.Image,
+					components.CalicoImagePath,
+					components.ComponentCalico.Image,
 					"sha256:calicohash")))
 		})
 
@@ -279,15 +263,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, apiSecret)).ShouldNot(HaveOccurred())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 					ClusterDomain:    dns.DefaultClusterDomain,
 				},
@@ -306,15 +289,14 @@ var _ = Describe("apiserver controller tests", func() {
 			secretName := "calico-apiserver-certs"
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -326,50 +308,18 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(secret.GetOwnerReferences()).To(HaveLen(1))
 		})
 
-		It("should wait for the Dex TLS secret rather than fail the reconcile", func() {
-			Expect(cli.Create(ctx, installation)).To(BeNil())
-
-			// Status is dropped on create, so mark Authentication ready explicitly.
-			auth := &operatorv1.Authentication{}
-			Expect(cli.Get(ctx, client.ObjectKey{Name: "tigera-secure"}, auth)).NotTo(HaveOccurred())
-			auth.Status.State = "Ready"
-			Expect(cli.Status().Update(ctx, auth)).NotTo(HaveOccurred())
-
-			Expect(cli.Delete(ctx, &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: render.DexTLSSecretName, Namespace: common.OperatorNamespace()},
-			})).NotTo(HaveOccurred())
-
-			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
-				client:              cli,
-				scheme:              scheme,
-				status:              mockStatus,
-				tierWatchReady:      ready,
-				migrationWatchReady: &utils.ReadyFlag{},
-				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
-					DetectedProvider: operatorv1.ProviderNone,
-				},
-			}
-			_, err := r.Reconcile(ctx, reconcile.Request{})
-			Expect(err).ShouldNot(HaveOccurred())
-			mockStatus.AssertCalled(GinkgoT(), "SetDegraded", operatorv1.ResourceNotReady, mock.Anything, mock.Anything, mock.Anything)
-		})
-
 		It("should render calico-system policy when tier and tier watch are ready", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -387,15 +337,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -411,15 +360,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      notReady,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -438,15 +386,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -467,15 +414,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -494,15 +440,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      notReady,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -516,20 +461,19 @@ var _ = Describe("apiserver controller tests", func() {
 
 		It("should create the cert secrets in the correct namespace when migrating from calico to enterprise", func() {
 			Expect(netv1.SchemeBuilder.AddToScheme(scheme)).ShouldNot(HaveOccurred())
-			installation.Spec.Variant = operatorv1.CalicoEnterprise
+			installation.Spec.Variant = operatorv1.Calico
 			installation.Status.Variant = operatorv1.Calico
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 			Expect(cli.Delete(ctx, &v3.Tier{ObjectMeta: metav1.ObjectMeta{Name: "calico-system"}})).NotTo(HaveOccurred())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
@@ -566,15 +510,14 @@ var _ = Describe("apiserver controller tests", func() {
 			}
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -600,15 +543,14 @@ var _ = Describe("apiserver controller tests", func() {
 				Status:     operatorv1.TigeraStatusStatus{},
 			}
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -654,15 +596,14 @@ var _ = Describe("apiserver controller tests", func() {
 			}
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -725,15 +666,14 @@ var _ = Describe("apiserver controller tests", func() {
 			}
 			Expect(cli.Create(ctx, ts)).NotTo(HaveOccurred())
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}
@@ -831,15 +771,14 @@ var _ = Describe("apiserver controller tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				r := ReconcileAPIServer{
-					ext:                 testExtensions.APIServer(),
+					ext:                 coreExtensions.APIServer(),
 					client:              cli,
 					scheme:              scheme,
 					status:              mockStatus,
 					tierWatchReady:      ready,
 					migrationWatchReady: &utils.ReadyFlag{},
 					opts: options.ControllerOptions{
-						Extensions:       testExtensions,
-						Variant:          operatorv1.CalicoEnterprise,
+						Variant:          operatorv1.Calico,
 						DetectedProvider: operatorv1.ProviderNone,
 					},
 				}
@@ -862,15 +801,14 @@ var _ = Describe("apiserver controller tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				r := ReconcileAPIServer{
-					ext:                 testExtensions.APIServer(),
+					ext:                 coreExtensions.APIServer(),
 					client:              cli,
 					scheme:              scheme,
 					status:              mockStatus,
 					tierWatchReady:      ready,
 					migrationWatchReady: &utils.ReadyFlag{},
 					opts: options.ControllerOptions{
-						Extensions:       testExtensions,
-						Variant:          operatorv1.CalicoEnterprise,
+						Variant:          operatorv1.Calico,
 						DetectedProvider: operatorv1.ProviderNone,
 					},
 				}
@@ -894,15 +832,14 @@ var _ = Describe("apiserver controller tests", func() {
 
 			It("Should reconcile multi-cluster setup for a management cluster for a multiple tenant", func() {
 				r := ReconcileAPIServer{
-					ext:                 multiTenantExtensions.APIServer(),
+					ext:                 coreExtensions.APIServer(),
 					client:              cli,
 					scheme:              scheme,
 					status:              mockStatus,
 					tierWatchReady:      ready,
 					migrationWatchReady: &utils.ReadyFlag{},
 					opts: options.ControllerOptions{
-						Extensions:       multiTenantExtensions,
-						Variant:          operatorv1.CalicoEnterprise,
+						Variant:          operatorv1.Calico,
 						DetectedProvider: operatorv1.ProviderNone,
 						MultiTenant:      true,
 					},
@@ -936,46 +873,6 @@ var _ = Describe("apiserver controller tests", func() {
 				Expect(kerror.IsNotFound(err)).Should(BeTrue())
 			})
 
-			It("Should grant each tenant's calico-apiserver ServiceAccount Linseed access via one ClusterRoleBinding", func() {
-				Expect(cli.Create(ctx, &operatorv1.Tenant{
-					ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "tenant-a"},
-					Spec:       operatorv1.TenantSpec{ID: "tenant-a-id"},
-				})).NotTo(HaveOccurred())
-				Expect(cli.Create(ctx, &operatorv1.Tenant{
-					ObjectMeta: metav1.ObjectMeta{Name: "default", Namespace: "tenant-b"},
-					Spec:       operatorv1.TenantSpec{ID: "tenant-b-id"},
-				})).NotTo(HaveOccurred())
-
-				r := ReconcileAPIServer{
-					ext:                 multiTenantExtensions.APIServer(),
-					client:              cli,
-					scheme:              scheme,
-					status:              mockStatus,
-					tierWatchReady:      ready,
-					migrationWatchReady: &utils.ReadyFlag{},
-					opts: options.ControllerOptions{
-						Extensions:       multiTenantExtensions,
-						Variant:          operatorv1.CalicoEnterprise,
-						DetectedProvider: operatorv1.ProviderNone,
-						MultiTenant:      true,
-					},
-				}
-
-				_, err := r.Reconcile(ctx, reconcile.Request{})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				// A single Linseed-access ClusterRoleBinding with one calico-apiserver ServiceAccount subject
-				// per tenant namespace.
-				crb := rbacv1.ClusterRoleBinding{
-					TypeMeta:   metav1.TypeMeta{Kind: "ClusterRoleBinding", APIVersion: "rbac.authorization.k8s.io/v1"},
-					ObjectMeta: metav1.ObjectMeta{Name: "calico-apiserver-linseed-access"},
-				}
-				Expect(test.GetResource(cli, &crb)).To(BeNil())
-				Expect(crb.Subjects).To(ConsistOf(
-					rbacv1.Subject{Kind: "ServiceAccount", Name: render.APIServerServiceAccountName, Namespace: "tenant-a"},
-					rbacv1.Subject{Kind: "ServiceAccount", Name: render.APIServerServiceAccountName, Namespace: "tenant-b"},
-				))
-			})
 		})
 	})
 
@@ -984,15 +881,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 					UseV3CRDs:        true,
 					ClusterDomain:    dns.DefaultClusterDomain,
@@ -1030,14 +926,13 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, ossInstallation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
 					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 					UseV3CRDs:        true,
@@ -1060,15 +955,14 @@ var _ = Describe("apiserver controller tests", func() {
 			Expect(cli.Create(ctx, installation)).To(BeNil())
 
 			r := ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 					UseV3CRDs:        false,
 				},
@@ -1119,15 +1013,14 @@ var _ = Describe("apiserver controller tests", func() {
 			})).NotTo(HaveOccurred())
 
 			r = ReconcileAPIServer{
-				ext:                 testExtensions.APIServer(),
+				ext:                 coreExtensions.APIServer(),
 				client:              cli,
 				scheme:              scheme,
 				status:              mockStatus,
 				tierWatchReady:      ready,
 				migrationWatchReady: &utils.ReadyFlag{},
 				opts: options.ControllerOptions{
-					Extensions:       testExtensions,
-					Variant:          operatorv1.CalicoEnterprise,
+					Variant:          operatorv1.Calico,
 					DetectedProvider: operatorv1.ProviderNone,
 				},
 			}

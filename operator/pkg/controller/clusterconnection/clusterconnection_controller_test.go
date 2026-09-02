@@ -16,11 +16,6 @@ package clusterconnection_test
 
 import (
 	"context"
-	"fmt"
-	"net"
-	"net/url"
-	"strconv"
-	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,7 +39,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
 	"github.com/projectcalico/calico/operator/pkg/dns"
-	"github.com/projectcalico/calico/operator/pkg/enterprise/render/monitor"
 	"github.com/projectcalico/calico/operator/pkg/render"
 	"github.com/projectcalico/calico/operator/test"
 )
@@ -114,17 +108,12 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 		pcSecret, err := certificateManager.GetOrCreateKeyPair(c, render.PacketCaptureServerCert, common.OperatorNamespace(), []string{"a"})
 		Expect(err).NotTo(HaveOccurred())
 
-		promSecret, err := certificateManager.GetOrCreateKeyPair(c, monitor.PrometheusServerTLSSecretName, common.OperatorNamespace(), []string{"a"})
-		Expect(err).NotTo(HaveOccurred())
-
 		queryServerSecret, err := certificateManager.GetOrCreateKeyPair(c, render.CalicoAPIServerTLSSecretName, common.OperatorNamespace(), []string{"a"})
 		Expect(err).NotTo(HaveOccurred())
 
 		err = c.Create(ctx, secret.Secret(common.OperatorNamespace()))
 		Expect(err).NotTo(HaveOccurred())
 		err = c.Create(ctx, pcSecret.Secret(common.OperatorNamespace()))
-		Expect(err).NotTo(HaveOccurred())
-		err = c.Create(ctx, promSecret.Secret(common.OperatorNamespace()))
 		Expect(err).NotTo(HaveOccurred())
 		err = c.Create(ctx, queryServerSecret.Secret(common.OperatorNamespace()))
 		Expect(err).NotTo(HaveOccurred())
@@ -145,14 +134,14 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 
 		installation = &operatorv1.Installation{
 			Spec: operatorv1.InstallationSpec{
-				Variant:  operatorv1.CalicoEnterprise,
+				Variant:  operatorv1.Calico,
 				Registry: "some.registry.org/",
 			},
 			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 			Status: operatorv1.InstallationStatus{
-				Variant: operatorv1.CalicoEnterprise,
+				Variant: operatorv1.Calico,
 				Computed: &operatorv1.InstallationSpec{
-					Variant:            operatorv1.CalicoEnterprise,
+					Variant:            operatorv1.Calico,
 					Registry:           "some.registry.org/",
 					KubernetesProvider: operatorv1.ProviderNone,
 				},
@@ -475,288 +464,3 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 	})
 
 })
-
-func createPodWithProxy(ctx context.Context, c client.Client, config *test.ProxyConfig, lowercase bool, replicaNum int) {
-	pod := v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      render.GuardianDeploymentName + strconv.Itoa(replicaNum),
-			Namespace: render.GuardianNamespace,
-			Labels: map[string]string{
-				"k8s-app":                render.GuardianDeploymentName,
-				"app.kubernetes.io/name": render.GuardianDeploymentName,
-			},
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{{
-				Name: render.GuardianContainerName,
-				Env:  []v1.EnvVar{},
-			}},
-		},
-	}
-
-	if config != nil {
-		// Set the env vars.
-		httpsProxyVarName := "HTTPS_PROXY"
-		httpProxyVarName := "HTTP_PROXY"
-		noProxyVarName := "NO_PROXY"
-		if lowercase {
-			httpsProxyVarName = strings.ToLower(httpsProxyVarName)
-			httpProxyVarName = strings.ToLower(httpProxyVarName)
-			noProxyVarName = strings.ToLower(noProxyVarName)
-		}
-		// Environment variables that are empty can be represented as an unset variable or a set variable with an empty string.
-		// For our tests, we'll represent them as an unset variable.
-		if config.HTTPSProxy != "" {
-			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, v1.EnvVar{
-				Name:  httpsProxyVarName,
-				Value: config.HTTPSProxy,
-			})
-			// Add a static HTTP_PROXY variable to catch any scenarios where the controller picks the wrong env var (Guardian uses HTTPS).
-			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, v1.EnvVar{
-				Name:  httpProxyVarName,
-				Value: "http://wrong-proxy-url.com/",
-			})
-		}
-		if config.NoProxy != "" {
-			pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, v1.EnvVar{
-				Name:  noProxyVarName,
-				Value: config.NoProxy,
-			})
-		}
-	}
-
-	err := c.Create(ctx, &pod)
-	Expect(err).NotTo(HaveOccurred())
-}
-
-type expectedEgressRule struct {
-	host      string
-	port      uint16
-	hostIsIP  bool
-	isProxied bool
-}
-
-func generateCoreProxyTestCases(targetDomain, targetIP, proxyDomain, proxyIP, proxyPort string) []test.ProxyTestCase {
-	var cases []test.ProxyTestCase
-	// We will collect the cases by target type. Targets are in the form of ip:port or domain:port.
-	for _, target := range []string{targetDomain, targetIP} {
-		var casesByTargetType []test.ProxyTestCase
-		// Generate the proxy strings. They can be http or https, use a domain or IP host, and can optionally specify a port.
-		var proxyStrings []string
-		for _, scheme := range []string{"http", "https"} {
-			for _, host := range []string{proxyDomain, proxyIP} {
-				for _, port := range []string{"", proxyPort} {
-					proxyString := fmt.Sprintf("%s://%s", scheme, host)
-					if port != "" {
-						proxyString = fmt.Sprintf("%s:%s", proxyString, port)
-					}
-					proxyStrings = append(proxyStrings, proxyString)
-				}
-			}
-		}
-		// Add base case: proxy is empty (empty and unset env vars are handled the same).
-		proxyStrings = append(proxyStrings, "")
-
-		// Generate the "no proxy" strings. They can either match or not match the target, can list one or many exemptions,
-		// and can optionally specify a port.
-		var noProxyStrings []string
-		for _, matchesTarget := range []bool{true, false} {
-			noProxyContainsPort := []bool{false}
-			if matchesTarget {
-				noProxyContainsPort = append(noProxyContainsPort, true)
-			}
-			for _, containsPort := range noProxyContainsPort {
-				for _, multipleExemptions := range []bool{true, false} {
-					host, port, err := net.SplitHostPort(target)
-					Expect(err).NotTo(HaveOccurred())
-					matchString := host
-					if containsPort {
-						matchString = fmt.Sprintf("%s:%s", matchString, port)
-					}
-
-					var noProxyString string
-					if matchesTarget {
-						noProxyString = matchString
-					} else {
-						noProxyString = "nomatch.com"
-					}
-
-					if multipleExemptions {
-						noProxyString = fmt.Sprintf("1.1.1.1,%s,nobueno.com", noProxyString)
-					}
-
-					noProxyStrings = append(noProxyStrings, noProxyString)
-				}
-			}
-		}
-		// Add base case: no-proxy is empty (empty and unset env vars are handled the same).
-		noProxyStrings = append(noProxyStrings, "")
-
-		// Create the cases based on the generated combinations of proxy strings.
-		// The env vars can be set as either lowercase or uppercase on the container, we express that possibility here.
-		for _, lowercase := range []bool{true, false} {
-			for _, proxyString := range proxyStrings {
-				for _, noProxyString := range noProxyStrings {
-					testCase := test.ProxyTestCase{
-						Lowercase: lowercase,
-						Target:    target,
-					}
-					var podProxyConfig *test.ProxyConfig
-					if proxyString != "" || noProxyString != "" {
-						podProxyConfig = &test.ProxyConfig{
-							HTTPSProxy: proxyString,
-							NoProxy:    noProxyString,
-						}
-					}
-					testCase.PodProxies = []*test.ProxyConfig{podProxyConfig}
-					casesByTargetType = append(casesByTargetType, testCase)
-				}
-			}
-		}
-		cases = append(cases, casesByTargetType...)
-	}
-	return cases
-}
-
-func getExpectedEgressRulesFromCase(c test.ProxyTestCase) []expectedEgressRule {
-	var expectedEgressRules []expectedEgressRule
-	expectedEgressRulesAdded := map[expectedEgressRule]bool{}
-
-	for _, proxy := range c.PodProxies {
-		var isProxied bool
-		if proxy != nil && proxy.HTTPSProxy != "" {
-			if proxy.NoProxy == "" {
-				isProxied = true
-			} else {
-				var proxyIsExempt bool
-				for _, noProxySubstring := range strings.Split(proxy.NoProxy, ",") {
-					if strings.Contains(c.Target, noProxySubstring) {
-						proxyIsExempt = true
-						break
-					}
-				}
-				if !proxyIsExempt {
-					isProxied = true
-				}
-			}
-		}
-
-		var host string
-		var port uint16
-		if isProxied {
-			proxyURL, err := url.ParseRequestURI(proxy.HTTPSProxy)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Resolve port
-			hostSplit := strings.Split(proxyURL.Host, ":")
-			switch {
-			case len(hostSplit) == 2:
-				port64, err := strconv.ParseUint(hostSplit[1], 10, 16)
-				Expect(err).NotTo(HaveOccurred())
-				host = hostSplit[0]
-				port = uint16(port64)
-			case proxyURL.Scheme == "https":
-				host = proxyURL.Host
-				port = 443
-			default:
-				host = proxyURL.Host
-				port = 80
-			}
-
-			Expect(err).NotTo(HaveOccurred())
-		} else {
-			var portString string
-			var err error
-			host, portString, err = net.SplitHostPort(c.Target)
-			Expect(err).NotTo(HaveOccurred())
-			port64, err := strconv.ParseUint(portString, 10, 16)
-			Expect(err).NotTo(HaveOccurred())
-			port = uint16(port64)
-		}
-
-		proxyPolicy := expectedEgressRule{
-			host:      host,
-			port:      port,
-			isProxied: isProxied,
-			hostIsIP:  net.ParseIP(host) != nil,
-		}
-
-		if !expectedEgressRulesAdded[proxyPolicy] {
-			expectedEgressRules = append(expectedEgressRules, proxyPolicy)
-			expectedEgressRulesAdded[proxyPolicy] = true
-		}
-	}
-
-	return expectedEgressRules
-}
-
-func multiplePodCases() []test.ProxyTestCase {
-	return []test.ProxyTestCase{
-		// Mainline case with multiple pods: both have the same proxy.
-		{
-			Target: "voltron:9000",
-			PodProxies: []*test.ProxyConfig{
-				{
-					HTTPSProxy: "http://proxy.io/",
-					NoProxy:    "nomatch",
-				},
-				{
-					HTTPSProxy: "http://proxy.io/",
-					NoProxy:    "nomatch",
-				},
-			},
-		},
-		// Mainline case with multiple pods: neither have a proxy.
-		{
-			Target:     "voltron:9000",
-			PodProxies: []*test.ProxyConfig{nil, nil},
-		},
-		// One pod has a proxy, one pod does not.
-		{
-			Target:     "voltron:9000",
-			PodProxies: []*test.ProxyConfig{{HTTPSProxy: "http://proxy.io/", NoProxy: "nomatch"}, nil},
-		},
-		// Pods have different proxies.
-		{
-			Target: "voltron:9000",
-			PodProxies: []*test.ProxyConfig{
-				{
-					HTTPSProxy: "http://proxy.io/",
-					NoProxy:    "nomatch",
-				},
-				{
-					HTTPSProxy: "http://proxy-number-two.io/",
-					NoProxy:    "nomatch",
-				},
-			},
-		},
-		// Pods have different proxies, but one of them is exempt from the proxy.
-		{
-			Target: "voltron:9000",
-			PodProxies: []*test.ProxyConfig{
-				{
-					HTTPSProxy: "http://proxy.io/",
-					NoProxy:    "nomatch",
-				},
-				{
-					HTTPSProxy: "http://proxy-number-two.io/",
-					NoProxy:    "voltron",
-				},
-			},
-		},
-		// Pods have different proxies, but both of them are exempt from the proxy.
-		{
-			Target: "voltron:9000",
-			PodProxies: []*test.ProxyConfig{
-				{
-					HTTPSProxy: "http://proxy.io/",
-					NoProxy:    "voltron",
-				},
-				{
-					HTTPSProxy: "http://proxy-number-two.io/",
-					NoProxy:    "voltron",
-				},
-			},
-		},
-	}
-}
