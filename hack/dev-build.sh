@@ -56,16 +56,15 @@ tag() {
     echo "Tagged $(echo $CALICO_IMAGES | wc -w) images as ${DEV_IMAGE_PREFIX}/*:${DEV_IMAGE_TAG}"
 }
 
-# Build the operator image if its inputs (tag, registry, source, versions)
-# have changed since the last run.
+# Build the operator image if its inputs (tag, registry, source) have changed
+# since the last run.
 operator() {
     mkdir -p "$STAMP_DIR"
-    versions_hash=$(md5sum "${KIND_INFRA_DIR}/calico_versions.yml" | cut -d' ' -f1)
     # Untracked files under operator/ are invisible here, so a brand-new source
     # file wants an explicit rebuild.
     operator_hash=$( { git -C "$REPO_ROOT" rev-parse HEAD:operator
                        git -C "$REPO_ROOT" diff HEAD -- operator; } | md5sum | cut -d' ' -f1)
-    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${operator_hash}:${versions_hash}"
+    cur_inputs="${DEV_IMAGE_TAG}:${DEV_IMAGE_REGISTRY}:${DEV_IMAGE_PATH}:${operator_hash}"
     stamp="${STAMP_DIR}/operator.inputs"
     prev_inputs=$(cat "$stamp" 2>/dev/null || echo "")
 
