@@ -221,6 +221,13 @@ func (cmd *conntrackDumpCmd) prettyDump(k conntrack.KeyInterface, v conntrack.Va
 		}
 	}
 
+	if h := legFwdHint(d.A2B); h != "" {
+		cmd.Printf(" fwd-hint[A2B: %s]", h)
+	}
+	if h := legFwdHint(d.B2A); h != "" {
+		cmd.Printf(" fwd-hint[B2A: %s]", h)
+	}
+
 	cmd.Printf("\n")
 }
 
@@ -243,19 +250,62 @@ type ctEntryJSON struct {
 	RevPortB uint16 `json:"rev_port_b,omitempty"`
 }
 
+// legFwdHint renders a leg's forwarding-hint state - the tunnel/pinned/checked
+// flags this leg carries as an egress hint for the opposite direction - as a
+// terse string, empty when the leg carries none of them.
+func legFwdHint(leg v4.Leg) string {
+	var f []string
+	if leg.Tunnel {
+		f = append(f, "tunnel")
+	}
+	if leg.Pinned {
+		f = append(f, "pinned")
+	}
+	if leg.Checked {
+		f = append(f, "checked")
+	}
+	if len(f) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s if=%d", strings.Join(f, ","), leg.Ifindex)
+}
+
+// legFwdHintJSON is the structured form of the same, nil when the leg carries
+// no hint flags.
+type legFwdHintJSON struct {
+	Tunnel  bool   `json:"tunnel"`
+	Pinned  bool   `json:"pinned"`
+	Checked bool   `json:"checked"`
+	Ifindex uint32 `json:"ifindex"`
+}
+
+func legFwdHintJSONOf(leg v4.Leg) *legFwdHintJSON {
+	if !leg.Tunnel && !leg.Pinned && !leg.Checked {
+		return nil
+	}
+	return &legFwdHintJSON{
+		Tunnel:  leg.Tunnel,
+		Pinned:  leg.Pinned,
+		Checked: leg.Checked,
+		Ifindex: leg.Ifindex,
+	}
+}
+
 // ctConnectionJSON is a logical connection in pretty JSON mode.
 // For NAT connections, forward and reverse entries are grouped.
 type ctConnectionJSON struct {
-	Type        string   `json:"type"`
-	Proto       string   `json:"proto"`
-	Src         string   `json:"src"`
-	Dst         string   `json:"dst"`
-	OrigDst     string   `json:"orig_dst,omitempty"`
-	TunnelIP    string   `json:"tunnel_ip,omitempty"`
-	OrigSrcPort uint16   `json:"orig_src_port,omitempty"`
-	Flags       []string `json:"flags"`
-	ActiveAgo   string   `json:"active_ago"`
-	TCPState    string   `json:"tcp_state,omitempty"`
+	Type        string          `json:"type"`
+	Proto       string          `json:"proto"`
+	Src         string          `json:"src"`
+	Dst         string          `json:"dst"`
+	OrigDst     string          `json:"orig_dst,omitempty"`
+	TunnelIP    string          `json:"tunnel_ip,omitempty"`
+	OrigSrcPort uint16          `json:"orig_src_port,omitempty"`
+	Flags       []string        `json:"flags"`
+	FwdHintA2B  *legFwdHintJSON `json:"fwd_hint_a2b,omitempty"`
+	FwdHintB2A  *legFwdHintJSON `json:"fwd_hint_b2a,omitempty"`
+	ActiveAgo   string          `json:"active_ago"`
+	TCPState    string          `json:"tcp_state,omitempty"`
 }
 
 func ctTypeStr(t uint8) string {
@@ -380,14 +430,17 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 	for _, e := range normals {
 		k, v := e.key, e.val
 		src, dst := orientedAddrs(k, v)
+		d := v.Data()
 		connections = append(connections, ctConnectionJSON{
-			Type:      "normal",
-			Proto:     protoStr(k.Proto()),
-			Src:       src,
-			Dst:       dst,
-			Flags:     v4.FlagNames(v.Flags()),
-			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
-			TCPState:  tcpStateStr(k, v),
+			Type:       "normal",
+			Proto:      protoStr(k.Proto()),
+			Src:        src,
+			Dst:        dst,
+			Flags:      v4.FlagNames(v.Flags()),
+			FwdHintA2B: legFwdHintJSONOf(d.A2B),
+			FwdHintB2A: legFwdHintJSONOf(d.B2A),
+			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
+			TCPState:   tcpStateStr(k, v),
 		})
 	}
 
@@ -399,14 +452,16 @@ func (cmd *conntrackDumpCmd) dumpPrettyJSON(
 		origDst := net.JoinHostPort(d.OrigDst.String(), fmt.Sprint(d.OrigPort))
 
 		conn := ctConnectionJSON{
-			Type:      "nat",
-			Proto:     protoStr(k.Proto()),
-			Src:       src,
-			OrigDst:   origDst,
-			Dst:       dst,
-			Flags:     v4.FlagNames(v.Flags()),
-			ActiveAgo: time.Duration(now - v.LastSeen()).String(),
-			TCPState:  tcpStateStr(k, v),
+			Type:       "nat",
+			Proto:      protoStr(k.Proto()),
+			Src:        src,
+			OrigDst:    origDst,
+			Dst:        dst,
+			Flags:      v4.FlagNames(v.Flags()),
+			FwdHintA2B: legFwdHintJSONOf(d.A2B),
+			FwdHintB2A: legFwdHintJSONOf(d.B2A),
+			ActiveAgo:  time.Duration(now - v.LastSeen()).String(),
+			TCPState:   tcpStateStr(k, v),
 		}
 
 		if (cmd.ipv6 && !d.TunIP.Equal(voidIP6)) || (!cmd.ipv6 && !d.TunIP.Equal(voidIP4)) {
