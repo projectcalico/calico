@@ -21,6 +21,29 @@
         commands:
           - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
 
+- name: "Operator: multi-arch build"
+  # The operator has no cgo and no build constraints, so cross-compiling the
+  # binary is the whole of the per-arch coverage. `make cd` and the release
+  # build assemble the images.
+  run:
+    when: "${CHANGE_IN(operator)}"
+  dependencies:
+    - Prerequisites
+  task:
+    prologue:
+      commands:
+        - cd operator
+    jobs:
+      - name: "Operator: build multi-arch binaries"
+        matrix:
+          - env_var: ARCH
+            values:
+              - arm64
+              - ppc64le
+              - s390x
+        commands:
+          - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
+
 - name: "Operator FV"
   run:
     when: "${CHANGE_IN(operator)}"
