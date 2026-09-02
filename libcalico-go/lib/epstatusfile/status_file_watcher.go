@@ -116,6 +116,13 @@ func (w *FileWatcher) newFsnotifyWatcher() error {
 	err = watcher.Add(w.dir)
 	if err != nil {
 		log.WithError(err).Error("Error adding directory to fsnotify.")
+		// A watcher owns an inotify instance and a goroutine, and the GC
+		// reclaims neither, so it must be closed even though it never watched
+		// anything. runWatcher() retries on every poll tick, so anything left
+		// behind here accumulates for as long as the directory is unwatchable.
+		if closeErr := watcher.Close(); closeErr != nil {
+			log.WithError(closeErr).Info("Ignoring error following close of fsWatcher")
+		}
 		return err
 	}
 
