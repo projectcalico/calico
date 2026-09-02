@@ -122,7 +122,7 @@ func TestList(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	gm.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl), "")
 
 	// Expect Goldmane to have received it.
 	var flows []*proto.FlowResult
@@ -179,7 +179,7 @@ func TestList(t *testing.T) {
 	id := flows[0].Id
 
 	// Send another copy of the flow log.
-	gm.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl), "")
 
 	// Expect Goldmane to have received it. Aggregation of new flows
 	// happens asynchonously, so we may need to wait a few ms for it.
@@ -214,7 +214,7 @@ func TestList(t *testing.T) {
 	time.Sleep(1001 * time.Millisecond)
 
 	// Send another flow log.
-	gm.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl), "")
 
 	// Expect Goldmane to have received it. This should be added to a new bucket,
 	// but aggregated into the same flow on read.
@@ -295,7 +295,7 @@ func TestLabelMerge(t *testing.T) {
 		fl := googleproto.Clone(base).(*proto.Flow)
 		fl.SourceLabels = []string{"common=src", fmt.Sprintf("unique-src=%d", i)}
 		fl.DestLabels = []string{"common=dst", fmt.Sprintf("unique-dest=%d", i)}
-		gm.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl), "")
 	}
 
 	// Query for the flow, and expect that labels are properly aggregated. We should see
@@ -362,7 +362,7 @@ func TestRotation(t *testing.T) {
 		PacketsOut:            20,
 		NumConnectionsStarted: 1,
 	}
-	gm.Receive(types.ProtoToFlow(fl))
+	gm.Receive(types.ProtoToFlow(fl), "")
 
 	// We should be able to read it back.
 	var flows []*proto.FlowResult
@@ -446,7 +446,7 @@ func TestManyFlows(t *testing.T) {
 		NumConnectionsStarted: 1,
 	}
 	for range 20000 {
-		gm.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl), "")
 	}
 
 	// Query for the flow.
@@ -500,7 +500,7 @@ func TestPagination(t *testing.T) {
 			PacketsOut:            20,
 			NumConnectionsStarted: 1,
 		}
-		gm.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl), "")
 	}
 
 	// Query without pagination.
@@ -599,7 +599,7 @@ func TestTimeRanges(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 	}
 
@@ -767,7 +767,7 @@ func TestSink(t *testing.T) {
 		// Write some data into Goldmane in a way that will trigger an emission on the next rollover.
 		// Write a flow that will trigger an emission, since it's within the push index.
 		fl := testutils.NewRandomFlow(now - int64(pushIndex))
-		gm.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl), "")
 
 		// Wait for the flow to be received.
 		Eventually(func() error {
@@ -816,7 +816,7 @@ func TestSink(t *testing.T) {
 				PacketsOut:            20,
 				NumConnectionsStarted: 1,
 			}
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for all flows to be received.
@@ -901,7 +901,7 @@ func TestSink(t *testing.T) {
 		// multiple emission windows.
 		for i := range 100 {
 			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for the flows to be received.
@@ -964,7 +964,7 @@ func TestSink(t *testing.T) {
 		// multiple emission windows.
 		for i := range 100 {
 			fl := testutils.NewRandomFlow(now - int64(pushIndex) - int64(i))
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for the flows to be received.
@@ -1103,7 +1103,7 @@ func TestStreams(t *testing.T) {
 		// time range of now-10 to now-5.
 		for i := 5; i < 10; i++ {
 			fl := testutils.NewRandomFlow(c.Now().Unix() - int64(i))
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Expect the flows to have been received.
@@ -1150,7 +1150,7 @@ func TestStreams(t *testing.T) {
 
 		// Ingest some new flow data.
 		fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-		gm.Receive(types.ProtoToFlow(fl))
+		gm.Receive(types.ProtoToFlow(fl), "")
 
 		// Expect the flow to have been received for a total of 6 flows in goldmane.
 		Eventually(func() error {
@@ -1219,7 +1219,7 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Expect all 10 flows to have been received.
@@ -1299,7 +1299,7 @@ func TestStreams(t *testing.T) {
 			fl.StartTime = base.StartTime - int64(i)
 			fl.EndTime = base.EndTime - int64(i)
 			startTimes = append(startTimes, fl.StartTime)
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for flows to be received.
@@ -1373,7 +1373,7 @@ func TestStreams(t *testing.T) {
 			// Ingest some new flow data.
 			fl := testutils.NewRandomFlow(c.Now().Unix() - 5)
 			keys[*types.ProtoToFlowKey(fl.Key)] = struct{}{}
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for flows to be received. Depending on test environment speed, this may take a little while.
@@ -1429,7 +1429,7 @@ func TestStreams(t *testing.T) {
 			// Ingest some new flow data.
 			fl := testutils.NewRandomFlow(c.Now().Unix() - 5)
 			keys[*types.ProtoToFlowKey(fl.Key)] = struct{}{}
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 		}
 
 		// Wait for flows to be received. Depending on test environment speed, this may take a little while.
@@ -1502,7 +1502,7 @@ func TestSortOrder(t *testing.T) {
 			// Create a bunch of random flows.
 			for range 100 {
 				fl := testutils.NewRandomFlow(c.Now().Unix() - 1)
-				gm.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl), "")
 			}
 
 			// Query for Flows, sorted by the Index under test. Since we have created a bunch of random flows,
@@ -1563,7 +1563,7 @@ func TestStatistics(t *testing.T) {
 			flows = append(flows, fl)
 
 			// Send it to goldmane.
-			gm.Receive(types.ProtoToFlow(fl))
+			gm.Receive(types.ProtoToFlow(fl), "")
 			roller.rolloverAndAdvanceClock(1)
 		}
 
@@ -1661,7 +1661,7 @@ func TestStatistics(t *testing.T) {
 
 			// Ingest the same flows again. This should double the statistics.
 			for _, fl := range flows {
-				gm.Receive(types.ProtoToFlow(fl))
+				gm.Receive(types.ProtoToFlow(fl), "")
 			}
 
 			// Wait for all flows to be received.

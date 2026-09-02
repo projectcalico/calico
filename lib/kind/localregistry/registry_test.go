@@ -14,9 +14,13 @@ import (
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/name"
 	ggcrregistry "github.com/google/go-containerregistry/pkg/registry"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 // startUpstream stands up a throwaway OCI registry and returns its host
@@ -136,6 +140,97 @@ func TestOverrideBeatsUpstream(t *testing.T) {
 	}
 }
 
+// TestRepoOverrideServesEveryTag proves a tag-agnostic repo override (the
+// pre-load path, registered before any specific tag is known) is served for
+// EVERY tag of a matching repository — including a tag never pushed upstream —
+// and that it does not leak to a non-matching repo leaf. The override is set
+// directly here; OverrideRepoFromDaemon's only extra step is `docker save`,
+// which a unit test can't exercise hermetically.
+func TestRepoOverrideServesEveryTag(t *testing.T) {
+	host, srv := startUpstream(t)
+	pushRandom(t, host, "tigera/calico:v1")            // a real upstream tag
+	otherImg := pushRandom(t, host, "tigera/other:v1") // an unrelated repo
+
+	override, err := random.Image(4096, 2) // distinct content
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+
+	f := startRegistry(t)
+	f.mu.Lock()
+	f.repoOverrides["calico"] = override
+	f.mu.Unlock()
+
+	// A non-matching repo leaf still comes from upstream — the override must not
+	// leak to it.
+	if got, want := manifestDigestVia(t, f.Addr(), host, "tigera/other", "v1"), mustDigest(t, otherImg); got != want {
+		t.Errorf("tigera/other served %s, want upstream %s (override leaked to a non-matching repo)", got, want)
+	}
+
+	// Kill the upstream: the override must be served without contacting it, for
+	// both an upstream-known tag and a tag that was never pushed.
+	srv.Close()
+	want := mustDigest(t, override)
+	for _, ref := range []string{"v1", "v999-never-pushed"} {
+		if got := manifestDigestVia(t, f.Addr(), host, "tigera/calico", ref); got != want {
+			t.Errorf("tigera/calico:%s served %s, want override %s", ref, got, want)
+		}
+	}
+}
+
+// TestRepoOverrideYieldsToExistingContent proves a tag-agnostic repo override
+// does NOT clobber content already in the internal store (an explicit or
+// shell-pushed override, or content from a previous process) -- that would break
+// the "an existing override beats upstream" contract. The repo override only
+// stands in for the upstream pull-through, so it applies to tags the store
+// doesn't already answer.
+func TestRepoOverrideYieldsToExistingContent(t *testing.T) {
+	f := startRegistry(t)
+
+	// A shell-pushed exact override for one tag of a matching-leaf repo.
+	shellImg, err := random.Image(2048, 3)
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+	_, port, err := net.SplitHostPort(f.Addr())
+	if err != nil {
+		t.Fatalf("split addr: %v", err)
+	}
+	if err := crane.Push(shellImg, "127.0.0.1:"+port+"/example.com/team/calico:v1", crane.Insecure); err != nil {
+		t.Fatalf("shell push: %v", err)
+	}
+
+	// A repo override for the same leaf ("calico"), with distinct content.
+	repoImg, err := random.Image(4096, 2)
+	if err != nil {
+		t.Fatalf("random.Image: %v", err)
+	}
+	f.mu.Lock()
+	f.repoOverrides["calico"] = repoImg
+	f.mu.Unlock()
+
+	// The shell-pushed tag serves the shell push, not the repo override.
+	if got, want := manifestDigestVia(t, f.Addr(), "example.com", "team/calico", "v1"), mustDigest(t, shellImg); got != want {
+		t.Errorf("v1 served %s, want shell push %s (repo override clobbered existing content)", got, want)
+	}
+	// A different, never-pushed tag of the same repo still gets the repo override.
+	if got, want := manifestDigestVia(t, f.Addr(), "example.com", "team/calico", "v2-new"), mustDigest(t, repoImg); got != want {
+		t.Errorf("v2-new served %s, want repo override %s", got, want)
+	}
+}
+
+// TestOverrideRepoFromDaemonRejectsBadLeaf guards the leaf contract: a
+// multi-segment or empty leaf is rejected up front (it would silently never
+// match a repository's last segment), before any docker save.
+func TestOverrideRepoFromDaemonRejectsBadLeaf(t *testing.T) {
+	f := startRegistry(t)
+	for _, leaf := range []string{"", "tigera/calico"} {
+		if err := f.OverrideRepoFromDaemon(context.Background(), leaf, "irrelevant:latest"); err == nil {
+			t.Errorf("OverrideRepoFromDaemon(leaf=%q) = nil, want error", leaf)
+		}
+	}
+}
+
 // TestShellPushOverride proves the no-code override path: pushing an image to
 // the facade under the upstream host as the first path segment — exactly what
 //
@@ -180,5 +275,45 @@ func TestOverrideRejectsDigest(t *testing.T) {
 		"quay.io/team/app@sha256:"+strings.Repeat("a", 64), img)
 	if err == nil {
 		t.Fatal("expected error overriding a digest ref, got nil")
+	}
+}
+
+// TestPullThroughMultiArchIndex proves ensureManifest handles a real
+// multi-arch image: pushing an OCI image index whose referenced child
+// manifests aren't yet in the internal store used to 404 the index PUT
+// (ggcr's registry rejects an index whose children are missing). The
+// facade must recursively populate each child before PUTing the index.
+func TestPullThroughMultiArchIndex(t *testing.T) {
+	host, _ := startUpstream(t)
+
+	// Build a two-arch OCI image index; push to the upstream.
+	imgA, err := random.Image(1024, 2)
+	if err != nil {
+		t.Fatalf("random.Image A: %v", err)
+	}
+	imgB, err := random.Image(1024, 2)
+	if err != nil {
+		t.Fatalf("random.Image B: %v", err)
+	}
+	idx := mutate.AppendManifests(empty.Index,
+		mutate.IndexAddendum{Add: imgA, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "amd64"}}},
+		mutate.IndexAddendum{Add: imgB, Descriptor: v1.Descriptor{Platform: &v1.Platform{OS: "linux", Architecture: "arm64"}}},
+	)
+	ref, err := name.ParseReference(host+"/team/multi:v1", name.Insecure)
+	if err != nil {
+		t.Fatalf("parse ref: %v", err)
+	}
+	if err := remote.WriteIndex(ref, idx); err != nil {
+		t.Fatalf("push index: %v", err)
+	}
+
+	f := startRegistry(t)
+	got := manifestDigestVia(t, f.Addr(), host, "team/multi", "v1")
+	want, err := idx.Digest()
+	if err != nil {
+		t.Fatalf("index digest: %v", err)
+	}
+	if got != want.String() {
+		t.Errorf("index served %s, want %s", got, want.String())
 	}
 }
