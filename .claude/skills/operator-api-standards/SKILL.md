@@ -13,10 +13,9 @@ When adding or changing CRD types under `api/v1/`:
    the top-level Kind marker block, shared-type reuse, the Deployment override
    pattern) and the end-of-file **checklist**. Apply all of it, and run the
    checklist before you finish.
-2. **Read [`docs/principles.md`](../../../docs/principles.md)** for related rules
+2. **Read [`DESIGN.md`](../../../operator/DESIGN.md)** for related rules
    ("Respect User Input", "Resource Ownership") when a judgement call isn't
    settled by `api_design.md`.
-3. Follow the post-change workflow in
-   [`docs/dev_guidelines.md`](../../../docs/dev_guidelines.md) — `make gen-files`,
+3. Follow the post-change workflow in `api_design.md` — `make gen-files`,
    verify scope didn't flip to `Namespaced`, update `convert` if relevant, and
    `make dirty-check`.

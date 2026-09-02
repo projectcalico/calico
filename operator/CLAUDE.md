@@ -78,9 +78,8 @@ Read the relevant doc before working in these areas:
 
 | Task | Read |
 |------|------|
-| Architecture & design rationale (the "why") | [`docs/principles.md`](docs/principles.md) |
+| Architecture & design rationale (the "why") | [`DESIGN.md`](DESIGN.md) |
 | API design & changing CRD types in `api/v1` (principles, conventions, checklist) | [`docs/api_design.md`](docs/api_design.md) |
-| Developer workflow, code generation, cherry-picks | [`docs/dev_guidelines.md`](docs/dev_guidelines.md) |
 | Common dev procedures (run, test, debug) | [`docs/common_tasks.md`](docs/common_tasks.md) |
 
 ## Build Environment

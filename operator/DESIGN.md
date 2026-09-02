@@ -1,10 +1,14 @@
-# Development Principles
+# Operator — Architecture
 
-Code architecture and design principles for the tigera/operator repository. For developer workflow, tooling, and day-to-day procedures, see [dev_guidelines.md](dev_guidelines.md).
+The operator manages the lifecycle of a Calico or Calico Enterprise installation: it owns the `operator.tigera.io` CRDs, renders the Kubernetes resources for each component, and reports their state through the TigeraStatus API. This document is the architecture and the invariants; operational guidance (build, test, debug recipes) lives in [`operator/CLAUDE.md`](./CLAUDE.md).
+
+## Cross-cutting
+
+- Repo-wide architecture, the component inventory, and Go module structure: see the root [`DESIGN.md`](../DESIGN.md).
 
 ## API Design
 
-API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD types have their own guide: see [api_design.md](api_design.md).
+API design principles and the Go/kubebuilder coding conventions for `api/v1` CRD types have their own guide: see [`docs/api_design.md`](docs/api_design.md).
 
 ## Respect User Input
 
