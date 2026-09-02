@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Check out a pinned revision. Use instead of git clone in build files.
+#
+#   hack/fetch-repo <repo-url> <revision> <dest>
+#
+# Leaves one commit and no tags, so `git describe` and merge-base do not work
+# against it. Clone with --filter=blob:none if the build needs those.
+set -euo pipefail
+
+if [ $# -ne 3 ]; then
+	echo "usage: $0 <repo-url> <revision> <dest>" >&2
+	exit 1
+fi
+
+repo=$1
+rev=$2
+dest=$3
+
+# Throttled anonymous clones get a 401; without this git blocks on the
+# credential prompt until the job times out.
+if [ -n "${SEMAPHORE:-}" ]; then
+	export GIT_TERMINAL_PROMPT=0
+fi
+
+mkdir -p "$dest"
+cd "$dest"
+
+git init -q .
+# Every run: a directory left by an earlier build may have a stale origin.
+git remote add origin "$repo" 2>/dev/null || git remote set-url origin "$repo"
+
+if ! git cat-file -e "${rev}^{commit}" 2>/dev/null; then
+	# Only a full SHA or an advertised ref can be fetched shallow.
+	if printf '%s' "$rev" | grep -qE '^[0-9a-f]{40}$'; then
+		git fetch -q --depth 1 origin "$rev"
+	elif git ls-remote --exit-code origin "$rev" >/dev/null 2>&1; then
+		git fetch -q --depth 1 origin "+refs/tags/$rev:refs/tags/$rev" 2>/dev/null ||
+			git fetch -q --depth 1 origin "$rev:refs/fetched/$rev"
+	else
+		git fetch -q origin
+	fi
+fi
+
+git checkout -q "$rev" 2>/dev/null || git checkout -q "refs/fetched/$rev"
