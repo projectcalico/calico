@@ -348,6 +348,20 @@ func (r *CalicoManager) Build() error {
 
 		// Build multi-arch e2e test binaries and copy them into the output directory.
 		if r.e2eBinaries {
+			// Free transient disk before the multi-arch e2e build. Tagged component
+			// and operator images are still needed by PublishRelease, so only the
+			// build cache and dangling layers are reclaimed here.
+			r.logDiskUsage("before e2e disk reclaim")
+			for _, c := range [][]string{
+				{"docker", "builder", "prune", "-af"},
+				{"docker", "image", "prune", "-f"},
+			} {
+				if out, err := r.runner.Run(c[0], c[1:], nil); err != nil {
+					logrus.WithError(err).Warnf("disk reclaim %q failed: %s", strings.Join(c, " "), out)
+				}
+			}
+			r.logDiskUsage("after e2e disk reclaim")
+
 			if err = r.buildE2EBinaries(); err != nil {
 				return err
 			}
@@ -1228,13 +1242,29 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eSupportedArches are the architectures e2e test runners actually consume:
+// runners pick the binary matching their own node arch, and there are no
+// ppc64le/s390x e2e runners. Building the other arches only wastes time and
+// exhausts the release agent's disk.
+var e2eSupportedArches = []string{"amd64", "arm64"}
+
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion))
-	if len(r.architectures) > 0 {
-		env = append(env, fmt.Sprintf("VALIDARCHES=%s", strings.Join(r.architectures, " ")))
+	// Build the intersection of the configured and the supported arches. The set
+	// is controlled via ARCHES, not VALIDARCHES: lib.Makefile assigns VALIDARCHES
+	// with `=`, so it ignores the environment.
+	var e2eArches []string
+	for _, arch := range r.architectures {
+		if slices.Contains(e2eSupportedArches, arch) {
+			e2eArches = append(e2eArches, arch)
+		}
 	}
+	if len(e2eArches) == 0 {
+		logrus.Info("No amd64/arm64 in the configured architectures; skipping e2e test binaries")
+		return nil
+	}
+	env := append(os.Environ(), fmt.Sprintf("VERSION=%s", r.calicoVersion), "ARCHES="+strings.Join(e2eArches, " "))
 	out, err := r.makeInDirectoryWithOutput(e2eDir, "build-all", env...)
 	if err != nil {
 		logrus.Error(out)
@@ -1263,6 +1293,24 @@ func (r *CalicoManager) buildE2EBinaries() error {
 		logrus.Infof("Staged e2e binary: %s", entry.Name())
 	}
 	return nil
+}
+
+// logDiskUsage prints disk and docker usage for hashrelease build diagnostics,
+// so disk pressure can be sized from the job log without SSH access to the agent.
+func (r *CalicoManager) logDiskUsage(stage string) {
+	logrus.Infof("=== disk usage: %s ===", stage)
+	for _, c := range [][]string{
+		{"df", "-h", "/"},
+		{"docker", "system", "df"},
+		{"docker", "images", "--format", "{{.Size}}\t{{.Repository}}:{{.Tag}}"},
+	} {
+		out, err := r.runner.Run(c[0], c[1:], nil)
+		if err != nil {
+			logrus.WithError(err).Warnf("disk usage diagnostic %q failed", strings.Join(c, " "))
+			continue
+		}
+		logrus.Infof("$ %s\n%s", strings.Join(c, " "), out)
+	}
 }
 
 func (r *CalicoManager) buildBinaries() error {
