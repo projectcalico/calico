@@ -366,6 +366,24 @@ blocks:
             - make fix-changed
             - make check-ocp-no-crds
             - make check-dirty
+  - name: Check CRD drift
+    # check-dirty only proves the tree is self-consistent, never that regeneration
+    # still produces what master ships. These three checks cover that gap, and none
+    # of them can see the others' failures.
+    run:
+      when: >-
+        true or
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/hack/check-crd-drift.sh', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+    dependencies: []
+    task:
+      jobs:
+        - name: Check CRD and manifest drift
+          commands:
+            - ./hack/check-crd-drift.sh sources
+            - ./hack/check-crd-drift.sh manifests
+        - name: Check for orphaned CRDs
+          commands:
+            - ./hack/check-crd-drift.sh orphans
   - name: Store working copy
     run:
       when: "branch =~ '.*'"
@@ -608,6 +626,7 @@ blocks:
       - Check language/Dockerfiles
       - Check protobufs
       - Manifests and API docs
+      - Check CRD drift
       - Store working copy
       - "Pull: go-build image"
     task:
