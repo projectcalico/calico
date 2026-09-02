@@ -7424,6 +7424,7 @@ blocks:
         '/api/config/crd/*.go',
         '/hack/test/certs/',
         '/lib.Makefile',
+        '/libcalico-go/config/crd',
         '/libcalico-go/config/crd/*.go',
         '/metadata.mk',
         '/operator/**'],
