@@ -139,7 +139,7 @@ func clearDir(dirPath string) {
 // process. Every fsnotify.Watcher owns exactly one.
 func countInotifyFDs() int {
 	entries, err := os.ReadDir("/proc/self/fd")
-	Expect(err).ShouldNot(HaveOccurred())
+	Expect(err).ShouldNot(HaveOccurred(), "cannot count inotify instances without procfs")
 
 	count := 0
 	for _, entry := range entries {
