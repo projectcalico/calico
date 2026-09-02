@@ -47,21 +47,71 @@ func (f *Registry) Override(ctx context.Context, upstreamRef string, img v1.Imag
 //
 //	mir.OverrideFromDaemon(ctx, "quay.io/calico/node:v3.30.1", "calico/node:latest-amd64")
 func (f *Registry) OverrideFromDaemon(ctx context.Context, upstreamRef, localDockerRef string) error {
+	img, tarPath, err := loadDaemonImage(ctx, localDockerRef)
+	if err != nil {
+		return err
+	}
+	// Override fully consumes img (crane.Push reads every layer) before it
+	// returns, so the lazy tarball is safe to remove right after.
+	defer func() { _ = os.Remove(tarPath) }()
+	return f.Override(ctx, upstreamRef, img)
+}
+
+// OverrideRepoFromDaemon pins a locally-built docker image as the answer for
+// EVERY pull whose repository leaf (the last path segment, e.g. "calico" in
+// "gcr.io/tigera/calico") equals leaf — regardless of registry host or tag.
+// Where Override/OverrideFromDaemon pin one exact ref, this is tag-agnostic:
+// use it when your build should stand in for an image whose exact tag isn't
+// known ahead of time (e.g. an operator picks the version at deploy time). The
+// image is materialized into the internal store lazily, under whatever ref the
+// node actually requests (see pullManifest), so it can be registered before any
+// pull. leaf must be a single, non-empty path segment (it's matched against a
+// repository's last segment); a multi-segment value like "tigera/calico" would
+// silently never match, so it's rejected.
+func (f *Registry) OverrideRepoFromDaemon(ctx context.Context, leaf, localDockerRef string) error {
+	if leaf == "" || strings.Contains(leaf, "/") {
+		return fmt.Errorf("repo override leaf %q must be a single non-empty path segment (e.g. \"calico\", not \"tigera/calico\")", leaf)
+	}
+	img, tarPath, err := loadDaemonImage(ctx, localDockerRef)
+	if err != nil {
+		return err
+	}
+	// The image is served lazily on later pulls (materialized in pullManifest),
+	// so its tarball must live for the registry's lifetime -- keep it, and Stop
+	// removes it. Removing it here would break the serve with "no such file".
+	f.mu.Lock()
+	f.repoOverrides[leaf] = img
+	f.repoOverrideTars = append(f.repoOverrideTars, tarPath)
+	f.mu.Unlock()
+	f.log.Info("repo override registered", "repoLeaf", leaf, "local", localDockerRef)
+	return nil
+}
+
+// loadDaemonImage snapshots a local docker image (localDockerRef, a tag as
+// `docker images` shows it) to an OCI tarball via `docker save` and loads it as
+// a v1.Image. Reuses the docker CLI (already a hard dependency of kind). The
+// returned image is LAZY -- it reads tarPath on demand (when crane.Push consumes
+// it) -- so the caller MUST keep tarPath alive until the image is fully consumed,
+// then remove it. Returns tarPath so the caller controls that lifetime.
+func loadDaemonImage(ctx context.Context, localDockerRef string) (v1.Image, string, error) {
 	tar, err := os.CreateTemp("", "kind-mirror-*.tar")
 	if err != nil {
-		return fmt.Errorf("temp file: %w", err)
+		return nil, "", fmt.Errorf("temp file: %w", err)
 	}
-	// Only the name is wanted; the writer below reopens it.
+	// Only the name is wanted; crane.Load reopens it.
 	_ = tar.Close()
-	defer func() { _ = os.Remove(tar.Name()) }()
 
-	// Reuse the docker CLI (already a hard dependency of kind) to snapshot
-	// the daemon image to a tarball crane can read.
 	out, err := exec.CommandContext(ctx, "docker", "save", "-o", tar.Name(), localDockerRef).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("docker save %s: %s: %w", localDockerRef, strings.TrimSpace(string(out)), err)
+		_ = os.Remove(tar.Name())
+		return nil, "", fmt.Errorf("docker save %s: %s: %w", localDockerRef, strings.TrimSpace(string(out)), err)
 	}
-	return f.OverrideFromTarball(ctx, upstreamRef, tar.Name())
+	img, err := crane.Load(tar.Name())
+	if err != nil {
+		_ = os.Remove(tar.Name())
+		return nil, "", fmt.Errorf("load tarball %s: %w", tar.Name(), err)
+	}
+	return img, tar.Name(), nil
 }
 
 // OverrideFromTarball pins an image from a `docker save` / OCI tarball as the
@@ -82,6 +132,15 @@ func (f *Registry) OverrideFromTarball(ctx context.Context, upstreamRef, tarPath
 // containerd actually requests.
 func key(registry, repo, ref string) string {
 	return registry + "|" + repo + "|" + ref
+}
+
+// repoLeaf returns the last path segment of an image repository (e.g.
+// "tigera/calico" -> "calico"), the identity a repo-level override matches on.
+func repoLeaf(repo string) string {
+	if i := strings.LastIndex(repo, "/"); i >= 0 {
+		return repo[i+1:]
+	}
+	return repo
 }
 
 // safeNS turns a registry host (the ns value, e.g. "gcr.io" or, in tests,

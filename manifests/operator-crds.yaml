@@ -13377,9 +13377,9 @@ spec:
                                       x-kubernetes-list-type: atomic
                                   type: object
                                 dnsPolicy:
-                                  description:
-                                    DNSPolicy is the DNS policy for the calico-node
-                                    pods.
+                                  description: |-
+                                    DNSPolicy is the DNS policy for the calico-node pods. Defaults to Default, which uses the node's
+                                    own resolver, since calico-node runs before cluster DNS is reachable.
                                   enum:
                                     - ""
                                     - Default
@@ -23891,9 +23891,14 @@ spec:
           jsonPath: .status.conditions[?(@.type=='Available')].lastTransitionTime
           name: Since
           type: date
+        - description: Human-readable summary of the component's current state.
+          jsonPath: .status.message
+          name: Message
+          type: string
         - description: Error message when the component is degraded.
           jsonPath: .status.conditions[?(@.type=='Degraded')].message
-          name: Message
+          name: Error
+          priority: 1
           type: string
       name: v1
       schema:
@@ -23971,6 +23976,12 @@ spec:
                       - type
                     type: object
                   type: array
+                message:
+                  description: |-
+                    Message is a human-readable summary of the component's current state: the degraded
+                    message if degraded, the progressing message if progressing, then any warnings.
+                    Empty when healthy with no warnings.
+                  type: string
               required:
                 - conditions
               type: object
@@ -24019,6 +24030,34 @@ spec:
               type: object
             spec:
               properties:
+                ingressGateway:
+                  description: |-
+                    IngressGateway configures Calico Ingress Gateway access to the Whisker UI.
+                    When set, the operator renders Gateway API resources (Gateway, HTTPRoute,
+                    Backend, ReferenceGrant, TLS Secret) to expose Whisker via CIG.
+                    Requires a GatewayAPI CR to be present.
+                  properties:
+                    gatewayClassName:
+                      description: |-
+                        GatewayClassName selects the GatewayClass for the Gateway resource.
+                        If not set and the GatewayAPI CR has exactly one class, that class is
+                        used. If not set and multiple classes exist, the component degrades
+                        until the user specifies one.
+                      type: string
+                    gatewayNamespace:
+                      description: |-
+                        GatewayNamespace is the namespace where the Gateway and Envoy Proxy pods
+                        run. Defaults to "calico-system".
+                      type: string
+                    hostname:
+                      description: |-
+                        Hostname for the Gateway listener. Must match the Authentication CR's
+                        managerDomain when OIDC is configured (Manager only).
+                      minLength: 1
+                      type: string
+                  required:
+                    - hostname
+                  type: object
                 notifications:
                   description: |-
                     Default: Enabled
