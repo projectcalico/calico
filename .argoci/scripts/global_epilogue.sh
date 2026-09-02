@@ -2,7 +2,7 @@
 # global_epilogue.sh - ArgoCI e2e epilogue for OSS Calico.
 #
 # Ported from .semaphore/end-to-end/scripts/global_epilogue.sh, adapted for
-# ArgoCI: artifacts go to GCS via gsutil (no Semaphore `artifact`/`cache`/
+# ArgoCI: artifacts via the bundled `artifact` shim (no Semaphore `cache`/
 # `test-results` CLIs), diags/destroy via bz. Best-effort throughout (|| true)
 # so teardown always runs. Sourced by the e2e-test template.
 set -o pipefail
@@ -18,18 +18,50 @@ cd "${BZ_HOME}" 2>/dev/null || echo "[WARN] could not cd to BZ_HOME=${BZ_HOME}"
 # every failure to 0 and skipped the diags capture below. Read the handler's
 # variable, falling back to CI_EXIT_CODE then 0.
 CI_EXIT_CODE=${CI_STEP_EXIT_CODE:-${CI_EXIT_CODE:-0}}
-ARTIFACT_DEST="gs://${GS_BUCKET}/${ARGO_WORKFLOW_NAME:-local}/${HOSTNAME:-pod}"
+
+# The viewer lists artifacts under CI_ARTIFACT_STEP_STORAGE, which is where
+# `artifact push job` publishes.
+echo "[INFO] publishing artifacts to ${CI_ARTIFACT_STEP_STORAGE}"
+
+# e2e-vpp additionally keeps its own copy, laid out the way the CalicoVPP
+# maintainers' tooling expects (date/stream/provisioner/manifest/flags/time).
+# Only .argoci/cron/e2e-vpp.yaml sets the prefix, and only for scheduled runs,
+# so an empty or malformed value just means "no copy".
+publish_vpp_copy() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  echo "[INFO] publishing vpp copy to ${VPP_RESULTS_PREFIX}"
+  if [[ -f "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" ]]; then
+    gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" \
+              "${VPP_RESULTS_PREFIX}/${DIAGS_ARCHIVE_FILENAME}" || true
+  fi
+  if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
+    gsutil cp "${REPORT_DIR}/junit.xml" "${VPP_RESULTS_PREFIX}/junit.xml" || true
+  fi
+  # Guard on the directory: were BZ_LOGS_DIR empty the source would be "/.",
+  # which is readable, recurses, and succeeds.
+  if [[ -d "${BZ_LOGS_DIR:-}" ]]; then
+    gsutil -m cp -r "${BZ_LOGS_DIR}/." "${VPP_RESULTS_PREFIX}/logs/" || true
+  fi
+}
+
+publish_vpp_destroy_log() {
+  case "${VPP_RESULTS_PREFIX:-}" in gs://*) ;; *) return 0 ;; esac
+  if [[ -f "${BZ_LOGS_DIR:-}/destroy.log" ]]; then
+    gsutil cp "${BZ_LOGS_DIR}/destroy.log" \
+              "${VPP_RESULTS_PREFIX}/logs/destroy.log" || true
+  fi
+}
 
 # Capture diags on failure (or always for cert runs).
 if [[ "${CI_EXIT_CODE}" != "0" || "${TEST_TYPE}" == "ocp-cert" ]]; then
   echo "[INFO] capturing diags"
   bz diags |& tee "${BZ_LOGS_DIR}/diagnostic.log" || true
-  gsutil cp "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" "${ARTIFACT_DEST}/diags.tgz" || true
+  artifact push job "${BZ_LOCAL_DIR}/${DIAGS_ARCHIVE_FILENAME}" -d diags.tgz -f || true
 
   # Per-test diags, where the suite collects them (openstack-e2e does, into
   # ${REPORT_DIR}/diags/) — distinct from the bz cluster diags above.
   if [[ -d "${REPORT_DIR}/diags" ]]; then
-    gsutil -m cp -r "${REPORT_DIR}/diags" "${ARTIFACT_DEST}/" || true
+    artifact push job "${REPORT_DIR}/diags" -f || true
   fi
 fi
 
@@ -43,9 +75,10 @@ fi
 
 # Publish JUnit + logs.
 if [[ -f "${REPORT_DIR}/junit.xml" ]]; then
-  gsutil cp "${REPORT_DIR}/junit.xml" "${ARTIFACT_DEST}/junit.xml" || true
+  artifact push job "${REPORT_DIR}/junit.xml" -f || true
 fi
-gsutil -m cp -r "${BZ_LOGS_DIR}/." "${ARTIFACT_DEST}/logs/" || true
+artifact push job "${BZ_LOGS_DIR}" -d logs -f || true
+publish_vpp_copy
 
 # Upload results to Lens (best-effort; token from banzai-secrets).
 if [[ -n "${GITHUB_ACCESS_TOKEN:-}" ]]; then
@@ -59,5 +92,12 @@ fi
 # Tear the cluster down.
 echo "[INFO] destroying cluster ${CLUSTER_NAME}"
 bz destroy |& tee "${BZ_LOGS_DIR}/destroy.log" || true
+
+# destroy.log only exists now, after the logs push above. Pushing it separately
+# rather than moving that push keeps logs for runs where destroy hangs.
+if [[ -f "${BZ_LOGS_DIR}/destroy.log" ]]; then
+  artifact push job "${BZ_LOGS_DIR}/destroy.log" -d logs/destroy.log -f || true
+fi
+publish_vpp_destroy_log
 
 echo "[INFO] exiting global_epilogue (CI_EXIT_CODE=${CI_EXIT_CODE})"
