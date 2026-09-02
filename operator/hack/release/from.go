@@ -37,7 +37,6 @@ var releaseFromCommand = &cli.Command{
 	Flags: []cli.Flag{
 		baseOperatorFlag,
 		versionFlag,
-		exceptCalicoFlag,
 		publishFlag,
 		archFlag,
 		registryFlag,
@@ -99,19 +98,6 @@ var releaseFromAction = cli.ActionFunc(func(ctx context.Context, c *cli.Command)
 	}
 	if err := versions.ReplaceConfigVersions(repoRootDir, gitRef); err != nil {
 		return fmt.Errorf("replacing config versions with content from git ref %q: %s", gitRef, err)
-	}
-
-	// Apply new version overrides
-	if calicoOverrides := c.StringSlice(exceptCalicoFlag.Name); len(calicoOverrides) > 0 {
-		cmpts := make(map[string]string)
-		for _, override := range calicoOverrides {
-			parts := strings.Split(override, ":")
-			cmpts[parts[0]] = parts[1]
-		}
-		logrus.WithField("components", cmpts).Debug("Applying Calico version overrides")
-		if err := versions.UpdateCalicoComponents(repoRootDir, cmpts); err != nil {
-			return fmt.Errorf("overriding calico config: %s", err)
-		}
 	}
 
 	// Build either a new release or a new hashrelease operator
