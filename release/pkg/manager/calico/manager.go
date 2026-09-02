@@ -1246,18 +1246,21 @@ func (r *CalicoManager) buildReleaseTar() error {
 	return nil
 }
 
+// e2eSupportedArches are the architectures e2e test runners actually consume:
+// runners pick the binary matching their own node arch, and there are no
+// ppc64le/s390x e2e runners. Building the other arches only wastes time and
+// exhausts the release agent's disk.
+var e2eSupportedArches = []string{"amd64", "arm64"}
+
 func (r *CalicoManager) buildE2EBinaries() error {
 	logrus.Info("Building multi-arch e2e test binaries")
 	e2eDir := filepath.Join(r.repoRoot, "e2e")
-	// e2e test binaries are only consumed on amd64 and arm64: test runners pick
-	// the binary matching their own node arch, and there are no ppc64le/s390x e2e
-	// runners. Building every configured arch also exhausts the release agent's
-	// disk. Build the intersection of the configured and the supported arches.
-	// The set is controlled via ARCHES, not VALIDARCHES: lib.Makefile assigns
-	// VALIDARCHES with `=`, so it ignores the environment.
+	// Build the intersection of the configured and the supported arches. The set
+	// is controlled via ARCHES, not VALIDARCHES: lib.Makefile assigns VALIDARCHES
+	// with `=`, so it ignores the environment.
 	var e2eArches []string
 	for _, arch := range r.architectures {
-		if arch == "amd64" || arch == "arm64" {
+		if slices.Contains(e2eSupportedArches, arch) {
 			e2eArches = append(e2eArches, arch)
 		}
 	}
