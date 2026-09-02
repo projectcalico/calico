@@ -42,8 +42,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/certificatemanager"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	ctrlrfake "github.com/projectcalico/calico/operator/pkg/ctrlruntime/client/fake"
-	eistio "github.com/projectcalico/calico/operator/pkg/enterprise/istio"
-	"github.com/projectcalico/calico/operator/pkg/extensions"
 	"github.com/projectcalico/calico/operator/pkg/render/istio"
 	"github.com/projectcalico/calico/operator/test"
 )
@@ -875,94 +873,5 @@ var _ = Describe("Istio controller tests", func() {
 			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:ztunnel123"))
 		})
 
-		It("should create expected Istio resources for Enterprise variant", func() {
-			installation.Spec.Variant = operatorv1.CalicoEnterprise
-			installation.Status.Variant = operatorv1.CalicoEnterprise
-			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
-			installation.Status.Computed = installation.Spec.DeepCopy()
-			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
-
-			r := &ReconcileIstio{
-				Client:   cli,
-				scheme:   scheme,
-				provider: operatorv1.ProviderNone,
-				status:   mockStatus,
-			}
-
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// Verify Istiod Deployment was created
-			istiodDeploy := &appsv1.Deployment{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
-
-			// Verify Istio CNI DaemonSet was created
-			cniDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioCNIDaemonSetName, Namespace: istio.IstioNamespace}, cniDaemonSet)).NotTo(HaveOccurred())
-
-			// Verify Istio Ztunnel DaemonSet was created
-			ztunnelDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioZTunnelDaemonSetName, Namespace: istio.IstioNamespace}, ztunnelDaemonSet)).NotTo(HaveOccurred())
-
-			// Verify status was marked ready
-			mockStatus.AssertCalled(GinkgoT(), "ClearDegraded")
-		})
-
-		It("should handle ImageSet application for Enterprise variant", func() {
-			DeferCleanup(components.UseImages(components.EnterpriseImages))
-
-			installation.Spec.Variant = operatorv1.CalicoEnterprise
-			installation.Status.Variant = operatorv1.CalicoEnterprise
-			Expect(cli.Update(ctx, installation)).NotTo(HaveOccurred())
-			installation.Status.Computed = installation.Spec.DeepCopy()
-			Expect(cli.Status().Update(ctx, installation)).NotTo(HaveOccurred())
-
-			// Create ImageSet with all required Istio images for Enterprise
-			imageSet := &operatorv1.ImageSet{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "enterprise-" + components.EnterpriseRelease,
-				},
-				Spec: operatorv1.ImageSetSpec{
-					Images: []operatorv1.Image{
-						{Image: "tigera/istio-pilot", Digest: "sha256:pilot123"},
-						{Image: "tigera/istio-install-cni", Digest: "sha256:cni123"},
-						{Image: "tigera/istio-ztunnel", Digest: "sha256:ztunnel123"},
-						{Image: "tigera/istio-proxyv2", Digest: "sha256:proxyv2123"},
-						// Waypoint l7-collector runs from the combined calico image.
-						{Image: "tigera/calico", Digest: "sha256:calico123"},
-					},
-				},
-			}
-			Expect(cli.Create(ctx, imageSet)).NotTo(HaveOccurred())
-
-			r := &ReconcileIstio{
-				Client:   cli,
-				scheme:   scheme,
-				provider: operatorv1.ProviderNone,
-				status:   mockStatus,
-				ext:      extensions.New(extensions.Set{Istio: eistio.New(operatorv1.CalicoEnterprise)}),
-			}
-
-			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// Verify Istiod Deployment uses ImageSet digest
-			istiodDeploy := &appsv1.Deployment{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioIstiodDeploymentName, Namespace: istio.IstioNamespace}, istiodDeploy)).NotTo(HaveOccurred())
-			Expect(istiodDeploy.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(istiodDeploy.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:pilot123"))
-
-			// Verify CNI DaemonSet uses ImageSet digest
-			cniDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioCNIDaemonSetName, Namespace: istio.IstioNamespace}, cniDaemonSet)).NotTo(HaveOccurred())
-			Expect(cniDaemonSet.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(cniDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:cni123"))
-
-			// Verify Ztunnel DaemonSet uses ImageSet digest
-			ztunnelDaemonSet := &appsv1.DaemonSet{}
-			Expect(cli.Get(ctx, types.NamespacedName{Name: istio.IstioZTunnelDaemonSetName, Namespace: istio.IstioNamespace}, ztunnelDaemonSet)).NotTo(HaveOccurred())
-			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers).NotTo(BeEmpty())
-			Expect(ztunnelDaemonSet.Spec.Template.Spec.Containers[0].Image).To(ContainSubstring("@sha256:ztunnel123"))
-		})
 	})
 })

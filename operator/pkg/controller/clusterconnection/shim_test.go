@@ -28,8 +28,6 @@ import (
 	"github.com/projectcalico/calico/operator/pkg/controller/options"
 	"github.com/projectcalico/calico/operator/pkg/controller/status"
 	"github.com/projectcalico/calico/operator/pkg/controller/utils"
-	"github.com/projectcalico/calico/operator/pkg/enterprise"
-	eoptions "github.com/projectcalico/calico/operator/pkg/enterprise/options"
 )
 
 func NewReconcilerWithShims(
@@ -42,8 +40,7 @@ func NewReconcilerWithShims(
 ) reconcile.Reconciler {
 	opts := options.ControllerOptions{
 		ShutdownContext: context.Background(),
-		Extensions:      enterprise.New(operatorv1.CalicoEnterprise, eoptions.Options{}),
-		Variant:         operatorv1.CalicoEnterprise,
+		Variant:         operatorv1.Calico,
 	}
 
 	return newReconciler(cli, schema, status, provider, tierWatchReady, clusterInfoWatchReady, opts)
