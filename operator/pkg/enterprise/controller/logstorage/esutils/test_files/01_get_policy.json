@@ -1,0 +1,33 @@
+{
+  "tigera_secure_ee_test_index_policy": {
+    "policy": {
+      "phases": {
+        "delete": {
+          "actions": {
+            "delete": {}
+          },
+          "min_age": "10d"
+        },
+        "hot": {
+          "actions": {
+            "rollover": {
+              "max_age" : "2d",
+              "max_size" : "16911433728b"
+            },
+            "set_priority": {
+              "priority": 100
+            }
+          }
+        },
+        "warm": {
+          "actions": {
+            "readonly": {},
+            "set_priority": {
+              "priority": 50
+            }
+          }
+        }
+      }
+    }
+  }
+}

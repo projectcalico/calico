@@ -1,0 +1,418 @@
+{
+  "service": {
+    "flush": 5,
+    "health_check": true,
+    "http_port": 2020,
+    "http_server": true,
+    "log_level": "info",
+    "storage.path": "/var/log/calico/calico-fluent-bit/storage"
+  },
+  "parsers": [
+    {
+      "format": "json",
+      "name": "json"
+    },
+    {
+      "format": "json",
+      "name": "json_audit",
+      "time_format": "%Y-%m-%dT%H:%M:%S.%L%z",
+      "time_key": "time"
+    },
+    {
+      "format": "json",
+      "name": "json_ids_events",
+      "time_format": "%s",
+      "time_keep": true,
+      "time_key": "time"
+    },
+    {
+      "format": "regex",
+      "name": "bird_regex",
+      "regex": "^(?\u003clogtime\u003e\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})\\.\\d{5} bird: (?\u003cmessage\u003e.*)"
+    }
+  ],
+  "pipeline": {
+    "inputs": [
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_flows.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/flowlogs/flows.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "flows"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_dns.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/dnslogs/dns.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "dns"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_l7.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/l7logs/l7.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "l7"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_waf.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/waf/waf.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "waf"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_runtime.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/runtime-security/report.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "runtime"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_audit.tsee.db",
+        "name": "tail",
+        "parser": "json_audit",
+        "path": "/var/log/calico/audit/tsee-audit.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "audit.tsee"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_audit.kube.db",
+        "name": "tail",
+        "parser": "json_audit",
+        "path": "/var/log/calico/audit/kube-audit.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "audit.kube"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_bird.db",
+        "name": "tail",
+        "parser": "bird_regex",
+        "path": "/var/log/calico/bird/current",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "bird"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_bird6.db",
+        "name": "tail",
+        "parser": "bird_regex",
+        "path": "/var/log/calico/bird6/current",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "bird6"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_ids.events.db",
+        "name": "tail",
+        "parser": "json_ids_events",
+        "path": "/var/log/calico/ids/events.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "ids.events"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_compliance.reports.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/compliance/compliance.*.reports.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "compliance.reports"
+      },
+      {
+        "buffer_chunk_size": "256K",
+        "buffer_max_size": "10M",
+        "db": "/var/log/calico/calico-fluent-bit/in_tail_policy_activity.db",
+        "name": "tail",
+        "parser": "json",
+        "path": "/var/log/calico/policy/policy_activity.log",
+        "read_from_head": true,
+        "skip_long_lines": true,
+        "storage.type": "filesystem",
+        "tag": "policy_activity"
+      }
+    ],
+    "filters": [
+      {
+        "call": "record_transformer",
+        "match": "*",
+        "name": "lua",
+        "script": "/etc/fluent-bit/record_transformer.lua"
+      }
+    ],
+    "outputs": [
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "flows",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "500M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/flows/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "dns",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/dns/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "l7",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/l7/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "waf",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/waf/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "runtime",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/runtime/reports/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "audit.tsee",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/audit/logs/ee/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "audit.kube",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/audit/logs/kube/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "bird",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/bgp/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "bird6",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/bgp/logs/bulk"
+      },
+      {
+        "bearer_token_file": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+        "format": "json_lines",
+        "host": "tigera-linseed.tigera-elasticsearch.svc",
+        "json_date_key": false,
+        "match": "policy_activity",
+        "name": "http",
+        "port": 443,
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "100M",
+        "tls": "on",
+        "tls.ca_file": "/etc/pki/tls/certs/tigera-ca-bundle.crt",
+        "tls.crt_file": "/calico-fluent-bit-tls/tls.crt",
+        "tls.key_file": "/calico-fluent-bit-tls/tls.key",
+        "tls.verify": "on",
+        "tls.verify_hostname": "on",
+        "uri": "/api/v1/policy_activity/logs/bulk"
+      },
+      {
+        "host": "169.254.254.254",
+        "match": "flows",
+        "mode": "udp",
+        "name": "syslog",
+        "port": "3665",
+        "processors": {
+          "logs": [
+            {
+              "call": "syslog_pack",
+              "name": "lua",
+              "script": "/etc/fluent-bit/record_transformer.lua"
+            }
+          ]
+        },
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "500M",
+        "syslog_appname_preset": "tigera_secure",
+        "syslog_format": "rfc5424",
+        "syslog_hostname_key": "host",
+        "syslog_hostname_preset": "${NODENAME}",
+        "syslog_message_key": "log"
+      },
+      {
+        "host": "169.254.254.254",
+        "match": "non_cluster_flows",
+        "mode": "udp",
+        "name": "syslog",
+        "port": "3665",
+        "processors": {
+          "logs": [
+            {
+              "call": "syslog_pack",
+              "name": "lua",
+              "script": "/etc/fluent-bit/record_transformer.lua"
+            }
+          ]
+        },
+        "retry_limit": "no_limits",
+        "storage.total_limit_size": "500M",
+        "syslog_appname_preset": "tigera_secure",
+        "syslog_format": "rfc5424",
+        "syslog_hostname_key": "host",
+        "syslog_hostname_preset": "${NODENAME}",
+        "syslog_message_key": "log"
+      }
+    ]
+  }
+}

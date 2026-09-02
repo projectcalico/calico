@@ -215,6 +215,8 @@ promotions:
     pipeline_file: push-images/whisker.yml
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
+  - name: Push operator images
+    pipeline_file: push-images/operator.yml
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
@@ -347,7 +349,7 @@ blocks:
     run:
       when: >-
         true or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -359,6 +361,7 @@ blocks:
             - make -C felix gen-files
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
+            - make -C operator gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -1752,6 +1755,53 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
+  - name: Operator
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: static checks and unit tests"
+          commands:
+            - export TEST_SUITE_PREFIX="operator"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator FV"
+    run:
+      when: "true"
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: FV on kind"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - export TEST_SUITE_PREFIX="operator-fv"
+            - ../.semaphore/run-and-monitor make-fv.log make fv
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator FV" || true'
   - name: pod2daemon
     run:
       when: "true"

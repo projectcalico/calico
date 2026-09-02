@@ -1,0 +1,58 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.tigera-dpi",
+    "namespace": "tigera-dpi"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "k8s-app == 'tigera-dpi'",
+    "types": [
+      "Egress"
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "namespace": "default",
+            "name": "kubernetes"
+          }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "services": {
+            "namespace": "default",
+            "name": "openshift-dns"
+          }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "namespace": "default",
+            "name": "openshift-dns"
+          }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "namespace": "calico-system",
+            "name": "guardian"
+          }
+        }
+      }
+    ]
+  }
+}

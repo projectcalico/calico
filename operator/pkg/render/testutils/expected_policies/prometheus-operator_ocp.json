@@ -1,0 +1,50 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.prometheus-operator",
+    "namespace": "tigera-prometheus"
+  },
+  "spec": {
+    "order": 1,
+    "tier": "calico-system",
+    "selector": "operator == 'prometheus'",
+    "types": [
+      "Egress"
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
+          "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
+          "ports": [
+            5353
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'openshift-dns'",
+          "selector": "dns.operator.openshift.io/daemonset-dns == 'default'",
+          "ports": [
+            5353
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "kubernetes",
+	    "namespace": "default"
+	  }
+        }
+      }
+    ]
+  }
+}

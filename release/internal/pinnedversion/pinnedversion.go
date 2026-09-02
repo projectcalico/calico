@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,20 +61,8 @@ type PinnedVersions[T version.Versions] interface {
 }
 
 type OperatorConfig struct {
-	Dir      string
-	Branch   string
 	Registry string
 	Image    string // i.e tigera/operator
-}
-
-func (c OperatorConfig) GitVersion() (string, error) {
-	tag, err := command.GitVersion(c.Dir, true)
-	if err != nil {
-		logrus.WithError(err).Error("Failed to determine operator git version")
-		return "", err
-	}
-	logrus.WithField("out", tag).Info("Current git describe")
-	return tag, nil
 }
 
 // PinnedVersion represents an entry in pinned version file.
@@ -157,11 +145,7 @@ func (p *CalicoPinnedVersions) GenerateFile() (*version.HashreleaseVersions, err
 	}
 	releaseName := fmt.Sprintf("%s-%s-%s", time.Now().Format("2006-01-02"), version.DeterminePublishStream(productBranch, productVer), RandomWord())
 	p.releaseName = strings.ReplaceAll(releaseName, ".", "-")
-	operatorVer, err := p.OperatorCfg.GitVersion()
-	if err != nil {
-		return nil, fmt.Errorf("failed to determine operator version: %w", err)
-	}
-	p.versionData = version.NewHashreleaseVersions(version.New(productVer), operatorVer)
+	p.versionData = version.NewHashreleaseVersions(version.New(productVer))
 	if err := generatePinnedVersionFile(p); err != nil {
 		return nil, err
 	}
@@ -204,8 +188,8 @@ func generatePinnedVersionFile(p *CalicoPinnedVersions) error {
 		Title:       p.versionData.ProductVersion(),
 		ManifestURL: fmt.Sprintf("https://%s.%s", p.releaseName, hashreleaseserver.BaseDomain),
 		ReleaseName: p.releaseName,
-		Note: fmt.Sprintf("%s - generated at %s using %s release branch with %s operator branch",
-			p.releaseName, time.Now().Format(time.RFC1123), p.productBranch, p.OperatorCfg.Branch),
+		Note: fmt.Sprintf("%s - generated at %s using %s release branch",
+			p.releaseName, time.Now().Format(time.RFC1123), p.productBranch),
 		Hash: p.versionData.Hash(),
 		TigeraOperator: registry.Component{
 			Image:    p.OperatorCfg.Image,
@@ -291,5 +275,5 @@ func RetrieveVersions(outputDir string) (version.Versions, error) {
 		return nil, err
 	}
 
-	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title), pinnedVersion.TigeraOperator.Version), nil
+	return version.NewHashreleaseVersions(version.New(pinnedVersion.Title)), nil
 }

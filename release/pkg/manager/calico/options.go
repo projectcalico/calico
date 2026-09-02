@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,15 +71,6 @@ func WithOperator(registry, image, version string) Option {
 		r.operatorImage = image
 		r.operatorVersion = version
 		r.operatorRegistry = registry
-		return nil
-	}
-}
-
-func WithOperatorGit(org, repo, branch string) Option {
-	return func(r *CalicoManager) error {
-		r.operatorGithubOrg = org
-		r.operatorRepo = repo
-		r.operatorBranch = branch
 		return nil
 	}
 }
@@ -274,13 +265,6 @@ func WithGithubToken(token string) Option {
 func WithArchiveImages(archive bool) Option {
 	return func(r *CalicoManager) error {
 		r.archiveImages = archive
-		return nil
-	}
-}
-
-func WithOperatorBranch(branch string) Option {
-	return func(r *CalicoManager) error {
-		r.operatorBranch = branch
 		return nil
 	}
 }

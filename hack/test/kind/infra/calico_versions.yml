@@ -1,5 +1,5 @@
-# Components defined here are required to be kept in sync with config/calico_versions.yml in the tigera/operator repository.
-# Ideally we can remove this file and the need to re-build the operator altogether if we change how images are loaded into the test cluster.
+# Overrides operator/config/calico_versions.yml for the dev build. Every image
+# listed here has to exist in the dev registry under the test-build tag.
 title: latest
 components:
   libcalico-go:

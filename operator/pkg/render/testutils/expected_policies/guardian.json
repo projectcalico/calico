@@ -1,0 +1,138 @@
+{
+  "apiVersion": "projectcalico.org/v3",
+  "kind": "NetworkPolicy",
+  "metadata": {
+    "name": "calico-system.guardian-access",
+    "namespace": "calico-system"
+  },
+  "spec": {
+    "selector": "k8s-app == 'guardian'",
+    "order": 1,
+    "tier": "calico-system",
+    "types": [
+      "Ingress",
+      "Egress"
+    ],
+    "ingress": [
+      {
+        "action": "Allow",
+        "destination": {
+          "ports": [
+            8080
+          ]
+        },
+        "protocol": "TCP",
+        "source": {
+          "namespaceSelector": "name == 'calico-system'",
+          "selector": "k8s-app == 'calico-fluent-bit' || k8s-app == 'calico-fluent-bit-windows'"
+        }
+      },
+      {
+        "action": "Allow",
+        "destination": {
+          "ports": [
+            8080
+          ]
+        },
+        "protocol": "TCP",
+        "source": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'",
+          "selector": "k8s-app == 'intrusion-detection-controller'"
+        }
+      },
+      {
+        "action": "Allow",
+        "destination": {
+          "ports": [
+            8080
+          ]
+        },
+        "protocol": "TCP",
+        "source": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-intrusion-detection'",
+          "selector": "job-name == 'intrusion-detection-es-job-installer'"
+        }
+      },
+      {
+        "action": "Allow",
+        "destination": {
+          "ports": [
+            8080
+          ]
+        },
+        "protocol": "TCP"
+      }
+    ],
+    "egress": [
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-packetcapture'",
+          "selector": "k8s-app == 'tigera-packetcapture'",
+          "ports": [
+            8444
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "UDP",
+        "destination": {
+          "namespaceSelector": "kubernetes.io/metadata.name == 'kube-system'",
+          "selector": "k8s-app in { 'kube-dns', 'coredns' }",
+          "ports": [
+            53
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "kubernetes",
+            "namespace": "default"
+          }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "selector": "k8s-app == 'tigera-prometheus'",
+          "namespaceSelector": "kubernetes.io/metadata.name == 'tigera-prometheus'",
+          "ports": [
+            9095
+          ]
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "destination": {
+          "services": {
+            "name": "calico-api",
+            "namespace": "calico-system"
+          }
+        }
+      },
+      {
+        "action": "Allow",
+        "protocol": "TCP",
+        "source": {},
+        "destination": {
+          "nets": [
+            "127.0.0.1/32"
+          ],
+          "ports": [
+            1234
+          ]
+        }
+      },
+      {
+        "action": "Pass"
+      }
+    ]
+  }
+}

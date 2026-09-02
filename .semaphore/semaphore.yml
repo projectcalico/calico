@@ -215,6 +215,8 @@ promotions:
     pipeline_file: push-images/whisker.yml
   - name: Push Envoy images
     pipeline_file: push-images/envoy.yml
+  - name: Push operator images
+    pipeline_file: push-images/operator.yml
   - name: Publish openstack packages
     pipeline_file: push-images/packaging.yaml
     auto_promote:
@@ -347,7 +349,7 @@ blocks:
     run:
       when: >-
         false or
-        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
+        change_in(['/api', '/manifests', '/charts', '/libcalico-go/lib/apis', '/libcalico-go/config', '/libcalico-go/Makefile', '/felix/config', '/felix/docs', '/felix/Makefile', '/goldmane', '/kube-controllers/pkg/apis/migration', '/operator/api', '/operator/pkg/crds', '/operator/pkg/admission', '/Makefile', '/lib.Makefile', '/metadata.mk'], {pipeline_file: 'ignore'})
     dependencies: []
     task:
       jobs:
@@ -359,6 +361,7 @@ blocks:
             - make -C felix gen-files
             - make -C goldmane gen-files
             - make -C kube-controllers gen-files
+            - make -C operator gen-files
             - make gen-manifests
             - make fix-changed
             - make check-ocp-no-crds
@@ -648,6 +651,7 @@ blocks:
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
         '/node/**',
+        '/operator/api/v1/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -824,9 +828,12 @@ blocks:
         '/.semaphore/semaphore.yml.d/blocks/20-kube-controllers.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-kubevirt-live-migration.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-node.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
         '/.semaphore/semaphore.yml.d/blocks/20-typha.yml',
         '/.semaphore/vms/',
         '/Makefile',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
         '/api/pkg/apis/projectcalico/v3/*.go',
         '/api/pkg/client/applyconfiguration_generated/internal/*.go',
         '/api/pkg/client/applyconfiguration_generated/projectcalico/v3/*.go',
@@ -957,6 +964,7 @@ blocks:
         '/lib/std/uniquelabels/*.go',
         '/lib/std/uniquestr/*.go',
         '/libcalico-go/config/*.go',
+        '/libcalico-go/config/crd/*.go',
         '/libcalico-go/lib/apiconfig/*.go',
         '/libcalico-go/lib/apis/crd.projectcalico.org/v1/scheme/*.go',
         '/libcalico-go/lib/apis/internalapi/*.go',
@@ -1013,6 +1021,7 @@ blocks:
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
         '/node/**',
+        '/operator/**',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -1386,6 +1395,7 @@ blocks:
         '/libcalico-go/lib/writelogger/*.go',
         '/metadata.mk',
         '/node/**',
+        '/operator/api/v1/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -2701,6 +2711,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
+        '/operator/api/v1/*.go',
         '/whisker-backend/pkg/apis/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -2716,6 +2727,7 @@ blocks:
         '/goldmane/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
+        '/operator/**/*_test.go',
         '/whisker-backend/**/*_test.go']})
     execution_time_limit:
       minutes: 30
@@ -2802,6 +2814,7 @@ blocks:
         '/libcalico-go/lib/watch/*.go',
         '/libcalico-go/lib/winutils/*.go',
         '/metadata.mk',
+        '/operator/api/v1/*.go',
         '/whisker-backend/pkg/apis/v1/*.go'],
         {pipeline_file: 'ignore', exclude: ['/**/*.md',
         '/**/.gitignore',
@@ -2817,6 +2830,7 @@ blocks:
         '/goldmane/**/*_test.go',
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
+        '/operator/**/*_test.go',
         '/whisker-backend/**/*_test.go']})
     execution_time_limit:
       minutes: 30
@@ -3209,6 +3223,7 @@ blocks:
         '/node/pkg/status/*.go',
         '/node/pkg/status/populators/*.go',
         '/node/windows-packaging/tests/*.go',
+        '/operator/api/v1/*.go',
         '/pkg/buildinfo/*.go',
         '/pkg/cmdwrapper/*.go',
         '/pod2daemon/binder/*.go',
@@ -3302,6 +3317,7 @@ blocks:
         '/lib/**/*_test.go',
         '/libcalico-go/**/*_test.go',
         '/node/**/*_test.go',
+        '/operator/**/*_test.go',
         '/pkg/**/*_test.go',
         '/pod2daemon/**/*_test.go',
         '/typha/**/*_test.go',
@@ -5996,6 +6012,99 @@ blocks:
             - ../.semaphore/vms/clean-up-vms ${VM_PREFIX}
       secrets:
         - name: google-service-account-for-gce
+  - name: Operator
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: static checks and unit tests"
+          commands:
+            - export TEST_SUITE_PREFIX="operator"
+            - ../.semaphore/run-and-monitor make-ci.log make ci
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator FV"
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+      - "Build: calico image"
+    task:
+      env_vars:
+        - name: BUILD_CACHE_GROUP
+          value: "calico"
+      prologue:
+        commands:
+          - .semaphore/load-cached-images
+          - cd operator
+      jobs:
+        - name: "Operator: FV on kind"
+          execution_time_limit:
+            minutes: 60
+          commands:
+            - export TEST_SUITE_PREFIX="operator-fv"
+            - ../.semaphore/run-and-monitor make-fv.log make fv
+      epilogue:
+        always:
+          commands:
+            - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator FV" || true'
   - name: pod2daemon
     run:
       when: >-

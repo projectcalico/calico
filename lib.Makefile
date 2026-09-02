@@ -1577,6 +1577,11 @@ stop-k8s-controller-manager:
 # Common functions for create a local kind cluster.
 ###############################################################################
 KIND_DIR := $(REPO_ROOT)/hack/test/kind
+
+# The operator CRDs a Calico install ships, named by the list the operator and the
+# manifest generator both read.
+CALICO_OPERATOR_CRDS = $(addprefix -f $(REPO_ROOT)/operator/pkg/crds/operator/,\
+	$(shell grep -v '^\#' $(REPO_ROOT)/operator/pkg/crds/calico_operator_crds.txt 2>/dev/null))
 KIND ?= $(KIND_DIR)/kind
 KUBECTL ?= $(KIND_DIR)/kubectl
 
@@ -1617,7 +1622,7 @@ $(REPO_ROOT)/.$(KIND_NAME).created: $(KUBECTL) $(KIND) kind-registry-up
 
 	# Wait for controller manager to be running and healthy, then create Calico CRDs.
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get serviceaccount default; do echo "Waiting for default serviceaccount to be created..."; sleep 2; done
-	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/charts/crd.projectcalico.org.v1/templates/; do echo "Waiting for operator CRDs to be created"; sleep 2; done
+	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create $(CALICO_OPERATOR_CRDS); do echo "Waiting for operator CRDs to be created"; sleep 2; done
 	while ! KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) create -f $(REPO_ROOT)/$(CALICO_CRD_PATH); do echo "Waiting for calico CRDs to be created"; sleep 2; done
 
 	# These may have already been created, depending on where we're getting our CRDs from. So use apply.

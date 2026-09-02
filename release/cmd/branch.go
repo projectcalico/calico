@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Tigera, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,6 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 				mainBranchFlag,
 				releaseBranchPrefixFlag,
 				devTagSuffixFlag,
-				operatorBranchFlag,
 				localFlag,
 				validationFlag,
 				planFlag,
@@ -63,7 +62,6 @@ func branchSubCommands(cfg *Config) []*cli.Command {
 					calico.WithRepoRemote(c.String(repoRemoteFlag.Name)),
 					calico.WithRepoRoot(cfg.RepoRootDir),
 					calico.WithReleaseBranchPrefix(c.String(releaseBranchPrefixFlag.Name)),
-					calico.WithOperatorBranch(c.String(operatorBranchFlag.Name)),
 					calico.WithMainBranch(c.String(mainBranchFlag.Name)),
 					calico.WithDevTagIdentifier(c.String(devTagSuffixFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),

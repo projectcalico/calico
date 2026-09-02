@@ -47,6 +47,8 @@ check-copyright:
 ###############################################################################
 .PHONY: gen-files
 gen-files:
+	# Prune stale CRDs so one whose Go type is gone leaves the tree too.
+	rm -f pkg/apis/migration/v1/crd/*.yaml
 	$(MAKE) -C $(REPO_ROOT) $(CALICO_CONTROLLER_GEN_BIN)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) crd paths=./pkg/apis/migration/... output:crd:dir=pkg/apis/migration/v1/crd/'
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '$(CALICO_CONTROLLER_GEN) object paths=./pkg/apis/migration/...'
