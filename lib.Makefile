@@ -1791,6 +1791,13 @@ $(REPO_ROOT)/third_party/envoy-ratelimit/.envoy-ratelimit.created-$(ARCH):
 $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 	$(MAKE) -C $(REPO_ROOT)/third_party/cni-plugins image
 
+# The registry/path/tag every kind lane bakes into its images.
+# hack/test/kind/infra/values.yaml pins the same triple.
+KIND_DEV_IMAGE_ARGS = \
+	    DEV_IMAGE_REGISTRY=localhost:5000 \
+	    DEV_IMAGE_PATH=calico \
+	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+
 ## Build all component images and push them to the local kind registry.
 # This invokes the same `make push` pipeline used by the release flow, with
 # kind-flavored DEV_IMAGE_REGISTRY/PATH/TAG so images land at
@@ -1800,10 +1807,14 @@ $(REPO_ROOT)/third_party/cni-plugins/.cni-plugins.created-$(ARCH):
 # inside the kind nodes mirrors localhost:5000 to http://kind-registry:5000.
 .PHONY: kind-build-images
 kind-build-images: kind-registry-up
-	$(MAKE) -C $(REPO_ROOT) push \
-	    DEV_IMAGE_REGISTRY=localhost:5000 \
-	    DEV_IMAGE_PATH=calico \
-	    DEV_IMAGE_TAG=$(KIND_TEST_BUILD_TAG)
+	$(MAKE) -C $(REPO_ROOT) push $(KIND_DEV_IMAGE_ARGS)
+
+## Build only the operator image, with the kind component references baked in.
+# CI's "Build: operator image" block runs this and caches the result so the
+# kind lanes load it instead of compiling the operator per job.
+.PHONY: kind-operator-image
+kind-operator-image:
+	$(MAKE) -C $(REPO_ROOT) operator-image $(KIND_DEV_IMAGE_ARGS)
 
 # Create a kind cluster and deploy Calico on it via Helm. Assumes images are
 # already built and tagged as test-build in the local Docker daemon. If a
