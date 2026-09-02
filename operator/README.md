@@ -6,9 +6,8 @@ The operator is built with the [operator-sdk](https://github.com/operator-framew
 
 ## Documentation
 
-- [docs/principles.md](docs/principles.md) - the operator's architecture and the reasoning behind it.
+- [DESIGN.md](DESIGN.md) - the operator's architecture and the reasoning behind it.
 - [docs/api_design.md](docs/api_design.md) - conventions for the CRD types in `api/v1`.
-- [docs/dev_guidelines.md](docs/dev_guidelines.md) - code structure, code generation, and cherry-picks.
 - [docs/common_tasks.md](docs/common_tasks.md) - running the operator against a local cluster, testing, and debugging.
 
 Installation and configuration documentation for users lives at [https://docs.tigera.io/](https://docs.tigera.io/).
