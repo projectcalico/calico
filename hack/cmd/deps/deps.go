@@ -363,11 +363,20 @@ func addSecondaryPkgInclusions(inclusions set.Set[string], pkg string) ([]string
 	for _, dir := range dirs {
 		inclusions.Add(dir + "/*.go")
 	}
-	inclusions.Add(pkg + "/Makefile")
-	inclusions.Add(pkg + "/deps.txt")
-	inclusions.Add(pkg + "/**/*Dockerfile*")
+	inclusions.AddAll(secondaryPkgBuildInputGlobs(pkg))
 	inclusions.AddAll(nonGoDeps[pkg])
 	return dirs, nil
+}
+
+// secondaryPkgBuildInputGlobs returns the non-Go build inputs of a secondary
+// package.  Semaphore resolves an unrooted change_in pattern against the
+// pipeline file's directory, so every glob is rooted at the repo root.
+func secondaryPkgBuildInputGlobs(pkg string) []string {
+	return []string{
+		"/" + pkg + "/Makefile",
+		"/" + pkg + "/deps.txt",
+		"/" + pkg + "/**/*Dockerfile*",
+	}
 }
 
 // blockInfo is the slice of a Semaphore block that we need to resolve
