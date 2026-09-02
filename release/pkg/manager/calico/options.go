@@ -335,3 +335,11 @@ func WithBranchCutOptions(opts branch.CutOptions) Option {
 		return nil
 	}
 }
+
+// WithImageReleaseDirs limits image building and publishing to dirs.
+func WithImageReleaseDirs(dirs []string) Option {
+	return func(r *CalicoManager) error {
+		r.imageReleaseDirs = dirs
+		return nil
+	}
+}
