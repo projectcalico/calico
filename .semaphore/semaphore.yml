@@ -7416,6 +7416,51 @@ blocks:
         always:
           commands:
             - 'test-results publish --ignore-missing ./report/*.xml --suite-prefix="$TEST_SUITE_PREFIX" --name "Operator" || true'
+  - name: "Operator: multi-arch build"
+    # The operator has no cgo and no build constraints, so cross-compiling the
+    # binary is the whole of the per-arch coverage. `make cd` and the release
+    # build assemble the images.
+    run:
+      when: >-
+        change_in(['/.semaphore/semaphore.yml.d/01-preamble.yml',
+        '/.semaphore/semaphore.yml.d/02-global_job_config.yml',
+        '/.semaphore/semaphore.yml.d/03-promotions.yml',
+        '/.semaphore/semaphore.yml.d/09-blocks.yml',
+        '/.semaphore/semaphore.yml.d/99-after_pipeline.yml',
+        '/.semaphore/semaphore.yml.d/blocks/20-operator.yml',
+        '/api/admission/*.go',
+        '/api/config/crd/*.go',
+        '/hack/test/certs/',
+        '/lib.Makefile',
+        '/libcalico-go/config/crd/*.go',
+        '/metadata.mk',
+        '/operator/**'],
+        {pipeline_file: 'ignore', exclude: ['/**/*.md',
+        '/**/.gitignore',
+        '/**/AUTHORS*',
+        '/**/CONTRIBUTING*',
+        '/**/DEVELOPER_GUIDE*',
+        '/**/LICENSE*',
+        '/**/README*',
+        '/**/SECURITY.md',
+        '/api/**/*_test.go',
+        '/libcalico-go/**/*_test.go']})
+    dependencies:
+      - Prerequisites
+    task:
+      prologue:
+        commands:
+          - cd operator
+      jobs:
+        - name: "Operator: build multi-arch binaries"
+          matrix:
+            - env_var: ARCH
+              values:
+                - arm64
+                - ppc64le
+                - s390x
+          commands:
+            - ../.semaphore/run-and-monitor build-$ARCH.log make build ARCH=$ARCH
   - name: "Operator FV"
     run:
       when: >-
