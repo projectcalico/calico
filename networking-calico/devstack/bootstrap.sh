@@ -259,7 +259,13 @@ EOF
 # QoS block because resync_scale_test.py imports etcd3, openstack and pymysql
 # as well, and the QoS block does not run when SCALE_ONLY is set.
 sudo -u stack -H -E bash -x <<'EOF'
-sudo pip install openstacksdk etcd3 pymysql
+# protobuf<4 because etcd3 is unmaintained: its generated _pb2 modules were
+# built with protoc older than 3.19, and a protobuf 4 runtime refuses to load
+# them ("Descriptors cannot be created directly").  Pin rather than take the
+# other documented workaround -- PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+# swaps in the pure-Python parser, which would slow down every etcd operation
+# this benchmark is timing and make the numbers incomparable with per-PR runs.
+sudo pip install openstacksdk etcd3 pymysql 'protobuf<4'
 EOF
 
 # Run QoS responsiveness tests
@@ -310,7 +316,14 @@ export RESYNC_CALICO_RESYNC=${DEVSTACK_VENV:-/usr/local}/bin/calico-resync
 # send-perf-results call below picks them up.
 mkdir -p ${CALICO_REPO_DIR}/artifacts/perf
 export RESYNC_PERF_ARTIFACTS_DIR=${CALICO_REPO_DIR}/artifacts/perf
-python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
+if ${SCALE_ONLY:-false}; then
+    # Producing these numbers is the whole purpose of the scheduled run, so a
+    # failure here has to fail the run.  Under `|| true` this test aborted on
+    # an import error and the run still went green, with nothing published.
+    python3 ../calico/networking-calico/devstack/resync_scale_test.py
+else
+    python3 ../calico/networking-calico/devstack/resync_scale_test.py || true
+fi
 EOF
 
 # Publish perf measurements to Lens.  No-op unless ELASTICSEARCH_URL +
