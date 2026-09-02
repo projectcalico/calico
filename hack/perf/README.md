@@ -87,8 +87,8 @@ On each invocation, in order:
 3. **Augment each doc** with CI metadata (`@timestamp`, `git_commit`,
    `git_branch`, `code_version`, `ci_run_id`, `pr_number`, `env`) unless the
    producer already supplied that field -- producer values win.  Picked up
-   from `SEMAPHORE_GIT_SHA`, `SEMAPHORE_GIT_BRANCH`, `SEMAPHORE_JOB_ID`,
-   `SEMAPHORE_GIT_PR_NUMBER`.
+   from the CI system's own variables -- `SEMAPHORE_*` under Semaphore,
+   `CI_GIT_*` / `CI_JOB_ID` under ArgoCI.
 4. **POST to `<family>_<UTC year>/_doc`.**  The year suffix is computed at
    send time; producer side stays date-free.  ES auto-creates the dated
    index on first write using the template applied in step 1.
@@ -179,13 +179,25 @@ Scenario-specific scalars are the producer's responsibility:
 already supplied a value (producer wins):
 
 - **`@timestamp`** -- ISO-8601 UTC; Kibana's time field.
-- **`git_commit`** -- from `SEMAPHORE_GIT_SHA`.
-- **`git_branch`** -- from `SEMAPHORE_GIT_BRANCH`.
+- **`git_commit`** -- from `SEMAPHORE_GIT_SHA` or `CI_GIT_SHA`.
+- **`git_branch`** -- from `SEMAPHORE_GIT_BRANCH` or `CI_GIT_BRANCH`.
 - **`code_version`** -- short SHA derived from `git_commit`.
-- **`ci_run_id`** -- from `SEMAPHORE_JOB_ID`.
-- **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER`, if set.
-- **`env`** -- `ci` if `SEMAPHORE_JOB_ID` is set, else `dev`.  Filter
-  dashboards to `env: ci` to keep dev runs out of trend data.
+- **`ci_run_id`** -- from `SEMAPHORE_JOB_ID`, `CI_JOB_ID` or
+  `CI_WORKFLOW_NAME`.
+- **`pr_number`** -- from `SEMAPHORE_GIT_PR_NUMBER` or `CI_GIT_PR_NUMBER`, if
+  set.
+- **`env`** -- `ci` if any of those run IDs is set, else `dev`; override with
+  `PERF_ENV`.  Filter dashboards to `env: ci` to keep dev runs out of trend
+  data.
+
+  Each CI system's own variables are read, so a test that moves between them
+  keeps landing complete documents instead of blank provenance and `env: dev`.
+  Semaphore's values win where both are present.
+
+  Scheduled runs should set `PERF_ENV` to something of their own (the weekly
+  OpenStack resync scale run uses `weekly`).  They may execute on different
+  machine types from the per-PR runs, so their timings are not comparable and
+  a dashboard should be able to separate them.
 
 ### `phase` vs `iter` vs `test_step`
 
