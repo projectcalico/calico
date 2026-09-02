@@ -30,6 +30,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/calico/felix/config"
+	"github.com/projectcalico/calico/felix/idalloc"
 	"github.com/projectcalico/calico/felix/testutils"
 	"github.com/projectcalico/calico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/calico/libcalico-go/lib/set"
@@ -806,6 +807,28 @@ var _ = DescribeTable("Config validation",
 		"RouteTableRanges": "abcde",
 	}, false),
 )
+
+var _ = Describe("Config RouteTableRanges", func() {
+	// The dataplane driver hands RouteTableIndices() to NewIndexAllocator, which
+	// sorts the ranges it is given.  If that reordered Felix's own copy of the
+	// config, the next config update would re-parse the raw value in its original
+	// order, see a change, and restart Felix - over and over.
+	const rawRanges = "1-250,1000-1500"
+
+	It("should survive the route-table index allocator without looking changed", func() {
+		conf := config.New()
+		changed, err := conf.UpdateFrom(map[string]string{"RouteTableRanges": rawRanges}, config.DatastoreGlobal)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeTrue())
+
+		idalloc.NewIndexAllocator(conf.RouteTableIndices(), []idalloc.IndexRange{{Min: 253, Max: 255}})
+
+		changed, err = conf.UpdateFrom(map[string]string{"RouteTableRanges": rawRanges}, config.DatastoreGlobal)
+		Expect(err).To(Succeed())
+		Expect(changed).To(BeFalse(),
+			"re-applying identical config reported a change, which would make Felix restart in a loop")
+	})
+})
 
 var _ = DescribeTable("Config InterfaceExclude",
 	func(excludeList string, expected []*regexp.Regexp) {
