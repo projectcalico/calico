@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nftables_test
+package nftrender_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -20,7 +20,7 @@ import (
 
 	"github.com/projectcalico/calico/felix/environment"
 	"github.com/projectcalico/calico/felix/generictables"
-	. "github.com/projectcalico/calico/felix/nftables"
+	. "github.com/projectcalico/calico/felix/nftables/nftrender"
 )
 
 var _ = DescribeTable("Actions",

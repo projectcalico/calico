@@ -746,9 +746,8 @@ configRetry:
 					configParams.PrometheusMetricsClientAuth,
 					configParams.PrometheusMetricsCAFile,
 				)
-				if err != nil {
-					log.Info("Error starting metrics https server.", err)
-				}
+				// The server retries internally, so it only returns on failure.
+				log.WithError(err).Error("Error starting metrics https server.")
 			}()
 		} else {
 			log.Info("Starting metrics http server.")
