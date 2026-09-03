@@ -532,6 +532,7 @@ var (
 		}
 		return append(f,
 			helmIndexFlag(envHelmIndexLegacy, envPublishHelmIndex, envReleaseHelmIndex),
+			e2eBinariesFlag,
 			gitRefFlag,
 			githubReleaseFlag)
 	}
@@ -611,7 +612,7 @@ var (
 	e2eBinariesFlag = &cli.BoolWithInverseFlag{
 		Name:     "e2e-binaries",
 		Category: stepControlCategory,
-		Usage:    "Build multi-arch e2e test binaries",
+		Usage:    "Include multi-arch e2e test binaries",
 		Sources:  cli.EnvVars(envBuildE2EBinaries, envReleaseE2EBinaries),
 		Value:    true,
 	}

@@ -159,6 +159,7 @@ func releaseSubCommands(cfg *Config) []*cli.Command {
 					calico.WithImages(c.Bool(imagesFlagName)),
 					calico.WithHelmCharts(c.Bool(helmChartsFlagName)),
 					calico.WithHelmIndex(c.Bool(helmIndexFlagName)),
+					calico.WithE2EBinaries(c.Bool(e2eBinariesFlag.Name)),
 					calico.WithGitRef(c.Bool(gitRefFlag.Name)),
 					calico.WithGithubRelease(c.Bool(githubReleaseFlag.Name)),
 					calico.WithValidation(c.Bool(validationFlag.Name)),

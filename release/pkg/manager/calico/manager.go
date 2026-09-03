@@ -358,6 +358,9 @@ func (r *CalicoManager) Build() error {
 		}
 	} else {
 		logrus.Info("Skipping building e2e test binaries")
+		if err = r.clearStagedE2EBinaries(); err != nil {
+			return err
+		}
 	}
 
 	// Build and add in the complete release tarball.
@@ -781,9 +784,11 @@ func (r *CalicoManager) PublishRelease() error {
 			return fmt.Errorf("update helm chart index: %s", err)
 		}
 
-		// Publish the e2e test binaries for individual download.
+		// Publish the e2e test binaries for individual download. Logged and
+		// ignored like the ISS scan above: the test binaries also ship inside the
+		// release archive, so failing to upload them should not halt a release.
 		if err := r.publishE2EBinaries(); err != nil {
-			return fmt.Errorf("publish e2e binaries: %s", err)
+			logrus.WithError(err).Error("Failed to publish e2e test binaries")
 		}
 	}
 
@@ -980,15 +985,6 @@ func (r *CalicoManager) publishPrereqs() error {
 		}
 		if !r.isHashRelease && r.s3Bucket == "" {
 			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for pushing helm index"))
-		}
-	}
-	// The e2e binaries go to S3 late in the publish, so check the bucket up front
-	// rather than after the images and charts are already out.
-	if !r.isHashRelease && r.s3Bucket == "" {
-		if staged, err := r.stagedE2EBinaries(); err != nil {
-			errStack = errors.Join(errStack, err)
-		} else if len(staged) > 0 {
-			errStack = errors.Join(errStack, fmt.Errorf("no S3 bucket specified for publishing e2e binaries"))
 		}
 	}
 	if dirty, err := utils.GitIsDirty(r.repoRoot); dirty || err != nil {
@@ -1282,15 +1278,24 @@ func (r *CalicoManager) e2eBinariesDir() string {
 	return filepath.Join(r.uploadDir(), "files", "e2e")
 }
 
-// stagedE2EBinaries lists the e2e binaries the build produced. Callers on the
-// publish side key off this rather than r.e2eBinaries, because the e2e-binaries
-// flag belongs to the build step and is never passed to publish.
+// stagedE2EBinaries lists the e2e binaries the build produced, so the archive and
+// the publish can no-op when there are none.
 func (r *CalicoManager) stagedE2EBinaries() ([]string, error) {
 	staged, err := filepath.Glob(filepath.Join(r.e2eBinariesDir(), "e2e-linux-*.test"))
 	if err != nil {
 		return nil, fmt.Errorf("looking for staged e2e binaries: %w", err)
 	}
 	return staged, nil
+}
+
+// clearStagedE2EBinaries drops the staging directory. The output directory
+// survives between runs, so without this a --no-e2e-binaries build would leave an
+// earlier run's binaries for the archive and the publish to find.
+func (r *CalicoManager) clearStagedE2EBinaries() error {
+	if err := os.RemoveAll(r.e2eBinariesDir()); err != nil {
+		return fmt.Errorf("removing staged e2e binaries: %w", err)
+	}
+	return nil
 }
 
 func (r *CalicoManager) buildE2EBinaries() error {
@@ -1678,6 +1683,10 @@ func (r *CalicoManager) updateHelmChartIndex() error {
 // matches Enterprise (<version>/files/e2e/), so both products resolve a binary
 // the same way.
 func (r *CalicoManager) publishE2EBinaries() error {
+	if !r.e2eBinaries {
+		logrus.Info("Skipping publishing e2e test binaries")
+		return nil
+	}
 	staged, err := r.stagedE2EBinaries()
 	if err != nil {
 		return err
@@ -1686,10 +1695,11 @@ func (r *CalicoManager) publishE2EBinaries() error {
 		logrus.Info("Skipping publishing e2e test binaries (none staged)")
 		return nil
 	}
-	// publishPrereqs catches this too; repeated here for a --no-validate run,
-	// which would otherwise upload to "s3:///".
+	// Nothing to upload to, and this step is best-effort, so warn rather than
+	// fail a release that is otherwise complete.
 	if r.s3Bucket == "" {
-		return fmt.Errorf("no S3 bucket specified")
+		logrus.Warn("Skipping publishing e2e test binaries (no S3 bucket specified)")
+		return nil
 	}
 	dest := fmt.Sprintf("s3://%s/%s/files/e2e/", r.s3Bucket, r.calicoVersion)
 	return r.s3Cp(r.e2eBinariesDir()+"/", dest, s3ACLPublicRead...)

@@ -784,30 +784,37 @@ func TestPublishE2EBinaries(t *testing.T) {
 	const bucket = "example-bucket"
 
 	tests := []struct {
-		name     string
-		staged   []string
-		bucket   string
-		wantS3   bool
-		wantErr  bool
-		wantDest string
+		name        string
+		e2eBinaries bool
+		staged      []string
+		bucket      string
+		wantS3      bool
+		wantDest    string
 	}{
 		{
-			name:     "staged binaries go to <version>/files/e2e/",
-			staged:   []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
-			bucket:   bucket,
-			wantS3:   true,
-			wantDest: "s3://" + bucket + "/v3.30.0/files/e2e/",
+			name:        "staged binaries go to <version>/files/e2e/",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test", "e2e-linux-arm64.test"},
+			bucket:      bucket,
+			wantS3:      true,
+			wantDest:    "s3://" + bucket + "/v3.30.0/files/e2e/",
 		},
 		{
-			name:   "nothing staged is a no-op",
+			name:        "nothing staged is a no-op",
+			e2eBinaries: true,
+			bucket:      bucket,
+		},
+		{
+			name:   "the flag off skips staged binaries",
+			staged: []string{"e2e-linux-amd64.test"},
 			bucket: bucket,
 		},
 		{
-			// The flag is not passed to publish, so a missing bucket must fail
-			// rather than silently skip a release that did stage binaries.
-			name:    "staged binaries without a bucket error",
-			staged:  []string{"e2e-linux-amd64.test"},
-			wantErr: true,
+			// Best-effort step: an incomplete upload target must not fail a
+			// release that is otherwise done.
+			name:        "no bucket warns rather than failing",
+			e2eBinaries: true,
+			staged:      []string{"e2e-linux-amd64.test"},
 		},
 	}
 
@@ -825,17 +832,12 @@ func TestPublishE2EBinaries(t *testing.T) {
 
 			r := &CalicoManager{
 				runner:        f,
+				e2eBinaries:   tt.e2eBinaries,
 				calicoVersion: "v3.30.0",
 				s3Bucket:      tt.bucket,
 				outputDir:     outputDir,
 			}
-			err := r.publishE2EBinaries()
-			if tt.wantErr {
-				require.Error(t, err)
-				require.False(t, f.ran("aws"), "no upload should be attempted (calls: %v)", f.calls)
-				return
-			}
-			require.NoError(t, err)
+			require.NoError(t, r.publishE2EBinaries())
 			require.Equal(t, tt.wantS3, f.ran("aws"), "calls: %v", f.calls)
 			if tt.wantS3 {
 				var dest string
@@ -848,4 +850,23 @@ func TestPublishE2EBinaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A --no-e2e-binaries build must not leave an earlier run's binaries in the
+// output directory, which survives between runs.
+func TestClearStagedE2EBinaries(t *testing.T) {
+	outputDir := t.TempDir()
+	r := &CalicoManager{outputDir: outputDir}
+	e2eDir := filepath.Join(outputDir, "files", "e2e")
+	require.NoError(t, os.MkdirAll(e2eDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(e2eDir, "e2e-linux-amd64.test"), []byte("stale"), 0o755))
+
+	require.NoError(t, r.clearStagedE2EBinaries())
+
+	staged, err := r.stagedE2EBinaries()
+	require.NoError(t, err)
+	require.Empty(t, staged)
+
+	// Idempotent: a build that never staged anything must not error.
+	require.NoError(t, r.clearStagedE2EBinaries())
 }
