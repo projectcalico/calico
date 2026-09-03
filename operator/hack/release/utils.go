@@ -62,10 +62,6 @@ func contextString(ctx context.Context, key contextKey) (string, error) {
 	return v, nil
 }
 
-type (
-	CalicoVersion = versions.CalicoVersion
-)
-
 func addRepoInfoToCtx(ctx context.Context, repo string) (context.Context, error) {
 	if ctx.Value(githubOrgCtxKey) != nil && ctx.Value(githubRepoCtxKey) != nil {
 		return ctx, nil

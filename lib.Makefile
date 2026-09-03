@@ -1795,7 +1795,7 @@ $(REPO_ROOT)/key-cert-provisioner/.image.created-$(ARCH): \
 # rebuild even though the recorded image still exists.
 $(REPO_ROOT)/operator/.image.created-$(ARCH): \
     $(shell $(REPO_ROOT)/hack/image-exists $(REPO_ROOT)/operator/.image.created-$(ARCH) $(DEV_OPERATOR_IMAGE)) \
-    $(call local-deps-go-files,operator) $(KIND_INFRA_DIR)/calico_versions.yml
+    $(call local-deps-go-files,operator)
 	rm -f $@
 	DEV_IMAGE_TAG=$(DEV_IMAGE_TAG) \
 	  DEV_IMAGE_REGISTRY=$(DEV_IMAGE_REGISTRY) \

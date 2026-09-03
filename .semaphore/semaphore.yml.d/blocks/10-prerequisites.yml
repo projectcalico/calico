@@ -349,7 +349,7 @@
   # (localhost:5000/calico/<name>:test-build), so this producer builds it
   # through the same `make kind-operator-image` its consumers run.
   run:
-    when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/,non-go:/hack/test/kind/infra/calico_versions.yml)}"
+    when: "${CHANGE_IN_WITH_DEPENDENTS(operator,non-go:/operator/)}"
   dependencies: []
   task:
     env_vars:

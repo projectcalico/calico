@@ -1993,7 +1993,6 @@ blocks:
         '/guardian/pkg/tunnel/*.go',
         '/hack/test/certs/',
         '/hack/test/kind',
-        '/hack/test/kind/infra/calico_versions.yml',
         '/key-cert-provisioner/pkg/cfg/*.go',
         '/key-cert-provisioner/pkg/k8s/*.go',
         '/key-cert-provisioner/pkg/keycert/*.go',
