@@ -2,7 +2,7 @@
 # Migrated from the Semaphore e2e pipeline of the same name — maintained here by hand.
 version: condensed
 generateName: e2e-windows-
-schedule: 10 21 * * 5
+schedule: 10 23 * * 5
 globalPrologue: |
   cd "${CI_HOME}/${CI_GIT_DIR}"
   export ARGO_WORKFLOW_NAME="{{workflow.name}}"
