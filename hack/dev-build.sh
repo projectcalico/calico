@@ -50,6 +50,9 @@ tag() {
 # Push dev-tagged images to the remote registry. Skips images whose
 # docker image ID hasn't changed since the last push.
 push() {
+    # The stamp dir is not created anywhere else; a fresh workspace has none.
+    mkdir -p "$STAMP_DIR"
+
     pushed=0
     skipped=0
 
