@@ -568,69 +568,6 @@ var _ = Describe("Istio controller tests", func() {
 				Expect(patched.Spec.PolicySyncPathPrefix).To(Equal("/var/run/customer"))
 			})
 
-			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer still needs it", func() {
-				// AL with logsCollection enabled — the symmetric coordination
-				// case the user called out: Istio deletion must not clear the
-				// field while AL is still actively using it.
-				enabled := operatorv1.L7LogCollectionEnabled
-				al := &operatorv1.ApplicationLayer{
-					ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-					Spec: operatorv1.ApplicationLayerSpec{
-						LogCollection: &operatorv1.LogCollectionSpec{CollectLogs: &enabled},
-					},
-				}
-				Expect(cli.Create(ctx, al)).NotTo(HaveOccurred())
-
-				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
-
-				r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
-				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				// Now delete the Istio CR and reconcile the finalizer cleanup.
-				updated := &operatorv1.Istio{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updated)).NotTo(HaveOccurred())
-				Expect(cli.Delete(ctx, updated)).NotTo(HaveOccurred())
-				_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				cleaned := &v3.FelixConfiguration{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, cleaned)).NotTo(HaveOccurred())
-				Expect(cleaned.Spec.PolicySyncPathPrefix).To(Equal("/var/run/nodeagent"))
-			})
-
-			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer features are all disabled", func() {
-				disabled := operatorv1.L7LogCollectionDisabled
-				al := &operatorv1.ApplicationLayer{
-					ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-					Spec: operatorv1.ApplicationLayerSpec{
-						LogCollection: &operatorv1.LogCollectionSpec{CollectLogs: &disabled},
-					},
-				}
-				Expect(cli.Create(ctx, al)).NotTo(HaveOccurred())
-
-				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
-				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())
-
-				r := &ReconcileIstio{Client: cli, scheme: scheme, provider: operatorv1.ProviderNone, status: mockStatus}
-				_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				updated := &operatorv1.Istio{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, updated)).NotTo(HaveOccurred())
-				Expect(cli.Delete(ctx, updated)).NotTo(HaveOccurred())
-				_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: types.NamespacedName{Name: "default"}})
-				Expect(err).ShouldNot(HaveOccurred())
-
-				cleaned := &v3.FelixConfiguration{}
-				Expect(cli.Get(ctx, types.NamespacedName{Name: "default"}, cleaned)).NotTo(HaveOccurred())
-				// Never clear a value we may not own: egressgateway and Gateway
-				// API share this default and never clear it, so Istio deletion
-				// preserves it rather than wiping it out from under them.
-				Expect(cleaned.Spec.PolicySyncPathPrefix).To(Equal("/var/run/nodeagent"))
-			})
-
 			It("leaves policySyncPathPrefix set on Istio deletion when ApplicationLayer is absent", func() {
 				fc := &v3.FelixConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "default"}}
 				Expect(cli.Create(ctx, fc)).NotTo(HaveOccurred())

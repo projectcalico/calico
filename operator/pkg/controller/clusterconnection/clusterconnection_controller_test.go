@@ -83,10 +83,6 @@ var _ = Describe("ManagementClusterConnection controller tests", func() {
 		mockStatus.On("SetMetaData", mock.Anything).Return()
 		mockStatus.On("OnCRNotFound").Return()
 
-		Expect(c.Create(ctx, &operatorv1.Monitor{
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
-		}))
-
 		Expect(c.Create(ctx, &v3.ClusterInformation{ObjectMeta: metav1.ObjectMeta{Name: "default"}})).NotTo(HaveOccurred())
 
 		r = clusterconnection.NewReconcilerWithShims(c, clientScheme, mockStatus, operatorv1.ProviderNone, ready, ready)

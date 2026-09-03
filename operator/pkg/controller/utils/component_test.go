@@ -58,7 +58,7 @@ const (
 var _ = Describe("Component handler tests", func() {
 	var (
 		c        client.Client
-		instance *operatorv1.Manager
+		instance *operatorv1.APIServer
 		ctx      context.Context
 		scheme   *runtime.Scheme
 		sm       status.StatusManager
@@ -81,9 +81,9 @@ var _ = Describe("Component handler tests", func() {
 		sm = status.New(c, "fake-component", &common.VersionInfo{Major: 1, Minor: 19})
 
 		// We need to provide something to handler even though it seems to be unused..
-		instance = &operatorv1.Manager{
-			TypeMeta:   metav1.TypeMeta{Kind: "Manager", APIVersion: "operator.tigera.io/v1"},
-			ObjectMeta: metav1.ObjectMeta{Name: "tigera-secure"},
+		instance = &operatorv1.APIServer{
+			TypeMeta:   metav1.TypeMeta{Kind: "APIServer", APIVersion: "operator.tigera.io/v1"},
+			ObjectMeta: metav1.ObjectMeta{Name: "default"},
 		}
 		handler = NewComponentHandler(logf.Log, c, scheme, instance)
 	})

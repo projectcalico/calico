@@ -160,6 +160,14 @@ type IstioSpec struct {
 	DSCPMark *numorstring.DSCP `json:"dscpMark,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Enabled;Disabled
+type LogCollectionStatusType string
+
+const (
+	L7LogCollectionDisabled LogCollectionStatusType = "Disabled"
+	L7LogCollectionEnabled  LogCollectionStatusType = "Enabled"
+)
+
 // IstioStatus defines the observed state of Istio
 type IstioStatus struct {
 	// Conditions represents the latest observed set of conditions for the component. A component may be one or more of
