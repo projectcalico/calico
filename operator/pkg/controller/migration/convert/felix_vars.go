@@ -163,6 +163,13 @@ func convert(t interface{}, str string) (interface{}, error) {
 		}
 		return &i, nil
 
+	case *int64:
+		i, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return &i, nil
+
 	case *uint32:
 		i, err := strconv.ParseUint(str, 10, 32)
 		if err != nil {

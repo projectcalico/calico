@@ -62,8 +62,8 @@ var _ = Describe("felix env parser", func() {
 		}))
 	})
 
-	It("converts a *uint32", func() {
-		m := uint32(20)
+	It("converts an *int64", func() {
+		m := int64(20)
 		fe, err := patchFromVal("iptablesmarkmask", "20")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(fe).To(Equal(patch{
